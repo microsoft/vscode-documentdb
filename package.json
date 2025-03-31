@@ -226,6 +226,37 @@
         ]
       }
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "documentDB",
+          "title": "DocumentDB",
+          "icon": "$(project)"
+        }
+      ]
+    },
+    "views": {
+      "documentDB": [
+        {
+          "id": "documentDBConnections",
+          "name": "DocumentDB Connections",
+          "visibility": "visible",
+          "icon": "$(plug)"
+        },
+        {
+          "id": "documentDBHelp",
+          "name": "Help and Feedback",
+          "visibility": "collapsed",
+          "icon": "$(question)"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "documentDBConnections",
+        "contents": "Welcome! To start exploring and managing your database, you'll need to connect to it first. Once connected, you can easily view, query, and modify your data.\n\n[$(plus) Add New Connection…](command:documentDB.newConnection)\nClick the button above to get started and unlock the full potential of your database."
+      }
+    ],
     "languages": [
       {
         "id": "mongo",
