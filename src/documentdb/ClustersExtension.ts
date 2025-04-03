@@ -16,7 +16,7 @@ import {
     registerCommandWithTreeNodeUnwrapping,
 } from '@microsoft/vscode-azext-utils';
 import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import { createMongoCollection } from '../commands/createContainer/createContainer';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteAzureContainer } from '../commands/deleteContainer/deleteContainer';
@@ -31,6 +31,7 @@ import { openCollectionView, openCollectionViewInternal } from '../commands/open
 import { openMongoDocumentView } from '../commands/openDocument/openDocument';
 import { ext } from '../extensionVariables';
 import { MongoVCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
+import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
@@ -38,6 +39,17 @@ import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands
 export class ClustersExtension implements vscode.Disposable {
     dispose(): Promise<void> {
         return Promise.resolve();
+    }
+
+    registerConnectionsTree(_activateContext: IActionContext): void {
+        ext.connectionsBranchDataProvider = new ConnectionsBranchDataProvider();
+
+        const treeView = vscode.window.createTreeView('documentDBConnections', {
+            canSelectMany: true,
+            showCollapseAll: true,
+            treeDataProvider: ext.connectionsBranchDataProvider,
+        });
+        ext.context.subscriptions.push(treeView);
     }
 
     async activate(): Promise<void> {
@@ -61,6 +73,8 @@ export class ClustersExtension implements vscode.Disposable {
                     WorkspaceResourceType.MongoClusters,
                     ext.mongoClustersWorkspaceBranchDataProvider,
                 );
+
+                this.registerConnectionsTree(activateContext);
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling

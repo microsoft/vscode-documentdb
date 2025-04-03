@@ -14,6 +14,7 @@ import { type PostgresCodeLensProvider } from './postgres/services/PostgresCodeL
 import { type PostgresDatabaseTreeItem } from './postgres/tree/PostgresDatabaseTreeItem';
 import { type CosmosDBBranchDataProvider } from './tree/azure-resources-view/cosmosdb/CosmosDBBranchDataProvider';
 import { type MongoVCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
+import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type AttachedAccountsTreeItem } from './tree/v1-legacy-api/AttachedAccountsTreeItem';
 import { type CosmosDBWorkspaceBranchDataProvider } from './tree/workspace-view/cosmosdb/CosmosDBWorkspaceBranchDataProvider';
 import { type CosmosDBWorkspaceItem } from './tree/workspace-view/cosmosdb/CosmosDBWorkspaceItem';
@@ -61,6 +62,14 @@ export namespace ext {
     // used for the workspace: these are the dedicated providers
     export let mongoClustersWorkspaceBranchDataProvider: ClustersWorkspaceBranchDataProvider;
     export let mongoClusterWorkspaceBranchDataResource: AccountsItem;
+
+    /**
+     * This is the access point for the connections tree branch data provider.
+     * We don't register it with any API as it's the only one provider we need.
+     * It's temporarily here, but it's very likely that it will be moved elsewhere
+     * once the itnernal API solidifies.
+     */
+    export let connectionsBranchDataProvider: ConnectionsBranchDataProvider;
 
     export namespace settingsKeys {
         export const mongoShellPath = 'mongo.shell.path';
