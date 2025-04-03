@@ -7,11 +7,8 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { API } from '../../AzureDBExperiences';
 import { ext } from '../../extensionVariables';
+import { type StorageItem, StorageService } from '../../services/storageService';
 import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
-import {
-    SharedWorkspaceStorage,
-    type SharedWorkspaceStorageItem,
-} from '../../tree/workspace-api/SharedWorkspaceStorage';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import {
     NewEmulatorConnectionMode,
@@ -73,7 +70,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
                     }
                 }
 
-                const storageItem: SharedWorkspaceStorageItem = {
+                const storageItem: StorageItem = {
                     id: connectionString,
                     name: label,
                     properties: {
@@ -85,9 +82,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
                 };
 
                 if (experience.api === API.MongoDB) {
-                    await SharedWorkspaceStorage.push(WorkspaceResourceType.MongoClusters, storageItem, true);
+                    await StorageService.get().push(WorkspaceResourceType.MongoClusters, storageItem, true);
                 } else {
-                    await SharedWorkspaceStorage.push(WorkspaceResourceType.AttachedAccounts, storageItem, true);
+                    await StorageService.get().push(WorkspaceResourceType.AttachedAccounts, storageItem, true);
                 }
             },
         );
