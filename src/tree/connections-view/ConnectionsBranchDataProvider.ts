@@ -11,9 +11,8 @@ import {
 import * as vscode from 'vscode';
 import { MongoClustersExperience } from '../../AzureDBExperiences';
 import { ext } from '../../extensionVariables';
+import { StorageNames, StorageService } from '../../services/storageService';
 import { type ClusterModel } from '../documentdb/ClusterModel';
-import { WorkspaceResourceType } from '../workspace-api/SharedWorkspaceResourceProvider';
-import { SharedWorkspaceStorage } from '../workspace-api/SharedWorkspaceStorage';
 import { ClusterItem } from '../workspace-view/documentdb/ClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
 import { NewConnectionItem } from './NewConnectionItem';
@@ -78,22 +77,20 @@ export class ConnectionsBranchDataProvider
      * Helper function to get the root items of the connections tree.
      */
     private async getRootItems(): Promise<TreeElementBase[] | null | undefined> {
-        const allItems = await SharedWorkspaceStorage.getItems(WorkspaceResourceType.MongoClusters);
+        const connectionItems = await StorageService.get(StorageNames.Connections).getItems('clusters');
 
         return [
             new LocalEmulatorsItem(),
-            ...allItems
-                .filter((item) => !item.properties?.isEmulator) // filter out emulators
-                .map((item) => {
-                    const model: ClusterModel = {
-                        id: item.id,
-                        name: item.name,
-                        dbExperience: MongoClustersExperience,
-                        connectionString: item?.secrets?.[0] ?? undefined,
-                    };
+            ...connectionItems.map((item) => {
+                const model: ClusterModel = {
+                    id: item.id,
+                    name: item.name,
+                    dbExperience: MongoClustersExperience,
+                    connectionString: item?.secrets?.[0] ?? undefined,
+                };
 
-                    return new ClusterItem(model);
-                }),
+                return new ClusterItem(model);
+            }),
             new NewConnectionItem(),
         ];
     }

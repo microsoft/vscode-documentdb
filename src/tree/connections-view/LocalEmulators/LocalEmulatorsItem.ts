@@ -8,12 +8,11 @@ import * as vscode from 'vscode';
 
 import { MongoClustersExperience } from '../../../AzureDBExperiences';
 import { getThemeAgnosticIconPath } from '../../../constants';
+import { StorageNames, StorageService } from '../../../services/storageService';
 import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
 import { type ClusterModel } from '../../documentdb/ClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { WorkspaceResourceType } from '../../workspace-api/SharedWorkspaceResourceProvider';
-import { SharedWorkspaceStorage } from '../../workspace-api/SharedWorkspaceStorage';
 import { ClusterItem } from '../../workspace-view/documentdb/ClusterItem';
 import { NewEmulatorConnectionItem } from './NewEmulatorConnectionItem';
 
@@ -26,28 +25,26 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const allItems = await SharedWorkspaceStorage.getItems(WorkspaceResourceType.MongoClusters);
+        const emulatorItems = await StorageService.get(StorageNames.Connections).getItems('emulators');
         return [
-            ...allItems
-                .filter((item) => item.properties?.isEmulator) // only show emulators
-                .map((item) => {
-                    // we need to create the emulator configuration object from
-                    // the flat properties object
-                    const emulatorConfiguration: EmulatorConfiguration = {
-                        isEmulator: true,
-                        disableEmulatorSecurity: !!item.properties?.disableEmulatorSecurity,
-                    };
+            ...emulatorItems.map((item) => {
+                // we need to create the emulator configuration object from
+                // the flat properties object
+                const emulatorConfiguration: EmulatorConfiguration = {
+                    isEmulator: true,
+                    disableEmulatorSecurity: !!item.properties?.disableEmulatorSecurity,
+                };
 
-                    const model: ClusterModel = {
-                        id: item.id,
-                        name: item.name,
-                        dbExperience: MongoClustersExperience,
-                        connectionString: item?.secrets?.[0],
-                        emulatorConfiguration: emulatorConfiguration,
-                    };
+                const model: ClusterModel = {
+                    id: item.id,
+                    name: item.name,
+                    dbExperience: MongoClustersExperience,
+                    connectionString: item?.secrets?.[0],
+                    emulatorConfiguration: emulatorConfiguration,
+                };
 
-                    return new ClusterItem(model);
-                }),
+                return new ClusterItem(model);
+            }),
             new NewEmulatorConnectionItem(),
         ];
     }
