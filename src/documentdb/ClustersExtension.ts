@@ -32,6 +32,8 @@ import { openMongoDocumentView } from '../commands/openDocument/openDocument';
 import { ext } from '../extensionVariables';
 import { MongoVCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
+import { AzureServiceBranchDataProvider } from '../tree/discovery-view/azure/AzureServiceBranchDataProvider';
+import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
@@ -48,6 +50,24 @@ export class ClustersExtension implements vscode.Disposable {
             canSelectMany: true,
             showCollapseAll: true,
             treeDataProvider: ext.connectionsBranchDataProvider,
+        });
+        ext.context.subscriptions.push(treeView);
+    }
+
+    registerDiscoveryTree(_activateContext: IActionContext): void {
+        /**
+         * Here, a behavior similar to Workspace Branch Data Providers from Azure Resources will be needed.
+         */
+        ext.discoveryBranchDataProvider = new DiscoveryBranchDataProvider();
+
+        // Today, we only have one service provider, but in the future, we will have more.
+        ext.context.subscriptions.push(
+            ext.discoveryBranchDataProvider.registerProvider(new AzureServiceBranchDataProvider()),
+        );
+
+        const treeView = vscode.window.createTreeView('documentDBDiscovery', {
+            showCollapseAll: true,
+            treeDataProvider: ext.discoveryBranchDataProvider,
         });
         ext.context.subscriptions.push(treeView);
     }
@@ -75,6 +95,7 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 this.registerConnectionsTree(activateContext);
+                this.registerDiscoveryTree(activateContext);
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling

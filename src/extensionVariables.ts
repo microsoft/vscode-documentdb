@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { type IAzExtLogOutputChannel, type TreeElementStateManager } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import { type AzureHostExtensionApi } from '@microsoft/vscode-azext-utils/hostapi';
@@ -15,6 +16,7 @@ import { type PostgresDatabaseTreeItem } from './postgres/tree/PostgresDatabaseT
 import { type CosmosDBBranchDataProvider } from './tree/azure-resources-view/cosmosdb/CosmosDBBranchDataProvider';
 import { type MongoVCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
+import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
 import { type AttachedAccountsTreeItem } from './tree/v1-legacy-api/AttachedAccountsTreeItem';
 import { type CosmosDBWorkspaceBranchDataProvider } from './tree/workspace-view/cosmosdb/CosmosDBWorkspaceBranchDataProvider';
 import { type CosmosDBWorkspaceItem } from './tree/workspace-view/cosmosdb/CosmosDBWorkspaceItem';
@@ -70,6 +72,12 @@ export namespace ext {
      * once the itnernal API solidifies.
      */
     export let connectionsBranchDataProvider: ConnectionsBranchDataProvider;
+
+    export let discoveryBranchDataProvider: DiscoveryBranchDataProvider;
+
+    // TODO: it's needed only when integrating with Azure, but it's so easy to just have it here..
+    // revisit once the functionality is done, create an AzureService in /src/services/
+    export let azureSubscriptionProvider: VSCodeAzureSubscriptionProvider;
 
     export namespace settingsKeys {
         export const mongoShellPath = 'mongo.shell.path';

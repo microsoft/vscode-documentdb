@@ -23,6 +23,21 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
     public readonly experience: Experience;
     public readonly contextValue: string = 'treeItem.mongoCluster';
 
+    protected iconPath?:
+        | string
+        | vscode.Uri
+        | {
+              /**
+               * The icon path for the light theme.
+               */
+              light: string | vscode.Uri;
+              /**
+               * The icon path for the dark theme.
+               */
+              dark: string | vscode.Uri;
+          }
+        | vscode.ThemeIcon;
+
     private readonly experienceContextValue: string = '';
 
     protected constructor(public cluster: ClusterModel) {
@@ -127,6 +142,7 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
             contextValue: this.contextValue,
             label: this.cluster.name,
             description: this.cluster.sku !== undefined ? `(${this.cluster.sku})` : false,
+            iconPath: this.iconPath ?? undefined,
             // iconPath: getThemeAgnosticIconPath('CosmosDBAccount.svg'), // Uncomment if icon is available
             tooltip: new vscode.MarkdownString(
                 `### Cluster: ${this.cluster.name}\n\n` +
