@@ -643,6 +643,12 @@
         "category": "MongoDB Clusters",
         "command": "command.mongoClusters.containerView.open",
         "title": "%cosmosdb.command.mongo.collection.open%"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "documentDB.newConnection",
+        "title": "New Connection…",
+        "icon": "$(plug)"
       }
     ],
     "submenus": [

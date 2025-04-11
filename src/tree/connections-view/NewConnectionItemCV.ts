@@ -8,7 +8,10 @@ import * as vscode from 'vscode';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 
-export class NewConnectionItem implements TreeElement, TreeElementWithContextValue {
+/**
+ * CV stands for Connections View
+ */
+export class NewConnectionItemCV implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
     public readonly contextValue: string = 'treeItem.newConnection';
 
@@ -23,7 +26,7 @@ export class NewConnectionItem implements TreeElement, TreeElementWithContextVal
             label: l10n.t('New Connection…'),
             iconPath: new vscode.ThemeIcon('plus'),
             command: {
-                command: 'ddb.newConnection',
+                command: 'documentDB.newConnection',
                 title: '',
                 arguments: [this],
             },

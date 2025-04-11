@@ -29,7 +29,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
             this.id,
             'Loading Azure subscriptions...',
             async () => {
-                return ext.azureSubscriptionProvider.getSubscriptions(true);
+                return ext.azureSubscriptionProvider.getSubscriptions(false); // TODO: add filter support, but it has to be a filter that works without Azure Resource installed.
             },
         );
 

@@ -15,7 +15,7 @@ import { StorageNames, StorageService } from '../../services/storageService';
 import { type ClusterModel } from '../documentdb/ClusterModel';
 import { ClusterItem } from '../workspace-view/documentdb/ClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
-import { NewConnectionItem } from './NewConnectionItem';
+import { NewConnectionItemCV } from './NewConnectionItemCV';
 
 /**
  * This class follows the same pattern as the `WorkspaceDataProvicers` does with Azure Resoruces.
@@ -79,7 +79,18 @@ export class ConnectionsBranchDataProvider
     private async getRootItems(): Promise<TreeElementBase[] | null | undefined> {
         const connectionItems = await StorageService.get(StorageNames.Connections).getItems('clusters');
 
-        return [
+        if (connectionItems.length === 0) {
+            /**
+             * we have a special case here as we'd love to show a "welcome screen" in the case when no connections were found.
+             * However, we need to lookup the emulator items as well, so we need to check if there are any emulators.
+             */
+            // const emulatorItems = await StorageService.get(StorageNames.Connections).getItems('emulators');
+            // if (emulatorItems.length === 0) {
+            //     return null;
+            // }
+        }
+
+        const rootItems = [
             new LocalEmulatorsItem(),
             ...connectionItems.map((item) => {
                 const model: ClusterModel = {
@@ -91,8 +102,10 @@ export class ConnectionsBranchDataProvider
 
                 return new ClusterItem(model);
             }),
-            new NewConnectionItem(),
+            new NewConnectionItemCV(),
         ];
+
+        return rootItems;
     }
 
     getTreeItem(element: TreeElementBase): vscode.TreeItem | Thenable<vscode.TreeItem> {

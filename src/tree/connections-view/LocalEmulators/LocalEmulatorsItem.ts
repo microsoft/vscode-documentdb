@@ -14,7 +14,7 @@ import { type ClusterModel } from '../../documentdb/ClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
 import { ClusterItem } from '../../workspace-view/documentdb/ClusterItem';
-import { NewEmulatorConnectionItem } from './NewEmulatorConnectionItem';
+import { NewEmulatorConnectionItemCV } from './NewEmulatorConnectionItemCV';
 
 export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
@@ -45,7 +45,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
 
                 return new ClusterItem(model);
             }),
-            new NewEmulatorConnectionItem(),
+            new NewEmulatorConnectionItemCV(),
         ];
     }
 

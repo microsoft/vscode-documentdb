@@ -18,6 +18,7 @@ export enum QuickPickType {
     Postgres,
     Cosmos,
     Mongo,
+    DocumentDB,
 }
 
 export async function pickExperience(context: IActionContext, type: QuickPickType): Promise<Experience> {

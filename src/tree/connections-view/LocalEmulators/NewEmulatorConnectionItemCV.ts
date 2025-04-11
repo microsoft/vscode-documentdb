@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
 
-export class NewEmulatorConnectionItem implements TreeElement, TreeElementWithContextValue {
+export class NewEmulatorConnectionItemCV implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
     public readonly contextValue: string = 'treeItem.newEmulatorConnection';
 

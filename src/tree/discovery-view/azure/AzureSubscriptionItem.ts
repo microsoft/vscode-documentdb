@@ -35,8 +35,6 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
     async getChildren(): Promise<ExtTreeElementBase[] | null | undefined> {
         return await callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
             const client = await createResourceManagementClient(context, this.subscription.subscription);
-            console.log('created cllient');
-            // const accounts = await uiUtils.listAllIterator(client.mongoClusters.list());
 
             const accounts = await uiUtils.listAllIterator(
                 client.resources.list({ filter: "resourceType eq 'Microsoft.DocumentDB/mongoClusters'" }),

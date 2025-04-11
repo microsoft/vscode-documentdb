@@ -9,6 +9,11 @@ import { type Experience } from '../../AzureDBExperiences';
 import { type ParsedCosmosDBConnectionString } from '../../cosmosdb/cosmosDBConnectionStrings';
 import { type QuickPickType } from '../../utils/pickItem/pickExperience';
 
+export enum ConnectionMode {
+    ConnectionString,
+    ServiceDiscovery,
+}
+
 export interface NewConnectionWizardContext extends IActionContext {
     quickPickType: QuickPickType;
     parentId: string;
@@ -19,4 +24,19 @@ export interface NewConnectionWizardContext extends IActionContext {
 
     username?: string;
     password?: string;
+
+    // The following properties are used in the "DocumentDB Connections" experience
+    connectionMode?: ConnectionMode;
+
+    /**
+     * The ID of the service discovery provider for service discovery connections.
+     * Only used when connectionMode is ConnectionMode.ServiceDiscovery.
+     *
+     * Set during the connection wizard prompt flow.
+     */
+    serviceDiscoveryProviderId?: string;
+
+    properties: {
+        [key: string]: unknown;
+    };
 }
