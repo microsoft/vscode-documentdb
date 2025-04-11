@@ -8,9 +8,9 @@ import { type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import { Disposable, l10n, ThemeIcon } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
 import { type ServiceDiscoveryProvider } from '../../services/serviceDiscoveryServices';
-import { AzureExecuteStep } from './wizard/AzureExecuteStep';
-import { SelectClusterStep } from './wizard/SelectClusterStep';
-import { SelectSubscriptionStep } from './wizard/SelectSubscriptionStep';
+import { AzureExecuteStep } from './discovery-wizard/AzureExecuteStep';
+import { SelectClusterStep } from './discovery-wizard/SelectClusterStep';
+import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep';
 
 export enum AzureContextProperties {
     ServiceDiscoveryProvider = 'serviceDiscoveryProvider',
