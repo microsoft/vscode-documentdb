@@ -23,10 +23,6 @@ export class AzureServiceBranchDataProvider
     extends vscode.Disposable
     implements BaseServiceBranchDataProvider<TreeElementBase>
 {
-    id = 'azure-provider';
-    label = ' Azure Label';
-    icon = new vscode.ThemeIcon('azure');
-
     private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<
         void | TreeElementBase | TreeElementBase[] | null | undefined
     >();

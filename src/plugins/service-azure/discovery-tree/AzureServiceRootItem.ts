@@ -23,19 +23,18 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        void ext.state.runWithTemporaryDescription(this.id, 'Signing in to Azure...', async () => {
-            if (!(await this.azureSubscriptionProvider.isSignedIn())) {
+        /**
+         * This is an important step to ensure that the user is signed in to Azure before listing subscriptions.
+         */
+        if (!(await this.azureSubscriptionProvider.isSignedIn())) {
+            void ext.state.runWithTemporaryDescription(this.id, 'Signing in to Azure...', async () => {
                 await this.azureSubscriptionProvider.signIn();
-            }
-        });
+            });
+        }
 
-        const subscriptions = await ext.state.runWithTemporaryDescription(
-            this.id,
-            'Loading Azure subscriptions...',
-            async () => {
-                return this.azureSubscriptionProvider.getSubscriptions(false); // TODO: add filter support, but it has to be a filter that works without Azure Resource installed.
-            },
-        );
+        const subscriptions = await ext.state.runWithTemporaryDescription(this.id, 'Working...', async () => {
+            return this.azureSubscriptionProvider.getSubscriptions(false); // TODO: add filter support, but it has to be a filter that works without Azure Resource installed.
+        });
 
         return subscriptions.map((sub) => {
             return new AzureSubscriptionItem(this.id, {
@@ -50,7 +49,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: l10n.t('Azure'),
+            label: l10n.t('Azure Cosmos DB for MongoDB (vCore)'),
             iconPath: new vscode.ThemeIcon('azure'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };

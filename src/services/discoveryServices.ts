@@ -9,13 +9,21 @@ import { type NewConnectionWizardContext } from '../commands/newConnection/NewCo
 import { type BaseServiceBranchDataProvider } from '../tree/discovery-view/BaseServiceBranchDataProvider';
 
 /**
- * Describes a service provider with basic information and optional icon.
+ * Represents basic information about a service provider.
  */
 export interface ProviderDescription {
+    /**
+     * Unique identifier for the provider.
+     * It's internal and not shown to the user.
+     */
     readonly id: string;
+
     readonly label: string;
     readonly description: string;
 
+    /**
+     * Optional icon associated with the provider.
+     */
     readonly iconPath?:
         | vscode.Uri
         | {
@@ -25,20 +33,35 @@ export interface ProviderDescription {
         | vscode.ThemeIcon;
 }
 
+/**
+ * Represents a discovery provider that extends basic provider information
+ * with methods to obtain wizard options and tree data providers.
+ */
 export interface DiscoveryProvider extends ProviderDescription {
+    /**
+     * Retrieves wizard options for discovering new connections.
+     *
+     * @param context - The wizard context used during the discovery process.
+     * @returns Wizard options configured for the discovery process.
+     */
     getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext>;
 
+    /**
+     * Retrieves the tree data provider for displaying discovered resources.
+     *
+     * @returns A tree data provider instance for the discovery view.
+     */
     getDiscoveryTreeDataProvider(): BaseServiceBranchDataProvider<TreeElementBase>;
 }
 
 /**
- * Private implementation of Storage interface that manages items and their
- * associated secrets in VSCode's storage mechanisms.
+ * Private implementation of DiscoveryService that manages cloud service providers
+ * for discovery functionality.
  *
- * Items are stored in VSCode's globalState, and secrets are stored using SecretStorage.
- * Each item is uniquely identified by its `id` within a given workspace.
+ * Service providers are registered with unique IDs and can be retrieved individually
+ * or listed as a collection of provider descriptions.
  *
- * This class cannot be instantiated directly - use StorageService.get() instead.
+ * This class cannot be instantiated directly - use the exported DiscoveryService singleton instead.
  */
 class DiscoveryServiceImpl {
     private serviceProviders: Map<string, DiscoveryProvider> = new Map();

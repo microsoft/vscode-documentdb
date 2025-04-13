@@ -36,6 +36,9 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             AzureContextProperties.AzureSubscriptionProvider
         ] as VSCodeAzureSubscriptionProvider;
 
+        /**
+         * This is an important step to ensure that the user is signed in to Azure before listing subscriptions.
+         */
         if (!(await subscriptionProvider.isSignedIn())) {
             await subscriptionProvider.signIn();
         }

@@ -22,8 +22,8 @@ export enum AzureContextProperties {
 
 export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvider {
     id = 'azure-discovery';
-    label = 'Azure';
-    description = 'Azure Service Discovery';
+    label = l10n.t('Azure Cosmos DB for MongoDB (vCore)');
+    description = l10n.t('Azure Service Discovery');
     iconPath = new ThemeIcon('azure');
 
     azureSubscriptionProvider: VSCodeAzureSubscriptionProvider;

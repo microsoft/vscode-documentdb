@@ -84,10 +84,10 @@ export class ConnectionsBranchDataProvider
              * we have a special case here as we'd love to show a "welcome screen" in the case when no connections were found.
              * However, we need to lookup the emulator items as well, so we need to check if there are any emulators.
              */
-            // const emulatorItems = await StorageService.get(StorageNames.Connections).getItems('emulators');
-            // if (emulatorItems.length === 0) {
-            //     return null;
-            // }
+            const emulatorItems = await StorageService.get(StorageNames.Connections).getItems('emulators');
+            if (emulatorItems.length === 0) {
+                return null;
+            }
         }
 
         const rootItems = [

@@ -29,6 +29,7 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         }
 
         const connectionString = await this.getConnectionString(context);
+
         if (!connectionString) {
             throw new Error('Failed to discover the connection string.');
         }
@@ -72,6 +73,10 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
                     connectionString.username = clusterInformation.administratorLogin;
                 }
 
+                /**
+                 * The connection string returned from Azure does not include the actual password.
+                 * Instead, it contains a placeholder. We explicitly set the password to an empty string here.
+                 */
                 connectionString.password = '';
 
                 return connectionString.toString();

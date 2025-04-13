@@ -54,22 +54,23 @@ export class PromptServiceDiscoveryStep extends AzureWizardPromptStep<NewConnect
             throw new UserCancelledError();
         }
 
-        context.serviceDiscoveryProviderId = selectedItem.id;
+        context.discoveryProviderId = selectedItem.id;
     }
 
     public async getSubWizard(
         wizardContext: NewConnectionWizardContext,
     ): Promise<IWizardOptions<NewConnectionWizardContext> | undefined> {
-        if (!wizardContext.serviceDiscoveryProviderId) {
+        if (!wizardContext.discoveryProviderId) {
             return undefined;
         }
 
-        // delegate to the provider, only it knows what steps it needs and how to help the user
-        // we expect the provider to return a wizard with prompt and execute steps so that in the end
-        // the wizardContext.connectionString is set
-        return DiscoveryService.getProvider(wizardContext.serviceDiscoveryProviderId)?.getDiscoveryWizard(
-            wizardContext,
-        );
+        /*
+         * Delegate to the provider, as only the provider knows the necessary steps
+         * and how to assist the user effectively.
+         * The provider is expected to return a wizard containing both prompt and execute steps.
+         * By the end of the process, the wizard should ensure that `wizardContext.connectionString` is set.
+         */
+        return DiscoveryService.getProvider(wizardContext.discoveryProviderId)?.getDiscoveryWizard(wizardContext);
     }
 
     public shouldPrompt(): boolean {

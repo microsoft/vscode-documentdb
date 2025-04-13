@@ -34,7 +34,7 @@ export interface NewConnectionWizardContext extends IActionContext {
      *
      * Set during the connection wizard prompt flow.
      */
-    serviceDiscoveryProviderId?: string;
+    discoveryProviderId?: string;
 
     properties: {
         [key: string]: unknown;
