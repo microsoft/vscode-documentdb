@@ -9,7 +9,7 @@ import {
     type TreeElementBase,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { ServiceDiscoveryService } from '../../services/serviceDiscoveryServices';
+import { DiscoveryService } from '../../services/discoveryServices';
 import { type BaseServiceBranchDataProvider } from './BaseServiceBranchDataProvider';
 import { wrapServiceItem, type ServiceItemWrapper } from './ServiceItemWrapper';
 
@@ -26,7 +26,7 @@ export class DiscoveryBranchDataProvider
     extends vscode.Disposable
     implements vscode.TreeDataProvider<ServiceItemWrapper>
 {
-    private serviceProviders: Map<string, BaseServiceBranchDataProvider<TreeElementBase>> = new Map();
+    private discoveryProviders: Map<string, BaseServiceBranchDataProvider<TreeElementBase>> = new Map();
 
     private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<
         void | ServiceItemWrapper | ServiceItemWrapper[] | null | undefined
@@ -48,12 +48,12 @@ export class DiscoveryBranchDataProvider
             this.onDidChangeTreeDataEmitter.dispose();
         });
 
-        const providers = ServiceDiscoveryService.listProviders()
-            .map((info) => ServiceDiscoveryService.getProvider(info.id))
+        const providers = DiscoveryService.listProviders()
+            .map((info) => DiscoveryService.getProvider(info.id))
             .filter((provider) => provider !== undefined);
 
         for (const provider of providers) {
-            this.serviceProviders.set(provider.id, provider.getDiscoveryTreeDataProvider());
+            this.discoveryProviders.set(provider.id, provider.getDiscoveryTreeDataProvider());
         }
     }
 
@@ -67,7 +67,7 @@ export class DiscoveryBranchDataProvider
                  * and get their root items.
                  */
                 const wrappedRootItems: ServiceItemWrapper[] = [];
-                for (const provider of this.serviceProviders.values()) {
+                for (const provider of this.discoveryProviders.values()) {
                     wrappedRootItems.push(wrapServiceItem(provider, await provider.getRootItem()));
                 }
 

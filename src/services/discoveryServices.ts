@@ -25,7 +25,7 @@ export interface ProviderDescription {
         | vscode.ThemeIcon;
 }
 
-export interface ServiceDiscoveryProvider extends ProviderDescription {
+export interface DiscoveryProvider extends ProviderDescription {
     getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext>;
 
     getDiscoveryTreeDataProvider(): BaseServiceBranchDataProvider<TreeElementBase>;
@@ -40,14 +40,14 @@ export interface ServiceDiscoveryProvider extends ProviderDescription {
  *
  * This class cannot be instantiated directly - use StorageService.get() instead.
  */
-class ServiceDiscoveryServiceImpl {
-    private serviceProviders: Map<string, ServiceDiscoveryProvider> = new Map();
+class DiscoveryServiceImpl {
+    private serviceProviders: Map<string, DiscoveryProvider> = new Map();
 
-    public registerProvider(provider: ServiceDiscoveryProvider) {
+    public registerProvider(provider: DiscoveryProvider) {
         this.serviceProviders.set(provider.id, provider);
     }
 
-    public getProvider(id: string): ServiceDiscoveryProvider | undefined {
+    public getProvider(id: string): DiscoveryProvider | undefined {
         return this.serviceProviders.get(id);
     }
 
@@ -63,4 +63,4 @@ class ServiceDiscoveryServiceImpl {
     }
 }
 
-export const ServiceDiscoveryService = new ServiceDiscoveryServiceImpl();
+export const DiscoveryService = new DiscoveryServiceImpl();

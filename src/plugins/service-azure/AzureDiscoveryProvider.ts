@@ -8,7 +8,7 @@ import { type IWizardOptions, type TreeElementBase } from '@microsoft/vscode-aze
 import { type BaseServiceBranchDataProvider } from 'src/tree/discovery-view/BaseServiceBranchDataProvider';
 import { Disposable, l10n, ThemeIcon } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
-import { type ServiceDiscoveryProvider } from '../../services/serviceDiscoveryServices';
+import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { AzureServiceBranchDataProvider } from './discovery-tree/AzureServiceBranchDataProvider';
 import { AzureExecuteStep } from './discovery-wizard/AzureExecuteStep';
 import { SelectClusterStep } from './discovery-wizard/SelectClusterStep';
@@ -20,7 +20,7 @@ export enum AzureContextProperties {
     SelectedCluster = 'selectedCluster',
 }
 
-export class AzureDiscoveryProvider extends Disposable implements ServiceDiscoveryProvider {
+export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvider {
     id = 'azure-discovery';
     label = 'Azure';
     description = 'Azure Service Discovery';

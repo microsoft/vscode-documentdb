@@ -31,7 +31,7 @@ import { openCollectionView, openCollectionViewInternal } from '../commands/open
 import { openMongoDocumentView } from '../commands/openDocument/openDocument';
 import { ext } from '../extensionVariables';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
-import { ServiceDiscoveryService } from '../services/serviceDiscoveryServices';
+import { DiscoveryService } from '../services/discoveryServices';
 import { MongoVCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
@@ -45,7 +45,7 @@ export class ClustersExtension implements vscode.Disposable {
     }
 
     registerDiscoveryServices(_activateContext: IActionContext) {
-        ServiceDiscoveryService.registerProvider(new AzureDiscoveryProvider());
+        DiscoveryService.registerProvider(new AzureDiscoveryProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
