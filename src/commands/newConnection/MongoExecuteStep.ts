@@ -9,7 +9,6 @@ import ConnectionString from 'mongodb-connection-string-url';
 import { API } from '../../AzureDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
-import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 export class MongoExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
@@ -20,7 +19,7 @@ export class MongoExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         const connectionString = context.connectionString!;
         const parentId = context.parentId;
 
-        if (api === API.MongoDB || api === API.MongoClusters) {
+        if (api === API.MongoDB || api === API.MongoClusters || api === API.Common) {
             const parsedCS = new ConnectionString(connectionString);
 
             const label = parsedCS.username + '@' + parsedCS.hosts.join(',');
@@ -38,11 +37,19 @@ export class MongoExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
                         secrets: [connectionString],
                     };
 
-                    await StorageService.get(StorageNames.Workspace).push(
-                        WorkspaceResourceType.MongoClusters,
-                        storageItem,
-                        true,
-                    );
+                    await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
+
+                    if (parentId === undefined || parentId === '') {
+                        // Refresh the connections tree when adding a new root-level connection
+                        // (No need to refresh when adding a child node)
+                        ext.connectionsBranchDataProvider.refresh();
+
+                        // TODO: Find the actual tree element by ID before revealing it
+                        // const treeItem = await ext.connectionsBranchDataProvider.findItemById(storageItem.id); // `findItemById` is a placeholder, does not exist in the current code
+                        // if (treeItem) {
+                        //     ext.connectionsTreeView.reveal(treeItem, { select: true, focus: true });
+                        // }
+                    }
                 },
             );
         }

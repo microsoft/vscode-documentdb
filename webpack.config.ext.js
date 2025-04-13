@@ -167,6 +167,14 @@ module.exports = (env, { mode }) => {
                         to: '.vscodeignore',
                         toType: 'file',
                     },
+                    {
+                        from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
+                        to: 'node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
+                    },
+                    {
+                        from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/MongoClusters.svg',
+                        to: 'node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/MongoClusters.svg',
+                    },
                 ],
             }),
         ].filter(Boolean),

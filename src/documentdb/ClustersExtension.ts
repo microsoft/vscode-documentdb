@@ -16,7 +16,7 @@ import {
     registerCommandWithTreeNodeUnwrapping,
 } from '@microsoft/vscode-azext-utils';
 import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import { createMongoCollection } from '../commands/createContainer/createContainer';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteAzureContainer } from '../commands/deleteContainer/deleteContainer';
@@ -30,7 +30,11 @@ import { launchShell } from '../commands/launchShell/launchShell';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openMongoDocumentView } from '../commands/openDocument/openDocument';
 import { ext } from '../extensionVariables';
+import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
+import { DiscoveryService } from '../services/discoveryServices';
 import { MongoVCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
+import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
+import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
@@ -38,6 +42,35 @@ import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands
 export class ClustersExtension implements vscode.Disposable {
     dispose(): Promise<void> {
         return Promise.resolve();
+    }
+
+    registerDiscoveryServices(_activateContext: IActionContext) {
+        DiscoveryService.registerProvider(new AzureDiscoveryProvider());
+    }
+
+    registerConnectionsTree(_activateContext: IActionContext): void {
+        ext.connectionsBranchDataProvider = new ConnectionsBranchDataProvider();
+
+        const treeView = vscode.window.createTreeView('documentDBConnections', {
+            canSelectMany: true,
+            showCollapseAll: true,
+            treeDataProvider: ext.connectionsBranchDataProvider,
+        });
+        ext.context.subscriptions.push(treeView);
+    }
+
+    registerDiscoveryTree(_activateContext: IActionContext): void {
+        /**
+         * Here, a behavior similar to Workspace Branch Data Providers from Azure Resources will be needed.
+         */
+        ext.discoveryBranchDataProvider = new DiscoveryBranchDataProvider();
+
+        const treeView = vscode.window.createTreeView('documentDBDiscovery', {
+            showCollapseAll: true,
+            treeDataProvider: ext.discoveryBranchDataProvider,
+        });
+
+        ext.context.subscriptions.push(treeView);
     }
 
     async activate(): Promise<void> {
@@ -61,6 +94,10 @@ export class ClustersExtension implements vscode.Disposable {
                     WorkspaceResourceType.MongoClusters,
                     ext.mongoClustersWorkspaceBranchDataProvider,
                 );
+
+                this.registerDiscoveryServices(activateContext);
+                this.registerConnectionsTree(activateContext);
+                this.registerDiscoveryTree(activateContext);
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling

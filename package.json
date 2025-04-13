@@ -226,6 +226,47 @@
         ]
       }
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "documentDB",
+          "title": "DocumentDB",
+          "icon": "$(project)"
+        }
+      ]
+    },
+    "views": {
+      "documentDB": [
+        {
+          "id": "documentDBConnections",
+          "name": "DocumentDB Connections",
+          "visibility": "visible",
+          "icon": "$(plug)"
+        },
+        {
+          "id": "documentDBDiscovery",
+          "name": "Service Discovery",
+          "visibility": "visible",
+          "icon": "$(plug)"
+        },
+        {
+          "id": "documentDBHelp",
+          "name": "Help and Feedback",
+          "visibility": "collapsed",
+          "icon": "$(question)"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "documentDBConnections",
+        "contents": "Welcome! To start exploring and managing your database, you'll need to connect to it first. Once connected, you can easily view, query, and modify your data.\n\n[$(plus) Add New Connection…](command:documentDB.newConnection)\nClick the button above to get started and unlock the full potential of your database."
+      },
+      {
+        "view": "documentDBDiscovery",
+        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:documentDB.activateDiscovery)\nClick the button above to get started and to start discovering your databases."
+      }
+    ],
     "languages": [
       {
         "id": "mongo",
@@ -602,6 +643,12 @@
         "category": "MongoDB Clusters",
         "command": "command.mongoClusters.containerView.open",
         "title": "%cosmosdb.command.mongo.collection.open%"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "documentDB.newConnection",
+        "title": "New Connection…",
+        "icon": "$(plug)"
       }
     ],
     "submenus": [

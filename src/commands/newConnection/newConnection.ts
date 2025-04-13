@@ -6,12 +6,14 @@
 import { AzExtTreeItem, AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../extensionVariables';
+import { NewConnectionItemCV } from '../../tree/connections-view/NewConnectionItemCV';
 import { CosmosDBAttachAccountResourceItem } from '../../tree/workspace-view/cosmosdb/CosmosDBAttachAccountResourceItem';
 import { NewConnectionItem } from '../../tree/workspace-view/documentdb/NewConnectionItem';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { QuickPickType } from '../../utils/pickItem/pickExperience';
 import { ExperienceStep } from './ExperienceStep';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
+import { PromptConnectionModeStep } from './PromptConnectionModeStep';
 
 export async function newConnection(
     context: IActionContext,
@@ -35,15 +37,21 @@ export async function newConnection(
         parentId = node.parentId ?? ext.mongoClusterWorkspaceBranchDataResource.id;
     }
 
+    if (node instanceof NewConnectionItemCV || type === QuickPickType.ALL) {
+        type = QuickPickType.DocumentDB;
+    }
+
     const wizardContext: NewConnectionWizardContext = {
         ...context,
         quickPickType: type,
         parentId,
+        properties: {},
     };
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('New Connection'),
-        promptSteps: [new ExperienceStep()],
+        // TODO: a plug here to esure merge-compatibility with the old code, simplify once the sync-merge procedure is done
+        promptSteps: type === QuickPickType.DocumentDB ? [new PromptConnectionModeStep()] : [new ExperienceStep()],
         executeSteps: [],
         showLoadingPrompt: true,
     });
