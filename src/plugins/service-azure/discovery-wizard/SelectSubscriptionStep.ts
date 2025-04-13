@@ -23,9 +23,9 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         if (
-            context.properties[AzureContextProperties.ServiceDiscoveryProvider] === undefined ||
+            context.properties[AzureContextProperties.AzureSubscriptionProvider] === undefined ||
             !(
-                context.properties[AzureContextProperties.ServiceDiscoveryProvider] instanceof
+                context.properties[AzureContextProperties.AzureSubscriptionProvider] instanceof
                 VSCodeAzureSubscriptionProvider
             )
         ) {
@@ -33,8 +33,13 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
         }
 
         const subscriptionProvider = context.properties[
-            AzureContextProperties.ServiceDiscoveryProvider
+            AzureContextProperties.AzureSubscriptionProvider
         ] as VSCodeAzureSubscriptionProvider;
+
+        if (!(await subscriptionProvider.isSignedIn())) {
+            await subscriptionProvider.signIn();
+        }
+
         const subscriptions = await subscriptionProvider.getSubscriptions(false);
 
         const promptItems: (QuickPickItem & { id: string })[] = subscriptions

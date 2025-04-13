@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import { type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { type TreeElementBase } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { type BaseServiceBranchDataProvider } from '../api/BaseServiceBranchDataProvider';
+import { type BaseServiceBranchDataProvider } from '../../../tree/discovery-view/BaseServiceBranchDataProvider';
 import { AzureServiceRootItem } from './AzureServiceRootItem';
 
 /**
@@ -42,19 +42,16 @@ export class AzureServiceBranchDataProvider
         return this.onDidChangeTreeDataEmitter.event;
     }
 
-    constructor() {
-        if (!ext.azureSubscriptionProvider) {
-            ext.azureSubscriptionProvider = new VSCodeAzureSubscriptionProvider();
-        }
-
+    constructor(private readonly azureSubscriptionProvider: VSCodeAzureSubscriptionProvider) {
         super(() => {
             this.onDidChangeTreeDataEmitter.dispose();
-            ext.azureSubscriptionProvider.dispose();
+            this.azureSubscriptionProvider.dispose();
         });
     }
 
     getRootItem(): Promise<TreeElementBase> {
-        const rootItem = new AzureServiceRootItem();
+        const rootItem = new AzureServiceRootItem(this.azureSubscriptionProvider);
+
         if (rootItem.id) {
             return Promise.resolve(
                 ext.state.wrapItemInStateHandling(rootItem as TreeElementBase & { id: string }, () =>
@@ -63,7 +60,7 @@ export class AzureServiceBranchDataProvider
             );
         }
 
-        return Promise.resolve(new AzureServiceRootItem());
+        return Promise.resolve(rootItem);
     }
 
     async getChildren(element: TreeElementBase): Promise<TreeElementBase[] | null | undefined> {

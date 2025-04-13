@@ -6,12 +6,12 @@
 import { AzureWizardPromptStep, openUrl, UserCancelledError, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { QuickPickItemKind, type QuickPickItem } from 'vscode';
-import { ServiceDiscoveryService } from '../../services/serviceDiscoveryServices';
+import { DiscoveryService } from '../../services/discoveryServices';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 export class PromptServiceDiscoveryStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const promptItems: (QuickPickItem & { id: string })[] = ServiceDiscoveryService.listProviders()
+        const promptItems: (QuickPickItem & { id: string })[] = DiscoveryService.listProviders()
             .map((provider) => ({
                 id: provider.id,
                 label: provider.label,
@@ -67,7 +67,7 @@ export class PromptServiceDiscoveryStep extends AzureWizardPromptStep<NewConnect
         // delegate to the provider, only it knows what steps it needs and how to help the user
         // we expect the provider to return a wizard with prompt and execute steps so that in the end
         // the wizardContext.connectionString is set
-        return ServiceDiscoveryService.getProvider(wizardContext.serviceDiscoveryProviderId)?.getDiscoveryWizard(
+        return DiscoveryService.getProvider(wizardContext.serviceDiscoveryProviderId)?.getDiscoveryWizard(
             wizardContext,
         );
     }

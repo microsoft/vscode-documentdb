@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IWizardOptions } from '@microsoft/vscode-azext-utils';
+import { type IWizardOptions, type TreeElementBase } from '@microsoft/vscode-azext-utils';
 import type * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../commands/newConnection/NewConnectionWizardContext';
+import { type BaseServiceBranchDataProvider } from '../tree/discovery-view/BaseServiceBranchDataProvider';
 
 /**
  * Describes a service provider with basic information and optional icon.
@@ -24,8 +25,10 @@ export interface ProviderDescription {
         | vscode.ThemeIcon;
 }
 
-export interface ServiceDiscoveryProvider extends ProviderDescription {
+export interface DiscoveryProvider extends ProviderDescription {
     getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext>;
+
+    getDiscoveryTreeDataProvider(): BaseServiceBranchDataProvider<TreeElementBase>;
 }
 
 /**
@@ -37,14 +40,14 @@ export interface ServiceDiscoveryProvider extends ProviderDescription {
  *
  * This class cannot be instantiated directly - use StorageService.get() instead.
  */
-class ServiceDiscoveryServiceImpl {
-    private serviceProviders: Map<string, ServiceDiscoveryProvider> = new Map();
+class DiscoveryServiceImpl {
+    private serviceProviders: Map<string, DiscoveryProvider> = new Map();
 
-    public registerProvider(provider: ServiceDiscoveryProvider) {
+    public registerProvider(provider: DiscoveryProvider) {
         this.serviceProviders.set(provider.id, provider);
     }
 
-    public getProvider(id: string): ServiceDiscoveryProvider | undefined {
+    public getProvider(id: string): DiscoveryProvider | undefined {
         return this.serviceProviders.get(id);
     }
 
@@ -60,4 +63,4 @@ class ServiceDiscoveryServiceImpl {
     }
 }
 
-export const ServiceDiscoveryService = new ServiceDiscoveryServiceImpl();
+export const DiscoveryService = new DiscoveryServiceImpl();

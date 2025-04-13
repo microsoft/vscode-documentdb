@@ -9,7 +9,8 @@ import {
     type TreeElementBase,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { type BaseServiceBranchDataProvider } from './api/BaseServiceBranchDataProvider';
+import { DiscoveryService } from '../../services/discoveryServices';
+import { type BaseServiceBranchDataProvider } from './BaseServiceBranchDataProvider';
 import { wrapServiceItem, type ServiceItemWrapper } from './ServiceItemWrapper';
 
 /**
@@ -25,7 +26,7 @@ export class DiscoveryBranchDataProvider
     extends vscode.Disposable
     implements vscode.TreeDataProvider<ServiceItemWrapper>
 {
-    private serviceProviders: Map<string, BaseServiceBranchDataProvider<TreeElementBase>> = new Map();
+    private discoveryProviders: Map<string, BaseServiceBranchDataProvider<TreeElementBase>> = new Map();
 
     private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<
         void | ServiceItemWrapper | ServiceItemWrapper[] | null | undefined
@@ -46,6 +47,14 @@ export class DiscoveryBranchDataProvider
         super(() => {
             this.onDidChangeTreeDataEmitter.dispose();
         });
+
+        const providers = DiscoveryService.listProviders()
+            .map((info) => DiscoveryService.getProvider(info.id))
+            .filter((provider) => provider !== undefined);
+
+        for (const provider of providers) {
+            this.discoveryProviders.set(provider.id, provider.getDiscoveryTreeDataProvider());
+        }
     }
 
     async getChildren(element: ServiceItemWrapper): Promise<ServiceItemWrapper[] | null | undefined> {
@@ -58,7 +67,7 @@ export class DiscoveryBranchDataProvider
                  * and get their root items.
                  */
                 const wrappedRootItems: ServiceItemWrapper[] = [];
-                for (const provider of this.serviceProviders.values()) {
+                for (const provider of this.discoveryProviders.values()) {
                     wrappedRootItems.push(wrapServiceItem(provider, await provider.getRootItem()));
                 }
 
@@ -77,31 +86,6 @@ export class DiscoveryBranchDataProvider
                 return wrapServiceItem(element.provider, child);
             });
         });
-    }
-
-    public registerProvider(provider: BaseServiceBranchDataProvider<TreeElementBase>): vscode.Disposable {
-        this.serviceProviders.set(provider.id, provider);
-
-        // const disposable = provider.onDidChangeTreeData?.((child) => {
-        //     if (child === undefined || child === null) {
-        //         // Refresh the entire tree
-        //         this.onDidChangeTreeDataEmitter.fire(undefined);
-        //     } else if (Array.isArray(child)) {
-        //         // Handle array of items
-        //         const wrappedItems = child.map((item) => wrapServiceItem(provider, item));
-        //         this.onDidChangeTreeDataEmitter.fire(wrappedItems);
-        //     } else {
-        //         // Handle single item
-        //         this.onDidChangeTreeDataEmitter.fire(wrapServiceItem(provider, child));
-        //     }
-        // });
-
-        return {
-            dispose: () => {
-                // disposable?.dispose();
-                this.serviceProviders.delete(provider.id);
-            },
-        };
     }
 
     getTreeItem(element: ServiceItemWrapper): vscode.TreeItem | Thenable<vscode.TreeItem> {

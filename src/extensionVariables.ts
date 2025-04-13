@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { type IAzExtLogOutputChannel, type TreeElementStateManager } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import { type AzureHostExtensionApi } from '@microsoft/vscode-azext-utils/hostapi';
@@ -74,10 +73,6 @@ export namespace ext {
     export let connectionsBranchDataProvider: ConnectionsBranchDataProvider;
 
     export let discoveryBranchDataProvider: DiscoveryBranchDataProvider;
-
-    // TODO: it's needed only when integrating with Azure, but it's so easy to just have it here..
-    // revisit once the functionality is done, create an AzureService in /src/services/
-    export let azureSubscriptionProvider: VSCodeAzureSubscriptionProvider;
 
     export namespace settingsKeys {
         export const mongoShellPath = 'mongo.shell.path';
