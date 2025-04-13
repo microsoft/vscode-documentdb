@@ -7,8 +7,8 @@ import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureau
 import { type TreeElementBase } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { type BaseServiceBranchDataProvider } from '../api/BaseServiceBranchDataProvider';
-import { AzureServiceRootItem } from './AzureServiceRootItem';
+import { type BaseServiceBranchDataProvider } from '../../../tree/discovery-view/api/BaseServiceBranchDataProvider';
+import { AzureServiceRootItem } from '../../../tree/discovery-view/azure/AzureServiceRootItem';
 
 /**
  * This class follows the same pattern as the `WorkspaceDataProvicers` does with Azure Resoruces.

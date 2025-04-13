@@ -10,9 +10,9 @@ import * as vscode from 'vscode';
 import { MongoClustersExperience } from '../../../AzureDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { createResourceManagementClient } from '../../../utils/azureClients';
-import { type ExtTreeElementBase, type TreeElement } from '../../TreeElement';
-import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
+import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
+import { type ClusterModel } from '../../../tree/documentdb/ClusterModel';
 import { DocumentDBResourceItem } from './documentdb/DocumentDBResourceItem';
 
 export interface AzureSubscriptionModel {

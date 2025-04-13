@@ -6,9 +6,9 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { type ExtTreeElementBase, type TreeElement } from '../../TreeElement';
-import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { AzureSubscriptionItem } from './AzureSubscriptionItem';
+import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
+import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
+import { AzureSubscriptionItem } from '../../../tree/discovery-view/azure/AzureSubscriptionItem';
 
 export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
