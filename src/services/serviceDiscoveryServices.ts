@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IWizardOptions } from '@microsoft/vscode-azext-utils';
+import { type IWizardOptions, type TreeElementBase } from '@microsoft/vscode-azext-utils';
 import type * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../commands/newConnection/NewConnectionWizardContext';
+import { type BaseServiceBranchDataProvider } from '../tree/discovery-view/BaseServiceBranchDataProvider';
 
 /**
  * Describes a service provider with basic information and optional icon.
@@ -26,6 +27,8 @@ export interface ProviderDescription {
 
 export interface ServiceDiscoveryProvider extends ProviderDescription {
     getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext>;
+
+    getDiscoveryTreeDataProvider(): BaseServiceBranchDataProvider<TreeElementBase>;
 }
 
 /**

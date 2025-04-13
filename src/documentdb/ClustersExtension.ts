@@ -34,7 +34,6 @@ import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryP
 import { ServiceDiscoveryService } from '../services/serviceDiscoveryServices';
 import { MongoVCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
-import { AzureServiceBranchDataProvider } from '../tree/discovery-view/azure/AzureServiceBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
@@ -43,6 +42,10 @@ import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands
 export class ClustersExtension implements vscode.Disposable {
     dispose(): Promise<void> {
         return Promise.resolve();
+    }
+
+    registerDiscoveryServices(_activateContext: IActionContext) {
+        ServiceDiscoveryService.registerProvider(new AzureDiscoveryProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
@@ -62,17 +65,11 @@ export class ClustersExtension implements vscode.Disposable {
          */
         ext.discoveryBranchDataProvider = new DiscoveryBranchDataProvider();
 
-        // Today, we only have one service provider, but in the future, we will have more.
-        ext.context.subscriptions.push(
-            ext.discoveryBranchDataProvider.registerProvider(new AzureServiceBranchDataProvider()),
-        );
-
-        ServiceDiscoveryService.registerProvider(new AzureDiscoveryProvider());
-
         const treeView = vscode.window.createTreeView('documentDBDiscovery', {
             showCollapseAll: true,
             treeDataProvider: ext.discoveryBranchDataProvider,
         });
+
         ext.context.subscriptions.push(treeView);
     }
 
@@ -98,6 +95,7 @@ export class ClustersExtension implements vscode.Disposable {
                     ext.mongoClustersWorkspaceBranchDataProvider,
                 );
 
+                this.registerDiscoveryServices(activateContext);
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
 

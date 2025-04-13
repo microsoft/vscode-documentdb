@@ -21,9 +21,9 @@ import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/a
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
-import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
 import { ClusterItemBase } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
 
 export class DocumentDBResourceItem extends ClusterItemBase {
     iconPath = vscode.Uri.joinPath(

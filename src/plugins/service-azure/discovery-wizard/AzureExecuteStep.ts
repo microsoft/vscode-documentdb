@@ -34,6 +34,11 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         }
 
         context.connectionString = connectionString;
+
+        // clean-up
+        context.properties[AzureContextProperties.SelectedSubscription] = undefined;
+        context.properties[AzureContextProperties.SelectedCluster] = undefined;
+        context.properties[AzureContextProperties.AzureSubscriptionProvider] = undefined;
     }
 
     async getConnectionString(wizardContext: NewConnectionWizardContext): Promise<string | undefined> {

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type TreeElementBase } from '@microsoft/vscode-azext-utils';
-import { type BaseServiceBranchDataProvider } from './api/BaseServiceBranchDataProvider';
+import { type BaseServiceBranchDataProvider } from './BaseServiceBranchDataProvider';
 
 export interface ServiceItemWrapper {
     provider: BaseServiceBranchDataProvider<TreeElementBase>;
