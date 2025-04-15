@@ -55,7 +55,7 @@ export class ClustersExtension implements vscode.Disposable {
     registerConnectionsTree(_activateContext: IActionContext): void {
         ext.connectionsBranchDataProvider = new ConnectionsBranchDataProvider();
 
-        const treeView = vscode.window.createTreeView('documentDBConnections', {
+        const treeView = vscode.window.createTreeView(Views.ConnectionsView, {
             canSelectMany: true,
             showCollapseAll: true,
             treeDataProvider: ext.connectionsBranchDataProvider,
@@ -69,7 +69,7 @@ export class ClustersExtension implements vscode.Disposable {
          */
         ext.discoveryBranchDataProvider = new DiscoveryBranchDataProvider();
 
-        const treeView = vscode.window.createTreeView('documentDBDiscovery', {
+        const treeView = vscode.window.createTreeView(Views.DiscoveryView, {
             showCollapseAll: true,
             treeDataProvider: ext.discoveryBranchDataProvider,
         });
