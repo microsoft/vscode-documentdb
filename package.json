@@ -238,13 +238,13 @@
     "views": {
       "documentDB": [
         {
-          "id": "documentDBConnections",
+          "id": "connectionsView",
           "name": "DocumentDB Connections",
           "visibility": "visible",
           "icon": "$(plug)"
         },
         {
-          "id": "documentDBDiscovery",
+          "id": "discoveryView",
           "name": "Service Discovery",
           "visibility": "visible",
           "icon": "$(plug)"
@@ -259,12 +259,12 @@
     },
     "viewsWelcome": [
       {
-        "view": "documentDBConnections",
+        "view": "connectionsView",
         "contents": "Welcome! To start exploring and managing your database, you'll need to connect to it first. Once connected, you can easily view, query, and modify your data.\n\n[$(plus) Add New Connection…](command:documentDB.newConnection)\nClick the button above to get started and unlock the full potential of your database."
       },
       {
-        "view": "documentDBDiscovery",
-        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:documentDB.activateDiscovery)\nClick the button above to get started and to start discovering your databases."
+        "view": "discoveryView",
+        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:documentdb.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
       }
     ],
     "languages": [
@@ -312,6 +312,30 @@
       }
     ],
     "commands": [
+      {
+        "command": "documentdb.connectionsView.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "documentdb.connectionsView.addConnection",
+        "title": "Add New Connection…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "documentdb.discoveryView.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "documentdb.discoveryView.addRegistry",
+        "title": "Enable new Registry…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "documentdb.discoveryView.removeRegistry",
+        "title": "Disable Registry…"
+      },
       {
         "category": "Azure Databases",
         "command": "azureDatabases.createServer",
@@ -706,6 +730,26 @@
       ],
       "view/title": [
         {
+          "command": "documentdb.connectionsView.refresh",
+          "when": "view == connectionsView",
+          "group": "navigation@10"
+        },
+        {
+          "command": "documentdb.connectionsView.addConnection",
+          "when": "view == connectionsView",
+          "group": "navigation@5"
+        },
+        {
+          "command": "documentdb.discoveryView.refresh",
+          "when": "view == discoveryView",
+          "group": "navigation@10"
+        },
+        {
+          "command": "documentdb.discoveryView.addRegistry",
+          "when": "view == discoveryView",
+          "group": "navigation@5"
+        },
+        {
           "submenu": "azureDatabases.submenus.workspaceActions",
           "when": "view == azureWorkspace",
           "group": "navigation@6"
@@ -768,6 +812,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "documentdb.discoveryView.removeRegistry",
+          "when": "view == discoveryView && viewItem =~ /discoveryRootItem/i",
+          "group": "1@1"
+        },
         {
           "command": "azureDatabases.createServer",
           "when": "view == azureResourceGroups && viewItem =~ /(AzureCosmosDb|PostgreSqlServers(Standard|Flexible))/i && viewItem =~ /azureResourceTypeGroup/i",

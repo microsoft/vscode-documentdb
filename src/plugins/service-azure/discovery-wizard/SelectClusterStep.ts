@@ -53,9 +53,11 @@ export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizard
             .sort((a, b) => a.label.localeCompare(b.label));
 
         const selectedItem = await context.ui.showQuickPick([...promptItems], {
+            stepName: 'selectCluster',
+            placeHolder: l10n.t('Choose a cluster…'),
+            loadingPlaceHolder: l10n.t('Loading subscriptions…'),
             enableGrouping: true,
-            placeHolder: l10n.t('Choose your provider…'),
-            stepName: 'selectProvider',
+            matchOnDescription: true,
             suppressPersistence: true,
         });
 
