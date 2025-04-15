@@ -30,6 +30,7 @@ import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openMongoDocumentView } from '../commands/openDocument/openDocument';
+import { refreshView } from '../commands/refreshView/refreshView';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { ext } from '../extensionVariables';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
@@ -40,6 +41,7 @@ import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBra
 import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
+import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
     dispose(): Promise<void> {
@@ -106,6 +108,13 @@ export class ClustersExtension implements vscode.Disposable {
                     'documentdb.discoveryView.removeRegistry',
                     removeDiscoveryRegistry,
                 );
+                registerCommand('documentdb.discoveryView.refresh', (context: IActionContext) => {
+                    return refreshView(context, Views.DiscoveryView);
+                });
+
+                registerCommand('documentdb.connectionsView.refresh', (context: IActionContext) => {
+                    return refreshView(context, Views.ConnectionsView);
+                });
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling
