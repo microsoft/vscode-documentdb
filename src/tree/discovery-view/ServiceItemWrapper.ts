@@ -9,6 +9,8 @@ import { type BaseServiceBranchDataProvider } from './BaseServiceBranchDataProvi
 export interface ServiceItemWrapper {
     provider: BaseServiceBranchDataProvider<TreeElementBase>;
     wrappedItem: TreeElementBase;
+
+    isRootItem?: boolean;
     // parent: ServiceItemWrapper<T> | undefined;
 }
 

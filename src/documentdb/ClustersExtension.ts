@@ -17,6 +17,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
+import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { createMongoCollection } from '../commands/createContainer/createContainer';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteAzureContainer } from '../commands/deleteContainer/deleteContainer';
@@ -29,6 +30,7 @@ import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openMongoDocumentView } from '../commands/openDocument/openDocument';
+import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { ext } from '../extensionVariables';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
@@ -98,6 +100,12 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerDiscoveryServices(activateContext);
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
+
+                registerCommand('documentdb.discoveryView.addRegistry', addDiscoveryRegistry);
+                registerCommandWithTreeNodeUnwrapping(
+                    'documentdb.discoveryView.removeRegistry',
+                    removeDiscoveryRegistry,
+                );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling

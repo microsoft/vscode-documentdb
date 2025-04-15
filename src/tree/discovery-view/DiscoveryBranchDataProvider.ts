@@ -5,10 +5,12 @@
 
 import {
     callWithTelemetryAndErrorHandling,
+    createContextValue,
     type IActionContext,
     type TreeElementBase,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { type BaseServiceBranchDataProvider } from './BaseServiceBranchDataProvider';
 import { wrapServiceItem, type ServiceItemWrapper } from './ServiceItemWrapper';
@@ -63,21 +65,39 @@ export class DiscoveryBranchDataProvider
 
             if (!element) {
                 /**
-                 * we're at the root of the tree, so we need to get all the registered services
-                 * and get their root items.
+                 * getChildren() (no parameters) is beeing called at the root of the tree.
+                 * We need to get all the registered services and return their root items.
                  */
+                const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>(
+                    'activeDiscoveryProviderIds',
+                    [],
+                );
+
                 const wrappedRootItems: ServiceItemWrapper[] = [];
-                for (const provider of this.discoveryProviders.values()) {
-                    wrappedRootItems.push(wrapServiceItem(provider, await provider.getRootItem()));
+                for (const [providerId, provider] of this.discoveryProviders) {
+                    // only show activated discovery providers
+                    if (!activeDiscoveryProviderIds.includes(providerId)) {
+                        continue;
+                    }
+
+                    const wrappedItem = wrapServiceItem(provider, await provider.getRootItem());
+                    wrappedItem.isRootItem = true;
+
+                    wrappedRootItems.push(wrappedItem);
                 }
 
-                return wrappedRootItems.sort((a, b) => {
-                    return a.wrappedItem.id!.localeCompare(b.wrappedItem.id!);
-                });
+                if (wrappedRootItems.length === 0) {
+                    return null;
+                }
+
+                return wrappedRootItems.sort((a, b) => a.wrappedItem.id?.localeCompare(b.wrappedItem.id ?? '') ?? 0);
             }
 
             /**
-             * We're at a child element, so we need to get the children of the actual item.
+             * We're being asked to provide children for a specific element, this means that discovery providers
+             * have been activated and used to process and populate the tree. Now, the tree is being explored.
+             *
+             * Note: the correct branch data provider has to be used.
              */
 
             context.telemetry.properties.parentNodeContext = (await element.wrappedItem.getTreeItem()).contextValue;
@@ -88,8 +108,18 @@ export class DiscoveryBranchDataProvider
         });
     }
 
-    getTreeItem(element: ServiceItemWrapper): vscode.TreeItem | Thenable<vscode.TreeItem> {
-        return element.provider.getTreeItem(element.wrappedItem);
+    async getTreeItem(element: ServiceItemWrapper): Promise<vscode.TreeItem> {
+        const treeItem: vscode.TreeItem = await element.provider.getTreeItem(element.wrappedItem);
+
+        if (element.isRootItem) {
+            const contextValues = ['discoveryRootItem'];
+            if (treeItem.contextValue) {
+                contextValues.push(treeItem.contextValue);
+            }
+            treeItem.contextValue = createContextValue(contextValues);
+        }
+
+        return treeItem;
     }
 
     /**

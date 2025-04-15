@@ -3,15 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardPromptStep, openUrl, UserCancelledError, type IWizardOptions } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep, openUrl, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { QuickPickItemKind, type QuickPickItem } from 'vscode';
+import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
-import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
+import { type AddRegistryWizardContext } from './AddRegistryWizardContext';
 
-export class PromptServiceDiscoveryStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
-    public async prompt(context: NewConnectionWizardContext): Promise<void> {
+export class PromptRegistryStep extends AzureWizardPromptStep<AddRegistryWizardContext> {
+    public async prompt(context: AddRegistryWizardContext): Promise<void> {
+        const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
+
         const promptItems: (QuickPickItem & { id: string })[] = DiscoveryService.listProviders()
+            // Filter out already enabled providers
+            .filter((provider) => {
+                return !activeDiscoveryProviderIds.includes(provider.id);
+            })
             // Map to QuickPickItem format
             .map((provider) => ({
                 id: provider.id,
@@ -25,6 +32,14 @@ export class PromptServiceDiscoveryStep extends AzureWizardPromptStep<NewConnect
             // Sort alphabetically
             .sort((a, b) => a.label.localeCompare(b.label));
 
+        if (promptItems.length === 0) {
+            promptItems.push({
+                id: 'noProviders',
+                label: l10n.t('All available providers have been added already.'),
+                alwaysShow: true,
+            });
+        }
+
         const selectedItem = await context.ui.showQuickPick(
             [
                 ...promptItems,
@@ -35,7 +50,7 @@ export class PromptServiceDiscoveryStep extends AzureWizardPromptStep<NewConnect
                 {
                     id: 'learnMore',
                     label: l10n.t('Learn more…'),
-                    detail: l10n.t('Learn more about integrating your cloud provider.'),
+                    detail: l10n.t('Learn more about integrating your cloud providers.'),
                     alwaysShow: true,
                     group: 'Learn More',
                 },
@@ -57,24 +72,11 @@ export class PromptServiceDiscoveryStep extends AzureWizardPromptStep<NewConnect
             throw new UserCancelledError();
         }
 
-        context.discoveryProviderId = selectedItem.id;
-    }
-
-    public async getSubWizard(
-        wizardContext: NewConnectionWizardContext,
-    ): Promise<IWizardOptions<NewConnectionWizardContext> | undefined> {
-        if (!wizardContext.discoveryProviderId) {
-            return undefined;
+        if (selectedItem.id === 'noProviders') {
+            throw new UserCancelledError();
         }
 
-        /*
-         * Delegate to the provider, as only the provider knows the necessary steps to be shown
-         * and how to assist the user effectively.
-         *
-         * The provider is expected to return a wizard containing both prompt and execute steps.
-         * By the end of the process, the wizard should ensure that `wizardContext.connectionString` is set.
-         */
-        return DiscoveryService.getProvider(wizardContext.discoveryProviderId)?.getDiscoveryWizard(wizardContext);
+        context.discoveryProviderId = selectedItem.id;
     }
 
     public shouldPrompt(): boolean {
