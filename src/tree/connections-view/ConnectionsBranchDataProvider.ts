@@ -3,16 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    callWithTelemetryAndErrorHandling,
-    type IActionContext,
-    type TreeElementBase,
-} from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { MongoClustersExperience } from '../../AzureDBExperiences';
 import { ext } from '../../extensionVariables';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { type ClusterModel } from '../documentdb/ClusterModel';
+import { type TreeElement } from '../TreeElement';
 import { ClusterItem } from '../workspace-view/documentdb/ClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
@@ -26,12 +23,9 @@ import { NewConnectionItemCV } from './NewConnectionItemCV';
  * There overall architecture is simple and could be modified here, however, in order to keep the code easier to follow,
  * we are going to keep the same pattern as the `WorkspaceDataProviders` does.
  */
-export class ConnectionsBranchDataProvider
-    extends vscode.Disposable
-    implements vscode.TreeDataProvider<TreeElementBase>
-{
+export class ConnectionsBranchDataProvider extends vscode.Disposable implements vscode.TreeDataProvider<TreeElement> {
     private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<
-        void | TreeElementBase | TreeElementBase[] | null | undefined
+        void | TreeElement | TreeElement[] | null | undefined
     >();
 
     /**
@@ -41,7 +35,7 @@ export class ConnectionsBranchDataProvider
      * This will trigger the view to update the changed element/root and its children recursively (if shown).
      * To signal that root has changed, do not pass any argument or pass `undefined` or `null`.
      */
-    get onDidChangeTreeData(): vscode.Event<void | TreeElementBase | TreeElementBase[] | null | undefined> {
+    get onDidChangeTreeData(): vscode.Event<void | TreeElement | TreeElement[] | null | undefined> {
         return this.onDidChangeTreeDataEmitter.event;
     }
 
@@ -51,7 +45,7 @@ export class ConnectionsBranchDataProvider
         });
     }
 
-    async getChildren(element: TreeElementBase): Promise<TreeElementBase[] | null | undefined> {
+    async getChildren(element: TreeElement): Promise<TreeElement[] | null | undefined> {
         return await callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
             context.telemetry.properties.view = 'connections';
 
@@ -64,9 +58,7 @@ export class ConnectionsBranchDataProvider
 
             return (await element.getChildren?.())?.map((child) => {
                 if (child.id) {
-                    return ext.state.wrapItemInStateHandling(child as TreeElementBase & { id: string }, () =>
-                        this.refresh(child),
-                    );
+                    return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as TreeElement;
                 }
                 return child;
             });
@@ -76,7 +68,7 @@ export class ConnectionsBranchDataProvider
     /**
      * Helper function to get the root items of the connections tree.
      */
-    private async getRootItems(): Promise<TreeElementBase[] | null | undefined> {
+    private async getRootItems(): Promise<TreeElement[] | null | undefined> {
         const connectionItems = await StorageService.get(StorageNames.Connections).getItems('clusters');
 
         if (connectionItems.length === 0) {
@@ -108,7 +100,7 @@ export class ConnectionsBranchDataProvider
         return rootItems;
     }
 
-    getTreeItem(element: TreeElementBase): vscode.TreeItem | Thenable<vscode.TreeItem> {
+    getTreeItem(element: TreeElement): vscode.TreeItem | Thenable<vscode.TreeItem> {
         return element.getTreeItem();
     }
 
@@ -118,7 +110,7 @@ export class ConnectionsBranchDataProvider
      *
      * @param element The element to refresh. If not provided, the entire tree will be refreshed.
      */
-    refresh(element?: TreeElementBase): void {
+    refresh(element?: TreeElement): void {
         this.onDidChangeTreeDataEmitter.fire(element);
     }
 }

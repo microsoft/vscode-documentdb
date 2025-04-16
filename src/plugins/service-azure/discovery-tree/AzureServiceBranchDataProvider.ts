@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { type TreeElementBase } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { type BaseServiceBranchDataProvider } from '../../../tree/discovery-view/BaseServiceBranchDataProvider';
+import { type TreeElement } from '../../../tree/TreeElement';
 import { AzureServiceRootItem } from './AzureServiceRootItem';
 
 /**
@@ -21,10 +21,10 @@ import { AzureServiceRootItem } from './AzureServiceRootItem';
  */
 export class AzureServiceBranchDataProvider
     extends vscode.Disposable
-    implements BaseServiceBranchDataProvider<TreeElementBase>
+    implements BaseServiceBranchDataProvider<TreeElement>
 {
     private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<
-        void | TreeElementBase | TreeElementBase[] | null | undefined
+        void | TreeElement | TreeElement[] | null | undefined
     >();
 
     /**
@@ -34,7 +34,7 @@ export class AzureServiceBranchDataProvider
      * This will trigger the view to update the changed element/root and its children recursively (if shown).
      * To signal that root has changed, do not pass any argument or pass `undefined` or `null`.
      */
-    get onDidChangeTreeData(): vscode.Event<void | TreeElementBase | TreeElementBase[] | null | undefined> {
+    get onDidChangeTreeData(): vscode.Event<void | TreeElement | TreeElement[] | null | undefined> {
         return this.onDidChangeTreeDataEmitter.event;
     }
 
@@ -45,34 +45,30 @@ export class AzureServiceBranchDataProvider
         });
     }
 
-    getRootItem(): Promise<TreeElementBase> {
+    getRootItem(): Promise<TreeElement> {
         const rootItem = new AzureServiceRootItem(this.azureSubscriptionProvider);
 
         if (rootItem.id) {
             return Promise.resolve(
-                ext.state.wrapItemInStateHandling(rootItem as TreeElementBase & { id: string }, () =>
-                    this.refresh(rootItem),
-                ),
+                ext.state.wrapItemInStateHandling(rootItem, () => this.refresh(rootItem)) as TreeElement,
             );
         }
 
         return Promise.resolve(rootItem);
     }
 
-    async getChildren(element: TreeElementBase): Promise<TreeElementBase[] | null | undefined> {
+    async getChildren(element: TreeElement): Promise<TreeElement[] | null | undefined> {
         return (await element.getChildren?.())
             ?.sort((a, b) => a.id!.localeCompare(b.id!))
             .map((child) => {
                 if (child.id) {
-                    return ext.state.wrapItemInStateHandling(child as TreeElementBase & { id: string }, () =>
-                        this.refresh(child),
-                    );
+                    return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as TreeElement;
                 }
                 return child;
             });
     }
 
-    getTreeItem(element: TreeElementBase): vscode.TreeItem | Thenable<vscode.TreeItem> {
+    getTreeItem(element: TreeElement): vscode.TreeItem | Thenable<vscode.TreeItem> {
         return element.getTreeItem();
     }
 
@@ -82,7 +78,7 @@ export class AzureServiceBranchDataProvider
      *
      * @param element The element to refresh. If not provided, the entire tree will be refreshed.
      */
-    refresh(element?: TreeElementBase): void {
+    refresh(element?: TreeElement): void {
         console.log('Refreshing.. ' + element?.id);
         this.onDidChangeTreeDataEmitter.fire(element);
     }
