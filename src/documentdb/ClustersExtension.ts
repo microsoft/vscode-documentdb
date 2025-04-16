@@ -17,6 +17,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
+import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { createMongoCollection } from '../commands/createContainer/createContainer';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
@@ -105,10 +106,17 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerDiscoveryTree(activateContext);
 
                 registerCommand('documentdb.discoveryView.addRegistry', addDiscoveryRegistry);
+
                 registerCommandWithTreeNodeUnwrapping(
                     'documentdb.discoveryView.removeRegistry',
                     removeDiscoveryRegistry,
                 );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'documentdb.addConnectionFromRegistry',
+                    addConnectionFromRegistry,
+                );
+
                 registerCommand('documentdb.discoveryView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.DiscoveryView);
                 });

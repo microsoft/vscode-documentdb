@@ -341,6 +341,10 @@
         "title": "Disable Registry…"
       },
       {
+        "command": "documentdb.addConnectionFromRegistry",
+        "title": "Add To DocumentDB Connections"
+      },
+      {
         "category": "Azure Databases",
         "command": "azureDatabases.createServer",
         "title": "%cosmosdb.command.account.create%",
@@ -819,13 +823,18 @@
         {
           "//": "Remove Connection...",
           "command": "documentdb.connectionsView.removeConnection",
-          "when": "view =~ /connectionsView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "1@2"
         },
         {
           "command": "documentdb.discoveryView.removeRegistry",
           "when": "view == discoveryView && viewItem =~ /discoveryView.*rootItem/i",
           "group": "1@1"
+        },
+        {
+          "command": "documentdb.addConnectionFromRegistry",
+          "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
+          "group": "0@1"
         },
         {
           "command": "azureDatabases.createServer",
