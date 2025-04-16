@@ -58,14 +58,17 @@ export class AzureServiceBranchDataProvider
     }
 
     async getChildren(element: TreeElement): Promise<TreeElement[] | null | undefined> {
-        return (await element.getChildren?.())
-            ?.sort((a, b) => a.id!.localeCompare(b.id!))
-            .map((child) => {
-                if (child.id) {
-                    return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as TreeElement;
-                }
-                return child;
-            });
+        const children = await element.getChildren?.();
+        if (!children) {
+            return [];
+        }
+
+        return children.map((child) => {
+            if (child.id) {
+                return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as TreeElement;
+            }
+            return child;
+        });
     }
 
     getTreeItem(element: TreeElement): vscode.TreeItem | Thenable<vscode.TreeItem> {
