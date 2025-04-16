@@ -945,7 +945,7 @@
         {
           "//": "[Account] CosmosDB | MongoDB | Cluster Copy connection string",
           "command": "cosmosDB.copyConnectionString",
-          "when": "view =~ /azure(ResourceGroups|FocusView|Workspace)/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
+          "when": "view =~ /azure(ResourceGroups|FocusView|Workspace)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
           "group": "2@1"
         },
         {
@@ -975,7 +975,7 @@
         {
           "//": "[Database] Mongo DB|Cluster Create collection",
           "command": "command.mongoClusters.createCollection",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         },
         {
