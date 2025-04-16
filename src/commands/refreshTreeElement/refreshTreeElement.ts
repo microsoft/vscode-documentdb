@@ -18,6 +18,10 @@ export async function refreshTreeElement(context: IActionContext, node: AzExtTre
     }
 
     if (node && 'contextValue' in node && typeof node.contextValue === 'string') {
+        if (/discoveryView/i.test(node.contextValue)) {
+            return ext.discoveryBranchDataProvider.refresh(node);
+        }
+
         if (/experience[.](mongocluster)/i.test(node.contextValue)) {
             return ext.mongoVCoreBranchDataProvider.refresh(node);
         }

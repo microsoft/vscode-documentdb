@@ -814,7 +814,7 @@
       "view/item/context": [
         {
           "command": "documentdb.discoveryView.removeRegistry",
-          "when": "view == discoveryView && viewItem =~ /discoveryRootItem/i",
+          "when": "view == discoveryView && viewItem =~ /discoveryView.*rootItem/i",
           "group": "1@1"
         },
         {
@@ -1011,7 +1011,7 @@
         {
           "//": "[Database] Refresh",
           "command": "azureDatabases.refresh",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i",
+          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i",
           "group": "3@1"
         },
         {
