@@ -12,7 +12,7 @@ export class NewEmulatorConnectionItemCV implements TreeElement, TreeElementWith
     public readonly id: string;
     public readonly contextValue: string = 'treeItem.newEmulatorConnection';
 
-    constructor(public readonly parentId?: string) {
+    constructor(public readonly parentId: string) {
         this.id = `${parentId}/newEmulatorConnection`;
     }
 

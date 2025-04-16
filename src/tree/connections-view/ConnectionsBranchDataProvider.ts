@@ -6,6 +6,7 @@
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { MongoClustersExperience } from '../../AzureDBExperiences';
+import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { type ClusterModel } from '../documentdb/ClusterModel';
@@ -51,7 +52,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
 
             if (!element) {
                 context.telemetry.properties.parentNodeContext = 'root';
-                return this.getRootItems();
+                return this.getRootItems(Views.ConnectionsView);
             }
 
             context.telemetry.properties.parentNodeContext = (await element.getTreeItem()).contextValue;
@@ -68,12 +69,12 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
     /**
      * Helper function to get the root items of the connections tree.
      */
-    private async getRootItems(): Promise<TreeElement[] | null | undefined> {
+    private async getRootItems(parentId: string): Promise<TreeElement[] | null | undefined> {
         const connectionItems = await StorageService.get(StorageNames.Connections).getItems('clusters');
 
         if (connectionItems.length === 0) {
             /**
-             * we have a special case here as we'd love to show a "welcome screen" in the case when no connections were found.
+             * we have a special case here as we want to show a "welcome screen" in the case when no connections were found.
              * However, we need to lookup the emulator items as well, so we need to check if there are any emulators.
              */
             const emulatorItems = await StorageService.get(StorageNames.Connections).getItems('emulators');
@@ -83,10 +84,10 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
         }
 
         const rootItems = [
-            new LocalEmulatorsItem(),
+            new LocalEmulatorsItem(parentId),
             ...connectionItems.map((item) => {
                 const model: ClusterModel = {
-                    id: item.id,
+                    id: `${parentId}/${item.id}`,
                     name: item.name,
                     dbExperience: MongoClustersExperience,
                     connectionString: item?.secrets?.[0] ?? undefined,
@@ -94,10 +95,12 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
 
                 return new ClusterItem(model);
             }),
-            new NewConnectionItemCV(),
+            new NewConnectionItemCV(parentId),
         ];
 
-        return rootItems;
+        return rootItems.map(
+            (item) => ext.state.wrapItemInStateHandling(item, () => this.refresh(item)) as TreeElement,
+        );
     }
 
     getTreeItem(element: TreeElement): vscode.TreeItem | Thenable<vscode.TreeItem> {

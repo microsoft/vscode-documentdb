@@ -20,7 +20,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
     public readonly id: string;
     public readonly contextValue: string = 'treeItem.LocalEmulators';
 
-    constructor(public readonly parentId?: string) {
+    constructor(public readonly parentId: string) {
         this.id = `${parentId}/localEmulators`;
     }
 
@@ -36,7 +36,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                 };
 
                 const model: ClusterModel = {
-                    id: item.id,
+                    id: `${this.id}/${item.id}`,
                     name: item.name,
                     dbExperience: MongoClustersExperience,
                     connectionString: item?.secrets?.[0],
@@ -45,7 +45,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
 
                 return new ClusterItem(model);
             }),
-            new NewEmulatorConnectionItemCV(),
+            new NewEmulatorConnectionItemCV(this.id),
         ];
     }
 

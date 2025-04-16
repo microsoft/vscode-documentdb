@@ -15,7 +15,7 @@ export class NewConnectionItemCV implements TreeElement, TreeElementWithContextV
     public readonly id: string;
     public readonly contextValue: string = 'treeItem.newConnection';
 
-    constructor(public readonly parentId?: string) {
+    constructor(public readonly parentId: string) {
         this.id = `${parentId}/newConnection`;
     }
 
