@@ -6,7 +6,6 @@
 import { type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import type * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../commands/newConnection/NewConnectionWizardContext';
-import { type BaseServiceBranchDataProvider } from '../tree/discovery-view/BaseServiceBranchDataProvider';
 import { type TreeElement } from '../tree/TreeElement';
 
 /**
@@ -48,11 +47,10 @@ export interface DiscoveryProvider extends ProviderDescription {
     getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext>;
 
     /**
-     * Retrieves the tree data provider for displaying discovered resources.
-     *
-     * @returns A tree data provider instance for the discovery view.
+     * Retrieves the root tree item for the discovery tree view.
+     * This is the top-level item that represents the provider in the tree view.
      */
-    getDiscoveryTreeDataProvider(): BaseServiceBranchDataProvider<TreeElement>;
+    getDiscoveryTreeRootItem(parentId: string): TreeElement;
 }
 
 /**
