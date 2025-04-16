@@ -36,13 +36,19 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
             return this.azureSubscriptionProvider.getSubscriptions(false); // TODO: add filter support, but it has to be a filter that works without Azure Resource installed.
         });
 
-        return subscriptions.map((sub) => {
-            return new AzureSubscriptionItem(this.id, {
-                subscription: sub,
-                subscriptionName: sub.name,
-                subscriptionId: sub.subscriptionId,
-            });
-        });
+        return (
+            subscriptions
+                // sort by name
+                .sort((a, b) => a.name.localeCompare(b.name))
+                // map to AzureSubscriptionItem
+                .map((sub) => {
+                    return new AzureSubscriptionItem(this.id, {
+                        subscription: sub,
+                        subscriptionName: sub.name,
+                        subscriptionId: sub.subscriptionId,
+                    });
+                })
+        );
     }
 
     public getTreeItem(): vscode.TreeItem {
