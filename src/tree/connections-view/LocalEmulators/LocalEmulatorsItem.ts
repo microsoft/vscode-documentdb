@@ -36,7 +36,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                 };
 
                 const model: ClusterModel = {
-                    id: `${this.id}/${item.id}`,
+                    id: item.id,
                     name: item.name,
                     dbExperience: MongoClustersExperience,
                     connectionString: item?.secrets?.[0],

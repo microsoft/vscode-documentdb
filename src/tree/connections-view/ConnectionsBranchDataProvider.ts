@@ -11,7 +11,7 @@ import { ext } from '../../extensionVariables';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { type ClusterModel } from '../documentdb/ClusterModel';
 import { type TreeElement } from '../TreeElement';
-import { ClusterItem } from '../workspace-view/documentdb/ClusterItem';
+import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
 
@@ -87,13 +87,13 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
             new LocalEmulatorsItem(parentId),
             ...connectionItems.map((item) => {
                 const model: ClusterModel = {
-                    id: `${parentId}/${item.id}`,
+                    id: item.id,
                     name: item.name,
                     dbExperience: MongoClustersExperience,
                     connectionString: item?.secrets?.[0] ?? undefined,
                 };
 
-                return new ClusterItem(model);
+                return new DocumentDBClusterItem(model);
             }),
             new NewConnectionItemCV(parentId),
         ];

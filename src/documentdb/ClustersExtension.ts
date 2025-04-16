@@ -31,6 +31,7 @@ import { launchShell } from '../commands/launchShell/launchShell';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openMongoDocumentView } from '../commands/openDocument/openDocument';
 import { refreshView } from '../commands/refreshView/refreshView';
+import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { ext } from '../extensionVariables';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
@@ -115,6 +116,8 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand('documentdb.connectionsView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.ConnectionsView);
                 });
+
+                registerCommandWithTreeNodeUnwrapping('documentdb.connectionsView.removeConnection', removeConnection);
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling

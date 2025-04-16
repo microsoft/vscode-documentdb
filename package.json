@@ -313,6 +313,10 @@
     ],
     "commands": [
       {
+        "command": "documentdb.connectionsView.removeConnection",
+        "title": "Remove Connection…"
+      },
+      {
         "command": "documentdb.connectionsView.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
@@ -812,6 +816,12 @@
         }
       ],
       "view/item/context": [
+        {
+          "//": "Remove Connection...",
+          "command": "documentdb.connectionsView.removeConnection",
+          "when": "view =~ /connectionsView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "group": "1@2"
+        },
         {
           "command": "documentdb.discoveryView.removeRegistry",
           "when": "view == discoveryView && viewItem =~ /discoveryView.*rootItem/i",

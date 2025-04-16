@@ -10,6 +10,7 @@ import { ext } from '../../extensionVariables';
 import { PostgresServerTreeItem } from '../../postgres/tree/PostgresServerTreeItem';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { CosmosDBAccountResourceItemBase } from '../../tree/azure-resources-view/cosmosdb/CosmosDBAccountResourceItemBase';
+import { DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { AttachedAccountSuffix } from '../../tree/v1-legacy-api/AttachedAccountsTreeItem';
 import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
@@ -61,7 +62,7 @@ export async function removeAzureConnection(
 
 export async function removeConnection(
     context: IActionContext,
-    node: CosmosDBAccountResourceItemBase | ClusterItemBase,
+    node: CosmosDBAccountResourceItemBase | ClusterItemBase | DocumentDBClusterItem,
 ): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
 
@@ -93,7 +94,17 @@ export async function removeConnection(
 
     // continue with deletion
 
-    if (node instanceof ClusterItemBase) {
+    if (node instanceof DocumentDBClusterItem) {
+        await ext.state.showDeleting(node.id, async () => {
+            if ((node as DocumentDBClusterItem).cluster.emulatorConfiguration?.isEmulator) {
+                await StorageService.get(StorageNames.Connections).delete('emulators', node.id);
+            } else {
+                await StorageService.get(StorageNames.Connections).delete('clusters', node.id);
+            }
+        });
+
+        ext.connectionsBranchDataProvider.refresh();
+    } else if (node instanceof ClusterItemBase) {
         await ext.state.showDeleting(node.id, async () => {
             await StorageService.get(StorageNames.Workspace).delete(WorkspaceResourceType.MongoClusters, node.id);
         });
@@ -109,5 +120,5 @@ export async function removeConnection(
         ext.cosmosDBWorkspaceBranchDataProvider.refresh();
     }
 
-    showConfirmationAsInSettings(l10n.t('The selected connection has been removed from your workspace.'));
+    showConfirmationAsInSettings(l10n.t('The selected connection has been removed.'));
 }
