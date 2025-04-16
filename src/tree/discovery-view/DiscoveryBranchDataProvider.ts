@@ -70,95 +70,102 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
         return await callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
 
-            // If no element is provided, we're at the root of the tree
             if (!element) {
-                // Reset the set of root items
-                this.currentRootItems = new WeakSet<TreeElement>();
+                return this.getRootItems();
+            }
 
-                // Get the list of active discovery provider IDs from global state
-                const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>(
-                    'activeDiscoveryProviderIds',
-                    [],
-                );
+            context.telemetry.properties.parentNodeContext = (await element.getTreeItem()).contextValue;
+            return this.getElementChildren(element);
+        });
+    }
 
-                const rootItems: TreeElement[] = [];
+    /**
+     * Helper to get root items for the tree.
+     */
+    // eslint-disable-next-line @typescript-eslint/require-await
+    private async getRootItems(): Promise<TreeElement[] | null | undefined> {
+        // Reset the set of root items
+        this.currentRootItems = new WeakSet<TreeElement>();
 
-                // Iterate through all registered discovery providers
-                for (const { id } of DiscoveryService.listProviders()) {
-                    // Only include providers that are currently activated
-                    if (!activeDiscoveryProviderIds.includes(id)) {
-                        continue;
-                    }
+        // Get the list of active discovery provider IDs from global state
+        const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
 
-                    // Retrieve the provider instance
-                    const discoveryProvider = DiscoveryService.getProvider(id);
+        const rootItems: TreeElement[] = [];
 
-                    if (!discoveryProvider) {
-                        throw new Error(`Discovery provider with id ${id} not found`);
-                    }
+        // Iterate through all registered discovery providers
+        for (const { id } of DiscoveryService.listProviders()) {
+            // Only include providers that are currently activated
+            if (!activeDiscoveryProviderIds.includes(id)) {
+                continue;
+            }
 
-                    // Get the root item for this provider
-                    const rootItem = discoveryProvider.getDiscoveryTreeRootItem(`${Views.DiscoveryView}/${id}`);
+            // Retrieve the provider instance
+            const discoveryProvider = DiscoveryService.getProvider(id);
 
-                    // Wrap the root item with state handling for refresh support
-                    const wrappedInStateHandling = ext.state.wrapItemInStateHandling(rootItem, () =>
-                        this.refresh(rootItem),
-                    ) as TreeElement;
+            if (!discoveryProvider) {
+                throw new Error(`Discovery provider with id ${id} not found`);
+            }
 
-                    // Track this as a root item for context menu support (see getTreeItem)
-                    this.currentRootItems.add(wrappedInStateHandling);
+            // Get the root item for this provider
+            const rootItem = discoveryProvider.getDiscoveryTreeRootItem(`${Views.DiscoveryView}/${id}`);
 
-                    rootItems.push(wrappedInStateHandling);
-                }
+            // Wrap the root item with state handling for refresh support
+            const wrappedInStateHandling = ext.state.wrapItemInStateHandling(rootItem, () =>
+                this.refresh(rootItem),
+            ) as TreeElement;
 
-                // If there are no root items, return null to indicate an empty tree
-                if (rootItems.length === 0) {
+            // Track this as a root item for context menu support (see getTreeItem)
+            this.currentRootItems.add(wrappedInStateHandling);
+
+            rootItems.push(wrappedInStateHandling);
+        }
+
+        // If there are no root items, return null to indicate an empty tree
+        if (rootItems.length === 0) {
+            return null;
+        }
+
+        // Sort root items by their id for consistent ordering
+        return rootItems.sort((a, b) => a.id?.localeCompare(b.id ?? '') ?? 0);
+    }
+
+    /**
+     * Helper to get children for a given element.
+     */
+    private async getElementChildren(element: TreeElement): Promise<TreeElement[] | null | undefined> {
+        // If the element can provide children
+        if (element.getChildren) {
+            // Avoid duplicate concurrent calls for the same element by caching in-flight promises
+            if (this.getChildrenPromises.has(element)) {
+                return this.getChildrenPromises.get(element);
+            }
+
+            // Start fetching children
+            const promise = (async () => {
+                const children = await element.getChildren!();
+                if (!children) {
                     return null;
                 }
+                // Wrap each child with state handling for refresh support
+                return children.map((child) =>
+                    ext.state.wrapItemInStateHandling(child, () => this.refresh(child)),
+                ) as TreeElement[];
+            })();
 
-                // Sort root items by their id for consistent ordering
-                return rootItems.sort((a, b) => a.id?.localeCompare(b.id ?? '') ?? 0);
+            // Store the in-flight promise
+            this.getChildrenPromises.set(element, promise);
+
+            try {
+                // Await and return the result
+                return await promise;
+            } finally {
+                // Clean up the promise cache
+                this.getChildrenPromises.delete(element);
             }
+        }
 
-            // --> If an element is provided, return its children
-
-            // Add parent node context to telemetry
-            context.telemetry.properties.parentNodeContext = (await element.getTreeItem()).contextValue;
-
-            // If the element can provide children
-            if (element.getChildren) {
-                // Avoid duplicate concurrent calls for the same element by caching in-flight promises
-                if (this.getChildrenPromises.has(element)) {
-                    return this.getChildrenPromises.get(element);
-                }
-
-                // Start fetching children
-                const promise = (async () => {
-                    const children = await element.getChildren!();
-                    if (!children) {
-                        return null;
-                    }
-                    // Wrap each child with state handling for refresh support
-                    return children.map((child) =>
-                        ext.state.wrapItemInStateHandling(child, () => this.refresh(child)),
-                    ) as TreeElement[];
-                })();
-
-                // Store the in-flight promise
-                this.getChildrenPromises.set(element, promise);
-
-                try {
-                    // Await and return the result
-                    return await promise;
-                } finally {
-                    // Clean up the promise cache
-                    this.getChildrenPromises.delete(element);
-                }
-            }
-
-            // If the element does not have children, return null
-            return null;
-        });
+        // If the element does not have children, return null
+        return null;
     }
 
     async getTreeItem(element: TreeElement): Promise<vscode.TreeItem> {
