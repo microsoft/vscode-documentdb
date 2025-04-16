@@ -13,13 +13,13 @@ import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
 export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public readonly contextValue: string = 'discovery.azureService';
+    public readonly contextValue: string = 'discoveryAzureServiceRoot';
 
     constructor(
         private readonly azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
-        public readonly parentId?: string,
+        public readonly parentId: string,
     ) {
-        this.id = `${parentId}/azureService`;
+        this.id = `${parentId}/rootItem`;
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {

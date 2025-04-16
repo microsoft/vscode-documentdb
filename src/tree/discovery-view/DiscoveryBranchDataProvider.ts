@@ -86,7 +86,10 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
                         continue;
                     }
 
-                    const wrappedItem = wrapDiscoveryViewItem(await provider.getRootItem(), providerId);
+                    const wrappedItem = wrapDiscoveryViewItem(
+                        await provider.getRootItem(`${Views.DiscoveryView}/${providerId}`),
+                        providerId,
+                    );
 
                     // Track root items in the WeakSet
                     this.rootItems.add(wrappedItem);

@@ -45,8 +45,8 @@ export class AzureServiceBranchDataProvider
         });
     }
 
-    getRootItem(): Promise<TreeElement> {
-        const rootItem = new AzureServiceRootItem(this.azureSubscriptionProvider);
+    getRootItem(parentId: string): Promise<TreeElement> {
+        const rootItem = new AzureServiceRootItem(this.azureSubscriptionProvider, parentId);
 
         if (rootItem.id) {
             return Promise.resolve(
