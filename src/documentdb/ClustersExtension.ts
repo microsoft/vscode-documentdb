@@ -42,6 +42,7 @@ import { ConnectionsBranchDataProvider } from '../tree/connections-view/Connecti
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
+import { enableMongoVCoreSupport, enableWorkspaceSupport } from './activationConditions';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
 import { Views } from './Views';
 
@@ -85,21 +86,28 @@ export class ClustersExtension implements vscode.Disposable {
             async (activateContext: IActionContext) => {
                 activateContext.telemetry.properties.isActivationEvent = 'true';
 
-                ext.mongoVCoreBranchDataProvider = new MongoVCoreBranchDataProvider();
-                ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
-                    AzExtResourceType.MongoClusters,
-                    ext.mongoVCoreBranchDataProvider,
-                );
+                // TODO: Implement https://github.com/microsoft/vscode-documentdb/issues/30
+                // for staged hand-over from Azure Databases to this DocumentDB extension
 
-                // Moved to extension.ts
-                // ext.workspaceDataProvider = new SharedWorkspaceResourceProvider();
-                // ext.rgApiV2.resources.registerWorkspaceResourceProvider(ext.workspaceDataProvider);
+                if (enableMongoVCoreSupport()) {
+                    activateContext.telemetry.properties.enabledVCore = 'true';
 
-                ext.mongoClustersWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
-                ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
-                    WorkspaceResourceType.MongoClusters,
-                    ext.mongoClustersWorkspaceBranchDataProvider,
-                );
+                    ext.mongoVCoreBranchDataProvider = new MongoVCoreBranchDataProvider();
+                    ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
+                        AzExtResourceType.MongoClusters,
+                        ext.mongoVCoreBranchDataProvider,
+                    );
+                }
+
+                if (enableWorkspaceSupport()) {
+                    activateContext.telemetry.properties.enabledWorkspace = 'true';
+
+                    ext.mongoClustersWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
+                    ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
+                        WorkspaceResourceType.MongoClusters,
+                        ext.mongoClustersWorkspaceBranchDataProvider,
+                    );
+                }
 
                 this.registerDiscoveryServices(activateContext);
                 this.registerConnectionsTree(activateContext);
