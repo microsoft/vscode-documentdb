@@ -17,6 +17,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
+import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { createMongoCollection } from '../commands/createContainer/createContainer';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
@@ -31,6 +32,7 @@ import { launchShell } from '../commands/launchShell/launchShell';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openMongoDocumentView } from '../commands/openDocument/openDocument';
 import { refreshView } from '../commands/refreshView/refreshView';
+import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { ext } from '../extensionVariables';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
@@ -103,18 +105,27 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
 
-                registerCommand('documentdb.discoveryView.addRegistry', addDiscoveryRegistry);
+                registerCommand('documentDB.discoveryView.addRegistry', addDiscoveryRegistry);
+
                 registerCommandWithTreeNodeUnwrapping(
-                    'documentdb.discoveryView.removeRegistry',
+                    'documentDB.discoveryView.removeRegistry',
                     removeDiscoveryRegistry,
                 );
-                registerCommand('documentdb.discoveryView.refresh', (context: IActionContext) => {
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'documentDB.addConnectionFromRegistry',
+                    addConnectionFromRegistry,
+                );
+
+                registerCommand('documentDB.discoveryView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.DiscoveryView);
                 });
 
-                registerCommand('documentdb.connectionsView.refresh', (context: IActionContext) => {
+                registerCommand('documentDB.connectionsView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.ConnectionsView);
                 });
+
+                registerCommandWithTreeNodeUnwrapping('documentDB.connectionsView.removeConnection', removeConnection);
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling

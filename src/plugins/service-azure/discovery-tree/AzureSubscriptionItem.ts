@@ -9,7 +9,7 @@ import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { MongoClustersExperience } from '../../../AzureDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
+import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { type ClusterModel } from '../../../tree/documentdb/ClusterModel';
 import { createResourceManagementClient } from '../../../utils/azureClients';
@@ -32,7 +32,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
         this.id = `${parentId}/${subscription.subscriptionId}`;
     }
 
-    async getChildren(): Promise<ExtTreeElementBase[] | null | undefined> {
+    async getChildren(): Promise<TreeElement[] | null | undefined> {
         return await callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
             const client = await createResourceManagementClient(context, this.subscription.subscription);
 
@@ -40,17 +40,19 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 client.resources.list({ filter: "resourceType eq 'Microsoft.DocumentDB/mongoClusters'" }),
             );
 
-            return accounts.map((account) => {
-                const resourceId = nonNullProp(account, 'id');
+            return accounts
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                .map((account) => {
+                    const resourceId = nonNullProp(account, 'id');
 
-                const clusterInfo: ClusterModel = {
-                    ...account,
-                    resourceGroup: getResourceGroupFromId(resourceId),
-                    dbExperience: MongoClustersExperience,
-                } as ClusterModel;
+                    const clusterInfo: ClusterModel = {
+                        ...account,
+                        resourceGroup: getResourceGroupFromId(resourceId),
+                        dbExperience: MongoClustersExperience,
+                    } as ClusterModel;
 
-                return new DocumentDBResourceItem(this.subscription.subscription, clusterInfo);
-            });
+                    return new DocumentDBResourceItem(this.subscription.subscription, clusterInfo);
+                });
         });
     }
 

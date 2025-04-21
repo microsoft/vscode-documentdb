@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { type IWizardOptions, type TreeElementBase } from '@microsoft/vscode-azext-utils';
-import { type BaseServiceBranchDataProvider } from 'src/tree/discovery-view/BaseServiceBranchDataProvider';
+import { type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import { Disposable, l10n, ThemeIcon } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
-import { AzureServiceBranchDataProvider } from './discovery-tree/AzureServiceBranchDataProvider';
+import { type TreeElement } from '../../tree/TreeElement';
+import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
 import { AzureExecuteStep } from './discovery-wizard/AzureExecuteStep';
 import { SelectClusterStep } from './discovery-wizard/SelectClusterStep';
 import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep';
@@ -37,8 +37,8 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
         this.azureSubscriptionProvider = new VSCodeAzureSubscriptionProvider();
     }
 
-    getDiscoveryTreeDataProvider(): BaseServiceBranchDataProvider<TreeElementBase> {
-        return new AzureServiceBranchDataProvider(this.azureSubscriptionProvider);
+    getDiscoveryTreeRootItem(parentId: string): TreeElement {
+        return new AzureServiceRootItem(this.azureSubscriptionProvider, parentId);
     }
 
     getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext> {

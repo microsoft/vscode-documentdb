@@ -15,7 +15,7 @@ export class NewConnectionItemCV implements TreeElement, TreeElementWithContextV
     public readonly id: string;
     public readonly contextValue: string = 'treeItem.newConnection';
 
-    constructor(public readonly parentId?: string) {
+    constructor(public readonly parentId: string) {
         this.id = `${parentId}/newConnection`;
     }
 
@@ -26,7 +26,7 @@ export class NewConnectionItemCV implements TreeElement, TreeElementWithContextV
             label: l10n.t('New Connection…'),
             iconPath: new vscode.ThemeIcon('plus'),
             command: {
-                command: 'documentDB.newConnection',
+                command: 'documentDB.connectionsView.newConnection',
                 title: '',
                 arguments: [this],
             },

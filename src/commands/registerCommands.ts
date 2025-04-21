@@ -80,7 +80,7 @@ export function registerAccountCommands() {
     registerCommandWithTreeNodeUnwrapping('cosmosDB.removeConnection', removeConnection);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.copyConnectionString', copyAzureConnectionString);
 
-    registerCommandWithTreeNodeUnwrapping('documentDB.newConnection', newConnection);
+    registerCommandWithTreeNodeUnwrapping('documentDB.connectionsView.newConnection', newConnection);
 }
 
 export function registerDatabaseCommands() {
