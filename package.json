@@ -260,11 +260,11 @@
     "viewsWelcome": [
       {
         "view": "connectionsView",
-        "contents": "Welcome! To start exploring and managing your database, you'll need to connect to it first. Once connected, you can easily view, query, and modify your data.\n\n[$(plus) Add New Connection…](command:documentDB.newConnection)\nClick the button above to get started and unlock the full potential of your database."
+        "contents": "Welcome! To start exploring and managing your database, you'll need to connect to it first. Once connected, you can easily view, query, and modify your data.\n\n[$(plus) Add New Connection…](command:documentDB.connectionsView.newConnection)\nClick the button above to get started and unlock the full potential of your database."
       },
       {
         "view": "discoveryView",
-        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:documentdb.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
+        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:documentDB.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
       }
     ],
     "languages": [
@@ -313,35 +313,42 @@
     ],
     "commands": [
       {
-        "command": "documentdb.connectionsView.removeConnection",
-        "title": "Remove Connection…"
-      },
-      {
-        "command": "documentdb.connectionsView.refresh",
-        "title": "Refresh",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "documentdb.connectionsView.addConnection",
-        "title": "Add New Connection…",
+        "category": "DocumentDB",
+        "command": "documentDB.connectionsView.newConnection",
+        "title": "New Connection…",
         "icon": "$(add)"
       },
       {
-        "command": "documentdb.discoveryView.refresh",
+        "category": "DocumentDB",
+        "command": "documentDB.connectionsView.removeConnection",
+        "title": "Remove Connection…"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "documentDB.connectionsView.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "documentdb.discoveryView.addRegistry",
+        "category": "DocumentDB",
+        "command": "documentDB.discoveryView.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "documentDB.discoveryView.addRegistry",
         "title": "Enable new Registry…",
         "icon": "$(add)"
       },
       {
-        "command": "documentdb.discoveryView.removeRegistry",
+        "category": "DocumentDB",
+        "command": "documentDB.discoveryView.removeRegistry",
         "title": "Disable Registry…"
       },
       {
-        "command": "documentdb.addConnectionFromRegistry",
+        "category": "DocumentDB",
+        "command": "documentDB.addConnectionFromRegistry",
         "title": "Add To DocumentDB Connections"
       },
       {
@@ -675,12 +682,6 @@
         "category": "MongoDB Clusters",
         "command": "command.mongoClusters.containerView.open",
         "title": "%cosmosdb.command.mongo.collection.open%"
-      },
-      {
-        "category": "DocumentDB",
-        "command": "documentDB.newConnection",
-        "title": "New Connection…",
-        "icon": "$(plug)"
       }
     ],
     "submenus": [
@@ -738,22 +739,22 @@
       ],
       "view/title": [
         {
-          "command": "documentdb.connectionsView.refresh",
+          "command": "documentDB.connectionsView.refresh",
           "when": "view == connectionsView",
           "group": "navigation@10"
         },
         {
-          "command": "documentdb.connectionsView.addConnection",
+          "command": "documentDB.connectionsView.newConnection",
           "when": "view == connectionsView",
           "group": "navigation@5"
         },
         {
-          "command": "documentdb.discoveryView.refresh",
+          "command": "documentDB.discoveryView.refresh",
           "when": "view == discoveryView",
           "group": "navigation@10"
         },
         {
-          "command": "documentdb.discoveryView.addRegistry",
+          "command": "documentDB.discoveryView.addRegistry",
           "when": "view == discoveryView",
           "group": "navigation@5"
         },
@@ -822,17 +823,17 @@
       "view/item/context": [
         {
           "//": "Remove Connection...",
-          "command": "documentdb.connectionsView.removeConnection",
+          "command": "documentDB.connectionsView.removeConnection",
           "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "1@2"
         },
         {
-          "command": "documentdb.discoveryView.removeRegistry",
+          "command": "documentDB.discoveryView.removeRegistry",
           "when": "view == discoveryView && viewItem =~ /discoveryView.*rootItem/i",
           "group": "1@1"
         },
         {
-          "command": "documentdb.addConnectionFromRegistry",
+          "command": "documentDB.addConnectionFromRegistry",
           "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
           "group": "0@1"
         },

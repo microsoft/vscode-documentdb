@@ -105,27 +105,27 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
 
-                registerCommand('documentdb.discoveryView.addRegistry', addDiscoveryRegistry);
+                registerCommand('documentDB.discoveryView.addRegistry', addDiscoveryRegistry);
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'documentdb.discoveryView.removeRegistry',
+                    'documentDB.discoveryView.removeRegistry',
                     removeDiscoveryRegistry,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'documentdb.addConnectionFromRegistry',
+                    'documentDB.addConnectionFromRegistry',
                     addConnectionFromRegistry,
                 );
 
-                registerCommand('documentdb.discoveryView.refresh', (context: IActionContext) => {
+                registerCommand('documentDB.discoveryView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.DiscoveryView);
                 });
 
-                registerCommand('documentdb.connectionsView.refresh', (context: IActionContext) => {
+                registerCommand('documentDB.connectionsView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.ConnectionsView);
                 });
 
-                registerCommandWithTreeNodeUnwrapping('documentdb.connectionsView.removeConnection', removeConnection);
+                registerCommandWithTreeNodeUnwrapping('documentDB.connectionsView.removeConnection', removeConnection);
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling
