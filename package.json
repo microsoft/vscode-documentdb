@@ -42,8 +42,7 @@
   "main": "./main",
   "l10n": "./l10n",
   "activationEvents": [
-    "onFileSystem:azureDatabases",
-    "onView:azureWorkspace"
+    "onView:documentDB"
   ],
   "scripts": {
     "build": "tsc",
@@ -180,44 +179,8 @@
     "vscode-uri": "^3.1.0",
     "zod": "^3.24.2"
   },
-  "extensionDependencies": [
-    "ms-azuretools.vscode-azureresourcegroups"
-  ],
+  "extensionDependencies": [],
   "contributes": {
-    "x-azResources": {
-      "azure": {
-        "branches": [
-          {
-            "type": "AzureCosmosDb"
-          },
-          {
-            "type": "PostgresqlServersStandard"
-          },
-          {
-            "type": "PostgresqlServersFlexible"
-          },
-          {
-            "type": "MongoClusters"
-          }
-        ]
-      },
-      "workspace": {
-        "branches": [
-          {
-            "type": "ms-azuretools.vscode-cosmosdb"
-          }
-        ],
-        "resources": true
-      },
-      "activation": {
-        "onResolve": [
-          "microsoft.documentdb/databaseaccounts",
-          "microsoft.dbforpostgresql/servers",
-          "microsoft.dbforpostgresql/flexibleservers",
-          "microsoft.documentdb/mongoclusters"
-        ]
-      }
-    },
     "viewsContainers": {
       "activitybar": [
         {
