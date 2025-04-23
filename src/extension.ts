@@ -12,32 +12,19 @@ import {
     createAzExtLogOutputChannel,
     registerErrorHandler,
     registerEvent,
-    registerReportIssueCommand,
     registerUIExtensionVariables,
     TreeElementStateManager,
     type apiUtils,
-    type AzExtParentTreeItem,
     type AzureExtensionApi,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
-import { AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
+import { getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { registerCommands } from './commands/registerCommands';
 import { getIsRunningOnAzure } from './cosmosdb/utils/managedIdentityUtils';
-import { DatabasesFileSystem } from './DatabasesFileSystem';
 import { ClustersExtension } from './documentdb/ClustersExtension';
 import { ext } from './extensionVariables';
-import { getResourceGroupsApi } from './getExtensionApi';
-import { CosmosDBBranchDataProvider } from './tree/azure-resources-view/cosmosdb/CosmosDBBranchDataProvider';
-import { DatabaseResolver } from './tree/v1-legacy-api/resolver/AppResolver';
-import { DatabaseWorkspaceProvider } from './tree/v1-legacy-api/resolver/DatabaseWorkspaceProvider';
-import {
-    SharedWorkspaceResourceProvider,
-    WorkspaceResourceType,
-} from './tree/workspace-api/SharedWorkspaceResourceProvider';
-import { CosmosDBWorkspaceBranchDataProvider } from './tree/workspace-view/cosmosdb/CosmosDBWorkspaceBranchDataProvider';
 
 export async function activateInternal(
     context: vscode.ExtensionContext,
@@ -73,6 +60,7 @@ export async function activateInternal(
         ext.state = new TreeElementStateManager();
         ext.rgApiV2 = (await getAzureResourcesExtensionApi(context, '2.0.0')) as AzureResourcesExtensionApiWithActivity;
 
+        /*
         ext.cosmosDBBranchDataProvider = new CosmosDBBranchDataProvider();
         ext.cosmosDBWorkspaceBranchDataProvider = new CosmosDBWorkspaceBranchDataProvider();
         ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
@@ -105,8 +93,8 @@ export async function activateInternal(
         // V1 Legacy API for Postgres support: end
 
         ext.fileSystem = new DatabasesFileSystem(ext.rgApi.appResourceTree);
+        */
 
-        registerCommands();
         // Old commands for old tree view. If need to be quickly returned to V1, uncomment the line below
         // registerCommandsCompatibility();
 
@@ -115,9 +103,11 @@ export async function activateInternal(
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
         await clustersSupport.activate();
 
+        /*
         context.subscriptions.push(
             vscode.workspace.registerFileSystemProvider(DatabasesFileSystem.scheme, ext.fileSystem),
         );
+        */
 
         registerEvent(
             'cosmosDB.onDidChangeConfiguration',
@@ -126,14 +116,14 @@ export async function activateInternal(
                 actionContext.telemetry.properties.isActivationEvent = 'true';
                 actionContext.errorHandling.suppressDisplay = true;
                 if (event.affectsConfiguration(ext.settingsKeys.documentLabelFields)) {
-                    await vscode.commands.executeCommand('azureDatabases.refresh');
+                    await vscode.commands.executeCommand('documentDB.refresh');
                 }
             },
         );
 
         // Suppress "Report an Issue" button for all errors in favor of the command
         registerErrorHandler((c) => (c.errorHandling.suppressReportIssue = true));
-        registerReportIssueCommand('azureDatabases.reportIssue');
+        //registerReportIssueCommand('azureDatabases.reportIssue');
     });
 
     // TODO: we still don't know for sure if this is needed
