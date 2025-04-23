@@ -230,25 +230,6 @@
         ],
         "firstLine": "^#!/.*\\bmongo*\\b",
         "configuration": "./grammar/configuration.json"
-      },
-      {
-        "id": "postgres",
-        "aliases": [
-          "PostgreSQL"
-        ],
-        "extensions": [
-          ".psql"
-        ]
-      },
-      {
-        "id": "nosql",
-        "aliases": [
-          "Cosmos NoSQL",
-          "nosql"
-        ],
-        "extensions": [
-          ".nosql"
-        ]
       }
     ],
     "grammars": [
