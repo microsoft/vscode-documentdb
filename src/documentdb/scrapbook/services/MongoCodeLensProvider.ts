@@ -74,7 +74,7 @@ export class MongoCodeLensProvider implements vscode.CodeLensProvider {
             command: {
                 title: '🌐 ' + shortenedTitle,
                 tooltip: title,
-                command: 'documentDB.scrapbook.connect',
+                command: 'command.documentDB.scrapbook.connect',
             },
             range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0)),
         };
@@ -86,7 +86,7 @@ export class MongoCodeLensProvider implements vscode.CodeLensProvider {
         return <vscode.CodeLens>{
             command: {
                 title,
-                command: 'documentDB.scrapbook.executeAllCommands',
+                command: 'command.documentDB.scrapbook.executeAllCommands',
             },
             range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0)),
         };
@@ -102,7 +102,7 @@ export class MongoCodeLensProvider implements vscode.CodeLensProvider {
             return <vscode.CodeLens>{
                 command: {
                     title,
-                    command: 'documentDB.scrapbook.executeCommand',
+                    command: 'command.documentDB.scrapbook.executeCommand',
                     arguments: [cmd.range.start],
                 },
                 range: cmd.range,

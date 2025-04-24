@@ -26,7 +26,7 @@ export class NewConnectionItemCV implements TreeElement, TreeElementWithContextV
             label: l10n.t('New Connection…'),
             iconPath: new vscode.ThemeIcon('plus'),
             command: {
-                command: 'documentDB.connectionsView.newConnection',
+                command: 'command.documentDB.connectionsView.newConnection',
                 title: '',
                 arguments: [this],
             },

@@ -211,11 +211,11 @@
     "viewsWelcome": [
       {
         "view": "connectionsView",
-        "contents": "Welcome! To start exploring and managing your database, you'll need to connect to it first. Once connected, you can easily view, query, and modify your data.\n\n[$(plus) Add New Connection…](command:documentDB.connectionsView.newConnection)\nClick the button above to get started and unlock the full potential of your database."
+        "contents": "Welcome! To start exploring and managing your database, you'll need to connect to it first. Once connected, you can easily view, query, and modify your data.\n\n[$(plus) Add New Connection…](command:command.documentDB.connectionsView.newConnection)\nClick the button above to get started and unlock the full potential of your database."
       },
       {
         "view": "discoveryView",
-        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:documentDB.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
+        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:command.documentDB.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
       }
     ],
     "languages": [
@@ -247,139 +247,139 @@
       {
         "//": "[ConnectionsView] New Connection",
         "category": "DocumentDB",
-        "command": "documentDB.connectionsView.newConnection",
+        "command": "command.documentDB.connectionsView.newConnection",
         "title": "New Connection…",
         "icon": "$(add)"
       },
       {
         "//": "[ConnectionsView] Remove Connection",
         "category": "DocumentDB",
-        "command": "documentDB.connectionsView.removeConnection",
+        "command": "command.documentDB.connectionsView.removeConnection",
         "title": "Remove Connection…"
       },
       {
         "//": "[ConnectionsView] Refresh View",
         "category": "DocumentDB",
-        "command": "documentDB.connectionsView.refresh",
+        "command": "command.documentDB.connectionsView.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
         "//": "[DiscoveryView] Refresh View",
         "category": "DocumentDB",
-        "command": "documentDB.discoveryView.refresh",
+        "command": "command.documentDB.discoveryView.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
         "//": "[DiscoveryView] Enable Registry",
         "category": "DocumentDB",
-        "command": "documentDB.discoveryView.addRegistry",
+        "command": "command.documentDB.discoveryView.addRegistry",
         "title": "Enable new Registry…",
         "icon": "$(add)"
       },
       {
         "//": "[DiscoveryView] Disable Registry",
         "category": "DocumentDB",
-        "command": "documentDB.discoveryView.removeRegistry",
+        "command": "command.documentDB.discoveryView.removeRegistry",
         "title": "Disable Registry…"
       },
       {
         "//": "[DiscoveryView] Add To DocumentDB Connections",
         "category": "DocumentDB",
-        "command": "documentDB.discoveryView.addConnectionToConnectionsView",
+        "command": "command.documentDB.discoveryView.addConnectionToConnectionsView",
         "title": "Add To DocumentDB Connections"
       },
       {
         "//": "Refresh a Tree Item",
         "category": "DocumentDB",
-        "command": "documentDB.refresh",
+        "command": "command.documentDB.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
         "//": "Copy Connection String",
         "category": "DocumentDB",
-        "command": "documentDB.copyConnectionString",
+        "command": "command.documentDB.copyConnectionString",
         "title": "Copy Connection String"
       },
       {
         "//": "Create Database",
         "category": "DocumentDB",
-        "command": "documentDB.createDatabase",
+        "command": "command.documentDB.createDatabase",
         "title": "Create Database…"
       },
       {
         "//": "Scrapbook: Connect Database",
         "category": "DocumentDB",
-        "command": "documentDB.scrapbook.connect",
+        "command": "command.documentDB.scrapbook.connect",
         "title": "Connect to this database"
       },
       {
         "//": "Scrapbook: Execute All Commands",
         "category": "DocumentDB",
-        "command": "documentDB.scrapbook.executeAllCommands",
+        "command": "command.documentDB.scrapbook.executeAllCommands",
         "title": "Execute All Commands"
       },
       {
         "//": "Scrapbook: Execute Command",
         "category": "DocumentDB",
-        "command": "documentDB.scrapbook.executeCommand",
+        "command": "command.documentDB.scrapbook.executeCommand",
         "title": "Execute Command"
       },
       {
         "//": "Scrapbook: New Scrapbook",
         "category": "DocumentDB",
-        "command": "documentDB.scrapbook.new",
+        "command": "command.documentDB.scrapbook.new",
         "title": "New DocumentDB Scrapbook",
         "icon": "$(new-file)"
       },
       {
         "//": "Delete Collection",
         "category": "DocumentDB",
-        "command": "documentDB.dropCollection",
+        "command": "command.documentDB.dropCollection",
         "title": "Delete Collection…"
       },
       {
         "//": "Delete Database",
         "category": "DocumentDB",
-        "command": "documentDB.dropDatabase",
+        "command": "command.documentDB.dropDatabase",
         "title": "Delete Database…"
       },
       {
         "//": "Create Collection",
         "category": "DocumentDB",
-        "command": "documentDB.createCollection",
+        "command": "command.documentDB.createCollection",
         "title": "Create Collection…"
       },
       {
         "//": "Import Documents",
         "category": "DocumentDB",
-        "command": "documentDB.importDocuments",
+        "command": "command.documentDB.importDocuments",
         "title": "Import Documents into Collection…"
       },
       {
         "//": "Export Documents",
         "category": "DocumentDB",
-        "command": "documentDB.exportDocuments",
+        "command": "command.documentDB.exportDocuments",
         "title": "Export Documents from Collection…"
       },
       {
         "//": "Create Document",
         "category": "DocumentDB",
-        "command": "documentDB.createDocument",
+        "command": "command.documentDB.createDocument",
         "title": "Create Document…"
       },
       {
         "//": "Launch Shell",
         "category": "DocumentDB",
-        "command": "documentDB.launchShell",
+        "command": "command.documentDB.launchShell",
         "title": "Launch Shell"
       },
       {
         "//": "Open Container View",
         "category": "DocumentDB",
-        "command": "documentDB.containerView.open",
+        "command": "command.documentDB.containerView.open",
         "title": "Open Collection"
       }
     ],
@@ -397,13 +397,13 @@
       "azureDatabases.submenus.mongo.database.scrapbook": [
         {
           "//": "[Database] Scrapbook: New Scrapbook",
-          "command": "documentDB.scrapbook.new",
+          "command": "command.documentDB.scrapbook.new",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         },
         {
           "//": "[Database] Scrapbook: Connect",
-          "command": "documentDB.scrapbook.connect",
+          "command": "command.documentDB.scrapbook.connect",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@2"
         }
@@ -411,46 +411,46 @@
       "azureDatabases.submenus.mongo.collection.scrapbook": [
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook New",
-          "command": "documentDB.scrapbook.new",
+          "command": "command.documentDB.scrapbook.new",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         },
         {
           "//": "[Collection] Scrapbook / Connect",
-          "command": "documentDB.scrapbook.connect",
+          "command": "command.documentDB.scrapbook.connect",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@2"
         }
       ],
       "view/title": [
         {
-          "command": "documentDB.connectionsView.refresh",
+          "command": "command.documentDB.connectionsView.refresh",
           "when": "view == connectionsView",
           "group": "navigation@10"
         },
         {
-          "command": "documentDB.connectionsView.newConnection",
+          "command": "command.documentDB.connectionsView.newConnection",
           "when": "view == connectionsView",
           "group": "navigation@5"
         },
         {
-          "command": "documentDB.discoveryView.refresh",
+          "command": "command.documentDB.discoveryView.refresh",
           "when": "view == discoveryView",
           "group": "navigation@10"
         },
         {
-          "command": "documentDB.discoveryView.addRegistry",
+          "command": "command.documentDB.discoveryView.addRegistry",
           "when": "view == discoveryView",
           "group": "navigation@5"
         }
       ],
       "editor/context": [
         {
-          "command": "documentDB.scrapbook.executeAllCommands",
+          "command": "command.documentDB.scrapbook.executeAllCommands",
           "when": "resourceLangId==mongo"
         },
         {
-          "command": "documentDB.scrapbook.executeCommand",
+          "command": "command.documentDB.scrapbook.executeCommand",
           "when": "resourceLangId==mongo"
         }
       ],
@@ -458,53 +458,53 @@
       "view/item/context": [
         {
           "//": "Remove Connection...",
-          "command": "documentDB.connectionsView.removeConnection",
+          "command": "command.documentDB.connectionsView.removeConnection",
           "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "1@2"
         },
         {
-          "command": "documentDB.discoveryView.removeRegistry",
+          "command": "command.documentDB.discoveryView.removeRegistry",
           "when": "view == discoveryView && viewItem =~ /discoveryView.*rootItem/i",
           "group": "1@1"
         },
         {
-          "command": "documentDB.discoveryView.addConnectionToConnectionsView",
+          "command": "command.documentDB.discoveryView.addConnectionToConnectionsView",
           "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
           "group": "0@1"
         },
         {
           "//": "Create database",
-          "command": "documentDB.createDatabase",
+          "command": "command.documentDB.createDatabase",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
           "group": "1@1"
         },
         {
           "//": "Copy connection string",
-          "command": "documentDB.copyConnectionString",
+          "command": "command.documentDB.copyConnectionString",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
           "group": "2@1"
         },
         {
           "//": "[Account] Mongo DB|Cluster Launch Shell",
-          "command": "documentDB.launchShell",
+          "command": "command.documentDB.launchShell",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "2@2"
         },
         {
           "//": "[Database] Create collection",
-          "command": "documentDB.createCollection",
+          "command": "command.documentDB.createCollection",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         },
         {
           "//": "[Database] Delete database",
-          "command": "documentDB.dropDatabase",
+          "command": "command.documentDB.dropDatabase",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@2"
         },
         {
           "//": "[Database] Mongo DB|Cluster Launch Shell",
-          "command": "documentDB.launchShell",
+          "command": "command.documentDB.launchShell",
           "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "2@1"
         },
@@ -516,43 +516,43 @@
         },
         {
           "//": "[Database] Refresh",
-          "command": "documentDB.refresh",
+          "command": "command.documentDB.refresh",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i",
           "group": "3@1"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Open collection",
-          "command": "documentDB.containerView.open",
+          "command": "command.documentDB.containerView.open",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         },
         {
           "//": "[Collection] Create document",
-          "command": "documentDB.createDocument",
+          "command": "command.documentDB.createDocument",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@2"
         },
         {
           "//": "[Collection] Import Documents",
-          "command": "documentDB.importDocuments",
+          "command": "command.documentDB.importDocuments",
           "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "2@1"
         },
         {
           "//": "[Collection] Export documents",
-          "command": "documentDB.exportDocuments",
+          "command": "command.documentDB.exportDocuments",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "2@2"
         },
         {
           "//": "[Collection] Drop collection",
-          "command": "documentDB.dropCollection",
+          "command": "command.documentDB.dropCollection",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "3@1"
         },
         {
           "//": "[Collection] Launch shell",
-          "command": "documentDB.launchShell",
+          "command": "command.documentDB.launchShell",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "4@1"
         },
@@ -564,25 +564,25 @@
         },
         {
           "//": "[Collection] Refresh",
-          "command": "documentDB.refresh",
+          "command": "command.documentDB.refresh",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i",
           "group": "5@1"
         },
         {
           "//": "[Collection/Documents] Mongo DB|Cluster Open collection",
-          "command": "documentDB.containerView.open",
+          "command": "command.documentDB.containerView.open",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]documents(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         },
         {
           "//": "[Indexes] Refresh",
-          "command": "documentDB.refresh",
+          "command": "command.documentDB.refresh",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]indexes(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         },
         {
           "//": "[Index] Refresh",
-          "command": "documentDB.refresh",
+          "command": "command.documentDB.refresh",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]index(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         }
@@ -590,28 +590,28 @@
       "explorer/context": [],
       "commandPalette": [
         {
-          "command": "documentDB.refresh",
+          "command": "command.documentDB.refresh",
           "when": "never"
         },
         {
-          "command": "documentDB.scrapbook.executeAllCommands",
+          "command": "command.documentDB.scrapbook.executeAllCommands",
           "when": "editorLangId == 'mongo'"
         },
         {
-          "command": "documentDB.scrapbook.executeCommand",
+          "command": "command.documentDB.scrapbook.executeCommand",
           "when": "editorLangId == 'mongo'"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "documentDB.scrapbook.executeCommand",
+        "command": "command.documentDB.scrapbook.executeCommand",
         "key": "ctrl+shift+'",
         "mac": "cmd+shift+'",
         "when": "editorLangId == 'mongo' && editorTextFocus"
       },
       {
-        "command": "documentDB.scrapbook.executeAllCommands",
+        "command": "command.documentDB.scrapbook.executeAllCommands",
         "key": "ctrl+shift+;",
         "mac": "cmd+shift+;",
         "when": "editorLangId == 'mongo' && editorTextFocus"

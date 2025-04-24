@@ -216,7 +216,7 @@ export const collectionsViewRouter = router({
     importDocuments: publicProcedure.use(trpcToTelemetry).query(({ ctx }) => {
         const myCtx = ctx as RouterContext;
 
-        vscode.commands.executeCommand('documentDB.importDocuments', myCtx.collectionTreeItem, null, {
+        vscode.commands.executeCommand('command.documentDB.importDocuments', myCtx.collectionTreeItem, null, {
             source: 'webview;collectionView',
         });
     }),

@@ -37,13 +37,13 @@ export function registerScrapbookCommands(): void {
 
     setUpErrorReporting();
 
-    registerCommandWithTreeNodeUnwrapping('documentDB.scrapbook.new', createScrapbook);
-    registerCommandWithTreeNodeUnwrapping('documentDB.scrapbook.executeCommand', executeCommand);
-    registerCommandWithTreeNodeUnwrapping('documentDB.scrapbook.executeAllCommands', executeAllCommand);
+    registerCommandWithTreeNodeUnwrapping('command.documentDB.scrapbook.new', createScrapbook);
+    registerCommandWithTreeNodeUnwrapping('command.documentDB.scrapbook.executeCommand', executeCommand);
+    registerCommandWithTreeNodeUnwrapping('command.documentDB.scrapbook.executeAllCommands', executeAllCommand);
 
     // #region Database command
 
-    registerCommandWithTreeNodeUnwrapping('documentDB.scrapbook.connect', connectCluster);
+    registerCommandWithTreeNodeUnwrapping('command.documentDB.scrapbook.connect', connectCluster);
 
     // #endregion
 }

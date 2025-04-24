@@ -63,7 +63,7 @@ export function registerCommands(): void {
     registerCosmosDBCommands();
     registerPostgresCommands();
 
-    registerCommandWithTreeNodeUnwrapping('documentDB.refresh', refreshTreeElement);
+    registerCommandWithTreeNodeUnwrapping('command.documentDB.refresh', refreshTreeElement);
 
     // For Cosmos DB FileSystem (Scrapbook)
     registerCommandWithTreeNodeUnwrapping(
@@ -73,14 +73,14 @@ export function registerCommands(): void {
 }
 
 export function registerAccountCommands() {
-    registerCommandWithTreeNodeUnwrapping('cosmosDB.createDatabase', createAzureDatabase);
+    registerCommandWithTreeNodeUnwrapping('command.documentDB.createDatabase', createAzureDatabase);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.deleteAccount', deleteAzureDatabaseAccount);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.newConnection', newConnection);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.newEmulatorConnection', newEmulatorConnection);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.removeConnection', removeConnection);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.copyConnectionString', copyAzureConnectionString);
 
-    registerCommandWithTreeNodeUnwrapping('documentDB.connectionsView.newConnection', newConnection);
+    registerCommandWithTreeNodeUnwrapping('command.documentDB.connectionsView.newConnection', newConnection);
 }
 
 export function registerDatabaseCommands() {
@@ -99,7 +99,7 @@ export function registerContainerCommands() {
 }
 
 export function registerDocumentCommands() {
-    registerCommandWithTreeNodeUnwrapping('documentDB.createDocument', cosmosDBCreateDocument);
+    registerCommandWithTreeNodeUnwrapping('command.documentDB.createDocument', cosmosDBCreateDocument);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.openGraphExplorer', cosmosDBOpenGraphExplorer);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.openDocument', cosmosDBOpenItem, doubleClickDebounceDelay);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.deleteDocument', cosmosDBDeleteItem);

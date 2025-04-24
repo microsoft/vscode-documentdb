@@ -43,7 +43,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
                     id: `${this.id}/no-collections`,
                     label: l10n.t('Create Collection…'),
                     iconPath: new vscode.ThemeIcon('plus'),
-                    commandId: 'documentDB.createCollection',
+                    commandId: 'command.documentDB.createCollection',
                     commandArgs: [this],
                 }) as TreeElement,
             ];
