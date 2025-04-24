@@ -123,6 +123,7 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerDiscoveryTree(activateContext);
 
                 //// General Commands:
+
                 registerCommandWithTreeNodeUnwrapping('command.documentDB.refresh', refreshTreeElement);
 
                 registerCommandWithTreeNodeUnwrapping('command.documentDB.createDatabase', createAzureDatabase);
@@ -142,6 +143,10 @@ export class ClustersExtension implements vscode.Disposable {
                     newEmulatorConnection,
                 );
 
+                registerCommand('command.documentDB.connectionsView.refresh', (context: IActionContext) => {
+                    return refreshView(context, Views.ConnectionsView);
+                });
+
                 //// Registry Commands:
 
                 registerCommand('command.documentDB.discoveryView.addRegistry', addDiscoveryRegistry);
@@ -158,10 +163,6 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommand('command.documentDB.discoveryView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.DiscoveryView);
-                });
-
-                registerCommand('command.documentDB.connectionsView.refresh', (context: IActionContext) => {
-                    return refreshView(context, Views.ConnectionsView);
                 });
 
                 registerCommandWithTreeNodeUnwrapping(

@@ -116,7 +116,8 @@ export async function activateInternal(
                 actionContext.telemetry.properties.isActivationEvent = 'true';
                 actionContext.errorHandling.suppressDisplay = true;
                 if (event.affectsConfiguration(ext.settingsKeys.documentLabelFields)) {
-                    await vscode.commands.executeCommand('command.documentDB.refresh');
+                    await vscode.commands.executeCommand('command.documentDB.discoveryView.refresh');
+                    await vscode.commands.executeCommand('command.documentDB.connectionsView.refresh');
                 }
             },
         );

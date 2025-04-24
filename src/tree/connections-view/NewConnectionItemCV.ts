@@ -13,7 +13,7 @@ import { type TreeElementWithContextValue } from '../TreeElementWithContextValue
  */
 export class NewConnectionItemCV implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public readonly contextValue: string = 'treeItem.newConnection';
+    public contextValue: string = 'treeItem.newConnection';
 
     constructor(public readonly parentId: string) {
         this.id = `${parentId}/newConnection`;

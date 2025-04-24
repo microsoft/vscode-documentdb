@@ -3,8 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/**
+ * Represents a tree element with context value support.
+ *
+ * @property contextValue - A string representing the context value of the tree element.
+ */
 export type TreeElementWithContextValue = {
-    readonly contextValue: string;
+    contextValue: string;
 };
 
 export function isTreeElementWithContextValue(node: unknown): node is TreeElementWithContextValue {
