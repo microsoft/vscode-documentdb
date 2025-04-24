@@ -252,6 +252,13 @@
         "icon": "$(add)"
       },
       {
+        "//": "[ConnectionsView] New Emulator Connection",
+        "category": "DocumentDB",
+        "command": "command.documentDB.connectionsView.newEmulatorConnection",
+        "title": "New Connection…",
+        "icon": "$(add)"
+      },
+      {
         "//": "[ConnectionsView] Remove Connection",
         "category": "DocumentDB",
         "command": "command.documentDB.connectionsView.removeConnection",

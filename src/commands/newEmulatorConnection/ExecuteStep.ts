@@ -45,6 +45,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
         if (experience.api === API.MongoDB || experience.api === API.MongoClusters) {
             label = `MongoDB Emulator${portSuffix}`;
         }
+        if (experience.api === API.DocumentDB) {
+            label = `DocumentDB Emulator${portSuffix}`;
+        }
 
         return ext.state.showCreatingChild(
             parentId,
@@ -57,7 +60,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
 
                 switch (experience.api) {
                     case API.MongoDB:
-                    case API.MongoClusters: {
+                    case API.MongoClusters:
+                    case API.DocumentDB: {
                         const mongoConfig = context.mongoEmulatorConfiguration as EmulatorConfiguration;
                         isEmulator = mongoConfig?.isEmulator ?? true;
                         disableEmulatorSecurity = mongoConfig?.disableEmulatorSecurity;
@@ -74,7 +78,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
                     id: connectionString,
                     name: label,
                     properties: {
-                        api: experience.api,
+                        api: experience.api === API.DocumentDB ? API.MongoClusters : experience.api,
                         isEmulator,
                         ...(disableEmulatorSecurity && { disableEmulatorSecurity }),
                     },
@@ -87,6 +91,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
                         storageItem,
                         true,
                     );
+                } else if (experience.api === API.DocumentDB) {
+                    await StorageService.get(StorageNames.Connections).push('emulators', storageItem, true);
                 } else {
                     await StorageService.get(StorageNames.Workspace).push(
                         WorkspaceResourceType.AttachedAccounts,

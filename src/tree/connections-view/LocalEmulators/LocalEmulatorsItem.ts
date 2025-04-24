@@ -13,7 +13,7 @@ import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration
 import { type ClusterModel } from '../../documentdb/ClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { ClusterItem } from '../../workspace-view/documentdb/ClusterItem';
+import { DocumentDBClusterItem } from '../DocumentDBClusterItem';
 import { NewEmulatorConnectionItemCV } from './NewEmulatorConnectionItemCV';
 
 export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextValue {
@@ -43,7 +43,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                     emulatorConfiguration: emulatorConfiguration,
                 };
 
-                return new ClusterItem(model);
+                return new DocumentDBClusterItem(model);
             }),
             new NewEmulatorConnectionItemCV(this.id),
         ];

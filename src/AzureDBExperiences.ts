@@ -17,6 +17,7 @@ export enum API {
     PostgresSingle = 'PostgresSingle',
     PostgresFlexible = 'PostgresFlexible',
     Common = 'Common', // In case we're reporting a common event and still need to provide the value of the API
+    DocumentDB = 'DocumentDB', // This the entry for new API (DocumentDB).
 }
 
 export enum DBAccountKind {
@@ -138,6 +139,13 @@ export const MongoExperience: Experience = {
     telemetryName: 'mongo',
     kind: DBAccountKind.MongoDB,
     tag: 'Azure Cosmos DB for MongoDB API',
+} as const;
+export const DocumentDBExperience: Experience = {
+    api: API.DocumentDB,
+    longName: 'DocumentDB',
+    shortName: 'DocumentDB',
+    telemetryName: 'Documentdb',
+    tag: 'DocumentDB',
 } as const;
 export const MongoClustersExperience: Experience = {
     api: API.MongoClusters,
