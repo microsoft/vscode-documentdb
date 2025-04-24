@@ -72,7 +72,7 @@ export class DatabasesFileSystem extends AzExtTreeFileSystem<EditableFileSystemI
         await node.writeFileContent(context, content.toString());
 
         this.fireChangedEvent(node);
-        await vscode.commands.executeCommand('azureDatabases.refresh', node);
+        await vscode.commands.executeCommand('documentDB.refresh', node);
 
         const updatedMessage: string = l10n.t('Updated entity "{name}".', { name: nodeEditorLabel });
         ext.outputChannel.appendLog(updatedMessage);

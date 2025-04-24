@@ -37,13 +37,13 @@ export function registerScrapbookCommands(): void {
 
     setUpErrorReporting();
 
-    registerCommandWithTreeNodeUnwrapping('cosmosDB.newMongoScrapbook', createScrapbook);
-    registerCommandWithTreeNodeUnwrapping('cosmosDB.executeMongoCommand', executeCommand);
-    registerCommandWithTreeNodeUnwrapping('cosmosDB.executeAllMongoCommands', executeAllCommand);
+    registerCommandWithTreeNodeUnwrapping('documentDB.scrapbook.new', createScrapbook);
+    registerCommandWithTreeNodeUnwrapping('documentDB.scrapbook.executeCommand', executeCommand);
+    registerCommandWithTreeNodeUnwrapping('documentDB.scrapbook.executeAllCommands', executeAllCommand);
 
     // #region Database command
 
-    registerCommandWithTreeNodeUnwrapping('cosmosDB.connectMongoDB', connectCluster);
+    registerCommandWithTreeNodeUnwrapping('documentDB.scrapbook.connect', connectCluster);
 
     // #endregion
 }

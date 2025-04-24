@@ -20,7 +20,7 @@ export const longRunningTestsEnabled: boolean = longRunningLocalTestsEnabled || 
 // Runs before all tests
 suiteSetup(async function (this: Mocha.Context): Promise<void> {
     this.timeout(2 * 60 * 1000);
-    await vscode.commands.executeCommand('azureDatabases.refresh'); // activate the extension before tests begin
+    await vscode.commands.executeCommand('documentDB.refresh'); // activate the extension before tests begin
     ext.outputChannel = new TestOutputChannel();
 
     registerOnActionStartHandler((context) => {

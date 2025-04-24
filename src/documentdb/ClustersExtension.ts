@@ -140,7 +140,7 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'documentDB.addConnectionFromRegistry',
+                    'documentDB.discoveryView.addConnectionToConnectionsView',
                     addConnectionFromRegistry,
                 );
 
@@ -168,20 +168,20 @@ export class ClustersExtension implements vscode.Disposable {
                  * harder to understand and maintain.
                  */
                 registerCommand('command.internal.mongoClusters.containerView.open', openCollectionViewInternal);
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.containerView.open', openCollectionView);
+                registerCommandWithTreeNodeUnwrapping('documentDB.containerView.open', openCollectionView);
 
                 registerCommand('command.internal.mongoClusters.documentView.open', openMongoDocumentView);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.launchShell', launchShell);
+                registerCommandWithTreeNodeUnwrapping('documentDB.launchShell', launchShell);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.dropCollection', deleteAzureContainer);
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.dropDatabase', deleteAzureDatabase);
+                registerCommandWithTreeNodeUnwrapping('documentDB.dropCollection', deleteAzureContainer);
+                registerCommandWithTreeNodeUnwrapping('documentDB.dropDatabase', deleteAzureDatabase);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.createCollection', createMongoCollection);
+                registerCommandWithTreeNodeUnwrapping('documentDB.createCollection', createMongoCollection);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.createDocument', createMongoDocument);
+                registerCommandWithTreeNodeUnwrapping('documentDB.createDocument', createMongoDocument);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.importDocuments', importDocuments);
+                registerCommandWithTreeNodeUnwrapping('documentDB.importDocuments', importDocuments);
 
                 registerScrapbookCommands();
 
@@ -196,10 +196,7 @@ export class ClustersExtension implements vscode.Disposable {
                  * harder to understand and maintain.
                  */
                 registerCommand('command.internal.mongoClusters.exportDocuments', clustersExportQueryResults);
-                registerCommandWithTreeNodeUnwrapping(
-                    'command.mongoClusters.exportDocuments',
-                    clustersExportEntireCollection,
-                );
+                registerCommandWithTreeNodeUnwrapping('documentDB.exportDocuments', clustersExportEntireCollection);
             },
         );
     }

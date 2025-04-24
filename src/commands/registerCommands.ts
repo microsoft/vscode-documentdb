@@ -63,7 +63,7 @@ export function registerCommands(): void {
     registerCosmosDBCommands();
     registerPostgresCommands();
 
-    registerCommandWithTreeNodeUnwrapping('azureDatabases.refresh', refreshTreeElement);
+    registerCommandWithTreeNodeUnwrapping('documentDB.refresh', refreshTreeElement);
 
     // For Cosmos DB FileSystem (Scrapbook)
     registerCommandWithTreeNodeUnwrapping(
@@ -99,7 +99,7 @@ export function registerContainerCommands() {
 }
 
 export function registerDocumentCommands() {
-    registerCommandWithTreeNodeUnwrapping('cosmosDB.createDocument', cosmosDBCreateDocument);
+    registerCommandWithTreeNodeUnwrapping('documentDB.createDocument', cosmosDBCreateDocument);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.openGraphExplorer', cosmosDBOpenGraphExplorer);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.openDocument', cosmosDBOpenItem, doubleClickDebounceDelay);
     registerCommandWithTreeNodeUnwrapping('cosmosDB.deleteDocument', cosmosDBDeleteItem);
