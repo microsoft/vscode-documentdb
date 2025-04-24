@@ -19,7 +19,9 @@ import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
+import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createMongoCollection } from '../commands/createContainer/createContainer';
+import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteAzureContainer } from '../commands/deleteContainer/deleteContainer';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
@@ -29,8 +31,10 @@ import {
 } from '../commands/exportDocuments/exportDocuments';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
+import { newConnection } from '../commands/newConnection/newConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openMongoDocumentView } from '../commands/openDocument/openDocument';
+import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
@@ -89,7 +93,9 @@ export class ClustersExtension implements vscode.Disposable {
                 // TODO: Implement https://github.com/microsoft/vscode-documentdb/issues/30
                 // for staged hand-over from Azure Databases to this DocumentDB extension
 
-                if (enableMongoVCoreSupport()) {
+                // eslint-disable-next-line no-constant-condition
+                if (false && enableMongoVCoreSupport()) {
+                    // on purpose, transition is still in progress
                     activateContext.telemetry.properties.enabledVCore = 'true';
 
                     ext.mongoVCoreBranchDataProvider = new MongoVCoreBranchDataProvider();
@@ -99,7 +105,9 @@ export class ClustersExtension implements vscode.Disposable {
                     );
                 }
 
-                if (enableWorkspaceSupport()) {
+                // eslint-disable-next-line no-constant-condition
+                if (false && enableWorkspaceSupport()) {
+                    // on purpose, transition is still in progress
                     activateContext.telemetry.properties.enabledWorkspace = 'true';
 
                     ext.mongoClustersWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
@@ -113,27 +121,47 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
 
-                registerCommand('documentDB.discoveryView.addRegistry', addDiscoveryRegistry);
+                //// General Commands:
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.refresh', refreshTreeElement);
+
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.createDatabase', createAzureDatabase);
+                registerCommandWithTreeNodeUnwrapping(
+                    'command.documentDB.copyConnectionString',
+                    copyAzureConnectionString,
+                );
+
+                //// Connections View Commands:
+                registerCommandWithTreeNodeUnwrapping(
+                    'command.documentDB.connectionsView.newConnection',
+                    newConnection,
+                );
+
+                //// Registry Commands:
+
+                registerCommand('command.documentDB.discoveryView.addRegistry', addDiscoveryRegistry);
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'documentDB.discoveryView.removeRegistry',
+                    'command.documentDB.discoveryView.removeRegistry',
                     removeDiscoveryRegistry,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'documentDB.addConnectionFromRegistry',
+                    'command.documentDB.discoveryView.addConnectionToConnectionsView',
                     addConnectionFromRegistry,
                 );
 
-                registerCommand('documentDB.discoveryView.refresh', (context: IActionContext) => {
+                registerCommand('command.documentDB.discoveryView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.DiscoveryView);
                 });
 
-                registerCommand('documentDB.connectionsView.refresh', (context: IActionContext) => {
+                registerCommand('command.documentDB.connectionsView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.ConnectionsView);
                 });
 
-                registerCommandWithTreeNodeUnwrapping('documentDB.connectionsView.removeConnection', removeConnection);
+                registerCommandWithTreeNodeUnwrapping(
+                    'command.documentDB.connectionsView.removeConnection',
+                    removeConnection,
+                );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling
@@ -149,20 +177,20 @@ export class ClustersExtension implements vscode.Disposable {
                  * harder to understand and maintain.
                  */
                 registerCommand('command.internal.mongoClusters.containerView.open', openCollectionViewInternal);
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.containerView.open', openCollectionView);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.containerView.open', openCollectionView);
 
                 registerCommand('command.internal.mongoClusters.documentView.open', openMongoDocumentView);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.launchShell', launchShell);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.launchShell', launchShell);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.dropCollection', deleteAzureContainer);
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.dropDatabase', deleteAzureDatabase);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.dropCollection', deleteAzureContainer);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.dropDatabase', deleteAzureDatabase);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.createCollection', createMongoCollection);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.createCollection', createMongoCollection);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.createDocument', createMongoDocument);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.createDocument', createMongoDocument);
 
-                registerCommandWithTreeNodeUnwrapping('command.mongoClusters.importDocuments', importDocuments);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.importDocuments', importDocuments);
 
                 registerScrapbookCommands();
 
@@ -178,7 +206,7 @@ export class ClustersExtension implements vscode.Disposable {
                  */
                 registerCommand('command.internal.mongoClusters.exportDocuments', clustersExportQueryResults);
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.mongoClusters.exportDocuments',
+                    'command.documentDB.exportDocuments',
                     clustersExportEntireCollection,
                 );
             },
