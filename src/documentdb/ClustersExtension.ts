@@ -32,6 +32,7 @@ import {
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { newConnection } from '../commands/newConnection/newConnection';
+import { newEmulatorConnection } from '../commands/newEmulatorConnection/newEmulatorConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openMongoDocumentView } from '../commands/openDocument/openDocument';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
@@ -134,6 +135,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'command.documentDB.connectionsView.newConnection',
                     newConnection,
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'command.documentDB.connectionsView.newEmulatorConnection',
+                    newEmulatorConnection,
                 );
 
                 //// Registry Commands:

@@ -6,7 +6,7 @@
 import { AzureWizardPromptStep, openUrl, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { API, CoreExperience, MongoExperience } from '../../AzureDBExperiences';
+import { API, CoreExperience, getExperienceFromApi } from '../../AzureDBExperiences';
 import { SettingsService } from '../../services/SettingsService';
 import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import {
@@ -87,12 +87,16 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
 
         if (selectedItem.id === 'connectionString') {
             context.mode = NewEmulatorConnectionMode.CustomConnectionString;
-            context.experience = isCore ? CoreExperience : MongoExperience;
+
+            context.experience = getExperienceFromApi(this.preselectedAPI);
+            if (isCore) {
+                context.experience = CoreExperience;
+            }
 
             if (isCore) {
                 context.isCoreEmulator = true;
             } else {
-                context.mongoEmulatorConfiguration = defaultMongoEmulatorConfiguration;
+                context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
             }
 
             return;
@@ -100,12 +104,15 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
 
         if (preconfiguredEmulators.some((emulator) => emulator.id === selectedItem.id)) {
             context.mode = NewEmulatorConnectionMode.Preconfigured;
-            context.experience = isCore ? CoreExperience : MongoExperience;
+            context.experience = getExperienceFromApi(this.preselectedAPI);
+            if (isCore) {
+                context.experience = CoreExperience;
+            }
 
             if (isCore) {
                 context.isCoreEmulator = true;
             } else {
-                context.mongoEmulatorConfiguration = defaultMongoEmulatorConfiguration;
+                context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
             }
 
             const settingName = isCore ? 'cosmosDB.emulator.port' : 'cosmosDB.emulator.mongoPort';

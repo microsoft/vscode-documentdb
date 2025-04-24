@@ -12,6 +12,7 @@ import {
 import * as l10n from '@vscode/l10n';
 import { API } from '../../AzureDBExperiences';
 import { isEmulatorSupported } from '../../constants';
+import { NewEmulatorConnectionItemCV } from '../../tree/connections-view/LocalEmulators/NewEmulatorConnectionItemCV';
 import { NewCoreEmulatorConnectionItem } from '../../tree/workspace-view/cosmosdb/LocalEmulators/NewCoreEmulatorConnectionItem';
 import { NewEmulatorConnectionItem } from '../../tree/workspace-view/documentdb/LocalEmulators/NewEmulatorConnectionItem';
 import { ExecuteStep } from './ExecuteStep';
@@ -24,12 +25,12 @@ import { PromptEmulatorTypeStep } from './PromptEmulatorTypeStep';
 
 export async function newEmulatorConnection(
     context: IActionContext,
-    node: NewCoreEmulatorConnectionItem | NewEmulatorConnectionItem,
+    node: NewCoreEmulatorConnectionItem | NewEmulatorConnectionItem | NewEmulatorConnectionItemCV,
 ) {
     if (!isEmulatorSupported) {
         context.errorHandling.suppressReportIssue = true;
         throw new Error(
-            node instanceof NewEmulatorConnectionItem
+            node instanceof NewEmulatorConnectionItem || node instanceof NewEmulatorConnectionItemCV
                 ? l10n.t(
                       'The Azure Cosmos DB emulator for MongoDB is only supported on Windows, Linux and MacOS (Intel).',
                   )
@@ -46,10 +47,13 @@ export async function newEmulatorConnection(
     const steps: AzureWizardPromptStep<NewEmulatorConnectionWizardContext>[] = [];
     const executeSteps: AzureWizardExecuteStep<NewEmulatorConnectionWizardContext>[] = [];
 
-    if (node instanceof NewEmulatorConnectionItem) {
+    if (node instanceof NewEmulatorConnectionItem || node instanceof NewEmulatorConnectionItemCV) {
         title = l10n.t('New Emulator Connection');
+
+        const api = node instanceof NewEmulatorConnectionItemCV ? API.DocumentDB : API.MongoDB;
+
         steps.push(
-            new PromptEmulatorTypeStep(API.MongoDB),
+            new PromptEmulatorTypeStep(api),
             new PromptMongoRUEmulatorConnectionStringStep(),
             new PromptEmulatorPortStep(),
             new PromptMongoRUEmulatorSecurityStep(),

@@ -49,7 +49,7 @@ export class PromptMongoRUEmulatorSecurityStep extends AzureWizardPromptStep<New
 
         if (selectedItem.id === 'disableTLS') {
             if (!context.mongoEmulatorConfiguration) {
-                context.mongoEmulatorConfiguration = defaultMongoEmulatorConfiguration;
+                context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
             }
 
             const config = context.mongoEmulatorConfiguration as EmulatorConfiguration;

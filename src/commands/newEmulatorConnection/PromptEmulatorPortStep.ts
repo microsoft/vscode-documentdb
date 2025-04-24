@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { MongoExperience, type Experience } from '../../AzureDBExperiences';
+import { DocumentDBExperience, MongoExperience, type Experience } from '../../AzureDBExperiences';
 import { wellKnownEmulatorPassword } from '../../constants';
 import {
     NewEmulatorConnectionMode,
@@ -22,6 +22,7 @@ export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorCon
 
         switch (context.experience) {
             case MongoExperience:
+            case DocumentDBExperience:
                 defaultPort = context.port ? context.port.toString() : '10255';
                 promptText = l10n.t('Enter the port number of the Emulator');
                 placeHolder = l10n.t('The default port: 10255');
@@ -73,6 +74,7 @@ export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorCon
     private buildConnectionString(port: number, experience: Experience): string | undefined {
         switch (experience) {
             case MongoExperience:
+            case DocumentDBExperience:
                 return `mongodb://localhost:${encodeURIComponent(wellKnownEmulatorPassword)}@localhost:${port}/?ssl=true&retrywrites=false`;
             default:
                 return `AccountEndpoint=https://localhost:${port}/;AccountKey=${wellKnownEmulatorPassword};`;
