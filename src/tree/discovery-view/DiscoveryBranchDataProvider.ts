@@ -13,6 +13,7 @@ import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { type TreeElement } from '../TreeElement';
+import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 
 /**
  * This class follows the same pattern as the `WorkspaceDataProvicers` does with Azure Resoruces.
@@ -79,6 +80,18 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
         });
     }
 
+    appendContextValue(treeItem: TreeElementWithContextValue, contextValueToAppend: string): void {
+        // all items returned from this view need that context value assigned
+        const contextValues: string[] = [contextValueToAppend];
+
+        // keep original contextValues if any
+        if (treeItem.contextValue) {
+            contextValues.push(treeItem.contextValue);
+        }
+
+        treeItem.contextValue = createContextValue(contextValues);
+    }
+
     /**
      * Helper to get root items for the tree.
      */
@@ -108,6 +121,10 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
 
             // Get the root item for this provider
             const rootItem = discoveryProvider.getDiscoveryTreeRootItem(`${Views.DiscoveryView}/${id}`);
+
+            if (isTreeElementWithContextValue(rootItem)) {
+                this.appendContextValue(rootItem, Views.DiscoveryView);
+            }
 
             // Wrap the root item with state handling for refresh support
             const wrappedInStateHandling = ext.state.wrapItemInStateHandling(rootItem, () =>
@@ -147,9 +164,12 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
                     return null;
                 }
                 // Wrap each child with state handling for refresh support
-                return children.map((child) =>
-                    ext.state.wrapItemInStateHandling(child, () => this.refresh(child)),
-                ) as TreeElement[];
+                return children.map((child) => {
+                    if (isTreeElementWithContextValue(child)) {
+                        this.appendContextValue(child, Views.DiscoveryView);
+                    }
+                    return ext.state.wrapItemInStateHandling(child, () => this.refresh(child));
+                }) as TreeElement[];
             })();
 
             // Store the in-flight promise
@@ -169,24 +189,9 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
     }
 
     async getTreeItem(element: TreeElement): Promise<vscode.TreeItem> {
-        const treeItem: vscode.TreeItem = await element.getTreeItem();
-
-        // all items returned from this view need that context value assigned
-        const contextValues: string[] = [Views.DiscoveryView];
-
-        // keep original contextValues if any
-        if (treeItem.contextValue) {
-            contextValues.push(treeItem.contextValue);
-        }
-
-        // mark root items with a special context value
-        if (this.currentRootItems.has(element)) {
-            contextValues.push('rootItem');
-        }
-
-        treeItem.contextValue = createContextValue(contextValues);
-
-        return treeItem;
+        /** note that due to caching done by the TreeElementStateManager,
+         * changes to the TreeItem added here might get lost */
+        return element.getTreeItem();
     }
 
     /**

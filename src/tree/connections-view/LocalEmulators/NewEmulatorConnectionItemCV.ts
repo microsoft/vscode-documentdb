@@ -10,7 +10,7 @@ import { type TreeElementWithContextValue } from '../../TreeElementWithContextVa
 
 export class NewEmulatorConnectionItemCV implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public readonly contextValue: string = 'treeItem.newEmulatorConnection';
+    public contextValue: string = 'treeItem.newEmulatorConnection';
 
     constructor(public readonly parentId: string) {
         this.id = `${parentId}/newEmulatorConnection`;

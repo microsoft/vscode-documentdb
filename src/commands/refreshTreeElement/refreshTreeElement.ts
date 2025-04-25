@@ -22,6 +22,10 @@ export async function refreshTreeElement(context: IActionContext, node: AzExtTre
             return ext.discoveryBranchDataProvider.refresh(node);
         }
 
+        if (/connectionsView/i.test(node.contextValue)) {
+            return ext.connectionsBranchDataProvider.refresh(node);
+        }
+
         if (/experience[.](mongocluster)/i.test(node.contextValue)) {
             return ext.mongoVCoreBranchDataProvider.refresh(node);
         }
