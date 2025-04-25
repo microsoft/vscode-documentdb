@@ -23,7 +23,7 @@ export interface AzureSubscriptionModel {
 
 export class AzureSubscriptionItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public contextValue: string = 'discovery.azureService';
+    public contextValue: string = 'enableRefreshCommand;discovery.azureService';
 
     constructor(
         public readonly parentId: string,
