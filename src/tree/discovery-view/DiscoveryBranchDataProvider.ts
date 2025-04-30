@@ -124,6 +124,7 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
 
             if (isTreeElementWithContextValue(rootItem)) {
                 this.appendContextValue(rootItem, Views.DiscoveryView);
+                this.appendContextValue(rootItem, 'rootItem');
             }
 
             // Wrap the root item with state handling for refresh support
