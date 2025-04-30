@@ -28,7 +28,8 @@ import { createMongoClustersManagementClient } from '../../../../utils/azureClie
 export class DocumentDBResourceItem extends ClusterItemBase {
     iconPath = vscode.Uri.joinPath(
         ext.context.extensionUri,
-        'node_modules',
+        'resources',
+        'from_node_modules',
         '@microsoft',
         'vscode-azext-azureutils',
         'resources',

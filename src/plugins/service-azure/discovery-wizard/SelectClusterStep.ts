@@ -16,7 +16,8 @@ import { AzureContextProperties } from '../AzureDiscoveryProvider';
 export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     iconPath = Uri.joinPath(
         ext.context.extensionUri,
-        'node_modules',
+        'resources',
+        'from_node_modules',
         '@microsoft',
         'vscode-azext-azureutils',
         'resources',

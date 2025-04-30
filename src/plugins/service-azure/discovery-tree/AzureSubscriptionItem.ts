@@ -64,7 +64,8 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
             tooltip: `Subscription ID: ${this.subscription.subscriptionId}`,
             iconPath: vscode.Uri.joinPath(
                 ext.context.extensionUri,
-                'node_modules',
+                'resources',
+                'from_node_modules',
                 '@microsoft',
                 'vscode-azext-azureutils',
                 'resources',
