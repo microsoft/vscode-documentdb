@@ -9,7 +9,7 @@ import { SettingsService } from '../services/SettingsService';
 import { indexMetricsToTableItem, queryMetricsToTable, queryResultToTable } from './convertors';
 
 function getCsvSeparator(): string {
-    return SettingsService.getSetting<string>('cosmosDB.csvSeparator') ?? ';';
+    return SettingsService.getSetting<string>('documentDB.csvSeparator') ?? ';';
 }
 
 export const escapeCsvValue = (value: string): string => {

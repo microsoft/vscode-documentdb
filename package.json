@@ -620,7 +620,7 @@
       {
         "title": "Authentication",
         "properties": {
-          "azureDatabases.cosmosDB.preferredAuthenticationMethod": {
+          "documentDB.preferredAuthenticationMethod": {
             "type": "string",
             "enum": [
               "auto",
@@ -644,7 +644,7 @@
             "default": "auto",
             "order": 0
           },
-          "azureDatabases.authentication.managedIdentity.clientID": {
+          "documentDB.authentication.managedIdentity.clientID": {
             "type": "string",
             "markdownDescription": "%cosmosdb.configuration.authentication.managedIdentity.clientID%",
             "default": null,
@@ -653,7 +653,7 @@
         }
       },
       {
-        "title": "Azure Databases",
+        "title": "DocumentDB",
         "properties": {
           "mongo.shell.path": {
             "type": [
@@ -678,18 +678,18 @@
             "description": "%cosmosdb.configuration.mongo.shell.timeout%",
             "default": 30
           },
-          "azureDatabases.batchSize": {
+          "documentDB.batchSize": {
             "type": "number",
             "description": "%cosmosdb.configuration.batch.size%",
             "default": 50
           },
-          "azureDatabases.useCosmosOAuth": {
+          "documentDB.useCosmosOAuth": {
             "type": "boolean",
             "markdownDescription": "%cosmosdb.configuration.oauth.enable%",
-            "markdownDeprecationMessage": "**Deprecated**: Please use `#azureDatabases.cosmosDB.preferredAuthenticationMethod#` instead.",
-            "deprecationMessage": "Deprecated: Please use azureDatabases.cosmosDB.preferredAuthenticationMethod instead."
+            "markdownDeprecationMessage": "**Deprecated**: Please use `#documentDB.preferredAuthenticationMethod#` instead.",
+            "deprecationMessage": "Deprecated: Please use documentDB.preferredAuthenticationMethod instead."
           },
-          "azureDatabases.confirmationStyle": {
+          "documentDB.confirmationStyle": {
             "type": "string",
             "description": "%cosmosdb.configuration.confirmation.style%",
             "enum": [
@@ -709,12 +709,12 @@
             ],
             "default": "wordConfirmation"
           },
-          "azureDatabases.showOperationSummaries": {
+          "documentDB.showOperationSummaries": {
             "type": "boolean",
             "default": true,
             "description": "%cosmosdb.configuration.operation.summaries%"
           },
-          "cosmosDB.documentLabelFields": {
+          "documentDB.documentLabelFields": {
             "type": "array",
             "default": [
               "name",
@@ -729,27 +729,27 @@
             ],
             "description": "%cosmosdb.configuration.document.label.fields%"
           },
-          "cosmosDB.emulator.mongoPort": {
+          "documentDB.emulator.mongoPort": {
             "type": "integer",
             "default": 10255,
             "description": "%cosmosdb.configuration.emulator.mongo.port%"
           },
-          "cosmosDB.emulator.port": {
+          "documentDB.emulator.port": {
             "type": "integer",
             "default": 8081,
             "description": "%cosmosdb.configuration.emulator.port%"
           },
-          "cosmosDB.enableEndpointDiscovery": {
+          "documentDB.enableEndpointDiscovery": {
             "type": "boolean",
             "default": true,
             "description": "%cosmosdb.configuration.endpoint.discovery%"
           },
-          "cosmosDB.showSavePrompt": {
+          "documentDB.showSavePrompt": {
             "type": "boolean",
             "default": true,
             "description": "%cosmosdb.configuration.save.prompt%"
           },
-          "cosmosDB.csvSeparator": {
+          "documentDB.csvSeparator": {
             "type": "string",
             "default": ";",
             "markdownDescription": "%cosmosdb.configuration.csv.separator%"

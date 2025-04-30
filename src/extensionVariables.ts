@@ -77,14 +77,14 @@ export namespace ext {
     export namespace settingsKeys {
         export const mongoShellPath = 'mongo.shell.path';
         export const mongoShellArgs = 'mongo.shell.args';
-        export const documentLabelFields = 'cosmosDB.documentLabelFields';
-        export const enableEndpointDiscovery = 'cosmosDB.enableEndpointDiscovery';
+        export const documentLabelFields = 'documentDB.documentLabelFields';
+        export const enableEndpointDiscovery = 'documentDB.enableEndpointDiscovery';
         export const mongoShellTimeout = 'mongo.shell.timeout';
-        export const batchSize = 'azureDatabases.batchSize';
-        export const confirmationStyle = 'azureDatabases.confirmationStyle';
-        export const showOperationSummaries = 'azureDatabases.showOperationSummaries';
-        export const cosmosDbAuthentication = 'azureDatabases.cosmosDB.preferredAuthenticationMethod';
-        export const authManagedIdentityClientId = 'azureDatabases.authentication.managedIdentity.clientID';
+        export const batchSize = 'documentDB.batchSize';
+        export const confirmationStyle = 'documentDB.confirmationStyle';
+        export const showOperationSummaries = 'documentDB.showOperationSummaries';
+        export const cosmosDbAuthentication = 'documentDB.preferredAuthenticationMethod';
+        export const authManagedIdentityClientId = 'documentDB.authentication.managedIdentity.clientID';
 
         export namespace vsCode {
             export const proxyStrictSSL = 'http.proxyStrictSSL';
