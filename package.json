@@ -38,7 +38,9 @@
   "main": "./main",
   "l10n": "./l10n",
   "activationEvents": [
-    "onView:documentDB"
+    "onView:workbench.view.extension.documentDB",
+    "onCommand:workbench.action.openWalkthrough",
+    "onStartupFinished"
   ],
   "scripts": {
     "build": "tsc",
@@ -751,6 +753,51 @@
             "markdownDescription": "%cosmosdb.configuration.csv.separator%"
           }
         }
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "documentdb-welcome",
+        "title": "Get Started with DocumentDB",
+        "description": "Connect to any DocumentDB or MongoDB database and start managing data directly inside VS Code.",
+        "steps": [
+          {
+            "id": "open-extension",
+            "title": "1. Open the DocumentDB Extension",
+            "description": "Click the DocumentDB icon in the sidebar to get started. This opens the database explorer panel.",
+            "media": {
+              "image": "resources/walkthroughs/sidebar.png",
+              "altText": "DocumentDB in the sidebar"
+            }
+          },
+          {
+            "id": "connect-database",
+            "title": "2. Connect to a Database",
+            "description": "Use a connection string or sign in with your cloud provider to connect to **DocumentDB** or **MongoDB**",
+            "media": {
+              "image": "resources/walkthroughs/connect.png",
+              "altText": "Connections screen"
+            }
+          },
+          {
+            "id": "browse-collections",
+            "title": "3. Browse Collections",
+            "description": "Explore your collections using Table, Tree, or JSON views. You can view documents with pagination support for large datasets.",
+            "media": {
+              "image": "resources/walkthroughs/browse.png",
+              "altText": "Collection view with documents"
+            }
+          },
+          {
+            "id": "run-queries",
+            "title": "4. Run Queries with Autocomplete",
+            "description": "Use the built-in editor to run find queries. Get syntax highlighting and field name suggestions while you type.",
+            "media": {
+              "image": "resources/walkthroughs/query.png",
+              "altText": "Query editor with autocomplete"
+            }
+          }
+        ]
       }
     ]
   }

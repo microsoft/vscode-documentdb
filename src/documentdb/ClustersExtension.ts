@@ -216,6 +216,46 @@ export class ClustersExtension implements vscode.Disposable {
                     'command.documentDB.exportDocuments',
                     clustersExportEntireCollection,
                 );
+                // This is an optional task - if it fails, we don't want to break extension activation,
+                // but we should log the error for diagnostics
+                try {
+                    // Show welcome screen if it hasn't been shown before
+                    const welcomeScreenShown = ext.context.globalState.get<boolean>('welcomeScreenShown', false);
+                    if (!welcomeScreenShown) {
+                        // Update the flag first
+                        await ext.context.globalState.update('welcomeScreenShown', true);
+                        ext.outputChannel.appendLog('Showing welcome screen...');
+
+                        // Schedule the walkthrough to open after activation completes
+                        // This prevents it from blocking the activation process
+                        setImmediate(() => {
+                            vscode.commands
+                                .executeCommand(
+                                    'workbench.action.openWalkthrough',
+                                    'ms-azuretools.vscode-documentdb#documentdb-welcome',
+                                )
+                                .then(
+                                    // Success handler
+                                    () => {
+                                        activateContext.telemetry.properties.welcomeScreenShown = 'true';
+                                    },
+                                    // Error handler
+                                    (error) => {
+                                        ext.outputChannel.appendLog(
+                                            `Welcome screen error: ${error instanceof Error ? error.message : String(error)}`,
+                                        );
+                                    },
+                                );
+                        });
+                    }
+                } catch (error) {
+                    // Log the error but don't throw - this is non-critical functionality
+                    activateContext.telemetry.properties.welcomeScreenError = 'true';
+                    ext.outputChannel.appendLog(
+                        `Welcome screen error: ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                    // Don't rethrow the error - we want activation to continue
+                }
             },
         );
     }
