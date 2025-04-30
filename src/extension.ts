@@ -33,7 +33,7 @@ export async function activateInternal(
     ext.context = context;
     ext.isBundle = !!process.env.IS_BUNDLE;
 
-    ext.outputChannel = createAzExtLogOutputChannel('Azure Databases');
+    ext.outputChannel = createAzExtLogOutputChannel('DocumentDB VS Code Extension');
     context.subscriptions.push(ext.outputChannel);
     registerUIExtensionVariables(ext);
     registerAzureUtilsExtensionVariables(ext);
