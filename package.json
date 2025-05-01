@@ -256,6 +256,13 @@
         "icon": "$(add)"
       },
       {
+        "//": "[ConnectionsView] Update Credentials",
+        "category": "DocumentDB",
+        "command": "command.documentDB.connectionsView.updateCredentials",
+        "title": "Update Credentials…",
+        "icon": "$(key)"
+      },
+      {
         "//": "[ConnectionsView] New Emulator Connection",
         "category": "DocumentDB",
         "command": "command.documentDB.connectionsView.newEmulatorConnection",
@@ -474,6 +481,11 @@
           "group": "1@2"
         },
         {
+          "command": "command.documentDB.connectionsView.updateCredentials",
+          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "group": "0@2"
+        },
+        {
           "command": "command.documentDB.discoveryView.removeRegistry",
           "when": "view == discoveryView && viewItem =~ /\\brootItem\\b/i",
           "group": "1@1"
@@ -493,7 +505,7 @@
           "//": "Copy connection string",
           "command": "command.documentDB.copyConnectionString",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
-          "group": "2@1"
+          "group": "0@1"
         },
         {
           "//": "[Account] Mongo DB|Cluster Launch Shell",
