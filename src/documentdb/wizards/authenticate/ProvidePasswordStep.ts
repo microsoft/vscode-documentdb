@@ -24,9 +24,11 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizar
 
         context.password = passwordTemp.trim();
         context.valuesToMask.push(context.password);
+
+        context.isPasswordUpdated = true;
     }
 
-    public shouldPrompt(): boolean {
-        return true;
+    public shouldPrompt(context: AuthenticateWizardContext): boolean {
+        return context.password === undefined;
     }
 }
