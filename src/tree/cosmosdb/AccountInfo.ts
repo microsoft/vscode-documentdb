@@ -301,7 +301,7 @@ async function getKeyCredentialWithoutARM(
 export function getPreferredAuthenticationMethod(): AuthenticationMethod {
     const configuration = vscode.workspace.getConfiguration();
     //migrate old setting
-    const deprecatedOauthSetting = configuration.get<boolean>('azureDatabases.useCosmosOAuth');
+    const deprecatedOauthSetting = configuration.get<boolean>('documentDB.useCosmosOAuth');
     let preferredAuthMethod = configuration.get<AuthenticationMethod>(
         ext.settingsKeys.cosmosDbAuthentication,
         AuthenticationMethod.auto,
@@ -312,7 +312,7 @@ export function getPreferredAuthenticationMethod(): AuthenticationMethod {
             preferredAuthMethod = AuthenticationMethod.entraId;
             configuration.update(ext.settingsKeys.cosmosDbAuthentication, preferredAuthMethod, true);
         }
-        configuration.update('azureDatabases.useCosmosOAuth', undefined, true);
+        configuration.update('documentDB.useCosmosOAuth', undefined, true);
     }
 
     return preferredAuthMethod;

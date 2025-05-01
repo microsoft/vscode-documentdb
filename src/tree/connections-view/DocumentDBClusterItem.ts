@@ -20,7 +20,9 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { type AuthenticateWizardContext } from '../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
+import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
+import { StorageNames, StorageService } from '../../services/storageService';
 import { ClusterItemBase } from '../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../documentdb/ClusterModel';
 
@@ -80,6 +82,48 @@ export class DocumentDBClusterItem extends ClusterItemBase {
 
                     username = nonNullProp(wizardContext, 'selectedUserName');
                     password = nonNullProp(wizardContext, 'password');
+
+                    if (wizardContext.saveCredentials) {
+                        ext.outputChannel.append(
+                            l10n.t('Saving credentials for "{clusterName}"…', {
+                                clusterName: this.cluster.name,
+                            }),
+                        );
+
+                        // Save the credentials to the connection string
+                        connectionString.username = username;
+                        connectionString.password = password;
+
+                        let resourceType = 'clusters';
+                        if (this.cluster.emulatorConfiguration?.isEmulator) {
+                            resourceType = 'emulators';
+                        }
+
+                        const storage = StorageService.get(StorageNames.Connections);
+                        const items = await storage.getItems(resourceType);
+
+                        const item = items.find((item) => item.id === this.id);
+                        if (item) {
+                            item.secrets = [connectionString.toString()];
+                            try {
+                                await storage.push(resourceType, item, true);
+                            } catch (pushError) {
+                                console.error(`Failed to save credentials for item "${this.id}":`, pushError);
+                                void vscode.window.showErrorMessage(
+                                    l10n.t('Failed to save credentials for "{cluster}".', {
+                                        cluster: this.cluster.name,
+                                    }),
+                                );
+                            }
+                        } else {
+                            console.error(`Item with ID "${this.id}" not found in storage.`);
+                            void vscode.window.showErrorMessage(
+                                l10n.t('Failed to save credentials for "{cluster}".', {
+                                    cluster: this.cluster.name,
+                                }),
+                            );
+                        }
+                    }
                 }
 
                 ext.outputChannel.append(
@@ -144,7 +188,8 @@ export class DocumentDBClusterItem extends ClusterItemBase {
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [new ProvideUserNameStep(), new ProvidePasswordStep()],
+            promptSteps: [new ProvideUserNameStep(), new ProvidePasswordStep(), new SaveCredentialsStep()],
+            executeSteps: [],
             title: l10n.t('Authenticate to connect with your MongoDB cluster'),
             showLoadingPrompt: true,
         });

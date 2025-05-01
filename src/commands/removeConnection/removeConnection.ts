@@ -6,6 +6,7 @@
 import { type AzExtTreeItem, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { PostgresServerTreeItem } from '../../postgres/tree/PostgresServerTreeItem';
 import { StorageNames, StorageService } from '../../services/storageService';
@@ -102,6 +103,9 @@ export async function removeConnection(
                 await StorageService.get(StorageNames.Connections).delete('clusters', node.id);
             }
         });
+
+        // delete cached credentials from memory
+        CredentialCache.deleteCredentials(node.id);
 
         ext.connectionsBranchDataProvider.refresh();
     } else if (node instanceof ClusterItemBase) {

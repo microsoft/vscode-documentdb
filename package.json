@@ -1,10 +1,10 @@
 {
   "name": "vscode-documentdb",
-  "version": "0.1.1-alpha",
+  "version": "0.1.0-beta",
   "aiKey": "0c6ae279ed8443289764825290e4f9e2-1a736e7c-1324-4338-be46-fc2a58ae4d14-7255",
   "publisher": "ms-azuretools",
   "displayName": "DocumentDB for VS Code",
-  "description": "Connect to DoumentDB, MongoDB, Mongo Clusters, CosmosDB and other databases in and outside of Azure, inspect and edit your data and run powerful queries with the visual query editor.",
+  "description": "DocumentDB and MongoDB management made easy: connect, query, and edit databases across cloud and local environments.",
   "enableMongoClusters": true,
   "engines": {
     "vscode": "^1.90.0",
@@ -20,10 +20,12 @@
     "Data Science"
   ],
   "keywords": [
-    "Cosmos DB",
     "DocumentDB",
     "MongoDB",
-    "Database"
+    "Database",
+    "Databases",
+    "NoSQL",
+    "JSON"
   ],
   "preview": true,
   "homepage": "https://github.com/microsoft/vscode-documentdb/blob/main/README.md",
@@ -254,6 +256,13 @@
         "icon": "$(add)"
       },
       {
+        "//": "[ConnectionsView] Update Credentials",
+        "category": "DocumentDB",
+        "command": "command.documentDB.connectionsView.updateCredentials",
+        "title": "Update Credentials…",
+        "icon": "$(key)"
+      },
+      {
         "//": "[ConnectionsView] New Emulator Connection",
         "category": "DocumentDB",
         "command": "command.documentDB.connectionsView.newEmulatorConnection",
@@ -472,8 +481,13 @@
           "group": "1@2"
         },
         {
+          "command": "command.documentDB.connectionsView.updateCredentials",
+          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "group": "0@2"
+        },
+        {
           "command": "command.documentDB.discoveryView.removeRegistry",
-          "when": "view == discoveryView && viewItem =~ /discoveryView.*rootItem/i",
+          "when": "view == discoveryView && viewItem =~ /\\brootItem\\b/i",
           "group": "1@1"
         },
         {
@@ -491,7 +505,7 @@
           "//": "Copy connection string",
           "command": "command.documentDB.copyConnectionString",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
-          "group": "2@1"
+          "group": "0@1"
         },
         {
           "//": "[Account] Mongo DB|Cluster Launch Shell",
@@ -618,7 +632,7 @@
       {
         "title": "Authentication",
         "properties": {
-          "azureDatabases.cosmosDB.preferredAuthenticationMethod": {
+          "documentDB.preferredAuthenticationMethod": {
             "type": "string",
             "enum": [
               "auto",
@@ -642,7 +656,7 @@
             "default": "auto",
             "order": 0
           },
-          "azureDatabases.authentication.managedIdentity.clientID": {
+          "documentDB.authentication.managedIdentity.clientID": {
             "type": "string",
             "markdownDescription": "%cosmosdb.configuration.authentication.managedIdentity.clientID%",
             "default": null,
@@ -651,7 +665,7 @@
         }
       },
       {
-        "title": "Azure Databases",
+        "title": "DocumentDB",
         "properties": {
           "mongo.shell.path": {
             "type": [
@@ -676,18 +690,18 @@
             "description": "%cosmosdb.configuration.mongo.shell.timeout%",
             "default": 30
           },
-          "azureDatabases.batchSize": {
+          "documentDB.batchSize": {
             "type": "number",
             "description": "%cosmosdb.configuration.batch.size%",
             "default": 50
           },
-          "azureDatabases.useCosmosOAuth": {
+          "documentDB.useCosmosOAuth": {
             "type": "boolean",
             "markdownDescription": "%cosmosdb.configuration.oauth.enable%",
-            "markdownDeprecationMessage": "**Deprecated**: Please use `#azureDatabases.cosmosDB.preferredAuthenticationMethod#` instead.",
-            "deprecationMessage": "Deprecated: Please use azureDatabases.cosmosDB.preferredAuthenticationMethod instead."
+            "markdownDeprecationMessage": "**Deprecated**: Please use `#documentDB.preferredAuthenticationMethod#` instead.",
+            "deprecationMessage": "Deprecated: Please use documentDB.preferredAuthenticationMethod instead."
           },
-          "azureDatabases.confirmationStyle": {
+          "documentDB.confirmationStyle": {
             "type": "string",
             "description": "%cosmosdb.configuration.confirmation.style%",
             "enum": [
@@ -707,12 +721,12 @@
             ],
             "default": "wordConfirmation"
           },
-          "azureDatabases.showOperationSummaries": {
+          "documentDB.showOperationSummaries": {
             "type": "boolean",
             "default": true,
             "description": "%cosmosdb.configuration.operation.summaries%"
           },
-          "cosmosDB.documentLabelFields": {
+          "documentDB.documentLabelFields": {
             "type": "array",
             "default": [
               "name",
@@ -727,27 +741,27 @@
             ],
             "description": "%cosmosdb.configuration.document.label.fields%"
           },
-          "cosmosDB.emulator.mongoPort": {
+          "documentDB.emulator.mongoPort": {
             "type": "integer",
             "default": 10255,
             "description": "%cosmosdb.configuration.emulator.mongo.port%"
           },
-          "cosmosDB.emulator.port": {
+          "documentDB.emulator.port": {
             "type": "integer",
             "default": 8081,
             "description": "%cosmosdb.configuration.emulator.port%"
           },
-          "cosmosDB.enableEndpointDiscovery": {
+          "documentDB.enableEndpointDiscovery": {
             "type": "boolean",
             "default": true,
             "description": "%cosmosdb.configuration.endpoint.discovery%"
           },
-          "cosmosDB.showSavePrompt": {
+          "documentDB.showSavePrompt": {
             "type": "boolean",
             "default": true,
             "description": "%cosmosdb.configuration.save.prompt%"
           },
-          "cosmosDB.csvSeparator": {
+          "documentDB.csvSeparator": {
             "type": "string",
             "default": ";",
             "markdownDescription": "%cosmosdb.configuration.csv.separator%"

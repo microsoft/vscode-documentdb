@@ -34,6 +34,7 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
             throw new Error('Failed to discover the connection string.');
         }
 
+        context.valuesToMask.push(connectionString);
         context.connectionString = connectionString;
 
         // clean-up

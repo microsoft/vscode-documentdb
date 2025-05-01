@@ -1,0 +1,57 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { AzureWizard, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as l10n from '@vscode/l10n';
+import ConnectionString from 'mongodb-connection-string-url';
+import { Views } from '../../documentdb/Views';
+import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { refreshView } from '../refreshView/refreshView';
+import { UpdateCredentialsExecuteStep } from './UpdateCredentialsExecuteStep';
+import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
+import { UpdatePasswordStep } from './UpdatePasswordStep';
+import { UpdateUserNameStep } from './UpdateUserNameStep';
+
+export async function updateCredentials(context: IActionContext, node?: DocumentDBClusterItem): Promise<void> {
+    if (!node) {
+        throw new Error(l10n.t('No cluster selected.'));
+    }
+
+    // access credentials assigned to the selected cluster
+    const connectionString = new ConnectionString(nonNullValue(node.cluster.connectionString));
+    const username: string | undefined = connectionString.username;
+    const password: string | undefined = connectionString.password;
+
+    const wizardContext: UpdateCredentialsWizardContext = {
+        ...context,
+        username: username,
+        password: password,
+        isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
+        storageId: node.id,
+    };
+
+    const wizard = new AzureWizard(wizardContext, {
+        title: l10n.t('Update cluster credentials'),
+        promptSteps: [new UpdateUserNameStep(), new UpdatePasswordStep()],
+        executeSteps: [new UpdateCredentialsExecuteStep()],
+        showLoadingPrompt: true,
+    });
+
+    await wizard.prompt();
+    await wizard.execute();
+
+    /**
+     * TODO: This is a temporary solution to refresh the view after updating the credentials.
+     *
+     * To be honest, this should not be needed. It happens now because the credentials
+     * are updated in the storage, but the view is not refreshed. And the node caches
+     * the connection string.
+     *
+     * The better solution would be, in general, to not cache the connection string at all.
+     * And only access it from the storage when needed. This would be a better and more
+     * secure solution.
+     */
+    await refreshView(context, Views.ConnectionsView);
+}

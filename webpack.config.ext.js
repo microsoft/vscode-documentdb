@@ -169,11 +169,11 @@ module.exports = (env, { mode }) => {
                     },
                     {
                         from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
-                        to: 'node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
+                        to: 'resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
                     },
                     {
                         from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/MongoClusters.svg',
-                        to: 'node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/MongoClusters.svg',
+                        to: 'resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/MongoClusters.svg',
                     },
                 ],
             }),
