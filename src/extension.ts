@@ -18,8 +18,6 @@ import {
     type AzureExtensionApi,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
-import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
-import { getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { getIsRunningOnAzure } from './cosmosdb/utils/managedIdentityUtils';
@@ -58,7 +56,7 @@ export async function activateInternal(
         // AzureResourceGraph API V1 provided by the getResourceGroupsApi call above.
         // TreeElementStateManager is needed here too
         ext.state = new TreeElementStateManager();
-        ext.rgApiV2 = (await getAzureResourcesExtensionApi(context, '2.0.0')) as AzureResourcesExtensionApiWithActivity;
+        // ext.rgApiV2 = (await getAzureResourcesExtensionApi(context, '2.0.0')) as AzureResourcesExtensionApiWithActivity;
 
         /*
         ext.cosmosDBBranchDataProvider = new CosmosDBBranchDataProvider();
