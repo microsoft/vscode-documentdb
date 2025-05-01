@@ -45,7 +45,7 @@ export async function updateCredentials(context: IActionContext, node?: Document
     /**
      * TODO: This is a temporary solution to refresh the view after updating the credentials.
      *
-     * To be honest, this should not be needed. It happens now because the credntials
+     * To be honest, this should not be needed. It happens now because the credentials
      * are updated in the storage, but the view is not refreshed. And the node caches
      * the connection string.
      *
