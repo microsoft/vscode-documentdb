@@ -37,11 +37,20 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
               ]
             : [
                   {
-                      id: API.MongoDB,
+                      id: 'mongo-ru',
                       label: l10n.t('Azure Cosmos DB for MongoDB (RU)'),
                       detail: l10n.t('I want to connect to the Azure Cosmos DB Emulator for MongoDB (RU).'),
                       alwaysShow: true,
                       group: 'Preconfigured Emulators',
+                      learnMoreUrl: '',
+                  },
+                  {
+                      id: 'mongo-vcore',
+                      label: l10n.t('Azure Cosmos DB for MongoDB (vCore)'),
+                      detail: l10n.t('I want to connect to the Azure Cosmos DB Emulator for MongoDB (vCore).'),
+                      alwaysShow: true,
+                      group: 'Preconfigured Emulators',
+                      learnMoreUrl: '',
                   },
                   // Additional MongoDB emulator options can be added here
               ];
@@ -81,6 +90,7 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
 
         if (selectedItem.id === 'learnMore') {
             context.telemetry.properties.emulatorLearnMore = 'true';
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             await openUrl(selectedItem.learnMoreUrl!);
             throw new UserCancelledError();
         }
@@ -102,6 +112,7 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
             return;
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         if (preconfiguredEmulators.some((emulator) => emulator.id === selectedItem.id)) {
             context.mode = NewEmulatorConnectionMode.Preconfigured;
             context.experience = getExperienceFromApi(this.preselectedAPI);
@@ -115,7 +126,9 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
                 context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
             }
 
-            const settingName = isCore ? 'cosmosDB.emulator.port' : 'cosmosDB.emulator.mongoPort';
+            const settingName = isCore ? 'documentDB.emulator.port' : 'documentDB.emulator.mongoPort';
+
+            context.emulatorType = selectedItem.id;
 
             context.port =
                 SettingsService.getWorkspaceSetting<number>(settingName) ??

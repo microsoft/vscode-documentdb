@@ -16,9 +16,14 @@ export enum NewEmulatorConnectionMode {
 export interface NewEmulatorConnectionWizardContext extends IActionContext {
     parentTreeElementId: string;
 
+    emulatorType?: string;
+
     experience?: Experience;
     connectionString?: string;
     port?: number;
+
+    userName?: string;
+    password?: string;
 
     mongoEmulatorConfiguration?: EmulatorConfiguration;
     // TODO: refactor to CoreEmulatorConfiguration as it's done for MongoEmulatorConfiguration in case more core-emulator properties are added

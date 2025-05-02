@@ -22,6 +22,8 @@ import { type NewEmulatorConnectionWizardContext } from './NewEmulatorConnection
 import { PromptNosqlEmulatorConnectionStringStep } from './nosql/PromptNosqlEmulatorConnectionStringStep';
 import { PromptEmulatorPortStep } from './PromptEmulatorPortStep';
 import { PromptEmulatorTypeStep } from './PromptEmulatorTypeStep';
+import { ProvidePasswordStep } from './ProvidePasswordStep';
+import { ProvideUserNameStep } from './ProvideUsernameStep';
 
 export async function newEmulatorConnection(
     context: IActionContext,
@@ -56,6 +58,8 @@ export async function newEmulatorConnection(
             new PromptEmulatorTypeStep(api),
             new PromptMongoRUEmulatorConnectionStringStep(),
             new PromptEmulatorPortStep(),
+            new ProvideUserNameStep(),
+            new ProvidePasswordStep(),
             new PromptMongoRUEmulatorSecurityStep(),
         );
         executeSteps.push(new ExecuteStep());
