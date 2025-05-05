@@ -15,6 +15,7 @@ export async function removeDiscoveryRegistry(_context: IActionContext, node?: T
     const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
 
     // Filter out 'azure-discovery' from the active providers
+    // TODO: extract the provider id from the node instead of hardcoding it
     const updatedProviderIds = activeDiscoveryProviderIds.filter((id) => id !== 'azure-discovery');
 
     // Update global state with the filtered list

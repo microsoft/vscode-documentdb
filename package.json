@@ -310,6 +310,13 @@
         "icon": "$(save)"
       },
       {
+        "//": "[DiscoveryView] Filter Provider Content",
+        "category": "DocumentDB",
+        "command": "command.documentDB.discoveryView.filterProviderContent",
+        "title": "Filter",
+        "icon": "$(filter)"
+      },
+      {
         "//": "Refresh a Tree Item",
         "category": "DocumentDB",
         "command": "command.documentDB.refresh",
@@ -499,6 +506,11 @@
         {
           "command": "command.documentDB.discoveryView.addConnectionToConnectionsView",
           "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
+          "group": "inline"
+        },
+        {
+          "command": "command.documentDB.discoveryView.filterProviderContent",
+          "when": "view == discoveryView && viewItem =~ /\\brootItem\\b/i && viewItem =~ /\\benableFilterCommand\\b/i",
           "group": "inline"
         },
         {

@@ -56,4 +56,23 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
             showLoadingPrompt: true,
         };
     }
+
+    configureTreeItemFilter(_node: TreeElement): Promise<void> {
+        /**
+         * The subscription filtering functionality is provided by the `VSCodeAzureSubscriptionProvider`
+         * from the `vscode-azuretools` library:
+         * https://github.com/tnaum-ms/vscode-azuretools/blob/main/auth/src/VSCodeAzureSubscriptionProvider.ts
+         *
+         * While the provider supports filtering subscriptions, there is no built-in code or UI
+         * to configure the filter.
+         *
+         * Interestingly, the `vscode-azuretools` library relies on filter settings stored by
+         * the `vscode-azureresourcegroups` extension, with the filter name hardcoded.
+         *
+         * To avoid adding a direct dependency on `vscode-azureresourcegroups`, we can replicate
+         * the filter logic here. Alternatively, we could implement our own filter storage, but
+         * since users of Azure Service Discovery are likely also using Azure Resource Groups,
+         * we can safely reuse the same filter storage as `vscode-azureresourcegroups`.
+         */
+    }
 }

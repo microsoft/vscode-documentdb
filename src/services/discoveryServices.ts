@@ -51,6 +51,8 @@ export interface DiscoveryProvider extends ProviderDescription {
      * This is the top-level item that represents the provider in the tree view.
      */
     getDiscoveryTreeRootItem(parentId: string): TreeElement;
+
+    configureTreeItemFilter?(node: TreeElement): Promise<void>;
 }
 
 /**
