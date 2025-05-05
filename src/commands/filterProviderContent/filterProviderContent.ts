@@ -8,7 +8,7 @@ import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 
-export async function filterProviderContent(_context: IActionContext, node?: TreeElementBase): Promise<void> {
+export async function filterProviderContent(context: IActionContext, node?: TreeElementBase): Promise<void> {
     if (
         // transition period code until the parent discovery is added
         !node ||
@@ -35,7 +35,7 @@ export async function filterProviderContent(_context: IActionContext, node?: Tre
     }
 
     // Call the filter function provided by the provider
-    await provider.configureTreeItemFilter(node as TreeElement);
+    await provider.configureTreeItemFilter(context, node as TreeElement);
 
     // Refresh the discovery branch data provider to show the updated list
     ext.discoveryBranchDataProvider.refresh(node as TreeElement);
