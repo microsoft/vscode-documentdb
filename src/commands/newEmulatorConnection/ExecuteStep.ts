@@ -5,11 +5,13 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { ConnectionString } from 'mongodb-connection-string-url';
 import { API } from '../../AzureDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
 import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
+import { nonNullValue } from '../../utils/nonNull';
 import {
     NewEmulatorConnectionMode,
     type NewEmulatorConnectionWizardContext,
@@ -20,7 +22,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
 
     public async execute(context: NewEmulatorConnectionWizardContext): Promise<void> {
         const parentId = context.parentTreeElementId;
-        const connectionString = context.connectionString;
+        let connectionString = context.connectionString;
         const port = context.port;
         const experience = context.experience;
 
@@ -46,7 +48,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
             label = `MongoDB Emulator${portSuffix}`;
         }
         if (experience.api === API.DocumentDB) {
-            label = `DocumentDB Emulator${portSuffix}`;
+            if (context.emulatorType === 'mongo-vcore') {
+                label = `MongoDB (vCore) Emulator${portSuffix}`;
+            } else if (context.emulatorType === 'mongo-ru') {
+                label = `MongoDB (RU) Emulator${portSuffix}`;
+            } else {
+                label = `DocumentDB Emulator${portSuffix}`;
+            }
         }
 
         return ext.state.showCreatingChild(
@@ -61,12 +69,21 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
                 switch (experience.api) {
                     case API.MongoDB:
                     case API.MongoClusters:
-                    case API.DocumentDB: {
-                        const mongoConfig = context.mongoEmulatorConfiguration as EmulatorConfiguration;
-                        isEmulator = mongoConfig?.isEmulator ?? true;
-                        disableEmulatorSecurity = mongoConfig?.disableEmulatorSecurity;
+                    case API.DocumentDB:
+                        {
+                            const mongoConfig = context.mongoEmulatorConfiguration as EmulatorConfiguration;
+                            isEmulator = mongoConfig?.isEmulator ?? true;
+                            disableEmulatorSecurity = mongoConfig?.disableEmulatorSecurity;
+
+                            if (context.userName || context.password) {
+                                const parsedConnectionString = new ConnectionString(nonNullValue(connectionString));
+                                parsedConnectionString.username = context.userName ?? '';
+                                parsedConnectionString.password = context.password ?? '';
+
+                                connectionString = parsedConnectionString.toString();
+                            }
+                        }
                         break;
-                    }
                     // Add additional cases here for APIs that require different handling
                     default: {
                         isEmulator = context.isCoreEmulator ?? true;
@@ -75,14 +92,14 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
                 }
 
                 const storageItem: StorageItem = {
-                    id: connectionString,
+                    id: nonNullValue(connectionString),
                     name: label,
                     properties: {
                         api: experience.api === API.DocumentDB ? API.MongoClusters : experience.api,
                         isEmulator,
                         ...(disableEmulatorSecurity && { disableEmulatorSecurity }),
                     },
-                    secrets: [connectionString],
+                    secrets: [nonNullValue(connectionString)],
                 };
 
                 if (experience.api === API.MongoDB) {

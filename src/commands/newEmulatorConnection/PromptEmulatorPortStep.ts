@@ -5,8 +5,14 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { DocumentDBExperience, MongoExperience, type Experience } from '../../AzureDBExperiences';
+import {
+    DocumentDBExperience,
+    MongoClustersExperience,
+    MongoExperience,
+    type Experience,
+} from '../../AzureDBExperiences';
 import { wellKnownEmulatorPassword } from '../../constants';
+import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import {
     NewEmulatorConnectionMode,
     type NewEmulatorConnectionWizardContext,
@@ -43,7 +49,7 @@ export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorCon
 
         if (port && context.experience) {
             context.port = Number(port);
-            context.connectionString = this.buildConnectionString(Number(port), context.experience);
+            context.connectionString = this.buildConnectionString(context, Number(port), context.experience);
         }
     }
 
@@ -71,11 +77,25 @@ export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorCon
         return undefined;
     }
 
-    private buildConnectionString(port: number, experience: Experience): string | undefined {
+    private buildConnectionString(
+        context: NewEmulatorConnectionWizardContext,
+        port: number,
+        experience: Experience,
+    ): string | undefined {
         switch (experience) {
             case MongoExperience:
-            case DocumentDBExperience:
+            case MongoClustersExperience:
+            case DocumentDBExperience: {
+                if (context.emulatorType === 'mongo-vcore') {
+                    if (!context.mongoEmulatorConfiguration) {
+                        context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
+                    }
+
+                    return `mongodb://localhost:${port}/?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`;
+                }
+
                 return `mongodb://localhost:${encodeURIComponent(wellKnownEmulatorPassword)}@localhost:${port}/?ssl=true&retrywrites=false`;
+            }
             default:
                 return `AccountEndpoint=https://localhost:${port}/;AccountKey=${wellKnownEmulatorPassword};`;
         }
