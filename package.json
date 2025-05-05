@@ -186,7 +186,7 @@
         {
           "id": "documentDB",
           "title": "DocumentDB",
-          "icon": "$(project)"
+          "icon": "$(database)"
         }
       ]
     },
@@ -303,10 +303,11 @@
         "title": "Disable Registry…"
       },
       {
-        "//": "[DiscoveryView] Add To DocumentDB Connections",
+        "//": "[DiscoveryView] Save To DocumentDB Connections",
         "category": "DocumentDB",
         "command": "command.documentDB.discoveryView.addConnectionToConnectionsView",
-        "title": "Add To DocumentDB Connections"
+        "title": "Save To DocumentDB Connections",
+        "icon": "$(save)"
       },
       {
         "//": "Refresh a Tree Item",
@@ -494,6 +495,11 @@
           "command": "command.documentDB.discoveryView.addConnectionToConnectionsView",
           "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
           "group": "0@1"
+        },
+        {
+          "command": "command.documentDB.discoveryView.addConnectionToConnectionsView",
+          "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
+          "group": "inline"
         },
         {
           "//": "Create database",
