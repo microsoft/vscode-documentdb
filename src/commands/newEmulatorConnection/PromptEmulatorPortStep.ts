@@ -12,7 +12,7 @@ import {
     type Experience,
 } from '../../AzureDBExperiences';
 import { wellKnownEmulatorPassword } from '../../constants';
-import { defaultMongoEmulatorConfiguration, type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
+import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import {
     NewEmulatorConnectionMode,
     type NewEmulatorConnectionWizardContext,
@@ -90,9 +90,6 @@ export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorCon
                     if (!context.mongoEmulatorConfiguration) {
                         context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
                     }
-
-                    const config = context.mongoEmulatorConfiguration as EmulatorConfiguration;
-                    config.disableEmulatorSecurity = true;
 
                     return `mongodb://localhost:${port}/?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`;
                 }

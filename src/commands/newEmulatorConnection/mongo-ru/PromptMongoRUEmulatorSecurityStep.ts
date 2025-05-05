@@ -68,6 +68,6 @@ export class PromptMongoRUEmulatorSecurityStep extends AzureWizardPromptStep<New
     }
 
     public shouldPrompt(context: NewEmulatorConnectionWizardContext): boolean {
-        return context.emulatorType === 'mongo-ru';
+        return context.emulatorType === 'mongo-ru' || context.emulatorType === 'mongo-vcore';
     }
 }
