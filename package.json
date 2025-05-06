@@ -264,6 +264,13 @@
         "icon": "$(key)"
       },
       {
+        "//": "[ConnectionsView] Update Credentials",
+        "category": "DocumentDB",
+        "command": "command.documentDB.connectionsView.renameConnection",
+        "title": "Rename…",
+        "icon": "$(edit)"
+      },
+      {
         "//": "[ConnectionsView] New Emulator Connection",
         "category": "DocumentDB",
         "command": "command.documentDB.connectionsView.newEmulatorConnection",
@@ -314,7 +321,7 @@
         "//": "[DiscoveryView] Filter Provider Content",
         "category": "DocumentDB",
         "command": "command.documentDB.discoveryView.filterProviderContent",
-        "title": "Filter",
+        "title": "Filter Entries…",
         "icon": "$(filter)"
       },
       {
@@ -484,15 +491,20 @@
       "editor/title": [],
       "view/item/context": [
         {
-          "//": "Remove Connection...",
-          "command": "command.documentDB.connectionsView.removeConnection",
-          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
-          "group": "1@2"
-        },
-        {
           "command": "command.documentDB.connectionsView.updateCredentials",
           "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "0@2"
+        },
+        {
+          "command": "command.documentDB.connectionsView.renameConnection",
+          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "group": "0@3"
+        },
+        {
+          "//": "Remove Connection...",
+          "command": "command.documentDB.connectionsView.removeConnection",
+          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "group": "0@4"
         },
         {
           "command": "command.documentDB.discoveryView.removeRegistry",
@@ -511,7 +523,12 @@
         },
         {
           "command": "command.documentDB.discoveryView.filterProviderContent",
-          "when": "view == discoveryView && viewItem =~ /\\brootItem\\b/i && viewItem =~ /\\benableFilterCommand\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\benableFilterCommand\\b/i",
+          "group": "1@2"
+        },
+        {
+          "command": "command.documentDB.discoveryView.filterProviderContent",
+          "when": "view == discoveryView && viewItem =~ /\\benableFilterCommand\\b/i",
           "group": "inline"
         },
         {
