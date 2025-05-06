@@ -30,18 +30,28 @@ import { ext } from '../../../extensionVariables';
 
 /**
  * Returns the currently selected subscription IDs from the shared configuration.
+ * The ID of the tenant is being excluced from the ID.
+ * The IDs are stored in the format 'tenantId/subscriptionId'.
+ * For example: 'tenantId/subscriptionId'.
+ * The function returns an array of subscription IDs without the tenant ID.
+ * For example: 'subscriptionId'.
+ *
+ * @returns An array of selected subscription IDs.
  */
 export function getSelectedSubscriptionIds(): string[] {
     const config = vscode.workspace.getConfiguration('azureResourceGroups');
-    return config.get<string[]>('subscriptions') || [];
+    const fullSubscriptionIds = config.get<string[]>('selectedSubscriptions', []);
+    return fullSubscriptionIds.map((id) => id.split('/')[1]);
 }
 
 /**
  * Updates the selected subscription IDs in the shared configuration.
+ * These have to contain the full subscription ID, which is a combination of the tenant ID and subscription ID.
+ * For example: 'tenantId/subscriptionId'.
  */
 export async function setSelectedSubscriptionIds(subscriptionIds: string[]): Promise<void> {
     const config = vscode.workspace.getConfiguration('azureResourceGroups');
-    await config.update('subscriptions', subscriptionIds, vscode.ConfigurationTarget.Global);
+    await config.update('selectedSubscriptions', subscriptionIds, vscode.ConfigurationTarget.Global);
 }
 
 /**
