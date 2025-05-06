@@ -6,8 +6,9 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
+import path from 'path';
 import { MongoClustersExperience } from '../../../AzureDBExperiences';
-import { getThemeAgnosticIconPath } from '../../../constants';
+import { getResourcesPath, type IThemedIconPath } from '../../../constants';
 import { StorageNames, StorageService } from '../../../services/storageService';
 import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
 import { type ClusterModel } from '../../documentdb/ClusterModel';
@@ -49,12 +50,17 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
         ];
     }
 
+    private iconPath: IThemedIconPath = {
+        light: path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-blue.svg'),
+        dark: path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon.svg'),
+    };
+
     public getTreeItem(): vscode.TreeItem {
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: l10n.t('Local Emulators'),
-            iconPath: getThemeAgnosticIconPath('vscode-documentdb-icon.svg'),
+            iconPath: this.iconPath,
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
