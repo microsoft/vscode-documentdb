@@ -54,7 +54,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
             id: this.id,
             contextValue: this.contextValue,
             label: l10n.t('Local Emulators'),
-            iconPath: getThemeAgnosticIconPath('CosmosDBAccount.svg'),
+            iconPath: getThemeAgnosticIconPath('vscode-documentdb-icon.svg'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }

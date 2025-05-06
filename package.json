@@ -14,7 +14,7 @@
     "color": "#3c3c3c",
     "theme": "dark"
   },
-  "icon": "resources/vscode-documentdb.png",
+  "icon": "resources/vscode-documentdb-logo.png",
   "categories": [
     "Azure",
     "Data Science"
@@ -187,7 +187,7 @@
         {
           "id": "documentDB",
           "title": "DocumentDB",
-          "icon": "$(database)"
+          "icon": "resources/vscode-documentdb-sidebar-icon.svg"
         }
       ]
     },
