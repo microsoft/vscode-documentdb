@@ -20,6 +20,6 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<NewEmulatorConnec
     }
 
     public shouldPrompt(context: NewEmulatorConnectionWizardContext): boolean {
-        return context.emulatorType === 'mongo-vcore';
+        return context.emulatorType === 'documentdb';
     }
 }
