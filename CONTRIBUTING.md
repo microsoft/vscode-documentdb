@@ -4,8 +4,8 @@ Thank you for your interest in contributing to the **DocumentDB for VS Code** ex
 
 The document consists of two sections:
 
-1. [Machine Setup](#machine-setup)
-2. [VS Code Configuration](#vs-code-configuration)
+1. [Machine Setup](#1-machine-setup)
+2. [VS Code Configuration](#2-vs-code-configuration)
 
 ## 1. Machine Setup
 
@@ -60,7 +60,7 @@ This section explains how to clone the **DocumentDB for VS Code** repository and
 
 ### 2.1. Steps to Clone and Set Up Repository
 
-1. Ensure you have completed the [Machine Setup](#machine-setup) steps.
+1. Ensure you have completed the [Machine Setup](#1-machine-setup) steps.
 
 2. Fork or directly clone the official repository:
 
