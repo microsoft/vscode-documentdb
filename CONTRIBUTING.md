@@ -64,14 +64,14 @@ This section explains how to clone the **DocumentDB for VS Code** repository and
 
    - [DocumentDB for VS Code (vscode-documentdb)](https://github.com/microsoft/vscode-documentdb)
 
-3. Open your **WSL2** terminal and clone the repository:
+   - Open your **WSL2** terminal and clone the repository:
 
 ```bash
 cd ~
 git clone https://github.com/microsoft/vscode-documentdb
 ```
 
-4. Install dependencies and build the project:
+3. Install dependencies and build the project:
 
 ```bash
 cd ~/vscode-documentdb
