@@ -45,9 +45,9 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
                       learnMoreUrl: '',
                   },
                   {
-                      id: 'mongo-vcore',
-                      label: l10n.t('Azure Cosmos DB for MongoDB (vCore)'),
-                      detail: l10n.t('I want to connect to the Azure Cosmos DB Emulator for MongoDB (vCore).'),
+                      id: 'documentdb',
+                      label: l10n.t('DocumentDB Emulator'),
+                      detail: l10n.t('I want to connect to the DocumentDB Emulator.'),
                       alwaysShow: true,
                       group: 'Preconfigured Emulators',
                       learnMoreUrl: '',

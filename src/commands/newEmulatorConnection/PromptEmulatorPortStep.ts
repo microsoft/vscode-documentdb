@@ -86,7 +86,7 @@ export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorCon
             case MongoExperience:
             case MongoClustersExperience:
             case DocumentDBExperience: {
-                if (context.emulatorType === 'mongo-vcore') {
+                if (context.emulatorType === 'documentdb') {
                     if (!context.mongoEmulatorConfiguration) {
                         context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
                     }

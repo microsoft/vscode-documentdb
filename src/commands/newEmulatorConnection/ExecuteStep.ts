@@ -48,8 +48,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
             label = `MongoDB Emulator${portSuffix}`;
         }
         if (experience.api === API.DocumentDB) {
-            if (context.emulatorType === 'mongo-vcore') {
-                label = `MongoDB (vCore) Emulator${portSuffix}`;
+            if (context.emulatorType === 'documentdb') {
+                label = `DocumentDB Emulator${portSuffix}`;
             } else if (context.emulatorType === 'mongo-ru') {
                 label = `MongoDB (RU) Emulator${portSuffix}`;
             } else {
