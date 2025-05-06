@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IWizardOptions } from '@microsoft/vscode-azext-utils';
+import { type IActionContext, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import type * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../commands/newConnection/NewConnectionWizardContext';
 import { type TreeElement } from '../tree/TreeElement';
@@ -51,6 +51,8 @@ export interface DiscoveryProvider extends ProviderDescription {
      * This is the top-level item that represents the provider in the tree view.
      */
     getDiscoveryTreeRootItem(parentId: string): TreeElement;
+
+    configureTreeItemFilter?(context: IActionContext, node: TreeElement): Promise<void>;
 }
 
 /**

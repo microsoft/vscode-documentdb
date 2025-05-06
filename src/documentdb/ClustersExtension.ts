@@ -29,6 +29,7 @@ import {
     clustersExportEntireCollection,
     clustersExportQueryResults,
 } from '../commands/exportDocuments/exportDocuments';
+import { filterProviderContent } from '../commands/filterProviderContent/filterProviderContent';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { newConnection } from '../commands/newConnection/newConnection';
@@ -160,6 +161,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'command.documentDB.discoveryView.removeRegistry',
                     removeDiscoveryRegistry,
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'command.documentDB.discoveryView.filterProviderContent',
+                    filterProviderContent,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(

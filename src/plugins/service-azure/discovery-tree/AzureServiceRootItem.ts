@@ -12,7 +12,7 @@ import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
 export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public contextValue: string = 'enableRefreshCommand;discoveryAzureServiceRoot';
+    public contextValue: string = 'enableRefreshCommand;enableFilterCommand;discoveryAzureServiceRootItem';
 
     constructor(
         private readonly azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
@@ -26,10 +26,17 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
          * This is an important step to ensure that the user is signed in to Azure before listing subscriptions.
          */
         if (!(await this.azureSubscriptionProvider.isSignedIn())) {
-            await this.azureSubscriptionProvider.signIn();
+            const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
+            void vscode.window
+                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in to continue.'), signIn)
+                .then((input) => {
+                    if (input === signIn) {
+                        void this.azureSubscriptionProvider.signIn();
+                    }
+                });
         }
 
-        const subscriptions = await this.azureSubscriptionProvider.getSubscriptions(false); // TODO: add filter support, but it has to be a filter that works without Azure Resource installed.
+        const subscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
         if (!subscriptions || subscriptions.length === 0) {
             return [];
         }
