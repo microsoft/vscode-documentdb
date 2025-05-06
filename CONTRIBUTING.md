@@ -20,8 +20,6 @@ Follow these instructions to configure your machine for JavaScript/TypeScript de
   - Your development environment and tools will reside within `WSL2`.
   - VS Code integrates seamlessly with `WSL2` instances, enabling smooth development from your Windows machine.
 
-- For the latest information about WSL2, visit: [Using WSL on Managed Windows Devices](https://microsoft.sharepoint.com/sites/DeviceExperience/SitePages/Device%20Experience%20-%20Linux%20-%20Apps.aspx#using-wsl-on-managed-windows-devices)
-
 ### 1.2. Update Ubuntu Packages
 
 Open your Ubuntu terminal and run:
