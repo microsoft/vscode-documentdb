@@ -39,8 +39,20 @@ import { ext } from '../../../extensionVariables';
  * @returns An array of selected subscription IDs.
  */
 export function getSelectedSubscriptionIds(): string[] {
+    // Try the Azure Resource Groups config first
     const config = vscode.workspace.getConfiguration('azureResourceGroups');
     const fullSubscriptionIds = config.get<string[]>('selectedSubscriptions', []);
+
+    // If nothing found there, try our fallback storage
+    if (fullSubscriptionIds.length === 0) {
+        const fallbackIds = ext.context.globalState.get<string[]>('azure-discovery.selectedSubscriptions', []);
+        return fallbackIds.map((id) => id.split('/')[1]);
+    }
+
+    // Sync to our fallback storage if primary storage had data
+    // This ensures we maintain a copy if Azure Resources extension is later removed
+    void ext.context.globalState.update('azure-discovery.selectedSubscriptions', fullSubscriptionIds);
+
     return fullSubscriptionIds.map((id) => id.split('/')[1]);
 }
 
@@ -50,8 +62,16 @@ export function getSelectedSubscriptionIds(): string[] {
  * For example: 'tenantId/subscriptionId'.
  */
 export async function setSelectedSubscriptionIds(subscriptionIds: string[]): Promise<void> {
-    const config = vscode.workspace.getConfiguration('azureResourceGroups');
-    await config.update('selectedSubscriptions', subscriptionIds, vscode.ConfigurationTarget.Global);
+    try {
+        const config = vscode.workspace.getConfiguration('azureResourceGroups');
+        await config.update('selectedSubscriptions', subscriptionIds, vscode.ConfigurationTarget.Global);
+    } catch (error) {
+        // Log the error if the Azure Resource Groups config update fails
+        console.error('Unable to update Azure Resource Groups configuration, using fallback storage.', error);
+    }
+
+    // Always update our fallback storage regardless of primary storage success
+    await ext.context.globalState.update('azure-discovery.selectedSubscriptions', subscriptionIds);
 }
 
 /**
