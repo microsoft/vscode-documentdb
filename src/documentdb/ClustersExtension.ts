@@ -40,6 +40,7 @@ import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeEl
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
+import { renameConnection } from '../commands/renameConnection/renameConnection';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { ext } from '../extensionVariables';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
@@ -180,6 +181,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'command.documentDB.connectionsView.removeConnection',
                     removeConnection,
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'command.documentDB.connectionsView.renameConnection',
+                    renameConnection,
                 );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
