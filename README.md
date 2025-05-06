@@ -53,24 +53,18 @@ Here are some known issues and limitations to be aware of when using the Documen
 
 <!-- region exclude-from-marketplace -->
 
-# Contributing
+#### References
 
-There are several ways you can contribute to the [vscode-cosmosdb repository](https://github.com/Microsoft/vscode-documentdb):
+- [DocumentDB](https://github.com/microsoft/documentdb)
 
-- **Ideas, feature requests, and bugs**: We are open to all ideas, and we want to get rid of bugs! Use the [Issues](https://github.com/Microsoft/vscode-documentdb/issues) section to report a new issue, provide your ideas or contribute to existing threads.
 
-- **Documentation**: Found a typo or awkward sentence? Submit a PR!
+# How to Contribute
 
-- **Code**: Contribute bug fixes, features, or design changes:
+To contribute, see these documents:
 
-  - Clone the repository and open it in VS Code.
-  - Run `Extensions: Show Recommended Extensions` from the [command palette](https://code.visualstudio.com/docs/getstarted/userinterface#_command-palette) and install all extensions listed under "Workspace Recommendations"
-
-  - Open the terminal (press <kbd>CTRL</kbd>+<kbd>\`</kbd>) and run `npm install`.
-
-  - Build: press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>, or press <kbd>F1</kbd> and type `Tasks: Run Build Task`.
-
-  - Debug: Select the `Launch Extension (webpack)` configuration in the Debug sidebar and press <kbd>F5</kbd> to start debugging the extension.
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+- [Security](./SECURITY.md)
+- [Contributing](./CONTRIBUTING.md)
 
 ## Legal
 
