@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type ComputeManagementClient } from '@azure/arm-compute'; // Add this import
 import { type CosmosDBManagementClient } from '@azure/arm-cosmosdb';
+import { type NetworkManagementClient } from '@azure/arm-network'; // Add this import
 import { type PostgreSQLManagementClient } from '@azure/arm-postgresql';
 import { type PostgreSQLManagementFlexibleServerClient } from '@azure/arm-postgresql-flexible';
 import { type ResourceManagementClient } from '@azure/arm-resources';
@@ -53,4 +55,30 @@ export async function createPostgreSQLFlexibleClient(
         context,
         (await import('@azure/arm-postgresql-flexible')).PostgreSQLManagementFlexibleServerClient,
     );
+}
+
+export async function createComputeManagementClient(
+    context: IActionContext,
+    subscription: AzureSubscription,
+): Promise<ComputeManagementClient> {
+    const subContext = createSubscriptionContext(subscription);
+
+    const clientModule = (await import('@azure/arm-compute')) as {
+        ComputeManagementClient: new (...args: unknown[]) => ComputeManagementClient;
+    };
+
+    return createAzureClient<ComputeManagementClient>([context, subContext], clientModule.ComputeManagementClient);
+}
+
+export async function createNetworkManagementClient(
+    context: IActionContext,
+    subscription: AzureSubscription,
+): Promise<NetworkManagementClient> {
+    const subContext = createSubscriptionContext(subscription);
+
+    const clientModule = (await import('@azure/arm-network')) as {
+        NetworkManagementClient: new (...args: unknown[]) => NetworkManagementClient;
+    };
+
+    return createAzureClient<NetworkManagementClient>([context, subContext], clientModule.NetworkManagementClient);
 }
