@@ -22,66 +22,56 @@ import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase } from '../../../../tree/documentdb/ClusterItemBase';
+import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 
 // Define a model for VM, similar to ClusterModel but for VM properties
-export interface VirtualMachineModel {
-    id: string;
-    name: string;
-    // Relevant properties from the VM object discovered by the wizard, stored in `azureVMInfo`
-    connectionStringTemplate: string;
+export interface VirtualMachineModel extends ClusterModel {
     vmSize?: string;
     publicIpAddress?: string;
     fqdn?: string;
-    resourceGroup?: string; // Optional, if needed for display or other purposes
-    // Add other VM specific details if needed for the tree item
 }
 
 export class AzureVMResourceItem extends ClusterItemBase {
     iconPath = new vscode.ThemeIcon('vm'); // Generic VM icon
 
-    // Store the connection string template and other details passed from the wizard
-    private _connectionStringTemplate: string;
-    private _vmSize?: string;
-    private _publicIpAddress?: string;
-    private _fqdn?: string;
-
     constructor(
         readonly subscription: AzureSubscription, // Retained from original
-        readonly vmModel: VirtualMachineModel, // Using the new VM model
+        readonly cluster: VirtualMachineModel, // Using the new VM model
         // connectionInfo: any, // Passed from the wizard execution step, containing vmId, name, connectionStringTemplate
     ) {
-        super(vmModel.name, vmModel.id); // label, id
-        this._connectionStringTemplate = vmModel.connectionStringTemplate;
-        this._vmSize = vmModel.vmSize;
-        this._publicIpAddress = vmModel.publicIpAddress;
-        this._fqdn = vmModel.fqdn;
+        super(cluster); // label, id
 
         // Construct tooltip and description
-        const tooltipParts: string[] = [`Name: ${this.vmModel.name}`, `ID: ${this.vmModel.id}`];
-        if (this._vmSize) {
-            tooltipParts.push(`Size: ${this._vmSize}`);
+        const tooltipParts: string[] = [`Name: ${cluster.name}`, `ID: ${cluster.id}`];
+        if (cluster.vmSize) {
+            tooltipParts.push(`Size: ${cluster.vmSize}`);
         }
-        if (this._fqdn) {
-            tooltipParts.push(`FQDN: ${this._fqdn}`);
+        if (cluster.fqdn) {
+            tooltipParts.push(`FQDN: ${cluster.fqdn}`);
         }
-        if (this._publicIpAddress) {
-            tooltipParts.push(`Public IP: ${this._publicIpAddress}`);
+        if (cluster.publicIpAddress) {
+            tooltipParts.push(`Public IP: ${cluster.publicIpAddress}`);
         }
 
-        if (!this._publicIpAddress && !this._fqdn) {
-            this.description = l10n.t('No Connectivity');
+        if (cluster.publicIpAddress && !cluster.fqdn) {
+            this.descriptionOverride = l10n.t('No Connectivity');
             tooltipParts.push(l10n.t('No public IP or FQDN available for direct connection.'));
         } else {
-            this.description = this._fqdn || this._publicIpAddress;
+            this.descriptionOverride = cluster.fqdn || cluster.publicIpAddress;
         }
-        this.tooltip = tooltipParts.join('\n');
+        this.tooltipOverride = tooltipParts.join('\n');
     }
 
-    // This method will be called by the framework when the item is expanded or actions are performed.
     public async getConnectionString(): Promise<string | undefined> {
-        // The connection string template is already available from the wizard.
-        // Credentials will be filled in by the authentication process.
-        return Promise.resolve(this._connectionStringTemplate);
+        const host = this.cluster.fqdn || this.cluster.publicIpAddress;
+
+        const connectionString = new ConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
+
+        connectionString.hosts = [host + ':27017']; // Set the actual host and default port
+        connectionString.protocol = 'mongodb';
+
+        const finalConnectionString = connectionString.toString();
+        return Promise.resolve(finalConnectionString);
     }
 
     /**
@@ -95,19 +85,15 @@ export class AzureVMResourceItem extends ClusterItemBase {
             async (context: IActionContext) => {
                 ext.outputChannel.appendLine(
                     l10n.t('Azure VM: Attempting to authenticate with "{vmName}"…', {
-                        vmName: this.vmModel.name,
+                        vmName: this.cluster.name,
                     }),
                 );
 
-                // The connection string template is already stored in this._connectionStringTemplate
-                const connectionStringTemplate = nonNullValue(this._connectionStringTemplate);
-                context.valuesToMask.push(connectionStringTemplate);
-
                 const wizardContext: AuthenticateWizardContext = {
                     ...context,
-                    // adminUserName: undefined, // VM connection doesn't have a default admin username from Azure like vCore
-                    resourceName: this.vmModel.name,
-                    connectionString: connectionStringTemplate, // Pass the template to the wizard
+                    resourceName: this.cluster.name,
+                    adminUserName: undefined,
+                    selectedUserName: undefined,
                 };
 
                 const credentialsProvided = await this.promptForCredentials(wizardContext);
@@ -119,8 +105,10 @@ export class AzureVMResourceItem extends ClusterItemBase {
                 context.valuesToMask.push(nonNullProp(wizardContext, 'password'));
 
                 // Construct the final connection string with user-provided credentials
-                const finalConnectionString = new ConnectionString(connectionStringTemplate);
+                const connectionString = await this.getConnectionString();
+                const finalConnectionString = new ConnectionString(nonNullValue(connectionString, 'connectionString'));
                 finalConnectionString.username = wizardContext.selectedUserName;
+
                 // Password will be handled by the ClustersClient, not directly in the string for cache
 
                 CredentialCache.setCredentials(
@@ -132,7 +120,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
 
                 ext.outputChannel.append(
                     l10n.t('Azure VM: Connecting to "{vmName}" as "{username}"…', {
-                        vmName: this.vmModel.name,
+                        vmName: this.cluster.name,
                         username: wizardContext.selectedUserName ?? '',
                     }),
                 );
@@ -143,7 +131,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
                     clustersClient = await ClustersClient.getClient(this.id).catch((error: Error) => {
                         ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: error.message }));
                         void vscode.window.showErrorMessage(
-                            l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.vmModel.name }),
+                            l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
                             {
                                 modal: true,
                                 detail:
@@ -162,7 +150,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
 
                 ext.outputChannel.appendLine(
                     l10n.t('Azure VM: Connected to "{vmName}" as "{username}".', {
-                        vmName: this.vmModel.name,
+                        vmName: this.cluster.name,
                         username: wizardContext.selectedUserName ?? '',
                     }),
                 );

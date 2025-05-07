@@ -61,7 +61,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
             id: this.id,
             contextValue: this.contextValue,
             label: l10n.t('Azure VMs (DocumentDB)'),
-            iconPath: new vscode.ThemeIcon('azure'),
+            iconPath: new vscode.ThemeIcon('vm'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }

@@ -7,6 +7,7 @@ import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureut
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
+import { DocumentDBExperience } from '../../../AzureDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
@@ -84,29 +85,20 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         }
                     }
 
-                    // The connection string template is created here because the tree item needs it directly.
-                    // In a real scenario, this might be slightly different if the wizard is the sole source of truth for new connections.
-                    const host = fqdn || publicIpAddress;
-                    let connectionStringTemplate = `mongodb://<YOUR_USERNAME>@\${host || '<UNKNOWN_HOST>'}:27017/`;
-                    if (!host) {
-                        // If no host, the template is less useful but good to have a placeholder
-                        connectionStringTemplate = 'mongodb://<YOUR_USERNAME>@<NO_PUBLIC_CONNECTIVITY>:27017/';
-                    }
-
                     const vmInfo: VirtualMachineModel = {
                         id: vm.id!,
                         name: vm.name!,
                         resourceGroup: getResourceGroupFromId(vm.id!),
-                        connectionStringTemplate: connectionStringTemplate,
                         vmSize: vm.hardwareProfile?.vmSize,
                         publicIpAddress: publicIpAddress,
                         fqdn: fqdn,
+                        dbExperience: DocumentDBExperience,
                     };
                     vmItems.push(new AzureVMResourceItem(this.subscription.subscription, vmInfo));
                 }
             }
 
-            return vmItems.sort((a, b) => a.vmModel.name.localeCompare(b.vmModel.name));
+            return vmItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
         });
     }
 

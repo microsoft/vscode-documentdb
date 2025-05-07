@@ -3,15 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type MongoCluster, type Resource } from '@azure/arm-cosmosdb';
+import { type Resource } from '@azure/arm-cosmosdb';
 import { type Experience } from '../../AzureDBExperiences';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 
 // Selecting only the properties used in the extension, but keeping an easy option to extend the model later and offer full coverage of MongoCluster
 // '|' means that you can only access properties that are common to both types.
-export type ClusterModel = (MongoCluster | ResourceModelInUse) & ResourceModelInUse;
+//export type ClusterModel = (MongoCluster | ResourceModelInUse) & ResourceModelInUse;
+// TODO: rethink this, it was not really needed to be that complex.
+export type ClusterModel = ResourceModelInUse;
 
-interface ResourceModelInUse extends Resource {
+export interface ResourceModelInUse extends Resource {
     // from the original MongoCluster type
     id: string;
     name: string;
