@@ -28,7 +28,10 @@ export async function addConnectionFromRegistry(context: IActionContext, node?: 
     }
 
     const parsedCS = new ConnectionString(connectionString);
-    const label = `${parsedCS.username}@${parsedCS.hosts.join(',')}`;
+    const label =
+        parsedCS.username && parsedCS.username.length > 0
+            ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
+            : parsedCS.hosts.join(',');
 
     const storageItem: StorageItem = {
         id: `${parsedCS.username}@${parsedCS.redact().toString()}`,

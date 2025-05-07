@@ -22,7 +22,10 @@ export class MongoExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         if (api === API.MongoDB || api === API.MongoClusters || api === API.Common) {
             const parsedCS = new ConnectionString(connectionString);
 
-            const label = parsedCS.username + '@' + parsedCS.hosts.join(',');
+            const label =
+                parsedCS.username && parsedCS.username.length > 0
+                    ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
+                    : parsedCS.hosts.join(',');
 
             return ext.state.showCreatingChild(
                 parentId,
