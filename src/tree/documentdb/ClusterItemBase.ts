@@ -24,7 +24,7 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
     public contextValue: string = 'treeItem.mongoCluster';
 
     protected descriptionOverride?: string;
-    protected tooltipOverride?: string;
+    protected tooltipOverride?: string | vscode.MarkdownString;
 
     protected iconPath?:
         | string

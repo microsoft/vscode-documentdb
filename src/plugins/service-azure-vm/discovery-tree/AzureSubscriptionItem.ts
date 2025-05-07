@@ -6,8 +6,9 @@
 import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
+import { ConnectionString } from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
-import { DocumentDBExperience } from '../../../AzureDBExperiences';
+import { MongoClustersExperience } from '../../../AzureDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
@@ -36,7 +37,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
             const computeClient = await createComputeManagementClient(context, this.subscription.subscription); // For listing VMs
             const networkClient = await createNetworkManagementClient(context, this.subscription.subscription); // For fetching IP addresses
 
-            const tagName = ext.context.globalState.get<string>('azureVmDiscoveryTag', 'DocumentDB');
+            const tagName = ext.context.globalState.get<string>('azure-vm-discovery.tag', 'DocumentDB');
 
             const vms = await uiUtils.listAllIterator(computeClient.virtualMachines.listAll());
             const vmItems: AzureVMResourceItem[] = [];
@@ -85,14 +86,22 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         }
                     }
 
+                    const host = fqdn || publicIpAddress;
+
+                    const connectionString = new ConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
+
+                    connectionString.hosts = [host + ':27017']; // Set the actual host and default port
+                    connectionString.protocol = 'mongodb';
+
                     const vmInfo: VirtualMachineModel = {
                         id: vm.id!,
                         name: vm.name!,
+                        connectionString: connectionString.toString(),
                         resourceGroup: getResourceGroupFromId(vm.id!),
                         vmSize: vm.hardwareProfile?.vmSize,
                         publicIpAddress: publicIpAddress,
                         fqdn: fqdn,
-                        dbExperience: DocumentDBExperience,
+                        dbExperience: MongoClustersExperience,
                     };
                     vmItems.push(new AzureVMResourceItem(this.subscription.subscription, vmInfo));
                 }

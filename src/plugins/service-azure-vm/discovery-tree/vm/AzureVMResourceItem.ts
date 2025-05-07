@@ -42,36 +42,27 @@ export class AzureVMResourceItem extends ClusterItemBase {
         super(cluster); // label, id
 
         // Construct tooltip and description
-        const tooltipParts: string[] = [`Name: ${cluster.name}`, `ID: ${cluster.id}`];
+        const tooltipParts: string[] = [`**Name:** ${cluster.name}`, `**ID:** ${cluster.id}`];
         if (cluster.vmSize) {
-            tooltipParts.push(`Size: ${cluster.vmSize}`);
+            tooltipParts.push(`**Size:** ${cluster.vmSize}`);
         }
         if (cluster.fqdn) {
-            tooltipParts.push(`FQDN: ${cluster.fqdn}`);
+            tooltipParts.push(`**FQDN:** ${cluster.fqdn}`);
         }
         if (cluster.publicIpAddress) {
-            tooltipParts.push(`Public IP: ${cluster.publicIpAddress}`);
+            tooltipParts.push(`**Public IP:** ${cluster.publicIpAddress}`);
         }
 
         if (cluster.publicIpAddress && !cluster.fqdn) {
             this.descriptionOverride = l10n.t('No Connectivity');
-            tooltipParts.push(l10n.t('No public IP or FQDN available for direct connection.'));
-        } else {
-            this.descriptionOverride = cluster.fqdn || cluster.publicIpAddress;
+            tooltipParts.push(l10n.t('**No public IP or FQDN available for direct connection.**'));
         }
-        this.tooltipOverride = tooltipParts.join('\n');
+
+        this.tooltipOverride = new vscode.MarkdownString(tooltipParts.join('\n\n'));
     }
 
     public async getConnectionString(): Promise<string | undefined> {
-        const host = this.cluster.fqdn || this.cluster.publicIpAddress;
-
-        const connectionString = new ConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
-
-        connectionString.hosts = [host + ':27017']; // Set the actual host and default port
-        connectionString.protocol = 'mongodb';
-
-        const finalConnectionString = connectionString.toString();
-        return Promise.resolve(finalConnectionString);
+        return Promise.resolve(this.cluster.connectionString);
     }
 
     /**
