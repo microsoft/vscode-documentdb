@@ -10,10 +10,10 @@ import { type NewConnectionWizardContext } from '../../commands/newConnection/Ne
 import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
-import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem'; // This will be updated later if needed, or a new VM-specific root item created
-import { configureAzureSubscriptionFilter } from './discovery-tree/subscriptionFiltering'; // This can be reused
+import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
+import { configureVmFilter } from './discovery-tree/configureVmFilterWizard';
 import { AzureVMExecuteStep } from './discovery-wizard/AzureVMExecuteStep';
-import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep'; // Reused
+import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep';
 import { SelectTagStep } from './discovery-wizard/SelectTagStep';
 import { SelectVMStep } from './discovery-wizard/SelectVMStep';
 
@@ -60,8 +60,7 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
 
     async configureTreeItemFilter(context: IActionContext, node: TreeElement): Promise<void> {
         if (node instanceof AzureServiceRootItem) {
-            // Reusing existing subscription filter configuration. Tag filtering is part of the wizard for now.
-            await configureAzureSubscriptionFilter(context, this.azureSubscriptionProvider);
+            await configureVmFilter(context, this.azureSubscriptionProvider);
             ext.discoveryBranchDataProvider.refresh(node);
         }
     }

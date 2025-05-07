@@ -13,7 +13,7 @@ const DEFAULT_VM_TAG = 'DocumentDB';
 
 export class SelectTagStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const currentTag: string = ext.context.globalState.get<string>('azure-vm-discovery', DEFAULT_VM_TAG);
+        const currentTag: string = ext.context.globalState.get<string>('azure-vm-discovery.tag', DEFAULT_VM_TAG);
 
         const newTag = await context.ui.showInputBox({
             prompt: l10n.t('Enter the Azure VM tag key used for discovering DocumentDB instances.'),
