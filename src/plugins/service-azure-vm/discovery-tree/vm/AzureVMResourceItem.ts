@@ -21,7 +21,7 @@ import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/a
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
-import { ResourceItemBase } from '../../../../tree/ResourceItemBase';
+import { ClusterItemBase } from '../../../../tree/documentdb/ClusterItemBase';
 
 // Define a model for VM, similar to ClusterModel but for VM properties
 export interface VirtualMachineModel {
@@ -32,10 +32,11 @@ export interface VirtualMachineModel {
     vmSize?: string;
     publicIpAddress?: string;
     fqdn?: string;
+    resourceGroup?: string; // Optional, if needed for display or other purposes
     // Add other VM specific details if needed for the tree item
 }
 
-export class AzureVMResourceItem extends ResourceItemBase {
+export class AzureVMResourceItem extends ClusterItemBase {
     iconPath = new vscode.ThemeIcon('vm'); // Generic VM icon
 
     // Store the connection string template and other details passed from the wizard

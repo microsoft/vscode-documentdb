@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type VirtualMachine } from '@azure/arm-compute'; // Added VirtualMachine type
+import { type ComputeManagementClient, type VirtualMachine } from '@azure/arm-compute';
+import { type NetworkManagementClient } from '@azure/arm-network'; // Added NetworkManagementClient type
 import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { AzureWizardPromptStep, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
@@ -26,20 +27,36 @@ export class SelectVMStep extends AzureWizardPromptStep<NewConnectionWizardConte
         const subscription = context.properties[
             AzureVMContextProperties.SelectedSubscription
         ] as unknown as AzureSubscription;
+
         const tagName = context.properties[AzureVMContextProperties.SelectedTag] as string;
 
-        // Using ComputeManagementClient to list VMs
-        const computeClient = await createComputeManagementClient(context, subscription);
-        const networkClient = await createNetworkManagementClient(context, subscription); // For fetching IP addresses
+        // Create management clients with error handling
+        let computeClient: ComputeManagementClient;
+        let networkClient: NetworkManagementClient;
 
-        const vms = await uiUtils.listAllIterator(computeClient.virtualMachines.listAll());
+        try {
+            // Use type assertions to ensure type safety
+            computeClient = (await createComputeManagementClient(context, subscription)) as ComputeManagementClient;
+            networkClient = (await createNetworkManagementClient(context, subscription)) as NetworkManagementClient;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            throw new Error(l10n.t('Failed to create Azure management clients: {0}', errorMessage));
+        }
+
+        if (!computeClient || !networkClient) {
+            throw new Error(l10n.t('Failed to initialize Azure management clients'));
+        }
+
+        // Using ComputeManagementClient to list VMs
+        const allVms = await uiUtils.listAllIterator(computeClient.virtualMachines.listAll());
 
         const taggedVms: IAzureQuickPickItem<VirtualMachine & { publicIpAddress?: string; fqdn?: string }>[] = [];
 
-        for (const vm of vms) {
+        for (const vm of allVms) {
             if (vm.tags && vm.tags[tagName] !== undefined) {
                 let publicIpAddress: string | undefined;
                 let fqdn: string | undefined;
+
                 if (vm.networkProfile?.networkInterfaces) {
                     for (const nicRef of vm.networkProfile.networkInterfaces) {
                         if (nicRef.id) {

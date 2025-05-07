@@ -20,8 +20,9 @@ import { SelectVMStep } from './discovery-wizard/SelectVMStep';
 export enum AzureVMContextProperties {
     AzureSubscriptionProvider = 'azureSubscriptionProvider',
     SelectedSubscription = 'selectedSubscription',
+    SelectedTag = 'selectedTag',
     SelectedVM = 'selectedVM',
-    SelectedTag = 'selectedTag', // New context property for the tag
+    AzureVMResourceItemDetails = 'azureVMResourceItem',
 }
 
 export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryProvider {

@@ -18,39 +18,30 @@ export class AzureVMExecuteStep extends AzureWizardExecuteStep<NewConnectionWiza
             publicIpAddress?: string;
             fqdn?: string;
         };
+
         if (!selectedVM) {
             throw new Error('Selected VM is not set.');
         }
+
         const { publicIpAddress, fqdn } = selectedVM;
         const host = fqdn || publicIpAddress;
+
         if (!host) {
             // This case should ideally be prevented by the SelectVMStep by not allowing selection or by user being informed.
             throw new Error('Selected VM does not have a public IP address or FQDN for connection.');
         }
+
         // Constructing a template connection string. User will be prompted for credentials by the resource item.
-        const connectionString = new ConnectionString('mongodb://<YOUR_USERNAME>@localhost:27017/'); // Placeholder host, will be replaced
+        const connectionString = new ConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
         connectionString.hosts = [host + ':27017']; // Set the actual host and default port
-        connectionString.username = '<YOUR_USERNAME>'; // Placeholder for username
-        connectionString.password = undefined; // Password will be prompted for
         connectionString.protocol = 'mongodb';
 
         const finalConnectionString = connectionString.toString();
-        context.valuesToMask.push(finalConnectionString); // Mask the template string as well
-        context.connectionString = finalConnectionString;
 
-        // Store VM details needed by the AzureVMResourceItem, e.g., VM id, name, and the generated connection string template
-        // These will be retrieved by the resource item later.
-        // For now, the connection string itself is the main piece of info to pass.
-        // Additional VM info can be added to context.properties if AzureVMResourceItem needs them directly.
-        context.customProperties.azureVMInfo = {
-            // Using customProperties to avoid collision with wizard context props
-            vmId: selectedVM.id,
-            vmName: selectedVM.name,
-            connectionStringTemplate: finalConnectionString, // Storing for the resource item
-            vmSize: selectedVM.hardwareProfile?.vmSize,
-            publicIpAddress: publicIpAddress,
-            fqdn: fqdn,
-        };
+        context.valuesToMask.push(finalConnectionString);
+
+        // This is the connection string that will be used to connect to the VM that is the response from the discovery wizard.
+        context.connectionString = finalConnectionString;
 
         // Clean-up wizard context properties
         context.properties[AzureVMContextProperties.SelectedSubscription] = undefined;

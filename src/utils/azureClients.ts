@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ComputeManagementClient } from '@azure/arm-compute'; // Add this import
+import { type ComputeManagementClient } from '@azure/arm-compute'; // Modified import
 import { type CosmosDBManagementClient } from '@azure/arm-cosmosdb';
 import { type NetworkManagementClient } from '@azure/arm-network'; // Add this import
 import { type PostgreSQLManagementClient } from '@azure/arm-postgresql';
@@ -62,12 +62,14 @@ export async function createComputeManagementClient(
     subscription: AzureSubscription,
 ): Promise<ComputeManagementClient> {
     const subContext = createSubscriptionContext(subscription);
+    return createAzureClient([context, subContext], (await import('@azure/arm-compute')).ComputeManagementClient);
 
-    const clientModule = (await import('@azure/arm-compute')) as {
-        ComputeManagementClient: new (...args: unknown[]) => ComputeManagementClient;
-    };
+    // const armCompute = await import('@azure/arm-compute');
+    // const options: ComputeManagementClientOptionalParams = {
+    //     baseUri: subContext.environment.resourceManagerEndpointUrl,
+    // };
 
-    return createAzureClient<ComputeManagementClient>([context, subContext], clientModule.ComputeManagementClient);
+    // return new armCompute.ComputeManagementClient(subContext.credentials, subContext.subscriptionId, options);
 }
 
 export async function createNetworkManagementClient(
@@ -75,10 +77,5 @@ export async function createNetworkManagementClient(
     subscription: AzureSubscription,
 ): Promise<NetworkManagementClient> {
     const subContext = createSubscriptionContext(subscription);
-
-    const clientModule = (await import('@azure/arm-network')) as {
-        NetworkManagementClient: new (...args: unknown[]) => NetworkManagementClient;
-    };
-
-    return createAzureClient<NetworkManagementClient>([context, subContext], clientModule.NetworkManagementClient);
+    return createAzureClient([context, subContext], (await import('@azure/arm-network')).NetworkManagementClient);
 }

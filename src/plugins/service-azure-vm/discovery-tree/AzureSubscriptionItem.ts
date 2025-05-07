@@ -3,9 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ComputeManagementClient } from '@azure/arm-compute';
-import { type NetworkManagementClient } from '@azure/arm-network';
-import { uiUtils } from '@microsoft/vscode-azext-azureutils';
+import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
@@ -13,7 +11,7 @@ import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { createComputeManagementClient, createNetworkManagementClient } from '../../../utils/azureClients';
-import { AzureVMResourceItem } from './vm/AzureVMResourceItem';
+import { AzureVMResourceItem, type VirtualMachineModel } from './vm/AzureVMResourceItem';
 
 export interface AzureSubscriptionModel {
     subscriptionName: string;
@@ -34,23 +32,11 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
 
     async getChildren(): Promise<TreeElement[] | null | undefined> {
         return await callWithTelemetryAndErrorHandling('getChildren.azureVM', async (context: IActionContext) => {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            const computeClient: ComputeManagementClient = (await createComputeManagementClient(
-                context,
-                this.subscription.subscription,
-            )) as unknown as ComputeManagementClient;
+            const computeClient = await createComputeManagementClient(context, this.subscription.subscription); // For listing VMs
+            const networkClient = await createNetworkManagementClient(context, this.subscription.subscription); // For fetching IP addresses
 
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            const networkClient: NetworkManagementClient = (await createNetworkManagementClient(
-                context,
-                this.subscription.subscription,
-            )) as unknown as NetworkManagementClient; // For fetching IP addresses
-
-            // Get the tag from fallback storage to filter VMs in the tree
-            // This assumes the tree should reflect the last used tag in the wizard for consistency
             const tagName = ext.context.globalState.get<string>('azureVmDiscoveryTag', 'DocumentDB');
 
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             const vms = await uiUtils.listAllIterator(computeClient.virtualMachines.listAll());
             const vmItems: AzureVMResourceItem[] = [];
 
@@ -119,6 +105,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                     vmItems.push(new AzureVMResourceItem(this.subscription.subscription, vmInfo));
                 }
             }
+
             return vmItems.sort((a, b) => a.vmModel.name.localeCompare(b.vmModel.name));
         });
     }

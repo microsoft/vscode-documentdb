@@ -43,6 +43,7 @@ import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/rem
 import { renameConnection } from '../commands/renameConnection/renameConnection';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { ext } from '../extensionVariables';
+import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
 import { MongoVCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
@@ -61,6 +62,7 @@ export class ClustersExtension implements vscode.Disposable {
 
     registerDiscoveryServices(_activateContext: IActionContext) {
         DiscoveryService.registerProvider(new AzureDiscoveryProvider());
+        DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
