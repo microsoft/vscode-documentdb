@@ -23,6 +23,9 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
     public readonly experience: Experience;
     public contextValue: string = 'treeItem.mongoCluster';
 
+    protected descriptionOverride?: string;
+    protected tooltipOverride?: string | vscode.MarkdownString;
+
     protected iconPath?:
         | string
         | vscode.Uri
@@ -141,24 +144,31 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
             id: this.id,
             contextValue: this.contextValue,
             label: this.cluster.name,
-            description: this.cluster.sku !== undefined ? `(${this.cluster.sku})` : false,
+            description: this.descriptionOverride
+                ? this.descriptionOverride
+                : this.cluster.sku !== undefined
+                  ? `(${this.cluster.sku})`
+                  : false,
             iconPath: this.iconPath ?? undefined,
-            // iconPath: getThemeAgnosticIconPath('CosmosDBAccount.svg'), // Uncomment if icon is available
-            tooltip: new vscode.MarkdownString(
-                `### Cluster: ${this.cluster.name}\n\n` +
-                    `---\n` +
-                    (this.cluster.location ? `- Location: **${regionToDisplayName(this.cluster.location)}**\n\n` : '') +
-                    (this.cluster.diskSize ? `- Disk Size: **${this.cluster.diskSize}GB**\n` : '') +
-                    (this.cluster.sku ? `- SKU: **${this.cluster.sku}**\n` : '') +
-                    (this.cluster.enableHa !== undefined
-                        ? `- High Availability: **${this.cluster.enableHa ? 'Enabled' : 'Disabled'}**\n`
-                        : '') +
-                    (this.cluster.nodeCount ? `- Node Count: **${this.cluster.nodeCount}**\n\n` : '') +
-                    (this.cluster.serverVersion ? `- Server Version: **${this.cluster.serverVersion}**\n` : '') +
-                    (this.cluster.systemData?.createdAt
-                        ? `---\n- Created Date: **${this.cluster.systemData.createdAt.toLocaleString()}**\n`
-                        : ''),
-            ),
+            tooltip: this.tooltipOverride
+                ? this.tooltipOverride
+                : new vscode.MarkdownString(
+                      `### Cluster: ${this.cluster.name}\n\n` +
+                          `---\n` +
+                          (this.cluster.location
+                              ? `- Location: **${regionToDisplayName(this.cluster.location)}**\n\n`
+                              : '') +
+                          (this.cluster.diskSize ? `- Disk Size: **${this.cluster.diskSize}GB**\n` : '') +
+                          (this.cluster.sku ? `- SKU: **${this.cluster.sku}**\n` : '') +
+                          (this.cluster.enableHa !== undefined
+                              ? `- High Availability: **${this.cluster.enableHa ? 'Enabled' : 'Disabled'}**\n`
+                              : '') +
+                          (this.cluster.nodeCount ? `- Node Count: **${this.cluster.nodeCount}**\n\n` : '') +
+                          (this.cluster.serverVersion ? `- Server Version: **${this.cluster.serverVersion}**\n` : '') +
+                          (this.cluster.systemData?.createdAt
+                              ? `---\n- Created Date: **${this.cluster.systemData.createdAt.toLocaleString()}**\n`
+                              : ''),
+                  ),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
