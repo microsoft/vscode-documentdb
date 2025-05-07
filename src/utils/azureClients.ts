@@ -63,13 +63,6 @@ export async function createComputeManagementClient(
 ): Promise<ComputeManagementClient> {
     const subContext = createSubscriptionContext(subscription);
     return createAzureClient([context, subContext], (await import('@azure/arm-compute')).ComputeManagementClient);
-
-    // const armCompute = await import('@azure/arm-compute');
-    // const options: ComputeManagementClientOptionalParams = {
-    //     baseUri: subContext.environment.resourceManagerEndpointUrl,
-    // };
-
-    // return new armCompute.ComputeManagementClient(subContext.credentials, subContext.subscriptionId, options);
 }
 
 export async function createNetworkManagementClient(
