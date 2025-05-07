@@ -66,7 +66,7 @@ export class DocumentDBClusterItem extends ClusterItemBase {
                         resourceName: this.cluster.name,
 
                         // preconfigure the username in case it's provided connection string
-                        selectedUserName: username,
+                        selectedUserName: username && username.length > 0 ? username : undefined,
                         // we'll always ask for the password
                     };
 
