@@ -12,6 +12,7 @@ import { PostgresServerTreeItem } from '../../postgres/tree/PostgresServerTreeIt
 import { StorageNames, StorageService } from '../../services/storageService';
 import { CosmosDBAccountResourceItemBase } from '../../tree/azure-resources-view/cosmosdb/CosmosDBAccountResourceItemBase';
 import { DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { CosmosDBAccountAttachedResourceItem } from '../../tree/cosmosdb/CosmosDBAccountAttachedResourceItem';
 import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { AttachedAccountSuffix } from '../../tree/v1-legacy-api/AttachedAccountsTreeItem';
 import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
@@ -46,13 +47,16 @@ export async function removeConnectionV1(context: IActionContext, node?: AzExtTr
 
 export async function removeAzureConnection(
     context: IActionContext,
-    node?: CosmosDBAccountAttachedResourceItem | ClusterItemBase,
+    node?: CosmosDBAccountAttachedResourceItem | ClusterItem | DocumentDBClusterItem,
 ): Promise<void> {
     if (!node) {
-        node = await pickWorkspaceResource<CosmosDBAccountAttachedResourceItem | ClusterItemBase>(context, {
-            type: [WorkspaceResourceType.AttachedAccounts, WorkspaceResourceType.MongoClusters],
-            expectedChildContextValue: ['treeItem.account', 'treeItem.mongoCluster'],
-        });
+        node = await pickWorkspaceResource<CosmosDBAccountAttachedResourceItem | ClusterItem | DocumentDBClusterItem>(
+            context,
+            {
+                type: [WorkspaceResourceType.AttachedAccounts, WorkspaceResourceType.MongoClusters],
+                expectedChildContextValue: ['treeItem.account', 'treeItem.mongoCluster'],
+            },
+        );
     }
 
     if (!node) {
@@ -64,7 +68,7 @@ export async function removeAzureConnection(
 
 export async function removeConnection(
     context: IActionContext,
-    node: CosmosDBAccountResourceItemBase | ClusterItemBase | DocumentDBClusterItem,
+    node: CosmosDBAccountResourceItemBase | ClusterItem | DocumentDBClusterItem,
 ): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
     let confirmed = false;

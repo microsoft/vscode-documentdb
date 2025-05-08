@@ -25,8 +25,11 @@ import { ext } from '../../extensionVariables';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { ClusterItemBase } from '../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../documentdb/ClusterModel';
+import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 
-export class DocumentDBClusterItem extends ClusterItemBase {
+export class DocumentDBClusterItem extends ClusterItemBase implements TreeElementWithStorageId {
+    storageId: string;
+
     constructor(mongoCluster: ClusterModel) {
         super(mongoCluster);
     }
