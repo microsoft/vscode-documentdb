@@ -23,6 +23,7 @@ import * as vscode from 'vscode';
 import { getIsRunningOnAzure } from './cosmosdb/utils/managedIdentityUtils';
 import { ClustersExtension } from './documentdb/ClustersExtension';
 import { ext } from './extensionVariables';
+import { globalUriHandler } from './vscodeUriHandler';
 
 export async function activateInternal(
     context: vscode.ExtensionContext,
@@ -118,6 +119,12 @@ export async function activateInternal(
                     await vscode.commands.executeCommand('command.documentDB.connectionsView.refresh');
                 }
             },
+        );
+
+        context.subscriptions.push(
+            vscode.window.registerUriHandler({
+                handleUri: globalUriHandler,
+            }),
         );
 
         // Suppress "Report an Issue" button for all errors in favor of the command

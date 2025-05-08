@@ -11,6 +11,7 @@ import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
 import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
+import { getEmulatorItemLabelForApi, getEmulatorItemUniqueId } from '../../utils/emulatorUtils';
 import { nonNullValue } from '../../utils/nonNull';
 import {
     NewEmulatorConnectionMode,
@@ -91,7 +92,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
                 }
 
                 const storageItem: StorageItem = {
-                    id: nonNullValue(connectionString),
+                    id: getEmulatorItemUniqueId(connectionString), // Use hash instead of raw connection string
                     name: label,
                     properties: {
                         api: experience.api === API.DocumentDB ? API.MongoClusters : experience.api,

@@ -13,7 +13,17 @@ import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 // TODO: rethink this, it was not really needed to be that complex.
 export type ClusterModel = ResourceModelInUse;
 
-export interface ResourceModelInUse extends Resource {
+/**
+ * Represents a cluster model that has been attached to the workspace
+ */
+export type AttachedClusterModel = ClusterModel & {
+    /**
+     * ID used to reference this attached cluster in storage
+     */
+    storageId: string;
+};
+
+interface ResourceModelInUse extends Resource {
     // from the original MongoCluster type
     id: string;
     name: string;
