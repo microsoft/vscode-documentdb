@@ -23,7 +23,7 @@ import { copyAzureConnectionString } from '../commands/copyConnectionString/copy
 import { createMongoCollection } from '../commands/createContainer/createContainer';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
-import { deleteAzureContainer } from '../commands/deleteContainer/deleteContainer';
+import { deleteContainer } from '../commands/deleteContainer/deleteContainer';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
 import {
     clustersExportEntireCollection,
@@ -210,7 +210,7 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommandWithTreeNodeUnwrapping('command.documentDB.launchShell', launchShell);
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.dropCollection', deleteAzureContainer);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.dropCollection', deleteContainer);
                 registerCommandWithTreeNodeUnwrapping('command.documentDB.dropDatabase', deleteAzureDatabase);
 
                 registerCommandWithTreeNodeUnwrapping('command.documentDB.createCollection', createMongoCollection);

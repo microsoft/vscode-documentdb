@@ -6,7 +6,7 @@
 import { AzureWizardPromptStep, openUrl, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { API, CoreExperience, getExperienceFromApi } from '../../AzureDBExperiences';
+import { getExperienceFromApi, type API } from '../../AzureDBExperiences';
 import { SettingsService } from '../../services/SettingsService';
 import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import {
@@ -23,37 +23,25 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
     }
 
     public async prompt(context: NewEmulatorConnectionWizardContext): Promise<void> {
-        const isCore = this.preselectedAPI === API.Core;
-
-        const preconfiguredEmulators = isCore
-            ? [
-                  {
-                      id: API.Core,
-                      label: l10n.t('Azure Cosmos DB (NoSQL)'),
-                      detail: l10n.t('I want to connect to the Azure Cosmos DB (NoSQL) Emulator.'),
-                      alwaysShow: true,
-                      group: 'Preconfigured Connections',
-                  },
-              ]
-            : [
-                  {
-                      id: 'mongo-ru',
-                      label: l10n.t('Azure Cosmos DB for MongoDB (RU) Emulator'),
-                      detail: l10n.t('I want to connect to the Azure Cosmos DB Emulator for MongoDB (RU).'),
-                      alwaysShow: true,
-                      group: 'Preconfigured Connections',
-                      learnMoreUrl: '',
-                  },
-                  {
-                      id: 'documentdb',
-                      label: l10n.t('DocumentDB Local'),
-                      detail: l10n.t('I want to connect to a local DocumentDB instance.'),
-                      alwaysShow: true,
-                      group: 'Preconfigured Connections',
-                      learnMoreUrl: '',
-                  },
-                  // Additional MongoDB emulator options can be added here
-              ];
+        const preconfiguredEmulators = [
+            {
+                id: 'mongo-ru',
+                label: l10n.t('Azure Cosmos DB for MongoDB (RU) Emulator'),
+                detail: l10n.t('I want to connect to the Azure Cosmos DB Emulator for MongoDB (RU).'),
+                alwaysShow: true,
+                group: 'Preconfigured Connections',
+                learnMoreUrl: '',
+            },
+            {
+                id: 'documentdb',
+                label: l10n.t('DocumentDB Local'),
+                detail: l10n.t('I want to connect to a local DocumentDB instance.'),
+                alwaysShow: true,
+                group: 'Preconfigured Connections',
+                learnMoreUrl: '',
+            },
+            // Additional MongoDB emulator options can be added here
+        ];
 
         const commonItems = [
             { label: '', kind: vscode.QuickPickItemKind.Separator },
@@ -68,12 +56,9 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
             {
                 id: 'learnMore',
                 label: l10n.t('Learn more…'),
-                detail: isCore
-                    ? l10n.t('Learn more about the Azure Cosmos DB (NoSQL) Emulator.')
-                    : l10n.t('Learn more about local connections.'),
-                learnMoreUrl: isCore
-                    ? 'https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-develop-emulator?pivots=api-nosql'
-                    : 'https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-develop-emulator?pivots=api-mongodb',
+                detail: l10n.t('Learn more about local connections.'),
+                learnMoreUrl:
+                    'https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-develop-emulator?pivots=api-mongodb',
                 alwaysShow: true,
                 group: 'Learn More',
             },
@@ -81,9 +66,7 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
 
         const selectedItem = await context.ui.showQuickPick([...preconfiguredEmulators, ...commonItems], {
             enableGrouping: true,
-            placeHolder: isCore
-                ? l10n.t('Select the Azure Cosmos DB Emulator Type…')
-                : l10n.t('Select the local connection type…'),
+            placeHolder: l10n.t('Select the local connection type…'),
             stepName: 'selectEmulatorType',
             suppressPersistence: true,
         });
@@ -99,15 +82,7 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
             context.mode = NewEmulatorConnectionMode.CustomConnectionString;
 
             context.experience = getExperienceFromApi(this.preselectedAPI);
-            if (isCore) {
-                context.experience = CoreExperience;
-            }
-
-            if (isCore) {
-                context.isCoreEmulator = true;
-            } else {
-                context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
-            }
+            context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
 
             return;
         }
@@ -116,17 +91,10 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
         if (preconfiguredEmulators.some((emulator) => emulator.id === selectedItem.id)) {
             context.mode = NewEmulatorConnectionMode.Preconfigured;
             context.experience = getExperienceFromApi(this.preselectedAPI);
-            if (isCore) {
-                context.experience = CoreExperience;
-            }
 
-            if (isCore) {
-                context.isCoreEmulator = true;
-            } else {
-                context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
-            }
+            context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
 
-            const settingName = isCore ? 'documentDB.emulator.port' : 'documentDB.emulator.mongoPort';
+            const settingName = 'documentDB.emulator.mongoPort';
 
             context.emulatorType = selectedItem.id;
 

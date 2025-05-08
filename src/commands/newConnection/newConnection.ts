@@ -3,47 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzExtTreeItem, AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ext } from '../../extensionVariables';
-import { NewConnectionItemCV } from '../../tree/connections-view/NewConnectionItemCV';
-import { CosmosDBAttachAccountResourceItem } from '../../tree/workspace-view/cosmosdb/CosmosDBAttachAccountResourceItem';
-import { NewConnectionItem } from '../../tree/workspace-view/documentdb/NewConnectionItem';
+import { type NewConnectionItem } from '../../tree/workspace-view/documentdb/NewConnectionItem';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { QuickPickType } from '../../utils/pickItem/pickExperience';
-import { ExperienceStep } from './ExperienceStep';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 import { PromptConnectionModeStep } from './PromptConnectionModeStep';
 
-export async function newConnection(
-    context: IActionContext,
-    node?: AzExtTreeItem | CosmosDBAttachAccountResourceItem | NewConnectionItem,
-): Promise<void> {
-    let type: QuickPickType = QuickPickType.ALL;
-    let parentId: string = '';
-
-    if (node instanceof AzExtTreeItem) {
-        type = QuickPickType.Postgres;
-        parentId = node.parent?.id ?? '';
-    }
-
-    if (node instanceof CosmosDBAttachAccountResourceItem) {
-        type = QuickPickType.Cosmos;
-        parentId = node.parentId ?? ext.cosmosDBWorkspaceBranchDataResource.id;
-    }
-
-    if (node instanceof NewConnectionItem) {
-        type = QuickPickType.Mongo;
-        parentId = node.parentId ?? ext.mongoClusterWorkspaceBranchDataResource.id;
-    }
-
-    if (node instanceof NewConnectionItemCV || type === QuickPickType.ALL) {
-        type = QuickPickType.DocumentDB;
-    }
+export async function newConnection(context: IActionContext, _node?: NewConnectionItem): Promise<void> {
+    const parentId: string = '';
 
     const wizardContext: NewConnectionWizardContext = {
         ...context,
-        quickPickType: type,
         parentId,
         properties: {},
     };
@@ -51,7 +22,7 @@ export async function newConnection(
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('New Connection'),
         // TODO: a plug here to esure merge-compatibility with the old code, simplify once the sync-merge procedure is done
-        promptSteps: type === QuickPickType.DocumentDB ? [new PromptConnectionModeStep()] : [new ExperienceStep()],
+        promptSteps: [new PromptConnectionModeStep()],
         executeSteps: [],
         showLoadingPrompt: true,
     });

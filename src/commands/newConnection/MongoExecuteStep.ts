@@ -16,49 +16,47 @@ export class MongoExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
     public priority: number = 100;
 
     public async execute(context: NewConnectionWizardContext): Promise<void> {
-        const api = context.experience?.api ?? API.Common;
+        const api = context.experience?.api ?? API.DocumentDB;
         const connectionString = context.connectionString!;
         const parentId = context.parentId;
 
-        if (api === API.MongoDB || api === API.MongoClusters || api === API.Common) {
-            const parsedCS = new ConnectionString(connectionString);
+        const parsedCS = new ConnectionString(connectionString);
 
-            const label =
-                parsedCS.username && parsedCS.username.length > 0
-                    ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
-                    : parsedCS.hosts.join(',');
+        const label =
+            parsedCS.username && parsedCS.username.length > 0
+                ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
+                : parsedCS.hosts.join(',');
 
-            return ext.state.showCreatingChild(
-                parentId,
-                l10n.t('Creating "{nodeName}"…', { nodeName: label }),
-                async () => {
-                    await new Promise((resolve) => setTimeout(resolve, 250));
+        return ext.state.showCreatingChild(
+            parentId,
+            l10n.t('Creating "{nodeName}"…', { nodeName: label }),
+            async () => {
+                await new Promise((resolve) => setTimeout(resolve, 250));
 
-                    const storageId = generateMongoStorageId(connectionString);
+                const storageId = generateMongoStorageId(connectionString);
 
-                    const storageItem: StorageItem = {
-                        id: storageId,
-                        name: label,
-                        properties: { isEmulator: false, api },
-                        secrets: [connectionString],
-                    };
+                const storageItem: StorageItem = {
+                    id: storageId,
+                    name: label,
+                    properties: { isEmulator: false, api: api },
+                    secrets: [connectionString],
+                };
 
-                    await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
+                await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
 
-                    if (parentId === undefined || parentId === '') {
-                        // Refresh the connections tree when adding a new root-level connection
-                        // (No need to refresh when adding a child node)
-                        ext.connectionsBranchDataProvider.refresh();
+                if (parentId === undefined || parentId === '') {
+                    // Refresh the connections tree when adding a new root-level connection
+                    // (No need to refresh when adding a child node)
+                    ext.connectionsBranchDataProvider.refresh();
 
-                        // TODO: Find the actual tree element by ID before revealing it
-                        // const treeItem = await ext.connectionsBranchDataProvider.findItemById(storageItem.id); // `findItemById` is a placeholder, does not exist in the current code
-                        // if (treeItem) {
-                        //     ext.connectionsTreeView.reveal(treeItem, { select: true, focus: true });
-                        // }
-                    }
-                },
-            );
-        }
+                    // TODO: Find the actual tree element by ID before revealing it
+                    // const treeItem = await ext.connectionsBranchDataProvider.findItemById(storageItem.id); // `findItemById` is a placeholder, does not exist in the current code
+                    // if (treeItem) {
+                    //     ext.connectionsTreeView.reveal(treeItem, { select: true, focus: true });
+                    // }
+                }
+            },
+        );
     }
 
     public shouldExecute(context: NewConnectionWizardContext): boolean {

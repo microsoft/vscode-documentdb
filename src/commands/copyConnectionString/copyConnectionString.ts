@@ -8,17 +8,13 @@ import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { type CosmosDBAccountResourceItemBase } from '../../tree/azure-resources-view/cosmosdb/CosmosDBAccountResourceItemBase';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { pickAppResource } from '../../utils/pickItem/pickAppResource';
 
-export async function copyAzureConnectionString(
-    context: IActionContext,
-    node?: CosmosDBAccountResourceItemBase | ClusterItemBase,
-) {
+export async function copyAzureConnectionString(context: IActionContext, node?: ClusterItemBase) {
     if (!node) {
-        node = await pickAppResource<CosmosDBAccountResourceItemBase | ClusterItemBase>(context, {
-            type: [AzExtResourceType.AzureCosmosDb, AzExtResourceType.MongoClusters],
+        node = await pickAppResource<ClusterItemBase>(context, {
+            type: [AzExtResourceType.MongoClusters],
         });
     }
 
@@ -29,10 +25,7 @@ export async function copyAzureConnectionString(
     await copyConnectionString(context, node);
 }
 
-export async function copyConnectionString(
-    context: IActionContext,
-    node: CosmosDBAccountResourceItemBase | ClusterItemBase,
-): Promise<void> {
+export async function copyConnectionString(context: IActionContext, node: ClusterItemBase): Promise<void> {
     const connectionString = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
         context.telemetry.properties.experience = node.experience.api;
 

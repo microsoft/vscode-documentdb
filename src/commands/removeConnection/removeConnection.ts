@@ -3,62 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { UserCancelledError, type AzExtTreeItem, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
-import { PostgresServerTreeItem } from '../../postgres/tree/PostgresServerTreeItem';
 import { StorageNames, StorageService } from '../../services/storageService';
-import { CosmosDBAccountResourceItemBase } from '../../tree/azure-resources-view/cosmosdb/CosmosDBAccountResourceItemBase';
 import { DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
-import { CosmosDBAccountAttachedResourceItem } from '../../tree/cosmosdb/CosmosDBAccountAttachedResourceItem';
 import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
-import { AttachedAccountSuffix } from '../../tree/v1-legacy-api/AttachedAccountsTreeItem';
 import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { type ClusterItem } from '../../tree/workspace-view/documentdb/ClusterItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { pickWorkspaceResource } from '../../utils/pickItem/pickAppResource';
-
-export async function removeConnectionV1(context: IActionContext, node?: AzExtTreeItem): Promise<void> {
-    const cosmosDBTopLevelContextValues: string[] = [PostgresServerTreeItem.contextValue];
-
-    const children = await ext.attachedAccountsNode.loadAllChildren(context);
-    if (children.length < 2) {
-        const message = l10n.t('There are no Attached Accounts.');
-        void vscode.window.showInformationMessage(message);
-    } else {
-        if (!node) {
-            node = await ext.rgApi.workspaceResourceTree.showTreeItemPicker<AzExtTreeItem>(
-                cosmosDBTopLevelContextValues.map((val: string) => (val += AttachedAccountSuffix)),
-                context,
-            );
-        }
-
-        if (!node) {
-            return undefined;
-        }
-
-        await ext.attachedAccountsNode.detach(node);
-        await ext.rgApi.workspaceResourceTree.refresh(context, ext.attachedAccountsNode);
-    }
-}
 
 export async function removeAzureConnection(
     context: IActionContext,
-    node?: CosmosDBAccountAttachedResourceItem | ClusterItem | DocumentDBClusterItem,
+    node?: ClusterItem | DocumentDBClusterItem,
 ): Promise<void> {
-    if (!node) {
-        node = await pickWorkspaceResource<CosmosDBAccountAttachedResourceItem | ClusterItem | DocumentDBClusterItem>(
-            context,
-            {
-                type: [WorkspaceResourceType.AttachedAccounts, WorkspaceResourceType.MongoClusters],
-                expectedChildContextValue: ['treeItem.account', 'treeItem.mongoCluster'],
-            },
-        );
-    }
-
     if (!node) {
         return;
     }
@@ -68,7 +28,7 @@ export async function removeAzureConnection(
 
 export async function removeConnection(
     context: IActionContext,
-    node: CosmosDBAccountResourceItemBase | ClusterItem | DocumentDBClusterItem,
+    node: ClusterItem | DocumentDBClusterItem,
 ): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
     let confirmed = false;
@@ -79,10 +39,6 @@ export async function removeConnection(
         connectionName = node.cluster.name;
         storageType = WorkspaceResourceType.MongoClusters;
         refreshProvider = ext.mongoClustersWorkspaceBranchDataProvider;
-    } else if (node instanceof CosmosDBAccountAttachedResourceItem) {
-        connectionName = node.account.name;
-        storageType = WorkspaceResourceType.AttachedAccounts;
-        refreshProvider = ext.cosmosDBWorkspaceBranchDataProvider;
     } else {
         throw new Error(l10n.t('Unknown node type for deletion'));
     }
@@ -127,14 +83,6 @@ export async function removeConnection(
         });
 
         ext.mongoClustersWorkspaceBranchDataProvider.refresh();
-    }
-
-    if (node instanceof CosmosDBAccountResourceItemBase) {
-        await ext.state.showDeleting(node.id, async () => {
-            await StorageService.get(StorageNames.Workspace).delete(WorkspaceResourceType.AttachedAccounts, node.id);
-        });
-
-        ext.cosmosDBWorkspaceBranchDataProvider.refresh();
     }
 
     showConfirmationAsInSettings(l10n.t('The selected connection has been removed.'));
