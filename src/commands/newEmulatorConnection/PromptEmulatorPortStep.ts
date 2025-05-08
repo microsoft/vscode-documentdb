@@ -30,7 +30,7 @@ export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorCon
             case MongoExperience:
             case DocumentDBExperience:
                 defaultPort = context.port ? context.port.toString() : '10255';
-                promptText = l10n.t('Enter the port number of the Emulator');
+                promptText = l10n.t('Enter the port number');
                 placeHolder = l10n.t('The default port: 10255');
                 break;
             default:

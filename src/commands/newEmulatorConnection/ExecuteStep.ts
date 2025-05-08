@@ -48,13 +48,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
             label = `MongoDB Emulator${portSuffix}`;
         }
         if (experience.api === API.DocumentDB) {
-            if (context.emulatorType === 'documentdb') {
-                label = `DocumentDB Emulator${portSuffix}`;
-            } else if (context.emulatorType === 'mongo-ru') {
-                label = `MongoDB (RU) Emulator${portSuffix}`;
-            } else {
-                label = `DocumentDB Emulator${portSuffix}`;
-            }
+            const parsedCS = new ConnectionString(nonNullValue(connectionString));
+            parsedCS.username = context.userName ?? '';
+            label =
+                parsedCS.username && parsedCS.username.length > 0
+                    ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
+                    : parsedCS.hosts.join(',');
         }
 
         return ext.state.showCreatingChild(

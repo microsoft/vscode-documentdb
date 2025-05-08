@@ -10,7 +10,7 @@ import { type NewEmulatorConnectionWizardContext } from './NewEmulatorConnection
 export class ProvidePasswordStep extends AzureWizardPromptStep<NewEmulatorConnectionWizardContext> {
     public async prompt(context: NewEmulatorConnectionWizardContext): Promise<void> {
         const passwordTemp = await context.ui.showInputBox({
-            prompt: l10n.t('Enter the password for the Emulator'),
+            prompt: l10n.t('Enter the password'),
             password: true,
             ignoreFocusOut: true,
         });

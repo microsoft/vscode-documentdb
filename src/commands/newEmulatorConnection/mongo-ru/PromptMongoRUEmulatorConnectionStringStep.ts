@@ -16,7 +16,7 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
     public hideStepCount: boolean = true;
 
     public async prompt(context: NewEmulatorConnectionWizardContext): Promise<void> {
-        const prompt: string = l10n.t('Enter the connection string of your Emulator');
+        const prompt: string = l10n.t('Enter the connection string of your local connection');
         context.connectionString = (
             await context.ui.showInputBox({
                 prompt: prompt,

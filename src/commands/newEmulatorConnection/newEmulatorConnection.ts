@@ -50,7 +50,7 @@ export async function newEmulatorConnection(
     const executeSteps: AzureWizardExecuteStep<NewEmulatorConnectionWizardContext>[] = [];
 
     if (node instanceof NewEmulatorConnectionItem || node instanceof NewEmulatorConnectionItemCV) {
-        title = l10n.t('New Emulator Connection');
+        title = l10n.t('New Local Connection');
 
         const api = node instanceof NewEmulatorConnectionItemCV ? API.DocumentDB : API.MongoDB;
 

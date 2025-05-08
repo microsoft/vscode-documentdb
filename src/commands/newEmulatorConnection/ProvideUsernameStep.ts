@@ -11,7 +11,7 @@ import { type NewEmulatorConnectionWizardContext } from './NewEmulatorConnection
 export class ProvideUserNameStep extends AzureWizardPromptStep<NewEmulatorConnectionWizardContext> {
     public async prompt(context: NewEmulatorConnectionWizardContext): Promise<void> {
         const username = await context.ui.showInputBox({
-            prompt: l10n.t('Enter the username for the Emulator'),
+            prompt: l10n.t('Enter the username'),
             ignoreFocusOut: true,
         });
 

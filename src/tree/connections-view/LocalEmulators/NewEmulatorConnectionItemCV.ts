@@ -20,7 +20,7 @@ export class NewEmulatorConnectionItemCV implements TreeElement, TreeElementWith
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: l10n.t('New Emulator Connection…'),
+            label: l10n.t('New Local Connection…'),
             iconPath: new vscode.ThemeIcon('plus'),
             command: {
                 command: 'command.documentDB.connectionsView.newEmulatorConnection',

@@ -16,14 +16,14 @@ export class PromptMongoRUEmulatorSecurityStep extends AzureWizardPromptStep<New
                 {
                     id: 'enableTLS',
                     label: l10n.t('Enable TLS/SSL (Default)'),
-                    detail: l10n.t('Enforce TLS/SSL checks for a secure connection to the MongoDB Emulator.'),
+                    detail: l10n.t('Enforce TLS/SSL checks for a secure connection.'),
                     alwaysShow: true,
                     group: 'TLS/SSL',
                 },
                 {
                     id: 'disableTLS',
                     label: l10n.t('Disable TLS/SSL (Not recommended)'),
-                    detail: l10n.t('Disable TLS/SSL checks when connecting to the MongoDB Emulator.'),
+                    detail: l10n.t('Disable TLS/SSL checks when connecting.'),
                     alwaysShow: true,
                     group: 'TLS/SSL',
                 },
@@ -34,7 +34,7 @@ export class PromptMongoRUEmulatorSecurityStep extends AzureWizardPromptStep<New
                 {
                     id: 'learnMore',
                     label: l10n.t('Learn more…'),
-                    detail: l10n.t('Learn more about enabling TLS/SSL for the MongoDB Emulator.'),
+                    detail: l10n.t('Learn more about enabling TLS/SSL.'),
                     alwaysShow: true,
                     group: 'Learn More',
                 },

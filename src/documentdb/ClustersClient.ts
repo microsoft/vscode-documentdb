@@ -139,13 +139,13 @@ export class ClustersClient {
             if (this.emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
-                    'Unable to connect to local Mongo DB emulator. Make sure it is started correctly. See {link} for tips.',
+                    'Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.',
                     { link: Links.LocalConnectionDebuggingTips },
                 );
             } else if (this.emulatorConfiguration?.isEmulator && message.includes('self-signed certificate')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
-                    "The local Mongo DB emulator is using a self-signed certificate. To connect to the emulator, you must import the emulator's TLS/SSL certificate. See {link} for tips.",
+                    'The local instance is using a self-signed certificate. To connect, you must import the appropriate TLS/SSL certificate. See {link} for tips.',
                     { link: Links.LocalConnectionDebuggingTips },
                 );
             }

@@ -59,7 +59,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: l10n.t('Local Emulators'),
+            label: l10n.t('DocumentDB Local'),
             iconPath: this.iconPath,
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
