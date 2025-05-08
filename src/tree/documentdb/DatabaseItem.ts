@@ -6,7 +6,7 @@
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { API, type Experience } from '../../AzureDBExperiences';
+import { type Experience } from '../../AzureDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -27,7 +27,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     ) {
         this.id = `${cluster.id}/${databaseInfo.name}`;
         this.experience = cluster.dbExperience;
-        this.experienceContextValue = `experience.${this.experience?.api ?? API.Common}`;
+        this.experienceContextValue = `experience.${this.experience?.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 

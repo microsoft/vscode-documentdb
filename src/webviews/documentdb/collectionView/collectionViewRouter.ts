@@ -44,8 +44,6 @@ async function findCollectionNodeInTree(
         branchDataProvider = ext.mongoClustersWorkspaceBranchDataProvider;
     } else if (clusterId.includes('/providers/Microsoft.DocumentDB/mongoClusters/')) {
         branchDataProvider = ext.mongoVCoreBranchDataProvider;
-    } else if (clusterId.includes('/providers/Microsoft.DocumentDb/databaseAccounts/')) {
-        branchDataProvider = ext.cosmosDBBranchDataProvider;
     }
 
     if (branchDataProvider) {

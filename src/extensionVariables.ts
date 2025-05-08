@@ -8,17 +8,10 @@ import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-a
 import { type AzureHostExtensionApi } from '@microsoft/vscode-azext-utils/hostapi';
 import type * as vscode from 'vscode';
 import { type DatabasesFileSystem } from './DatabasesFileSystem';
-import { type NoSqlCodeLensProvider } from './cosmosdb/NoSqlCodeLensProvider';
 import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClient';
-import { type PostgresCodeLensProvider } from './postgres/services/PostgresCodeLensProvider';
-import { type PostgresDatabaseTreeItem } from './postgres/tree/PostgresDatabaseTreeItem';
-import { type CosmosDBBranchDataProvider } from './tree/azure-resources-view/cosmosdb/CosmosDBBranchDataProvider';
 import { type MongoVCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
-import { type AttachedAccountsTreeItem } from './tree/v1-legacy-api/AttachedAccountsTreeItem';
-import { type CosmosDBWorkspaceBranchDataProvider } from './tree/workspace-view/cosmosdb/CosmosDBWorkspaceBranchDataProvider';
-import { type CosmosDBWorkspaceItem } from './tree/workspace-view/cosmosdb/CosmosDBWorkspaceItem';
 import { type AccountsItem } from './tree/workspace-view/documentdb/AccountsItem';
 import { type ClustersWorkspaceBranchDataProvider } from './tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 
@@ -26,17 +19,12 @@ import { type ClustersWorkspaceBranchDataProvider } from './tree/workspace-view/
  * Namespace for common variables used throughout the extension. They must be initialized in the activate() method of extension.ts
  */
 export namespace ext {
-    export let connectedPostgresDB: PostgresDatabaseTreeItem | undefined;
-    export let postgresCodeLensProvider: PostgresCodeLensProvider | undefined;
-
     export let context: vscode.ExtensionContext;
     export let outputChannel: IAzExtLogOutputChannel;
-    export let attachedAccountsNode: AttachedAccountsTreeItem;
     export let isBundle: boolean | undefined;
     export let secretStorage: vscode.SecretStorage;
     export const prefix: string = 'azureDatabases';
     export let fileSystem: DatabasesFileSystem;
-    export let noSqlCodeLensProvider: NoSqlCodeLensProvider;
     export let mongoLanguageClient: MongoDBLanguageClient;
     export let rgApi: AzureHostExtensionApi;
 
@@ -51,12 +39,6 @@ export namespace ext {
     // - AzureResourceBranchDataProviderManager,
     // - WorkspaceResourceProviderManager,
     // - WorkspaceResourceBranchDataProviderManager,
-
-    // used for the resources tree and the workspace tree REFRESH
-    export let cosmosDBBranchDataProvider: CosmosDBBranchDataProvider;
-    // used for the workspace: these are the dedicated providers
-    export let cosmosDBWorkspaceBranchDataProvider: CosmosDBWorkspaceBranchDataProvider;
-    export let cosmosDBWorkspaceBranchDataResource: CosmosDBWorkspaceItem;
 
     // used for the resources tree
     export let mongoVCoreBranchDataProvider: MongoVCoreBranchDataProvider;

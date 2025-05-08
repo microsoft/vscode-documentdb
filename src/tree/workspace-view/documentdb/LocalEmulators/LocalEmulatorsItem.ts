@@ -9,7 +9,6 @@ import { MongoClustersExperience } from '../../../../AzureDBExperiences';
 import { getThemeAgnosticIconPath } from '../../../../constants';
 import { StorageNames, StorageService } from '../../../../services/storageService';
 import { type EmulatorConfiguration } from '../../../../utils/emulatorConfiguration';
-import { migrateRawEmulatorItemToHashed } from '../../../../utils/emulatorUtils';
 import { type AttachedClusterModel } from '../../../documentdb/ClusterModel';
 import { type TreeElement } from '../../../TreeElement';
 import { type TreeElementWithContextValue } from '../../../TreeElementWithContextValue';
@@ -32,7 +31,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                 allItems
                     .filter((item) => item.properties?.isEmulator) // only show emulators
                     .map(async (item) => {
-                        const { id, name, properties, secrets } = await migrateRawEmulatorItemToHashed(item);
+                        const { id, name, properties, secrets } = item;
                         // we need to create the emulator configuration object from
                         // the flat properties object
                         const emulatorConfiguration: EmulatorConfiguration = {

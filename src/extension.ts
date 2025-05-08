@@ -13,14 +13,12 @@ import {
     registerErrorHandler,
     registerEvent,
     registerUIExtensionVariables,
-    TreeElementStateManager,
     type apiUtils,
     type AzureExtensionApi,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { getIsRunningOnAzure } from './cosmosdb/utils/managedIdentityUtils';
 import { ClustersExtension } from './documentdb/ClustersExtension';
 import { ext } from './extensionVariables';
 import { globalUriHandler } from './vscodeUriHandler';
@@ -49,64 +47,10 @@ export async function activateInternal(
 
         ext.secretStorage = context.secrets;
 
-        // Early initialization to determine whether Managed Identity is available for authentication
-        void getIsRunningOnAzure();
-
-        // getAzureResourcesExtensionApi provides a way to get the Azure Resources extension's API V2
-        // and is used to work with the tree view structure, as an improved alternative to the
-        // AzureResourceGraph API V1 provided by the getResourceGroupsApi call above.
-        // TreeElementStateManager is needed here too
-        ext.state = new TreeElementStateManager();
-        // ext.rgApiV2 = (await getAzureResourcesExtensionApi(context, '2.0.0')) as AzureResourcesExtensionApiWithActivity;
-
-        /*
-        ext.cosmosDBBranchDataProvider = new CosmosDBBranchDataProvider();
-        ext.cosmosDBWorkspaceBranchDataProvider = new CosmosDBWorkspaceBranchDataProvider();
-        ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
-            AzExtResourceType.AzureCosmosDb,
-            ext.cosmosDBBranchDataProvider,
-        );
-        ext.rgApiV2.resources.registerWorkspaceResourceProvider(new SharedWorkspaceResourceProvider());
-        ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
-            WorkspaceResourceType.AttachedAccounts,
-            ext.cosmosDBWorkspaceBranchDataProvider,
-        );
-
-        // V1 Legacy API for Postgres support: begin
-        ext.rgApi = await getResourceGroupsApi();
-
-        ext.rgApi.registerApplicationResourceResolver(
-            AzExtResourceType.PostgresqlServersStandard,
-            new DatabaseResolver(),
-        );
-        ext.rgApi.registerApplicationResourceResolver(
-            AzExtResourceType.PostgresqlServersFlexible,
-            new DatabaseResolver(),
-        );
-
-        const workspaceRootTreeItem = (
-            ext.rgApi.workspaceResourceTree as unknown as { _rootTreeItem: AzExtParentTreeItem }
-        )._rootTreeItem;
-        const databaseWorkspaceProvider = new DatabaseWorkspaceProvider(workspaceRootTreeItem);
-        ext.rgApi.registerWorkspaceResourceProvider('AttachedDatabaseAccount', databaseWorkspaceProvider);
-        // V1 Legacy API for Postgres support: end
-
-        ext.fileSystem = new DatabasesFileSystem(ext.rgApi.appResourceTree);
-        */
-
-        // Old commands for old tree view. If need to be quickly returned to V1, uncomment the line below
-        // registerCommandsCompatibility();
-
         // init and activate mongodb RU and vCore support (branch data provider, commands, ...)
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
         await clustersSupport.activate();
-
-        /*
-        context.subscriptions.push(
-            vscode.workspace.registerFileSystemProvider(DatabasesFileSystem.scheme, ext.fileSystem),
-        );
-        */
 
         registerEvent(
             'cosmosDB.onDidChangeConfiguration',
