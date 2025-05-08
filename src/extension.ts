@@ -13,6 +13,7 @@ import {
     registerErrorHandler,
     registerEvent,
     registerUIExtensionVariables,
+    TreeElementStateManager,
     type apiUtils,
     type AzureExtensionApi,
     type IActionContext,
@@ -29,6 +30,12 @@ export async function activateInternal(
 ): Promise<apiUtils.AzureExtensionApiProvider> {
     ext.context = context;
     ext.isBundle = !!process.env.IS_BUNDLE;
+
+    // getAzureResourcesExtensionApi provides a way to get the Azure Resources extension's API V2
+    // and is used to work with the tree view structure, as an improved alternative to the
+    // AzureResourceGraph API V1 provided by the getResourceGroupsApi call above.
+    // TreeElementStateManager is needed here too
+    ext.state = new TreeElementStateManager();
 
     ext.outputChannel = createAzExtLogOutputChannel('DocumentDB VS Code Extension');
     context.subscriptions.push(ext.outputChannel);

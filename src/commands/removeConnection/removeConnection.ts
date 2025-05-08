@@ -32,32 +32,18 @@ export async function removeConnection(
 ): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
     let confirmed = false;
-    let connectionName: string;
-    let storageType: WorkspaceResourceType;
-    let refreshProvider: { refresh: () => void };
-    if (node instanceof ClusterItemBase) {
-        connectionName = node.cluster.name;
-        storageType = WorkspaceResourceType.MongoClusters;
-        refreshProvider = ext.mongoClustersWorkspaceBranchDataProvider;
-    } else {
-        throw new Error(l10n.t('Unknown node type for deletion'));
-    }
 
     await ext.state.showDeleting(node.id, async () => {
         // ask for confirmation
         confirmed = await getConfirmationAsInSettings(
             l10n.t('Are you sure?'),
-            l10n.t('Delete "{connectionName}"?', { connectionName }) + '\n' + l10n.t('This cannot be undone.'),
+            l10n.t('Delete "{connectionName}"?', { connectionName: node.cluster.name }) +
+                '\n' +
+                l10n.t('This cannot be undone.'),
             'delete',
         );
-
-        if (confirmed) {
-            const resourceId = node.storageId;
-            await StorageService.get(StorageNames.Workspace).delete(storageType, resourceId);
-            showConfirmationAsInSettings(l10n.t('The selected connection has been removed from your workspace.'));
-        }
-        refreshProvider.refresh();
     });
+
     if (!confirmed) {
         throw new UserCancelledError();
     }

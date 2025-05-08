@@ -60,37 +60,6 @@ export function getResourcesPath(): string {
 
 export const doubleClickDebounceDelay = 500; //milliseconds
 
-export const defaultStoredProcedure = `function sample(prefix) {
-    var collection = getContext().getCollection();
-
-    // Query documents and take 1st item.
-    var isAccepted = collection.queryDocuments(
-        collection.getSelfLink(),
-        'SELECT * FROM root r',
-        function (err, feed, options) {
-            if (err) throw err;
-
-            // Check the feed and if empty, set the body to 'no docs found',
-            // else take 1st element from feed
-            if (!feed || !feed.length) {
-                var response = getContext().getResponse();
-                response.setBody('no docs found');
-            }
-
-            else {
-                var response = getContext().getResponse();
-                var body = { prefix: prefix, feed: feed[0] };
-                response.setBody(JSON.stringify(body));
-            }
-        });
-
-    if (!isAccepted) throw new Error('The query was not accepted by the server.');
-};`;
-
-export const defaultTrigger = `function trigger() {
-
-}`;
-
 export const wellKnownEmulatorPassword =
     'C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==';
 
@@ -98,23 +67,3 @@ export const isEmulatorSupported = isWindows || isLinux || (isMacOS && process.a
 
 // https://docs.mongodb.com/manual/mongo/#working-with-the-mongo-shell
 export const testDb: string = 'test';
-
-export const connectedPostgresKey: string = 'ms-azuretools.vscode-azuredatabases.connectedPostgresDB';
-export const postgresLanguageId: string = 'postgres';
-export const postgresFileExtension: string = '.psql';
-export const postgresBaseFileName: string = 'query';
-export const postgresDefaultPort = '5432';
-export const postgresDefaultDatabase = 'postgres';
-export const SERVERLESS_CAPABILITY_NAME = 'EnableServerless';
-
-export const databaseAccountType = 'Microsoft.DocumentDB/databaseAccounts';
-
-export const postgresFlexibleFilter = {
-    type: 'Microsoft.DBforPostgreSQL/flexibleServers',
-};
-
-export const postgresSingleFilter = {
-    type: 'Microsoft.DBForPostgreSQL/servers',
-};
-
-export const CosmosDBHiddenFields: string[] = ['_rid', '_self', '_etag', '_attachments', '_ts'];

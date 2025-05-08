@@ -5,7 +5,6 @@
 
 import { type IAzExtLogOutputChannel, type TreeElementStateManager } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
-import { type AzureHostExtensionApi } from '@microsoft/vscode-azext-utils/hostapi';
 import type * as vscode from 'vscode';
 import { type DatabasesFileSystem } from './DatabasesFileSystem';
 import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClient';
@@ -23,22 +22,15 @@ export namespace ext {
     export let outputChannel: IAzExtLogOutputChannel;
     export let isBundle: boolean | undefined;
     export let secretStorage: vscode.SecretStorage;
-    export const prefix: string = 'azureDatabases';
+    export const prefix: string = 'documentDB';
     export let fileSystem: DatabasesFileSystem;
     export let mongoLanguageClient: MongoDBLanguageClient;
-    export let rgApi: AzureHostExtensionApi;
 
     // Since the Azure Resources extension did not update API interface, but added a new interface with activity
     // we have to use the new interface AzureResourcesExtensionApiWithActivity instead of AzureResourcesExtensionApi
     export let rgApiV2: AzureResourcesExtensionApiWithActivity;
 
     export let state: TreeElementStateManager;
-
-    // TODO: To avoid these stupid variables below the rgApiV2 should have the following public fields (but they are private):
-    // - AzureResourceProviderManager,
-    // - AzureResourceBranchDataProviderManager,
-    // - WorkspaceResourceProviderManager,
-    // - WorkspaceResourceBranchDataProviderManager,
 
     // used for the resources tree
     export let mongoVCoreBranchDataProvider: MongoVCoreBranchDataProvider;

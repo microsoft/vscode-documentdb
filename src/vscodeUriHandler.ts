@@ -25,11 +25,7 @@ import { getConfirmationAsInSettings } from './utils/dialogs/getConfirmation';
 import { getEmulatorItemLabelForApi, getEmulatorItemUniqueId } from './utils/emulatorUtils';
 import { generateMongoStorageId } from './utils/storageUtils';
 
-const supportedProviders = [
-    'Microsoft.DocumentDB/databaseAccounts',
-    'Microsoft.DocumentDB/mongoClusters',
-    //'Microsoft.DBforPostgreSQL/serverGroupsv2', // uncomment once we support Cosmos DB for PostgreSQL
-];
+const supportedProviders = ['Microsoft.DocumentDB/databaseAccounts', 'Microsoft.DocumentDB/mongoClusters'];
 
 /**
  * Global URI handler for processing external URIs related to Azure Databases.
