@@ -234,10 +234,10 @@ export class ClustersExtension implements vscode.Disposable {
                 // but we should log the error for diagnostics
                 try {
                     // Show welcome screen if it hasn't been shown before
-                    const welcomeScreenShown = ext.context.globalState.get<boolean>('welcomeScreenShown', false);
+                    const welcomeScreenShown = ext.context.globalState.get<boolean>('welcomeScreenShown_1', false);
                     if (!welcomeScreenShown) {
                         // Update the flag first
-                        await ext.context.globalState.update('welcomeScreenShown', true);
+                        await ext.context.globalState.update('welcomeScreenShown_1', true);
                         ext.outputChannel.appendLog('Showing welcome screen...');
 
                         // Schedule the walkthrough to open after activation completes
