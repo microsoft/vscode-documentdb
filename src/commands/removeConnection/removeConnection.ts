@@ -31,18 +31,13 @@ export async function removeConnection(
     node: ClusterItem | DocumentDBClusterItem,
 ): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
-    let confirmed = false;
-
-    await ext.state.showDeleting(node.id, async () => {
-        // ask for confirmation
-        confirmed = await getConfirmationAsInSettings(
-            l10n.t('Are you sure?'),
-            l10n.t('Delete "{connectionName}"?', { connectionName: node.cluster.name }) +
-                '\n' +
-                l10n.t('This cannot be undone.'),
-            'delete',
-        );
-    });
+    const confirmed = await getConfirmationAsInSettings(
+        l10n.t('Are you sure?'),
+        l10n.t('Delete "{connectionName}"?', { connectionName: node.cluster.name }) +
+            '\n' +
+            l10n.t('This cannot be undone.'),
+        'delete',
+    );
 
     if (!confirmed) {
         throw new UserCancelledError();
