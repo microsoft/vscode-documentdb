@@ -8,8 +8,8 @@ import * as l10n from '@vscode/l10n';
 import { Views } from '../../documentdb/Views';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { refreshView } from '../refreshView/refreshView';
-import { PromptNewConnectionNameStep } from './PromptNewConnectionNameStep';
 import { ExecuteStep } from './ExecuteStep';
+import { PromptNewConnectionNameStep } from './PromptNewConnectionNameStep';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';
 
 export async function renameConnection(context: IActionContext, node?: DocumentDBClusterItem): Promise<void> {

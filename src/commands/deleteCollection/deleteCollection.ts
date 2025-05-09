@@ -14,8 +14,12 @@ import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmati
 export async function deleteCollection(context: IActionContext, node: CollectionItem): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
 
-    const message = l10n.t('Delete collection "{collectionId}" and its contents?', { collectionId: node.collectionInfo.name });
-    const successMessage = l10n.t('The collection "{collectionId}" has been deleted.', { collectionId: node.collectionInfo.name });
+    const message = l10n.t('Delete collection "{collectionId}" and its contents?', {
+        collectionId: node.collectionInfo.name,
+    });
+    const successMessage = l10n.t('The collection "{collectionId}" has been deleted.', {
+        collectionId: node.collectionInfo.name,
+    });
 
     const confirmed = await getConfirmationAsInSettings(
         l10n.t('Delete "{nodeName}"?', { nodeName: node.collectionInfo.name }),
@@ -34,7 +38,6 @@ export async function deleteCollection(context: IActionContext, node: Collection
         await ext.state.showDeleting(node.id, async () => {
             success = await client.dropCollection(node.databaseInfo.name, node.collectionInfo.name);
         });
-
 
         if (success) {
             showConfirmationAsInSettings(successMessage);

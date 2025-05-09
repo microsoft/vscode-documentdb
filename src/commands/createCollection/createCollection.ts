@@ -9,8 +9,8 @@ import * as l10n from '@vscode/l10n';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { pickAppResource } from '../../utils/pickItem/pickAppResource';
-import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 import { CollectionNameStep } from './CollectionNameStep';
+import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 
 export async function createCollection(context: IActionContext, node?: DatabaseItem): Promise<void> {

@@ -17,9 +17,9 @@ import { ExecuteStep } from './ExecuteStep';
 import { PromptMongoRUEmulatorConnectionStringStep } from './mongo-ru/PromptMongoRUEmulatorConnectionStringStep';
 import { PromptMongoRUEmulatorSecurityStep } from './mongo-ru/PromptMongoRUEmulatorSecurityStep';
 import { type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
-import { PromptPortStep } from './PromptPortStep';
 import { PromptConnectionTypeStep } from './PromptConnectionTypeStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
+import { PromptPortStep } from './PromptPortStep';
 import { PromptUsernameStep } from './PromptUsernameStep';
 
 export async function newLocalConnection(

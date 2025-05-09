@@ -13,10 +13,7 @@ import {
 } from '../../AzureDBExperiences';
 import { wellKnownEmulatorPassword } from '../../constants';
 import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
-import {
-    NewEmulatorConnectionMode,
-    type NewLocalConnectionWizardContext,
-} from './NewLocalConnectionWizardContext';
+import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
 export class PromptPortStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
     public hideStepCount: boolean = false;

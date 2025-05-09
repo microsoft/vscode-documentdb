@@ -6,12 +6,12 @@
 import { AzureWizardPromptStep, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { MongoClustersExperience } from '../../AzureDBExperiences';
-import { PromptConnectionStringStep } from './PromptConnectionStringStep';
 import { ExecuteStep } from './ExecuteStep';
-import { PromptPasswordStep } from './PromptPasswordStep';
-import { PromptUsernameStep } from './PromptUsernameStep';
 import { ConnectionMode, type NewConnectionWizardContext } from './NewConnectionWizardContext';
+import { PromptConnectionStringStep } from './PromptConnectionStringStep';
+import { PromptPasswordStep } from './PromptPasswordStep';
 import { PromptServiceDiscoveryStep } from './PromptServiceDiscoveryStep';
+import { PromptUsernameStep } from './PromptUsernameStep';
 
 export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {

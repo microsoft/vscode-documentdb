@@ -680,24 +680,24 @@
               "managedIdentity"
             ],
             "enumItemLabels": [
-              "%cosmosdb.configuration.preferredAuthenticationMethod.auto%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.accountKey%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.entraId%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.managedIdentity%"
+              "Automatic",
+              "Account Key",
+              "VS Code Entra ID",
+              "Managed Identity"
             ],
             "markdownEnumDescriptions": [
-              "%cosmosdb.configuration.preferredAuthenticationMethod.auto.description%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.accountKey.description%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.entraId.description%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.managedIdentity.description%"
+              "Selects the best authentication method based on the account configuration",
+              "[LocalAuth](https://learn.microsoft.com/azure/cosmos-db/nosql/security/how-to-disable-key-based-authentication) must be enabled, this is not recommended for production environments",
+              "Sign in to VS Code using Entra ID",
+              "Only supported when running in Azure (i.e. a VM), [learn more](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-setup-managed-identity)"
             ],
-            "markdownDescription": "%cosmosdb.configuration.preferredAuthenticationMethod%",
+            "markdownDescription": "Select a preferred authentication method for Cosmos DB accounts.",
             "default": "auto",
             "order": 0
           },
           "documentDB.authentication.managedIdentity.clientID": {
             "type": "string",
-            "markdownDescription": "%cosmosdb.configuration.authentication.managedIdentity.clientID%",
+            "markdownDescription": "The Client ID of the Managed Identity to use when authenticating with Entra ID using a Usier-assigned Managed Identity.",
             "default": null,
             "order": 1
           }
@@ -711,7 +711,7 @@
               "string",
               "null"
             ],
-            "description": "%cosmosdb.configuration.mongo.shell.path%",
+            "description": "Full path to folder and executable to start the Mongo shell, needed by some Mongo scrapbook commands. The default is to search in the system path for 'mongo'.",
             "default": null
           },
           "mongo.shell.args": {
@@ -719,51 +719,51 @@
             "items": {
               "type": "string"
             },
-            "description": "%cosmosdb.configuration.mongo.shell.args%",
+            "description": "Arguments to pass when starting the Mongo shell.",
             "default": [
               "--quiet"
             ]
           },
           "mongo.shell.timeout": {
             "type": "number",
-            "description": "%cosmosdb.configuration.mongo.shell.timeout%",
+            "description": "The duration allowed (in seconds) for the Mongo shell to execute a command. Default value is 30 seconds.",
             "default": 30
           },
           "documentDB.batchSize": {
             "type": "number",
-            "description": "%cosmosdb.configuration.batch.size%",
+            "description": "The batch size to be used when querying Azure Database resources.",
             "default": 50
           },
           "documentDB.useCosmosOAuth": {
             "type": "boolean",
-            "markdownDescription": "%cosmosdb.configuration.oauth.enable%",
+            "markdownDescription": "Always authenticate using Entra ID RBAC when connecting to Cosmos DB NoSQL Accounts. [Enable RBAC and assign Roles](https://aka.ms/cosmos-native-rbac).",
             "markdownDeprecationMessage": "**Deprecated**: Please use `#documentDB.preferredAuthenticationMethod#` instead.",
             "deprecationMessage": "Deprecated: Please use documentDB.preferredAuthenticationMethod instead."
           },
           "documentDB.confirmationStyle": {
             "type": "string",
-            "description": "%cosmosdb.configuration.confirmation.style%",
+            "description": "The behavior to use when confirming operations that cannot be undone, such as deleting resources.",
             "enum": [
               "wordConfirmation",
               "challengeConfirmation",
               "buttonConfirmation"
             ],
             "enumItemLabels": [
-              "%cosmosdb.configuration.confirmation.style.word%",
-              "%cosmosdb.configuration.confirmation.style.challenge%",
-              "%cosmosdb.configuration.confirmation.style.button%"
+              "Word Entry Confirmation",
+              "Challenge Confirmation",
+              "Button Click Confirmation"
             ],
             "enumDescriptions": [
-              "%cosmosdb.configuration.confirmation.style.word.description%",
-              "%cosmosdb.configuration.confirmation.style.challenge.description%",
-              "%cosmosdb.configuration.confirmation.style.button.description%"
+              "Prompts with an input box where you enter the name of the resource to confirm deletion.",
+              "Prompts with a challenge where you select the correct number among multiple options to confirm deletion.",
+              "Prompts with a warning dialog where you click a button to confirm deletion."
             ],
             "default": "wordConfirmation"
           },
           "documentDB.showOperationSummaries": {
             "type": "boolean",
             "default": true,
-            "description": "%cosmosdb.configuration.operation.summaries%"
+            "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events."
           },
           "documentDB.documentLabelFields": {
             "type": "array",
@@ -778,32 +778,32 @@
               "_id",
               "uuid"
             ],
-            "description": "%cosmosdb.configuration.document.label.fields%"
+            "description": "The field values to display as labels in the treeview for Cosmos DB and MongoDB documents, in priority order"
           },
           "documentDB.emulator.mongoPort": {
             "type": "integer",
             "default": 10255,
-            "description": "%cosmosdb.configuration.emulator.mongo.port%"
+            "description": "Port to use when connecting to a CosmosDB Mongo Emulator instance"
           },
           "documentDB.emulator.port": {
             "type": "integer",
             "default": 8081,
-            "description": "%cosmosdb.configuration.emulator.port%"
+            "description": "Port to use when connecting to a CosmosDB Emulator instance"
           },
           "documentDB.enableEndpointDiscovery": {
             "type": "boolean",
             "default": true,
-            "description": "%cosmosdb.configuration.endpoint.discovery%"
+            "description": "Flag to enable/disable automatic redirecting of requests based on read/write operations."
           },
           "documentDB.showSavePrompt": {
             "type": "boolean",
             "default": true,
-            "description": "%cosmosdb.configuration.save.prompt%"
+            "description": "Show warning dialog when uploading a document to the cloud."
           },
           "documentDB.csvSeparator": {
             "type": "string",
             "default": ";",
-            "markdownDescription": "%cosmosdb.configuration.csv.separator%"
+            "markdownDescription": "The separator to use when exporting data to a CSV file (i.e. `;`, | or `,`)."
           }
         }
       }

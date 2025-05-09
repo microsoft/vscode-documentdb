@@ -6,10 +6,7 @@
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import ConnectionString from 'mongodb-connection-string-url';
-import {
-    NewEmulatorConnectionMode,
-    type NewLocalConnectionWizardContext,
-} from '../NewLocalConnectionWizardContext';
+import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from '../NewLocalConnectionWizardContext';
 
 // TODO: create one that can be shared for adding an account and adding an emulator
 export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {

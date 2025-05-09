@@ -13,10 +13,7 @@ import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceR
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { getEmulatorItemUniqueId } from '../../utils/emulatorUtils';
 import { nonNullValue } from '../../utils/nonNull';
-import {
-    NewEmulatorConnectionMode,
-    type NewLocalConnectionWizardContext,
-} from './NewLocalConnectionWizardContext';
+import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizardContext> {
     public priority: number = 100;

@@ -25,10 +25,7 @@ import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
-import {
-    exportEntireCollection,
-    exportQueryResults,
-} from '../commands/exportDocuments/exportDocuments';
+import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
 import { filterProviderContent } from '../commands/filterProviderContent/filterProviderContent';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
@@ -232,10 +229,7 @@ export class ClustersExtension implements vscode.Disposable {
                  * harder to understand and maintain.
                  */
                 registerCommand('command.internal.mongoClusters.exportDocuments', exportQueryResults);
-                registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.exportDocuments',
-                    exportEntireCollection,
-                );
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.exportDocuments', exportEntireCollection);
                 // This is an optional task - if it fails, we don't want to break extension activation,
                 // but we should log the error for diagnostics
                 try {

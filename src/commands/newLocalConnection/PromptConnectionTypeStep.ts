@@ -9,10 +9,7 @@ import * as vscode from 'vscode';
 import { getExperienceFromApi, type API } from '../../AzureDBExperiences';
 import { SettingsService } from '../../services/SettingsService';
 import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
-import {
-    NewEmulatorConnectionMode,
-    type NewLocalConnectionWizardContext,
-} from './NewLocalConnectionWizardContext';
+import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
 export class PromptConnectionTypeStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
     private readonly preselectedAPI: API;

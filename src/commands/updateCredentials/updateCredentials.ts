@@ -12,9 +12,9 @@ import { Views } from '../../documentdb/Views';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { refreshView } from '../refreshView/refreshView';
 import { ExecuteStep } from './ExecuteStep';
-import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 import { PromptPasswordStep } from './PromptPasswordStep';
 import { PromptUserNameStep } from './PromptUserNameStep';
+import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 export async function updateCredentials(context: IActionContext, node?: DocumentDBClusterItem): Promise<void> {
     if (!node) {

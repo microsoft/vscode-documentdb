@@ -55,4 +55,3 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
         ext.state.notifyChildrenChanged(parentId);
     }
 }
-
