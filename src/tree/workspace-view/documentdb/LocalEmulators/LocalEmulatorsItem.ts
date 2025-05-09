@@ -5,8 +5,8 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { MongoClustersExperience } from '../../../../DocumentDBExperiences';
 import { getThemeAgnosticIconPath } from '../../../../constants';
+import { MongoClustersExperience } from '../../../../DocumentDBExperiences';
 import { StorageNames, StorageService } from '../../../../services/storageService';
 import { type EmulatorConfiguration } from '../../../../utils/emulatorConfiguration';
 import { type AttachedClusterModel } from '../../../documentdb/ClusterModel';

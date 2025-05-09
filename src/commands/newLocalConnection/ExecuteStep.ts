@@ -39,8 +39,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 throw new Error(l10n.t('Internal error: mode must be defined.'));
         }
 
-        const portSuffix = typeof port !== 'undefined' ? ` : ${port}` : '';
-        const label = `${experience.shortName} Emulator${portSuffix}`;
+        const parsedCS = new ConnectionString(connectionString);
+
+        const label =
+            parsedCS.username && parsedCS.username.length > 0
+                ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
+                : parsedCS.hosts.join(',');
 
         return ext.state.showCreatingChild(
             parentId,

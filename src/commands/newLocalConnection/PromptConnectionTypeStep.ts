@@ -7,7 +7,6 @@ import { AzureWizardPromptStep, openUrl, UserCancelledError } from '@microsoft/v
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { getExperienceFromApi, type API } from '../../DocumentDBExperiences';
-import { SettingsService } from '../../services/SettingsService';
 import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
@@ -91,13 +90,8 @@ export class PromptConnectionTypeStep extends AzureWizardPromptStep<NewLocalConn
 
             context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
 
-            const settingName = 'documentDB.emulator.mongoPort';
-
             context.emulatorType = selectedItem.id;
 
-            context.port =
-                SettingsService.getWorkspaceSetting<number>(settingName) ??
-                SettingsService.getGlobalSetting<number>(settingName);
             return;
         }
     }

@@ -11,7 +11,6 @@ import {
     createApiProvider,
     createAzExtLogOutputChannel,
     registerErrorHandler,
-    registerEvent,
     registerUIExtensionVariables,
     TreeElementStateManager,
     type apiUtils,
@@ -58,19 +57,6 @@ export async function activateInternal(
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
         await clustersSupport.activateClustersSupport();
-
-        registerEvent(
-            'cosmosDB.onDidChangeConfiguration',
-            vscode.workspace.onDidChangeConfiguration,
-            async (actionContext: IActionContext, event: vscode.ConfigurationChangeEvent) => {
-                actionContext.telemetry.properties.isActivationEvent = 'true';
-                actionContext.errorHandling.suppressDisplay = true;
-                if (event.affectsConfiguration(ext.settingsKeys.documentLabelFields)) {
-                    await vscode.commands.executeCommand('command.documentDB.discoveryView.refresh');
-                    await vscode.commands.executeCommand('command.documentDB.connectionsView.refresh');
-                }
-            },
-        );
 
         context.subscriptions.push(
             vscode.window.registerUriHandler({

@@ -32,7 +32,7 @@ suite('MongoShell', async function (this: Mocha.Suite): Promise<void> {
     this.timeout(10000);
 
     async function testIfSupported(title: string, fn?: Mocha.Func | Mocha.AsyncFunc): Promise<void> {
-        await runWithSetting(ext.settingsKeys.mongoShellTimeout, '60', async () => {
+        await runWithSetting(ext.settingsKeys.shellTimeout, '60', async () => {
             if (testsSupported) {
                 test(title, fn);
             } else {

@@ -49,16 +49,13 @@ export namespace ext {
     export let discoveryBranchDataProvider: DiscoveryBranchDataProvider;
 
     export namespace settingsKeys {
-        export const mongoShellPath = 'mongo.shell.path';
-        export const mongoShellArgs = 'mongo.shell.args';
-        export const documentLabelFields = 'documentDB.documentLabelFields';
-        export const enableEndpointDiscovery = 'documentDB.enableEndpointDiscovery';
-        export const mongoShellTimeout = 'mongo.shell.timeout';
-        export const batchSize = 'documentDB.batchSize';
-        export const confirmationStyle = 'documentDB.confirmationStyle';
-        export const showOperationSummaries = 'documentDB.showOperationSummaries';
-        export const cosmosDbAuthentication = 'documentDB.preferredAuthenticationMethod';
-        export const authManagedIdentityClientId = 'documentDB.authentication.managedIdentity.clientID';
+        export const shellPath = 'documentDB.mongoShell.path';
+        export const shellArgs = 'ocumentDB.mongoShell.args';
+        export const shellTimeout = 'ocumentDB.mongoShell.timeout';
+        export const batchSize = 'documentDB.mongoShell.batchSize';
+        export const confirmationStyle = 'documentDB.UI.confirmationStyle';
+        export const showOperationSummaries = 'documentDB.UI.ShowOperationSummaries';
+        export const localPort = 'documentDB.local.port';
 
         export namespace vsCode {
             export const proxyStrictSSL = 'http.proxyStrictSSL';

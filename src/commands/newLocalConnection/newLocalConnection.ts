@@ -10,7 +10,9 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { API } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { NewEmulatorConnectionItemCV } from '../../tree/connections-view/LocalEmulators/NewEmulatorConnectionItemCV';
 import { NewEmulatorConnectionItem } from '../../tree/workspace-view/documentdb/LocalEmulators/NewEmulatorConnectionItem';
 import { ExecuteStep } from './ExecuteStep';
@@ -26,9 +28,13 @@ export async function newLocalConnection(
     context: IActionContext,
     node: NewEmulatorConnectionItem | NewEmulatorConnectionItemCV,
 ) {
+    const portString = vscode.workspace.getConfiguration().get(ext.settingsKeys.localPort);
+    const portNumber = Number(portString);
+
     const wizardContext: NewLocalConnectionWizardContext = {
         ...context,
         parentTreeElementId: node.parentId,
+        port: isNaN(portNumber) ? undefined : portNumber,
     };
 
     let title: string = '';
