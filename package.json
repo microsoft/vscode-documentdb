@@ -671,7 +671,7 @@
       {
         "title": "DocumentDB for VS Code",
         "properties": {
-          "documentDB.UI.confirmationStyle": {
+          "documentDB.userInterface.confirmationStyle": {
             "order": 0,
             "type": "string",
             "description": "The behavior to use when confirming operations that cannot be undone, such as deleting resources.",
@@ -692,7 +692,7 @@
             ],
             "default": "challengeConfirmation"
           },
-          "documentDB.UI.ShowOperationSummaries": {
+          "documentDB.userInterface.ShowOperationSummaries": {
             "order": 1,
             "type": "boolean",
             "default": true,

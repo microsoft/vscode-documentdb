@@ -53,8 +53,8 @@ export namespace ext {
         export const shellArgs = 'ocumentDB.mongoShell.args';
         export const shellTimeout = 'ocumentDB.mongoShell.timeout';
         export const batchSize = 'documentDB.mongoShell.batchSize';
-        export const confirmationStyle = 'documentDB.UI.confirmationStyle';
-        export const showOperationSummaries = 'documentDB.UI.ShowOperationSummaries';
+        export const confirmationStyle = 'documentDB.userInterface.confirmationStyle';
+        export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
         export const localPort = 'documentDB.local.port';
 
         export namespace vsCode {
