@@ -10,7 +10,7 @@ import { StorageNames, StorageService } from '../../services/storageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
-export class UpdateCredentialsExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardContext> {
+export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardContext> {
     public priority: number = 100;
 
     public async execute(context: UpdateCredentialsWizardContext): Promise<void> {

@@ -6,12 +6,12 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
-import { type CreateMongoDatabaseWizardContext } from './CreateMongoDatabaseWizardContext';
+import { type CreateDatabaseWizardContext } from './CreateDatabaseWizardContext';
 
-export class MongoDatabaseNameStep extends AzureWizardPromptStep<CreateMongoDatabaseWizardContext> {
+export class DatabaseNameStep extends AzureWizardPromptStep<CreateDatabaseWizardContext> {
     public hideStepCount: boolean = true;
 
-    public async prompt(context: CreateMongoDatabaseWizardContext): Promise<void> {
+    public async prompt(context: CreateDatabaseWizardContext): Promise<void> {
         const prompt: string = l10n.t('Enter a database name.');
         context.databaseName = (
             await context.ui.showInputBox({
@@ -24,7 +24,7 @@ export class MongoDatabaseNameStep extends AzureWizardPromptStep<CreateMongoData
         context.valuesToMask.push(context.databaseName);
     }
 
-    public shouldPrompt(context: CreateMongoDatabaseWizardContext): boolean {
+    public shouldPrompt(context: CreateDatabaseWizardContext): boolean {
         return !context.databaseName;
     }
 
@@ -57,7 +57,7 @@ export class MongoDatabaseNameStep extends AzureWizardPromptStep<CreateMongoData
     }
 
     private async validateNameAvailable(
-        context: CreateMongoDatabaseWizardContext,
+        context: CreateDatabaseWizardContext,
         name: string,
     ): Promise<string | undefined> {
         if (name.length === 0) {

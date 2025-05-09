@@ -22,9 +22,9 @@ export async function refreshTreeElement(context: IActionContext, node: TreeElem
             return ext.connectionsBranchDataProvider.refresh(node);
         }
 
-        if (/experience[.](mongocluster)/i.test(node.contextValue)) {
-            return ext.mongoVCoreBranchDataProvider.refresh(node);
-        }
+        // if (/experience[.](mongocluster)/i.test(node.contextValue)) {
+        //     return ext.mongoVCoreBranchDataProvider.refresh(node);
+        // }
     }
 
     if (node && 'id' in node && typeof node.id === 'string') {

@@ -8,14 +8,14 @@ import * as l10n from '@vscode/l10n';
 import ConnectionString from 'mongodb-connection-string-url';
 import {
     NewEmulatorConnectionMode,
-    type NewEmulatorConnectionWizardContext,
-} from '../NewEmulatorConnectionWizardContext';
+    type NewLocalConnectionWizardContext,
+} from '../NewLocalConnectionWizardContext';
 
 // TODO: create one that can be shared for adding an account and adding an emulator
-export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPromptStep<NewEmulatorConnectionWizardContext> {
+export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
     public hideStepCount: boolean = true;
 
-    public async prompt(context: NewEmulatorConnectionWizardContext): Promise<void> {
+    public async prompt(context: NewLocalConnectionWizardContext): Promise<void> {
         const prompt: string = l10n.t('Enter the connection string of your local connection');
         context.connectionString = (
             await context.ui.showInputBox({
@@ -47,7 +47,7 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
         return undefined;
     }
 
-    public shouldPrompt(context: NewEmulatorConnectionWizardContext): boolean {
+    public shouldPrompt(context: NewLocalConnectionWizardContext): boolean {
         return context.mode === NewEmulatorConnectionMode.CustomConnectionString;
     }
 

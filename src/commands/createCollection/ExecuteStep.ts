@@ -9,7 +9,7 @@ import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 
-export class MongoExecuteStep extends AzureWizardExecuteStep<CreateCollectionWizardContext> {
+export class ExecuteStep extends AzureWizardExecuteStep<CreateCollectionWizardContext> {
     public priority: number = 100;
 
     public async execute(context: CreateCollectionWizardContext): Promise<void> {

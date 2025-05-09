@@ -7,7 +7,7 @@ import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
-export class UpdatePasswordStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
+export class PromptPasswordStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
     public async prompt(context: UpdateCredentialsWizardContext): Promise<void> {
         const passwordTemp = await context.ui.showInputBox({
             prompt: l10n.t('Please enter the password for the user "{username}"', {

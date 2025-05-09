@@ -7,7 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { DocumentsViewController } from '../../webviews/documentdb/documentView/documentsViewController';
 
-export function openMongoDocumentView(
+export function openDocumentView(
     _context: IActionContext,
     props: {
         id: string;

@@ -7,12 +7,12 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
-import { type CreateMongoDatabaseWizardContext } from './CreateMongoDatabaseWizardContext';
+import { type CreateDatabaseWizardContext } from './CreateDatabaseWizardContext';
 
-export class MongoExecuteStep extends AzureWizardExecuteStep<CreateMongoDatabaseWizardContext> {
+export class ExecuteStep extends AzureWizardExecuteStep<CreateDatabaseWizardContext> {
     public priority: number = 100;
 
-    public async execute(context: CreateMongoDatabaseWizardContext): Promise<void> {
+    public async execute(context: CreateDatabaseWizardContext): Promise<void> {
         const credentialsId = context.credentialsId;
         const databaseName = context.databaseName!;
         const nodeId = context.nodeId;
@@ -35,7 +35,7 @@ export class MongoExecuteStep extends AzureWizardExecuteStep<CreateMongoDatabase
         );
     }
 
-    public shouldExecute(context: CreateMongoDatabaseWizardContext): boolean {
+    public shouldExecute(context: CreateDatabaseWizardContext): boolean {
         return !!context.databaseName;
     }
 }

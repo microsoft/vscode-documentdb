@@ -13,13 +13,13 @@ import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { appendToFile } from '../../utils/fs/appendToFile';
 import { getRootPath } from '../../utils/workspacUtils';
 
-export async function clustersExportEntireCollection(context: IActionContext, node?: CollectionItem) {
+export async function exportEntireCollection(context: IActionContext, node?: CollectionItem) {
     context.telemetry.properties.experience = node?.experience.api;
 
-    return clustersExportQueryResults(context, node);
+    return exportQueryResults(context, node);
 }
 
-export async function clustersExportQueryResults(
+export async function exportQueryResults(
     context: IActionContext,
     node?: CollectionItem,
     props?: { queryText?: string; source?: string },

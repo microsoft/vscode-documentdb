@@ -11,10 +11,10 @@ import { SettingsService } from '../../services/SettingsService';
 import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import {
     NewEmulatorConnectionMode,
-    type NewEmulatorConnectionWizardContext,
-} from './NewEmulatorConnectionWizardContext';
+    type NewLocalConnectionWizardContext,
+} from './NewLocalConnectionWizardContext';
 
-export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorConnectionWizardContext> {
+export class PromptConnectionTypeStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
     private readonly preselectedAPI: API;
 
     constructor(preselectedAPI: API) {
@@ -22,7 +22,7 @@ export class PromptEmulatorTypeStep extends AzureWizardPromptStep<NewEmulatorCon
         this.preselectedAPI = preselectedAPI;
     }
 
-    public async prompt(context: NewEmulatorConnectionWizardContext): Promise<void> {
+    public async prompt(context: NewLocalConnectionWizardContext): Promise<void> {
         const preconfiguredEmulators = [
             {
                 id: 'mongo-ru',

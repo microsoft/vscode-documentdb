@@ -6,10 +6,10 @@
 import { AzureWizardPromptStep, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { MongoClustersExperience } from '../../AzureDBExperiences';
-import { MongoConnectionStringStep } from './MongoConnectionStringStep';
-import { MongoExecuteStep } from './MongoExecuteStep';
-import { MongoPasswordStep } from './MongoPasswordStep';
-import { MongoUsernameStep } from './MongoUsernameStep';
+import { PromptConnectionStringStep } from './PromptConnectionStringStep';
+import { ExecuteStep } from './ExecuteStep';
+import { PromptPasswordStep } from './PromptPasswordStep';
+import { PromptUsernameStep } from './PromptUsernameStep';
 import { ConnectionMode, type NewConnectionWizardContext } from './NewConnectionWizardContext';
 import { PromptServiceDiscoveryStep } from './PromptServiceDiscoveryStep';
 
@@ -58,14 +58,14 @@ export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectio
             case ConnectionMode.ConnectionString:
                 return {
                     title: l10n.t('Connection String'),
-                    promptSteps: [new MongoConnectionStringStep(), new MongoUsernameStep(), new MongoPasswordStep()],
-                    executeSteps: [new MongoExecuteStep()],
+                    promptSteps: [new PromptConnectionStringStep(), new PromptUsernameStep(), new PromptPasswordStep()],
+                    executeSteps: [new ExecuteStep()],
                 };
             case ConnectionMode.ServiceDiscovery:
                 return {
                     title: l10n.t('Service Discovery'),
                     promptSteps: [new PromptServiceDiscoveryStep()],
-                    executeSteps: [new MongoExecuteStep()],
+                    executeSteps: [new ExecuteStep()],
                 };
             default:
                 return undefined;

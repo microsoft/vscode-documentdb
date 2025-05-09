@@ -10,10 +10,10 @@ import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { pickAppResource } from '../../utils/pickItem/pickAppResource';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
-import { CollectionNameStep } from './MongoCollectionNameStep';
-import { MongoExecuteStep } from './MongoExecuteStep';
+import { CollectionNameStep } from './CollectionNameStep';
+import { ExecuteStep } from './ExecuteStep';
 
-export async function createMongoCollection(context: IActionContext, node?: DatabaseItem): Promise<void> {
+export async function createCollection(context: IActionContext, node?: DatabaseItem): Promise<void> {
     if (!node) {
         node = await pickAppResource<DatabaseItem>(context, {
             type: AzExtResourceType.MongoClusters,
@@ -37,7 +37,7 @@ export async function createMongoCollection(context: IActionContext, node?: Data
     const wizard: AzureWizard<CreateCollectionWizardContext> = new AzureWizard(wizardContext, {
         title: l10n.t('Create collection'),
         promptSteps: [new CollectionNameStep()],
-        executeSteps: [new MongoExecuteStep()],
+        executeSteps: [new ExecuteStep()],
         showLoadingPrompt: true,
     });
 

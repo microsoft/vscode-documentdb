@@ -16,24 +16,24 @@ import { NewEmulatorConnectionItem } from '../../tree/workspace-view/documentdb/
 import { ExecuteStep } from './ExecuteStep';
 import { PromptMongoRUEmulatorConnectionStringStep } from './mongo-ru/PromptMongoRUEmulatorConnectionStringStep';
 import { PromptMongoRUEmulatorSecurityStep } from './mongo-ru/PromptMongoRUEmulatorSecurityStep';
-import { type NewEmulatorConnectionWizardContext } from './NewEmulatorConnectionWizardContext';
-import { PromptEmulatorPortStep } from './PromptEmulatorPortStep';
-import { PromptEmulatorTypeStep } from './PromptEmulatorTypeStep';
-import { ProvidePasswordStep } from './ProvidePasswordStep';
-import { ProvideUserNameStep } from './ProvideUsernameStep';
+import { type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
+import { PromptPortStep } from './PromptPortStep';
+import { PromptConnectionTypeStep } from './PromptConnectionTypeStep';
+import { PromptPasswordStep } from './PromptPasswordStep';
+import { PromptUsernameStep } from './PromptUsernameStep';
 
-export async function newEmulatorConnection(
+export async function newLocalConnection(
     context: IActionContext,
     node: NewEmulatorConnectionItem | NewEmulatorConnectionItemCV,
 ) {
-    const wizardContext: NewEmulatorConnectionWizardContext = {
+    const wizardContext: NewLocalConnectionWizardContext = {
         ...context,
         parentTreeElementId: node.parentId,
     };
 
     let title: string = '';
-    const steps: AzureWizardPromptStep<NewEmulatorConnectionWizardContext>[] = [];
-    const executeSteps: AzureWizardExecuteStep<NewEmulatorConnectionWizardContext>[] = [];
+    const steps: AzureWizardPromptStep<NewLocalConnectionWizardContext>[] = [];
+    const executeSteps: AzureWizardExecuteStep<NewLocalConnectionWizardContext>[] = [];
 
     if (node instanceof NewEmulatorConnectionItem || node instanceof NewEmulatorConnectionItemCV) {
         title = l10n.t('New Local Connection');
@@ -41,11 +41,11 @@ export async function newEmulatorConnection(
         const api = node instanceof NewEmulatorConnectionItemCV ? API.DocumentDB : API.MongoDB;
 
         steps.push(
-            new PromptEmulatorTypeStep(api),
+            new PromptConnectionTypeStep(api),
             new PromptMongoRUEmulatorConnectionStringStep(),
-            new PromptEmulatorPortStep(),
-            new ProvideUserNameStep(),
-            new ProvidePasswordStep(),
+            new PromptPortStep(),
+            new PromptUsernameStep(),
+            new PromptPasswordStep(),
             new PromptMongoRUEmulatorSecurityStep(),
         );
         executeSteps.push(new ExecuteStep());

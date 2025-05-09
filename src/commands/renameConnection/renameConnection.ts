@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { Views } from '../../documentdb/Views';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { refreshView } from '../refreshView/refreshView';
-import { EnterNewConnectionNameStep } from './EnterNewConnectionNameStep';
+import { PromptNewConnectionNameStep } from './PromptNewConnectionNameStep';
 import { ExecuteStep } from './ExecuteStep';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';
 
@@ -26,7 +26,7 @@ export async function renameConnection(context: IActionContext, node?: DocumentD
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Rename Connection'),
-        promptSteps: [new EnterNewConnectionNameStep()],
+        promptSteps: [new PromptNewConnectionNameStep()],
         executeSteps: [new ExecuteStep()],
     });
 

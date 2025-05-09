@@ -12,7 +12,7 @@ import { type StorageItem, StorageNames, StorageService } from '../../services/s
 import { generateMongoStorageId } from '../../utils/storageUtils';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
-export class MongoExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
+export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
     public priority: number = 100;
 
     public async execute(context: NewConnectionWizardContext): Promise<void> {

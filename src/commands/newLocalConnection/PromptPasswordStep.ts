@@ -5,10 +5,10 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { type NewEmulatorConnectionWizardContext } from './NewEmulatorConnectionWizardContext';
+import { type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
-export class ProvidePasswordStep extends AzureWizardPromptStep<NewEmulatorConnectionWizardContext> {
-    public async prompt(context: NewEmulatorConnectionWizardContext): Promise<void> {
+export class PromptPasswordStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
+    public async prompt(context: NewLocalConnectionWizardContext): Promise<void> {
         const passwordTemp = await context.ui.showInputBox({
             prompt: l10n.t('Enter the password'),
             password: true,
@@ -19,7 +19,7 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<NewEmulatorConnec
         context.valuesToMask.push(context.password);
     }
 
-    public shouldPrompt(context: NewEmulatorConnectionWizardContext): boolean {
+    public shouldPrompt(context: NewLocalConnectionWizardContext): boolean {
         return context.emulatorType === 'documentdb';
     }
 }

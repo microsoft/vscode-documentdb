@@ -11,17 +11,16 @@ import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
-export async function deleteContainer(context: IActionContext, node: CollectionItem): Promise<void> {
+export async function deleteCollection(context: IActionContext, node: CollectionItem): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
 
-    const containerId = node.collectionInfo.name;
-    const message = l10n.t('Delete collection "{containerId}" and its contents?', { containerId });
-    const successMessage = l10n.t('The collection "{containerId}" has been deleted.', { containerId });
+    const message = l10n.t('Delete collection "{collectionId}" and its contents?', { collectionId: node.collectionInfo.name });
+    const successMessage = l10n.t('The collection "{collectionId}" has been deleted.', { collectionId: node.collectionInfo.name });
 
     const confirmed = await getConfirmationAsInSettings(
-        l10n.t('Delete "{nodeName}"?', { nodeName: containerId }),
+        l10n.t('Delete "{nodeName}"?', { nodeName: node.collectionInfo.name }),
         message + '\n' + l10n.t('This cannot be undone.'),
-        containerId,
+        node.collectionInfo.name,
     );
 
     if (!confirmed) {
@@ -29,7 +28,13 @@ export async function deleteContainer(context: IActionContext, node: CollectionI
     }
 
     try {
-        const success = await deleteMongoCollection(node);
+        const client = await ClustersClient.getClient(node.cluster.id);
+
+        let success = false;
+        await ext.state.showDeleting(node.id, async () => {
+            success = await client.dropCollection(node.databaseInfo.name, node.collectionInfo.name);
+        });
+
 
         if (success) {
             showConfirmationAsInSettings(successMessage);
@@ -42,15 +47,4 @@ export async function deleteContainer(context: IActionContext, node: CollectionI
         }
         ext.state.notifyChildrenChanged(parentId);
     }
-}
-
-async function deleteMongoCollection(node: CollectionItem): Promise<boolean> {
-    const client = await ClustersClient.getClient(node.cluster.id);
-
-    let success = false;
-    await ext.state.showDeleting(node.id, async () => {
-        success = await client.dropCollection(node.databaseInfo.name, node.collectionInfo.name);
-    });
-
-    return success;
 }

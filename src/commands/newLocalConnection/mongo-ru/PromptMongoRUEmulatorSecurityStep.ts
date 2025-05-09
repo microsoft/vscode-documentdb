@@ -7,10 +7,10 @@ import { AzureWizardPromptStep, openUrl, UserCancelledError } from '@microsoft/v
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { defaultMongoEmulatorConfiguration, type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
-import { type NewEmulatorConnectionWizardContext } from '../NewEmulatorConnectionWizardContext';
+import { type NewLocalConnectionWizardContext } from '../NewLocalConnectionWizardContext';
 
-export class PromptMongoRUEmulatorSecurityStep extends AzureWizardPromptStep<NewEmulatorConnectionWizardContext> {
-    public async prompt(context: NewEmulatorConnectionWizardContext): Promise<void> {
+export class PromptMongoRUEmulatorSecurityStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
+    public async prompt(context: NewLocalConnectionWizardContext): Promise<void> {
         const selectedItem = await context.ui.showQuickPick(
             [
                 {
@@ -67,7 +67,7 @@ export class PromptMongoRUEmulatorSecurityStep extends AzureWizardPromptStep<New
         }
     }
 
-    public shouldPrompt(context: NewEmulatorConnectionWizardContext): boolean {
+    public shouldPrompt(context: NewLocalConnectionWizardContext): boolean {
         return context.emulatorType === 'mongo-ru' || context.emulatorType === 'documentdb';
     }
 }

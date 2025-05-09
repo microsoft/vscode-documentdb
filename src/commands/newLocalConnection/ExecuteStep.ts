@@ -15,13 +15,13 @@ import { getEmulatorItemUniqueId } from '../../utils/emulatorUtils';
 import { nonNullValue } from '../../utils/nonNull';
 import {
     NewEmulatorConnectionMode,
-    type NewEmulatorConnectionWizardContext,
-} from './NewEmulatorConnectionWizardContext';
+    type NewLocalConnectionWizardContext,
+} from './NewLocalConnectionWizardContext';
 
-export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWizardContext> {
+export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizardContext> {
     public priority: number = 100;
 
-    public async execute(context: NewEmulatorConnectionWizardContext): Promise<void> {
+    public async execute(context: NewLocalConnectionWizardContext): Promise<void> {
         const parentId = context.parentTreeElementId;
         let connectionString = context.connectionString;
         const port = context.port;
@@ -43,19 +43,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
         }
 
         const portSuffix = typeof port !== 'undefined' ? ` : ${port}` : '';
-        let label = `${experience.shortName} Emulator${portSuffix}`;
-
-        if (experience.api === API.MongoDB || experience.api === API.MongoClusters) {
-            label = `MongoDB Emulator${portSuffix}`;
-        }
-        if (experience.api === API.DocumentDB) {
-            const parsedCS = new ConnectionString(nonNullValue(connectionString));
-            parsedCS.username = context.userName ?? '';
-            label =
-                parsedCS.username && parsedCS.username.length > 0
-                    ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
-                    : parsedCS.hosts.join(',');
-        }
+        const label = `${experience.shortName} Emulator${portSuffix}`;
 
         return ext.state.showCreatingChild(
             parentId,
@@ -121,7 +109,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewEmulatorConnectionWiz
         );
     }
 
-    public shouldExecute(context: NewEmulatorConnectionWizardContext): boolean {
+    public shouldExecute(context: NewLocalConnectionWizardContext): boolean {
         return !!context.connectionString;
     }
 }

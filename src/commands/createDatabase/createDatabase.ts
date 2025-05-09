@@ -8,9 +8,9 @@ import * as l10n from '@vscode/l10n';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { type CreateMongoDatabaseWizardContext } from './CreateMongoDatabaseWizardContext';
-import { MongoDatabaseNameStep } from './MongoDatabaseNameStep';
-import { MongoExecuteStep } from './MongoExecuteStep';
+import { type CreateDatabaseWizardContext } from './CreateDatabaseWizardContext';
+import { DatabaseNameStep } from './DatabaseNameStep';
+import { ExecuteStep } from './ExecuteStep';
 
 export async function createAzureDatabase(context: IActionContext, node?: ClusterItemBase): Promise<void> {
     if (!node) {
@@ -36,7 +36,7 @@ async function createMongoDatabase(context: IActionContext, node: ClusterItemBas
         );
     }
 
-    const wizardContext: CreateMongoDatabaseWizardContext = {
+    const wizardContext: CreateDatabaseWizardContext = {
         ...context,
         credentialsId: node.cluster.id,
         clusterName: node.cluster.name,
@@ -45,8 +45,8 @@ async function createMongoDatabase(context: IActionContext, node: ClusterItemBas
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Create database'),
-        promptSteps: [new MongoDatabaseNameStep()],
-        executeSteps: [new MongoExecuteStep()],
+        promptSteps: [new DatabaseNameStep()],
+        executeSteps: [new ExecuteStep()],
         showLoadingPrompt: true,
     });
 

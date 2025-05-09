@@ -13,9 +13,9 @@ import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 export async function connectCluster(_context: IActionContext, node?: DatabaseItem | CollectionItem): Promise<void> {
     if (!node) {
         await vscode.window.showInformationMessage(
-            l10n.t('You can connect to a different Mongo Cluster by:') +
+            l10n.t('You can connect to a different DocumentDB by:') +
                 '\n\n' +
-                l10n.t("1. Locating the one you'd like from the resource view,") +
+                l10n.t("1. Locating the one you'd like from the DocumentDB side panel,") +
                 '\n' +
                 l10n.t('2. Selecting a database or a collection,') +
                 '\n' +

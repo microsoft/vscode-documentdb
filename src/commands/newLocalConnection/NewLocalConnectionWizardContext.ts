@@ -13,7 +13,7 @@ export enum NewEmulatorConnectionMode {
     Unknown = 'unknown', // not configured
 }
 
-export interface NewEmulatorConnectionWizardContext extends IActionContext {
+export interface NewLocalConnectionWizardContext extends IActionContext {
     parentTreeElementId: string;
 
     emulatorType?: string;

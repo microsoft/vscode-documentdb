@@ -8,44 +8,43 @@ import * as l10n from '@vscode/l10n';
 import ConnectionString from 'mongodb-connection-string-url';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
-export class MongoPasswordStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
+export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const prompt: string = l10n.t('Enter the password for {experience}', {
+        const prompt: string = l10n.t('Enter the username for {experience}', {
             experience: context.experience!.shortName,
         });
 
-        const password = await context.ui.showInputBox({
+        const username = await context.ui.showInputBox({
             prompt: prompt,
             ignoreFocusOut: true,
-            password: true,
-            value: context.password,
-            validateInput: (password?: string) => this.validateInput(context, password),
+            value: context.username,
+            validateInput: (username?: string) => this.validateInput(context, username),
         });
 
         const parsedConnectionString = new ConnectionString(context.connectionString!);
-        parsedConnectionString.password = password;
+        parsedConnectionString.username = username;
 
         context.connectionString = parsedConnectionString.toString();
-        context.password = password;
+        context.username = username;
 
-        context.valuesToMask.push(password);
+        context.valuesToMask.push(username);
     }
 
     public shouldPrompt(): boolean {
         return true;
     }
 
-    public validateInput(context: NewConnectionWizardContext, password: string | undefined): string | undefined {
-        password = password ? password.trim() : '';
+    public validateInput(context: NewConnectionWizardContext, username: string | undefined): string | undefined {
+        username = username ? username.trim() : '';
 
-        if (password.length === 0) {
+        if (username.length === 0) {
             // skip this for now, asyncValidationTask takes care of this case, otherwise it's only warnings the user sees..
             return undefined;
         }
 
         try {
             const parsedConnectionString = new ConnectionString(context.connectionString!);
-            parsedConnectionString.password = password;
+            parsedConnectionString.username = username;
 
             const connectionString = parsedConnectionString.toString();
 

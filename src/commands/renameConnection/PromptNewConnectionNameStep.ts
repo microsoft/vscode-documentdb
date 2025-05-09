@@ -9,7 +9,7 @@ import * as l10n from '@vscode/l10n';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';
 
-export class EnterNewConnectionNameStep extends AzureWizardPromptStep<RenameConnectionWizardContext> {
+export class PromptNewConnectionNameStep extends AzureWizardPromptStep<RenameConnectionWizardContext> {
     public async prompt(context: RenameConnectionWizardContext): Promise<void> {
         const newConnectionName = await context.ui.showInputBox({
             prompt: l10n.t('Please enter a new connection name.'),

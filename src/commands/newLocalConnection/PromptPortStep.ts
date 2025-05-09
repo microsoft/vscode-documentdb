@@ -15,13 +15,13 @@ import { wellKnownEmulatorPassword } from '../../constants';
 import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import {
     NewEmulatorConnectionMode,
-    type NewEmulatorConnectionWizardContext,
-} from './NewEmulatorConnectionWizardContext';
+    type NewLocalConnectionWizardContext,
+} from './NewLocalConnectionWizardContext';
 
-export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorConnectionWizardContext> {
+export class PromptPortStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
     public hideStepCount: boolean = false;
 
-    public async prompt(context: NewEmulatorConnectionWizardContext): Promise<void> {
+    public async prompt(context: NewLocalConnectionWizardContext): Promise<void> {
         let defaultPort: string;
         let promptText: string;
         let placeHolder: string | undefined;
@@ -53,7 +53,7 @@ export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorCon
         }
     }
 
-    public shouldPrompt(context: NewEmulatorConnectionWizardContext): boolean {
+    public shouldPrompt(context: NewLocalConnectionWizardContext): boolean {
         // For Mongo and NoSQL, prompt if mode is Preconfigured
         return context.mode === NewEmulatorConnectionMode.Preconfigured;
     }
@@ -78,7 +78,7 @@ export class PromptEmulatorPortStep extends AzureWizardPromptStep<NewEmulatorCon
     }
 
     private buildConnectionString(
-        context: NewEmulatorConnectionWizardContext,
+        context: NewLocalConnectionWizardContext,
         port: number,
         experience: Experience,
     ): string | undefined {

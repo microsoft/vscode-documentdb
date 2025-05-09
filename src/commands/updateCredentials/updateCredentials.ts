@@ -11,10 +11,10 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { Views } from '../../documentdb/Views';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { refreshView } from '../refreshView/refreshView';
-import { UpdateCredentialsExecuteStep } from './UpdateCredentialsExecuteStep';
+import { ExecuteStep } from './ExecuteStep';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
-import { UpdatePasswordStep } from './UpdatePasswordStep';
-import { UpdateUserNameStep } from './UpdateUserNameStep';
+import { PromptPasswordStep } from './PromptPasswordStep';
+import { PromptUserNameStep } from './PromptUserNameStep';
 
 export async function updateCredentials(context: IActionContext, node?: DocumentDBClusterItem): Promise<void> {
     if (!node) {
@@ -36,8 +36,8 @@ export async function updateCredentials(context: IActionContext, node?: Document
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Update cluster credentials'),
-        promptSteps: [new UpdateUserNameStep(), new UpdatePasswordStep()],
-        executeSteps: [new UpdateCredentialsExecuteStep()],
+        promptSteps: [new PromptUserNameStep(), new PromptPasswordStep()],
+        executeSteps: [new ExecuteStep()],
         showLoadingPrompt: true,
     });
 

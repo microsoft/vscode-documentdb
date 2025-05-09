@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import ConnectionString from 'mongodb-connection-string-url';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
-export class MongoConnectionStringStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
+export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public hideStepCount: boolean = true;
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {

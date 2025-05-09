@@ -5,7 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
-export interface CreateMongoDatabaseWizardContext extends IActionContext {
+export interface CreateDatabaseWizardContext extends IActionContext {
     credentialsId: string;
     clusterName: string;
     nodeId: string;

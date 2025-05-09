@@ -36,7 +36,12 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
     }
 
     try {
-        const success = await deleteMongoDatabase(node);
+        const client = await ClustersClient.getClient(node.cluster.id);
+
+        let success = false;
+        await ext.state.showDeleting(node.id, async () => {
+            success = await client.dropDatabase(node.databaseInfo.name);
+        });
 
         if (success) {
             showConfirmationAsInSettings(l10n.t('The "{databaseId}" database has been deleted.', { databaseId }));
@@ -51,13 +56,3 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
     }
 }
 
-async function deleteMongoDatabase(node: DatabaseItem): Promise<boolean> {
-    const client = await ClustersClient.getClient(node.cluster.id);
-
-    let success = false;
-    await ext.state.showDeleting(node.id, async () => {
-        success = await client.dropDatabase(node.databaseInfo.name);
-    });
-
-    return success;
-}
