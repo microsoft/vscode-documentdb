@@ -35,7 +35,7 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
 
     public async getConnectionString(): Promise<string | undefined> {
         return callWithTelemetryAndErrorHandling(
-            'cosmosDB.mongoClusters.getConnectionString',
+            'documentDB.mongoClusters.getConnectionString',
             async (context: IActionContext) => {
                 // Create a client to interact with the MongoDB vCore management API and read the cluster details
                 const managementClient = await createMongoClustersManagementClient(context, this.subscription);
@@ -71,7 +71,7 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling(
-            'cosmosDB.mongoClusters.connect',
+            'documentDB.mongoClusters.connect',
             async (context: IActionContext) => {
                 ext.outputChannel.appendLine(
                     l10n.t('MongoDB Clusters: Attempting to authenticate with "{cluster}"…', {

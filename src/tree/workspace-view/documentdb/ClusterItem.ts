@@ -48,7 +48,7 @@ export class ClusterItem extends ClusterItemBase implements TreeElementWithStora
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling(
-            'cosmosDB.mongoClusters.connect',
+            'documentDB.mongoClusters.connect',
             async (context: IActionContext) => {
                 context.telemetry.properties.view = 'workspace';
 
@@ -159,7 +159,7 @@ export class ClusterItem extends ClusterItemBase implements TreeElementWithStora
 
         // Prompt the user for credentials
         await callWithTelemetryAndErrorHandling(
-            'cosmosDB.mongoClusters.connect.promptForCredentials',
+            'documentDB.mongoClusters.connect.promptForCredentials',
             async (context: IActionContext) => {
                 context.telemetry.properties.view = 'workspace';
 

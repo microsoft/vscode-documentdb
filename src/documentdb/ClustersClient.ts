@@ -152,7 +152,7 @@ export class ClustersClient {
             throw error;
         }
 
-        void callWithTelemetryAndErrorHandling('cosmosDB.mongoClusters.connect.getmetadata', async (context) => {
+        void callWithTelemetryAndErrorHandling('documentDB.mongoClusters.connect.getmetadata', async (context) => {
             const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
 
             context.telemetry.properties = {

@@ -23,7 +23,7 @@ export class NewConnectionItem implements TreeElement, TreeElementWithContextVal
             label: l10n.t('New Connection…'),
             iconPath: new vscode.ThemeIcon('plus'),
             command: {
-                command: 'cosmosDB.newConnection',
+                command: 'documentDB.newConnection',
                 title: '',
                 arguments: [this],
             },

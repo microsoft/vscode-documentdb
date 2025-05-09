@@ -45,7 +45,7 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
 
     async getConnectionString(wizardContext: NewConnectionWizardContext): Promise<string | undefined> {
         return callWithTelemetryAndErrorHandling(
-            'cosmosDB.mongoClusters.getConnectionString',
+            'documentDB.mongoClusters.getConnectionString',
             async (context: IActionContext) => {
                 const subscription = wizardContext.properties[
                     AzureContextProperties.SelectedSubscription

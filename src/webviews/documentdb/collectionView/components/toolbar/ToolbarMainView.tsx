@@ -54,7 +54,7 @@ export const ToolbarMainView = (): JSX.Element => {
                                 trpcClient.common.surveyOpen
                                     .mutate({
                                         experienceKind: ExperienceKind.Mongo,
-                                        triggerAction: 'cosmosDB.mongo.collectionView.provideFeedback',
+                                        triggerAction: 'documentDB.mongo.collectionView.provideFeedback',
                                     })
                                     .catch(() => {});
                             }}

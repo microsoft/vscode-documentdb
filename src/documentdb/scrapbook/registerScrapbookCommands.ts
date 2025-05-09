@@ -32,7 +32,7 @@ export function registerScrapbookCommands(): void {
         vscode.languages.registerCodeLensProvider(mongoLanguageId, ScrapbookService.getCodeLensProvider()),
     );
 
-    diagnosticsCollection = vscode.languages.createDiagnosticCollection('cosmosDB.mongo');
+    diagnosticsCollection = vscode.languages.createDiagnosticCollection('documentDB.mongo');
     ext.context.subscriptions.push(diagnosticsCollection);
 
     setUpErrorReporting();

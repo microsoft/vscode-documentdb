@@ -45,7 +45,7 @@ class SurveyState {
     };
 }
 
-const GLOBAL_STATE_KEY_PREFIX = 'ms-azuretools.vscode-cosmosdb.survey';
+const GLOBAL_STATE_KEY_PREFIX = 'ms-azuretools.vscode-documentdb.survey';
 //Survey keys for persistent storage
 const StateKeys = {
     SESSION_COUNT: `${GLOBAL_STATE_KEY_PREFIX}/sessionCount`,

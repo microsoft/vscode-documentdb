@@ -55,7 +55,7 @@ export async function exportQueryResults(
     let documentCount = 0;
 
     // Wrap the export process inside a progress reporting function
-    await callWithTelemetryAndErrorHandling('cosmosDB.mongoClusters.exportDocuments', async (actionContext) => {
+    await callWithTelemetryAndErrorHandling('documentDB.mongoClusters.exportDocuments', async (actionContext) => {
         await runExportWithProgressAndDescription(node.id, async (progress, cancellationToken) => {
             documentCount = await exportDocumentsToFile(
                 docStream,
