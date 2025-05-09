@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Resource } from '@azure/arm-cosmosdb';
-import { type Experience } from '../../AzureDBExperiences';
+import { type Experience } from '../../DocumentDBExperiences';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 
 // Selecting only the properties used in the extension, but keeping an easy option to extend the model later and offer full coverage of MongoCluster

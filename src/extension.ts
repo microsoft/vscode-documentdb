@@ -57,7 +57,7 @@ export async function activateInternal(
         // init and activate mongodb RU and vCore support (branch data provider, commands, ...)
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
-        await clustersSupport.activate();
+        await clustersSupport.activateClustersSupport();
 
         registerEvent(
             'cosmosDB.onDidChangeConfiguration',

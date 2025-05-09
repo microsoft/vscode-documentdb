@@ -8,7 +8,7 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import { ConnectionString } from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
-import { MongoClustersExperience } from '../../../AzureDBExperiences';
+import { MongoClustersExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';

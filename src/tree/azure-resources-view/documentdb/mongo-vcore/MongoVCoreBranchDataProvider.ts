@@ -7,7 +7,7 @@ import { type GenericResource } from '@azure/arm-resources';
 import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, nonNullProp, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureResource, type AzureSubscription } from '@microsoft/vscode-azureresources-api';
-import { API, MongoClustersExperience } from '../../../../AzureDBExperiences';
+import { API, MongoClustersExperience } from '../../../../DocumentDBExperiences';
 import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
 import { BaseCachedBranchDataProvider } from '../../../BaseCachedBranchDataProvider';
 import { type ClusterModel } from '../../../documentdb/ClusterModel';

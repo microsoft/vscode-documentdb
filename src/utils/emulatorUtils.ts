@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { l10n } from 'vscode';
-import { API, getExperienceFromApi } from '../AzureDBExperiences';
+import { API, getExperienceFromApi } from '../DocumentDBExperiences';
 import { randomUtils } from './randomUtils';
 
 /**

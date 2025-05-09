@@ -5,7 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import type ConnectionString from 'mongodb-connection-string-url';
-import { type Experience } from '../../AzureDBExperiences';
+import { type Experience } from '../../DocumentDBExperiences';
 
 export enum ConnectionMode {
     ConnectionString,

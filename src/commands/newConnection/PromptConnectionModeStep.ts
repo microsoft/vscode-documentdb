@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { MongoClustersExperience } from '../../AzureDBExperiences';
+import { MongoClustersExperience } from '../../DocumentDBExperiences';
 import { ExecuteStep } from './ExecuteStep';
 import { ConnectionMode, type NewConnectionWizardContext } from './NewConnectionWizardContext';
 import { PromptConnectionStringStep } from './PromptConnectionStringStep';

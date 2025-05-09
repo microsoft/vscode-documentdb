@@ -10,7 +10,7 @@ import {
     MongoClustersExperience,
     MongoExperience,
     type Experience,
-} from '../../AzureDBExperiences';
+} from '../../DocumentDBExperiences';
 import { wellKnownEmulatorPassword } from '../../constants';
 import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';

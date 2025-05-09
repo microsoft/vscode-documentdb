@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type Experience } from '../../AzureDBExperiences';
+import { type Experience } from '../../DocumentDBExperiences';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 
 export enum NewEmulatorConnectionMode {

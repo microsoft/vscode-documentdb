@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Experience } from '../AzureDBExperiences';
+import { type Experience } from '../DocumentDBExperiences';
 
 /**
  * It's currently being kept separately from the TreeElement as we need to discuss it with the team,

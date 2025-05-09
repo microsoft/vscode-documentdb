@@ -7,7 +7,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
 import path from 'path';
-import { MongoClustersExperience } from '../../../AzureDBExperiences';
+import { MongoClustersExperience } from '../../../DocumentDBExperiences';
 import { getResourcesPath, type IThemedIconPath } from '../../../constants';
 import { StorageNames, StorageService } from '../../../services/storageService';
 import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';

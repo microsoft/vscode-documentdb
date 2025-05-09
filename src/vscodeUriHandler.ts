@@ -13,7 +13,7 @@ import {
 import * as l10n from '@vscode/l10n';
 import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
-import { API, getExperienceFromApi } from './AzureDBExperiences';
+import { API, getExperienceFromApi } from './DocumentDBExperiences';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { ext } from './extensionVariables';
 import { StorageNames, StorageService, type StorageItem } from './services/storageService';

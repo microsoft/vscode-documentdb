@@ -10,7 +10,7 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { API } from '../../AzureDBExperiences';
+import { API } from '../../DocumentDBExperiences';
 import { NewEmulatorConnectionItemCV } from '../../tree/connections-view/LocalEmulators/NewEmulatorConnectionItemCV';
 import { NewEmulatorConnectionItem } from '../../tree/workspace-view/documentdb/LocalEmulators/NewEmulatorConnectionItem';
 import { ExecuteStep } from './ExecuteStep';

@@ -5,7 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { MongoClustersExperience, type Experience } from '../../../AzureDBExperiences';
+import { MongoClustersExperience, type Experience } from '../../../DocumentDBExperiences';
 import { StorageNames, StorageService } from '../../../services/storageService';
 import { generateMongoStorageId } from '../../../utils/storageUtils'; // Import the new utility function
 import { type AttachedClusterModel } from '../../documentdb/ClusterModel';

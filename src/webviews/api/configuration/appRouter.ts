@@ -9,7 +9,7 @@
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { type API } from '../../../AzureDBExperiences';
+import { type API } from '../../../DocumentDBExperiences';
 import { openSurvey, promptAfterActionEventually } from '../../../utils/survey';
 import { ExperienceKind, UsageImpact } from '../../../utils/surveyTypes';
 import { collectionsViewRouter as collectionViewRouter } from '../../documentdb/collectionView/collectionViewRouter';

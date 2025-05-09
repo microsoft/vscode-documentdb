@@ -87,7 +87,7 @@ export class ClustersExtension implements vscode.Disposable {
         ext.context.subscriptions.push(treeView);
     }
 
-    async activate(): Promise<void> {
+    async activateClustersSupport(): Promise<void> {
         await callWithTelemetryAndErrorHandling(
             'cosmosDB.mongoClusters.activate',
             async (activateContext: IActionContext) => {
