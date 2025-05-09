@@ -1,4 +1,6 @@
-# DocumentDB for VS Code (Preview)
+# DocumentDB for VS Code (Pre-Release)
+
+> **Note:** This extension is currently configured for `pre-release` audiences and is intended solely for evaluation and testing purposes. We strongly advise against using it on production systems.
 
 <!-- region exclude-from-marketplace -->
 
@@ -56,7 +58,6 @@ Here are some known issues and limitations to be aware of when using the Documen
 #### References
 
 - [DocumentDB](https://github.com/microsoft/documentdb)
-
 
 # How to Contribute
 
