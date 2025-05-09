@@ -422,16 +422,16 @@
     ],
     "submenus": [
       {
-        "id": "azureDatabases.submenus.mongo.database.scrapbook",
+        "id": "documentDB.submenus.mongo.database.scrapbook",
         "label": "DocumentDB Scrapbook"
       },
       {
-        "id": "azureDatabases.submenus.mongo.collection.scrapbook",
+        "id": "documentDB.submenus.mongo.collection.scrapbook",
         "label": "DocumentDB Scrapbook"
       }
     ],
     "menus": {
-      "azureDatabases.submenus.mongo.database.scrapbook": [
+      "documentDB.submenus.mongo.database.scrapbook": [
         {
           "//": "[Database] Scrapbook: New Scrapbook",
           "command": "command.documentDB.scrapbook.new",
@@ -445,7 +445,7 @@
           "group": "1@2"
         }
       ],
-      "azureDatabases.submenus.mongo.collection.scrapbook": [
+      "documentDB.submenus.mongo.collection.scrapbook": [
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook New",
           "command": "command.documentDB.scrapbook.new",
@@ -567,13 +567,13 @@
         {
           "//": "[Database] Mongo DB|Cluster Launch Shell",
           "command": "command.documentDB.launchShell",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "2@1"
         },
         {
           "//": "[Database] Mongo DB|Cluster Scrapbook Submenu",
-          "submenu": "azureDatabases.submenus.mongo.database.scrapbook",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "submenu": "documentDB.submenus.mongo.database.scrapbook",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "2@2"
         },
         {
@@ -591,7 +591,7 @@
         {
           "//": "[Collection] Import Documents",
           "command": "command.documentDB.importDocuments",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "2@1"
         },
         {
@@ -614,8 +614,8 @@
         },
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook Submenu",
-          "submenu": "azureDatabases.submenus.mongo.collection.scrapbook",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "submenu": "documentDB.submenus.mongo.collection.scrapbook",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "4@2"
         },
         {
@@ -669,7 +669,7 @@
     ],
     "configuration": [
       {
-        "title": "DocumentDB",
+        "title": "DocumentDB for VS Code",
         "properties": {
           "documentDB.UI.confirmationStyle": {
             "order": 0,
