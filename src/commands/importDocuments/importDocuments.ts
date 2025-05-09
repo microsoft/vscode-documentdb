@@ -3,26 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ItemDefinition, type JSONObject, type JSONValue, type PartitionKeyDefinition } from '@azure/cosmos';
 import { parseError, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
-import { parse as parseJson } from '@prantlf/jsonlint';
 import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fse from 'fs-extra';
 import * as vscode from 'vscode';
-import { getCosmosClient } from '../../cosmosdb/getCosmosClient';
-import { validateDocumentId, validatePartitionKey } from '../../cosmosdb/utils/validateDocument';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
-import { CosmosDBContainerResourceItem } from '../../tree/cosmosdb/CosmosDBContainerResourceItem';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
-import { pickAppResource } from '../../utils/pickItem/pickAppResource';
 import { getRootPath } from '../../utils/workspacUtils';
 
 export async function importDocuments(
     context: IActionContext,
-    selectedItem: vscode.Uri | CosmosDBContainerResourceItem | CollectionItem | undefined,
+    selectedItem: vscode.Uri | CollectionItem | undefined,
     uris: vscode.Uri[] | undefined,
 ): Promise<void> {
     if (selectedItem instanceof vscode.Uri) {
@@ -55,13 +48,6 @@ export async function importDocuments(
     }
 
     if (!selectedItem) {
-        selectedItem = await pickAppResource<CosmosDBContainerResourceItem | CollectionItem>(context, {
-            type: [AzExtResourceType.AzureCosmosDb, AzExtResourceType.MongoClusters],
-            expectedChildContextValue: ['treeItem.container', 'treeItem.collection'],
-        });
-    }
-
-    if (!selectedItem) {
         return undefined;
     }
 
@@ -74,10 +60,7 @@ export async function importDocuments(
     ext.state.notifyChildrenChanged(selectedItem.id);
 }
 
-export async function importDocumentsWithProgress(
-    selectedItem: CosmosDBContainerResourceItem | CollectionItem,
-    uris: vscode.Uri[],
-): Promise<void> {
+export async function importDocumentsWithProgress(selectedItem: CollectionItem, uris: vscode.Uri[]): Promise<void> {
     const result = await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -172,18 +155,13 @@ async function askForDocuments(context: IActionContext): Promise<vscode.Uri[]> {
 }
 
 async function parseAndValidateFile(
-    node: CosmosDBContainerResourceItem | CollectionItem,
+    node: CollectionItem,
     uri: vscode.Uri,
 ): Promise<{ documents: unknown[]; errors: string[] }> {
     try {
         if (node instanceof CollectionItem) {
             // await needs to catch the error here, otherwise it will be thrown to the caller
             return await parseAndValidateFileForMongo(uri);
-        }
-
-        if (node instanceof CosmosDBContainerResourceItem) {
-            // await needs to catch the error here, otherwise it will be thrown to the caller
-            return await parseAndValidateFileForCosmosDB(uri, node.model.container.partitionKey);
         }
     } catch (e) {
         return { documents: [], errors: [parseError(e).message] };
@@ -227,95 +205,17 @@ async function parseAndValidateFileForMongo(uri: vscode.Uri): Promise<{ document
     return { documents, errors };
 }
 
-async function parseAndValidateFileForCosmosDB(
-    uri: vscode.Uri,
-    partitionKey?: PartitionKeyDefinition,
-): Promise<{ documents: unknown[]; errors: string[] }> {
-    const errors: string[] = [];
-    const documents: unknown[] = [];
-
-    const validateOneDocument = (document: JSONObject): boolean => {
-        let hasErrors = false;
-        const partitionKeyError = validatePartitionKey(document, partitionKey);
-        if (partitionKeyError) {
-            errors.push(...partitionKeyError);
-            hasErrors = true;
-        }
-
-        const idError = validateDocumentId(document);
-        if (idError) {
-            errors.push(...idError);
-            hasErrors = true;
-        }
-
-        return !hasErrors;
-    };
-
-    const fileContent = await fse.readFile(uri.fsPath, 'utf8');
-    const parsed = parseJson(fileContent) as JSONValue;
-
-    if (!parsed || typeof parsed !== 'object') {
-        errors.push(l10n.t('Document must be an object.'));
-    } else if (Array.isArray(parsed)) {
-        documents.push(
-            ...parsed
-                .map((document: unknown) => {
-                    // Only top-level array is supported
-                    if (!document || typeof document !== 'object' || Array.isArray(document)) {
-                        errors.push(l10n.t('Document must be an object. Skipping…') + '\n' + EJSON.stringify(document));
-                        return undefined;
-                    }
-
-                    return validateOneDocument(document as JSONObject) ? document : undefined;
-                })
-                .filter((e) => e),
-        );
-    } else if (typeof parsed === 'object') {
-        if (validateOneDocument(parsed as JSONObject)) {
-            documents.push(parsed);
-        }
-    }
-
-    return { documents, errors };
-}
-
-async function insertDocument(
-    node: CosmosDBContainerResourceItem | CollectionItem,
-    document: unknown,
-): Promise<{ document: unknown; error: string }> {
+async function insertDocument(node: CollectionItem, document: unknown): Promise<{ document: unknown; error: string }> {
     try {
         if (node instanceof CollectionItem) {
             // await needs to catch the error here, otherwise it will be thrown to the caller
             return await insertDocumentIntoCluster(node, document as Document);
-        }
-
-        if (node instanceof CosmosDBContainerResourceItem) {
-            // await needs to catch the error here, otherwise it will be thrown to the caller
-            return await insertDocumentIntoCosmosDB(node, document as ItemDefinition);
         }
     } catch (e) {
         return { document, error: parseError(e).message };
     }
 
     return { document, error: l10n.t('Unknown error') };
-}
-
-async function insertDocumentIntoCosmosDB(
-    node: CosmosDBContainerResourceItem,
-    document: ItemDefinition,
-): Promise<{ document: ItemDefinition; error: string }> {
-    const { endpoint, credentials, isEmulator } = node.model.accountInfo;
-    const cosmosClient = getCosmosClient(endpoint, credentials, isEmulator);
-    const response = await cosmosClient
-        .database(node.model.database.id)
-        .container(node.model.container.id)
-        .items.create<ItemDefinition>(document);
-
-    if (response.resource) {
-        return { document, error: '' };
-    } else {
-        return { document, error: l10n.t('The insertion failed with status code {0}', response.statusCode) };
-    }
 }
 
 async function insertDocumentIntoCluster(

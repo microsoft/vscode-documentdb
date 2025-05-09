@@ -422,16 +422,16 @@
     ],
     "submenus": [
       {
-        "id": "azureDatabases.submenus.mongo.database.scrapbook",
+        "id": "documentDB.submenus.mongo.database.scrapbook",
         "label": "DocumentDB Scrapbook"
       },
       {
-        "id": "azureDatabases.submenus.mongo.collection.scrapbook",
+        "id": "documentDB.submenus.mongo.collection.scrapbook",
         "label": "DocumentDB Scrapbook"
       }
     ],
     "menus": {
-      "azureDatabases.submenus.mongo.database.scrapbook": [
+      "documentDB.submenus.mongo.database.scrapbook": [
         {
           "//": "[Database] Scrapbook: New Scrapbook",
           "command": "command.documentDB.scrapbook.new",
@@ -445,7 +445,7 @@
           "group": "1@2"
         }
       ],
-      "azureDatabases.submenus.mongo.collection.scrapbook": [
+      "documentDB.submenus.mongo.collection.scrapbook": [
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook New",
           "command": "command.documentDB.scrapbook.new",
@@ -567,13 +567,13 @@
         {
           "//": "[Database] Mongo DB|Cluster Launch Shell",
           "command": "command.documentDB.launchShell",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "2@1"
         },
         {
           "//": "[Database] Mongo DB|Cluster Scrapbook Submenu",
-          "submenu": "azureDatabases.submenus.mongo.database.scrapbook",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "submenu": "documentDB.submenus.mongo.database.scrapbook",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "2@2"
         },
         {
@@ -591,7 +591,7 @@
         {
           "//": "[Collection] Import Documents",
           "command": "command.documentDB.importDocuments",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "2@1"
         },
         {
@@ -614,8 +614,8 @@
         },
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook Submenu",
-          "submenu": "azureDatabases.submenus.mongo.collection.scrapbook",
-          "when": "view =~ /azure(ResourceGroups|Workspace|FocusView)|connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "submenu": "documentDB.submenus.mongo.collection.scrapbook",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "4@2"
         },
         {
@@ -669,141 +669,68 @@
     ],
     "configuration": [
       {
-        "title": "Authentication",
+        "title": "DocumentDB for VS Code",
         "properties": {
-          "documentDB.preferredAuthenticationMethod": {
+          "documentDB.userInterface.confirmationStyle": {
+            "order": 0,
             "type": "string",
+            "description": "The behavior to use when confirming operations that cannot be undone, such as deleting resources.",
             "enum": [
-              "auto",
-              "accountKey",
-              "entraId",
-              "managedIdentity"
+              "buttonConfirmation",
+              "challengeConfirmation",
+              "wordConfirmation"
             ],
             "enumItemLabels": [
-              "%cosmosdb.configuration.preferredAuthenticationMethod.auto%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.accountKey%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.entraId%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.managedIdentity%"
+              "Button Click Confirmation",
+              "Challenge Confirmation",
+              "Word Entry Confirmation"
             ],
-            "markdownEnumDescriptions": [
-              "%cosmosdb.configuration.preferredAuthenticationMethod.auto.description%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.accountKey.description%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.entraId.description%",
-              "%cosmosdb.configuration.preferredAuthenticationMethod.managedIdentity.description%"
+            "enumDescriptions": [
+              "Prompts with a warning dialog where you click a button to confirm deletion.",
+              "Prompts with a challenge where you select the correct number among multiple options to confirm deletion.",
+              "Prompts with an input box where you enter the name of the resource to confirm deletion."
             ],
-            "markdownDescription": "%cosmosdb.configuration.preferredAuthenticationMethod%",
-            "default": "auto",
-            "order": 0
+            "default": "challengeConfirmation"
           },
-          "documentDB.authentication.managedIdentity.clientID": {
-            "type": "string",
-            "markdownDescription": "%cosmosdb.configuration.authentication.managedIdentity.clientID%",
-            "default": null,
-            "order": 1
-          }
-        }
-      },
-      {
-        "title": "DocumentDB",
-        "properties": {
-          "mongo.shell.path": {
+          "documentDB.userInterface.ShowOperationSummaries": {
+            "order": 1,
+            "type": "boolean",
+            "default": true,
+            "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events."
+          },
+          "documentDB.local.port": {
+            "order": 2,
+            "type": "integer",
+            "default": 10260,
+            "description": "Port to use when connecting to DocumentDB Local instance"
+          },
+          "documentDB.mongoShell.path": {
             "type": [
               "string",
               "null"
             ],
-            "description": "%cosmosdb.configuration.mongo.shell.path%",
+            "description": "Full path to folder and executable to start the Mongo shell, needed by some Mongo scrapbook commands. The default is to search in the system path for 'mongo'.",
             "default": null
           },
-          "mongo.shell.args": {
+          "documentDB.mongoShell.args": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "%cosmosdb.configuration.mongo.shell.args%",
+            "description": "Arguments to pass when starting the Mongo shell.",
             "default": [
               "--quiet"
             ]
           },
-          "mongo.shell.timeout": {
+          "documentDB.mongoShell.timeout": {
             "type": "number",
-            "description": "%cosmosdb.configuration.mongo.shell.timeout%",
+            "description": "The duration allowed (in seconds) for the Mongo shell to execute a command. Default value is 30 seconds.",
             "default": 30
           },
-          "documentDB.batchSize": {
+          "documentDB.mongoShell.batchSize": {
             "type": "number",
-            "description": "%cosmosdb.configuration.batch.size%",
+            "description": "The batch size to be used when querying working with the shell.",
             "default": 50
-          },
-          "documentDB.useCosmosOAuth": {
-            "type": "boolean",
-            "markdownDescription": "%cosmosdb.configuration.oauth.enable%",
-            "markdownDeprecationMessage": "**Deprecated**: Please use `#documentDB.preferredAuthenticationMethod#` instead.",
-            "deprecationMessage": "Deprecated: Please use documentDB.preferredAuthenticationMethod instead."
-          },
-          "documentDB.confirmationStyle": {
-            "type": "string",
-            "description": "%cosmosdb.configuration.confirmation.style%",
-            "enum": [
-              "wordConfirmation",
-              "challengeConfirmation",
-              "buttonConfirmation"
-            ],
-            "enumItemLabels": [
-              "%cosmosdb.configuration.confirmation.style.word%",
-              "%cosmosdb.configuration.confirmation.style.challenge%",
-              "%cosmosdb.configuration.confirmation.style.button%"
-            ],
-            "enumDescriptions": [
-              "%cosmosdb.configuration.confirmation.style.word.description%",
-              "%cosmosdb.configuration.confirmation.style.challenge.description%",
-              "%cosmosdb.configuration.confirmation.style.button.description%"
-            ],
-            "default": "wordConfirmation"
-          },
-          "documentDB.showOperationSummaries": {
-            "type": "boolean",
-            "default": true,
-            "description": "%cosmosdb.configuration.operation.summaries%"
-          },
-          "documentDB.documentLabelFields": {
-            "type": "array",
-            "default": [
-              "name",
-              "Name",
-              "NAME",
-              "ID",
-              "UUID",
-              "Id",
-              "id",
-              "_id",
-              "uuid"
-            ],
-            "description": "%cosmosdb.configuration.document.label.fields%"
-          },
-          "documentDB.emulator.mongoPort": {
-            "type": "integer",
-            "default": 10255,
-            "description": "%cosmosdb.configuration.emulator.mongo.port%"
-          },
-          "documentDB.emulator.port": {
-            "type": "integer",
-            "default": 8081,
-            "description": "%cosmosdb.configuration.emulator.port%"
-          },
-          "documentDB.enableEndpointDiscovery": {
-            "type": "boolean",
-            "default": true,
-            "description": "%cosmosdb.configuration.endpoint.discovery%"
-          },
-          "documentDB.showSavePrompt": {
-            "type": "boolean",
-            "default": true,
-            "description": "%cosmosdb.configuration.save.prompt%"
-          },
-          "documentDB.csvSeparator": {
-            "type": "string",
-            "default": ";",
-            "markdownDescription": "%cosmosdb.configuration.csv.separator%"
           }
         }
       }

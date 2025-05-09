@@ -3,15 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzExtTreeItem, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../../tree/TreeElement';
 
-export async function refreshTreeElement(context: IActionContext, node: AzExtTreeItem | TreeElement): Promise<void> {
-    if (node instanceof AzExtTreeItem) {
-        return node.refresh(context);
-    }
-
+export async function refreshTreeElement(context: IActionContext, node: TreeElement): Promise<void> {
     if (node && 'refresh' in node && typeof node.refresh === 'function') {
         await node.refresh.call(node, context);
         return;
@@ -26,13 +22,9 @@ export async function refreshTreeElement(context: IActionContext, node: AzExtTre
             return ext.connectionsBranchDataProvider.refresh(node);
         }
 
-        if (/experience[.](mongocluster)/i.test(node.contextValue)) {
-            return ext.mongoVCoreBranchDataProvider.refresh(node);
-        }
-
-        if (/experience[.](table|cassandra|core|graph|mongodb)/i.test(node.contextValue)) {
-            return ext.cosmosDBBranchDataProvider.refresh(node);
-        }
+        // if (/experience[.](mongocluster)/i.test(node.contextValue)) {
+        //     return ext.mongoVCoreBranchDataProvider.refresh(node);
+        // }
     }
 
     if (node && 'id' in node && typeof node.id === 'string') {

@@ -13,29 +13,19 @@ import {
 import * as l10n from '@vscode/l10n';
 import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
-import { API, getExperienceFromApi } from './AzureDBExperiences';
+import { API, getExperienceFromApi } from './DocumentDBExperiences';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
-import { openNoSqlQueryEditor } from './commands/openNoSqlQueryEditor/openNoSqlQueryEditor';
-import {
-    parseCosmosDBConnectionString,
-    type ParsedCosmosDBConnectionString,
-} from './cosmosdb/cosmosDBConnectionStrings';
 import { ext } from './extensionVariables';
 import { StorageNames, StorageService, type StorageItem } from './services/storageService';
-import { getAccountInfo } from './tree/cosmosdb/AccountInfo';
 import { type TreeElement } from './tree/TreeElement';
 import { isTreeElementWithContextValue } from './tree/TreeElementWithContextValue';
 import { isTreeElementWithExperience } from './tree/TreeElementWithExperience';
 import { WorkspaceResourceType } from './tree/workspace-api/SharedWorkspaceResourceProvider';
 import { getConfirmationAsInSettings } from './utils/dialogs/getConfirmation';
-import { getEmulatorItemLabelForApi, getEmulatorItemUniqueId, getIsEmulatorConnection } from './utils/emulatorUtils';
+import { getEmulatorItemLabelForApi, getEmulatorItemUniqueId } from './utils/emulatorUtils';
 import { generateMongoStorageId } from './utils/storageUtils';
 
-const supportedProviders = [
-    'Microsoft.DocumentDB/databaseAccounts',
-    'Microsoft.DocumentDB/mongoClusters',
-    //'Microsoft.DBforPostgreSQL/serverGroupsv2', // uncomment once we support Cosmos DB for PostgreSQL
-];
+const supportedProviders = ['Microsoft.DocumentDB/databaseAccounts', 'Microsoft.DocumentDB/mongoClusters'];
 
 /**
  * Global URI handler for processing external URIs related to Azure Databases.
@@ -145,6 +135,10 @@ async function handleConnectionStringRequest(
     }
 
     const parsedConnection = parseConnectionString(context, params.connectionString);
+    if (!parsedConnection) {
+        throw new Error(l10n.t('Unable to parse the parameters.'));
+    }
+
     context.telemetry.properties.experience = parsedConnection.api;
 
     if (params.subscriptionId && params.resourceGroup) {
@@ -152,9 +146,6 @@ async function handleConnectionStringRequest(
         context.telemetry.properties.subscriptionId = params.subscriptionId;
         let accountName: string | undefined;
         switch (parsedConnection.api) {
-            case API.Core:
-                accountName = parsedConnection.connectionString.accountName;
-                break;
             case API.MongoDB:
                 accountName = parsedConnection.connectionString.username;
                 break;
@@ -179,6 +170,11 @@ async function handleConnectionStringRequest(
             params.resourceGroup,
             accountName,
         );
+
+        if (!resourceId) {
+            throw new Error(l10n.t('Unable to create resource ID from connection string'));
+        }
+
         context.telemetry.properties.resourceId = new vscode.TelemetryTrustedValue(resourceId.rawId);
         const resource = await revealAzureResourceInExplorer(context, resourceId, params.database, params.container);
         if (params.database && params.container) {
@@ -186,41 +182,28 @@ async function handleConnectionStringRequest(
         }
     } else {
         // Create storage item for the connection
-        if (parsedConnection.api === API.Core) {
-            const isEmulator = getIsEmulatorConnection(parsedConnection.connectionString);
-            const fullId = await createAttachedForConnection(
-                parsedConnection.connectionString.accountId,
-                parsedConnection.connectionString.accountName,
-                parsedConnection.api,
-                params.connectionString,
-                isEmulator,
-                parsedConnection.connectionString.port,
-            );
-            ext.cosmosDBWorkspaceBranchDataProvider.refresh();
-            await revealAttachedInWorkspaceExplorer(fullId, params.database, params.container);
-        } else {
-            // Handle MongoDB and MongoClusters
-            const accountId = generateMongoStorageId(parsedConnection.connectionString.toString()); // FYI: working with the prasedConnection string for to guarantee a consistent accountId in this file.
+        // Handle MongoDB and MongoClusters
+        const accountId = generateMongoStorageId(parsedConnection.connectionString.toString()); // FYI: working with the prasedConnection string for to guarantee a consistent accountId in this file.
 
-            const isEmulator =
-                parsedConnection.connectionString.hosts?.length > 0 &&
-                parsedConnection.connectionString.hosts[0].includes('localhost');
+        const isEmulator =
+            parsedConnection.connectionString.hosts?.length > 0 &&
+            parsedConnection.connectionString.hosts[0].includes('localhost');
 
-            const disableEmulatorSecurity =
-                parsedConnection.connectionString.searchParams.get('tlsAllowInvalidCertificates') === 'true';
+        const disableEmulatorSecurity =
+            parsedConnection.connectionString.searchParams.get('tlsAllowInvalidCertificates') === 'true';
 
-            const fullId = await createAttachedForConnection(
-                accountId,
-                parsedConnection.connectionString.username + '@' + parsedConnection.connectionString.hosts.join(','),
-                parsedConnection.api,
-                params.connectionString,
-                isEmulator,
-                parsedConnection.connectionString.port,
-                disableEmulatorSecurity,
-            );
-            ext.mongoClustersWorkspaceBranchDataProvider.refresh();
-            await revealAttachedInWorkspaceExplorer(fullId, params.database, params.container);
-        }
+        const fullId = await createAttachedForConnection(
+            accountId,
+            parsedConnection.connectionString.username + '@' + parsedConnection.connectionString.hosts.join(','),
+            parsedConnection.api,
+            params.connectionString,
+            isEmulator,
+            parsedConnection.connectionString.port,
+            disableEmulatorSecurity,
+        );
+        ext.mongoClustersWorkspaceBranchDataProvider.refresh();
+        await revealAttachedInWorkspaceExplorer(fullId, params.database, params.container);
+
         if (params.database && params.container) {
             // Open appropriate editor based on API type
             await openAppropriateEditorForConnection(context, parsedConnection, params.database, params.container);
@@ -248,7 +231,7 @@ function createAzureResourceId(
     subscriptionId: string,
     resourceGroup: string,
     accountName: string,
-): ParsedAzureResourceId {
+): ParsedAzureResourceId | undefined {
     switch (api) {
         case API.MongoClusters:
             // Document DB Clusters API resource ID format
@@ -256,16 +239,8 @@ function createAzureResourceId(
                 `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.DocumentDB/mongoClusters/${accountName}`,
             );
 
-        /** We don't support PG Clusters yet
-        case API.PostgresSingle:
-            return `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.DBforPostgreSQL/serverGroupsv2/sevoku-test-pg`;
-        */
-
         default:
-            // Cosmos DB Core resource ID format
-            return parseAzureResourceId(
-                `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.DocumentDb/databaseAccounts/${accountName}`,
-            );
+            return;
     }
 }
 
@@ -307,10 +282,8 @@ async function revealAzureResourceInExplorer(
     }
 
     let resource: TreeElement | undefined;
-    const branchDataProvider =
-        resourceId.provider === 'Microsoft.DocumentDB/mongoClusters'
-            ? ext.mongoVCoreBranchDataProvider
-            : ext.cosmosDBBranchDataProvider;
+    const branchDataProvider = ext.mongoVCoreBranchDataProvider;
+
     const revealedId = await ext.rgApiV2.resources.getSelectedAzureNode();
     if (revealedId) {
         const strippedId = removeAzureTenantPrefix(revealedId);
@@ -369,7 +342,7 @@ async function createAttachedForConnection(
     emulatorPort?: string,
     disableEmulatorSecurity?: boolean,
 ): Promise<string> {
-    const rootId = `${api === API.Core ? WorkspaceResourceType.AttachedAccounts : WorkspaceResourceType.MongoClusters}`;
+    const rootId = `${WorkspaceResourceType.MongoClusters}`;
     const parentId = `${rootId}${isEmulator ? '/localEmulators' : ''}`;
     const name = !isEmulator ? accountName : getEmulatorItemLabelForApi(api, emulatorPort);
     const id = !isEmulator ? accountId : getEmulatorItemUniqueId(connectionString);
@@ -402,7 +375,7 @@ async function createAttachedForConnection(
 
         try {
             await StorageService.get(StorageNames.Workspace).push(
-                api === API.Core ? WorkspaceResourceType.AttachedAccounts : WorkspaceResourceType.MongoClusters,
+                WorkspaceResourceType.MongoClusters,
                 storageItem,
                 false,
             );
@@ -477,9 +450,7 @@ async function revealAttachedInWorkspaceExplorer(
  */
 async function openAppropriateEditorForConnection(
     context: IActionContext,
-    parsedConnection:
-        | { api: API.Core; connectionString: ParsedCosmosDBConnectionString }
-        | { api: API.MongoDB | API.MongoClusters; connectionString: ConnectionString },
+    parsedConnection: { api: API.MongoDB | API.MongoClusters; connectionString: ConnectionString },
     database: string | undefined,
     container: string | undefined,
 ): Promise<void> {
@@ -487,22 +458,7 @@ async function openAppropriateEditorForConnection(
         throw new Error(l10n.t("Can't open the Query Editor, Container name is required"));
     }
 
-    if (parsedConnection.api === API.Core) {
-        const info = await getAccountInfo(parsedConnection.connectionString);
-        const parsedCS = parsedConnection.connectionString as ParsedCosmosDBConnectionString;
-        const databaseName = database || parsedCS.databaseName;
-        if (!databaseName) {
-            throw new Error(l10n.t("Can't open the Query Editor, Database name is required"));
-        }
-        // Open NoSQL editor
-        await openNoSqlQueryEditor(context, {
-            databaseId: databaseName,
-            containerId: container,
-            endpoint: info.endpoint,
-            credentials: info.credentials,
-            isEmulator: false,
-        });
-    } else {
+    {
         // Open MongoDB editor
         const accountId = generateMongoStorageId(parsedConnection.connectionString.toString()); // FYI: working with the prasedConnection string for to guarantee a consistent accountId in this file.
         const expectedClusterId = `${WorkspaceResourceType.MongoClusters}/${accountId}`;
@@ -533,12 +489,7 @@ async function openAppropriateEditorForAzure(resource: TreeElement): Promise<voi
         isTreeElementWithContextValue(resource) &&
         (resource.contextValue.includes('treeItem.collection') || resource.contextValue.includes('treeItem.container'))
     ) {
-        await vscode.commands.executeCommand(
-            resource.experience.api === API.Core
-                ? 'cosmosDB.openNoSqlQueryEditor'
-                : 'command.mongoClusters.containerView.open',
-            resource,
-        );
+        await vscode.commands.executeCommand('command.mongoClusters.containerView.open', resource);
     } else {
         throw new Error(l10n.t('Unable to determine the experience for the resource'));
     }
@@ -573,9 +524,7 @@ function removeAzureTenantPrefix(id?: string): string {
 function parseConnectionString(
     context: IActionContext,
     connectionString: string,
-):
-    | { api: API.Core; connectionString: ParsedCosmosDBConnectionString }
-    | { api: API.MongoDB | API.MongoClusters; connectionString: ConnectionString } {
+): { api: API.MongoDB | API.MongoClusters; connectionString: ConnectionString } | undefined {
     if (!connectionString) {
         throw new Error(l10n.t('Connection string cannot be empty'));
     }
@@ -594,15 +543,7 @@ function parseConnectionString(
         };
     }
 
-    // All other connection strings are treated as Core API
-    const parsedCS = parseCosmosDBConnectionString(connectionString);
-    [parsedCS.masterKey, parsedCS.databaseName]
-        .filter((value): value is string => Boolean(value))
-        .forEach((value) => context.valuesToMask.push(value));
-    return {
-        api: API.Core,
-        connectionString: parsedCS,
-    };
+    return;
 }
 
 /**

@@ -6,7 +6,7 @@
 import { getTRPCErrorFromUnknown } from '@trpc/server';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { type API } from '../../../AzureDBExperiences';
+import { type API } from '../../../DocumentDBExperiences';
 import { appRouter, type BaseRouterContext } from '../configuration/appRouter';
 import { type VsCodeLinkRequestMessage } from '../webview-client/vscodeLink';
 import { WebviewBaseController } from './WebviewBaseController';

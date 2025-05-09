@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { API } from '../../../AzureDBExperiences';
+import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { WebviewController } from '../../api/extension-server/WebviewController';
 import { type RouterContext } from './documentsViewRouter';

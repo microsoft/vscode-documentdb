@@ -20,22 +20,19 @@ import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
-import { createMongoCollection } from '../commands/createContainer/createContainer';
+import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
-import { deleteAzureContainer } from '../commands/deleteContainer/deleteContainer';
+import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
-import {
-    clustersExportEntireCollection,
-    clustersExportQueryResults,
-} from '../commands/exportDocuments/exportDocuments';
+import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
 import { filterProviderContent } from '../commands/filterProviderContent/filterProviderContent';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { newConnection } from '../commands/newConnection/newConnection';
-import { newEmulatorConnection } from '../commands/newEmulatorConnection/newEmulatorConnection';
+import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
-import { openMongoDocumentView } from '../commands/openDocument/openDocument';
+import { openDocumentView } from '../commands/openDocument/openDocument';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
@@ -90,7 +87,7 @@ export class ClustersExtension implements vscode.Disposable {
         ext.context.subscriptions.push(treeView);
     }
 
-    async activate(): Promise<void> {
+    async activateClustersSupport(): Promise<void> {
         await callWithTelemetryAndErrorHandling(
             'cosmosDB.mongoClusters.activate',
             async (activateContext: IActionContext) => {
@@ -150,7 +147,7 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommandWithTreeNodeUnwrapping(
                     'command.documentDB.connectionsView.newEmulatorConnection',
-                    newEmulatorConnection,
+                    newLocalConnection,
                 );
 
                 registerCommand('command.documentDB.connectionsView.refresh', (context: IActionContext) => {
@@ -206,14 +203,14 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand('command.internal.mongoClusters.containerView.open', openCollectionViewInternal);
                 registerCommandWithTreeNodeUnwrapping('command.documentDB.containerView.open', openCollectionView);
 
-                registerCommand('command.internal.mongoClusters.documentView.open', openMongoDocumentView);
+                registerCommand('command.internal.mongoClusters.documentView.open', openDocumentView);
 
                 registerCommandWithTreeNodeUnwrapping('command.documentDB.launchShell', launchShell);
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.dropCollection', deleteAzureContainer);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.dropCollection', deleteCollection);
                 registerCommandWithTreeNodeUnwrapping('command.documentDB.dropDatabase', deleteAzureDatabase);
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.createCollection', createMongoCollection);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.createCollection', createCollection);
 
                 registerCommandWithTreeNodeUnwrapping('command.documentDB.createDocument', createMongoDocument);
 
@@ -231,11 +228,8 @@ export class ClustersExtension implements vscode.Disposable {
                  * It was possible to merge the two commands into one, but it would result in code that is
                  * harder to understand and maintain.
                  */
-                registerCommand('command.internal.mongoClusters.exportDocuments', clustersExportQueryResults);
-                registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.exportDocuments',
-                    clustersExportEntireCollection,
-                );
+                registerCommand('command.internal.mongoClusters.exportDocuments', exportQueryResults);
+                registerCommandWithTreeNodeUnwrapping('command.documentDB.exportDocuments', exportEntireCollection);
                 // This is an optional task - if it fails, we don't want to break extension activation,
                 // but we should log the error for diagnostics
                 try {

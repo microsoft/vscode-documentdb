@@ -4,43 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
-import { API } from '../../AzureDBExperiences';
-import { DocumentFileDescriptor } from '../../cosmosdb/fs/DocumentFileDescriptor';
-import { ext } from '../../extensionVariables';
-import { type CosmosDBItemResourceItem } from '../../tree/cosmosdb/CosmosDBItemResourceItem';
-import { pickAppResource } from '../../utils/pickItem/pickAppResource';
-import { countExperienceUsageForSurvey } from '../../utils/survey';
-import { ExperienceKind, UsageImpact } from '../../utils/surveyTypes';
 import { DocumentsViewController } from '../../webviews/documentdb/documentView/documentsViewController';
 
-export async function cosmosDBOpenItem(context: IActionContext, node?: CosmosDBItemResourceItem): Promise<void> {
-    if (!node) {
-        node = await pickAppResource<CosmosDBItemResourceItem>(context, {
-            type: [AzExtResourceType.AzureCosmosDb],
-            expectedChildContextValue: ['treeItem.document'],
-        });
-    }
-
-    if (!node) {
-        return;
-    }
-
-    context.telemetry.properties.experience = node.experience.api;
-
-    const fsNode = new DocumentFileDescriptor(node.id, node.model, node.experience);
-    // Clear un-uploaded local changes to the document before opening https://github.com/microsoft/vscode-cosmosdb/issues/1619
-    ext.fileSystem.fireChangedEvent(fsNode);
-    await ext.fileSystem.showTextDocument(fsNode);
-
-    const experienceKind = [API.MongoDB, API.MongoClusters].includes(node.experience.api)
-        ? ExperienceKind.Mongo
-        : ExperienceKind.NoSQL;
-    countExperienceUsageForSurvey(experienceKind, UsageImpact.Low);
-}
-
-export function openMongoDocumentView(
+export function openDocumentView(
     _context: IActionContext,
     props: {
         id: string;

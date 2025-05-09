@@ -21,12 +21,6 @@ export { ObjectId } from 'bson';
 export { AzureAccountTreeItemBase, createAzureClient } from '@microsoft/vscode-azext-azureutils';
 export * from '@microsoft/vscode-azext-utils';
 export { isWindows, wellKnownEmulatorPassword } from './src/constants';
-export {
-    ParsedCosmosDBConnectionString,
-    parseCosmosDBConnectionString,
-} from './src/cosmosdb/cosmosDBConnectionStrings';
-export { getCosmosClient } from './src/cosmosdb/getCosmosClient';
-export * from './src/cosmosdb/registerCosmosDBCommands';
 export { connectToClient, isCosmosEmulatorConnectionString } from './src/documentdb/scrapbook/connectToClient';
 export { MongoCommand } from './src/documentdb/scrapbook/MongoCommand';
 export {
@@ -39,15 +33,13 @@ export { findCommandAtPosition, getAllCommandsFromText } from './src/documentdb/
 export { ShellScriptRunner as MongoShell } from './src/documentdb/scrapbook/ShellScriptRunner';
 export { activateInternal, deactivateInternal } from './src/extension';
 export { ext } from './src/extensionVariables';
-export { addDatabaseToConnectionString } from './src/postgres/postgresConnectionStrings';
 export { SettingUtils } from './src/services/SettingsService';
-export { AttachedAccountsTreeItem } from './src/tree/v1-legacy-api/AttachedAccountsTreeItem';
 export * from './src/utils/azureClients';
 export { getPublicIpv4, isIpInRanges } from './src/utils/getIp';
 export { improveError } from './src/utils/improveError';
 export { randomUtils } from './src/utils/randomUtils';
 export { rejectOnTimeout, valueOnTimeout } from './src/utils/timeout';
-export { IDisposable, getDocumentTreeItemLabel } from './src/utils/vscodeUtils';
+export { IDisposable } from './src/utils/vscodeUtils';
 export { wrapError } from './src/utils/wrapError';
 
 // NOTE: The auto-fix action "source.organizeImports" does weird things with this file, but there doesn't seem to be a way to disable it on a per-file basis so we'll just let it happen

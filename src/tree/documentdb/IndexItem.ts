@@ -5,7 +5,7 @@
 
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { type Experience } from '../../AzureDBExperiences';
+import { type Experience } from '../../DocumentDBExperiences';
 import { type CollectionItemModel, type DatabaseItemModel, type IndexItemModel } from '../../documentdb/ClustersClient';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';

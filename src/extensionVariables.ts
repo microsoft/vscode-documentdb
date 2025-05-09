@@ -5,20 +5,12 @@
 
 import { type IAzExtLogOutputChannel, type TreeElementStateManager } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
-import { type AzureHostExtensionApi } from '@microsoft/vscode-azext-utils/hostapi';
 import type * as vscode from 'vscode';
 import { type DatabasesFileSystem } from './DatabasesFileSystem';
-import { type NoSqlCodeLensProvider } from './cosmosdb/NoSqlCodeLensProvider';
 import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClient';
-import { type PostgresCodeLensProvider } from './postgres/services/PostgresCodeLensProvider';
-import { type PostgresDatabaseTreeItem } from './postgres/tree/PostgresDatabaseTreeItem';
-import { type CosmosDBBranchDataProvider } from './tree/azure-resources-view/cosmosdb/CosmosDBBranchDataProvider';
 import { type MongoVCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
-import { type AttachedAccountsTreeItem } from './tree/v1-legacy-api/AttachedAccountsTreeItem';
-import { type CosmosDBWorkspaceBranchDataProvider } from './tree/workspace-view/cosmosdb/CosmosDBWorkspaceBranchDataProvider';
-import { type CosmosDBWorkspaceItem } from './tree/workspace-view/cosmosdb/CosmosDBWorkspaceItem';
 import { type AccountsItem } from './tree/workspace-view/documentdb/AccountsItem';
 import { type ClustersWorkspaceBranchDataProvider } from './tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 
@@ -26,37 +18,19 @@ import { type ClustersWorkspaceBranchDataProvider } from './tree/workspace-view/
  * Namespace for common variables used throughout the extension. They must be initialized in the activate() method of extension.ts
  */
 export namespace ext {
-    export let connectedPostgresDB: PostgresDatabaseTreeItem | undefined;
-    export let postgresCodeLensProvider: PostgresCodeLensProvider | undefined;
-
     export let context: vscode.ExtensionContext;
     export let outputChannel: IAzExtLogOutputChannel;
-    export let attachedAccountsNode: AttachedAccountsTreeItem;
     export let isBundle: boolean | undefined;
     export let secretStorage: vscode.SecretStorage;
-    export const prefix: string = 'azureDatabases';
+    export const prefix: string = 'documentDB';
     export let fileSystem: DatabasesFileSystem;
-    export let noSqlCodeLensProvider: NoSqlCodeLensProvider;
     export let mongoLanguageClient: MongoDBLanguageClient;
-    export let rgApi: AzureHostExtensionApi;
 
     // Since the Azure Resources extension did not update API interface, but added a new interface with activity
     // we have to use the new interface AzureResourcesExtensionApiWithActivity instead of AzureResourcesExtensionApi
     export let rgApiV2: AzureResourcesExtensionApiWithActivity;
 
     export let state: TreeElementStateManager;
-
-    // TODO: To avoid these stupid variables below the rgApiV2 should have the following public fields (but they are private):
-    // - AzureResourceProviderManager,
-    // - AzureResourceBranchDataProviderManager,
-    // - WorkspaceResourceProviderManager,
-    // - WorkspaceResourceBranchDataProviderManager,
-
-    // used for the resources tree and the workspace tree REFRESH
-    export let cosmosDBBranchDataProvider: CosmosDBBranchDataProvider;
-    // used for the workspace: these are the dedicated providers
-    export let cosmosDBWorkspaceBranchDataProvider: CosmosDBWorkspaceBranchDataProvider;
-    export let cosmosDBWorkspaceBranchDataResource: CosmosDBWorkspaceItem;
 
     // used for the resources tree
     export let mongoVCoreBranchDataProvider: MongoVCoreBranchDataProvider;
@@ -75,16 +49,13 @@ export namespace ext {
     export let discoveryBranchDataProvider: DiscoveryBranchDataProvider;
 
     export namespace settingsKeys {
-        export const mongoShellPath = 'mongo.shell.path';
-        export const mongoShellArgs = 'mongo.shell.args';
-        export const documentLabelFields = 'documentDB.documentLabelFields';
-        export const enableEndpointDiscovery = 'documentDB.enableEndpointDiscovery';
-        export const mongoShellTimeout = 'mongo.shell.timeout';
-        export const batchSize = 'documentDB.batchSize';
-        export const confirmationStyle = 'documentDB.confirmationStyle';
-        export const showOperationSummaries = 'documentDB.showOperationSummaries';
-        export const cosmosDbAuthentication = 'documentDB.preferredAuthenticationMethod';
-        export const authManagedIdentityClientId = 'documentDB.authentication.managedIdentity.clientID';
+        export const shellPath = 'documentDB.mongoShell.path';
+        export const shellArgs = 'ocumentDB.mongoShell.args';
+        export const shellTimeout = 'ocumentDB.mongoShell.timeout';
+        export const batchSize = 'documentDB.mongoShell.batchSize';
+        export const confirmationStyle = 'documentDB.userInterface.confirmationStyle';
+        export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
+        export const localPort = 'documentDB.local.port';
 
         export namespace vsCode {
             export const proxyStrictSSL = 'http.proxyStrictSSL';

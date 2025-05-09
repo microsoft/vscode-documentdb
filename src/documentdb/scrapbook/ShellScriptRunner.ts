@@ -132,8 +132,8 @@ export class ShellScriptRunner extends vscode.Disposable {
         connectionInfo: { connectionString: string; emulatorConfiguration?: EmulatorConfiguration },
     ): Promise<ShellScriptRunner> {
         const config = vscode.workspace.getConfiguration();
-        let shellPath: string | undefined = config.get(ext.settingsKeys.mongoShellPath);
-        const shellArgs: string[] = config.get(ext.settingsKeys.mongoShellArgs, []);
+        let shellPath: string | undefined = config.get(ext.settingsKeys.shellPath);
+        const shellArgs: string[] = config.get(ext.settingsKeys.shellArgs, []);
 
         if (
             !shellPath ||
@@ -146,8 +146,7 @@ export class ShellScriptRunner extends vscode.Disposable {
         }
         ShellScriptRunner._cachedShellPathOrCmd = shellPath;
 
-        const timeout =
-            1000 * nonNullValue(config.get<number>(ext.settingsKeys.mongoShellTimeout), 'mongoShellTimeout');
+        const timeout = 1000 * nonNullValue(config.get<number>(ext.settingsKeys.shellTimeout), 'mongoShellTimeout');
         return ShellScriptRunner.createShellProcessHelper(
             shellPath,
             shellArgs,
@@ -376,7 +375,7 @@ export class ShellScriptRunner extends vscode.Disposable {
 
                         await vscode.workspace
                             .getConfiguration()
-                            .update(ext.settingsKeys.mongoShellPath, fsPath, vscode.ConfigurationTarget.Global);
+                            .update(ext.settingsKeys.shellPath, fsPath, vscode.ConfigurationTarget.Global);
                         return fsPath;
                     }
                 } else if (response === browse) {

@@ -9,8 +9,8 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { MongoClustersExperience } from '../../AzureDBExperiences';
 import { Views } from '../../documentdb/Views';
+import { MongoClustersExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { type ClusterModel } from '../documentdb/ClusterModel';

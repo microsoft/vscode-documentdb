@@ -96,9 +96,7 @@ export async function pickWorkspaceResource<T extends TreeElement>(
 
     const firstWorkspaceResources = types
         .map((type) => {
-            if (type === WorkspaceResourceType.AttachedAccounts) {
-                return ext.cosmosDBWorkspaceBranchDataResource;
-            } else if (type === WorkspaceResourceType.MongoClusters) {
+            if (type === WorkspaceResourceType.MongoClusters) {
                 return ext.mongoClusterWorkspaceBranchDataResource;
             }
 

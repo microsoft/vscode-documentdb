@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type AccountInfo } from '../../tree/cosmosdb/AccountInfo';
 
 export interface CreateDatabaseWizardContext extends IActionContext {
-    accountInfo: AccountInfo;
+    credentialsId: string;
+    clusterName: string;
     nodeId: string;
 
     databaseName?: string;

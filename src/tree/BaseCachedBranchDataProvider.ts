@@ -17,7 +17,6 @@ import {
 } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { API } from '../AzureDBExperiences';
 import { ext } from '../extensionVariables';
 import { type TreeElement } from './TreeElement';
 import { isTreeElementWithContextValue } from './TreeElementWithContextValue';
@@ -121,7 +120,7 @@ export abstract class BaseCachedBranchDataProvider<T extends AzureResource | Wor
                             context.telemetry.properties.parentContext = element.contextValue;
                         }
                         if (isTreeElementWithExperience(element)) {
-                            context.telemetry.properties.experience = element.experience?.api ?? API.Common;
+                            context.telemetry.properties.experience = element.experience?.api;
                         }
                         context.telemetry.properties.parentNodeContext =
                             (await element.getTreeItem()).contextValue ?? 'unknown';
