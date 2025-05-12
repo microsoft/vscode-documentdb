@@ -269,7 +269,7 @@ export const collectionsViewRouter = router({
         );
 
         if (collectionTreeNode) {
-            vscode.commands.executeCommand('command.documentDB.importDocuments', collectionTreeNode, null, {
+            vscode.commands.executeCommand('vscode-documentdb.command.importDocuments', collectionTreeNode, null, {
                 source: 'webview;collectionView',
             });
         } else {
