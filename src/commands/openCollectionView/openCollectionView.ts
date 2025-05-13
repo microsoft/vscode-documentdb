@@ -9,9 +9,9 @@ import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { CollectionViewController } from '../../webviews/documentdb/collectionView/collectionViewController';
 
-export async function openCollectionView(context: IActionContext, node?: CollectionItem) {
+export async function openCollectionView(context: IActionContext, node: CollectionItem) {
     if (!node) {
-        throw new Error(l10n.t('Invalid collection node'));
+        throw new Error(l10n.t('No node selected.'));
     }
 
     context.telemetry.properties.experience = node?.experience.api;

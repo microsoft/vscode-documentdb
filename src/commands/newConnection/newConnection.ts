@@ -5,12 +5,11 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { type NewConnectionItem } from '../../tree/workspace-view/documentdb/NewConnectionItem';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 import { PromptConnectionModeStep } from './PromptConnectionModeStep';
 
-export async function newConnection(context: IActionContext, _node?: NewConnectionItem): Promise<void> {
+export async function newConnection(context: IActionContext): Promise<void> {
     const parentId: string = '';
 
     const wizardContext: NewConnectionWizardContext = {

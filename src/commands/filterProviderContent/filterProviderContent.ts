@@ -4,11 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext, type TreeElementBase } from '@microsoft/vscode-azext-utils';
+import { l10n } from 'vscode';
 import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 
-export async function filterProviderContent(context: IActionContext, node?: TreeElementBase): Promise<void> {
+export async function filterProviderContent(context: IActionContext, node: TreeElementBase): Promise<void> {
+    if (!node) {
+        throw new Error(l10n.t('No node selected.'));
+    }
+
     if (
         // transition period code until the parent discovery is added
         !node ||

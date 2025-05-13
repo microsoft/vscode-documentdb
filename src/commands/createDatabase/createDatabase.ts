@@ -12,9 +12,9 @@ import { type CreateDatabaseWizardContext } from './CreateDatabaseWizardContext'
 import { DatabaseNameStep } from './DatabaseNameStep';
 import { ExecuteStep } from './ExecuteStep';
 
-export async function createAzureDatabase(context: IActionContext, node?: ClusterItemBase): Promise<void> {
+export async function createAzureDatabase(context: IActionContext, node: ClusterItemBase): Promise<void> {
     if (!node) {
-        return undefined;
+        throw new Error(l10n.t('No node selected.'));
     }
 
     return createDatabase(context, node);

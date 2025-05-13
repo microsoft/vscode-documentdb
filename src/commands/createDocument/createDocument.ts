@@ -4,23 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
-import { pickAppResource } from '../../utils/pickItem/pickAppResource';
 
-export async function createMongoDocument(context: IActionContext, node?: CollectionItem): Promise<void> {
+export async function createMongoDocument(context: IActionContext, node: CollectionItem): Promise<void> {
     context.telemetry.properties.experience = node?.experience.api;
 
     if (!node) {
-        node = await pickAppResource<CollectionItem>(context, {
-            type: [AzExtResourceType.MongoClusters],
-            expectedChildContextValue: ['treeItem.collection'],
-        });
-    }
-
-    if (!node) {
-        return;
+        throw new Error(vscode.l10n.t('No node selected.'));
     }
 
     await vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {

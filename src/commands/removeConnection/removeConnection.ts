@@ -17,10 +17,10 @@ import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmati
 
 export async function removeAzureConnection(
     context: IActionContext,
-    node?: ClusterItem | DocumentDBClusterItem,
+    node: ClusterItem | DocumentDBClusterItem,
 ): Promise<void> {
     if (!node) {
-        return;
+        throw new Error(l10n.t('No node selected.'));
     }
 
     await removeConnection(context, node);

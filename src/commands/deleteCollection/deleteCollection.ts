@@ -12,6 +12,10 @@ import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
 export async function deleteCollection(context: IActionContext, node: CollectionItem): Promise<void> {
+    if (!node) {
+        throw new Error(l10n.t('No node selected.'));
+    }
+
     context.telemetry.properties.experience = node.experience.api;
 
     const message = l10n.t('Delete collection "{collectionId}" and its contents?', {
