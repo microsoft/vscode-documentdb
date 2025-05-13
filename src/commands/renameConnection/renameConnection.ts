@@ -12,7 +12,7 @@ import { ExecuteStep } from './ExecuteStep';
 import { PromptNewConnectionNameStep } from './PromptNewConnectionNameStep';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';
 
-export async function renameConnection(context: IActionContext, node?: DocumentDBClusterItem): Promise<void> {
+export async function renameConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }

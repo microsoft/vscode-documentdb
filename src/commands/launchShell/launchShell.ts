@@ -21,7 +21,7 @@ import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
  */
 export async function launchShell(
     context: IActionContext,
-    node?: DatabaseItem | CollectionItem | ClusterItemBase,
+    node: DatabaseItem | CollectionItem | ClusterItemBase,
 ): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));

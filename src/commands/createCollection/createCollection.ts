@@ -11,7 +11,7 @@ import { CollectionNameStep } from './CollectionNameStep';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 
-export async function createCollection(context: IActionContext, node?: DatabaseItem): Promise<void> {
+export async function createCollection(context: IActionContext, node: DatabaseItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }

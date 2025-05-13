@@ -9,7 +9,7 @@ import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 
-export async function filterProviderContent(context: IActionContext, node?: TreeElementBase): Promise<void> {
+export async function filterProviderContent(context: IActionContext, node: TreeElementBase): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }

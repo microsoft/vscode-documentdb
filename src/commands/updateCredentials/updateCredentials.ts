@@ -16,7 +16,7 @@ import { PromptPasswordStep } from './PromptPasswordStep';
 import { PromptUserNameStep } from './PromptUserNameStep';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
-export async function updateCredentials(context: IActionContext, node?: DocumentDBClusterItem): Promise<void> {
+export async function updateCredentials(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }

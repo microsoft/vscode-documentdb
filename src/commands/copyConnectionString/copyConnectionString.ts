@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 
-export async function copyAzureConnectionString(context: IActionContext, node?: ClusterItemBase) {
+export async function copyAzureConnectionString(context: IActionContext, node: ClusterItemBase) {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }

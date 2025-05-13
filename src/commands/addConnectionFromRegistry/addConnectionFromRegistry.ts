@@ -12,7 +12,7 @@ import { type DocumentDBResourceItem } from '../../plugins/service-azure/discove
 import { StorageNames, StorageService, type StorageItem } from '../../services/storageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
-export async function addConnectionFromRegistry(context: IActionContext, node?: DocumentDBResourceItem): Promise<void> {
+export async function addConnectionFromRegistry(context: IActionContext, node: DocumentDBResourceItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }

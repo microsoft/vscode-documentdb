@@ -8,7 +8,7 @@ import { l10n } from 'vscode';
 import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
 
-export async function removeDiscoveryRegistry(_context: IActionContext, node?: TreeElementBase): Promise<void> {
+export async function removeDiscoveryRegistry(_context: IActionContext, node: TreeElementBase): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }

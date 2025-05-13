@@ -7,7 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 
-export async function createMongoDocument(context: IActionContext, node?: CollectionItem): Promise<void> {
+export async function createMongoDocument(context: IActionContext, node: CollectionItem): Promise<void> {
     context.telemetry.properties.experience = node?.experience.api;
 
     if (!node) {
