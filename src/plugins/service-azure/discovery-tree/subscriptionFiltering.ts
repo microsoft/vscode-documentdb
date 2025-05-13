@@ -106,9 +106,10 @@ export async function configureAzureSubscriptionFilter(
         const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
         void vscode.window
             .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in to continue.'), signIn)
-            .then((input) => {
+            .then(async (input) => {
                 if (input === signIn) {
-                    void azureSubscriptionProvider.signIn();
+                    await azureSubscriptionProvider.signIn();
+                    ext.discoveryBranchDataProvider.refresh();
                 }
             });
 

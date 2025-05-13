@@ -7,6 +7,7 @@ import { type AzureSubscription, type VSCodeAzureSubscriptionProvider } from '@m
 import {
     AzureWizard,
     AzureWizardPromptStep,
+    UserCancelledError,
     type IActionContext,
     type IAzureQuickPickItem,
 } from '@microsoft/vscode-azext-utils';
@@ -28,10 +29,17 @@ class SubscriptionFilterStep extends AzureWizardPromptStep<ConfigureVmFilterWiza
         const azureSubscriptionProvider = context.azureSubscriptionProvider;
 
         if (!(await azureSubscriptionProvider.isSignedIn())) {
-            await azureSubscriptionProvider.signIn(); // This will prompt the user if not signed in
-            if (!(await azureSubscriptionProvider.isSignedIn())) {
-                throw new Error(l10n.t('You must be signed in to Azure to select subscriptions.'));
-            }
+            const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
+            void vscode.window
+                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in to continue.'), signIn)
+                .then(async (input) => {
+                    if (input === signIn) {
+                        await azureSubscriptionProvider.signIn();
+                        ext.discoveryBranchDataProvider.refresh();
+                    }
+                });
+
+            throw new UserCancelledError(l10n.t('User is not signed in to Azure.'));
         }
 
         const selectedSubscriptionIds = getSelectedSubscriptionIds();
