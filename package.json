@@ -222,11 +222,11 @@
     "viewsWelcome": [
       {
         "view": "connectionsView",
-        "contents": "Welcome! To start exploring and managing your database, you'll need to connect to it first. Once connected, you can easily view, query, and modify your data.\n\n[$(plus) Add New Connection…](vscode-documentdb.command.connectionsView.newConnection)\nClick the button above to get started and unlock the full potential of your database."
+        "contents": "Welcome! To start exploring and managing your database, you'll need to connect to it first. Once connected, you can easily view, query, and modify your data.\n\n[$(plus) Add New Connection…](command:vscode-documentdb.command.connectionsView.newConnection)\nClick the button above to get started and unlock the full potential of your database."
       },
       {
         "view": "discoveryView",
-        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
+        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
       }
     ],
     "languages": [
