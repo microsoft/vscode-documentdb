@@ -109,7 +109,7 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
                     id: `${this.id}/error`,
                     label: l10n.t('Failed to authenticate (click to retry)'),
                     iconPath: new vscode.ThemeIcon('error'),
-                    commandId: 'command.documentDB.refresh',
+                    commandId: 'vscode-documentdb.command.refresh',
                     commandArgs: [this],
                 }) as TreeElement,
             ];
@@ -124,7 +124,7 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
                         id: `${this.id}/no-databases`,
                         label: l10n.t('Create Database…'),
                         iconPath: new vscode.ThemeIcon('plus'),
-                        commandId: 'command.documentDB.createDatabase',
+                        commandId: 'vscode-documentdb.command.createDatabase',
                         commandArgs: [this],
                     }) as TreeElement,
                 ];

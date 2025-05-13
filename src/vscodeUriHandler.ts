@@ -489,7 +489,7 @@ async function openAppropriateEditorForAzure(resource: TreeElement): Promise<voi
         isTreeElementWithContextValue(resource) &&
         (resource.contextValue.includes('treeItem.collection') || resource.contextValue.includes('treeItem.container'))
     ) {
-        await vscode.commands.executeCommand('command.mongoClusters.containerView.open', resource);
+        await vscode.commands.executeCommand('vscode-documentdb.command.containerView.open', resource);
     } else {
         throw new Error(l10n.t('Unable to determine the experience for the resource'));
     }

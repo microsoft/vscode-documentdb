@@ -49,7 +49,7 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
             label: l10n.t('Documents'),
             command: {
                 title: l10n.t('Open Collection'), // unused, but required by TreeItem
-                command: 'command.internal.mongoClusters.containerView.open',
+                command: 'vscode-documentdb.command.internal.containerView.open',
                 arguments: [
                     {
                         id: this.id,

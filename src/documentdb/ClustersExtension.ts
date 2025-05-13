@@ -126,64 +126,64 @@ export class ClustersExtension implements vscode.Disposable {
 
                 //// General Commands:
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.refresh', refreshTreeElement);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.refresh', refreshTreeElement);
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.createDatabase', createAzureDatabase);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.createDatabase', createAzureDatabase);
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.copyConnectionString',
+                    'vscode-documentdb.command.copyConnectionString',
                     copyAzureConnectionString,
                 );
 
                 //// Connections View Commands:
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.connectionsView.newConnection',
+                    'vscode-documentdb.command.connectionsView.newConnection',
                     newConnection,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.connectionsView.updateCredentials',
+                    'vscode-documentdb.command.connectionsView.updateCredentials',
                     updateCredentials,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.connectionsView.newEmulatorConnection',
+                    'vscode-documentdb.command.connectionsView.newEmulatorConnection',
                     newLocalConnection,
                 );
 
-                registerCommand('command.documentDB.connectionsView.refresh', (context: IActionContext) => {
+                registerCommand('vscode-documentdb.command.connectionsView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.ConnectionsView);
                 });
 
                 //// Registry Commands:
 
-                registerCommand('command.documentDB.discoveryView.addRegistry', addDiscoveryRegistry);
+                registerCommand('vscode-documentdb.command.discoveryView.addRegistry', addDiscoveryRegistry);
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.discoveryView.removeRegistry',
+                    'vscode-documentdb.command.discoveryView.removeRegistry',
                     removeDiscoveryRegistry,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.discoveryView.filterProviderContent',
+                    'vscode-documentdb.command.discoveryView.filterProviderContent',
                     filterProviderContent,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.discoveryView.addConnectionToConnectionsView',
+                    'vscode-documentdb.command.discoveryView.addConnectionToConnectionsView',
                     addConnectionFromRegistry,
                 );
 
-                registerCommand('command.documentDB.discoveryView.refresh', (context: IActionContext) => {
+                registerCommand('vscode-documentdb.command.discoveryView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.DiscoveryView);
                 });
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.connectionsView.removeConnection',
+                    'vscode-documentdb.command.connectionsView.removeConnection',
                     removeConnection,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'command.documentDB.connectionsView.renameConnection',
+                    'vscode-documentdb.command.connectionsView.renameConnection',
                     renameConnection,
                 );
 
@@ -200,21 +200,24 @@ export class ClustersExtension implements vscode.Disposable {
                  * It was possible to merge the two commands into one, but it would result in code that is
                  * harder to understand and maintain.
                  */
-                registerCommand('command.internal.mongoClusters.containerView.open', openCollectionViewInternal);
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.containerView.open', openCollectionView);
+                registerCommand('vscode-documentdb.command.internal.containerView.open', openCollectionViewInternal);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.containerView.open',
+                    openCollectionView,
+                );
 
-                registerCommand('command.internal.mongoClusters.documentView.open', openDocumentView);
+                registerCommand('vscode-documentdb.command.internal.documentView.open', openDocumentView);
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.launchShell', launchShell);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.launchShell', launchShell);
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.dropCollection', deleteCollection);
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.dropDatabase', deleteAzureDatabase);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropCollection', deleteCollection);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropDatabase', deleteAzureDatabase);
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.createCollection', createCollection);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.createCollection', createCollection);
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.createDocument', createMongoDocument);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.createDocument', createMongoDocument);
 
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.importDocuments', importDocuments);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.importDocuments', importDocuments);
 
                 registerScrapbookCommands();
 
@@ -228,8 +231,11 @@ export class ClustersExtension implements vscode.Disposable {
                  * It was possible to merge the two commands into one, but it would result in code that is
                  * harder to understand and maintain.
                  */
-                registerCommand('command.internal.mongoClusters.exportDocuments', exportQueryResults);
-                registerCommandWithTreeNodeUnwrapping('command.documentDB.exportDocuments', exportEntireCollection);
+                registerCommand('vscode-documentdb.command.internal.exportDocuments', exportQueryResults);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.exportDocuments',
+                    exportEntireCollection,
+                );
                 // This is an optional task - if it fails, we don't want to break extension activation,
                 // but we should log the error for diagnostics
                 try {

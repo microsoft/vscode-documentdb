@@ -37,13 +37,13 @@ export function registerScrapbookCommands(): void {
 
     setUpErrorReporting();
 
-    registerCommandWithTreeNodeUnwrapping('command.documentDB.scrapbook.new', createScrapbook);
-    registerCommandWithTreeNodeUnwrapping('command.documentDB.scrapbook.executeCommand', executeCommand);
-    registerCommandWithTreeNodeUnwrapping('command.documentDB.scrapbook.executeAllCommands', executeAllCommand);
+    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.new', createScrapbook);
+    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.executeCommand', executeCommand);
+    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.executeAllCommands', executeAllCommand);
 
     // #region Database command
 
-    registerCommandWithTreeNodeUnwrapping('command.documentDB.scrapbook.connect', connectCluster);
+    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.connect', connectCluster);
 
     // #endregion
 }
