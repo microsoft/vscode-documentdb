@@ -200,13 +200,13 @@ export class ClustersExtension implements vscode.Disposable {
                  * It was possible to merge the two commands into one, but it would result in code that is
                  * harder to understand and maintain.
                  */
-                registerCommand('command.internal.mongoClusters.containerView.open', openCollectionViewInternal);
+                registerCommand('vscode-documentdb.command.internal.containerView.open', openCollectionViewInternal);
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.containerView.open',
                     openCollectionView,
                 );
 
-                registerCommand('command.internal.mongoClusters.documentView.open', openDocumentView);
+                registerCommand('vscode-documentdb.command.internal.documentView.open', openDocumentView);
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.launchShell', launchShell);
 
@@ -231,7 +231,7 @@ export class ClustersExtension implements vscode.Disposable {
                  * It was possible to merge the two commands into one, but it would result in code that is
                  * harder to understand and maintain.
                  */
-                registerCommand('command.internal.mongoClusters.exportDocuments', exportQueryResults);
+                registerCommand('vscode-documentdb.command.internal.exportDocuments', exportQueryResults);
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.exportDocuments',
                     exportEntireCollection,

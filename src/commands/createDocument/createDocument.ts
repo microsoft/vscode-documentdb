@@ -23,7 +23,7 @@ export async function createMongoDocument(context: IActionContext, node?: Collec
         return;
     }
 
-    await vscode.commands.executeCommand('command.internal.mongoClusters.documentView.open', {
+    await vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
         clusterId: node.cluster.id,
         databaseName: node.databaseInfo.name,
         collectionName: node.collectionInfo.name,

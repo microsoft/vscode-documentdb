@@ -159,7 +159,7 @@ export const collectionsViewRouter = router({
         .mutation(({ ctx }) => {
             const myCtx = ctx as RouterContext;
 
-            vscode.commands.executeCommand('command.internal.mongoClusters.documentView.open', {
+            vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
                 databaseName: myCtx.databaseName,
                 collectionName: myCtx.collectionName,
@@ -174,7 +174,7 @@ export const collectionsViewRouter = router({
         .mutation(({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
 
-            vscode.commands.executeCommand('command.internal.mongoClusters.documentView.open', {
+            vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
                 databaseName: myCtx.databaseName,
                 collectionName: myCtx.collectionName,
@@ -190,7 +190,7 @@ export const collectionsViewRouter = router({
         .mutation(({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
 
-            vscode.commands.executeCommand('command.internal.mongoClusters.documentView.open', {
+            vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
                 databaseName: myCtx.databaseName,
                 collectionName: myCtx.collectionName,
@@ -249,10 +249,14 @@ export const collectionsViewRouter = router({
             );
 
             if (collectionTreeNode) {
-                vscode.commands.executeCommand('command.internal.mongoClusters.exportDocuments', collectionTreeNode, {
-                    queryText: input.query,
-                    source: 'webview;collectionView',
-                });
+                vscode.commands.executeCommand(
+                    'vscode-documentdb.command.internal.exportDocuments',
+                    collectionTreeNode,
+                    {
+                        queryText: input.query,
+                        source: 'webview;collectionView',
+                    },
+                );
             } else {
                 throw new Error('Could not find the specified collection in the tree.');
             }
