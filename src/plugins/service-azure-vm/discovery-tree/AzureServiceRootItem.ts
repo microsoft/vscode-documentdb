@@ -6,6 +6,7 @@
 import { type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { ext } from '../../../extensionVariables';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { AzureSubscriptionItem } from './AzureSubscriptionItem';
@@ -29,11 +30,14 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
             const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
             void vscode.window
                 .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in to continue.'), signIn)
-                .then((input) => {
+                .then(async (input) => {
                     if (input === signIn) {
-                        void this.azureSubscriptionProvider.signIn();
+                        await this.azureSubscriptionProvider.signIn();
+                        ext.discoveryBranchDataProvider.refresh();
                     }
                 });
+
+            return [];
         }
 
         const subscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
