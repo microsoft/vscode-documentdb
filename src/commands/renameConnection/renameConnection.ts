@@ -14,7 +14,7 @@ import { type RenameConnectionWizardContext } from './RenameConnectionWizardCont
 
 export async function renameConnection(context: IActionContext, node?: DocumentDBClusterItem): Promise<void> {
     if (!node) {
-        throw new Error(l10n.t('No cluster selected.'));
+        throw new Error(l10n.t('No node selected.'));
     }
 
     const wizardContext: RenameConnectionWizardContext = {

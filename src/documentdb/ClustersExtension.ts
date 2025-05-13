@@ -135,10 +135,7 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 //// Connections View Commands:
-                registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.connectionsView.newConnection',
-                    newConnection,
-                );
+                registerCommand('vscode-documentdb.command.connectionsView.newConnection', newConnection);
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.updateCredentials',

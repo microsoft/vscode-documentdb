@@ -4,25 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizard, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { pickAppResource } from '../../utils/pickItem/pickAppResource';
 import { CollectionNameStep } from './CollectionNameStep';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 
 export async function createCollection(context: IActionContext, node?: DatabaseItem): Promise<void> {
     if (!node) {
-        node = await pickAppResource<DatabaseItem>(context, {
-            type: AzExtResourceType.MongoClusters,
-            expectedChildContextValue: 'treeItem.database',
-        });
-    }
-
-    if (!node) {
-        return undefined;
+        throw new Error(l10n.t('No node selected.'));
     }
 
     context.telemetry.properties.experience = node.experience.api;

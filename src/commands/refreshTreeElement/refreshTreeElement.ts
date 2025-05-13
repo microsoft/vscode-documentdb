@@ -4,10 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { l10n } from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../../tree/TreeElement';
 
 export async function refreshTreeElement(context: IActionContext, node: TreeElement): Promise<void> {
+    if (!node) {
+        throw new Error(l10n.t('No node selected.'));
+    }
+
     if (node && 'refresh' in node && typeof node.refresh === 'function') {
         await node.refresh.call(node, context);
         return;

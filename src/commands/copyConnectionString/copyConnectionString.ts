@@ -4,22 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
-import { pickAppResource } from '../../utils/pickItem/pickAppResource';
 
 export async function copyAzureConnectionString(context: IActionContext, node?: ClusterItemBase) {
     if (!node) {
-        node = await pickAppResource<ClusterItemBase>(context, {
-            type: [AzExtResourceType.MongoClusters],
-        });
-    }
-
-    if (!node) {
-        return undefined;
+        throw new Error(l10n.t('No node selected.'));
     }
 
     await copyConnectionString(context, node);

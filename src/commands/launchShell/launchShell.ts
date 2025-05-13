@@ -24,7 +24,7 @@ export async function launchShell(
     node?: DatabaseItem | CollectionItem | ClusterItemBase,
 ): Promise<void> {
     if (!node) {
-        throw new Error(l10n.t('No database or collection selected.'));
+        throw new Error(l10n.t('No node selected.'));
     }
 
     context.telemetry.properties.experience = node.experience.api;

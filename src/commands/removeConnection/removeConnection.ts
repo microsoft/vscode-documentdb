@@ -20,7 +20,7 @@ export async function removeAzureConnection(
     node?: ClusterItem | DocumentDBClusterItem,
 ): Promise<void> {
     if (!node) {
-        return;
+        throw new Error(l10n.t('No node selected.'));
     }
 
     await removeConnection(context, node);

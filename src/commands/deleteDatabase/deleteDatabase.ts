@@ -13,7 +13,7 @@ import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmati
 
 export async function deleteAzureDatabase(context: IActionContext, node?: DatabaseItem): Promise<void> {
     if (!node) {
-        return undefined;
+        throw new Error(l10n.t('No node selected.'));
     }
 
     return deleteDatabase(context, node);

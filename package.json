@@ -277,17 +277,17 @@
         "icon": "$(edit)"
       },
       {
-        "//": "[ConnectionsView] New Emulator Connection",
+        "//": "[ConnectionsView] New Local Connection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.newEmulatorConnection",
-        "title": "New Connection…",
+        "title": "New Local Connection…",
         "icon": "$(add)"
       },
       {
         "//": "[ConnectionsView] Remove Connection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.removeConnection",
-        "title": "Remove Connection…"
+        "title": "Remove…"
       },
       {
         "//": "[ConnectionsView] Refresh View",
@@ -307,14 +307,14 @@
         "//": "[DiscoveryView] Enable Registry",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.addRegistry",
-        "title": "Enable new Registry…",
+        "title": "Enable New Registry…",
         "icon": "$(add)"
       },
       {
         "//": "[DiscoveryView] Disable Registry",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.removeRegistry",
-        "title": "Disable Registry…"
+        "title": "Disable Registry"
       },
       {
         "//": "[DiscoveryView] Save To DocumentDB Connections",
@@ -647,12 +647,84 @@
           "when": "never"
         },
         {
+          "command": "vscode-documentdb.command.connectionsView.renameConnection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.connectionsView.updateCredentials",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.connectionsView.removeConnection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.removeRegistry",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.copyConnectionString",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.createDatabase",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.dropDatabase",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.createCollection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.dropCollection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.createDocument",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.importDocuments",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.exportDocuments",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.launchShell",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.containerView.open",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.scrapbook.new",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.scrapbook.connect",
+          "when": "never"
+        },
+        {
           "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
-          "when": "editorLangId == 'mongo'"
+          "when": "never"
         },
         {
           "command": "vscode-documentdb.command.scrapbook.executeCommand",
-          "when": "editorLangId == 'mongo'"
+          "when": "never"
         }
       ]
     },
