@@ -16,7 +16,6 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 // eslint-disable-next-line import/no-internal-modules
 import { ext } from '../../../extensionVariables';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
-import { WorkspaceResourceType } from '../../../tree/workspace-api/SharedWorkspaceResourceProvider';
 // eslint-disable-next-line import/no-internal-modules
 import { Views } from '../../../documentdb/Views';
 import basicFindQuerySchema from '../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
@@ -42,16 +41,23 @@ async function findCollectionNodeInTree(
     const nodeId = `${clusterId}/${databaseName}/${collectionName}`;
 
     // TODO: this should not be necessary in general, let's rebuild this in the near future
+    // There is a lack of consistency with using the parentId in the ID of the tree nodes
+    // This is happening in the discovery and the plugins, it's easy to fix but needs
+    // a bit of work. For now, we'll ignore it as we only have two branchdata providers
+    // but it needs to be fixed when new providers are added.
 
     if (clusterId.startsWith(Views.ConnectionsView)) {
         branchDataProvider = ext.connectionsBranchDataProvider;
-    } else if (clusterId.startsWith(Views.DiscoveryView)) {
+    } else {
         branchDataProvider = ext.discoveryBranchDataProvider;
-    } else if (clusterId.startsWith(WorkspaceResourceType.MongoClusters)) {
-        branchDataProvider = ext.mongoClustersWorkspaceBranchDataProvider;
-    } else if (clusterId.includes('/providers/Microsoft.DocumentDB/mongoClusters/')) {
-        branchDataProvider = ext.mongoVCoreBranchDataProvider;
     }
+    // } else if (clusterId.startsWith(Views.DiscoveryView)) {
+    //     branchDataProvider = ext.discoveryBranchDataProvider;
+    // } else if (clusterId.startsWith(WorkspaceResourceType.MongoClusters)) {
+    //     branchDataProvider = ext.mongoClustersWorkspaceBranchDataProvider;
+    // } else if (clusterId.includes('/providers/Microsoft.DocumentDB/mongoClusters/')) {
+    //     branchDataProvider = ext.mongoVCoreBranchDataProvider;
+    // }
 
     if (branchDataProvider) {
         try {
