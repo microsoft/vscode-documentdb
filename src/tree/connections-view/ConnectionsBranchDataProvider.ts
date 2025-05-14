@@ -16,6 +16,7 @@ import { StorageNames, StorageService } from '../../services/storageService';
 import { type ClusterModel } from '../documentdb/ClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
+import { TreeParentCache } from '../TreeParentCache';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
@@ -33,6 +34,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
     private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<
         void | TreeElement | TreeElement[] | null | undefined
     >();
+    private readonly parentCache = new TreeParentCache<TreeElement>();
 
     /**
      * From vscode.TreeDataProvider<T>:
@@ -70,14 +72,23 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
             if (!element) {
                 context.telemetry.properties.parentNodeContext = 'root';
 
+                // For root-level items, we should clear any existing cache first
+                this.parentCache.clear();
+
                 const rootItems = await this.getRootItems(Views.ConnectionsView);
                 if (!rootItems) {
                     return null;
                 }
 
+                // Now process and add each root item to the cache
                 for (const item of rootItems) {
                     if (isTreeElementWithContextValue(item)) {
                         this.appendContextValue(item, Views.ConnectionsView);
+                    }
+
+                    // Add root items to the cache
+                    if (item.id) {
+                        this.parentCache.registerNode(item, (node) => node.id);
                     }
                 }
 
@@ -91,6 +102,12 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
                     if (isTreeElementWithContextValue(child)) {
                         this.appendContextValue(child, Views.ConnectionsView);
                     }
+
+                    // Register parent-child relationship in the cache
+                    if (element.id && child.id) {
+                        this.parentCache.registerRelationship(element, child, (node) => node.id);
+                    }
+
                     return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as TreeElement;
                 }
                 return child;
@@ -119,7 +136,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
             new LocalEmulatorsItem(parentId),
             ...connectionItems.map((item) => {
                 const model: ClusterModel = {
-                    id: item.id,
+                    id: `${parentId}/${item.id}`,
                     name: item.name,
                     dbExperience: MongoClustersExperience,
                     connectionString: item?.secrets?.[0] ?? undefined,
@@ -146,6 +163,21 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
      * @param element The element to refresh. If not provided, the entire tree will be refreshed.
      */
     refresh(element?: TreeElement): void {
+        if (element?.id) {
+            this.parentCache.clear(element.id);
+        } else {
+            this.parentCache.clear();
+        }
+
         this.onDidChangeTreeDataEmitter.fire(element);
+    }
+
+    // Implement getParent using the cache
+    getParent(element: TreeElement): TreeElement | null | undefined {
+        return this.parentCache.getParent(element, (node) => node.id);
+    }
+
+    async findNodeById(id: string): Promise<TreeElement | undefined> {
+        return this.parentCache.findNodeById(id, (node) => node.id);
     }
 }

@@ -18,6 +18,7 @@ import { ext } from '../../../extensionVariables';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { WorkspaceResourceType } from '../../../tree/workspace-api/SharedWorkspaceResourceProvider';
 // eslint-disable-next-line import/no-internal-modules
+import { Views } from '../../../documentdb/Views';
 import basicFindQuerySchema from '../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
 import { generateMongoFindJsonSchema } from '../../../utils/json/mongo/autocomplete/generateMongoFindJsonSchema';
 import { promptAfterActionEventually } from '../../../utils/survey';
@@ -40,7 +41,13 @@ async function findCollectionNodeInTree(
     let branchDataProvider: { findNodeById(id: string): Promise<unknown> } | undefined;
     const nodeId = `${clusterId}/${databaseName}/${collectionName}`;
 
-    if (clusterId.startsWith(WorkspaceResourceType.MongoClusters)) {
+    // TODO: this should not be necessary in general, let's rebuild this in the near future
+
+    if (clusterId.startsWith(Views.ConnectionsView)) {
+        branchDataProvider = ext.connectionsBranchDataProvider;
+    } else if (clusterId.startsWith(Views.DiscoveryView)) {
+        branchDataProvider = ext.discoveryBranchDataProvider;
+    } else if (clusterId.startsWith(WorkspaceResourceType.MongoClusters)) {
         branchDataProvider = ext.mongoClustersWorkspaceBranchDataProvider;
     } else if (clusterId.includes('/providers/Microsoft.DocumentDB/mongoClusters/')) {
         branchDataProvider = ext.mongoVCoreBranchDataProvider;

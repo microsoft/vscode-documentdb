@@ -14,6 +14,7 @@ import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
+import { TreeParentCache } from '../TreeParentCache';
 
 /**
  * This class follows the same pattern as the `WorkspaceDataProvicers` does with Azure Resoruces.
@@ -45,6 +46,11 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
      * This avoids duplicate work and ensures only one request is in progress per element at a time.
      */
     private getChildrenPromises = new Map<TreeElement, Promise<TreeElement[] | null | undefined>>();
+
+    /**
+     * Cache for tracking parent-child relationships to support the getParent method.
+     */
+    private readonly parentCache = new TreeParentCache<TreeElement>();
 
     private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<
         void | TreeElement | TreeElement[] | null | undefined
@@ -100,6 +106,9 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
         // Reset the set of root items
         this.currentRootItems = new WeakSet<TreeElement>();
 
+        // Clear the parent cache when retrieving root items
+        this.parentCache.clear();
+
         // Get the list of active discovery provider IDs from global state
         const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
 
@@ -135,6 +144,11 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
             // Track this as a root item for context menu support (see getTreeItem)
             this.currentRootItems.add(wrappedInStateHandling);
 
+            // Register root item in the parent cache
+            if (wrappedInStateHandling.id) {
+                this.parentCache.registerNode(wrappedInStateHandling, (node) => node.id);
+            }
+
             rootItems.push(wrappedInStateHandling);
         }
 
@@ -169,7 +183,17 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
                     if (isTreeElementWithContextValue(child)) {
                         this.appendContextValue(child, Views.DiscoveryView);
                     }
-                    return ext.state.wrapItemInStateHandling(child, () => this.refresh(child));
+
+                    const wrappedChild = ext.state.wrapItemInStateHandling(child, () =>
+                        this.refresh(child),
+                    ) as TreeElement;
+
+                    // Register parent-child relationship in the cache
+                    if (element.id && wrappedChild.id) {
+                        this.parentCache.registerRelationship(element, wrappedChild, (node) => node.id);
+                    }
+
+                    return wrappedChild;
                 }) as TreeElement[];
             })();
 
@@ -202,6 +226,42 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
      * @param element The element to refresh. If not provided, the entire tree will be refreshed.
      */
     refresh(element?: TreeElement): void {
+        // Clear the relevant part of the parent cache
+        if (element?.id) {
+            this.parentCache.clear(element.id);
+        } else {
+            this.parentCache.clear();
+        }
+
         this.onDidChangeTreeDataEmitter.fire(element);
+    }
+
+    /**
+     * Gets the parent of a tree element. Required for TreeView.reveal functionality.
+     *
+     * @param element The element for which to find the parent
+     * @returns The parent element, or undefined if the element is a root item
+     */
+    getParent(element: TreeElement): TreeElement | null | undefined {
+        return this.parentCache.getParent(element, (node) => node.id);
+    }
+
+    /**
+     * Finds a node in the tree by its ID.
+     *
+     * @param id The ID of the node to find
+     * @returns A Promise that resolves to the found node or undefined if not found
+     */
+    async findNodeById(id: string): Promise<TreeElement | undefined> {
+        return this.parentCache.findNodeById(
+            id,
+            (node) => node.id,
+            async (element) => {
+                if (!element.getChildren) {
+                    return undefined;
+                }
+                return element.getChildren();
+            },
+        );
     }
 }
