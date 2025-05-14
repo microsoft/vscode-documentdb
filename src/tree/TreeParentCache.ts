@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type TreeElement } from './TreeElement';
+
 /**
  * Helper class for caching parent-child relationships in tree data providers.
  * This enables implementation of the getParent method required for TreeView.reveal functionality.
  */
-export class TreeParentCache<T> {
+export class TreeParentCache<T extends TreeElement> {
     private readonly nodeCache = new Map<string, T>();
     private readonly childToParentMap = new Map<string, string>();
 
@@ -16,11 +18,10 @@ export class TreeParentCache<T> {
      *
      * @param parent The parent node
      * @param child The child node
-     * @param getNodeId Function to extract a node's ID
      */
-    registerRelationship(parent: T, child: T, getNodeId: (node: T) => string | undefined): void {
-        const parentId = getNodeId(parent);
-        const childId = getNodeId(child);
+    registerRelationship(parent: T, child: T): void {
+        const parentId = parent.id;
+        const childId = child.id;
 
         if (parentId && childId) {
             this.nodeCache.set(parentId, parent);
@@ -33,10 +34,9 @@ export class TreeParentCache<T> {
      * Registers a node in the cache (typically used for root nodes that don't have parents)
      *
      * @param node The node to register
-     * @param getNodeId Function to extract a node's ID
      */
-    registerNode(node: T, getNodeId: (node: T) => string | undefined): void {
-        const nodeId = getNodeId(node);
+    registerNode(node: T): void {
+        const nodeId = node.id;
 
         if (nodeId) {
             this.nodeCache.set(nodeId, node);
@@ -47,11 +47,10 @@ export class TreeParentCache<T> {
      * Gets the parent of a node from the cache.
      *
      * @param element The node to find the parent for
-     * @param getNodeId Function to extract a node's ID
      * @returns The parent node if found, otherwise undefined
      */
-    getParent(element: T, getNodeId: (node: T) => string | undefined): T | undefined {
-        const elementId = getNodeId(element);
+    getParent(element: T): T | undefined {
+        const elementId = element.id;
 
         if (!elementId) {
             return undefined;
@@ -115,13 +114,11 @@ export class TreeParentCache<T> {
     /**
      * Finds and returns a tree node by its ID.
      * @param id - The ID of the node to find
-     * @param getNodeId Function to extract a node's ID
      * @param getChildrenFunc Optional function to get children of a node for deep searching
      * @returns A Promise that resolves to the found node or undefined if not found
      */
     async findNodeById(
         id: string,
-        getNodeId: (node: T) => string | undefined,
         getChildrenFunc?: (element: T) => Promise<T[] | null | undefined>,
     ): Promise<T | undefined> {
         // Direct cache lookup
@@ -132,7 +129,7 @@ export class TreeParentCache<T> {
         if (getChildrenFunc) {
             for (const [key, value] of this.nodeCache.entries()) {
                 if (key.startsWith(id)) {
-                    const child = await this.findChildById(value, id, getNodeId, getChildrenFunc);
+                    const child = await this.findChildById(value, id, getChildrenFunc);
                     if (child) return child;
                 }
             }
@@ -146,17 +143,15 @@ export class TreeParentCache<T> {
      *
      * @param element - The tree element from which to start the search
      * @param id - The ID of the child element to find
-     * @param getNodeId - Function to extract a node's ID
      * @param getChildrenFunc - Function to get children of a node
      * @returns A Promise that resolves to the found node or undefined if not found
      */
     async findChildById(
         element: T,
         id: string,
-        getNodeId: (node: T) => string | undefined,
         getChildrenFunc: (element: T) => Promise<T[] | null | undefined>,
     ): Promise<T | undefined> {
-        const elementId = getNodeId(element);
+        const elementId = element.id;
         if (!elementId || !id.startsWith(elementId)) {
             return undefined;
         }
@@ -171,12 +166,12 @@ export class TreeParentCache<T> {
             }
 
             for (const child of children) {
-                const childId = getNodeId(child);
+                const childId = child.id;
                 if (!childId) continue;
 
                 if (childId.toLowerCase() === id.toLowerCase()) {
                     return child;
-                } else if (this.isAncestorOf(child, id, getNodeId)) {
+                } else if (this.isAncestorOf(child, id)) {
                     node = child;
                     continue outerLoop;
                 }
@@ -191,11 +186,10 @@ export class TreeParentCache<T> {
      *
      * @param element - The potential ancestor element
      * @param id - The ID to check against
-     * @param getNodeId - Function to extract a node's ID
      * @returns true if element is an ancestor of the node with the given ID, false otherwise
      */
-    private isAncestorOf(element: T, id: string, getNodeId: (node: T) => string | undefined): boolean {
-        const elementId = getNodeId(element);
+    private isAncestorOf(element: T, id: string): boolean {
+        const elementId = element.id;
         if (!elementId || id === undefined) {
             return false;
         }

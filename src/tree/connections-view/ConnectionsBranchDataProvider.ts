@@ -88,7 +88,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
 
                     // Add root items to the cache
                     if (item.id) {
-                        this.parentCache.registerNode(item, (node) => node.id);
+                        this.parentCache.registerNode(item);
                     }
                 }
 
@@ -105,7 +105,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
 
                     // Register parent-child relationship in the cache
                     if (element.id && child.id) {
-                        this.parentCache.registerRelationship(element, child, (node) => node.id);
+                        this.parentCache.registerRelationship(element, child);
                     }
 
                     return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as TreeElement;
@@ -174,10 +174,10 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
 
     // Implement getParent using the cache
     getParent(element: TreeElement): TreeElement | null | undefined {
-        return this.parentCache.getParent(element, (node) => node.id);
+        return this.parentCache.getParent(element);
     }
 
     async findNodeById(id: string): Promise<TreeElement | undefined> {
-        return this.parentCache.findNodeById(id, (node) => node.id);
+        return this.parentCache.findNodeById(id);
     }
 }

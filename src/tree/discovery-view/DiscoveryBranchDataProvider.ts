@@ -100,6 +100,7 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
 
     /**
      * Helper to get root items for the tree.
+     * Root items here are all the regiestered and enabled discovery providers.
      */
     // eslint-disable-next-line @typescript-eslint/require-await
     private async getRootItems(): Promise<TreeElement[] | null | undefined> {
@@ -129,7 +130,7 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
             }
 
             // Get the root item for this provider
-            const rootItem = discoveryProvider.getDiscoveryTreeRootItem(`${Views.DiscoveryView}/${id}`);
+            const rootItem = discoveryProvider.getDiscoveryTreeRootItem(Views.DiscoveryView);
 
             if (isTreeElementWithContextValue(rootItem)) {
                 this.appendContextValue(rootItem, Views.DiscoveryView);
@@ -146,7 +147,7 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
 
             // Register root item in the parent cache
             if (wrappedInStateHandling.id) {
-                this.parentCache.registerNode(wrappedInStateHandling, (node) => node.id);
+                this.parentCache.registerNode(wrappedInStateHandling);
             }
 
             rootItems.push(wrappedInStateHandling);
@@ -190,7 +191,7 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
 
                     // Register parent-child relationship in the cache
                     if (element.id && wrappedChild.id) {
-                        this.parentCache.registerRelationship(element, wrappedChild, (node) => node.id);
+                        this.parentCache.registerRelationship(element, wrappedChild);
                     }
 
                     return wrappedChild;
@@ -243,7 +244,7 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
      * @returns The parent element, or undefined if the element is a root item
      */
     getParent(element: TreeElement): TreeElement | null | undefined {
-        return this.parentCache.getParent(element, (node) => node.id);
+        return this.parentCache.getParent(element);
     }
 
     /**
@@ -253,15 +254,11 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements vs
      * @returns A Promise that resolves to the found node or undefined if not found
      */
     async findNodeById(id: string): Promise<TreeElement | undefined> {
-        return this.parentCache.findNodeById(
-            id,
-            (node) => node.id,
-            async (element) => {
-                if (!element.getChildren) {
-                    return undefined;
-                }
-                return element.getChildren();
-            },
-        );
+        return this.parentCache.findNodeById(id, async (element) => {
+            if (!element.getChildren) {
+                return undefined;
+            }
+            return element.getChildren();
+        });
     }
 }
