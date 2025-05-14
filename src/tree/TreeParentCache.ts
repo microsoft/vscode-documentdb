@@ -8,9 +8,53 @@ import { type TreeElement } from './TreeElement';
 /**
  * Helper class for caching parent-child relationships in tree data providers.
  * This enables implementation of the getParent method required for TreeView.reveal functionality.
+ *
+ * ## Purpose and Benefits
+ *
+ * VS Code's TreeDataProvider interface includes an optional getParent method that enables
+ * important functionality like tree.reveal(). However, implementing this method requires
+ * tracking parent-child relationships, which complicates tree providers. This class solves
+ * this problem by abstracting parent-child relationship tracking into a reusable component.
+ *
+ * ## Integration with Tree Providers
+ *
+ * This cache is used by tree data providers like:
+ *
+ * 1. ConnectionsBranchDataProvider - For the Connections view showing database clusters and connections
+ * 2. DiscoveryBranchDataProvider - For the Discovery view showing various database discovery mechanisms
+ *
+ * These providers maintain their tree structure by registering nodes and relationships during
+ * their getChildren() calls, which enables them to later resolve parent nodes and perform
+ * node lookups by ID.
+ *
+ * ## Cache Design Considerations
+ *
+ * - Hierarchical ID structure is supported (paths with '/' separators)
+ * - Explicit relationship tracking allows non-hierarchical relationships
+ * - Optimized for fast parent lookups and node finding operations
+ * - Selective cache clearing for refreshing specific branches
+ *
+ * ## Advantages over Base Class Approach
+ *
+ * This composition-based approach offers more flexibility than inheritance:
+ * - Providers can selectively implement required functionality
+ * - Multiple inheritance issues are avoided
+ * - Implementation is consistent between different provider types
+ * - Allows for separate evolution of caching and tree provider logic
  */
 export class TreeParentCache<T extends TreeElement> {
+    /**
+     * Stores nodes by their ID for quick lookup operations.
+     * This cache is the primary source for node retrieval operations and enables
+     * findNodeById to efficiently return existing nodes.
+     */
     private readonly nodeCache = new Map<string, T>();
+
+    /**
+     * Maps child node IDs to their parent node IDs.
+     * This mapping enables the getParent method to quickly find a node's parent
+     * without having to traverse the entire tree structure.
+     */
     private readonly childToParentMap = new Map<string, string>();
 
     /**

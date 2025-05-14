@@ -14,6 +14,7 @@ import { MongoClustersExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { type ClusterModel } from '../documentdb/ClusterModel';
+import { type ExtendedTreeDataProvider } from '../ExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { TreeParentCache } from '../TreeParentCache';
@@ -22,15 +23,25 @@ import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
 
 /**
- * This class follows the same pattern as the `WorkspaceDataProvicers` does with Azure Resoruces.
+ * Tree data provider for the Connections view.
  *
- * The reason is that we want to be able to use the same implementation of tree items for both,
- * the Azure Resources integration, and this extension.
+ * This provider manages the display of database connections, including clusters and local emulators.
  *
- * There overall architecture is simple and could be modified here, however, in order to keep the code easier to follow,
- * we are going to keep the same pattern as the `WorkspaceDataProviders` does.
+ * ## Integration with TreeParentCache
+ *
+ * This class uses TreeParentCache to implement the getParent and findNodeById methods required by
+ * the ExtendedTreeDataProvider interface. The caching mechanism enables:
+ *
+ * 1. Efficient implementation of tree.reveal() functionality to navigate to specific nodes
+ * 2. Finding nodes by ID without traversing the entire tree each time
+ * 3. Proper cleanup when refreshing parts of the tree
+ *
+ * When building the tree:
+ * - Root items are registered directly with registerNode
+ * - Child-parent relationships are registered with registerRelationship during getChildren
+ * - The cache is selectively cleared during refresh operations
  */
-export class ConnectionsBranchDataProvider extends vscode.Disposable implements vscode.TreeDataProvider<TreeElement> {
+export class ConnectionsBranchDataProvider extends vscode.Disposable implements ExtendedTreeDataProvider<TreeElement> {
     private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<
         void | TreeElement | TreeElement[] | null | undefined
     >();

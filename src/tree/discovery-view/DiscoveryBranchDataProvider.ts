@@ -12,20 +12,38 @@ import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
+import { type ExtendedTreeDataProvider } from '../ExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { TreeParentCache } from '../TreeParentCache';
 
 /**
- * This class follows the same pattern as the `WorkspaceDataProvicers` does with Azure Resoruces.
+ * Tree data provider for the Discovery view.
  *
- * The reason is that we want to be able to use the same implementation of tree items for both,
- * the Azure Resources integration, and this extension.
+ * This provider manages the display of database discovery mechanisms from registered providers.
+ * It presents a hierarchical view of discovery sources like Azure resources, local deployments,
+ * and other database instances.
  *
- * There overall architecture is simple and could be modified here, however, in order to keep the code easier to follow,
- * we are going to keep the same pattern as the `WorkspaceDataProviders` does.
+ * ## TreeParentCache Integration
+ *
+ * While this provider maintains its own complex caching for in-flight promises and root items,
+ * it leverages TreeParentCache specifically for parent-child relationship management:
+ *
+ * 1. registerNode is used when creating root items (discovery providers)
+ * 2. registerRelationship is used when wrapping child elements with state handling
+ * 3. getParent implementation delegates to the cache for efficient parent lookup
+ * 4. findNodeById uses the cache with a custom getChildrenFunc for deep searches
+ *
+ * This separation of concerns allows the provider to focus on discovery-specific logic while
+ * delegating parent-child relationship tracking to the specialized cache.
+ *
+ * ## Performance Optimizations
+ *
+ * The combination of TreeParentCache with this provider's existing caching mechanisms
+ * (getChildrenPromises) provides efficient tree operations even for slow-loading discovery
+ * sources that may involve network requests.
  */
-export class DiscoveryBranchDataProvider extends vscode.Disposable implements vscode.TreeDataProvider<TreeElement> {
+export class DiscoveryBranchDataProvider extends vscode.Disposable implements ExtendedTreeDataProvider<TreeElement> {
     /**
      * Tracks the current root items in the tree.
      *
