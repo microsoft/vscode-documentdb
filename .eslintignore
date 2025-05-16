@@ -1,0 +1,8 @@
+/dist
+/out
+/node_modules
+**/__mocks__/**
+**/*.d.ts
+.eslintrc.js
+jest.config.js
+main.js

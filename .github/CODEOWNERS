@@ -1,0 +1,3 @@
+/.azure-pipelines @Microsoft/vscodeazuretoolsdev @Microsoft/documentdb-for-vscode-engineering
+/.config @Microsoft/vscodeazuretoolsdev @Microsoft/documentdb-for-vscode-engineering
+/src @tnaum-ms @Microsoft/documentdb-for-vscode-engineering
