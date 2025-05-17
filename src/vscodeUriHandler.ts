@@ -183,7 +183,7 @@ async function handleConnectionStringRequest(
     } else {
         // Create storage item for the connection
         // Handle MongoDB and MongoClusters
-        const accountId = generateDocumentDBStorageId(parsedConnection.connectionString.toString()); // FYI: working with the prasedConnection string for to guarantee a consistent accountId in this file.
+        const accountId = generateDocumentDBStorageId(parsedConnection.connectionString.toString()); // FYI: working with the parsedConnection string to guarantee a consistent accountId in this file.
 
         const isEmulator =
             parsedConnection.connectionString.hosts?.length > 0 &&
