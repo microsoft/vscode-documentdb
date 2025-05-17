@@ -81,7 +81,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 }
 
                 const storageItem: StorageItem = {
-                    id: generateDocumentDBStorageId(connectionString!), // Use hash instead of raw connection string
+                    id: generateDocumentDBStorageId(connectionString!),
                     name: label,
                     properties: {
                         api: experience.api === API.DocumentDB ? API.MongoClusters : experience.api,
