@@ -11,7 +11,7 @@ import { ext } from '../../extensionVariables';
 import { type DocumentDBResourceItem } from '../../plugins/service-azure/discovery-tree/documentdb/DocumentDBResourceItem';
 import { StorageNames, StorageService, type StorageItem } from '../../services/storageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { generateMongoStorageId } from '../../utils/storageUtils';
+import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 
 export async function addConnectionFromRegistry(context: IActionContext, node: DocumentDBResourceItem): Promise<void> {
     if (!node) {
@@ -34,7 +34,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
             ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
             : parsedCS.hosts.join(',');
 
-    const storageId = generateMongoStorageId(connectionString);
+    const storageId = generateDocumentDBStorageId(connectionString);
 
     const storageItem: StorageItem = {
         id: storageId,

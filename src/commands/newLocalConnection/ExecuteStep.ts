@@ -11,8 +11,8 @@ import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
 import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
-import { getEmulatorItemUniqueId } from '../../utils/emulatorUtils';
 import { nonNullValue } from '../../utils/nonNull';
+import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizardContext> {
@@ -81,7 +81,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 }
 
                 const storageItem: StorageItem = {
-                    id: getEmulatorItemUniqueId(connectionString!), // Use hash instead of raw connection string
+                    id: generateDocumentDBStorageId(connectionString!), // Use hash instead of raw connection string
                     name: label,
                     properties: {
                         api: experience.api === API.DocumentDB ? API.MongoClusters : experience.api,

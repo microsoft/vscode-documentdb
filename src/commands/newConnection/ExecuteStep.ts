@@ -9,7 +9,7 @@ import ConnectionString from 'mongodb-connection-string-url';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
-import { generateMongoStorageId } from '../../utils/storageUtils';
+import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
@@ -33,7 +33,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             async () => {
                 await new Promise((resolve) => setTimeout(resolve, 250));
 
-                const storageId = generateMongoStorageId(connectionString);
+                const storageId = generateDocumentDBStorageId(connectionString);
 
                 const storageItem: StorageItem = {
                     id: storageId,

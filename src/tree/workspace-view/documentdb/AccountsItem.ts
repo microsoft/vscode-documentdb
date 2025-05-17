@@ -7,7 +7,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { MongoClustersExperience, type Experience } from '../../../DocumentDBExperiences';
 import { StorageNames, StorageService } from '../../../services/storageService';
-import { generateMongoStorageId } from '../../../utils/storageUtils'; // Import the new utility function
+import { generateDocumentDBStorageId } from '../../../utils/storageUtils'; // Import the new utility function
 import { type AttachedClusterModel } from '../../documentdb/ClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithExperience } from '../../TreeElementWithExperience';
@@ -49,7 +49,7 @@ export class AccountsItem implements TreeElement, TreeElementWithExperience {
                             return;
                         }
 
-                        const storageId = generateMongoStorageId(connectionString);
+                        const storageId = generateDocumentDBStorageId(connectionString);
 
                         // Create the new item with updated ID
                         const newItem = { ...item, id: storageId };

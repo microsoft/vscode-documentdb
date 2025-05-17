@@ -15,7 +15,7 @@ import { randomUtils } from './randomUtils';
  * @returns The generated storage ID.
  * @throws Error if the connection string is invalid or has no hosts.
  */
-export function generateMongoStorageId(connectionString: string): string {
+export function generateDocumentDBStorageId(connectionString: string): string {
     if (!connectionString) {
         throw new Error('Connection string cannot be empty');
     }
@@ -31,8 +31,8 @@ export function generateMongoStorageId(connectionString: string): string {
         throw new Error('Invalid connection string: No hosts specified.');
     }
 
-    const hashedCS = randomUtils.getPseudononymousStringHash(connectionString, 'hex').substring(0, 24);
-    const storageId = `storageId-${parsedCS.hosts.join('_')}-${hashedCS}`;
+    const randomString = randomUtils.getRandomUUID();
+    const storageId = `storageId-${parsedCS.hosts.join('_')}-${randomString}`;
 
     return storageId;
 }
