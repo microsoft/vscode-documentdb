@@ -14,6 +14,7 @@ import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
+import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { type ClusterModel } from './ClusterModel';
 import { DatabaseItem } from './DatabaseItem';
 
@@ -102,16 +103,22 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
 
         // If authentication failed, return the error element
         if (!clustersClient) {
-            ext.outputChannel.appendLine(`MongoDB Clusters: Failed to authenticate with "${this.cluster.name}".`);
+            ext.outputChannel.appendLine(`Failed to connect to "${this.cluster.name}".`);
             return [
-                createGenericElement({
+                // createGenericElement({
+                //     contextValue: 'error',
+                //     id: `${this.id}/error`,
+                //     label: l10n.t('Failed to connect'),
+                //     iconPath: new vscode.ThemeIcon('error'),
+                // }) as TreeElement,
+                createGenericElementWithContext({
                     contextValue: 'error',
-                    id: `${this.id}/error`,
-                    label: l10n.t('Failed to authenticate (click to retry)'),
-                    iconPath: new vscode.ThemeIcon('error'),
-                    commandId: 'vscode-documentdb.command.refresh',
+                    id: `${this.id}/reconnect`, // note: keep this in sync with the `hasErrorNode` function in this file
+                    label: vscode.l10n.t('Click here to retry'),
+                    iconPath: new vscode.ThemeIcon('refresh'),
+                    commandId: 'vscode-documentdb.command.internal.retryAuthentication',
                     commandArgs: [this],
-                }) as TreeElement,
+                }),
             ];
         }
 
@@ -133,6 +140,15 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
             // Map the databases to DatabaseItem elements
             return databases.map((database) => new DatabaseItem(this.cluster, database));
         });
+    }
+
+    /**
+     * Checks if the given children array contains an error node.
+     * @param children The children array to check.
+     * @returns True if any child in the array is an error node, false otherwise.
+     */
+    public hasErrorNode(children: TreeElement[] | null | undefined): boolean {
+        return !!(children && children.length > 0 && children.some((child) => child.id.endsWith('/reconnect')));
     }
 
     /**

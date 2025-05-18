@@ -13,6 +13,8 @@ import { Views } from '../../documentdb/Views';
 import { MongoClustersExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { StorageNames, StorageService } from '../../services/storageService';
+import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
+import { ClusterItemBase } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type ExtendedTreeDataProvider } from '../ExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
@@ -48,6 +50,18 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
     private readonly parentCache = new TreeParentCache<TreeElement>();
 
     /**
+     * Caches nodes whose getChildren() call has failed.
+     *
+     * This cache prevents repeated attempts to fetch children for nodes that have previously failed,
+     * such as when a user enters invalid credentials. By storing the failed nodes, we avoid unnecessary
+     * repeated calls until the error state is explicitly cleared.
+     *
+     * Key: Node ID (parent)
+     * Value: Array of TreeElement representing the failed children (usually an error node)
+     */
+    private readonly errorNodeCache = new Map<string, TreeElement[]>();
+
+    /**
      * From vscode.TreeDataProvider<T>:
      *
      * An optional event to signal that an element or root has changed.
@@ -76,8 +90,18 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
         treeItem.contextValue = createContextValue(contextValues);
     }
 
+    /**
+     * Removes a node's error state from the failed node cache.
+     * This allows the node to be refreshed and its children to be re-fetched on the next refresh call.
+     * If not reset, the cached error children will always be returned for this node.
+     * @param nodeId The ID of the node to clear from the failed node cache.
+     */
+    resetNodeErrorState(nodeId: string): void {
+        this.errorNodeCache.delete(nodeId);
+    }
+
     async getChildren(element: TreeElement): Promise<TreeElement[] | null | undefined> {
-        return await callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
+        return callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.ConnectionsView;
 
             if (!element) {
@@ -108,10 +132,39 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
                 return rootItems;
             }
 
+            // 1. Check if this is a ClusterItemBase and we have a cached error for it.
+            //
+            // This prevents repeated attempts to fetch children for nodes that have previously failed
+            // (e.g., due to invalid credentials)
+            if (element instanceof ClusterItemBase && element.id && this.errorNodeCache.has(element.id)) {
+                context.telemetry.properties.usedCachedErrorNode = 'true';
+                return this.errorNodeCache.get(element.id);
+            }
+
             context.telemetry.properties.parentNodeContext = (await element.getTreeItem()).contextValue;
 
+            // 2. Fetch the children of the current element
             const children = await element.getChildren?.();
             context.telemetry.measurements.childrenCount = children?.length ?? 0;
+
+            // 3. Check if the returned children contain an error node (do this only for the ClusterItemBase type)
+            // This means the operation failed (eg. authentication)
+            if (element instanceof ClusterItemBase && element.id && element.hasErrorNode(children)) {
+                // append helpful nodes to the error node
+                children?.push(
+                    createGenericElementWithContext({
+                        contextValue: 'error',
+                        id: `${element.id}/retryAuthentication`,
+                        label: vscode.l10n.t('Click here to update credentials'),
+                        iconPath: new vscode.ThemeIcon('key'),
+                        commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
+                        commandArgs: [element],
+                    }),
+                );
+                // Store the error node(s) in our cache for future refreshes
+                this.errorNodeCache.set(element.id, children ?? []);
+                context.telemetry.properties.cachedErrorNode = 'true';
+            }
 
             return children?.map((child) => {
                 if (child.id) {
