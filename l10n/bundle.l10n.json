@@ -104,6 +104,7 @@
   "Database name cannot be longer than 64 characters.": "Database name cannot be longer than 64 characters.",
   "Database name cannot contain any of the following characters: \"{0}{1}\"": "Database name cannot contain any of the following characters: \"{0}{1}\"",
   "Database name is required.": "Database name is required.",
+  "Default Windows terminal profile not found in VS Code settings. Assuming PowerShell for launching MongoDB shell.": "Default Windows terminal profile not found in VS Code settings. Assuming PowerShell for launching MongoDB shell.",
   "Delete": "Delete",
   "Delete \"{connectionName}\"?": "Delete \"{connectionName}\"?",
   "Delete \"{nodeName}\"?": "Delete \"{nodeName}\"?",
