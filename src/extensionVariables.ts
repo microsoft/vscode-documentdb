@@ -50,8 +50,8 @@ export namespace ext {
 
     export namespace settingsKeys {
         export const shellPath = 'documentDB.mongoShell.path';
-        export const shellArgs = 'ocumentDB.mongoShell.args';
-        export const shellTimeout = 'ocumentDB.mongoShell.timeout';
+        export const shellArgs = 'documentDB.mongoShell.args';
+        export const shellTimeout = 'documentDB.mongoShell.timeout';
         export const batchSize = 'documentDB.mongoShell.batchSize';
         export const confirmationStyle = 'documentDB.userInterface.confirmationStyle';
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
