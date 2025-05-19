@@ -15,24 +15,27 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
         super(logger);
     }
 
+    private async getTenantAndSubscriptionFilters(): Promise<string[]> {
+        // Try the Azure Resource Groups config first
+        const config = vscode.workspace.getConfiguration('azureResourceGroups');
+        let fullSubscriptionIds = config.get<string[]>('selectedSubscriptions', []);
+
+        // If nothing found there, try our fallback storage
+        if (fullSubscriptionIds.length === 0) {
+            fullSubscriptionIds = ext.context.globalState.get<string[]>('azure-discovery.selectedSubscriptions', []);
+        } else {
+            // Sync to our fallback storage if primary storage had data
+            void ext.context.globalState.update('azure-discovery.selectedSubscriptions', fullSubscriptionIds);
+        }
+        return fullSubscriptionIds;
+    }
+
     /**
      * Override the getTenantFilters method to provide custom tenant filtering
      * Uses the same logic as in the original implementation but with fallback storage support
      */
     protected override async getTenantFilters(): Promise<TenantId[]> {
-        // Try the Azure Resource Groups config first
-        const config = vscode.workspace.getConfiguration('azureResourceGroups');
-        const fullSubscriptionIds = config.get<string[]>('selectedSubscriptions', []);
-
-        // If nothing found there, try our fallback storage
-        if (fullSubscriptionIds.length === 0) {
-            const fallbackIds = ext.context.globalState.get<string[]>('azure-discovery.selectedSubscriptions', []);
-            return fallbackIds.map((id) => id.split('/')[0]); // Return tenant IDs
-        }
-
-        // Sync to our fallback storage if primary storage had data
-        void ext.context.globalState.update('azure-discovery.selectedSubscriptions', fullSubscriptionIds);
-
+        const fullSubscriptionIds = await this.getTenantAndSubscriptionFilters();
         // Extract the tenant IDs from the full IDs (tenantId/subscriptionId)
         return fullSubscriptionIds.map((id) => id.split('/')[0]);
     }
@@ -42,19 +45,7 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
      * Uses the same logic as in the original implementation but with fallback storage support
      */
     protected override async getSubscriptionFilters(): Promise<SubscriptionId[]> {
-        // Try the Azure Resource Groups config first
-        const config = vscode.workspace.getConfiguration('azureResourceGroups');
-        const fullSubscriptionIds = config.get<string[]>('selectedSubscriptions', []);
-
-        // If nothing found there, try our fallback storage
-        if (fullSubscriptionIds.length === 0) {
-            const fallbackIds = ext.context.globalState.get<string[]>('azure-discovery.selectedSubscriptions', []);
-            return fallbackIds.map((id) => id.split('/')[1]); // Return subscription IDs
-        }
-
-        // Sync to our fallback storage if primary storage had data
-        void ext.context.globalState.update('azure-discovery.selectedSubscriptions', fullSubscriptionIds);
-
+        const fullSubscriptionIds = await this.getTenantAndSubscriptionFilters();
         // Extract the subscription IDs from the full IDs (tenantId/subscriptionId)
         return fullSubscriptionIds.map((id) => id.split('/')[1]);
     }
