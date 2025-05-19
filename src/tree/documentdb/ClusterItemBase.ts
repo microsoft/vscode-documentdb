@@ -105,7 +105,6 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
         if (!clustersClient) {
             ext.outputChannel.appendLine(`Failed to connect to "${this.cluster.name}".`);
             return [
-// Removed commented-out createGenericElement code block to clean up the codebase.
                 createGenericElementWithContext({
                     contextValue: 'error',
                     id: `${this.id}/reconnect`, // note: keep this in sync with the `hasErrorNode` function in this file
