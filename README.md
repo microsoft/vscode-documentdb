@@ -1,4 +1,4 @@
-# DocumentDB for VS Code (Pre-Release)
+# DocumentDB for VS Code
 
 <!-- region exclude-from-marketplace -->
 
