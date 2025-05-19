@@ -74,7 +74,7 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
             'documentDB.mongoClusters.connect',
             async (context: IActionContext) => {
                 ext.outputChannel.appendLine(
-                    l10n.t('MongoDB Clusters: Attempting to authenticate with "{cluster}"…', {
+                    l10n.t('Attempting to authenticate with "{cluster}"…', {
                         cluster: this.cluster.name,
                     }),
                 );
@@ -119,7 +119,7 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
                 );
 
                 ext.outputChannel.append(
-                    l10n.t('MongoDB Clusters: Connecting to the cluster as "{username}"…', {
+                    l10n.t('Connecting to the cluster as "{username}"…', {
                         username: wizardContext.selectedUserName ?? '',
                     }),
                 );
@@ -153,7 +153,7 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
                 }
 
                 ext.outputChannel.appendLine(
-                    l10n.t('MongoDB Clusters: Connected to "{cluster}" as "{username}".', {
+                    l10n.t('Connected to "{cluster}" as "{username}".', {
                         cluster: this.cluster.name,
                         username: wizardContext.selectedUserName ?? '',
                     }),

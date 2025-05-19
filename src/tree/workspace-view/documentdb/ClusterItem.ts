@@ -53,7 +53,7 @@ export class ClusterItem extends ClusterItemBase implements TreeElementWithStora
                 context.telemetry.properties.view = 'workspace';
 
                 ext.outputChannel.appendLine(
-                    l10n.t('MongoDB Clusters: Attempting to authenticate with {cluster}', {
+                    l10n.t('Attempting to authenticate with {cluster}', {
                         cluster: this.cluster.name,
                     }),
                 );
@@ -90,9 +90,7 @@ export class ClusterItem extends ClusterItemBase implements TreeElementWithStora
                     password = nonNullProp(wizardContext, 'password');
                 }
 
-                ext.outputChannel.append(
-                    l10n.t('MongoDB Clusters: Connecting to the cluster as "{username}"…', { username }),
-                );
+                ext.outputChannel.append(l10n.t('Connecting to the cluster as "{username}"…', { username }));
 
                 // Cache the credentials
                 CredentialCache.setCredentials(
@@ -133,7 +131,7 @@ export class ClusterItem extends ClusterItemBase implements TreeElementWithStora
                 }
 
                 ext.outputChannel.appendLine(
-                    l10n.t('MongoDB Clusters: Connected to "{cluster}" as "{username}"', {
+                    l10n.t('Connected to "{cluster}" as "{username}"', {
                         cluster: this.cluster.name,
                         username,
                     }),

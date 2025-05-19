@@ -8,6 +8,7 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import { ConnectionString } from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
+import { Views } from '../../../documentdb/Views';
 import { MongoClustersExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
@@ -36,6 +37,8 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
         return await callWithTelemetryAndErrorHandling(
             'azure-vm-discovery.getChildren',
             async (context: IActionContext) => {
+                context.telemetry.properties.view = Views.DiscoveryView;
+
                 const computeClient = await createComputeManagementClient(context, this.subscription.subscription); // For listing VMs
                 const networkClient = await createNetworkManagementClient(context, this.subscription.subscription); // For fetching IP addresses
 

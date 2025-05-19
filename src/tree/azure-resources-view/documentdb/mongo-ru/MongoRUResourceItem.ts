@@ -66,7 +66,7 @@ export class MongoRUResourceItem extends ClusterItemBase {
             'documentDB.mongoClusters.connect',
             async (context: IActionContext) => {
                 ext.outputChannel.appendLine(
-                    l10n.t('MongoDB Clusters: Attempting to authenticate with "{cluster}"…', {
+                    l10n.t('Attempting to authenticate with "{cluster}"…', {
                         cluster: this.cluster.name,
                     }),
                 );

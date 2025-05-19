@@ -52,7 +52,7 @@ export const ToolbarMainView = (): JSX.Element => {
                             onClick={() => {
                                 trpcClient.common.surveyOpen
                                     .mutate({
-                                        triggerAction: 'documentDB.mongo.collectionView.provideFeedback',
+                                        triggerAction: 'documentDB.collectionView.provideFeedback',
                                     })
                                     .catch(() => {});
                             }}
