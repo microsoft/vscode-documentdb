@@ -9,9 +9,9 @@ import { type NewConnectionWizardContext } from '../../commands/newConnection/Ne
 import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
+import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
+import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering';
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
-import { AzureSubscriptionProviderWithFilters } from './discovery-tree/AzureSubscriptionProviderWithFilters';
-import { configureAzureSubscriptionFilter } from './discovery-tree/subscriptionFiltering';
 import { AzureExecuteStep } from './discovery-wizard/AzureExecuteStep';
 import { SelectClusterStep } from './discovery-wizard/SelectClusterStep';
 import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep';
