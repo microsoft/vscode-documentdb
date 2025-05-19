@@ -8,7 +8,7 @@
 
 **A powerful, open-source DocumentDB and MongoDB GUI for everyone.**
 
-**DocumentDB for VS Code** helps you browse, manage, and query **DocumentDB** and **MongoDB** API databases across any cloud, hybrid, or local environment.
+**DocumentDB for VS Code** helps you browse, manage, and query **DocumentDB** and **MongoDB** databases across any cloud, hybrid, or local environment.
 
 ![DocumentDB with a Collection View and auto-completion](resources/readme/vscode-documentdb-vcore.png)
 
@@ -22,7 +22,7 @@ Connect to any MongoDB or DocumentDB instance: cloud, hybrid cloud, on-premises,
 
 - **Cross-Platform Service Discovery:** Connect to DocumentDB and MongoDB instances hosted with your provider.
 
-- **Wide Compatibility:** Full support for all DocumentDB and MongoDB API databases.
+- **Wide Compatibility:** Full support for all DocumentDB and MongoDB databases.
 
 ### Developer-Centric Experience
 
