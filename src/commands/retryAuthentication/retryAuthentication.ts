@@ -9,7 +9,7 @@ import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 
-export async function retryAuthentication(context: IActionContext, node: ClusterItemBase): Promise<void> {
+export async function retryAuthentication(_context: IActionContext, node: ClusterItemBase): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
