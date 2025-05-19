@@ -45,13 +45,13 @@ export function getSelectedSubscriptionIds(): string[] {
 
     // If nothing found there, try our fallback storage
     if (fullSubscriptionIds.length === 0) {
-        const fallbackIds = ext.context.globalState.get<string[]>('azure-vm-discovery.selectedSubscriptions', []);
+        const fallbackIds = ext.context.globalState.get<string[]>('azure-discovery.selectedSubscriptions', []);
         return fallbackIds.map((id) => id.split('/')[1]);
     }
 
     // Sync to our fallback storage if primary storage had data
     // This ensures we maintain a copy if Azure Resources extension is later removed
-    void ext.context.globalState.update('azure-vm-discovery.selectedSubscriptions', fullSubscriptionIds);
+    void ext.context.globalState.update('azure-discovery.selectedSubscriptions', fullSubscriptionIds);
 
     return fullSubscriptionIds.map((id) => id.split('/')[1]);
 }
@@ -71,7 +71,7 @@ export async function setSelectedSubscriptionIds(subscriptionIds: string[]): Pro
     }
 
     // Always update our fallback storage regardless of primary storage success
-    await ext.context.globalState.update('azure-vm-discovery.selectedSubscriptions', subscriptionIds);
+    await ext.context.globalState.update('azure-discovery.selectedSubscriptions', subscriptionIds);
 }
 
 /**
