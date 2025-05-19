@@ -45,13 +45,13 @@ export function getSelectedSubscriptionIds(): string[] {
 
     // If nothing found there, try our fallback storage
     if (fullSubscriptionIds.length === 0) {
-        const fallbackIds = ext.context.globalState.get<string[]>('azure-vm-discovery.selectedSubscriptions', []);
+        const fallbackIds = ext.context.globalState.get<string[]>('azure-discovery.selectedSubscriptions', []);
         return fallbackIds.map((id) => id.split('/')[1]);
     }
 
     // Sync to our fallback storage if primary storage had data
     // This ensures we maintain a copy if Azure Resources extension is later removed
-    void ext.context.globalState.update('azure-vm-discovery.selectedSubscriptions', fullSubscriptionIds);
+    void ext.context.globalState.update('azure-discovery.selectedSubscriptions', fullSubscriptionIds);
 
     return fullSubscriptionIds.map((id) => id.split('/')[1]);
 }
@@ -68,10 +68,10 @@ export async function setSelectedSubscriptionIds(subscriptionIds: string[]): Pro
     } catch (error) {
         // Log the error if the Azure Resource Groups config update fails
         console.error('Unable to update Azure Resource Groups configuration, using fallback storage.', error);
+    } finally {
+        // Always update our fallback storage regardless of primary storage success
+        await ext.context.globalState.update('azure-discovery.selectedSubscriptions', subscriptionIds);
     }
-
-    // Always update our fallback storage regardless of primary storage success
-    await ext.context.globalState.update('azure-vm-discovery.selectedSubscriptions', subscriptionIds);
 }
 
 /**
@@ -106,9 +106,10 @@ export async function configureAzureSubscriptionFilter(
         const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
         void vscode.window
             .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in to continue.'), signIn)
-            .then((input) => {
+            .then(async (input) => {
                 if (input === signIn) {
-                    void azureSubscriptionProvider.signIn();
+                    await azureSubscriptionProvider.signIn();
+                    ext.discoveryBranchDataProvider.refresh();
                 }
             });
 

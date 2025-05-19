@@ -18,7 +18,7 @@ import {
     getDuplicateSubscriptions,
     getSelectedSubscriptionIds,
     setSelectedSubscriptionIds,
-} from './subscriptionFiltering';
+} from '../../api-shared/azure/subscriptionFiltering';
 
 export interface ConfigureVmFilterWizardContext extends IActionContext {
     azureSubscriptionProvider: VSCodeAzureSubscriptionProvider;

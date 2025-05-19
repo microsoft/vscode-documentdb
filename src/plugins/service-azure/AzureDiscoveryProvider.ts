@@ -3,15 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { type IActionContext, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import { Disposable, l10n, ThemeIcon } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
+import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
+import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering';
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
-import { configureAzureSubscriptionFilter } from './discovery-tree/subscriptionFiltering';
 import { AzureExecuteStep } from './discovery-wizard/AzureExecuteStep';
 import { SelectClusterStep } from './discovery-wizard/SelectClusterStep';
 import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep';
@@ -28,7 +28,7 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
     description = l10n.t('Azure Service Discovery');
     iconPath = new ThemeIcon('azure');
 
-    azureSubscriptionProvider: VSCodeAzureSubscriptionProvider;
+    azureSubscriptionProvider: AzureSubscriptionProviderWithFilters;
 
     constructor() {
         super(() => {
@@ -36,7 +36,7 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
             this.azureSubscriptionProvider.dispose();
         });
 
-        this.azureSubscriptionProvider = new VSCodeAzureSubscriptionProvider();
+        this.azureSubscriptionProvider = new AzureSubscriptionProviderWithFilters();
     }
 
     getDiscoveryTreeRootItem(parentId: string): TreeElement {

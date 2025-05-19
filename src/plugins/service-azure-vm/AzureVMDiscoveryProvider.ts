@@ -3,13 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { type IActionContext, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import { Disposable, l10n, ThemeIcon } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
+import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
 import { configureVmFilter } from './discovery-tree/configureVmFilterWizard';
 import { AzureVMExecuteStep } from './discovery-wizard/AzureVMExecuteStep';
@@ -31,7 +31,7 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
     description = l10n.t('Azure VM Service Discovery');
     iconPath = new ThemeIcon('vm'); // Using a generic VM icon
 
-    azureSubscriptionProvider: VSCodeAzureSubscriptionProvider;
+    azureSubscriptionProvider: AzureSubscriptionProviderWithFilters;
 
     constructor() {
         super(() => {
@@ -39,7 +39,7 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
             this.azureSubscriptionProvider.dispose();
         });
 
-        this.azureSubscriptionProvider = new VSCodeAzureSubscriptionProvider();
+        this.azureSubscriptionProvider = new AzureSubscriptionProviderWithFilters();
     }
 
     getDiscoveryTreeRootItem(parentId: string): TreeElement {
