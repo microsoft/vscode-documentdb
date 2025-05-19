@@ -49,28 +49,46 @@ export async function launchShell(
         void vscode.window.showErrorMessage(l10n.t('Failed to extract the connection string from the selected node.'));
         return;
     }
+    context.valuesToMask.push(rawConnectionString);
 
     const connectionString: ConnectionString = new ConnectionString(rawConnectionString);
 
-    const username = connectionString.username;
-    const password = connectionString.password;
+    const actualPassword = connectionString.password;
+    context.valuesToMask.push(actualPassword);
+
+    // Use unique environment variable names to avoid conflicts
+    const randomSuffix = Math.floor(100000 + Math.random() * 900000).toString(); // Generate a 6-digit random number string
+    const uniquePassEnvVar = `documentdb_${randomSuffix}`; // Use a lowercase, generic-looking variable name to avoid drawing attention in the shell output—this helps prevent bystanders from noticing sensitive info if they're watching the user's screen.
 
     // Check if PowerShell is being used on Windows
-    const isWindowsPowerShell =
-        isWindows &&
-        (vscode.workspace.getConfiguration('terminal.integrated.defaultProfile').get('windows') === 'PowerShell' ||
-            vscode.workspace.getConfiguration('terminal.integrated.defaultProfile').get('windows') === 'pwsh');
+    let isWindowsPowerShell = false;
+    if (isWindows) {
+        const terminalProfile = vscode.workspace.getConfiguration('terminal.integrated.defaultProfile').get('windows');
+        if (terminalProfile === null || typeof terminalProfile === 'undefined') {
+            ext.outputChannel.appendLog(
+                l10n.t(
+                    'Default Windows terminal profile not found in VS Code settings. Assuming PowerShell for launching MongoDB shell.',
+                ),
+            );
+            isWindowsPowerShell = true;
+        } else if (typeof terminalProfile === 'string') {
+            isWindowsPowerShell =
+                terminalProfile.toLowerCase() === 'powershell' || terminalProfile.toLowerCase() === 'pwsh';
+        }
+    }
 
     // Use correct variable syntax based on shell
     if (isWindows && isWindowsPowerShell) {
-        connectionString.username = '$env:USERNAME';
-        connectionString.password = '$env:PASSWORD';
+        connectionString.password = `$env:${uniquePassEnvVar}`;
     } else if (isWindows) {
-        connectionString.username = '%USERNAME%';
-        connectionString.password = '%PASSWORD%';
+        connectionString.password = `%${uniquePassEnvVar}%`;
     } else {
-        connectionString.username = '$USERNAME';
-        connectionString.password = '$PASSWORD';
+        connectionString.password = `$${uniquePassEnvVar}`;
+    }
+
+    // If the username or password is empty, remove them from the connection string to avoid invalid connection strings
+    if (!connectionString.username || !actualPassword) {
+        connectionString.password = '';
     }
 
     if ('databaseInfo' in node && node.databaseInfo?.name) {
@@ -83,11 +101,10 @@ export async function launchShell(
     // }
 
     const terminal: vscode.Terminal = vscode.window.createTerminal({
-        name: `MongoDB Shell (${username})`,
+        name: `MongoDB Shell (${connectionString.username || 'default'})`, // Display actual username or a default
         hideFromUser: false,
         env: {
-            USERNAME: username,
-            PASSWORD: password,
+            [uniquePassEnvVar]: actualPassword,
         },
     });
 
