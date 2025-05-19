@@ -68,10 +68,10 @@ export async function setSelectedSubscriptionIds(subscriptionIds: string[]): Pro
     } catch (error) {
         // Log the error if the Azure Resource Groups config update fails
         console.error('Unable to update Azure Resource Groups configuration, using fallback storage.', error);
+    } finally {
+        // Always update our fallback storage regardless of primary storage success
+        await ext.context.globalState.update('azure-discovery.selectedSubscriptions', subscriptionIds);
     }
-
-    // Always update our fallback storage regardless of primary storage success
-    await ext.context.globalState.update('azure-discovery.selectedSubscriptions', subscriptionIds);
 }
 
 /**
