@@ -14,4 +14,8 @@ export namespace randomUtils {
         const buffer: Buffer = crypto.randomBytes(Math.ceil(length / 2));
         return buffer.toString('hex').slice(0, length);
     }
+
+    export function getRandomUUID(): string {
+        return crypto.randomUUID();
+    }
 }

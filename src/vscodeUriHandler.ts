@@ -23,7 +23,7 @@ import { isTreeElementWithExperience } from './tree/TreeElementWithExperience';
 import { WorkspaceResourceType } from './tree/workspace-api/SharedWorkspaceResourceProvider';
 import { getConfirmationAsInSettings } from './utils/dialogs/getConfirmation';
 import { getEmulatorItemLabelForApi, getEmulatorItemUniqueId } from './utils/emulatorUtils';
-import { generateMongoStorageId } from './utils/storageUtils';
+import { generateDocumentDBStorageId } from './utils/storageUtils';
 
 const supportedProviders = ['Microsoft.DocumentDB/databaseAccounts', 'Microsoft.DocumentDB/mongoClusters'];
 
@@ -183,7 +183,7 @@ async function handleConnectionStringRequest(
     } else {
         // Create storage item for the connection
         // Handle MongoDB and MongoClusters
-        const accountId = generateMongoStorageId(parsedConnection.connectionString.toString()); // FYI: working with the prasedConnection string for to guarantee a consistent accountId in this file.
+        const accountId = generateDocumentDBStorageId(parsedConnection.connectionString.toString()); // FYI: working with the parsedConnection string to guarantee a consistent accountId in this file.
 
         const isEmulator =
             parsedConnection.connectionString.hosts?.length > 0 &&
@@ -460,7 +460,7 @@ async function openAppropriateEditorForConnection(
 
     {
         // Open MongoDB editor
-        const accountId = generateMongoStorageId(parsedConnection.connectionString.toString()); // FYI: working with the prasedConnection string for to guarantee a consistent accountId in this file.
+        const accountId = generateDocumentDBStorageId(parsedConnection.connectionString.toString()); // FYI: working with the prasedConnection string for to guarantee a consistent accountId in this file.
         const expectedClusterId = `${WorkspaceResourceType.MongoClusters}/${accountId}`;
 
         return openCollectionViewInternal(context, {
