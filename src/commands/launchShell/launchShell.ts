@@ -56,10 +56,21 @@ export async function launchShell(
     const password = connectionString.password;
 
     // Check if PowerShell is being used on Windows
-    const isWindowsPowerShell =
-        isWindows &&
-        (vscode.workspace.getConfiguration('terminal.integrated.defaultProfile').get('windows') === 'PowerShell' ||
-            vscode.workspace.getConfiguration('terminal.integrated.defaultProfile').get('windows') === 'pwsh');
+    let isWindowsPowerShell = false;
+    if (isWindows) {
+        const terminalProfile = vscode.workspace.getConfiguration('terminal.integrated.defaultProfile').get('windows');
+        if (terminalProfile === null || typeof terminalProfile === 'undefined') {
+            ext.outputChannel.appendLog(
+                l10n.t(
+                    'Default Windows terminal profile not found in VS Code settings. Assuming PowerShell for launching MongoDB shell.',
+                ),
+            );
+            isWindowsPowerShell = true;
+        } else if (typeof terminalProfile === 'string') {
+            isWindowsPowerShell =
+                terminalProfile.toLowerCase() === 'powershell' || terminalProfile.toLowerCase() === 'pwsh';
+        }
+    }
 
     // Use correct variable syntax based on shell
     if (isWindows && isWindowsPowerShell) {
