@@ -14,6 +14,7 @@ import { type GenericResource } from '@azure/arm-resources';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { getResourceGroupFromId } from '@microsoft/vscode-azext-azureutils';
 import ConnectionString from 'mongodb-connection-string-url';
+import { Views } from '../../../documentdb/Views';
 import { createMongoClustersManagementClient } from '../../../utils/azureClients';
 import { AzureContextProperties } from '../AzureDiscoveryProvider';
 
@@ -45,6 +46,7 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
 
     async getConnectionString(wizardContext: NewConnectionWizardContext): Promise<string | undefined> {
         return callWithTelemetryAndErrorHandling('getConnectionString', async (context: IActionContext) => {
+            context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-discovery';
 
             const subscription = wizardContext.properties[

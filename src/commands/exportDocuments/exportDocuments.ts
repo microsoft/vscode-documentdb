@@ -50,7 +50,7 @@ export async function exportQueryResults(
     );
 
     const filePath = targetUri.fsPath; // Convert `vscode.Uri` to a regular file path
-    ext.outputChannel.appendLog(l10n.t('MongoDB Clusters: Exporting data to: {filePath}', { filePath }));
+    ext.outputChannel.appendLog(l10n.t('Exporting data to: {filePath}', { filePath }));
 
     let documentCount = 0;
 
@@ -71,9 +71,7 @@ export async function exportQueryResults(
         actionContext.telemetry.measurements.documentCount = documentCount;
     });
 
-    ext.outputChannel.appendLog(
-        l10n.t('MongoDB Clusters: Exported document count: {documentCount}', { documentCount }),
-    );
+    ext.outputChannel.appendLog(l10n.t('Exported document count: {documentCount}', { documentCount }));
 }
 
 async function runExportWithProgressAndDescription(
@@ -98,7 +96,7 @@ async function runExportWithProgressAndDescription(
                         l10n.t('Failed to export documents. Please see the output for details.'),
                     );
                     ext.outputChannel.appendLog(
-                        l10n.t('MongoDB Clusters: Error exporting documents: {error}', {
+                        l10n.t('Error exporting documents: {error}', {
                             error: parseError(error).message,
                         }),
                     );

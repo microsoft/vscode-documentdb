@@ -17,6 +17,7 @@ import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { Views } from '../../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
@@ -71,85 +72,83 @@ export class AzureVMResourceItem extends ClusterItemBase {
      * @returns An instance of ClustersClient if successful; otherwise, null.
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
-        const result = await callWithTelemetryAndErrorHandling(
-            'connect', // Changed telemetry event name
-            async (context: IActionContext) => {
-                context.telemetry.properties.discoveryProvider = 'azure-discovery';
+        const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            context.telemetry.properties.discoveryProvider = 'azure-discovery';
+            context.telemetry.properties.view = Views.DiscoveryView;
 
-                ext.outputChannel.appendLine(
-                    l10n.t('Azure VM: Attempting to authenticate with "{vmName}"…', {
-                        vmName: this.cluster.name,
-                    }),
-                );
+            ext.outputChannel.appendLine(
+                l10n.t('Azure VM: Attempting to authenticate with "{vmName}"…', {
+                    vmName: this.cluster.name,
+                }),
+            );
 
-                const wizardContext: AuthenticateWizardContext = {
-                    ...context,
-                    resourceName: this.cluster.name,
-                    adminUserName: undefined,
-                    selectedUserName: undefined,
-                };
+            const wizardContext: AuthenticateWizardContext = {
+                ...context,
+                resourceName: this.cluster.name,
+                adminUserName: undefined,
+                selectedUserName: undefined,
+            };
 
-                const credentialsProvided = await this.promptForCredentials(wizardContext);
+            const credentialsProvided = await this.promptForCredentials(wizardContext);
 
-                if (!credentialsProvided || !wizardContext.selectedUserName || !wizardContext.password) {
-                    return null;
-                }
+            if (!credentialsProvided || !wizardContext.selectedUserName || !wizardContext.password) {
+                return null;
+            }
 
-                context.valuesToMask.push(nonNullProp(wizardContext, 'password'));
+            context.valuesToMask.push(nonNullProp(wizardContext, 'password'));
 
-                // Construct the final connection string with user-provided credentials
-                const connectionString = await this.getConnectionString();
-                const finalConnectionString = new ConnectionString(nonNullValue(connectionString, 'connectionString'));
-                finalConnectionString.username = wizardContext.selectedUserName;
+            // Construct the final connection string with user-provided credentials
+            const connectionString = await this.getConnectionString();
+            const finalConnectionString = new ConnectionString(nonNullValue(connectionString, 'connectionString'));
+            finalConnectionString.username = wizardContext.selectedUserName;
 
-                // Password will be handled by the ClustersClient, not directly in the string for cache
+            // Password will be handled by the ClustersClient, not directly in the string for cache
 
-                CredentialCache.setCredentials(
-                    this.id, // Use the VM resource ID as the cache key
-                    finalConnectionString.toString(), // Store the string with username for reference, but password separately
-                    wizardContext.selectedUserName,
-                    wizardContext.password,
-                );
+            CredentialCache.setCredentials(
+                this.id, // Use the VM resource ID as the cache key
+                finalConnectionString.toString(), // Store the string with username for reference, but password separately
+                wizardContext.selectedUserName,
+                wizardContext.password,
+            );
 
-                ext.outputChannel.append(
-                    l10n.t('Azure VM: Connecting to "{vmName}" as "{username}"…', {
-                        vmName: this.cluster.name,
-                        username: wizardContext.selectedUserName ?? '',
-                    }),
-                );
+            ext.outputChannel.append(
+                l10n.t('Azure VM: Connecting to "{vmName}" as "{username}"…', {
+                    vmName: this.cluster.name,
+                    username: wizardContext.selectedUserName ?? '',
+                }),
+            );
 
-                let clustersClient: ClustersClient;
-                try {
-                    // GetClient will use the cached credentials including the password
-                    clustersClient = await ClustersClient.getClient(this.id).catch((error: Error) => {
-                        ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: error.message }));
-                        void vscode.window.showErrorMessage(
-                            l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
-                            {
-                                modal: true,
-                                detail:
-                                    l10n.t('Revisit connection details and try again.') +
-                                    '\n\n' +
-                                    l10n.t('Error: {error}', { error: error.message }),
-                            },
-                        );
-                        throw error;
-                    });
-                } catch {
-                    await ClustersClient.deleteClient(this.id);
-                    CredentialCache.deleteCredentials(this.id);
-                    return null;
-                }
+            let clustersClient: ClustersClient;
+            try {
+                // GetClient will use the cached credentials including the password
+                clustersClient = await ClustersClient.getClient(this.id).catch((error: Error) => {
+                    ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: error.message }));
+                    void vscode.window.showErrorMessage(
+                        l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
+                        {
+                            modal: true,
+                            detail:
+                                l10n.t('Revisit connection details and try again.') +
+                                '\n\n' +
+                                l10n.t('Error: {error}', { error: error.message }),
+                        },
+                    );
+                    throw error;
+                });
+            } catch {
+                await ClustersClient.deleteClient(this.id);
+                CredentialCache.deleteCredentials(this.id);
+                return null;
+            }
 
-                ext.outputChannel.appendLine(
-                    l10n.t('Azure VM: Connected to "{vmName}" as "{username}".', {
-                        vmName: this.cluster.name,
-                        username: wizardContext.selectedUserName ?? '',
-                    }),
-                );
-                return clustersClient;
-            },
-        );
+            ext.outputChannel.appendLine(
+                l10n.t('Azure VM: Connected to "{vmName}" as "{username}".', {
+                    vmName: this.cluster.name,
+                    username: wizardContext.selectedUserName ?? '',
+                }),
+            );
+            return clustersClient;
+        });
         return result ?? null;
     }
 

@@ -17,6 +17,7 @@ import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { Views } from '../../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
@@ -45,34 +46,32 @@ export class DocumentDBResourceItem extends ClusterItemBase {
     }
 
     public async getConnectionString(): Promise<string | undefined> {
-        return callWithTelemetryAndErrorHandling(
-            'documentDB.mongoClusters.getConnectionString',
-            async (context: IActionContext) => {
-                // Create a client to interact with the MongoDB vCore management API and read the cluster details
-                const managementClient = await createMongoClustersManagementClient(context, this.subscription);
+        return callWithTelemetryAndErrorHandling('getConnectionString', async (context: IActionContext) => {
+            context.telemetry.properties.view = Views.DiscoveryView;
+            // Create a client to interact with the MongoDB vCore management API and read the cluster details
+            const managementClient = await createMongoClustersManagementClient(context, this.subscription);
 
-                const clusterInformation = await managementClient.mongoClusters.get(
-                    this.cluster.resourceGroup as string,
-                    this.cluster.name,
-                );
+            const clusterInformation = await managementClient.mongoClusters.get(
+                this.cluster.resourceGroup as string,
+                this.cluster.name,
+            );
 
-                if (!clusterInformation.connectionString) {
-                    return undefined;
-                }
+            if (!clusterInformation.connectionString) {
+                return undefined;
+            }
 
-                context.valuesToMask.push(clusterInformation.connectionString);
-                const connectionString = new ConnectionString(clusterInformation.connectionString as string);
+            context.valuesToMask.push(clusterInformation.connectionString);
+            const connectionString = new ConnectionString(clusterInformation.connectionString as string);
 
-                if (clusterInformation.administratorLogin) {
-                    context.valuesToMask.push(clusterInformation.administratorLogin);
-                    connectionString.username = clusterInformation.administratorLogin;
-                }
+            if (clusterInformation.administratorLogin) {
+                context.valuesToMask.push(clusterInformation.administratorLogin);
+                connectionString.username = clusterInformation.administratorLogin;
+            }
 
-                connectionString.password = '';
+            connectionString.password = '';
 
-                return connectionString.toString();
-            },
-        );
+            return connectionString.toString();
+        });
     }
 
     /**
@@ -82,9 +81,11 @@ export class DocumentDBResourceItem extends ClusterItemBase {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-discovery';
+
             ext.outputChannel.appendLine(
-                l10n.t('MongoDB Clusters: Attempting to authenticate with "{cluster}"…', {
+                l10n.t('Attempting to authenticate with "{cluster}"…', {
                     cluster: this.cluster.name,
                 }),
             );
@@ -129,7 +130,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             );
 
             ext.outputChannel.append(
-                l10n.t('MongoDB Clusters: Connecting to the cluster as "{username}"…', {
+                l10n.t('Connecting to the cluster as "{username}"…', {
                     username: wizardContext.selectedUserName ?? '',
                 }),
             );
@@ -163,7 +164,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             }
 
             ext.outputChannel.appendLine(
-                l10n.t('MongoDB Clusters: Connected to "{cluster}" as "{username}".', {
+                l10n.t('Connected to "{cluster}" as "{username}".', {
                     cluster: this.cluster.name,
                     username: wizardContext.selectedUserName ?? '',
                 }),

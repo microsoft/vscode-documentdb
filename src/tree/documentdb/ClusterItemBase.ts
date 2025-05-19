@@ -81,16 +81,14 @@ export abstract class ClusterItemBase implements TreeElement, TreeElementWithExp
      * @returns A list of databases in the cluster or a single element to create a new database.
      */
     async getChildren(): Promise<TreeElement[]> {
-        ext.outputChannel.appendLine(
-            l10n.t('MongoDB Clusters: Loading cluster details for "{cluster}"', { cluster: this.cluster.name }),
-        );
+        ext.outputChannel.appendLine(l10n.t('Loading cluster details for "{cluster}"', { cluster: this.cluster.name }));
 
         let clustersClient: ClustersClient | null;
 
         // Check if credentials are cached, and return the cached client if available
         if (CredentialCache.hasCredentials(this.id)) {
             ext.outputChannel.appendLine(
-                l10n.t('MongoDB Clusters: Reusing active connection for "{cluster}".', {
+                l10n.t('Reusing active connection for "{cluster}".', {
                     cluster: this.cluster.name,
                 }),
             );
