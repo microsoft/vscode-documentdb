@@ -154,7 +154,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
                 children?.push(
                     createGenericElementWithContext({
                         contextValue: 'error',
-                        id: `${element.id}/retryAuthentication`,
+                        id: `${element.id}/updateCredentials`,
                         label: vscode.l10n.t('Click here to update credentials'),
                         iconPath: new vscode.ThemeIcon('key'),
                         commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
