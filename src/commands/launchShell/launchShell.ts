@@ -49,16 +49,16 @@ export async function launchShell(
         void vscode.window.showErrorMessage(l10n.t('Failed to extract the connection string from the selected node.'));
         return;
     }
+    context.valuesToMask.push(rawConnectionString);
 
     const connectionString: ConnectionString = new ConnectionString(rawConnectionString);
 
-    const actualUsername = connectionString.username;
     const actualPassword = connectionString.password;
+    context.valuesToMask.push(actualPassword);
 
     // Use unique environment variable names to avoid conflicts
     const randomSuffix = Math.floor(100000 + Math.random() * 900000).toString(); // Generate a 6-digit random number string
-    const uniqueUserEnvVar = `DOCUMENTDB_USER_${randomSuffix}`;
-    const uniquePassEnvVar = `DOCUMENTDB_PASS_${randomSuffix}`;
+    const uniquePassEnvVar = `documentdb_${randomSuffix}`; // Use a lowercase, generic-looking variable name to avoid drawing attention in the shell output—this helps prevent bystanders from noticing sensitive info if they're watching the user's screen.
 
     // Check if PowerShell is being used on Windows
     let isWindowsPowerShell = false;
@@ -79,14 +79,16 @@ export async function launchShell(
 
     // Use correct variable syntax based on shell
     if (isWindows && isWindowsPowerShell) {
-        connectionString.username = `$env:${uniqueUserEnvVar}`;
         connectionString.password = `$env:${uniquePassEnvVar}`;
     } else if (isWindows) {
-        connectionString.username = `%${uniqueUserEnvVar}%`;
         connectionString.password = `%${uniquePassEnvVar}%`;
     } else {
-        connectionString.username = `$${uniqueUserEnvVar}`;
         connectionString.password = `$${uniquePassEnvVar}`;
+    }
+
+    // If the username or password is empty, remove them from the connection string to avoid invalid connection strings
+    if (!connectionString.username || !actualPassword) {
+        connectionString.password = '';
     }
 
     if ('databaseInfo' in node && node.databaseInfo?.name) {
@@ -99,10 +101,9 @@ export async function launchShell(
     // }
 
     const terminal: vscode.Terminal = vscode.window.createTerminal({
-        name: `MongoDB Shell (${actualUsername || 'default'})`, // Display actual username or a default
+        name: `MongoDB Shell (${connectionString.username || 'default'})`, // Display actual username or a default
         hideFromUser: false,
         env: {
-            [uniqueUserEnvVar]: actualUsername,
             [uniquePassEnvVar]: actualPassword,
         },
     });
