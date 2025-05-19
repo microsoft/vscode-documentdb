@@ -20,7 +20,7 @@ export async function retryAuthentication(context: IActionContext, node: Cluster
     }
 
     if (new RegExp(`\\b${Views.DiscoveryView}\\b`, 'i').test(node.contextValue)) {
-        // here, no reset as the discovery view does not support nodes with an error state
+        ext.discoveryBranchDataProvider.resetNodeErrorState(node.id);
         return ext.discoveryBranchDataProvider.refresh(node);
     }
 

@@ -262,9 +262,14 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
             // First try to find the current instance with this ID
             const currentElement = await this.findNodeById(element.id!);
 
-            // AFTER finding the element, clear the cached relationship
-            // This ensures we can find the element before clearing it
+            // AFTER finding the element, update the cache:
+            // 1. Clear the cache for this ID to remove any stale references
+            // (drops the element and its children)
             this.parentCache.clear(element.id!);
+            // 2. Re-register the node (but not its children)
+            if (currentElement?.id) {
+                this.parentCache.registerNode(currentElement);
+            }
 
             if (currentElement) {
                 // We found the current instance, use it for refresh
