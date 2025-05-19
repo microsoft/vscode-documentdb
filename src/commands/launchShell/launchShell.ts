@@ -52,8 +52,13 @@ export async function launchShell(
 
     const connectionString: ConnectionString = new ConnectionString(rawConnectionString);
 
-    const username = connectionString.username;
-    const password = connectionString.password;
+    const actualUsername = connectionString.username;
+    const actualPassword = connectionString.password;
+
+    // Use unique environment variable names to avoid conflicts
+    const randomSuffix = Math.floor(100000 + Math.random() * 900000).toString(); // Generate a 6-digit random number string
+    const uniqueUserEnvVar = `DOCUMENTDB_USER_${randomSuffix}`;
+    const uniquePassEnvVar = `DOCUMENTDB_PASS_${randomSuffix}`;
 
     // Check if PowerShell is being used on Windows
     let isWindowsPowerShell = false;
@@ -74,14 +79,14 @@ export async function launchShell(
 
     // Use correct variable syntax based on shell
     if (isWindows && isWindowsPowerShell) {
-        connectionString.username = '$env:USERNAME';
-        connectionString.password = '$env:PASSWORD';
+        connectionString.username = `$env:${uniqueUserEnvVar}`;
+        connectionString.password = `$env:${uniquePassEnvVar}`;
     } else if (isWindows) {
-        connectionString.username = '%USERNAME%';
-        connectionString.password = '%PASSWORD%';
+        connectionString.username = `%${uniqueUserEnvVar}%`;
+        connectionString.password = `%${uniquePassEnvVar}%`;
     } else {
-        connectionString.username = '$USERNAME';
-        connectionString.password = '$PASSWORD';
+        connectionString.username = `$${uniqueUserEnvVar}`;
+        connectionString.password = `$${uniquePassEnvVar}`;
     }
 
     if ('databaseInfo' in node && node.databaseInfo?.name) {
@@ -94,11 +99,11 @@ export async function launchShell(
     // }
 
     const terminal: vscode.Terminal = vscode.window.createTerminal({
-        name: `MongoDB Shell (${username})`,
+        name: `MongoDB Shell (${actualUsername || 'default'})`, // Display actual username or a default
         hideFromUser: false,
         env: {
-            USERNAME: username,
-            PASSWORD: password,
+            [uniqueUserEnvVar]: actualUsername,
+            [uniquePassEnvVar]: actualPassword,
         },
     });
 
