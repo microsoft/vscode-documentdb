@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Toolbar, ToolbarButton } from '@fluentui/react-components';
+import { Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
 import { AddFilled, DeleteRegular, EditRegular, EyeRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
@@ -26,33 +26,41 @@ export const ToolbarDocumentManipulation = ({
 
     return (
         <Toolbar aria-label={l10n.t('with Popover')} size="small">
-            <ToolbarButton
-                aria-label={l10n.t('Add new document')}
-                icon={<AddFilled />}
-                disabled={currentContext.commands.disableAddDocument}
-                onClick={onAddClick}
-            />
+            <Tooltip content={l10n.t('Add new document')} relationship="description" withArrow>
+                <ToolbarButton
+                    aria-label={l10n.t('Add new document')}
+                    icon={<AddFilled />}
+                    disabled={currentContext.commands.disableAddDocument}
+                    onClick={onAddClick}
+                />
+            </Tooltip>
 
-            <ToolbarButton
-                aria-label={l10n.t('View selected document')}
-                icon={<EyeRegular />}
-                disabled={currentContext.commands.disableViewDocument}
-                onClick={onViewClick}
-            />
+            <Tooltip content={l10n.t('View selected document')} relationship="description" withArrow>
+                <ToolbarButton
+                    aria-label={l10n.t('View selected document')}
+                    icon={<EyeRegular />}
+                    disabled={currentContext.commands.disableViewDocument}
+                    onClick={onViewClick}
+                />
+            </Tooltip>
 
-            <ToolbarButton
-                aria-label={l10n.t('Edit selected document')}
-                icon={<EditRegular />}
-                disabled={currentContext.commands.disableEditDocument}
-                onClick={onEditClick}
-            />
+            <Tooltip content={l10n.t('Edit selected document')} relationship="description" withArrow>
+                <ToolbarButton
+                    aria-label={l10n.t('Edit selected document')}
+                    icon={<EditRegular />}
+                    disabled={currentContext.commands.disableEditDocument}
+                    onClick={onEditClick}
+                />
+            </Tooltip>
 
-            <ToolbarButton
-                aria-label={l10n.t('Delete selected document')}
-                icon={<DeleteRegular />}
-                disabled={currentContext.commands.disableDeleteDocument}
-                onClick={onDeleteClick}
-            />
+            <Tooltip content={l10n.t('Delete selected document')} relationship="description" withArrow>
+                <ToolbarButton
+                    aria-label={l10n.t('Delete selected document')}
+                    icon={<DeleteRegular />}
+                    disabled={currentContext.commands.disableDeleteDocument}
+                    onClick={onDeleteClick}
+                />
+            </Tooltip>
         </Toolbar>
     );
 };
