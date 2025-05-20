@@ -58,6 +58,10 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
         };
     }
 
+    getLearnMoreUrl(): string | undefined {
+        return 'https://aka.ms/vscode-documentdb-discovery-providers-azure-vms';
+    }
+
     async configureTreeItemFilter(context: IActionContext, node: TreeElement): Promise<void> {
         if (node instanceof AzureServiceRootItem) {
             await configureVmFilter(context, this.azureSubscriptionProvider);

@@ -52,6 +52,8 @@ export interface DiscoveryProvider extends ProviderDescription {
      */
     getDiscoveryTreeRootItem(parentId: string): TreeElement;
 
+    getLearnMoreUrl?(): string | undefined;
+
     configureTreeItemFilter?(context: IActionContext, node: TreeElement): Promise<void>;
 }
 
