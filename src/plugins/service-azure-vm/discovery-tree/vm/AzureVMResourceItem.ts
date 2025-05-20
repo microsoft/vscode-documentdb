@@ -33,7 +33,7 @@ export interface VirtualMachineModel extends ClusterModel {
 }
 
 export class AzureVMResourceItem extends ClusterItemBase {
-    iconPath = new vscode.ThemeIcon('vm'); // Generic VM icon
+    iconPath = new vscode.ThemeIcon('server-environment');
 
     constructor(
         readonly subscription: AzureSubscription, // Retained from original
