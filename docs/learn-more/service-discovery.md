@@ -1,12 +1,14 @@
 <!-- Learn More Section Badge or Breadcrumb -->
 
-> **Learn More** &mdash; [Back to Learn More Index](./index.md)
+> **Learn More** &mdash; [Back to Learn More Index](./index)
 
 ---
 
 # Service Discovery in DocumentDB for VS Code
 
 **DocumentDB for VS Code** is built with an open architecture. While the extension focuses on developer productivity-such as data exploration, running queries, and importing/exporting data-the core connectivity is centered around connection strings.
+
+![Service Discovery Providers Location](./images/service-discovery-introduction.png)
 
 ## How Service Discovery Works
 
@@ -23,8 +25,8 @@ This approach allows you to connect to a variety of platforms without needing to
 
 Currently, two service discovery plugins are available:
 
-- **Azure CosmosDB for MongoDB (vCore)**
-- **Azure VMs**
+- **[Azure CosmosDB for MongoDB (vCore)](./service-discovery-azure-cosmosdb-for-mongodb-vcore)**
+- **[Azure VMs (DocumentDB)](./service-discovery-azure-vms)**
 
 We are actively working to integrate more platforms and welcome contributions from the community.
 
@@ -36,6 +38,6 @@ If you are interested in contributing, now is a great time to get involved and h
 
 ## Get Involved
 
-Would you like to add your own service discovery provider? Would you like to suggest a provider to get added? Do you have feedback or suggestions about the existing plugins?
+Would you like to add your own service discovery provider? Would you like to suggest a provider to be added? Do you have feedback or suggestions about the existing plugins?
 
-We encourage you to [join the discussion board](#) and share your ideas or questions. Collaboration and feedback from developers like you are essential to making DocumentDB for VS Code more useful and adaptable to a wide range of environments.
+We encourage you to [join the discussion board](https://github.com/microsoft/vscode-documentdb/discussions) and share your ideas or questions. Collaboration and feedback from developers like you are essential to making DocumentDB for VS Code more useful and adaptable to a wide range of environments.
