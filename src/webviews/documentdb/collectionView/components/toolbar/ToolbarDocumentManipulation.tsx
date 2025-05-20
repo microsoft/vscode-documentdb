@@ -53,9 +53,9 @@ export const ToolbarDocumentManipulation = ({
                 />
             </Tooltip>
 
-            <Tooltip content={l10n.t('Delete selected document')} relationship="description" withArrow>
+            <Tooltip content={l10n.t('Delete selected document(s)')} relationship="description" withArrow>
                 <ToolbarButton
-                    aria-label={l10n.t('Delete selected document')}
+                    aria-label={l10n.t('Delete selected document(s)')}
                     icon={<DeleteRegular />}
                     disabled={currentContext.commands.disableDeleteDocument}
                     onClick={onDeleteClick}
