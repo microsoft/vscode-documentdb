@@ -59,6 +59,10 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
         };
     }
 
+    getLearnMoreUrl(): string | undefined {
+        return 'https://aka.ms/vscode-documentdb-discovery-providers-azure-vcore';
+    }
+
     async configureTreeItemFilter(context: IActionContext, node: TreeElement): Promise<void> {
         if (node instanceof AzureServiceRootItem) {
             await configureAzureSubscriptionFilter(context, this.azureSubscriptionProvider);

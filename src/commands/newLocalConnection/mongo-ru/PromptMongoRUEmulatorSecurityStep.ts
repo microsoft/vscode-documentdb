@@ -60,7 +60,7 @@ export class PromptMongoRUEmulatorSecurityStep extends AzureWizardPromptStep<New
         if (selectedItem.id === 'learnMore') {
             context.telemetry.properties.emulatorLearnMoreSecurity = 'true';
 
-            await openUrl('https://aka.ms/vscode-documentdb-local-connections');
+            await openUrl('https://aka.ms/vscode-documentdb-local-connections-security');
             throw new UserCancelledError();
         }
     }

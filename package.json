@@ -337,6 +337,13 @@
         "icon": "$(filter)"
       },
       {
+        "//": "[DiscoveryView] Learn More About Service Provider",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
+        "title": "Learn More",
+        "icon": "$(info)"
+      },
+      {
         "//": "Refresh a Tree Item",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.refresh",
@@ -534,6 +541,16 @@
           "group": "inline"
         },
         {
+          "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
+          "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
+          "group": "1@3"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
+          "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
+          "group": "inline"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
           "when": "view == discoveryView && viewItem =~ /\\benableFilterCommand\\b/i",
           "group": "1@2"
@@ -674,6 +691,10 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
           "when": "never"
         },
         {
