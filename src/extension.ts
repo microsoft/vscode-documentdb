@@ -36,7 +36,7 @@ export async function activateInternal(
     // TreeElementStateManager is needed here too
     ext.state = new TreeElementStateManager();
 
-    ext.outputChannel = createAzExtLogOutputChannel('DocumentDB VS Code Extension');
+    ext.outputChannel = createAzExtLogOutputChannel('DocumentDB for VS Code');
     context.subscriptions.push(ext.outputChannel);
     registerUIExtensionVariables(ext);
     registerAzureUtilsExtensionVariables(ext);
