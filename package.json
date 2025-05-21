@@ -148,12 +148,12 @@
     "webpack-dev-server": "^5.2.0"
   },
   "dependencies": {
+    "@azure/arm-compute": "^22.4.0",
     "@azure/arm-cosmosdb": "16.0.0-beta.7",
+    "@azure/arm-network": "^33.5.0",
     "@azure/arm-postgresql": "^6.1.0",
     "@azure/arm-postgresql-flexible": "^8.0.0",
     "@azure/arm-resources": "^6.0.0",
-    "@azure/arm-compute": "^22.4.0",
-    "@azure/arm-network": "^33.5.0",
     "@azure/cosmos": "^4.2.0",
     "@azure/identity": "^4.6.0",
     "@fluentui/react-components": "^9.60.0",
@@ -179,6 +179,7 @@
     "lodash.omit": "^4.5.0",
     "monaco-editor": "~0.51.0",
     "mongodb": "^6.14.2",
+    "mongodb-connection-string-url": "^3.0.2",
     "pg": "^8.13.3",
     "pg-connection-string": "^2.7.0",
     "react-hotkeys-hook": "^4.6.1",
