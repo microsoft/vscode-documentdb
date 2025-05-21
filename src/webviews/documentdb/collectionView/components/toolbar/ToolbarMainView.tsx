@@ -38,7 +38,7 @@ export const ToolbarMainView = (): JSX.Element => {
             <ToolbarDivider />
             <Menu>
                 <MenuTrigger>
-                    <Tooltip content={l10n.t('Provide Feedback')} relationship="label">
+                    <Tooltip content={l10n.t('Provide Feedback')} relationship="description" withArrow>
                         <ToolbarButton
                             aria-label={l10n.t('Provide Feedback')}
                             icon={<EmojiSmileSlightRegular />}

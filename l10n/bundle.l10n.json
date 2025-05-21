@@ -111,7 +111,7 @@
   "Delete {count} documents?": "Delete {count} documents?",
   "Delete collection \"{collectionId}\" and its contents?": "Delete collection \"{collectionId}\" and its contents?",
   "Delete database \"{databaseId}\" and its contents?": "Delete database \"{databaseId}\" and its contents?",
-  "Delete selected document": "Delete selected document",
+  "Delete selected document(s)": "Delete selected document(s)",
   "Deleting...": "Deleting...",
   "Disable TLS/SSL (Not recommended)": "Disable TLS/SSL (Not recommended)",
   "Disable TLS/SSL checks when connecting.": "Disable TLS/SSL checks when connecting.",
