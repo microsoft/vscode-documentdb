@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.2.1
+
+### Fixes
+
+- Fixed inconsistent icons between Connections and Discovery Views. [#84](https://github.com/ms/vscode-documentdb/issues/84)
+- Updated Extension Output Console to use standard naming conventions. [#80](https://github.com/ms/vscode-documentdb/issues/80)
+- Added missing hover labels for UI buttons. [#90](https://github.com/ms/vscode-documentdb/issues/90)
+- Improved shell password handling for PowerShell and added detection for other terminal options. [#106](https://github.com/ms/vscode-documentdb/issues/106)
+
 ## 0.2.0 - First Public Preview Release
 
 - Support for DocumentDB and MongoDB databases.
