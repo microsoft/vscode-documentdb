@@ -22,7 +22,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
         const parentId = context.parentId;
 
         const parsedCS = new ConnectionString(connectionString);
-        const joinedHosts = parsedCS.hosts.join(',');
+        const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
         const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
@@ -34,7 +34,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             }
 
             const itemCS = new ConnectionString(secret);
-            return itemCS.username === parsedCS.username && itemCS.hosts.join(',') === joinedHosts;
+            return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
         });
 
         if (existingDuplicateConnection) {
