@@ -9,7 +9,7 @@ import { ConnectionString } from 'mongodb-connection-string-url';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
-import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
+import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { nonNullValue } from '../../utils/nonNull';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
@@ -138,21 +138,11 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 secrets: [nonNullValue(connectionString)],
             };
 
-            if (experience.api === API.MongoDB) {
-                await StorageService.get(StorageNames.Workspace).push(
-                    WorkspaceResourceType.MongoClusters,
-                    storageItem,
-                    true,
-                );
-            } else if (experience.api === API.DocumentDB) {
-                await StorageService.get(StorageNames.Connections).push('emulators', storageItem, true);
-            } else {
-                await StorageService.get(StorageNames.Workspace).push(
-                    WorkspaceResourceType.AttachedAccounts,
-                    storageItem,
-                    true,
-                );
-            }
+            await StorageService.get(StorageNames.Connections).push('emulators', storageItem, true);
+
+            ext.connectionsBranchDataProvider.refresh();
+
+            showConfirmationAsInSettings(l10n.t('New connection has been added.'));
         });
     }
 

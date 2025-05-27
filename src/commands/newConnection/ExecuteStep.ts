@@ -105,7 +105,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 // }
             }
 
-            showConfirmationAsInSettings(l10n.t('New connection has been added to your workspace.'));
+            showConfirmationAsInSettings(l10n.t('New connection has been added.'));
         });
     }
 
