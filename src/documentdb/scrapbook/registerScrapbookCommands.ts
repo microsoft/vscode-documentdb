@@ -23,16 +23,16 @@ import { getAllErrorsFromTextDocument } from './ScrapbookHelpers';
 import { ScrapbookService } from './ScrapbookService';
 
 let diagnosticsCollection: vscode.DiagnosticCollection;
-const mongoLanguageId: string = 'mongo';
+const scrapbookLanguageId: string = 'vscode-documentdb-scrapbook-language';
 
 export function registerScrapbookCommands(): void {
     ext.mongoLanguageClient = new MongoDBLanguageClient();
 
     ext.context.subscriptions.push(
-        vscode.languages.registerCodeLensProvider(mongoLanguageId, ScrapbookService.getCodeLensProvider()),
+        vscode.languages.registerCodeLensProvider(scrapbookLanguageId, ScrapbookService.getCodeLensProvider()),
     );
 
-    diagnosticsCollection = vscode.languages.createDiagnosticCollection('documentDB.mongo');
+    diagnosticsCollection = vscode.languages.createDiagnosticCollection('documentDB.vscode-documentdb-scrapbook');
     ext.context.subscriptions.push(diagnosticsCollection);
 
     setUpErrorReporting();
@@ -78,7 +78,7 @@ function setUpErrorReporting(): void {
         vscode.workspace.onDidCloseTextDocument,
         async (context: IActionContext, document: vscode.TextDocument) => {
             // Remove errors when closed
-            if (document?.languageId === mongoLanguageId) {
+            if (document?.languageId === scrapbookLanguageId) {
                 diagnosticsCollection.set(document.uri, []);
             } else {
                 context.telemetry.suppressIfSuccessful = true;
@@ -94,7 +94,7 @@ function setUpErrorReporting(): void {
 }
 
 function updateErrorsInScrapbook(context: IActionContext, document: vscode.TextDocument | undefined): void {
-    if (document?.languageId === mongoLanguageId) {
+    if (document?.languageId === scrapbookLanguageId) {
         const errors = getAllErrorsFromTextDocument(document);
         diagnosticsCollection.set(document.uri, errors);
     } else {

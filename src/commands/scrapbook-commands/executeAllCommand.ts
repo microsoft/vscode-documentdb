@@ -12,7 +12,7 @@ import { withProgress } from '../../utils/withProgress';
 export async function executeAllCommand(context: IActionContext): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-        throw new Error(l10n.t('You must open a *.mongo file to run commands.'));
+        throw new Error(l10n.t('You must open a *.vscode-documentdb-scrapbook file to run commands.'));
     }
     await withProgress(
         ScrapbookService.executeAllCommands(context, editor.document),

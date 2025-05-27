@@ -22,7 +22,8 @@ module.exports = (env, { mode }) => {
         node: { __filename: false, __dirname: false },
         entry: {
             // 'extension.bundle.ts': './src/extension.ts', // Is still necessary?
-            './mongo-languageServer.bundle': './src/documentdb/scrapbook/languageServer.ts',
+            './vscode-documentdb-scrapbook-language-languageServer.bundle':
+                './src/documentdb/scrapbook/languageServer.ts',
             main: './main.ts',
         },
         output: {

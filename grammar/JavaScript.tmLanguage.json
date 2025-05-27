@@ -1,10 +1,10 @@
 {
   "name.$comment": "** Changed **",
-  "name": "Mongo Scrapbooks (JavaScript)",
+  "name": "DocumentDB & MongoDB Scrapbooks (JavaScript)",
   "scopeName.$comment": "** Changed **",
   "scopeName": "source.mongo.js",
   "fileTypes.$comment": "** Changed from .js/.jsx **",
-  "fileTypes": [".mongo"],
+  "fileTypes": [".vscode-documentdb-scrapbook"],
   "uuid.$comment": "** Changed **",
   "uuid": "311c363f-7b1d-4dc4-b237-da46f717cca4",
   "patterns": [
