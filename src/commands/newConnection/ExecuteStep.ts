@@ -24,40 +24,38 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
         const parsedCS = new ConnectionString(connectionString);
         const joinedHosts = parsedCS.hosts.join(',');
 
+        //  Sanity Check 1/2: is there a connection with the same username + host in there?
+        const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
+
+        const existingDuplicateConnection = existingConnections.find((item) => {
+            const secret = item.secrets?.[0];
+            if (!secret) {
+                return false; // Skip if no secret string is found
+            }
+
+            const itemCS = new ConnectionString(secret);
+            return itemCS.username === parsedCS.username && itemCS.hosts.join(',') === joinedHosts;
+        });
+
+        if (existingDuplicateConnection) {
+            throw new Error(
+                l10n.t('A connection "{existingName}" with the same username and host already exists.', {
+                    existingName: existingDuplicateConnection.name,
+                }),
+            );
+        }
+
         let newConnectionLabel =
-            parsedCS.username && parsedCS.username.length > 0
-                ? `${parsedCS.username}@${joinedHosts}`
-                : parsedCS.hosts.join(',');
+            parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
 
         return ext.state.showCreatingChild(parentId, l10n.t('Creating new connection…'), async () => {
             // This is a workaround to ensure that the UI has time to update with the temporary description before we perform the storage operations.
             await new Promise((resolve) => setTimeout(resolve, 250));
 
-            // 1. Perform a validation for potential collisions in the storage:
-            //  1.1 is there a connection with the same username + host in there?
-            //  1.2 is there a connection with the same 'label' in there? If so, append a number to the label
-            //    - this is possible as users are allowed to rename their connections
+            // Sanity Check 2/2: is there a connection with the same 'label' in there?
+            // If so, append a number to the label.
+            // This scenario is possible as users are allowed to rename their connections.
 
-            // 1.1
-            const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
-            const existingDuplicateConnection = existingConnections.find((item) => {
-                if (!item.secrets || item.secrets.length === 0) {
-                    return false; // Skip items without secrets
-                }
-
-                const itemCS = new ConnectionString(item.secrets[0]);
-                return itemCS.username === parsedCS.username && itemCS.hosts.join(',') === joinedHosts;
-            });
-
-            if (existingDuplicateConnection) {
-                throw new Error(
-                    l10n.t('A connection "{existingName}" with the same username and host already exists.', {
-                        existingName: existingDuplicateConnection.name,
-                    }),
-                );
-            }
-
-            // 1.2
             let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
             // If a connection with the same label exists, append a number to the label
             while (existingDuplicateLabel) {
