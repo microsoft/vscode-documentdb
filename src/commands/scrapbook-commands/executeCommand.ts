@@ -12,7 +12,7 @@ import { withProgress } from '../../utils/withProgress';
 export async function executeCommand(context: IActionContext, position?: vscode.Position): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-        throw new Error(l10n.t('You must open a *.mongo file to run commands.'));
+        throw new Error(l10n.t('You must open a *.vscode-documentdb-scrapbook file to run commands.'));
     }
 
     const pos = position ?? editor.selection.start;

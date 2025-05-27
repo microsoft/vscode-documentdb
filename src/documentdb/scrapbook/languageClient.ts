@@ -17,8 +17,8 @@ export class MongoDBLanguageClient {
     constructor() {
         // The server is implemented in node
         const serverPath = ext.isBundle
-            ? path.join('mongo-languageServer.bundle.js') // Run with webpack
-            : path.join('out', 'src', 'mongo', 'languageServer.js'); // Run without webpack
+            ? path.join('vscode-documentdb-scrapbook-language-languageServer.bundle.js') // Run with webpack
+            : path.join('out', 'src', 'documentdb', 'scrapbook', 'languageServer.js'); // Run without webpack
         const serverModule = ext.context.asAbsolutePath(serverPath);
         // The debug options for the server
         const debugOptions = { execArgv: ['--nolazy', '--inspect=6005'] };
@@ -34,13 +34,18 @@ export class MongoDBLanguageClient {
         const clientOptions: LanguageClientOptions = {
             // Register the server for mongo javascript documents
             documentSelector: [
-                { language: 'mongo', scheme: 'file' },
-                { language: 'mongo', scheme: 'untitled' },
+                { language: 'vscode-documentdb-scrapbook-language', scheme: 'file' },
+                { language: 'vscode-documentdb-scrapbook-language', scheme: 'untitled' },
             ],
         };
 
         // Create the language client and start the client.
-        this.client = new LanguageClient('mongo', l10n.t('DocumentDB Language Server'), serverOptions, clientOptions);
+        this.client = new LanguageClient(
+            'vscode-documentdb-scrapbook-language',
+            l10n.t('DocumentDB Language Server'),
+            serverOptions,
+            clientOptions,
+        );
         const disposable = this.client.start();
 
         // Push the disposable to the context's subscriptions so that the

@@ -448,7 +448,7 @@
   "You are not signed in to the MongoDB Cluster. Please sign in (by expanding the node \"{0}\") and try again.": "You are not signed in to the MongoDB Cluster. Please sign in (by expanding the node \"{0}\") and try again.",
   "You can connect to a different DocumentDB by:": "You can connect to a different DocumentDB by:",
   "You do not have permission to create a resource group in subscription \"{0}\".": "You do not have permission to create a resource group in subscription \"{0}\".",
-  "You must open a *.mongo file to run commands.": "You must open a *.mongo file to run commands.",
+  "You must open a *.vscode-documentdb-scrapbook file to run commands.": "You must open a *.vscode-documentdb-scrapbook file to run commands.",
   "You need to provide the password for \"{username}\" in order to continue. Your password will not be stored.": "You need to provide the password for \"{username}\" in order to continue. Your password will not be stored.",
   "Your database stores documents with embedded fields, allowing for hierarchical data organization.": "Your database stores documents with embedded fields, allowing for hierarchical data organization.",
   "Your VS Code window must be reloaded to perform this action.": "Your VS Code window must be reloaded to perform this action."

@@ -23,7 +23,7 @@ import { getAllErrorsFromTextDocument } from './ScrapbookHelpers';
 import { ScrapbookService } from './ScrapbookService';
 
 let diagnosticsCollection: vscode.DiagnosticCollection;
-const mongoLanguageId: string = 'mongo';
+const mongoLanguageId: string = 'vscode-documentdb-scrapbook-language';
 
 export function registerScrapbookCommands(): void {
     ext.mongoLanguageClient = new MongoDBLanguageClient();
@@ -32,7 +32,7 @@ export function registerScrapbookCommands(): void {
         vscode.languages.registerCodeLensProvider(mongoLanguageId, ScrapbookService.getCodeLensProvider()),
     );
 
-    diagnosticsCollection = vscode.languages.createDiagnosticCollection('documentDB.mongo');
+    diagnosticsCollection = vscode.languages.createDiagnosticCollection('documentDB.vscode-documentdb-scrapbook');
     ext.context.subscriptions.push(diagnosticsCollection);
 
     setUpErrorReporting();
