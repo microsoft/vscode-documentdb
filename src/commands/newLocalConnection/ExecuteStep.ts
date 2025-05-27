@@ -140,7 +140,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
 
             await StorageService.get(StorageNames.Connections).push('emulators', storageItem, true);
 
-            ext.connectionsBranchDataProvider.refresh();
+            // We're not refreshing the tree here, the new connection is a child node, the parent node will refresh itself
 
             showConfirmationAsInSettings(l10n.t('New connection has been added.'));
         });

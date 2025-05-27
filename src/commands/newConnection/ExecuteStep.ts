@@ -93,9 +93,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
             await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
 
+            // Refresh the connections tree when adding a new root-level connection
             if (parentId === undefined || parentId === '') {
-                // Refresh the connections tree when adding a new root-level connection
-                // (No need to refresh when adding a child node)
                 ext.connectionsBranchDataProvider.refresh();
 
                 // TODO: Find the actual tree element by ID before revealing it
