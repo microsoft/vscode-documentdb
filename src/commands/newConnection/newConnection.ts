@@ -5,7 +5,6 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 import { PromptConnectionModeStep } from './PromptConnectionModeStep';
 
@@ -28,6 +27,4 @@ export async function newConnection(context: IActionContext): Promise<void> {
 
     await wizard.prompt();
     await wizard.execute();
-
-    showConfirmationAsInSettings(l10n.t('New connection has been added to your workspace.'));
 }

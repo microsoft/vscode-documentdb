@@ -9,6 +9,7 @@ import ConnectionString from 'mongodb-connection-string-url';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
+import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
@@ -21,42 +22,93 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
         const parentId = context.parentId;
 
         const parsedCS = new ConnectionString(connectionString);
+        const joinedHosts = parsedCS.hosts.join(',');
 
-        const label =
+        let newConnectionLabel =
             parsedCS.username && parsedCS.username.length > 0
-                ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
+                ? `${parsedCS.username}@${joinedHosts}`
                 : parsedCS.hosts.join(',');
 
-        return ext.state.showCreatingChild(
-            parentId,
-            l10n.t('Creating "{nodeName}"…', { nodeName: label }),
-            async () => {
-                await new Promise((resolve) => setTimeout(resolve, 250));
+        return ext.state.showCreatingChild(parentId, l10n.t('Creating new connection…'), async () => {
+            // This is a workaround to ensure that the UI has time to update with the temporary description before we perform the storage operations.
+            await new Promise((resolve) => setTimeout(resolve, 250));
 
-                const storageId = generateDocumentDBStorageId(connectionString);
+            // 1. Perform a validation for potential collisions in the storage:
+            //  1.1 is there a connection with the same username + host in there?
+            //  1.2 is there a connection with the same 'label' in there? If so, append a number to the label
+            //    - this is possible as users are allowed to rename their connections
 
-                const storageItem: StorageItem = {
-                    id: storageId,
-                    name: label,
-                    properties: { isEmulator: false, api: api },
-                    secrets: [connectionString],
-                };
-
-                await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
-
-                if (parentId === undefined || parentId === '') {
-                    // Refresh the connections tree when adding a new root-level connection
-                    // (No need to refresh when adding a child node)
-                    ext.connectionsBranchDataProvider.refresh();
-
-                    // TODO: Find the actual tree element by ID before revealing it
-                    // const treeItem = await ext.connectionsBranchDataProvider.findItemById(storageItem.id); // `findItemById` is a placeholder, does not exist in the current code
-                    // if (treeItem) {
-                    //     ext.connectionsTreeView.reveal(treeItem, { select: true, focus: true });
-                    // }
+            // 1.1
+            const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
+            const existingDuplicateConnection = existingConnections.find((item) => {
+                if (!item.secrets || item.secrets.length === 0) {
+                    return false; // Skip items without secrets
                 }
-            },
-        );
+
+                const itemCS = new ConnectionString(item.secrets[0]);
+                return itemCS.username === parsedCS.username && itemCS.hosts.join(',') === joinedHosts;
+            });
+
+            if (existingDuplicateConnection) {
+                throw new Error(
+                    l10n.t('A connection "{existingName}" with the same username and host already exists.', {
+                        existingName: existingDuplicateConnection.name,
+                    }),
+                );
+            }
+
+            // 1.2
+            let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+            // If a connection with the same label exists, append a number to the label
+            while (existingDuplicateLabel) {
+                /**
+                 * Matches and captures parts of a connection label string.
+                 *
+                 * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
+                 * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
+                 * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
+                 *   which may be preceded by whitespace. For example, " (123)".
+                 *
+                 * Examples:
+                 * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
+                 * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
+                 */
+                const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
+                if (match) {
+                    const baseName = match[1];
+                    const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
+                    newConnectionLabel = `${baseName} (${count})`;
+                }
+                existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+            }
+
+            // Now, we're safe to create a new connection with the new unique label
+
+            const storageId = generateDocumentDBStorageId(connectionString);
+
+            const storageItem: StorageItem = {
+                id: storageId,
+                name: newConnectionLabel,
+                properties: { isEmulator: false, api: api },
+                secrets: [connectionString],
+            };
+
+            await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
+
+            if (parentId === undefined || parentId === '') {
+                // Refresh the connections tree when adding a new root-level connection
+                // (No need to refresh when adding a child node)
+                ext.connectionsBranchDataProvider.refresh();
+
+                // TODO: Find the actual tree element by ID before revealing it
+                // const treeItem = await ext.connectionsBranchDataProvider.findItemById(storageItem.id); // `findItemById` is a placeholder, does not exist in the current code
+                // if (treeItem) {
+                //     ext.connectionsTreeView.reveal(treeItem, { select: true, focus: true });
+                // }
+            }
+
+            showConfirmationAsInSettings(l10n.t('New connection has been added to your workspace.'));
+        });
     }
 
     public shouldExecute(context: NewConnectionWizardContext): boolean {
