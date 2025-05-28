@@ -40,7 +40,22 @@ export enum TaskState {
     /**
      * Task has been successfully stopped before completion.
      */
-    Stopped = 'stopped'
+    Stopped = 'stopped',
+    
+    /**
+     * Task is in the process of pausing its execution.
+     */
+    Pausing = 'pausing',
+    
+    /**
+     * Task execution is temporarily suspended and can be resumed.
+     */
+    Paused = 'paused',
+    
+    /**
+     * Task is in the process of resuming from a paused state.
+     */
+    Resuming = 'resuming'
 }
 
 /**
@@ -121,6 +136,36 @@ export interface Task {
 }
 
 /**
+ * Represents a task that supports pause and resume operations.
+ * 
+ * Implementation of pause and resume methods is optional for tasks.
+ * A task that implements this interface indicates it can be paused during execution
+ * and later resumed from the point it was paused.
+ */
+export interface PausableTask extends Task {
+    /**
+     * Temporarily suspends the task execution while preserving its state.
+     * 
+     * @returns A Promise that resolves when the task has successfully paused.
+     */
+    pause(): Promise<void>;
+    
+    /**
+     * Resumes task execution from the point it was paused.
+     * 
+     * @returns A Promise that resolves when the task has successfully resumed.
+     */
+    resume(): Promise<void>;
+    
+    /**
+     * Indicates whether the task supports pause and resume operations.
+     * 
+     * @returns True if the task can be paused and resumed, false otherwise.
+     */
+    canPause(): boolean;
+}
+
+/**
  * Service for managing long-running tasks within the extension.
  */
 export interface TaskService {
@@ -156,6 +201,31 @@ export interface TaskService {
      * @throws Error if the task is not found or if deletion fails.
      */
     deleteTask(id: string): Promise<void>;
+    
+    /**
+     * Pauses a task if it implements the PausableTask interface.
+     * 
+     * @param id The ID of the task to pause.
+     * @throws Error if the task is not found, does not support pausing, or if pausing fails.
+     */
+    pauseTask(id: string): Promise<void>;
+    
+    /**
+     * Resumes a paused task if it implements the PausableTask interface.
+     * 
+     * @param id The ID of the task to resume.
+     * @throws Error if the task is not found, does not support resuming, or if resuming fails.
+     */
+    resumeTask(id: string): Promise<void>;
+    
+    /**
+     * Checks if a task supports pause and resume operations.
+     * 
+     * @param id The ID of the task to check.
+     * @returns True if the task supports pause and resume, false otherwise.
+     * @throws Error if the task is not found.
+     */
+    isTaskPausable(id: string): boolean;
 }
 
 /**
@@ -220,6 +290,85 @@ class TaskServiceImpl implements TaskService {
         } catch (error) {
             throw new Error(`Failed to delete task '${id}': ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+    
+    /**
+     * Implementation of TaskService.pauseTask that pauses a pausable task.
+     * 
+     * @param id The ID of the task to pause.
+     * @throws Error if the task is not found, does not support pausing, or if pausing fails.
+     */
+    public async pauseTask(id: string): Promise<void> {
+        const task = this.tasks.get(id);
+        if (!task) {
+            throw new Error(`Task with ID '${id}' not found`);
+        }
+        
+        if (!this.isPausableTask(task)) {
+            throw new Error(`Task with ID '${id}' does not support pause operation`);
+        }
+        
+        try {
+            await task.pause();
+        } catch (error) {
+            throw new Error(`Failed to pause task '${id}': ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    
+    /**
+     * Implementation of TaskService.resumeTask that resumes a paused task.
+     * 
+     * @param id The ID of the task to resume.
+     * @throws Error if the task is not found, does not support resuming, or if resuming fails.
+     */
+    public async resumeTask(id: string): Promise<void> {
+        const task = this.tasks.get(id);
+        if (!task) {
+            throw new Error(`Task with ID '${id}' not found`);
+        }
+        
+        if (!this.isPausableTask(task)) {
+            throw new Error(`Task with ID '${id}' does not support resume operation`);
+        }
+        
+        try {
+            await task.resume();
+        } catch (error) {
+            throw new Error(`Failed to resume task '${id}': ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    
+    /**
+     * Implementation of TaskService.isTaskPausable that checks if a task supports pause and resume operations.
+     * 
+     * @param id The ID of the task to check.
+     * @returns True if the task supports pause and resume, false otherwise.
+     * @throws Error if the task is not found.
+     */
+    public isTaskPausable(id: string): boolean {
+        const task = this.tasks.get(id);
+        if (!task) {
+            throw new Error(`Task with ID '${id}' not found`);
+        }
+        
+        return this.isPausableTask(task);
+    }
+    
+    /**
+     * Helper method to check if a task implements the PausableTask interface.
+     * 
+     * @param task The task to check.
+     * @returns True if the task is pausable, false otherwise.
+     */
+    private isPausableTask(task: Task): task is PausableTask {
+        return (
+            'pause' in task && 
+            'resume' in task && 
+            'canPause' in task &&
+            typeof (task as PausableTask).pause === 'function' &&
+            typeof (task as PausableTask).resume === 'function' &&
+            typeof (task as PausableTask).canPause === 'function'
+        );
     }
 }
 
