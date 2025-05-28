@@ -4,13 +4,53 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
+ * Enumeration of possible states a task can be in.
+ */
+export enum TaskState {
+    /**
+     * Task has been created but not yet started.
+     */
+    Pending = 'pending',
+    
+    /**
+     * Task is initializing resources before beginning actual work.
+     */
+    Initializing = 'initializing',
+    
+    /**
+     * Task is actively executing its core function.
+     */
+    Running = 'running',
+    
+    /**
+     * Task has successfully finished its work.
+     */
+    Completed = 'completed',
+    
+    /**
+     * Task encountered an error and could not complete successfully.
+     */
+    Failed = 'failed',
+    
+    /**
+     * Task is in the process of stopping after receiving a stop request.
+     */
+    Stopping = 'stopping',
+    
+    /**
+     * Task has been successfully stopped before completion.
+     */
+    Stopped = 'stopped'
+}
+
+/**
  * Represents the status of a task at a given point in time.
  */
 export interface TaskStatus {
     /**
      * The current state of the task.
      */
-    state: 'pending' | 'initializing' | 'running' | 'completed' | 'failed' | 'stopping' | 'stopped';
+    state: TaskState;
     
     /**
      * Optional progress indicator, typically from 0-100.
@@ -30,6 +70,9 @@ export interface TaskStatus {
 
 /**
  * Represents a long-running task managed by the TaskService.
+ * 
+ * When created, a task should be initialized with the default state of TaskState.Pending.
+ * Tasks must be explicitly started via the start() method to begin execution.
  */
 export interface Task {
     /**
