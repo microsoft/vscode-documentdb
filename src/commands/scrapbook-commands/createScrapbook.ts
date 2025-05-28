@@ -20,5 +20,5 @@ export async function createScrapbook(_context: IActionContext, node: DatabaseIt
 
     await ScrapbookService.setConnectedCluster(node.cluster, node.databaseInfo);
 
-    await vscodeUtil.showNewFile(initialFileContents, 'Scrapbook', '.mongo');
+    await vscodeUtil.showNewFile(initialFileContents, 'Scrapbook', '.vscode-documentdb-scrapbook');
 }

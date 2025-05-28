@@ -238,21 +238,19 @@
     ],
     "languages": [
       {
-        "id": "mongo",
+        "id": "vscode-documentdb-scrapbook-language",
         "aliases": [
-          "DocumentDB Scrapbook",
-          "mongo"
+          "DocumentDB Scrapbook"
         ],
         "extensions": [
-          ".mongo"
+          ".vscode-documentdb-scrapbook"
         ],
-        "firstLine": "^#!/.*\\bmongo*\\b",
         "configuration": "./grammar/configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "mongo",
+        "language": "vscode-documentdb-scrapbook-language",
         "scopeName": "source.mongo.js",
         "path": "./grammar/JavaScript.tmLanguage.json"
       },
@@ -761,13 +759,13 @@
         "command": "vscode-documentdb.command.scrapbook.executeCommand",
         "key": "ctrl+shift+'",
         "mac": "cmd+shift+'",
-        "when": "editorLangId == 'mongo' && editorTextFocus"
+        "when": "editorLangId == 'vscode-documentdb-scrapbook-language' && editorTextFocus"
       },
       {
         "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
         "key": "ctrl+shift+;",
         "mac": "cmd+shift+;",
-        "when": "editorLangId == 'mongo' && editorTextFocus"
+        "when": "editorLangId == 'vscode-documentdb-scrapbook-language' && editorTextFocus"
       }
     ],
     "configuration": [
