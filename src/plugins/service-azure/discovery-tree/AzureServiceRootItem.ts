@@ -46,7 +46,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
             return [
                 createGenericElementWithContext({
                     contextValue: 'error',
-                    id: `${this.id}/retry`, // note: keep this in sync with the `hasErrorNode` function in this file
+                    id: `${this.id}/retry`, // note: keep this in sync with the `hasRetryNode` function in this file
                     label: vscode.l10n.t('Click here to retry'),
                     iconPath: new vscode.ThemeIcon('refresh'),
                     commandId: 'vscode-documentdb.command.internal.retry',
