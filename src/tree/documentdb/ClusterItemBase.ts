@@ -13,13 +13,16 @@ import { ext } from '../../extensionVariables';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
+import { type TreeElementWithErrorChildren } from '../TreeElementWithErrorCache';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { type ClusterModel } from './ClusterModel';
 import { DatabaseItem } from './DatabaseItem';
 
 // This info will be available at every level in the tree for immediate access
-export abstract class ClusterItemBase implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
+export abstract class ClusterItemBase
+    implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue, TreeElementWithErrorChildren
+{
     public readonly id: string;
     public readonly experience: Experience;
     public contextValue: string = 'treeItem.mongoCluster';

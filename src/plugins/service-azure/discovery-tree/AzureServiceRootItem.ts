@@ -7,11 +7,16 @@ import { type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-az
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
+import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
-import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
+import {
+    isTreeElementWithContextValue,
+    type TreeElementWithContextValue,
+} from '../../../tree/TreeElementWithContextValue';
+import { type TreeElementWithErrorChildren } from '../../../tree/TreeElementWithErrorCache';
 import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
-export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue {
+export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithErrorChildren {
     public readonly id: string;
     public contextValue: string =
         'enableRefreshCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAzureServiceRootItem';
@@ -38,7 +43,16 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
                     }
                 });
 
-            return [];
+            return [
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/retry`, // note: keep this in sync with the `hasErrorNode` function in this file
+                    label: vscode.l10n.t('Click here to retry'),
+                    iconPath: new vscode.ThemeIcon('refresh'),
+                    commandId: 'vscode-documentdb.command.internal.retryAuthentication',
+                    commandArgs: [this],
+                }),
+            ];
         }
 
         const subscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
@@ -58,6 +72,12 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
                         subscriptionId: sub.subscriptionId,
                     });
                 })
+        );
+    }
+
+    public hasErrorNode(children: TreeElement[] | null | undefined): boolean {
+        return (
+            children?.some((child) => isTreeElementWithContextValue(child) && child.contextValue === 'error') ?? false
         );
     }
 

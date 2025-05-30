@@ -15,8 +15,8 @@ import { DiscoveryService } from '../../services/discoveryServices';
 import { type ExtendedTreeDataProvider } from '../ExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
+import { isTreeElementWithErrorChildren } from '../TreeElementWithErrorCache';
 import { TreeParentCache } from '../TreeParentCache';
-import { ClusterItemBase } from '../documentdb/ClusterItemBase';
 
 /**
  * Tree data provider for the Discovery view.
@@ -222,11 +222,11 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements Ex
                 return this.getChildrenPromises.get(element);
             }
 
-            // 1. Check if this is a ClusterItemBase and we have a cached error for it.
+            // 1. Check if we have a cached error for this element
             //
             // This prevents repeated attempts to fetch children for nodes that have previously failed
             // (e.g., due to invalid credentials or connection issues).
-            if (element instanceof ClusterItemBase && element.id && this.errorNodeCache.has(element.id)) {
+            if (element.id && this.errorNodeCache.has(element.id)) {
                 context.telemetry.properties.usedCachedErrorNode = 'true';
                 return this.errorNodeCache.get(element.id);
             }
@@ -238,12 +238,12 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements Ex
                 context.telemetry.measurements.childrenCount = children?.length ?? 0;
 
                 if (!children) {
-                    return null;
+                    return [];
                 }
 
-                // 3. Check if the returned children contain an error node (do this only for the ClusterItemBase type)
+                // 3. Check if the returned children contain an error node
                 // This means the operation failed (eg. authentication)
-                if (element instanceof ClusterItemBase && element.id && element.hasErrorNode(children)) {
+                if (isTreeElementWithErrorChildren(element) && element.hasErrorNode(children)) {
                     // Store the error node(s) in our cache for future refreshes
                     this.errorNodeCache.set(element.id, children ?? []);
                     context.telemetry.properties.cachedErrorNode = 'true';
