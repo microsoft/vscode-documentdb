@@ -7,11 +7,16 @@ import { type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-az
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
+import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
-import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
+import {
+    isTreeElementWithContextValue,
+    type TreeElementWithContextValue,
+} from '../../../tree/TreeElementWithContextValue';
+import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
-export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue {
+export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
     public contextValue: string =
         'enableRefreshCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAzureVMRootItem';
@@ -30,7 +35,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         if (!(await this.azureSubscriptionProvider.isSignedIn())) {
             const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
             void vscode.window
-                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in to continue.'), signIn)
+                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in and retry.'), signIn)
                 .then(async (input) => {
                     if (input === signIn) {
                         await this.azureSubscriptionProvider.signIn();
@@ -38,7 +43,16 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
                     }
                 });
 
-            return [];
+            return [
+                createGenericElementWithContext({
+                    contextValue: 'error', // note: keep this in sync with the `hasRetryNode` function in this file
+                    id: `${this.id}/retry`,
+                    label: vscode.l10n.t('Click here to retry'),
+                    iconPath: new vscode.ThemeIcon('refresh'),
+                    commandId: 'vscode-documentdb.command.internal.retry',
+                    commandArgs: [this],
+                }),
+            ];
         }
 
         const subscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
@@ -58,6 +72,12 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
                         subscriptionId: sub.subscriptionId,
                     });
                 })
+        );
+    }
+
+    public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
+        return (
+            children?.some((child) => isTreeElementWithContextValue(child) && child.contextValue === 'error') ?? false
         );
     }
 

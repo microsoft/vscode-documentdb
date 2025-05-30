@@ -446,7 +446,7 @@
   "Yes": "Yes",
   "Yes, save my credentials": "Yes, save my credentials",
   "You are not signed in to an Azure account. Please sign in.": "You are not signed in to an Azure account. Please sign in.",
-  "You are not signed in to Azure. Sign in to continue.": "You are not signed in to Azure. Sign in to continue.",
+  "You are not signed in to Azure. Sign in and retry.": "You are not signed in to Azure. Sign in and retry.",
   "You are not signed in to the MongoDB Cluster. Please sign in (by expanding the node \"{0}\") and try again.": "You are not signed in to the MongoDB Cluster. Please sign in (by expanding the node \"{0}\") and try again.",
   "You can connect to a different DocumentDB by:": "You can connect to a different DocumentDB by:",
   "You do not have permission to create a resource group in subscription \"{0}\".": "You do not have permission to create a resource group in subscription \"{0}\".",
