@@ -30,7 +30,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         if (!(await this.azureSubscriptionProvider.isSignedIn())) {
             const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
             void vscode.window
-                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in to continue.'), signIn)
+                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in and retry.'), signIn)
                 .then(async (input) => {
                     if (input === signIn) {
                         await this.azureSubscriptionProvider.signIn();
