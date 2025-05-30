@@ -13,7 +13,7 @@ import {
     isTreeElementWithContextValue,
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
-import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithErrorCache';
+import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
 export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {

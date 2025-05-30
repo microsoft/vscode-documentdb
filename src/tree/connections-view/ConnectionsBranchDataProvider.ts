@@ -18,7 +18,7 @@ import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type ExtendedTreeDataProvider } from '../ExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
-import { isTreeElementWithRetryChildren } from '../TreeElementWithErrorCache';
+import { isTreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
 import { TreeParentCache } from '../TreeParentCache';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';

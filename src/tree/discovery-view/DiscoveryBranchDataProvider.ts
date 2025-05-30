@@ -15,7 +15,7 @@ import { DiscoveryService } from '../../services/discoveryServices';
 import { type ExtendedTreeDataProvider } from '../ExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
-import { isTreeElementWithRetryChildren } from '../TreeElementWithErrorCache';
+import { isTreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
 import { TreeParentCache } from '../TreeParentCache';
 
 /**
