@@ -212,10 +212,7 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommand('vscode-documentdb.command.internal.documentView.open', openDocumentView);
 
-                registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.internal.retryAuthentication',
-                    retryAuthentication,
-                );
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.internal.retry', retryAuthentication);
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.launchShell', launchShell);
 

@@ -15,7 +15,7 @@ import { DiscoveryService } from '../../services/discoveryServices';
 import { type ExtendedTreeDataProvider } from '../ExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
-import { isTreeElementWithErrorChildren } from '../TreeElementWithErrorCache';
+import { isTreeElementWithRetryChildren } from '../TreeElementWithErrorCache';
 import { TreeParentCache } from '../TreeParentCache';
 
 /**
@@ -243,7 +243,7 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements Ex
 
                 // 3. Check if the returned children contain an error node
                 // This means the operation failed (eg. authentication)
-                if (isTreeElementWithErrorChildren(element) && element.hasErrorNode(children)) {
+                if (isTreeElementWithRetryChildren(element) && element.hasRetryNode(children)) {
                     // Store the error node(s) in our cache for future refreshes
                     this.errorNodeCache.set(element.id, children ?? []);
                     context.telemetry.properties.cachedErrorNode = 'true';

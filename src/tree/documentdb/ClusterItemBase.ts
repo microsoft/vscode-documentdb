@@ -13,7 +13,7 @@ import { ext } from '../../extensionVariables';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
-import { type TreeElementWithErrorChildren } from '../TreeElementWithErrorCache';
+import { type TreeElementWithRetryChildren } from '../TreeElementWithErrorCache';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { type ClusterModel } from './ClusterModel';
@@ -21,7 +21,7 @@ import { DatabaseItem } from './DatabaseItem';
 
 // This info will be available at every level in the tree for immediate access
 export abstract class ClusterItemBase
-    implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue, TreeElementWithErrorChildren
+    implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue, TreeElementWithRetryChildren
 {
     public readonly id: string;
     public readonly experience: Experience;
@@ -111,7 +111,7 @@ export abstract class ClusterItemBase
                     id: `${this.id}/reconnect`, // note: keep this in sync with the `hasErrorNode` function in this file
                     label: vscode.l10n.t('Click here to retry'),
                     iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retryAuthentication',
+                    commandId: 'vscode-documentdb.command.internal.retry',
                     commandArgs: [this],
                 }),
             ];
@@ -142,7 +142,7 @@ export abstract class ClusterItemBase
      * @param children The children array to check.
      * @returns True if any child in the array is an error node, false otherwise.
      */
-    public hasErrorNode(children: TreeElement[] | null | undefined): boolean {
+    public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
         return !!(children && children.length > 0 && children.some((child) => child.id.endsWith('/reconnect')));
     }
 

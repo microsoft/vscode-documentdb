@@ -14,11 +14,11 @@ import { MongoClustersExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
-import { ClusterItemBase } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type ExtendedTreeDataProvider } from '../ExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../TreeElementWithContextValue';
+import { isTreeElementWithRetryChildren } from '../TreeElementWithErrorCache';
 import { TreeParentCache } from '../TreeParentCache';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
@@ -132,11 +132,11 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
                 return rootItems;
             }
 
-            // 1. Check if this is a ClusterItemBase and we have a cached error for it.
+            // 1. Check if we have a cached error for this element
             //
             // This prevents repeated attempts to fetch children for nodes that have previously failed
-            // (e.g., due to invalid credentials)
-            if (element instanceof ClusterItemBase && element.id && this.errorNodeCache.has(element.id)) {
+            // (e.g., due to invalid credentials or connection issues).
+            if (element.id && this.errorNodeCache.has(element.id)) {
                 context.telemetry.properties.usedCachedErrorNode = 'true';
                 return this.errorNodeCache.get(element.id);
             }
@@ -147,9 +147,9 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
             const children = await element.getChildren?.();
             context.telemetry.measurements.childrenCount = children?.length ?? 0;
 
-            // 3. Check if the returned children contain an error node (do this only for the ClusterItemBase type)
+            // 3. Check if the returned children contain an error node
             // This means the operation failed (eg. authentication)
-            if (element instanceof ClusterItemBase && element.id && element.hasErrorNode(children)) {
+            if (isTreeElementWithRetryChildren(element) && element.hasRetryNode(children)) {
                 // append helpful nodes to the error node
                 children?.push(
                     createGenericElementWithContext({

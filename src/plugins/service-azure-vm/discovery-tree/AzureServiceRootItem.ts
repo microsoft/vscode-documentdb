@@ -13,10 +13,10 @@ import {
     isTreeElementWithContextValue,
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
-import { type TreeElementWithErrorChildren } from '../../../tree/TreeElementWithErrorCache';
+import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithErrorCache';
 import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
-export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithErrorChildren {
+export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
     public contextValue: string =
         'enableRefreshCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAzureVMRootItem';
@@ -49,7 +49,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
                     id: `${this.id}/retry`, // note: keep this in sync with the `hasErrorNode` function in this file
                     label: vscode.l10n.t('Click here to retry'),
                     iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retryAuthentication',
+                    commandId: 'vscode-documentdb.command.internal.retry',
                     commandArgs: [this],
                 }),
             ];
@@ -75,7 +75,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         );
     }
 
-    public hasErrorNode(children: TreeElement[] | null | undefined): boolean {
+    public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
         return (
             children?.some((child) => isTreeElementWithContextValue(child) && child.contextValue === 'error') ?? false
         );
