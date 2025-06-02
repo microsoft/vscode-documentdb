@@ -160,14 +160,6 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
                         commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
                         commandArgs: [element],
                     }),
-                    createGenericElementWithContext({
-                        contextValue: 'error',
-                        id: `${element.id}/updateConnectionString`,
-                        label: vscode.l10n.t('Click here to update the connection string'),
-                        iconPath: new vscode.ThemeIcon('whole-word'),
-                        commandId: 'vscode-documentdb.command.connectionsView.updateConnectionString',
-                        commandArgs: [element],
-                    }),
                 );
                 // Store the error node(s) in our cache for future refreshes
                 this.errorNodeCache.set(element.id, children ?? []);
