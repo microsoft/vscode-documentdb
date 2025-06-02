@@ -275,7 +275,14 @@
         "icon": "$(key)"
       },
       {
-        "//": "[ConnectionsView] Update Credentials",
+        "//": "[ConnectionsView] Update Connection String",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.connectionsView.updateConnectionString",
+        "title": "Update Connection String…",
+        "icon": "$(whole-word)"
+      },
+      {
+        "//": "[ConnectionsView] Rename Connection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.renameConnection",
         "title": "Rename…",
@@ -509,20 +516,25 @@
       "editor/title": [],
       "view/item/context": [
         {
-          "command": "vscode-documentdb.command.connectionsView.updateCredentials",
+          "command": "vscode-documentdb.command.connectionsView.updateConnectionString",
           "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "0@2"
         },
         {
-          "command": "vscode-documentdb.command.connectionsView.renameConnection",
+          "command": "vscode-documentdb.command.connectionsView.updateCredentials",
           "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "0@3"
+        },
+        {
+          "command": "vscode-documentdb.command.connectionsView.renameConnection",
+          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "group": "0@4"
         },
         {
           "//": "Remove Connection...",
           "command": "vscode-documentdb.command.connectionsView.removeConnection",
           "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
-          "group": "0@4"
+          "group": "0@5"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.removeRegistry",
@@ -674,6 +686,10 @@
         },
         {
           "command": "vscode-documentdb.command.connectionsView.updateCredentials",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.connectionsView.updateConnectionString",
           "when": "never"
         },
         {
