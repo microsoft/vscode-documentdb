@@ -32,6 +32,8 @@ export interface VirtualMachineModel extends ClusterModel {
     fqdn?: string;
 }
 
+const DEFAULT_PORT = 27017;
+
 export class AzureVMResourceItem extends ClusterItemBase {
     iconPath = new vscode.ThemeIcon('server-environment');
 
@@ -63,7 +65,82 @@ export class AzureVMResourceItem extends ClusterItemBase {
     }
 
     public async getConnectionString(): Promise<string | undefined> {
-        return Promise.resolve(this.cluster.connectionString);
+        return callWithTelemetryAndErrorHandling('getConnectionString', async (context: IActionContext) => {
+            context.telemetry.properties.discoveryProvider = 'azure-vm-discovery';
+            context.telemetry.properties.view = Views.DiscoveryView;
+
+            const newPort = await context.ui.showInputBox({
+                prompt: l10n.t('Enter the port number your DocumentDB uses.'),
+                value: `${DEFAULT_PORT}`,
+                placeHolder: l10n.t('The default port: {defaultPort}', { defaultPort: `${DEFAULT_PORT}` }),
+                validateInput: (port: string) => {
+                    port = port ? port.trim() : '';
+
+                    if (!port) {
+                        return l10n.t('Port number is required');
+                    }
+
+                    const portNumber = parseInt(port, 10);
+                    if (isNaN(portNumber)) {
+                        return l10n.t('Port number must be a number');
+                    }
+
+                    if (portNumber <= 0 || portNumber > 65535) {
+                        return l10n.t('Port number must be between 1 and 65535');
+                    }
+
+                    return undefined;
+                },
+            });
+
+            const portNumber = newPort ? parseInt(newPort, 10) : DEFAULT_PORT;
+
+            const parsedCS = new ConnectionString(this.cluster.connectionString ?? '');
+
+            const newHosts: string[] = [];
+            if (parsedCS.hosts && parsedCS.hosts.length > 0) {
+                for (const hostString of parsedCS.hosts) {
+                    let baseAddress = hostString;
+                    const lastColonIndex = hostString.lastIndexOf(':');
+
+                    // Check if a colon exists and it's not the first character of the string.
+                    // This is an attempt to identify a port separator.
+                    if (lastColonIndex > 0) {
+                        const potentialPortStr = hostString.substring(lastColonIndex + 1);
+
+                        // Verify if the part after the colon is purely numeric.
+                        if (/^\d+$/.test(potentialPortStr)) {
+                            const portVal = parseInt(potentialPortStr, 10);
+                            // Verify if the numeric part is within the valid port range.
+                            if (portVal > 0 && portVal <= 65535) {
+                                // If all checks pass, consider this a "host:port" structure.
+                                // The baseAddress is the part before the last colon.
+                                // This handles "hostname:port" and "[ipv6address]:port".
+                                baseAddress = hostString.substring(0, lastColonIndex);
+                            }
+                            // If portVal is not in valid range, potentialPortStr is not a valid port.
+                            // So, the colon was likely part of the hostname itself (e.g. unbracketed IPv6).
+                            // In this case, baseAddress remains the original hostString.
+                        }
+                        // If potentialPortStr is not numeric, it's not a port.
+                        // The colon was likely part of the hostname.
+                        // baseAddress remains the original hostString.
+                    }
+                    // If lastColonIndex <= 0 (no colon, or colon is the first char like ":27017"),
+                    // or if the part after colon wasn't a valid port,
+                    // baseAddress is the original hostString.
+
+                    // Construct the new host entry with the specified port.
+                    // The format "baseAddress:numericPortToUse" is verified by construction.
+                    newHosts.push(`${baseAddress}:${portNumber}`);
+                }
+            }
+            // else if parsedCS.hosts is null, undefined or empty, newHosts remains empty.
+
+            parsedCS.hosts = newHosts;
+
+            return parsedCS.toString();
+        });
     }
 
     /**
@@ -82,6 +159,12 @@ export class AzureVMResourceItem extends ClusterItemBase {
                 }),
             );
 
+            // Construct the final connection string with user-provided credentials
+            const connectionString = await this.getConnectionString();
+            context.valuesToMask.push(nonNullValue(connectionString, 'connectionString'));
+
+            const finalConnectionString = new ConnectionString(nonNullValue(connectionString, 'connectionString'));
+
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
                 resourceName: this.cluster.name,
@@ -97,9 +180,6 @@ export class AzureVMResourceItem extends ClusterItemBase {
 
             context.valuesToMask.push(nonNullProp(wizardContext, 'password'));
 
-            // Construct the final connection string with user-provided credentials
-            const connectionString = await this.getConnectionString();
-            const finalConnectionString = new ConnectionString(nonNullValue(connectionString, 'connectionString'));
             finalConnectionString.username = wizardContext.selectedUserName;
 
             // Password will be handled by the ClustersClient, not directly in the string for cache
