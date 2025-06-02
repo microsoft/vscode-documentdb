@@ -143,7 +143,7 @@
   "Enter the password": "Enter the password",
   "Enter the password for {experience}": "Enter the password for {experience}",
   "Enter the port number": "Enter the port number",
-  "Enter the port number your DocumentDB uses.": "Enter the port number your DocumentDB uses.",
+  "Enter the port number your DocumentDB uses. The default port: {defaultPort}.": "Enter the port number your DocumentDB uses. The default port: {defaultPort}.",
   "Enter the username": "Enter the username",
   "Enter the username for {experience}": "Enter the username for {experience}",
   "Error creating resource: {0}": "Error creating resource: {0}",

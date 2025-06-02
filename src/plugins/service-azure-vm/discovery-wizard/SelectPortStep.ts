@@ -13,7 +13,10 @@ const DEFAULT_PORT = '27017';
 export class SelectPortStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const newPort = await context.ui.showInputBox({
-            prompt: l10n.t('Enter the port number your DocumentDB uses.'),
+            prompt: l10n.t(
+                'Enter the port number your DocumentDB uses. The default port: {defaultPort}.',
+                `${DEFAULT_PORT}`,
+            ),
             value: DEFAULT_PORT,
             placeHolder: l10n.t('The default port: {defaultPort}', { defaultPort: DEFAULT_PORT }),
             validateInput: (input: string) => this.validateInput(input),
