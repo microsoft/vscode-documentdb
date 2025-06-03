@@ -288,6 +288,7 @@
   "No session found for id {sessionId}": "No session found for id {sessionId}",
   "No subscriptions found": "No subscriptions found",
   "Not connected to any MongoDB database.": "Not connected to any MongoDB database.",
+  "Note: This confirmation type can be configured in the settings (documentDB.userInterface.confirmationStyle).": "Note: This confirmation type can be configured in the settings (documentDB.userInterface.confirmationStyle).",
   "Open Collection": "Open Collection",
   "Open installation page": "Open installation page",
   "Opening DocumentDB resource…": "Opening DocumentDB resource…",

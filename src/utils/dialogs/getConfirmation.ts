@@ -52,10 +52,21 @@ export async function getConfirmationWithWordQuestion(
             '\n\n' +
             l10n.t('Please enter the word "{expectedConfirmationWord}" to confirm the operation.', {
                 expectedConfirmationWord,
-            }),
+            }) +
+            '\n\n' +
+            l10n.t(
+                'Note: This confirmation type can be configured in the settings (documentDB.userInterface.confirmationStyle).',
+            ),
+
         ignoreFocusOut: true,
         validateInput: (val: string | undefined) => {
-            if (val && 0 === val.localeCompare(expectedConfirmationWord, undefined, { sensitivity: 'accent' })) {
+            if (
+                val &&
+                0 ===
+                    val.localeCompare(expectedConfirmationWord, undefined, {
+                        sensitivity: 'accent',
+                    })
+            ) {
                 return undefined;
             }
             return l10n.t('Please enter the word "{expectedConfirmationWord}" to confirm the operation.', {
@@ -68,7 +79,12 @@ export async function getConfirmationWithWordQuestion(
         throw new UserCancelledError();
     }
 
-    return 0 === result.localeCompare(expectedConfirmationWord, undefined, { sensitivity: 'accent' });
+    return (
+        0 ===
+        result.localeCompare(expectedConfirmationWord, undefined, {
+            sensitivity: 'accent',
+        })
+    );
 }
 
 export async function getConfirmationWithNumberQuiz(title: string, message: string): Promise<boolean> {
@@ -81,7 +97,9 @@ export async function getConfirmationWithNumberQuiz(title: string, message: stri
             detail:
                 message +
                 '\n\n' +
-                l10n.t('Pick "{number}" to confirm and continue.', { number: randomInput.numbers[randomInput.index] }),
+                l10n.t('Pick "{number}" to confirm and continue.', {
+                    number: randomInput.numbers[randomInput.index],
+                }),
         },
         randomInput.numbers[0].toString(),
         randomInput.numbers[1].toString(),
@@ -111,7 +129,10 @@ export async function getConfirmationWithClick(title: string, message: string): 
  * @param length - The length of the array to generate.
  * @returns An object containing the array of random numbers and a random index greater than 0.
  */
-function getRandomArrayAndIndex(length: number): { numbers: number[]; index: number } {
+function getRandomArrayAndIndex(length: number): {
+    numbers: number[];
+    index: number;
+} {
     if (length <= 1) {
         throw new Error(l10n.t('Length must be greater than 1'));
     }
