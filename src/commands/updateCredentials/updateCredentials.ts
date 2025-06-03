@@ -3,12 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizard, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import ConnectionString from 'mongodb-connection-string-url';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { Views } from '../../documentdb/Views';
+import { StorageNames, StorageService } from '../../services/storageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { refreshView } from '../refreshView/refreshView';
 import { ExecuteStep } from './ExecuteStep';
@@ -22,9 +23,21 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     }
 
     // access credentials assigned to the selected cluster
-    const connectionString = new ConnectionString(nonNullValue(node.cluster.connectionString));
-    const username: string | undefined = connectionString.username;
-    const password: string | undefined = connectionString.password;
+
+    // Note to future maintainers: the node.cluster might be out of date
+    // as the object is cached in the tree view, and in the 'retry/error' nodes
+    // that's why we need to get the fresh one each time.
+
+    const resourceType = node.cluster.emulatorConfiguration?.isEmulator ? 'emulators' : 'clusters';
+    const storage = StorageService.get(StorageNames.Connections);
+    const currentItem = await storage.getItem(resourceType, node.storageId);
+    const connectionString = currentItem?.secrets?.[0] || '';
+    context.valuesToMask.push(connectionString);
+
+    const parsedCS = new ConnectionString(connectionString);
+
+    const username: string | undefined = parsedCS.username;
+    const password: string | undefined = parsedCS.password;
 
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,

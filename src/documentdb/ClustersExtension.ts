@@ -40,6 +40,7 @@ import { removeConnection } from '../commands/removeConnection/removeConnection'
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { renameConnection } from '../commands/renameConnection/renameConnection';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
+import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { ext } from '../extensionVariables';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
@@ -142,6 +143,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.updateCredentials',
                     updateCredentials,
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.updateConnectionString',
+                    updateConnectionString,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
