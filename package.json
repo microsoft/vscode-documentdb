@@ -807,7 +807,7 @@
               "Prompts with a challenge where you select the correct number among multiple options to confirm deletion.",
               "Prompts with an input box where you enter the name of the resource to confirm deletion."
             ],
-            "default": "challengeConfirmation"
+            "default": "wordConfirmation"
           },
           "documentDB.userInterface.ShowOperationSummaries": {
             "order": 1,
