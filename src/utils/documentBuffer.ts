@@ -3,137 +3,251 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { parseError } from '@microsoft/vscode-azext-utils';
-import * as l10n from '@vscode/l10n';
-import { type Document } from 'bson';
-import { ClustersClient } from '../documentdb/ClustersClient';
-import { CollectionItem } from '../tree/documentdb/CollectionItem';
+import { EJSON } from 'bson';
 
-// Buffer size for batch document insertion to improve performance
-export const DOCUMENT_IMPORT_BUFFER_SIZE = 100;
+/**
+ * Configuration options for the document buffer
+ */
+export interface DocumentBufferOptions {
+    /**
+     * Maximum size of the buffer in bytes before it should be flushed
+     */
+    maxBufferSizeBytes: number;
 
-export interface BatchInsertResult {
-    insertedCount: number;
-    error: string;
-}
+    /**
+     * Maximum number of documents in the buffer before it should be flushed
+     */
+    maxDocumentCount: number;
 
-export interface BatchProgressInfo {
-    start: number;
-    end: number;
-    total: number;
+    /**
+     * Maximum size of a single document in bytes that can be added to the buffer
+     */
+    maxSingleDocumentSizeBytes: number;
+
+    /**
+     * Function to calculate the size of a document
+     */
+    calculateDocumentSize: (document: unknown) => number;
 }
 
 /**
- * Utility class for buffering documents during import operations
+ * Error codes for document buffer operations
  */
-export class DocumentBuffer {
-    private buffer: Document[] = [];
-    private totalProcessed = 0;
-
-    constructor(private readonly bufferSize: number = DOCUMENT_IMPORT_BUFFER_SIZE) {}
+export enum BufferErrorCode {
+    /**
+     * No error occurred
+     */
+    None = 'none',
 
     /**
-     * Add a document to the buffer
+     * Document is too large to fit in the buffer based on maxSingleDocumentSizeBytes
      */
-    add(document: Document): void {
-        this.buffer.push(document);
-    }
+    DocumentTooLarge = 'document_too_large',
 
     /**
-     * Check if the buffer is full
+     * Buffer has reached maximum number of documents (maxDocumentCount)
+     * or maximum size in bytes (maxBufferSizeBytes)
      */
-    isFull(): boolean {
-        return this.buffer.length >= this.bufferSize;
-    }
+    BufferFull = 'buffer_full',
 
     /**
-     * Check if the buffer has documents
+     * Document is null or undefined
      */
-    hasDocuments(): boolean {
-        return this.buffer.length > 0;
-    }
+    EmptyDocument = 'empty_document',
 
     /**
-     * Get the current buffer size
+     * Other unexpected errors
      */
-    size(): number {
-        return this.buffer.length;
-    }
-
-    /**
-     * Get progress information for the current batch
-     */
-    getBatchProgressInfo(totalDocuments: number): BatchProgressInfo {
-        return {
-            start: this.totalProcessed + 1,
-            end: this.totalProcessed + this.buffer.length,
-            total: totalDocuments,
-        };
-    }
-
-    /**
-     * Flush the buffer by inserting all documents in batch
-     */
-    async flush(collectionItem: CollectionItem): Promise<BatchInsertResult> {
-        if (this.buffer.length === 0) {
-            return { insertedCount: 0, error: '' };
-        }
-
-        try {
-            const result = await insertDocumentsBatch(collectionItem, this.buffer);
-            this.totalProcessed += result.insertedCount;
-            this.buffer = []; // Clear the buffer
-            return result;
-        } catch (e) {
-            this.buffer = []; // Clear the buffer even on error
-            return { insertedCount: 0, error: parseError(e).message };
-        }
-    }
-
-    /**
-     * Get the total number of documents processed so far
-     */
-    getTotalProcessed(): number {
-        return this.totalProcessed;
-    }
-
-    /**
-     * Reset the buffer and counters
-     */
-    reset(): void {
-        this.buffer = [];
-        this.totalProcessed = 0;
-    }
+    Other = 'other',
 }
 
 /**
- * Insert a batch of documents into the collection
+ * Result of an insert operation into the document buffer
  */
-async function insertDocumentsBatch(
-    collectionItem: CollectionItem,
-    documents: Document[],
-): Promise<BatchInsertResult> {
-    if (documents.length === 0) {
-        return { insertedCount: 0, error: '' };
+export interface BufferInsertResult {
+    /**
+     * Whether the insert operation was successful
+     * If true, the documentsToProcess will be undefined
+     */
+    success: boolean;
+
+    /**
+     * Error code indicating the reason for failure
+     */
+    errorCode: BufferErrorCode;
+}
+
+export interface BufferInsertOrFlushResult<T> extends BufferInsertResult {
+    /**
+     * Documents that need to be processed immediately if not buffered
+     * This could be the current document if it's too large, or
+     * the contents of the buffer if it's full and needs to be flushed
+     */
+    documentsToProcess?: T[];
+}
+
+/**
+ * Document buffer for a specific database/collection pair.
+ * Used for batching document inserts to improve performance.
+ */
+export class DocumentBuffer<T> {
+    private documents: T[] = [];
+    private currentSize: number = 0;
+
+    /**
+     * Create a new document buffer
+     *
+     * @param options Configuration options for the buffer
+     */
+    constructor(private readonly options: DocumentBufferOptions) {}
+
+    /**
+     * Calculate the size of a document using the provided size calculation function
+     */
+    public getDocumentSize(document?: T): number {
+        if (!document) {
+            return 0;
+        }
+        return this.options.calculateDocumentSize(document);
     }
 
-    try {
-        const client = await ClustersClient.getClient(collectionItem.cluster.id);
-        const response = await client.insertDocuments(
-            collectionItem.databaseInfo.name,
-            collectionItem.collectionInfo.name,
-            documents,
+    /**
+     * Check if the buffer should be flushed
+     *
+     * @param documentSize Size of the document to be added (optional)
+     */
+    public shouldFlush(documentSize: number = 0): boolean {
+        return (
+            this.documents.length + 1 > this.options.maxDocumentCount ||
+            this.currentSize + documentSize > this.options.maxBufferSizeBytes
         );
+    }
 
-        if (response?.acknowledged) {
-            return { insertedCount: response.insertedCount, error: '' };
-        } else {
+    /**
+     * Insert a document into the buffer
+     * If the document is too large or the buffer is full, it will return the documents that need to be processed
+     * Note: It is highly recommended to check if flush needed with `shouldFlush` before inserting
+     *
+     * @param document The document to insert
+     * @returns Result indicating success or documents that need immediate processing
+     */
+    public instertOrFlush(document: T): BufferInsertOrFlushResult<T> {
+        const insertResult = this.insert(document);
+        if (insertResult.success) {
+            // If the insert was successful, return success with no documents to process
+            return { ...insertResult, documentsToProcess: undefined };
+        }
+        // If the insert failed, we need to determine what to do next
+        switch (insertResult.errorCode) {
+            case BufferErrorCode.DocumentTooLarge:
+                // If the document is too large, return it for immediate processing
+                return {
+                    ...insertResult,
+                    documentsToProcess: [document],
+                };
+
+            case BufferErrorCode.BufferFull:
+                // If the buffer is full, return the current buffer for processing
+                // Note that current document is not added to the buffer yet
+                return {
+                    ...insertResult,
+                    documentsToProcess: this.flush(),
+                };
+
+            case BufferErrorCode.EmptyDocument:
+                // If the document is empty, return an empty array for processing
+                return {
+                    ...insertResult,
+                    documentsToProcess: [],
+                };
+
+            case BufferErrorCode.None:
+                // This shouldn't happen since we already checked success, but handle it anyway
+                return { ...insertResult, documentsToProcess: undefined };
+
+            case BufferErrorCode.Other:
+            default:
+                // Handle any other error codes or future additions
+                return {
+                    ...insertResult,
+                    documentsToProcess: [],
+                };
+        }
+    }
+
+    public insert(document: T): BufferInsertResult {
+        // Check if the document is valid
+        if (!document) {
+            return { success: false, errorCode: BufferErrorCode.EmptyDocument };
+        }
+
+        const documentSize = this.getDocumentSize(document);
+
+        // If the document is too large to fit in the buffer, return it for immediate processing
+        if (documentSize > this.options.maxSingleDocumentSizeBytes) {
             return {
-                insertedCount: 0,
-                error: l10n.t('The batch insertion failed. The operation was not acknowledged by the database.'),
+                success: false,
+                errorCode: BufferErrorCode.DocumentTooLarge,
             };
         }
-    } catch (e) {
-        return { insertedCount: 0, error: parseError(e).message };
+
+        // Check if buffer is full
+        if (this.shouldFlush(documentSize)) {
+            return {
+                success: false,
+                errorCode: BufferErrorCode.BufferFull,
+            };
+        }
+
+        // Add the document to the buffer
+        this.documents.push(document);
+        this.currentSize += documentSize;
+
+        return { success: true, errorCode: BufferErrorCode.None };
     }
+
+    /**
+     * Flush all documents from the buffer
+     *
+     * @returns All documents currently in the buffer
+     */
+    public flush(): T[] {
+        const documents = [...this.documents];
+        this.documents = [];
+        this.currentSize = 0;
+
+        return documents;
+    }
+
+    /**
+     * Get statistics about the current buffer state
+     */
+    public getStats(): { documentCount: number; currentSizeBytes: number } {
+        return {
+            documentCount: this.documents.length,
+            currentSizeBytes: this.currentSize,
+        };
+    }
+}
+
+// Default configuration for MongoDB buffers
+const defaultMongoBufferConfig: DocumentBufferOptions = {
+    maxBufferSizeBytes: 32 * 1024 * 1024, // 32MB
+    maxDocumentCount: 50,
+    maxSingleDocumentSizeBytes: 16 * 1024 * 1024, // 16MB
+    calculateDocumentSize: (document: unknown) => {
+        // Use EJSON to calculate the size of MongoDB documents
+        // Adding 20% for BSON overhead compared to JSON
+        return document ? Buffer.byteLength(EJSON.stringify(document)) * 1.2 : 0;
+    },
+};
+
+/**
+ * Create a document buffer configured for MongoDB
+ */
+export function createMongoDbBuffer<T>(customConfig?: DocumentBufferOptions): DocumentBuffer<T> {
+    return new DocumentBuffer<T>({
+        ...defaultMongoBufferConfig,
+        ...customConfig,
+    });
 }

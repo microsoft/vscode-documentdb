@@ -8,9 +8,14 @@ import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fse from 'fs-extra';
 import * as vscode from 'vscode';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
-import { DocumentBuffer } from '../../utils/documentBuffer';
+import {
+    BufferErrorCode,
+    createMongoDbBuffer,
+    type DocumentBuffer,
+} from '../../utils/documentBuffer';
 import { getRootPath } from '../../utils/workspacUtils';
 
 export async function importDocuments(
@@ -51,6 +56,10 @@ export async function importDocuments(
         return undefined;
     }
 
+    if (!(selectedItem instanceof CollectionItem)) {
+        throw new Error('Selected item must be a CollectionItem');
+    }
+
     context.telemetry.properties.experience = selectedItem.experience.api;
 
     await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
@@ -70,17 +79,20 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             progress.report({ increment: 0, message: l10n.t('Loading documents…') });
 
             const countUri = uris.length;
-            const incrementUri = 50 / (countUri || 1);
+            const incrementUri = 25 / (countUri || 1);
             const documents: unknown[] = [];
             let hasErrors = false;
 
-            for (let i = 0, percent = 0; i < countUri; i++, percent += incrementUri) {
+            for (let i = 0; i < countUri; i++) {
+                const increment = (i + 1) * incrementUri;
                 progress.report({
-                    increment: Math.floor(percent),
+                    increment: Math.floor(increment),
                     message: l10n.t('Loading document {num} of {countUri}', { num: i + 1, countUri }),
                 });
 
                 const result = await parseAndValidateFile(selectedItem, uris[i]);
+
+                // Note to future maintainers: the validation can return 0 valid documents and still have errors.
 
                 if (result.errors && result.errors.length) {
                     ext.outputChannel.appendLog(
@@ -91,62 +103,52 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
                     hasErrors = true;
                 }
 
-                if (result.documents && result.documents.length) {
+                if (result.documents && result.documents.length > 0) {
                     documents.push(...result.documents);
                 }
             }
 
-            const countDocuments = documents.length;
-            const incrementDocuments = 50 / (countDocuments || 1);
-            const documentBuffer = new DocumentBuffer();
-
-            for (let i = 0; i <= countDocuments; i++) {
-                // Add document to buffer if we haven't reached the end
-                if (i < countDocuments) {
-                    documentBuffer.add(documents[i] as Document);
-                }
-
-                // Insert batch when buffer is full or we've reached the end
-                const shouldInsertBatch = documentBuffer.isFull() || (i === countDocuments && documentBuffer.hasDocuments());
-
-                if (shouldInsertBatch) {
-                    const batchInfo = documentBuffer.getBatchProgressInfo(countDocuments);
-                    const batchSize = documentBuffer.size();
-
-                    progress.report({
-                        increment: Math.floor(batchSize * incrementDocuments),
-                        message: l10n.t('Importing documents {start}-{end} of {total}', {
-                            start: batchInfo.start,
-                            end: batchInfo.end,
-                            total: batchInfo.total,
-                        }),
-                    });
-
-                    const result = await documentBuffer.flush(selectedItem);
-
-                    if (result.error) {
-                        ext.outputChannel.appendLog(
-                            l10n.t('The insertion of documents {start}-{end} failed with error: {error}', {
-                                start: batchInfo.start,
-                                end: batchInfo.end,
-                                error: result.error,
-                            }),
-                        );
-                        ext.outputChannel.show();
-                        hasErrors = true;
-                    }
-                }
+            const countDocuments = documents.length ?? 0;
+            const incrementDocuments = 75 / (countDocuments || 1);
+            let count = 0;
+            let buffer: DocumentBuffer<unknown> | undefined;
+            if (selectedItem instanceof CollectionItem) {
+                buffer = createMongoDbBuffer<unknown>();
             }
 
-            const count = documentBuffer.getTotalProcessed();
+            for (let i = 0; i < countDocuments; i++) {
+                progress.report({
+                    increment: Math.floor(incrementDocuments),
+                    message: l10n.t('Importing document {num} of {countDocuments}', {
+                        num: i + 1,
+                        countDocuments,
+                    }),
+                });
 
-            progress.report({ increment: 50, message: l10n.t('Finished importing') });
+                const result = await insertDocument(selectedItem, documents[i], buffer);
 
-            return hasErrors
-                ? l10n.t('Import has accomplished with errors.')
-                : l10n.t('Import successful.') +
-                      ' ' +
-                      l10n.t('Inserted {0} document(s). See output for more details.', count);
+                // 'count' in result means that the result is from the buffer
+                count += result.count;
+                // check if error occurred as partial failure would happen in bulk insertion
+                hasErrors = hasErrors || result.errorOccurred;
+            }
+
+            // Do insertion for the last batch for bulk insertion
+            if (buffer && buffer.getStats().documentCount > 0) {
+                const lastBatchFlushResult = await insertDocument(selectedItem, undefined, buffer);
+
+                count += lastBatchFlushResult.count;
+                hasErrors = hasErrors || lastBatchFlushResult.errorOccurred;
+            }
+
+            // let's make sure we reach 100% progress, useful in case of errors etc.
+            progress.report({ increment: 100, message: l10n.t('Finished importing') });
+
+            return (
+                (hasErrors ? l10n.t('Import has accomplished with errors.') : l10n.t('Import successful.')) +
+                ' ' +
+                l10n.t('Inserted {0} document(s). See output for more details.', count)
+            );
         },
     );
 
@@ -218,4 +220,64 @@ async function parseAndValidateFileForMongo(uri: vscode.Uri): Promise<{ document
     }
 
     return { documents, errors };
+}
+
+async function insertDocument(
+    node: CollectionItem,
+    document: unknown,
+    buffer: DocumentBuffer<unknown> | undefined,
+): Promise<{ count: number; errorOccurred: boolean }> {
+    try {
+        // Check for valid buffer
+        if (!buffer) {
+            return { count: 0, errorOccurred: true };
+        }
+
+        // Route to appropriate handler based on node type
+        if (node instanceof CollectionItem) {
+            return await insertDocumentWithBufferIntoCluster(node, buffer, document as Document);
+        }
+
+        // Should only reach here if node is neither CollectionItem nor CosmosDBContainerResourceItem
+        return { count: 0, errorOccurred: true };
+    } catch {
+        return { count: 0, errorOccurred: true };
+    }
+}
+
+async function insertDocumentWithBufferIntoCluster(
+    node: CollectionItem,
+    buffer: DocumentBuffer<unknown>,
+    document?: Document,
+    // If document is undefined, it means that we are flushing the buffer
+    // It is used for the last batch, and not recommended to be used for normal batches
+): Promise<{ count: number; errorOccurred: boolean }> {
+    const databaseName = node.databaseInfo.name;
+    const collectionName = node.collectionInfo.name;
+    // Try to add document to buffer
+    const insertOrFlushToBufferResult = buffer.instertOrFlush(document);
+    // If successful, no immediate action needed
+    if (insertOrFlushToBufferResult.success) {
+        return { count: 0, errorOccurred: false };
+    }
+
+    let documentsToProcess = insertOrFlushToBufferResult.documentsToProcess;
+    if (insertOrFlushToBufferResult.errorCode === BufferErrorCode.BufferFull) {
+        // The buffer has been flushed by the insertOrFlush method
+        // We need to insert current document to buffer here
+        // As we have inserted it once, so it has been verified that it is not too large and not undefined
+        buffer.insert(document);
+    } else if (insertOrFlushToBufferResult.errorCode === BufferErrorCode.EmptyDocument) {
+        documentsToProcess = buffer.flush();
+    }
+
+    // Documents to process could be the current document (if too large)
+    // or the contents of the buffer (if it was full)
+    const client = await ClustersClient.getClient(node.cluster.id);
+    const insertResult = await client.insertDocuments(databaseName, collectionName, documentsToProcess as Document[]);
+
+    return {
+        count: insertResult.insertedCount,
+        errorOccurred: insertResult.insertedCount < (documentsToProcess?.length || 0),
+    };
 }
