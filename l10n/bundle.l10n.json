@@ -378,7 +378,6 @@
   "The document with the _id \"{0}\" has been saved.": "The document with the _id \"{0}\" has been saved.",
   "The entered value does not match the original.": "The entered value does not match the original.",
   "The export operation was canceled.": "The export operation was canceled.",
-  "The insertion failed with error: {0}": "The insertion failed with error: {0}",
   "The issue text was copied to the clipboard.  Please paste it into this window.": "The issue text was copied to the clipboard.  Please paste it into this window.",
   "The local instance is using a self-signed certificate. To connect, you must import the appropriate TLS/SSL certificate. See {link} for tips.": "The local instance is using a self-signed certificate. To connect, you must import the appropriate TLS/SSL certificate. See {link} for tips.",
   "The location where resources will be deployed.": "The location where resources will be deployed.",
