@@ -11,11 +11,7 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
-import {
-    BufferErrorCode,
-    createMongoDbBuffer,
-    type DocumentBuffer,
-} from '../../utils/documentBuffer';
+import { BufferErrorCode, createMongoDbBuffer, type DocumentBuffer } from '../../utils/documentBuffer';
 import { getRootPath } from '../../utils/workspacUtils';
 
 export async function importDocuments(
