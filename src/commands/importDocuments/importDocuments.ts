@@ -8,13 +8,10 @@ import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fse from 'fs-extra';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
+import { DocumentBuffer } from '../../utils/documentBuffer';
 import { getRootPath } from '../../utils/workspacUtils';
-
-// Buffer size for batch document insertion to improve performance
-const DOCUMENT_IMPORT_BUFFER_SIZE = 100;
 
 export async function importDocuments(
     context: IActionContext,
@@ -101,53 +98,47 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
 
             const countDocuments = documents.length;
             const incrementDocuments = 50 / (countDocuments || 1);
-            let count = 0;
-            let documentBuffer: Document[] = [];
+            const documentBuffer = new DocumentBuffer();
 
             for (let i = 0; i <= countDocuments; i++) {
                 // Add document to buffer if we haven't reached the end
                 if (i < countDocuments) {
-                    documentBuffer.push(documents[i] as Document);
+                    documentBuffer.add(documents[i] as Document);
                 }
 
                 // Insert batch when buffer is full or we've reached the end
-                const shouldInsertBatch =
-                    documentBuffer.length >= DOCUMENT_IMPORT_BUFFER_SIZE ||
-                    (i === countDocuments && documentBuffer.length > 0);
+                const shouldInsertBatch = documentBuffer.isFull() || (i === countDocuments && documentBuffer.hasDocuments());
 
                 if (shouldInsertBatch) {
-                    const batchStartIndex = count;
-                    const batchSize = documentBuffer.length;
+                    const batchInfo = documentBuffer.getBatchProgressInfo(countDocuments);
+                    const batchSize = documentBuffer.size();
 
                     progress.report({
                         increment: Math.floor(batchSize * incrementDocuments),
                         message: l10n.t('Importing documents {start}-{end} of {total}', {
-                            start: batchStartIndex + 1,
-                            end: batchStartIndex + batchSize,
-                            total: countDocuments,
+                            start: batchInfo.start,
+                            end: batchInfo.end,
+                            total: batchInfo.total,
                         }),
                     });
 
-                    const result = await insertDocumentsBatch(selectedItem, documentBuffer);
+                    const result = await documentBuffer.flush(selectedItem);
 
                     if (result.error) {
                         ext.outputChannel.appendLog(
                             l10n.t('The insertion of documents {start}-{end} failed with error: {error}', {
-                                start: batchStartIndex + 1,
-                                end: batchStartIndex + batchSize,
+                                start: batchInfo.start,
+                                end: batchInfo.end,
                                 error: result.error,
                             }),
                         );
                         ext.outputChannel.show();
                         hasErrors = true;
-                    } else {
-                        count += result.insertedCount;
                     }
-
-                    // Clear the buffer for the next batch
-                    documentBuffer = [];
                 }
             }
+
+            const count = documentBuffer.getTotalProcessed();
 
             progress.report({ increment: 50, message: l10n.t('Finished importing') });
 
@@ -227,29 +218,4 @@ async function parseAndValidateFileForMongo(uri: vscode.Uri): Promise<{ document
     }
 
     return { documents, errors };
-}
-
-async function insertDocumentsBatch(
-    node: CollectionItem,
-    documents: Document[],
-): Promise<{ insertedCount: number; error: string }> {
-    if (documents.length === 0) {
-        return { insertedCount: 0, error: '' };
-    }
-
-    try {
-        const client = await ClustersClient.getClient(node.cluster.id);
-        const response = await client.insertDocuments(node.databaseInfo.name, node.collectionInfo.name, documents);
-
-        if (response?.acknowledged) {
-            return { insertedCount: response.insertedCount, error: '' };
-        } else {
-            return {
-                insertedCount: 0,
-                error: l10n.t('The batch insertion failed. The operation was not acknowledged by the database.'),
-            };
-        }
-    } catch (e) {
-        return { insertedCount: 0, error: parseError(e).message };
-    }
 }
