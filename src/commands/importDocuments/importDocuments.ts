@@ -118,7 +118,7 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
 
             for (let i = 0; i < countDocuments; i++) {
                 progress.report({
-                    increment: Math.floor(incrementDocuments),
+                    increment: incrementDocuments,
                     message: l10n.t('Importing document {num} of {countDocuments}', {
                         num: i + 1,
                         countDocuments,
