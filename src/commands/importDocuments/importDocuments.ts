@@ -13,6 +13,9 @@ import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { getRootPath } from '../../utils/workspacUtils';
 
+// Buffer size for batch document insertion to improve performance
+const DOCUMENT_IMPORT_BUFFER_SIZE = 100;
+
 export async function importDocuments(
     context: IActionContext,
     selectedItem: vscode.Uri | CollectionItem | undefined,
@@ -99,29 +102,50 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             const countDocuments = documents.length;
             const incrementDocuments = 50 / (countDocuments || 1);
             let count = 0;
+            let documentBuffer: Document[] = [];
 
-            for (let i = 0, percent = 0; i < countDocuments; i++, percent += incrementDocuments) {
-                progress.report({
-                    increment: Math.floor(percent),
-                    message: l10n.t('Importing document {num} of {countDocuments}', {
-                        num: i + 1,
-                        countDocuments,
-                    }),
-                });
+            for (let i = 0; i <= countDocuments; i++) {
+                // Add document to buffer if we haven't reached the end
+                if (i < countDocuments) {
+                    documentBuffer.push(documents[i] as Document);
+                }
 
-                const result = await insertDocument(selectedItem, documents[i]);
+                // Insert batch when buffer is full or we've reached the end
+                const shouldInsertBatch =
+                    documentBuffer.length >= DOCUMENT_IMPORT_BUFFER_SIZE ||
+                    (i === countDocuments && documentBuffer.length > 0);
 
-                if (result.error) {
-                    ext.outputChannel.appendLog(
-                        l10n.t('The insertion of document {number} failed with error: {error}', {
-                            number: i + 1,
-                            error: result.error,
+                if (shouldInsertBatch) {
+                    const batchStartIndex = count;
+                    const batchSize = documentBuffer.length;
+
+                    progress.report({
+                        increment: Math.floor(batchSize * incrementDocuments),
+                        message: l10n.t('Importing documents {start}-{end} of {total}', {
+                            start: batchStartIndex + 1,
+                            end: batchStartIndex + batchSize,
+                            total: countDocuments,
                         }),
-                    );
-                    ext.outputChannel.show();
-                    hasErrors = true;
-                } else {
-                    count++;
+                    });
+
+                    const result = await insertDocumentsBatch(selectedItem, documentBuffer);
+
+                    if (result.error) {
+                        ext.outputChannel.appendLog(
+                            l10n.t('The insertion of documents {start}-{end} failed with error: {error}', {
+                                start: batchStartIndex + 1,
+                                end: batchStartIndex + batchSize,
+                                error: result.error,
+                            }),
+                        );
+                        ext.outputChannel.show();
+                        hasErrors = true;
+                    } else {
+                        count += result.insertedCount;
+                    }
+
+                    // Clear the buffer for the next batch
+                    documentBuffer = [];
                 }
             }
 
@@ -205,32 +229,27 @@ async function parseAndValidateFileForMongo(uri: vscode.Uri): Promise<{ document
     return { documents, errors };
 }
 
-async function insertDocument(node: CollectionItem, document: unknown): Promise<{ document: unknown; error: string }> {
-    try {
-        if (node instanceof CollectionItem) {
-            // await needs to catch the error here, otherwise it will be thrown to the caller
-            return await insertDocumentIntoCluster(node, document as Document);
-        }
-    } catch (e) {
-        return { document, error: parseError(e).message };
+async function insertDocumentsBatch(
+    node: CollectionItem,
+    documents: Document[],
+): Promise<{ insertedCount: number; error: string }> {
+    if (documents.length === 0) {
+        return { insertedCount: 0, error: '' };
     }
 
-    return { document, error: l10n.t('Unknown error') };
-}
+    try {
+        const client = await ClustersClient.getClient(node.cluster.id);
+        const response = await client.insertDocuments(node.databaseInfo.name, node.collectionInfo.name, documents);
 
-async function insertDocumentIntoCluster(
-    node: CollectionItem,
-    document: Document,
-): Promise<{ document: Document; error: string }> {
-    const client = await ClustersClient.getClient(node.cluster.id);
-    const response = await client.insertDocuments(node.databaseInfo.name, node.collectionInfo.name, [document]);
-
-    if (response?.acknowledged) {
-        return { document, error: '' };
-    } else {
-        return {
-            document,
-            error: l10n.t('The insertion failed. The operation was not acknowledged by the database.'),
-        };
+        if (response?.acknowledged) {
+            return { insertedCount: response.insertedCount, error: '' };
+        } else {
+            return {
+                insertedCount: 0,
+                error: l10n.t('The batch insertion failed. The operation was not acknowledged by the database.'),
+            };
+        }
+    } catch (e) {
+        return { insertedCount: 0, error: parseError(e).message };
     }
 }
