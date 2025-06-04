@@ -31,7 +31,7 @@ jobs:
             - name: 🛠 Setup Node.js Environment
               uses: actions/setup-node@v4
               with:
-                  node-version-file: ../.nvmrc # Adjust path to match the root .nvmrc file
+                  node-version-file: .nvmrc
                   cache: 'npm'
 
             - name: 💾 Restore npm Cache
