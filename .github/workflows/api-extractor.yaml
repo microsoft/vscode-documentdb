@@ -1,0 +1,49 @@
+name: 'API: Extract Public Typings'
+
+# 📘 This workflow verifies that API typings can be generated and rolled up cleanly.
+# It runs on:
+# - Pushes to `main` (validate committed state)
+# - PRs to any branch (validate incoming changes)
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+    cancel-in-progress: true
+
+jobs:
+    extract-api-typings:
+        name: 📤 Extract API Typings
+        runs-on: ubuntu-latest
+
+        defaults:
+            run:
+                working-directory: '.'
+
+        steps:
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@v4
+
+            - name: 🛠 Setup Node.js Environment
+              uses: actions/setup-node@v4
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'npm'
+
+            - name: 💾 Restore npm Cache
+              uses: actions/cache@v3
+              with:
+                  path: ~/.npm
+                  key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node-
+
+            - name: 📦 Install Dependencies (npm ci)
+              run: npm ci
+
+            - name: 🧬 Run API Extractor
+              run: npm run api-extractor
