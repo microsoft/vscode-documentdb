@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/vscode-documentdb-api",
   "version": "0.1.0",
-  "description": "Extension API for VS Code DocumentDB extension",
+  "description": "Extension API for VS Code DocumentDB extension (preview)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": {
