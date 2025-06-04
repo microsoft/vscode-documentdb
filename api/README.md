@@ -1,6 +1,8 @@
 # DocumentDB Extension API
 
-This package provides the ExtensionAPI for integrating with the VS Code DocumentDB extension.
+⚠️ **Warning**: This is an experimental API for a feature currently in development. It is intended for internal use only. The API is unstable and subject to rapid changes, which may break compatibility without notice.
+
+This package provides the Extension API for integrating with the VS Code DocumentDB extension.
 
 ## Installation
 

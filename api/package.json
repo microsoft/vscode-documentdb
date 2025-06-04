@@ -1,5 +1,5 @@
 {
-  "name": "@microsoft/vscode-documentdb-api",
+  "name": "vscode-documentdb-api-experimental-beta",
   "version": "0.1.0",
   "description": "Extension API for VS Code DocumentDB extension (preview)",
   "main": "dist/index.js",
