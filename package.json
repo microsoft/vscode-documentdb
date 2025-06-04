@@ -424,6 +424,12 @@
         "title": "Export Documents from Collection…"
       },
       {
+        "//": "Data Migration",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.chooseDataMigrationExtension",
+        "title": "Data Migration…"
+      },
+      {
         "//": "Create Document",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.createDocument",
@@ -638,6 +644,12 @@
           "group": "2@2"
         },
         {
+          "//": "[Collection] Data Migration",
+          "command": "vscode-documentdb.command.chooseDataMigrationExtension",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "group": "2@3"
+        },
+        {
           "//": "[Collection] Drop collection",
           "command": "vscode-documentdb.command.dropCollection",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
@@ -742,6 +754,10 @@
         },
         {
           "command": "vscode-documentdb.command.exportDocuments",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.chooseDataMigrationExtension",
           "when": "never"
         },
         {
