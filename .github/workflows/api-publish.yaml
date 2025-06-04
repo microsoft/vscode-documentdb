@@ -14,37 +14,42 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    publish-api-package:
-        name: 🚀 Publish API Package to npm
+    echo:
         runs-on: ubuntu-latest
-
-        defaults:
-            run:
-                working-directory: '.'
-
         steps:
-            - name: ✅ Checkout Repository
-              uses: actions/checkout@v4
+            - run: echo "It works"
 
-            - name: 🛠 Setup Node.js Environment
-              uses: actions/setup-node@v4
-              with:
-                  node-version-file: .nvmrc
-                  cache: 'npm'
+    # publish-api-package:
+    #     name: 🚀 Publish API Package to npm
+    #     runs-on: ubuntu-latest
 
-            - name: 💾 Restore npm Cache
-              uses: actions/cache@v3
-              with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-node-
+    #     defaults:
+    #         run:
+    #             working-directory: '.'
 
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci
+    #     steps:
+    #         - name: ✅ Checkout Repository
+    #           uses: actions/checkout@v4
 
-            - name: 🚀 Publish Package to npm
-              uses: JS-DevTools/npm-publish@v1
-              with:
-                  package: ./api/package.json
-                  token: ${{ secrets.EXPERIMENTAL_NPM_ACCESS_TOKEN }}
+    #         - name: 🛠 Setup Node.js Environment
+    #           uses: actions/setup-node@v4
+    #           with:
+    #               node-version-file: .nvmrc
+    #               cache: 'npm'
+
+    #         - name: 💾 Restore npm Cache
+    #           uses: actions/cache@v3
+    #           with:
+    #               path: ~/.npm
+    #               key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+    #               restore-keys: |
+    #                   ${{ runner.os }}-node-
+
+    #         - name: 📦 Install Dependencies (npm ci)
+    #           run: npm ci
+
+    #         - name: 🚀 Publish Package to npm
+    #           uses: JS-DevTools/npm-publish@v1
+    #           with:
+    #               package: ./api/package.json
+    #               token: ${{ secrets.EXPERIMENTAL_NPM_ACCESS_TOKEN }}
