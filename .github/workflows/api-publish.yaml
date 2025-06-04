@@ -47,4 +47,4 @@ jobs:
               uses: JS-DevTools/npm-publish@v1
               with:
                   package: ./api/package.json
-                  token: ${{ secrets.NPM_ACCESS_TOKEN }}
+                  token: ${{ secrets.EXPERIMENTAL_NPM_ACCESS_TOKEN }}
