@@ -23,7 +23,7 @@ const DOCUMENTDB_EXTENSION_ID = 'ms-azuretools.vscode-documentdb';
  * ```
  */
 export async function getDocumentDBExtensionApi(
-    context: vscode.ExtensionContext,
+    _context: vscode.ExtensionContext,
     apiVersionRange: string,
 ): Promise<DocumentDBExtensionApi> {
     const extension = vscode.extensions.getExtension<DocumentDBExtensionApi>(DOCUMENTDB_EXTENSION_ID);
