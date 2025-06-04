@@ -251,7 +251,7 @@ async function insertDocumentWithBufferIntoCluster(
     const databaseName = node.databaseInfo.name;
     const collectionName = node.collectionInfo.name;
     // Try to add document to buffer
-    const insertOrFlushToBufferResult = buffer.instertOrFlush(document);
+    const insertOrFlushToBufferResult = buffer.insertOrFlush(document);
     // If successful, no immediate action needed
     if (insertOrFlushToBufferResult.success) {
         return { count: 0, errorOccurred: false };
