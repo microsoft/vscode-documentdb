@@ -22,7 +22,7 @@ jobs:
 
         defaults:
             run:
-                working-directory: '.'
+                working-directory: './api' # Ensure the workflow runs in the 'api' folder
 
         steps:
             - name: ✅ Checkout Repository
@@ -31,7 +31,7 @@ jobs:
             - name: 🛠 Setup Node.js Environment
               uses: actions/setup-node@v4
               with:
-                  node-version-file: .nvmrc
+                  node-version-file: ../.nvmrc # Adjust path to match the root .nvmrc file
                   cache: 'npm'
 
             - name: 💾 Restore npm Cache
