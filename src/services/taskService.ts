@@ -311,7 +311,9 @@ class TaskServiceImpl implements TaskService {
         try {
             await task.pause();
         } catch (error) {
-            throw new Error(`Failed to pause task '${id}': ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+            throw new Error(`Failed to pause task '${id}': ${error instanceof Error ? error.message : String(error)}`, {
+                cause: error,
+            });
         }
     }
 
