@@ -646,8 +646,8 @@
         {
           "//": "[Collection] Data Migration",
           "command": "vscode-documentdb.command.chooseDataMigrationExtension",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
-          "group": "2@3"
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "group": "1@2"
         },
         {
           "//": "[Collection] Drop collection",
