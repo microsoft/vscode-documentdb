@@ -46,14 +46,15 @@ export async function activate(context: vscode.ExtensionContext) {
       ];
     },
 
-    async executeAction(id?: string): Promise<void> {
+    async executeAction(options?: ActionsOptions, id?: string): Promise<void> {
       // Execute the selected action
+      // Use options for context like connection details
       switch (id) {
         case 'import-data':
-          // Perform import operation
+          // Perform import operation using options.connectionString, etc.
           break;
         case 'export-data':
-          // Perform export operation
+          // Perform export operation using options.databaseName, etc.
           break;
         default:
           // Handle default action or no action selected
@@ -187,8 +188,9 @@ const provider: MigrationProvider = {
     ];
   },
 
-  async executeAction(id?: string): Promise<void> {
+  async executeAction(options?: ActionsOptions, id?: string): Promise<void> {
     // Handle actions based on their authentication requirements
+    // Use options for context like connection details
   },
 };
 ```
@@ -221,8 +223,9 @@ const provider: MigrationProvider = {
     ];
   },
 
-  async executeAction(id?: string): Promise<void> {
+  async executeAction(options?: ActionsOptions, id?: string): Promise<void> {
     // Both default and custom actions handled appropriately
+    // Access context via options parameter
   },
 };
 ```

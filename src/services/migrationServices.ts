@@ -121,10 +121,12 @@ export interface MigrationProvider extends MigrationProviderDescription {
 
     /**
      * Executes the operation corresponding to the selected action.
+     * The `options` parameter provides context for the execution.
      * The `id` parameter identifies the specific action to be executed.
      * If no `id` is provided, the provider may execute a default action or handle the absence gracefully.
      *
+     * @param options - Optional parameters providing context for the action execution.
      * @param id - The identifier of the action to execute.
      */
-    executeAction(id?: string): Promise<void>;
+    executeAction(options?: ActionsOptions, id?: string): Promise<void>;
 }
