@@ -334,7 +334,7 @@ class TaskServiceImpl implements TaskService {
         try {
             await task.resume();
         } catch (error) {
-            throw new Error(`Failed to resume task '${id}': ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(`Failed to resume task '${id}'`, { cause: error });
         }
     }
 
