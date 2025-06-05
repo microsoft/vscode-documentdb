@@ -77,6 +77,13 @@ export async function activateInternal(
         migration: {
             registerProvider: (provider) => {
                 MigrationService.registerProvider(provider);
+
+                ext.outputChannel.appendLine(
+                    vscode.l10n.t('API: Registered new migration provider: "{providerId}" - "{providerLabel}"', {
+                        providerId: provider.id,
+                        providerLabel: provider.label,
+                    }),
+                );
             },
         },
     };

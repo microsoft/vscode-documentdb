@@ -43,6 +43,7 @@
   "An error has occurred. Check output window for more details.": "An error has occurred. Check output window for more details.",
   "An item with id \"{0}\" already exists for workspace \"{1}\".": "An item with id \"{0}\" already exists for workspace \"{1}\".",
   "API version \"{0}\" for extension id \"{1}\" is no longer supported. Minimum version is \"{2}\".": "API version \"{0}\" for extension id \"{1}\" is no longer supported. Minimum version is \"{2}\".",
+  "API: Registered new migration provider: \"{providerId}\" - \"{providerLabel}\"": "API: Registered new migration provider: \"{providerId}\" - \"{providerLabel}\"",
   "Are you sure?": "Are you sure?",
   "Attempting to authenticate with \"{cluster}\"…": "Attempting to authenticate with \"{cluster}\"…",
   "Attempting to authenticate with {cluster}": "Attempting to authenticate with {cluster}",
