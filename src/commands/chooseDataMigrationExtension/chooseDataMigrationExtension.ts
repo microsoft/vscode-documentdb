@@ -65,7 +65,7 @@ export async function chooseDataMigrationExtension(context: IActionContext, _nod
 
     if (selectedItem.id === 'addMigrationProvider') {
         context.telemetry.properties.addMigrationProvider = 'true';
-        commands.executeCommand('workbench.extensions.search', '"Migration Extension for DocumentDB"');
+        commands.executeCommand('workbench.extensions.search', '"DocumentDB Migration Plugin"');
         return;
     }
 
@@ -75,7 +75,70 @@ export async function chooseDataMigrationExtension(context: IActionContext, _nod
 
         if (selectedProvider) {
             context.telemetry.properties.migrationProvider = selectedProvider.id;
-            await selectedProvider.activate();
+
+            try {
+                // Construct the options object with available context
+                const options = {
+                    connectionString: 'connectionString',
+                    databaseName: _node.databaseInfo.name,
+                    collectionName: _node.collectionInfo.name,
+                    extendedProperties: {
+                        clusterId: _node.cluster.id,
+                    },
+                };
+
+                // Get available actions from the provider
+                const availableActions = await selectedProvider.getAvailableActions(options);
+
+                if (availableActions.length === 0) {
+                    // No actions available, execute default action
+                    await selectedProvider.executeAction();
+                } else {
+                    // Extend actions with Learn More option if provider has a learn more URL
+                    const extendedActions: (QuickPickItem & { id: string; learnMoreUrl?: string })[] = [
+                        ...availableActions,
+                    ];
+
+                    const learnMoreUrl = selectedProvider.getLearnMoreUrl?.();
+
+                    if (learnMoreUrl) {
+                        extendedActions.push(
+                            { id: 'separator', label: '', kind: QuickPickItemKind.Separator },
+                            {
+                                id: 'learnMore',
+                                label: l10n.t('Learn more…'),
+                                detail: l10n.t('Learn more about {0}.', selectedProvider.label),
+                                learnMoreUrl,
+                                alwaysShow: true,
+                            },
+                        );
+                    }
+
+                    // Show action picker to user
+                    const selectedAction = await context.ui.showQuickPick(extendedActions, {
+                        placeHolder: l10n.t('Choose the migration action…'),
+                        stepName: 'selectMigrationAction',
+                        suppressPersistence: true,
+                    });
+
+                    if (selectedAction.id === 'learnMore') {
+                        context.telemetry.properties.migrationLearnMore = 'true';
+                        if (selectedAction.learnMoreUrl) {
+                            await openUrl(selectedAction.learnMoreUrl);
+                        }
+                        return;
+                    }
+
+                    context.telemetry.properties.migrationAction = selectedAction.id;
+
+                    // Execute the selected action
+                    await selectedProvider.executeAction(selectedAction.id);
+                }
+            } catch (error) {
+                // Log the error and re-throw to be handled by the caller
+                console.error('Error during migration provider execution:', error);
+                throw error;
+            }
         }
     }
 }

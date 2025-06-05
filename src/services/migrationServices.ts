@@ -30,14 +30,24 @@ export interface MigrationProviderDescription {
         | vscode.ThemeIcon;
 }
 
-/**
- * Represents a migration provider that extends basic provider information
- * with methods to obtain wizard options and tree data providers.
- */
-export interface MigrationProvider extends MigrationProviderDescription {
-    getLearnMoreUrl?(): string | undefined;
+export interface MigrationProviderPickItem extends vscode.QuickPickItem {
+    id: string;
+}
 
-    activate(): Promise<void>;
+/**
+ * Represents optional parameters to customize available actions.
+ * Includes connection details and additional properties.
+ */
+export interface ActionsOptions {
+    connectionString?: string;
+    databaseName?: string;
+    collectionName?: string;
+
+    /**
+     * A dictionary for extended properties.
+     * Future experimental options can be added here without requiring interface changes.
+     */
+    extendedProperties?: { [key: string]: string | undefined };
 }
 
 /**
@@ -73,3 +83,29 @@ class MigrationServiceImpl {
 }
 
 export const MigrationService = new MigrationServiceImpl();
+
+/**
+ * Represents a migration provider that extends basic provider information
+ * with methods to obtain wizard actions and tree data providers.
+ */
+export interface MigrationProvider extends MigrationProviderDescription {
+    getLearnMoreUrl?(): string | undefined;
+
+    /**
+     * Returns a set of available actions that a user can choose from.
+     * Each action represents a specific operation that can be executed.
+     * The returned actions are displayed to the user in a selection interface.
+     *
+     * @param options - Optional parameters to customize the available actions.
+     */
+    getAvailableActions(options?: ActionsOptions): Promise<MigrationProviderPickItem[]>;
+
+    /**
+     * Executes the operation corresponding to the selected action.
+     * The `id` parameter identifies the specific action to be executed.
+     * If no `id` is provided, the provider may execute a default action or handle the absence gracefully.
+     *
+     * @param id - The identifier of the action to execute.
+     */
+    executeAction(id?: string): Promise<void>;
+}

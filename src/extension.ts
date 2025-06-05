@@ -73,7 +73,7 @@ export async function activateInternal(
 
     // Create the DocumentDB Extension API
     const documentDBApi: DocumentDBExtensionApi = {
-        apiVersion: '0.1.0',
+        apiVersion: '0.2.0',
         migration: {
             registerProvider: (provider) => {
                 MigrationService.registerProvider(provider);
