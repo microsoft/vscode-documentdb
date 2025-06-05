@@ -10,6 +10,7 @@ import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
+import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
 import './collectionView.scss';
 import {
     CollectionViewContext,
@@ -67,6 +68,8 @@ export const CollectionView = (): JSX.Element => {
 
     // that's our current global context of the view
     const [currentContext, setCurrentContext] = useState<CollectionViewContextType>(DefaultCollectionViewContext);
+
+    useSelectiveContextMenuPrevention();
 
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
@@ -369,37 +372,6 @@ export const CollectionView = (): JSX.Element => {
                 console.debug('Failed to report an event:', error);
             });
     }
-
-    // Selective context menu prevention - allow only in Monaco editor
-    useEffect(() => {
-        const monacoSelectors = [
-            '.monaco-editor',
-            '.monaco-editor-background',
-            '.view-lines',
-            '.monaco-scrollable-element',
-            '.monaco-mouse-cursor-text',
-        ];
-
-        const handleContextMenu = (e: Event): boolean | undefined => {
-            const target = e.target as HTMLElement;
-
-            // Check if target is within any Monaco editor element
-            const isInMonacoEditor = monacoSelectors.some((selector) => target.closest(selector) !== null);
-
-            if (!isInMonacoEditor) {
-                e.preventDefault();
-                return false;
-            }
-
-            return undefined;
-        };
-
-        document.oncontextmenu = handleContextMenu;
-
-        return () => {
-            document.oncontextmenu = null;
-        };
-    }, []);
 
     return (
         <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>
