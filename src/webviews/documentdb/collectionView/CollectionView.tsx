@@ -370,6 +370,37 @@ export const CollectionView = (): JSX.Element => {
             });
     }
 
+    // Selective context menu prevention - allow only in Monaco editor
+    useEffect(() => {
+        const monacoSelectors = [
+            '.monaco-editor',
+            '.monaco-editor-background',
+            '.view-lines',
+            '.monaco-scrollable-element',
+            '.monaco-mouse-cursor-text',
+        ];
+
+        const handleContextMenu = (e: Event): boolean | undefined => {
+            const target = e.target as HTMLElement;
+
+            // Check if target is within any Monaco editor element
+            const isInMonacoEditor = monacoSelectors.some((selector) => target.closest(selector) !== null);
+
+            if (!isInMonacoEditor) {
+                e.preventDefault();
+                return false;
+            }
+
+            return undefined;
+        };
+
+        document.oncontextmenu = handleContextMenu;
+
+        return () => {
+            document.oncontextmenu = null;
+        };
+    }, []);
+
     return (
         <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>
             <div className="collectionView">
