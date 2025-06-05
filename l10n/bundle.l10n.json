@@ -48,6 +48,8 @@
   "Attempting to authenticate with \"{cluster}\"…": "Attempting to authenticate with \"{cluster}\"…",
   "Attempting to authenticate with {cluster}": "Attempting to authenticate with {cluster}",
   "Authenticate to connect with your MongoDB cluster": "Authenticate to connect with your MongoDB cluster",
+  "Authentication is required for this action.": "Authentication is required for this action.",
+  "Authentication is required to use this migration provider.": "Authentication is required to use this migration provider.",
   "Azure Activity": "Azure Activity",
   "Azure Cosmos DB for MongoDB (RU) Emulator": "Azure Cosmos DB for MongoDB (RU) Emulator",
   "Azure Cosmos DB for MongoDB (vCore)": "Azure Cosmos DB for MongoDB (vCore)",
