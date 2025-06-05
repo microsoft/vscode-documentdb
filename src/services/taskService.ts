@@ -288,7 +288,7 @@ class TaskServiceImpl implements TaskService {
             await task.delete();
             this.tasks.delete(id);
         } catch (error) {
-            throw new Error(`Failed to delete task '${id}': ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(`Failed to delete task '${id}'`, { cause: error });
         }
     }
 
