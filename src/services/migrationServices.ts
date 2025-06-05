@@ -32,6 +32,12 @@ export interface MigrationProviderDescription {
 
 export interface MigrationProviderPickItem extends vscode.QuickPickItem {
     id: string;
+
+    /**
+     * Indicates whether this action requires authentication in the host extension.
+     * When true, the host should ensure the user is authenticated before executing the action.
+     */
+    requiresAuthentication?: boolean;
 }
 
 /**
@@ -90,6 +96,19 @@ export const MigrationService = new MigrationServiceImpl();
  */
 export interface MigrationProvider extends MigrationProviderDescription {
     getLearnMoreUrl?(): string | undefined;
+
+    /**
+     * Indicates whether this provider requires authentication for its default operation.
+     * This is primarily relevant when no custom actions are provided (getAvailableActions returns empty array),
+     * as it ensures authentication is performed before executeAction() is called.
+     *
+     * For granular control, individual actions can specify their own authentication requirements
+     * via the requiresAuthentication property in MigrationProviderPickItem.
+     *
+     * Both methods can be combined: use this property for the default action and
+     * requiresAuthentication on individual actions for specific operations.
+     */
+    requiresAuthentication?: boolean;
 
     /**
      * Returns a set of available actions that a user can choose from.
