@@ -13,16 +13,22 @@ import { useEffect } from 'react';
  *
  * Additional editor selectors can be added to the allowlist as needed.
  */
+/**
+ * List of allowed selectors for context menus in the Monaco editor.
+ * Update this list as needed to accommodate future editor changes.
+ */
+const ALLOWED_SELECTORS = [
+    '.monaco-editor',
+    '.monaco-editor-background',
+    '.view-lines',
+    '.monaco-scrollable-element',
+    '.monaco-mouse-cursor-text',
+    // Add other editor selectors here as needed
+];
+
 export const useSelectiveContextMenuPrevention = (): void => {
     useEffect(() => {
-        const allowedSelectors = [
-            '.monaco-editor',
-            '.monaco-editor-background',
-            '.view-lines',
-            '.monaco-scrollable-element',
-            '.monaco-mouse-cursor-text',
-            // Add other editor selectors here as needed
-        ];
+        const allowedSelectors = ALLOWED_SELECTORS;
 
         const handleContextMenu = (e: MouseEvent): void => {
             const target = e.target as HTMLElement;
