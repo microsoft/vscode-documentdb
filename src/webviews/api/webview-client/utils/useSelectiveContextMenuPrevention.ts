@@ -24,7 +24,7 @@ export const useSelectiveContextMenuPrevention = (): void => {
             // Add other editor selectors here as needed
         ];
 
-        const handleContextMenu = (e: Event): boolean | undefined => {
+        const handleContextMenu = (e: MouseEvent): void => {
             const target = e.target as HTMLElement;
 
             // Check if target is within any allowed element
@@ -32,16 +32,13 @@ export const useSelectiveContextMenuPrevention = (): void => {
 
             if (!isInAllowedElement) {
                 e.preventDefault();
-                return false;
             }
-
-            return undefined;
         };
 
-        document.oncontextmenu = handleContextMenu;
+        document.addEventListener('contextmenu', handleContextMenu);
 
         return () => {
-            document.oncontextmenu = null;
+            document.removeEventListener('contextmenu', handleContextMenu);
         };
     }, []);
 };
