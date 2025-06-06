@@ -141,7 +141,7 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             progress.report({ increment: 100, message: l10n.t('Finished importing') });
 
             return (
-                (hasErrors ? l10n.t('Import has accomplished with errors.') : l10n.t('Import successful.')) +
+                (hasErrors ? l10n.t('Import completed with errors.') : l10n.t('Import successful.')) +
                 ' ' +
                 l10n.t('Inserted {0} document(s). See output for more details.', count)
             );
@@ -259,9 +259,9 @@ async function insertDocumentWithBufferIntoCluster(
 
     let documentsToProcess = insertOrFlushToBufferResult.documentsToProcess;
     if (insertOrFlushToBufferResult.errorCode === BufferErrorCode.BufferFull) {
-        // The buffer has been flushed by the insertOrFlush method
-        // We need to insert current document to buffer here
-        // As we have inserted it once, so it has been verified that it is not too large and not undefined
+        // The buffer has been flushed by the insertOrFlush method.
+        // Reinserting the current document into the buffer ensures it is processed after the flush.
+        // This is safe because the document has already been validated (e.g., it is not too large and not undefined).
         buffer.insert(document);
     } else if (insertOrFlushToBufferResult.errorCode === BufferErrorCode.EmptyDocument) {
         documentsToProcess = buffer.flush();
