@@ -51,6 +51,17 @@ export interface Storage {
     getItems(workspace: WorkspaceResourceType): Promise<StorageItem[]>;
 
     /**
+     * Retrieves a specific item from the storage along with its secrets for a given workspace.
+     * The item is identified by its unique `id` within the workspace.
+     *
+     * @param workspace - The workspace identifier acting as a directory for the items.
+     *                    Can be a WorkspaceResourceType or any string value.
+     * @param storageId - The unique `id` of the item to retrieve.
+     * @returns A promise resolving to the storage item with its secrets loaded, or `undefined` if not found.
+     */
+    getItem(workspace: WorkspaceResourceType, storageId: string): Promise<StorageItem | undefined>;
+
+    /**
      * Stores an item and its secrets into storage for a specific workspace.
      * The item's `id` is used as the key and must be unique within the workspace.
      * Item properties are stored in globalState while secrets are stored securely
@@ -138,6 +149,35 @@ class StorageImpl implements Storage {
         }
 
         return items;
+    }
+
+    /**
+     * Implementation of Storage.getItem that retrieves a specific item along with its secrets.
+     */
+    public async getItem(workspace: string, storageId: string): Promise<StorageItem | undefined> {
+        const storageKey = `${this.storageName}/${workspace}/${storageId}`;
+        const item = ext.context.globalState.get<StorageItem>(storageKey);
+
+        if (!item) {
+            return undefined; // Item not found
+        }
+
+        // Read secrets associated with the item
+        const secretKey = `${storageKey}/secrets`;
+        const secretsJson = await ext.secretStorage.get(secretKey);
+
+        let secrets: string[] = [];
+        if (secretsJson) {
+            try {
+                secrets = JSON.parse(secretsJson) as string[];
+            } catch (error) {
+                console.error(l10n.t('Failed to parse secrets for key {0}:', storageKey), error);
+                secrets = [];
+            }
+        }
+
+        // Return the item with its secrets
+        return { ...item, id: storageId, secrets };
     }
 
     /**

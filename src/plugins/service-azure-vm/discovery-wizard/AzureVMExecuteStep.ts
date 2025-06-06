@@ -22,6 +22,7 @@ export class AzureVMExecuteStep extends AzureWizardExecuteStep<NewConnectionWiza
         if (!selectedVM) {
             throw new Error('Selected VM is not set.');
         }
+        const selectedPort = (context.properties[AzureVMContextProperties.SelectedPort] as string) ?? '27017'; // Default to 27017 if not set
 
         const { publicIpAddress, fqdn } = selectedVM;
         const host = fqdn || publicIpAddress;
@@ -33,7 +34,7 @@ export class AzureVMExecuteStep extends AzureWizardExecuteStep<NewConnectionWiza
 
         // Constructing a template connection string. User will be prompted for credentials by the resource item.
         const connectionString = new ConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
-        connectionString.hosts = [host + ':27017']; // Set the actual host and default port
+        connectionString.hosts = [`${host}:${selectedPort}`]; // Set the actual host and actual port
         connectionString.protocol = 'mongodb';
 
         const finalConnectionString = connectionString.toString();

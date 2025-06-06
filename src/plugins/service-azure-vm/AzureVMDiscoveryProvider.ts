@@ -13,6 +13,7 @@ import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureS
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
 import { configureVmFilter } from './discovery-tree/configureVmFilterWizard';
 import { AzureVMExecuteStep } from './discovery-wizard/AzureVMExecuteStep';
+import { SelectPortStep } from './discovery-wizard/SelectPortStep';
 import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep';
 import { SelectTagStep } from './discovery-wizard/SelectTagStep';
 import { SelectVMStep } from './discovery-wizard/SelectVMStep';
@@ -22,6 +23,7 @@ export enum AzureVMContextProperties {
     SelectedSubscription = 'selectedSubscription',
     SelectedTag = 'selectedTag',
     SelectedVM = 'selectedVM',
+    SelectedPort = 'selectedPort',
     AzureVMResourceItemDetails = 'azureVMResourceItem',
 }
 
@@ -52,7 +54,7 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
 
         return {
             title: l10n.t('Azure VM Service Discovery'),
-            promptSteps: [new SelectSubscriptionStep(), new SelectTagStep(), new SelectVMStep()],
+            promptSteps: [new SelectSubscriptionStep(), new SelectTagStep(), new SelectVMStep(), new SelectPortStep()],
             executeSteps: [new AzureVMExecuteStep()],
             showLoadingPrompt: true,
         };

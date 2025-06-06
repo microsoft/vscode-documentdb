@@ -43,7 +43,7 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
         if (!(await subscriptionProvider.isSignedIn())) {
             const signIn: MessageItem = { title: l10n.t('Sign In') };
             void window
-                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in to continue.'), signIn)
+                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in and retry.'), signIn)
                 .then((input) => {
                     if (input === signIn) {
                         void subscriptionProvider.signIn();

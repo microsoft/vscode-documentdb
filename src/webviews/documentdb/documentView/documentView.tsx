@@ -14,6 +14,7 @@ import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
+import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
 import { MonacoEditor } from '../../MonacoEditor';
 import { ToolbarDocuments } from './components/toolbarDocuments';
 import { type DocumentsViewWebviewConfigurationType } from './documentsViewController';
@@ -46,6 +47,8 @@ export const DocumentView = (): JSX.Element => {
     const [editorContent] = configuration.mode === 'add' ? useState('{  }') : useState('{ "loading…": true }');
     const [isLoading, setIsLoading] = useState(configuration.mode !== 'add');
     const [isDirty, setIsDirty] = useState(true);
+
+    useSelectiveContextMenuPrevention();
 
     // a useEffect without a dependency runs only once after the first render only
     useEffect(() => {
