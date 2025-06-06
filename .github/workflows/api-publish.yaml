@@ -1,0 +1,20 @@
+name: "API: Publish to npm"
+
+# 🚀 This workflow manually publishes the API package to npm.
+# It should only be triggered via GitHub's UI or CLI using `workflow_dispatch`.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "dummy action"
