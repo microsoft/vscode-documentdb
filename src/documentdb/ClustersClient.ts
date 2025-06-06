@@ -491,11 +491,11 @@ export class ClustersClient {
                         ? `${generalErrorMessage} - ${descriptiveErrorMessage}`
                         : generalErrorMessage;
 
-                    ext.outputChannel.appendLog(`Write error: ${fullErrorMessage}`);
+                    ext.outputChannel.appendLog(l10n.t('Write error: {0}', fullErrorMessage));
                 }
                 ext.outputChannel.show();
             } else if (error instanceof Error) {
-                ext.outputChannel.appendLog(`Error: ${error.message}`);
+                ext.outputChannel.appendLog(l10n.t('Error: {0}', error.message));
                 ext.outputChannel.show();
             }
 
