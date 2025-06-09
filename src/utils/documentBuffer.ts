@@ -245,7 +245,7 @@ const defaultMongoBufferConfig: DocumentBufferOptions = {
 /**
  * Create a document buffer configured for MongoDB
  */
-export function createMongoDbBuffer<T>(customConfig?: DocumentBufferOptions): DocumentBuffer<T> {
+export function createMongoDbBuffer<T>(customConfig?: Partial<DocumentBufferOptions>): DocumentBuffer<T> {
     return new DocumentBuffer<T>({
         ...defaultMongoBufferConfig,
         ...customConfig,
