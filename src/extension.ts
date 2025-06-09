@@ -21,6 +21,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersExtension } from './documentdb/ClustersExtension';
 import { ext } from './extensionVariables';
+import { ProgressMonitoringService } from './services/ProgressMonitoringService';
 import { globalUriHandler } from './vscodeUriHandler';
 
 export async function activateInternal(
@@ -56,6 +57,11 @@ export async function activateInternal(
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
         await clustersSupport.activateClustersSupport();
+
+        // Initialize progress monitoring service for task monitoring
+        context.subscriptions.push({
+            dispose: () => ProgressMonitoringService.dispose(),
+        });
 
         context.subscriptions.push(
             vscode.window.registerUriHandler({
