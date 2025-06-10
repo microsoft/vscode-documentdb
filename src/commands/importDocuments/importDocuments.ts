@@ -3,12 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { parseError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { nonNullProp, parseError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fse from 'fs-extra';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import {
+    AzureDomains,
+    getHostsFromConnectionString,
+    hasDomainSuffix,
+} from '../../documentdb/utils/connectionStringHelpers';
 import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { BufferErrorCode, createMongoDbBuffer, type DocumentBuffer } from '../../utils/documentBuffer';
@@ -104,12 +109,14 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
                 }
             }
 
-            const countDocuments = documents.length ?? 0;
+            const countDocuments = documents.length;
             const incrementDocuments = 75 / (countDocuments || 1);
             let count = 0;
             let buffer: DocumentBuffer<unknown> | undefined;
             if (selectedItem instanceof CollectionItem) {
-                const isRuResource = await ClustersClient.isAzureMongoRuConnection(selectedItem.cluster.id);
+                const hosts = getHostsFromConnectionString(nonNullProp(selectedItem.cluster, 'connectionString'));
+                const isRuResource = hasDomainSuffix(AzureDomains.RU, ...hosts);
+
                 if (isRuResource) {
                     // For Azure MongoDB RU, we use a buffer with maxDocumentCount = 1
                     buffer = createMongoDbBuffer<unknown>({
