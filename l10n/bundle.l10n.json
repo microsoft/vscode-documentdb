@@ -147,7 +147,6 @@
   "Enter the port number your DocumentDB uses. The default port: {defaultPort}.": "Enter the port number your DocumentDB uses. The default port: {defaultPort}.",
   "Enter the username": "Enter the username",
   "Enter the username for {experience}": "Enter the username for {experience}",
-  "Error checking MongoDB connection type: {0}": "Error checking MongoDB connection type: {0}",
   "Error creating resource: {0}": "Error creating resource: {0}",
   "Error deleting selected documents": "Error deleting selected documents",
   "Error exporting documents: {error}": "Error exporting documents: {error}",
