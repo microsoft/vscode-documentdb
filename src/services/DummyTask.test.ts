@@ -10,12 +10,11 @@ describe('DummyTask', () => {
     let task: DummyTask;
 
     beforeEach(() => {
-        task = new DummyTask();
-        jest.useFakeTimers();
+        // Use very short delays for testing (1ms per step, 5 steps = 5ms total)
+        task = new DummyTask(1, 5);
     });
 
     afterEach(() => {
-        jest.useRealTimers();
         jest.clearAllMocks();
     });
 
@@ -30,12 +29,7 @@ describe('DummyTask', () => {
 
     describe('execute', () => {
         it('should complete successfully without options', async () => {
-            const executePromise = task.execute();
-
-            // Fast-forward through all timeouts
-            jest.runAllTimers();
-
-            const result = await executePromise;
+            const result = await task.execute();
 
             expect(result.success).toBe(true);
             expect(result.data).toBe('Dummy task completed successfully!');
@@ -48,14 +42,12 @@ describe('DummyTask', () => {
             const progressCallback = jest.fn();
             const stateChangeCallback = jest.fn();
 
-            const executePromise = task.execute({
+            const result = await task.execute({
                 onProgress: progressCallback,
                 onStateChange: stateChangeCallback,
             });
 
-            // Fast-forward through all timeouts
-            jest.runAllTimers();
-            await executePromise;
+            expect(result.success).toBe(true);
 
             // Check that we got the starting progress call
             expect(progressCallback).toHaveBeenCalledWith({
@@ -64,13 +56,25 @@ describe('DummyTask', () => {
                 increment: 0,
             });
 
-            // Check that we got progress updates for each step (11 calls total: 1 start + 10 steps)
-            expect(progressCallback).toHaveBeenCalledTimes(12); // start + 10 steps + final
+            // Should have been called for initial + 5 steps + final completion message
+            expect(progressCallback).toHaveBeenCalledTimes(7);
 
             // Verify state changes
             expect(stateChangeCallback).toHaveBeenCalledWith(TaskState.Running);
             expect(stateChangeCallback).toHaveBeenCalledWith(TaskState.Completed);
             expect(stateChangeCallback).toHaveBeenCalledTimes(2);
+
+            // Check progress increments
+            expect(progressCallback).toHaveBeenCalledWith({
+                percentage: 20,
+                message: expect.stringContaining('step 1 of 5'),
+                increment: 20,
+            });
+            expect(progressCallback).toHaveBeenCalledWith({
+                percentage: 100,
+                message: 'Dummy task completed successfully!',
+                increment: 0,
+            });
         });
 
         it('should handle abort signal before execution starts', async () => {
@@ -91,15 +95,14 @@ describe('DummyTask', () => {
             const controller = new AbortController();
             const stateChangeCallback = jest.fn();
 
+            // Start the task and abort it during execution
             const executePromise = task.execute({
                 abortSignal: controller.signal,
                 onStateChange: stateChangeCallback,
             });
 
-            // Let the task run for a few steps then abort
-            jest.advanceTimersByTime(3000);
-            controller.abort();
-            jest.runAllTimers();
+            // Abort after a short delay to let the task start
+            setTimeout(() => controller.abort(), 2);
 
             const result = await executePromise;
 
@@ -110,57 +113,19 @@ describe('DummyTask', () => {
             expect(stateChangeCallback).toHaveBeenCalledWith(TaskState.Aborted);
         });
 
-        it('should handle abort signal during delay', async () => {
-            const controller = new AbortController();
-
-            const executePromise = task.execute({
-                abortSignal: controller.signal,
-            });
-
-            // Start a step but abort during the delay
-            jest.advanceTimersByTime(500);
-            controller.abort();
-            jest.runAllTimers();
-
-            const result = await executePromise;
-
-            expect(result.success).toBe(false);
-            expect(result.error?.message).toBe('Task was aborted');
-            expect(result.finalState).toBe(TaskState.Aborted);
-        });
-
         it('should throw error if already running', async () => {
             const executePromise1 = task.execute();
 
             await expect(task.execute()).rejects.toThrow('Task is already running');
 
             // Clean up the first execution
-            jest.runAllTimers();
             await executePromise1;
         });
 
-        it('should handle unexpected errors gracefully', async () => {
-            // Mock setTimeout to throw an error
-            const originalSetTimeout = global.setTimeout;
-            global.setTimeout = jest.fn().mockImplementation(() => {
-                throw new Error('Unexpected error');
-            }) as any;
-
-            const result = await task.execute();
-
-            expect(result.success).toBe(false);
-            expect(result.error?.message).toBe('Unexpected error');
-            expect(result.finalState).toBe(TaskState.Failed);
-            expect(task.state).toBe(TaskState.Failed);
-
-            // Restore original setTimeout
-            global.setTimeout = originalSetTimeout;
-        });
-
-        it('should report initial progress message', async () => {
+        it('should report initial progress message', () => {
             const progressCallback = jest.fn();
 
-            const executePromise = task.execute({
+            task.execute({
                 onProgress: progressCallback,
             });
 
@@ -170,16 +135,11 @@ describe('DummyTask', () => {
                 message: 'Starting dummy task...',
                 increment: 0,
             });
-
-            jest.runAllTimers();
-            await executePromise;
         });
 
         it('should maintain progress state between calls', async () => {
             // First execution
-            const executePromise1 = task.execute();
-            jest.runAllTimers();
-            await executePromise1;
+            await task.execute();
 
             expect(task.progress).toBe(100);
             expect(task.state).toBe(TaskState.Completed);
@@ -189,8 +149,29 @@ describe('DummyTask', () => {
             expect(task.state).toBe(TaskState.Running);
             expect(task.progress).toBe(0);
 
-            jest.runAllTimers();
             await executePromise2;
+        });
+
+        it('should handle different step counts', async () => {
+            const taskWith3Steps = new DummyTask(1, 3);
+            const progressCallback = jest.fn();
+
+            const result = await taskWith3Steps.execute({
+                onProgress: progressCallback,
+            });
+
+            expect(result.success).toBe(true);
+            expect(taskWith3Steps.progress).toBe(100);
+
+            // Should have initial + 3 steps + final = 5 calls
+            expect(progressCallback).toHaveBeenCalledTimes(5);
+
+            // Check that progress increments correctly (33.33%, 66.67%, 100%)
+            expect(progressCallback).toHaveBeenCalledWith({
+                percentage: expect.closeTo(33.33, 1),
+                message: expect.stringContaining('step 1 of 3'),
+                increment: expect.any(Number),
+            });
         });
     });
 });

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PausableTask, TaskExecutionOptions, TaskProgress, TaskResult, TaskState } from '../services/taskService';
+import { type PausableTask, type TaskExecutionOptions, type TaskProgress, type TaskResult, TaskState } from '../services/taskService';
 
 /**
  * A pausable task that simulates work with the ability to pause and resume execution.
@@ -18,6 +18,13 @@ export class PausableTaskImpl implements PausableTask<string> {
     private _currentStep = 0;
     private _isPauseRequested = false;
     private _pauseResolve?: () => void;
+    private readonly _stepDuration: number;
+    private readonly _totalSteps: number;
+
+    constructor(stepDuration: number = 10, totalSteps: number = 10) {
+        this._stepDuration = stepDuration; // Default 10ms for testing
+        this._totalSteps = totalSteps;
+    }
 
     public get state(): TaskState {
         return this._state;
@@ -58,18 +65,15 @@ export class PausableTaskImpl implements PausableTask<string> {
         if (this._state !== TaskState.Paused) {
             this._currentStep = 0;
             this._progress = 0;
+            this._reportProgress(0, 'Starting pausable task...', options);
         }
 
         this._setState(TaskState.Running, options);
         this._isPauseRequested = false;
 
         try {
-            // Simulate work with 10 steps, each taking 1 second
-            const totalSteps = 10;
-            const stepDuration = 1000; // 1 second per step
-
             // Continue from where we left off if resuming
-            for (let step = this._currentStep; step < totalSteps; step++) {
+            for (let step = this._currentStep; step < this._totalSteps; step++) {
                 // Check for abort signal
                 if (options?.abortSignal?.aborted) {
                     this._setState(TaskState.Aborted, options);
@@ -85,7 +89,7 @@ export class PausableTaskImpl implements PausableTask<string> {
                     this._setState(TaskState.Paused, options);
                     this._reportProgress(
                         this._progress,
-                        `Pausable task paused at step ${step + 1} of ${totalSteps}`,
+                        `Pausable task paused at step ${step + 1} of ${this._totalSteps}`,
                         options,
                     );
 
@@ -107,26 +111,25 @@ export class PausableTaskImpl implements PausableTask<string> {
                     }
                 }
 
-                // Wait for the step duration
-                await this._delay(stepDuration, options?.abortSignal);
-
-                // Check again after delay in case abort was signaled during delay
-                if (options?.abortSignal?.aborted) {
+                try {
+                    // Wait for the step duration
+                    await this._delay(this._stepDuration, options?.abortSignal);
+                } catch (error) {
+                    // If delay was aborted, task was aborted
                     this._setState(TaskState.Aborted, options);
                     return {
                         success: false,
-                        error: new Error('Task was aborted'),
+                        error: error instanceof Error ? error : new Error('Task was aborted'),
                         finalState: TaskState.Aborted,
                     };
                 }
 
                 // Update progress and current step
                 this._currentStep = step + 1;
-                const currentProgress = (this._currentStep / totalSteps) * 100;
-                this._progress = currentProgress;
+                const currentProgress = (this._currentStep / this._totalSteps) * 100;
                 this._reportProgress(
                     currentProgress,
-                    `Pausable task step ${this._currentStep} of ${totalSteps} completed`,
+                    `Pausable task step ${this._currentStep} of ${this._totalSteps} completed`,
                     options,
                 );
             }
@@ -156,39 +159,38 @@ export class PausableTaskImpl implements PausableTask<string> {
     }
 
     private _reportProgress(percentage: number, message: string, options?: TaskExecutionOptions): void {
+        const increment = percentage - this._progress;
         const progress: TaskProgress = {
             percentage,
             message,
-            increment: percentage - this._progress,
+            increment,
         };
+        this._progress = percentage; // Update _progress after calculating increment
         options?.onProgress?.(progress);
     }
 
     private async _delay(ms: number, abortSignal?: AbortSignal): Promise<void> {
+        if (abortSignal?.aborted) {
+            throw new Error('Task was aborted');
+        }
+
         return new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
-                resolve();
+                if (abortSignal?.aborted) {
+                    reject(new Error('Task was aborted'));
+                } else {
+                    resolve();
+                }
             }, ms);
 
-            // Handle abort signal
+            // Handle abort signal during timeout
+            const abortHandler = () => {
+                clearTimeout(timeout);
+                reject(new Error('Task was aborted'));
+            };
+
             if (abortSignal) {
-                const abortHandler = () => {
-                    clearTimeout(timeout);
-                    reject(new Error('Operation was aborted'));
-                };
-
-                if (abortSignal.aborted) {
-                    clearTimeout(timeout);
-                    reject(new Error('Operation was aborted'));
-                    return;
-                }
-
                 abortSignal.addEventListener('abort', abortHandler, { once: true });
-
-                // Clean up the abort listener when the timeout completes
-                setTimeout(() => {
-                    abortSignal.removeEventListener('abort', abortHandler);
-                }, ms);
             }
         });
     }

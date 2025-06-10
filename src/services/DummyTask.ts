@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Task, TaskExecutionOptions, TaskProgress, TaskResult, TaskState } from '../services/taskService';
+import { type Task, type TaskExecutionOptions, type TaskProgress, type TaskResult, TaskState } from '../services/taskService';
 
 /**
  * A dummy task that simulates work using timeouts for demonstration purposes.
- * Total execution time is 10 seconds with progress reporting.
+ * Total execution time is configurable with progress reporting.
  */
 export class DummyTask implements Task<string> {
     public readonly id = 'dummy-task';
@@ -15,6 +15,13 @@ export class DummyTask implements Task<string> {
 
     private _state: TaskState = TaskState.NotStarted;
     private _progress = 0;
+    private readonly _stepDuration: number;
+    private readonly _totalSteps: number;
+
+    constructor(stepDuration: number = 10, totalSteps: number = 10) {
+        this._stepDuration = stepDuration; // Default 10ms for testing
+        this._totalSteps = totalSteps;
+    }
 
     public get state(): TaskState {
         return this._state;
@@ -34,11 +41,7 @@ export class DummyTask implements Task<string> {
         this._reportProgress(0, 'Starting dummy task...', options);
 
         try {
-            // Simulate work with 10 steps, each taking 1 second
-            const totalSteps = 10;
-            const stepDuration = 1000; // 1 second per step
-
-            for (let step = 0; step < totalSteps; step++) {
+            for (let step = 0; step < this._totalSteps; step++) {
                 // Check for abort signal before each step
                 if (options?.abortSignal?.aborted) {
                     this._setState(TaskState.Aborted, options);
@@ -51,7 +54,7 @@ export class DummyTask implements Task<string> {
 
                 try {
                     // Wait for the step duration
-                    await this._delay(stepDuration, options?.abortSignal);
+                    await this._delay(this._stepDuration, options?.abortSignal);
                 } catch (error) {
                     // If delay was aborted, task was aborted
                     this._setState(TaskState.Aborted, options);
@@ -63,11 +66,10 @@ export class DummyTask implements Task<string> {
                 }
 
                 // Update progress after completing the step
-                const currentProgress = ((step + 1) / totalSteps) * 100;
-                this._progress = currentProgress;
+                const currentProgress = ((step + 1) / this._totalSteps) * 100;
                 this._reportProgress(
                     currentProgress,
-                    `Dummy task step ${step + 1} of ${totalSteps} completed`,
+                    `Dummy task step ${step + 1} of ${this._totalSteps} completed`,
                     options,
                 );
             }
@@ -97,11 +99,13 @@ export class DummyTask implements Task<string> {
     }
 
     private _reportProgress(percentage: number, message: string, options?: TaskExecutionOptions): void {
+        const increment = percentage - this._progress;
         const progress: TaskProgress = {
             percentage,
             message,
-            increment: percentage - this._progress,
+            increment,
         };
+        this._progress = percentage; // Update _progress after calculating increment
         options?.onProgress?.(progress);
     }
 

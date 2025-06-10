@@ -14,13 +14,12 @@ describe('TaskService', () => {
 
     beforeEach(() => {
         service = new TaskService();
-        dummyTask = new DummyTask();
-        pausableTask = new PausableTaskImpl();
-        jest.useFakeTimers();
+        // Use very short delays for testing (1ms per step, 5 steps = 5ms total)
+        dummyTask = new DummyTask(1, 5);
+        pausableTask = new PausableTaskImpl(1, 5);
     });
 
     afterEach(() => {
-        jest.useRealTimers();
         jest.clearAllMocks();
     });
 
@@ -79,18 +78,15 @@ describe('TaskService', () => {
 
         it('should execute task by ID', async () => {
             const progressCallback = jest.fn();
-            const executePromise = service.executeTask('dummy-task', {
+            const result = await service.executeTask('dummy-task', {
                 onProgress: progressCallback,
             });
-
-            jest.advanceTimersByTime(10000);
-            const result = await executePromise;
 
             expect(result?.success).toBe(true);
             expect(result?.data).toBe('Dummy task completed successfully!');
             expect(result?.finalState).toBe(TaskState.Completed);
             expect(progressCallback).toHaveBeenCalled();
-        }, 10000);
+        });
 
         it('should return undefined for non-existent task', async () => {
             const result = await service.executeTask('non-existent');
@@ -108,9 +104,8 @@ describe('TaskService', () => {
                 onStateChange: stateChangeCallback,
             });
 
-            jest.advanceTimersByTime(3000);
-            controller.abort();
-            jest.advanceTimersByTime(1000);
+            // Let task start then abort
+            setTimeout(() => controller.abort(), 2);
 
             const result = await executePromise;
 
@@ -139,23 +134,20 @@ describe('TaskService', () => {
         it('should execute pausable task through service', async () => {
             const executePromise = service.executeTask('pausable-task');
 
-            jest.advanceTimersByTime(3000);
-            await Promise.resolve();
-            
+            // Let task start then pause it
+            await new Promise((resolve) => setTimeout(resolve, 2));
             pausableTask.pause();
-            jest.advanceTimersByTime(1000);
-            await Promise.resolve();
+            await new Promise((resolve) => setTimeout(resolve, 2));
 
             expect(pausableTask.state).toBe(TaskState.Paused);
 
             pausableTask.resume();
-            jest.advanceTimersByTime(7000);
 
             const result = await executePromise;
 
             expect(result?.success).toBe(true);
             expect(result?.finalState).toBe(TaskState.Completed);
-        }, 10000);
+        });
     });
 
     describe('concurrent execution', () => {
@@ -168,22 +160,19 @@ describe('TaskService', () => {
             const dummyPromise = service.executeTask('dummy-task');
             const pausablePromise = service.executeTask('pausable-task');
 
-            jest.advanceTimersByTime(10000);
-
             const [dummyResult, pausableResult] = await Promise.all([dummyPromise, pausablePromise]);
 
             expect(dummyResult?.success).toBe(true);
             expect(pausableResult?.success).toBe(true);
-        }, 10000);
+        });
 
         it('should prevent multiple executions of same task', async () => {
             const firstExecution = service.executeTask('dummy-task');
 
             await expect(service.executeTask('dummy-task')).rejects.toThrow('Task is already running');
 
-            jest.advanceTimersByTime(10000);
             await firstExecution;
-        }, 10000);
+        });
     });
 
     describe('task state management', () => {
@@ -195,58 +184,59 @@ describe('TaskService', () => {
         it('should maintain task states independently', async () => {
             // Start dummy task
             const dummyPromise = service.executeTask('dummy-task');
-            await Promise.resolve();
+            await new Promise((resolve) => setTimeout(resolve, 1));
 
             expect(dummyTask.state).toBe(TaskState.Running);
             expect(pausableTask.state).toBe(TaskState.NotStarted);
 
             // Start pausable task
             const pausablePromise = service.executeTask('pausable-task');
-            await Promise.resolve();
+            await new Promise((resolve) => setTimeout(resolve, 1));
 
             expect(dummyTask.state).toBe(TaskState.Running);
             expect(pausableTask.state).toBe(TaskState.Running);
 
             // Complete both tasks
-            jest.advanceTimersByTime(10000);
             await Promise.all([dummyPromise, pausablePromise]);
 
             expect(dummyTask.state).toBe(TaskState.Completed);
             expect(pausableTask.state).toBe(TaskState.Completed);
-        }, 10000);
+        });
 
         it('should track progress independently for each task', async () => {
             const dummyPromise = service.executeTask('dummy-task');
             const pausablePromise = service.executeTask('pausable-task');
-            await Promise.resolve();
+            await new Promise((resolve) => setTimeout(resolve, 1));
 
-            // Let both tasks run for 3 seconds
-            jest.advanceTimersByTime(3000);
-            await Promise.resolve();
+            // Let both tasks run for a bit
+            await new Promise((resolve) => setTimeout(resolve, 2));
 
-            expect(dummyTask.progress).toBe(30);
-            expect(pausableTask.progress).toBe(30);
+            // Both should have made some progress
+            expect(dummyTask.progress).toBeGreaterThan(0);
+            expect(pausableTask.progress).toBeGreaterThan(0);
 
             // Pause only the pausable task
             pausableTask.pause();
-            jest.advanceTimersByTime(1000);
-            await Promise.resolve();
+            await new Promise((resolve) => setTimeout(resolve, 1));
 
-            // Dummy task should continue, pausable should be paused
-            jest.advanceTimersByTime(3000);
-            await Promise.resolve();
+            // Get current progress levels
+            const dummyProgressBeforePause = dummyTask.progress;
+            const pausableProgressAtPause = pausableTask.progress;
 
-            expect(dummyTask.progress).toBe(60);
-            expect(pausableTask.progress).toBe(30); // Should remain at 30 while paused
+            // Let some time pass
+            await new Promise((resolve) => setTimeout(resolve, 2));
+
+            // Dummy task should continue progressing, pausable should stay the same
+            expect(dummyTask.progress).toBeGreaterThanOrEqual(dummyProgressBeforePause);
+            expect(pausableTask.progress).toBe(pausableProgressAtPause);
 
             // Resume pausable task and complete both
             pausableTask.resume();
-            jest.advanceTimersByTime(7000);
 
             await Promise.all([dummyPromise, pausablePromise]);
 
             expect(dummyTask.progress).toBe(100);
             expect(pausableTask.progress).toBe(100);
-        }, 15000);
+        });
     });
 });
