@@ -9,7 +9,7 @@ import { ext } from '../../extensionVariables';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 
 export async function pasteCollection(_context: IActionContext, targetNode: CollectionItem): Promise<void> {
-    const sourceNode = ext.copiedCollectionNode as CollectionItem | undefined;
+    const sourceNode = ext.copiedCollectionNode;
     if (!sourceNode) {
         void vscode.window.showWarningMessage(
             vscode.l10n.t('No collection has been marked for copy. Please use Copy Collection first.'),

@@ -27,7 +27,7 @@ export namespace ext {
     export let fileSystem: DatabasesFileSystem;
     export let mongoLanguageClient: MongoDBLanguageClient;
 
-    // TODO: TN imporove this: This is a temporary solution to get going.
+    // TODO: TN improve this: This is a temporary solution to get going.
     export let copiedCollectionNode: CollectionItem | undefined;
 
     // Since the Azure Resources extension did not update API interface, but added a new interface with activity
