@@ -11,6 +11,7 @@ import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClien
 import { type MongoVCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
+import { type CollectionItem } from './tree/documentdb/CollectionItem';
 import { type AccountsItem } from './tree/workspace-view/documentdb/AccountsItem';
 import { type ClustersWorkspaceBranchDataProvider } from './tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 
@@ -25,6 +26,9 @@ export namespace ext {
     export const prefix: string = 'documentDB';
     export let fileSystem: DatabasesFileSystem;
     export let mongoLanguageClient: MongoDBLanguageClient;
+
+    // TODO: TN imporove this: This is a temporary solution to get going.
+    export let copiedCollectionNode: CollectionItem | undefined;
 
     // Since the Azure Resources extension did not update API interface, but added a new interface with activity
     // we have to use the new interface AzureResourcesExtensionApiWithActivity instead of AzureResourcesExtensionApi
