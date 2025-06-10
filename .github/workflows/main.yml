@@ -3,11 +3,11 @@ name: Node PR Lint, Build and Test
 # This workflow handles three scenarios:
 #
 # 1. Push to `next`, `dev/*`, or `feature/*` branches:
-#    - Runs `code-quality-and-tests` and `integration-tests`
-#    - Skips `build-and-package` to save resources and focus on code quality
+#    - Runs `code-quality-and-tests`
+#    - Skips `integration-tests` and `build-and-package` to save resources and focus on code quality
 #
 # 2. Pull Requests to `main` or `next`:
-#    - Runs all jobs: code checks, tests, and packaging
+#    - Runs all jobs: code checks, tests, integration tests, and packaging
 #    - Ensures complete validation including artifact generation before merge
 #
 # 3. Push to `main`:
@@ -77,6 +77,13 @@ jobs:
     integration-tests:
         name: Integration Tests
         runs-on: ubuntu-latest
+        needs: [code-quality-and-tests]
+        if: |
+            github.ref == 'refs/heads/main' ||
+            (startsWith(github.ref, 'refs/pull/') && (
+              github.base_ref == 'main' ||
+              github.base_ref == 'next'
+            ))
         defaults:
             run:
                 working-directory: '.'
@@ -109,8 +116,7 @@ jobs:
     build-and-package:
         name: Build & Package Artifacts
         runs-on: ubuntu-latest
-        needs: [code-quality-and-tests, integration-tests]
-
+        needs: [code-quality-and-tests]
         if: |
             github.ref == 'refs/heads/main' ||
             (startsWith(github.ref, 'refs/pull/') && (
