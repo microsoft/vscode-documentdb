@@ -11,6 +11,7 @@ import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClien
 import { type MongoVCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
+import { type TreeElement } from './tree/TreeElement';
 import { type AccountsItem } from './tree/workspace-view/documentdb/AccountsItem';
 import { type ClustersWorkspaceBranchDataProvider } from './tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 
@@ -45,6 +46,7 @@ export namespace ext {
      * once the itnernal API solidifies.
      */
     export let connectionsBranchDataProvider: ConnectionsBranchDataProvider;
+    export let connectionsTreeView: vscode.TreeView<TreeElement>;
 
     export let discoveryBranchDataProvider: DiscoveryBranchDataProvider;
 
