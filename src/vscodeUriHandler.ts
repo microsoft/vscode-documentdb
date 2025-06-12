@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
+import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
 import { StorageNames, StorageService, type StorageItem } from './services/storageService';
@@ -103,8 +104,10 @@ async function handleConnectionStringRequest(
     const existingConnections = await getExistingConnections(isEmulator);
     const existingDuplicateConnection = findDuplicateConnection(existingConnections, parsedCS, joinedHosts);
 
+    let storageId: string;
+
     if (!existingDuplicateConnection) {
-        const storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
+        storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
 
         let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
         // If a connection with the same label exists, append a number to the label
@@ -131,17 +134,17 @@ async function handleConnectionStringRequest(
         await revealInConnectionsView(context, storageId, isEmulator, params.database, params.collection);
     } else {
         // the connection already exists, let's just reveal it in the Connections View
-        const storageId = existingDuplicateConnection.id;
+        storageId = existingDuplicateConnection.id;
         await revealInConnectionsView(context, storageId, isEmulator, params.database, params.collection);
     }
 
-    // now we have the storageId of an existing or newly created connection
-    // and wa want to reveal it in the Connections View
+    // At this point, we have either created a new connection or found an existing one.
+    // In case the database and collection parameters are provided,
+    // we can open the Collection View.
 
-    // if (params.database && params.container) {
-    //     // Open appropriate editor based on API type
-    //     await openAppropriateEditorForConnection(context, parsedConnection, params.database, params.container);
-    // }
+    if (params.database && params.collection) {
+        await openDedicatedView(context, storageId, isEmulator, params.database, params.collection);
+    }
 }
 
 // #endregion
@@ -229,25 +232,22 @@ function generateUniqueLabel(existingLabel: string): string {
 // #region View Operations
 
 /**
- * Reveals an element in the Connections View.
+ * Builds a tree path for the Connections View based on the provided parameters.
+ * This code builds a tree path based on the structure of the Connections View.
+ * Any change to the Connections View structure will require changes here.
  *
- * @param context - The action context for telemetry
- * @param storageId - The ID of the connection to reveal
+ * @param storageId - The ID of the connection
  * @param isEmulator - Whether the connection is to a local emulator
- * @param database - Optional database name to reveal
- * @param collection - Optional collection name to reveal
+ * @param database - Optional database name to include in the path
+ * @param collection - Optional collection name to include in the path
+ * @returns The constructed tree path string
  */
-async function revealInConnectionsView(
-    context: IActionContext,
+function buildConnectionsViewTreePath(
     storageId: string,
     isEmulator: boolean,
     database?: string,
     collection?: string,
-): Promise<void> {
-    /**
-     * This code builds a tree path based on the structure of the Connections View.
-     * Any change to the Connections View structure will require changes here.
-     */
+): string {
     let treePath = `${Views.ConnectionsView}`;
 
     // Add 'Local Emulators' node to the path, if needed
@@ -267,6 +267,27 @@ async function revealInConnectionsView(
             treePath += `/${collection}`;
         }
     }
+
+    return treePath;
+}
+
+/**
+ * Reveals an element in the Connections View.
+ *
+ * @param context - The action context for telemetry
+ * @param storageId - The ID of the connection to reveal
+ * @param isEmulator - Whether the connection is to a local emulator
+ * @param database - Optional database name to reveal
+ * @param collection - Optional collection name to reveal
+ */
+async function revealInConnectionsView(
+    context: IActionContext,
+    storageId: string,
+    isEmulator: boolean,
+    database?: string,
+    collection?: string,
+): Promise<void> {
+    const treePath = buildConnectionsViewTreePath(storageId, isEmulator, database, collection);
 
     await revealConnectionsViewElement(context, treePath, {
         select: true,
@@ -379,28 +400,21 @@ function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: Conne
  * @throws Error if container name is not provided, or if database name is not provided for Core API connections.
  * @returns A promise that resolves when the editor is opened.
  */
-// async function openAppropriateEditorForConnection(
-//     context: IActionContext,
-//     parsedConnection: { api: API.MongoDB | API.MongoClusters; connectionString: ConnectionString },
-//     database: string | undefined,
-//     container: string | undefined,
-// ): Promise<void> {
-//     if (!container) {
-//         throw new Error(l10n.t("Can't open the Query Editor, Container name is required"));
-//     }
+async function openDedicatedView(
+    context: IActionContext,
+    storageId: string,
+    isEmulator: boolean,
+    database?: string,
+    collection?: string,
+): Promise<void> {
+    const clusterId = buildConnectionsViewTreePath(storageId, isEmulator);
 
-//     {
-//         // Open MongoDB editor
-//         const accountId = generateDocumentDBStorageId(parsedConnection.connectionString.toString()); // FYI: working with the prasedConnection string for to guarantee a consistent accountId in this file.
-//         const expectedClusterId = `${WorkspaceResourceType.MongoClusters}/${accountId}`;
-
-//         return openCollectionViewInternal(context, {
-//             clusterId: expectedClusterId,
-//             databaseName: nonNullValue(database),
-//             collectionName: nonNullValue(container),
-//         });
-//     }
-// }
+    return openCollectionViewInternal(context, {
+        clusterId: clusterId,
+        databaseName: nonNullValue(database, 'database'),
+        collectionName: nonNullValue(collection, 'collection'),
+    });
+}
 
 /**
  * Opens the appropriate editor for a Cosmos DB resource in Azure.
