@@ -14,7 +14,7 @@ export async function revealConnectionsViewElement(
     options?: VSCodeRevealOptions,
 ): Promise<void> {
     try {
-        const item: TreeElement | undefined = await ext.connectionsBranchDataProvider.findNodeById(resourceId);
+        const item: TreeElement | undefined = await ext.connectionsBranchDataProvider.findNodeById(resourceId, true);
         if (!item) {
             throw new Error(`Element with ID "${resourceId}" not found in the Connections view.`);
         }
