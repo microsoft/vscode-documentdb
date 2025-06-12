@@ -410,7 +410,6 @@
   "Unable to connect to the local database instance. Make sure it is started correctly. See {link} for tips.": "Unable to connect to the local database instance. Make sure it is started correctly. See {link} for tips.",
   "Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.": "Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.",
   "Unable to parse syntax near line {line}, col {column}: {message}": "Unable to parse syntax near line {line}, col {column}: {message}",
-  "Unable to parse the connection string. Please ensure it is valid and contains hosts.": "Unable to parse the connection string. Please ensure it is valid and contains hosts.",
   "Unable to retrieve connection string for the selected cluster.": "Unable to retrieve connection string for the selected cluster.",
   "Unexpected status code: {0}": "Unexpected status code: {0}",
   "Unknown error": "Unknown error",
