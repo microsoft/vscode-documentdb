@@ -23,8 +23,8 @@ interface UriParams {
     connectionString?: string;
     /** The name of the database in the DocumentDB account */
     database?: string;
-    /** The name of the container/collection within the database */
-    container?: string;
+    /** The name of the collection within the database */
+    collection?: string;
 }
 
 // #endregion
@@ -128,11 +128,11 @@ async function handleConnectionStringRequest(
         );
 
         ext.connectionsBranchDataProvider.refresh();
-        await revealInConnectionsView(context, storageId, isEmulator, params.database, params.container);
+        await revealInConnectionsView(context, storageId, isEmulator, params.database, params.collection);
     } else {
         // the connection already exists, let's just reveal it in the Connections View
         const storageId = existingDuplicateConnection.id;
-        await revealInConnectionsView(context, storageId, isEmulator, params.database, params.container);
+        await revealInConnectionsView(context, storageId, isEmulator, params.database, params.collection);
     }
 
     // now we have the storageId of an existing or newly created connection
@@ -309,7 +309,7 @@ function extractParams(query: string): UriParams {
 
     params.connectionString = safeDoubleDecodeURIComponent(queryParams.get('connectionString'), 'connectionString');
     params.database = safeDoubleDecodeURIComponent(queryParams.get('database'), 'database');
-    params.container = safeDoubleDecodeURIComponent(queryParams.get('container'), 'container');
+    params.collection = safeDoubleDecodeURIComponent(queryParams.get('collection'), 'collection');
 
     return params;
 }
@@ -332,9 +332,9 @@ function extractAndValidateParams(context: IActionContext, queryFragment: string
         throw new Error(l10n.t('The connection string is required.'));
     }
 
-    context.telemetry.properties.uriType = 'connectionString';
+    context.telemetry.properties.hasConnectionString = params.connectionString ? 'true' : 'false';
     context.telemetry.properties.hasDatabase = params.database ? 'true' : 'false';
-    context.telemetry.properties.hasContainer = params.container ? 'true' : 'false';
+    context.telemetry.properties.hasCollection = params.collection ? 'true' : 'false';
 
     return params;
 }
@@ -347,7 +347,7 @@ function maskParamsInTelemetry(context: IActionContext, params: UriParams): void
         switch (key) {
             case 'connectionString':
             case 'database':
-            case 'container':
+            case 'collection':
                 if (value !== undefined && typeof value === 'string') {
                     context.valuesToMask.push(value);
                 }
@@ -368,105 +368,6 @@ function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: Conne
 // #endregion
 
 // #region Commented out code for reference (to be implemented later)
-
-// /**
-//  * Creates and attaches a database connection to the workspace.
-//  *
-//  * @param accountId - The ID of the account to attach
-//  * @param accountName - The display name of the account
-//  * @param api - The API type (Core, MongoDB, etc.) of the account
-//  * @param connectionString - The connection string used to connect to the account
-//  * @param isEmulator - Whether this connection is to a local emulator
-//  * @param emulatorPort - Optional port number for the emulator connection
-//  * @returns A Promise that resolves to the ID of the created/updated connection
-//  *
-//  * @remarks
-//  * This function will:
-//  * 1. Focus the Azure Workspace view
-//  * 2. Create the connection with the specified parameters
-//  * 3. If a connection with the same ID already exists, prompt the user to update it
-//  */
-// async function createAttachedForConnection(
-//     accountId: string,
-//     accountName: string,
-//     api: API,
-//     connectionString: string,
-//     isEmulator: boolean,
-//     emulatorPort?: string,
-//     disableEmulatorSecurity?: boolean,
-// ): Promise<string> {
-//     const rootId = `${WorkspaceResourceType.MongoClusters}`;
-//     const parentId = `${rootId}${isEmulator ? '/localEmulators' : ''}`;
-//     const name = !isEmulator ? accountName : getEmulatorItemLabelForApi(api, emulatorPort);
-//     const id = !isEmulator ? accountId : getEmulatorItemUniqueId(connectionString);
-//     const fulId = `${parentId}/${id}`;
-//     // Open the Azure Workspace view
-//     await vscode.commands.executeCommand('azureWorkspace.focus');
-//     if (rootId !== parentId) {
-//         // TODO: this seems to be a bug in revealWorkspaceResource
-//         // If the parentId is not the root it will fail to drill down into the hierarchy,
-//         // we need to reveal the root first
-//         await ext.rgApiV2.resources.revealWorkspaceResource(rootId, {
-//             select: true,
-//             focus: true,
-//             expand: true,
-//         });
-//     }
-//     // Reveal the parent node to show progress in the tree
-//     await ext.rgApiV2.resources.revealWorkspaceResource(parentId, {
-//         select: true,
-//         focus: true,
-//         expand: true,
-//     });
-//     await ext.state.showCreatingChild(parentId, l10n.t('Creating "{nodeName}"…', { nodeName: accountId }), async () => {
-//         const storageItem: StorageItem = {
-//             id,
-//             name,
-//             properties: { isEmulator, api, ...(disableEmulatorSecurity && { disableEmulatorSecurity }) },
-//             secrets: [connectionString],
-//         };
-
-//         try {
-//             await StorageService.get(StorageNames.Workspace).push(
-//                 WorkspaceResourceType.MongoClusters,
-//                 storageItem,
-//                 false,
-//             );
-//         } catch (error) {
-//             if (error instanceof Error && error.message.includes('already exists')) {
-//                 let confirmed: boolean = false;
-//                 try {
-//                     confirmed = await getConfirmationAsInSettings(
-//                         l10n.t('Update existing {accountType} connection?', {
-//                             accountType: getExperienceFromApi(api).longName,
-//                         }),
-//                         l10n.t('The connection "{connectionName}" already exists. Do you want to update it?', {
-//                             connectionName: name,
-//                         }),
-//                         'update',
-//                     );
-//                 } catch (error) {
-//                     if (error instanceof UserCancelledError) {
-//                         confirmed = false;
-//                     } else {
-//                         throw error;
-//                     }
-//                 }
-
-//                 if (confirmed) {
-//                     await StorageService.get(StorageNames.Workspace).push(
-//                         WorkspaceResourceType.AttachedAccounts,
-//                         storageItem,
-//                         true,
-//                     );
-//                 }
-//             } else {
-//                 throw error;
-//             }
-//         }
-//     });
-//     return fulId;
-// }
 
 /**
  * Opens an appropriate editor for a Cosmos DB connection.
