@@ -55,8 +55,9 @@ export namespace ext {
         export const shellArgs = 'documentDB.mongoShell.args';
         export const shellTimeout = 'documentDB.mongoShell.timeout';
         export const batchSize = 'documentDB.mongoShell.batchSize';
-        export const confirmationStyle = 'documentDB.userInterface.confirmationStyle';
+        export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
+        export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
         export const localPort = 'documentDB.local.port';
 
         export namespace vsCode {
