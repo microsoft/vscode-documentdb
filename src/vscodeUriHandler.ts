@@ -48,17 +48,8 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
             // Extract and validate parameters
             const params = extractAndValidateParams(context, uri.query);
 
-            // Process the URI
-            await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: l10n.t('Importing new DocumentDB Connection…'),
-                    cancellable: false,
-                },
-                async () => {
-                    await handleConnectionStringRequest(context, params);
-                },
-            );
+            // Process the URI with user confirmation
+            await handleConnectionStringRequest(context, params);
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error);
             throw new Error(l10n.t('Failed to process URI: {0}', errMsg));
@@ -119,6 +110,23 @@ async function handleConnectionStringRequest(
     let storageId: string;
 
     if (!existingDuplicateConnection) {
+        // First confirmation: Ask user about adding new connection
+        const connectionConfirmation = await vscode.window.showInformationMessage(
+            l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.'),
+            {
+                modal: true,
+                detail: l10n.t(
+                    'A new connection will be added to your Connections View.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the exension settings.',
+                ),
+            },
+            l10n.t('Yes, continue'),
+        );
+
+        if (connectionConfirmation !== l10n.t('Yes, continue')) {
+            context.telemetry.properties.userCancelledAtConnectionStep = 'true';
+            return; // User cancelled
+        }
+
         storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
 
         let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
@@ -143,19 +151,57 @@ async function handleConnectionStringRequest(
         );
 
         ext.connectionsBranchDataProvider.refresh();
-        await revealInConnectionsView(context, storageId, isEmulator, selectedDatabase, params.collection);
     } else {
         // the connection already exists, let's just reveal it in the Connections View
         storageId = existingDuplicateConnection.id;
-        await revealInConnectionsView(context, storageId, isEmulator, selectedDatabase, params.collection);
     }
 
-    // At this point, we have either created a new connection or found an existing one.
-    // In case the database and collection parameters are provided,
-    // we can open the Collection View.
+    // Second confirmation: Ask user about revealing the connection
+    const revealConfirmation = await vscode.window.showInformationMessage(
+        existingDuplicateConnection
+            ? l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.')
+            : l10n.t('The connection will now be opened in the Connections View.'),
+        {
+            modal: true,
+            detail: l10n.t(
+                'You might be asked for credentials to establish the connection.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the extension settings.',
+            ),
+        },
+        l10n.t('Yes, open connection'),
+    );
 
+    if (revealConfirmation !== l10n.t('Yes, open connection')) {
+        context.telemetry.properties.userCancelledAtRevealStep = 'true';
+        return; // User cancelled
+    }
+
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: l10n.t('Opening DocumentDB connection…'),
+            cancellable: false,
+        },
+        async () => {
+            await revealInConnectionsView(context, storageId, isEmulator, selectedDatabase, params.collection);
+        },
+    );
+
+    // Third confirmation: Ask user about opening collection view (if applicable)
     if (selectedDatabase && params.collection) {
-        await openDedicatedView(context, storageId, isEmulator, selectedDatabase, params.collection);
+        const collectionViewConfirmation = await vscode.window.showInformationMessage(
+            l10n.t('Would you like to open the Collection View?'),
+            {
+                modal: true,
+                detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+            },
+            l10n.t('Yes, open Collection View'),
+        );
+
+        if (collectionViewConfirmation === l10n.t('Yes, open Collection View')) {
+            await openDedicatedView(context, storageId, isEmulator, selectedDatabase, params.collection);
+        } else {
+            context.telemetry.properties.userCancelledAtCollectionViewStep = 'true';
+        }
     }
 }
 
