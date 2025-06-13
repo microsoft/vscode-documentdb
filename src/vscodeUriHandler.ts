@@ -87,6 +87,18 @@ async function handleConnectionStringRequest(
     // Parse the connection string
     const parsedCS = new ConnectionString(params.connectionString!);
 
+    // Extract database name from connection string pathname if params.database is not provided
+    let selectedDatabase = params.database;
+    if (!selectedDatabase && parsedCS.pathname) {
+        // Split on '/' and take the first non-empty part
+        const pathParts = parsedCS.pathname.split('/');
+        const firstPart = pathParts.find((part) => part.trim() !== '');
+        if (firstPart) {
+            selectedDatabase = firstPart;
+            context.telemetry.properties.usedDbFromConnectionString = 'true';
+        }
+    }
+
     // Mask sensitive values in telemetry
     maskSensitiveValuesInTelemetry(context, parsedCS);
 
@@ -131,19 +143,19 @@ async function handleConnectionStringRequest(
         );
 
         ext.connectionsBranchDataProvider.refresh();
-        await revealInConnectionsView(context, storageId, isEmulator, params.database, params.collection);
+        await revealInConnectionsView(context, storageId, isEmulator, selectedDatabase, params.collection);
     } else {
         // the connection already exists, let's just reveal it in the Connections View
         storageId = existingDuplicateConnection.id;
-        await revealInConnectionsView(context, storageId, isEmulator, params.database, params.collection);
+        await revealInConnectionsView(context, storageId, isEmulator, selectedDatabase, params.collection);
     }
 
     // At this point, we have either created a new connection or found an existing one.
     // In case the database and collection parameters are provided,
     // we can open the Collection View.
 
-    if (params.database && params.collection) {
-        await openDedicatedView(context, storageId, isEmulator, params.database, params.collection);
+    if (selectedDatabase && params.collection) {
+        await openDedicatedView(context, storageId, isEmulator, selectedDatabase, params.collection);
     }
 }
 
@@ -353,9 +365,9 @@ function extractAndValidateParams(context: IActionContext, queryFragment: string
         throw new Error(l10n.t('The connection string is required.'));
     }
 
-    context.telemetry.properties.hasConnectionString = params.connectionString ? 'true' : 'false';
-    context.telemetry.properties.hasDatabase = params.database ? 'true' : 'false';
-    context.telemetry.properties.hasCollection = params.collection ? 'true' : 'false';
+    context.telemetry.properties.hasParamConnectionString = params.connectionString ? 'true' : undefined;
+    context.telemetry.properties.hasParamDatabase = params.database ? 'true' : undefined;
+    context.telemetry.properties.hasParamCollection = params.collection ? 'true' : undefined;
 
     return params;
 }
@@ -388,8 +400,6 @@ function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: Conne
 
 // #endregion
 
-// #region Commented out code for reference (to be implemented later)
-
 /**
  * Opens an appropriate editor for a Cosmos DB connection.
  *
@@ -415,29 +425,3 @@ async function openDedicatedView(
         collectionName: nonNullValue(collection, 'collection'),
     });
 }
-
-/**
- * Opens the appropriate editor for a Cosmos DB resource in Azure.
- *
- * @param context - The action context for the operation.
- * @param resourceId - The Azure resource ID of the Cosmos DB account.
- * @param database - The name of the database to open. Required for query editor.
- * @param container - The name of the container to open. Required for query editor.
- * @throws Error if database or container names are not provided.
- * @throws Error if the specified database and container combination cannot be found.
- * @throws Error if the experience type for the resource cannot be determined.
- * @returns Promise that resolves when the appropriate editor has been opened.
- */
-// async function openAppropriateEditorForAzure(resource: TreeElement): Promise<void> {
-//     if (
-//         isTreeElementWithExperience(resource) &&
-//         isTreeElementWithContextValue(resource) &&
-//         (resource.contextValue.includes('treeItem.collection') || resource.contextValue.includes('treeItem.container'))
-//     ) {
-//         await vscode.commands.executeCommand('vscode-documentdb.command.containerView.open', resource);
-//     } else {
-//         throw new Error(l10n.t('Unable to determine the experience for the resource'));
-//     }
-// }
-
-// #endregion
