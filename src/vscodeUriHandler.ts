@@ -114,7 +114,10 @@ async function handleConnectionStringRequest(
 
     let storageId: string;
 
-    if (!existingDuplicateConnection) {
+    if (existingDuplicateConnection) {
+        // the connection already exists, let's just reveal it later in the Connections View
+        storageId = existingDuplicateConnection.id;
+    } else {
         // First confirmation: Ask user about adding new connection (if enabled)
         if (showUrlHandlingConfirmations) {
             const connectionConfirmation = await vscode.window.showInformationMessage(
@@ -136,6 +139,7 @@ async function handleConnectionStringRequest(
 
         // Show the Connections View
         await vscode.commands.executeCommand(`connectionsView.focus`);
+        await waitForTreeViewReady();
 
         storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
 
@@ -163,10 +167,7 @@ async function handleConnectionStringRequest(
         ext.connectionsBranchDataProvider.refresh();
 
         // add a delay to allow the Connections View to refresh
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-    } else {
-        // the connection already exists, let's just reveal it later in the Connections View
-        storageId = existingDuplicateConnection.id;
+        await waitForTreeViewReady();
     }
 
     // Second confirmation: Ask user about revealing the connection (if enabled)
@@ -192,9 +193,12 @@ async function handleConnectionStringRequest(
 
     if (existingDuplicateConnection) {
         // Show the Connections View
-        // this is done only for the existing connection, as the new connection
+        //
+        // Note:
+        // This is done only for the existing connection, as the new connection
         // has already been shown in the previous step
         await vscode.commands.executeCommand(`connectionsView.focus`);
+        await waitForTreeViewReady();
     }
 
     // For future code maintainers:
@@ -550,4 +554,31 @@ async function openDedicatedView(
         databaseName: nonNullValue(database, 'database'),
         collectionName: nonNullValue(collection, 'collection'),
     });
+}
+
+/**
+ * Waits for the connections tree view to be accessible with exponential backoff
+ */
+async function waitForTreeViewReady(maxAttempts: number = 5): Promise<void> {
+    let attempt = 0;
+    let delay = 500; // Start with 500ms
+
+    while (attempt < maxAttempts) {
+        try {
+            // Try to access the tree view - if this succeeds, we're ready
+            const rootElements = await ext.connectionsBranchDataProvider.getChildren();
+            if (rootElements !== undefined) {
+                return; // Tree view is ready
+            }
+        } catch {
+            // Tree view not ready yet, continue polling
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        attempt++;
+        delay = Math.min(delay * 1.5, 2000); // Cap at 2 seconds
+    }
+
+    // let's just move forward, maybe it's ready, maybe something has failed
+    // the next step will handle the case when the tree view is not ready
 }
