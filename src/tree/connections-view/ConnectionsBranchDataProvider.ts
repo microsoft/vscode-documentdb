@@ -100,7 +100,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
         this.errorNodeCache.delete(nodeId);
     }
 
-    async getChildren(element: TreeElement): Promise<TreeElement[] | null | undefined> {
+    async getChildren(element?: TreeElement): Promise<TreeElement[] | null | undefined> {
         return callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.ConnectionsView;
 
