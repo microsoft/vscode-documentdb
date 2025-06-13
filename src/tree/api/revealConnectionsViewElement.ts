@@ -19,9 +19,7 @@ export async function revealConnectionsViewElement(
             throw new Error(`Element with ID "${resourceId}" not found in the Connections view.`);
         }
 
-        if (item) {
-            await ext.connectionsTreeView.reveal(item, options ?? { expand: false, focus: true, select: true });
-        }
+        await ext.connectionsTreeView.reveal(item, options ?? { expand: false, focus: true, select: true });
     } catch (error) {
         context.telemetry.properties.revealError = maskUserInfo(parseError(error).message, []);
     }
