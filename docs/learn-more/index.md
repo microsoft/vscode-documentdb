@@ -1,3 +1,9 @@
+<!-- Manual Section Badge or Breadcrumb -->
+
+> **Manual** &mdash; [Back to Home](../index.md)
+
+---
+
 # Learn More
 
 This section contains additional documentation for features and concepts in DocumentDB for VS Code. These documents are linked from within the DocumentDB for VS Code Extension, but we encourage you to explore this documentation directly for more details and context.
