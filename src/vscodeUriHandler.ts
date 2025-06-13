@@ -139,7 +139,7 @@ async function handleConnectionStringRequest(
 
         // Show the Connections View
         await vscode.commands.executeCommand(`connectionsView.focus`);
-        await waitForTreeViewReady();
+        await waitForTreeViewReady(context);
 
         storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
 
@@ -167,7 +167,7 @@ async function handleConnectionStringRequest(
         ext.connectionsBranchDataProvider.refresh();
 
         // add a delay to allow the Connections View to refresh
-        await waitForTreeViewReady();
+        await waitForTreeViewReady(context);
     }
 
     // Second confirmation: Ask user about revealing the connection (if enabled)
@@ -198,7 +198,7 @@ async function handleConnectionStringRequest(
         // This is done only for the existing connection, as the new connection
         // has already been shown in the previous step
         await vscode.commands.executeCommand(`connectionsView.focus`);
-        await waitForTreeViewReady();
+        await waitForTreeViewReady(context);
     }
 
     // For future code maintainers:
@@ -559,7 +559,8 @@ async function openDedicatedView(
 /**
  * Waits for the connections tree view to be accessible with exponential backoff
  */
-async function waitForTreeViewReady(maxAttempts: number = 5): Promise<void> {
+async function waitForTreeViewReady(context: IActionContext, maxAttempts: number = 5): Promise<void> {
+    const startTime = Date.now();
     let attempt = 0;
     let delay = 500; // Start with 500ms
 
@@ -568,7 +569,12 @@ async function waitForTreeViewReady(maxAttempts: number = 5): Promise<void> {
             // Try to access the tree view - if this succeeds, we're ready
             const rootElements = await ext.connectionsBranchDataProvider.getChildren();
             if (rootElements !== undefined) {
-                return; // Tree view is ready
+                // Tree view is ready - record successful activation
+                const totalTime = Date.now() - startTime;
+                context.telemetry.measurements.connectionViewActivationTimeMs = totalTime;
+                context.telemetry.measurements.connectionViewActivationAttempts = attempt + 1;
+                context.telemetry.properties.connectionViewActivationResult = 'success';
+                return;
             }
         } catch {
             // Tree view not ready yet, continue polling
@@ -579,6 +585,12 @@ async function waitForTreeViewReady(maxAttempts: number = 5): Promise<void> {
         delay = Math.min(delay * 1.5, 2000); // Cap at 2 seconds
     }
 
-    // let's just move forward, maybe it's ready, maybe something has failed
-    // the next step will handle the case when the tree view is not ready
+    // Exhausted all attempts - record timeout and continue optimistically
+    const totalTime = Date.now() - startTime;
+    context.telemetry.measurements.connectionViewActivationTimeMs = totalTime;
+    context.telemetry.measurements.connectionViewActivationAttempts = maxAttempts;
+    context.telemetry.properties.connectionViewActivationResult = 'timeout';
+
+    // Let's just move forward, maybe it's ready, maybe something has failed
+    // The next step will handle the case when the tree view is not ready
 }
