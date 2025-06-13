@@ -197,6 +197,9 @@ async function handleConnectionStringRequest(
         await vscode.commands.executeCommand(`connectionsView.focus`);
     }
 
+    // For future code maintainers:
+    // This is a little trick: the first withProgress shows the notification with a user-friendly message,
+    // while the second withProgress is used to show the 'loading animation' in the Connections View.
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -204,7 +207,15 @@ async function handleConnectionStringRequest(
             cancellable: false,
         },
         async () => {
-            await revealInConnectionsView(context, storageId, isEmulator, selectedDatabase, params.collection);
+            await vscode.window.withProgress(
+                {
+                    location: { viewId: 'connectionsView' },
+                    cancellable: false,
+                },
+                async () => {
+                    await revealInConnectionsView(context, storageId, isEmulator, selectedDatabase, params.collection);
+                },
+            );
         },
     );
 
