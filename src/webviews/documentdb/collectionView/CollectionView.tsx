@@ -10,6 +10,7 @@ import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
+import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
 import './collectionView.scss';
 import {
     CollectionViewContext,
@@ -67,6 +68,8 @@ export const CollectionView = (): JSX.Element => {
 
     // that's our current global context of the view
     const [currentContext, setCurrentContext] = useState<CollectionViewContextType>(DefaultCollectionViewContext);
+
+    useSelectiveContextMenuPrevention();
 
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view

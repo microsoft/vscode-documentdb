@@ -2,25 +2,54 @@
 
 Thank you for your interest in contributing to the **DocumentDB for VS Code** extension. This guide helps you set up your development environment and configure Visual Studio Code to effectively contribute to the extension.
 
-The document consists of two sections:
+The document consists of three sections:
 
-1. [Machine Setup](#1-machine-setup)
-2. [VS Code Configuration](#2-vs-code-configuration)
+1. [Branching Strategy](#1-branching-strategy)
+2. [Machine Setup](#2-machine-setup)
+3. [VS Code Configuration](#3-vs-code-configuration)
 
-## 1. Machine Setup
+## 1. Branching Strategy
+
+The repository follows a structured branching strategy to ensure smooth development and release processes:
+
+- **`main`** — Production-ready code. All releases are tagged here.
+- **`next`** — Staging for the upcoming release. Completed features are merged here.
+- **`dev/<user>/<feature>`** — Individual feature branches for personal development.
+- **`feature/<big-feature>`** — Shared branches for large features requiring collaboration.
+
+### Pull Requests and GitHub Actions
+
+GitHub Actions are configured to perform automated checks on the repository. The intensity of these checks depends on the target branch:
+
+1. **Push to `next`, `dev/*`, or `feature/*` branches**:
+
+   - Runs basic code quality checks and tests.
+   - Skips resource-intensive jobs like integration tests and packaging to focus on code validation.
+
+2. **Pull Requests to `main` or `next`**:
+
+   - Executes all jobs, including code checks, tests, and packaging.
+   - Ensures complete validation before merging, including artifact generation.
+
+3. **Push to `main`**:
+   - Runs the full workflow for release validation and artifact generation.
+
+This setup ensures that contributions are thoroughly validated while optimizing resource usage during development.
+
+## 2. Machine Setup
 
 Follow these instructions to configure your machine for JavaScript/TypeScript development using Windows Subsystem for Linux (WSL2) and Visual Studio Code.
 
 > This setup assumes you're using WSL2 on Windows. However, you can use a Linux or Windows setup exclusively if preferred.
 
-### 1.1. Install Ubuntu 22.\* on Windows
+### 2.1. Install Ubuntu 22.\* on Windows
 
 - Install **Ubuntu 22.\*** from the Microsoft Store and launch it to configure your Linux user account.
 
   - Your development environment and tools will reside within `WSL2`.
   - VS Code integrates seamlessly with `WSL2` instances, enabling smooth development from your Windows machine.
 
-### 1.2. Update Ubuntu Packages
+### 2.2. Update Ubuntu Packages
 
 Open your Ubuntu terminal and run:
 
@@ -29,7 +58,7 @@ sudo apt update
 sudo apt upgrade
 ```
 
-### 1.3. Install Node.js with FNM (Fast Node Manager)
+### 2.3. Install Node.js with FNM (Fast Node Manager)
 
 - `FNM` helps with installing and switching Node.js versions easily. This is useful for testing compatibility across different Node.js versions.
 
@@ -44,7 +73,7 @@ fnm default 22
 node --version
 ```
 
-### 1.4. Install TypeScript Globally (optional)
+### 2.4. Install TypeScript Globally (optional)
 
 You can install TypeScript globally:
 
@@ -52,13 +81,13 @@ You can install TypeScript globally:
 npm install -g typescript
 ```
 
-## 2. VS Code Configuration
+## 3. VS Code Configuration
 
 This section explains how to clone the **DocumentDB for VS Code** repository and set up Visual Studio Code for development and debugging.
 
-### 2.1. Steps to Clone and Set Up Repository
+### 3.1. Steps to Clone and Set Up Repository
 
-1. Ensure you have completed the [Machine Setup](#1-machine-setup) steps.
+1. Ensure you have completed the [Machine Setup](#2-machine-setup) steps.
 
 2. Fork or directly clone the official repository:
 
@@ -79,7 +108,7 @@ npm install
 npm run build
 ```
 
-### 2.2. Launching and Debugging in VS Code
+### 3.2. Launching and Debugging in VS Code
 
 To effectively isolate development environments, it is beneficial to create and use a separate VS Code profile.
 

@@ -37,3 +37,22 @@ DocumentDB for VS Code focuses on providing developer productivity features with
 
 We believe in building in the open. All development, roadmap planning, and feature discussions happen publicly on GitHub.
 Your feedback, contributions, and ideas shape the future of the extension.
+
+# Table of Contents
+
+## User Manual
+
+The User Manual provides guidance on using DocumentDB for VS Code:
+
+- [How to Construct a URL That Opens a Connection in the Extension](./manual/how-to-construct-url.md)
+
+## Learn More
+
+This section contains detailed documentation for specific features and concepts that are directly accessible from within the DocumentDB for VS Code extension. These documents provide additional context and examples for features you encounter while using the extension:
+
+- [Service Discovery](./learn-more/service-discovery.md)
+  - [Service Discovery: Azure CosmosDB for MongoDB (vCore)](./learn-more/service-discovery-azure-cosmosdb-for-mongodb-vcore.md)
+  - [Service Discovery: Azure VMs (DocumentDB)](./learn-more/service-discovery-azure-vms.md)
+- [Local Connection](./learn-more/local-connection.md)
+  - [Local Connection: Azure CosmosDB for MongoDB (RU) Emulator](./learn-more/local-connection-mongodb-ru.md)
+  - [Local Connection: DocumentDB Local](./learn-more/local-connection-documentdb-local.md)

@@ -3,65 +3,53 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { parseAzureResourceId, type ParsedAzureResourceId } from '@microsoft/vscode-azext-azureutils';
-import {
-    callWithTelemetryAndErrorHandling,
-    nonNullValue,
-    UserCancelledError,
-    type IActionContext,
-} from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
-import { API, getExperienceFromApi } from './DocumentDBExperiences';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
+import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
 import { StorageNames, StorageService, type StorageItem } from './services/storageService';
-import { type TreeElement } from './tree/TreeElement';
-import { isTreeElementWithContextValue } from './tree/TreeElementWithContextValue';
-import { isTreeElementWithExperience } from './tree/TreeElementWithExperience';
-import { WorkspaceResourceType } from './tree/workspace-api/SharedWorkspaceResourceProvider';
-import { getConfirmationAsInSettings } from './utils/dialogs/getConfirmation';
-import { getEmulatorItemLabelForApi, getEmulatorItemUniqueId } from './utils/emulatorUtils';
+import { revealConnectionsViewElement } from './tree/api/revealConnectionsViewElement';
 import { generateDocumentDBStorageId } from './utils/storageUtils';
 
-const supportedProviders = ['Microsoft.DocumentDB/databaseAccounts', 'Microsoft.DocumentDB/mongoClusters'];
+// #region Type Definitions
 
 /**
- * Global URI handler for processing external URIs related to Azure Databases.
- * This function handles URIs that contain either resource IDs or connection strings.
+ * Interface for URI parameters used for connecting to DocumentDB resources.
+ */
+interface UriParams {
+    /** The connection string to the DocumentDB/MongoDB account */
+    connectionString?: string;
+    /** The name of the database in the DocumentDB account */
+    database?: string;
+    /** The name of the collection within the database */
+    collection?: string;
+}
+
+// #endregion
+
+// #region Main Handler Functions
+
+/**
+ * Global URI handler for processing external URIs routed to this extension.
+ *
+ * This function handles URIs that contain a set of parameters:
+ * - the default is a connection string to a DocumentDB / MongoDB resource
+ * - other modes will be added in the future, these will be handled by our discoverability plugins
  *
  * @param uri - The VS Code URI to handle, typically from an external source
  * @returns {Promise<void>} A Promise that resolves when the URI has been handled
- * @throws {Error} Will throw an error if URI processing fails, wrapped with appropriate error message
- *
- * The handler shows a progress notification while:
- * 1. Extracting and validating parameters from the URI query
- * 2. Processing either resource ID based requests or connection string requests
- *
- * All operations are tracked with telemetry and error handling.
  */
 export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
-    await callWithTelemetryAndErrorHandling('handleExternalUri', async (context: IActionContext) => {
+    return callWithTelemetryAndErrorHandling('globalUriHandler', async (context: IActionContext) => {
         try {
             // Extract and validate parameters
             const params = extractAndValidateParams(context, uri.query);
 
-            // Process the URI
-            await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: l10n.t('Opening DocumentDB resource…'),
-                    cancellable: false,
-                },
-                async () => {
-                    if (params.resourceId) {
-                        await handleResourceIdRequest(context, params);
-                    } else {
-                        await handleConnectionStringRequest(context, params);
-                    }
-                },
-            );
+            // Process the URI with user confirmation
+            await handleConnectionStringRequest(context, params);
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error);
             throw new Error(l10n.t('Failed to process URI: {0}', errMsg));
@@ -70,373 +58,477 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
 }
 
 /**
- * Handles a request to process an Azure resource identified by a resource ID.
- *
- * This function verifies that the resource ID is valid and belongs to a supported provider,
- * then reveals the resource in the Azure explorer and opens the appropriate editor.
- *
- * @param context - The action context containing telemetry and other contextual information
- * @param params - Parameters extracted from the request containing resourceId and optional database/container info
- * @throws {Error} When resource ID is missing or when the provider is not supported
- * @returns {Promise<void>} A promise that resolves when the resource handling is complete
- */
-async function handleResourceIdRequest(
-    context: IActionContext,
-    params: ReturnType<typeof extractParams>,
-): Promise<void> {
-    if (!params.resourceId) {
-        throw new Error('Resource ID is required');
-    }
-
-    const resourceId = parseAzureResourceId(params.resourceId);
-    context.telemetry.properties.subscriptionId = resourceId.subscriptionId;
-    context.telemetry.properties.resourceId = new vscode.TelemetryTrustedValue(resourceId.rawId);
-    // Check if the provider is supported, even if revealing works for any resource,
-    // we don't want to handle resources unsupported by this extension
-    if (!supportedProviders.some((provider) => provider.toLowerCase() === resourceId.provider.toLowerCase())) {
-        throw new Error(
-            l10n.t(
-                'Unsupported resource provider: {0}. This extension only supports Cosmos DB resources.',
-                resourceId.provider,
-            ),
-        );
-    }
-    // reveal the account first, this will open the Azure Resource Groups view,
-    // select the resource in the tree and expand it, forcing it to load the children
-    const resource = await revealAzureResourceInExplorer(context, resourceId, params.database, params.container);
-    if (params.database && params.container) {
-        await openAppropriateEditorForAzure(resource);
-    }
-}
-
-/**
- * Handles connection string requests by connecting to Azure Cosmos DB resources.
+ * Handles connection string requests by connecting to DocumentDB resources.
  *
  * This function processes a connection string and optional parameters to either:
- * 1. Connect to an Azure Cosmos DB resource identified by subscription ID and resource group, or
- * 2. Create an attached account from the connection string in the workspace explorer
- *
- * After establishing the connection, it will reveal the resource in the appropriate explorer
- * and open the query editor if a container is specified.
+ * 1. Create a new connection from the connection string
+ * 2. Reveal an existing connection if one with the same parameters already exists
  *
  * @param context - The action context for telemetry and other VS Code operations
- * @param params - The parameters extracted from the request, including connection string,
- *                 subscription ID, resource group, database name, and container name
- * @throws {Error} when connection string is missing, account name can't be extracted,
- *        or container name is missing when trying to open the query editor
- * @returns {Promise<void>} A promise that resolves when the connection handling is complete
+ * @param params - The parameters extracted from the request
+ * @throws {Error} when connection string is invalid or missing
  */
 async function handleConnectionStringRequest(
     context: IActionContext,
     params: ReturnType<typeof extractParams>,
 ): Promise<void> {
-    if (!params.connectionString) {
-        throw new Error('Connection string is required');
+    // Validate connection string
+    validateConnectionString(params.connectionString);
+
+    // Parse the connection string
+    const parsedCS = new ConnectionString(params.connectionString!);
+
+    // Extract database name from connection string pathname if params.database is not provided
+    let selectedDatabase = params.database;
+    if (!selectedDatabase && parsedCS.pathname) {
+        // Split on '/' and take the first non-empty part
+        const pathParts = parsedCS.pathname.split('/');
+        const firstPart = pathParts.find((part) => part.trim() !== '');
+        if (firstPart) {
+            selectedDatabase = firstPart;
+            context.telemetry.properties.usedDbFromConnectionString = 'true';
+        }
     }
 
-    const parsedConnection = parseConnectionString(context, params.connectionString);
-    if (!parsedConnection) {
-        throw new Error(l10n.t('Unable to parse the parameters.'));
-    }
+    // Mask sensitive values in telemetry
+    maskSensitiveValuesInTelemetry(context, parsedCS);
 
-    context.telemetry.properties.experience = parsedConnection.api;
+    // Process the hosts from the connection string
+    const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
-    if (params.subscriptionId && params.resourceGroup) {
-        // If subscriptionId and resourceGroup are provided, we need to extract the account name from the connection string
-        context.telemetry.properties.subscriptionId = params.subscriptionId;
-        let accountName: string | undefined;
-        switch (parsedConnection.api) {
-            case API.MongoDB:
-                accountName = parsedConnection.connectionString.username;
-                break;
-            case API.MongoClusters:
-                accountName =
-                    parsedConnection.connectionString.hosts?.length > 0
-                        ? // The hostname is in the format of "accountname.mongocluster.cosmos.azure.com"
-                          // Extract the first subdomain component by splitting the hostname on dots
-                          parsedConnection.connectionString.hosts[0]?.split('.')[0]
-                        : undefined;
-                break;
-            default:
-                accountName = undefined;
-                break;
-        }
-        if (!accountName || accountName.length === 0) {
-            throw new Error(l10n.t('Unable to extract account name from connection string'));
-        }
-        const resourceId = createAzureResourceId(
-            parsedConnection.api,
-            params.subscriptionId,
-            params.resourceGroup,
-            accountName,
-        );
+    // Determine if this is an emulator connection
+    const isEmulator = isEmulatorConnection(parsedCS);
+    const disableEmulatorSecurity = parsedCS.searchParams.get('tlsAllowInvalidCertificates') === 'true';
 
-        if (!resourceId) {
-            throw new Error(l10n.t('Unable to create resource ID from connection string'));
-        }
+    // Create a label for the new connection
+    let newConnectionLabel = createConnectionLabel(parsedCS, joinedHosts);
 
-        context.telemetry.properties.resourceId = new vscode.TelemetryTrustedValue(resourceId.rawId);
-        const resource = await revealAzureResourceInExplorer(context, resourceId, params.database, params.container);
-        if (params.database && params.container) {
-            await openAppropriateEditorForAzure(resource);
-        }
+    // Check for existing connections with the same parameters
+    const existingConnections = await getExistingConnections(isEmulator);
+    const existingDuplicateConnection = findDuplicateConnection(existingConnections, parsedCS, joinedHosts);
+
+    // Check if URL handling confirmations are enabled
+    const showUrlHandlingConfirmations = vscode.workspace
+        .getConfiguration()
+        .get<boolean>(ext.settingsKeys.showUrlHandlingConfirmations, true);
+
+    let storageId: string;
+
+    if (existingDuplicateConnection) {
+        // the connection already exists, let's just reveal it later in the Connections View
+        storageId = existingDuplicateConnection.id;
     } else {
-        // Create storage item for the connection
-        // Handle MongoDB and MongoClusters
-        const accountId = generateDocumentDBStorageId(parsedConnection.connectionString.toString()); // FYI: working with the parsedConnection string to guarantee a consistent accountId in this file.
-
-        const isEmulator =
-            parsedConnection.connectionString.hosts?.length > 0 &&
-            parsedConnection.connectionString.hosts[0].includes('localhost');
-
-        const disableEmulatorSecurity =
-            parsedConnection.connectionString.searchParams.get('tlsAllowInvalidCertificates') === 'true';
-
-        const fullId = await createAttachedForConnection(
-            accountId,
-            parsedConnection.connectionString.username + '@' + parsedConnection.connectionString.hosts.join(','),
-            parsedConnection.api,
-            params.connectionString,
-            isEmulator,
-            parsedConnection.connectionString.port,
-            disableEmulatorSecurity,
-        );
-        ext.mongoClustersWorkspaceBranchDataProvider.refresh();
-        await revealAttachedInWorkspaceExplorer(fullId, params.database, params.container);
-
-        if (params.database && params.container) {
-            // Open appropriate editor based on API type
-            await openAppropriateEditorForConnection(context, parsedConnection, params.database, params.container);
-        }
-    }
-}
-
-/**
- * Generates an Azure resource ID for the specified Cosmos DB resource.
- *
- * @param api - The API type of the Cosmos DB resource
- * @param subscriptionId - The Azure subscription ID
- * @param resourceGroup - The resource group name
- * @param accountName - The account name of the Cosmos DB resource
- * @returns A formatted Azure resource ID string
- *
- * @remarks
- * Different API types require different resource ID formats:
- * - For MongoDB Clusters, it uses the Microsoft.DocumentDB/mongoClusters format
- * - For other APIs, it uses the Microsoft.DocumentDb/databaseAccounts format
- * - PostgreSQL Clusters support is not implemented yet
- */
-function createAzureResourceId(
-    api: API,
-    subscriptionId: string,
-    resourceGroup: string,
-    accountName: string,
-): ParsedAzureResourceId | undefined {
-    switch (api) {
-        case API.MongoClusters:
-            // Document DB Clusters API resource ID format
-            return parseAzureResourceId(
-                `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.DocumentDB/mongoClusters/${accountName}`,
+        // First confirmation: Ask user about adding new connection (if enabled)
+        if (showUrlHandlingConfirmations) {
+            const connectionConfirmation = await vscode.window.showInformationMessage(
+                l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.'),
+                {
+                    modal: true,
+                    detail: l10n.t(
+                        'A new connection will be added to your Connections View.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the exension settings.',
+                    ),
+                },
+                l10n.t('Yes, continue'),
             );
 
-        default:
-            return;
-    }
-}
-
-/**
- * Reveals an Azure resource in the Azure Resource Groups explorer.
- *
- * @param resourceId - The ID of the Azure resource to reveal.
- * @param database - Optional. The name of the database associated with the resource.
- * @param container - Optional. The name of the container associated with the database.
- * @returns A promise that resolves when the resource is revealed in the explorer.
- *
- * @remarks
- * This function:
- * 1. Constructs a full resource ID that may include database and container paths.
- * 2. Focuses the Azure Resource Groups view in the explorer.
- * 3. Reveals the specified Azure resource in the explorer with selection, focus, and expansion.
- */
-async function revealAzureResourceInExplorer(
-    context: IActionContext,
-    resourceId: ParsedAzureResourceId,
-    database?: string,
-    container?: string,
-): Promise<TreeElement> {
-    await vscode.commands.executeCommand('azureResourceGroups.focus');
-    await ext.rgApiV2.resources.revealAzureResource(resourceId.rawId, {
-        select: true,
-        focus: true,
-        expand: true,
-    });
-
-    let fulId = resourceId.rawId;
-    if (database && container) {
-        fulId = `${resourceId.rawId}${database ? `/${database}${container ? `/${container}` : ''}` : ''}`;
-        await ext.rgApiV2.resources.revealAzureResource(fulId, {
-            select: true,
-            focus: true,
-            expand: true,
-        });
-    }
-
-    let resource: TreeElement | undefined;
-    const branchDataProvider = ext.mongoVCoreBranchDataProvider;
-
-    const revealedId = await ext.rgApiV2.resources.getSelectedAzureNode();
-    if (revealedId) {
-        const strippedId = removeAzureTenantPrefix(revealedId);
-        resource = await branchDataProvider.findNodeById(strippedId);
-    } else {
-        resource = await branchDataProvider.findNodeById(fulId);
-    }
-
-    if (!resource) {
-        throw new Error(
-            l10n.t('Unable to find resource "{0}". Please ensure the resource exists and try again.', resourceId.rawId),
-        );
-    }
-
-    context.telemetry.properties.experience = isTreeElementWithExperience(resource)
-        ? resource.experience.api
-        : 'unknown';
-
-    // Check if the selected resource is a collection if database and collection were provided
-    if (database && container && !resource.id.endsWith(`/${container}`)) {
-        throw new Error(
-            l10n.t(
-                'Unable to find database "{0}" and collection "{1}" in resource "{2}". Please ensure the resource exists and try again.',
-                database,
-                container,
-                resourceId.rawId,
-            ),
-        );
-    }
-    return resource;
-}
-
-/**
- * Creates and attaches a database connection to the workspace.
- *
- * @param accountId - The ID of the account to attach
- * @param accountName - The display name of the account
- * @param api - The API type (Core, MongoDB, etc.) of the account
- * @param connectionString - The connection string used to connect to the account
- * @param isEmulator - Whether this connection is to a local emulator
- * @param emulatorPort - Optional port number for the emulator connection
- * @returns A Promise that resolves to the ID of the created/updated connection
- *
- * @remarks
- * This function will:
- * 1. Focus the Azure Workspace view
- * 2. Create the connection with the specified parameters
- * 3. If a connection with the same ID already exists, prompt the user to update it
- */
-async function createAttachedForConnection(
-    accountId: string,
-    accountName: string,
-    api: API,
-    connectionString: string,
-    isEmulator: boolean,
-    emulatorPort?: string,
-    disableEmulatorSecurity?: boolean,
-): Promise<string> {
-    const rootId = `${WorkspaceResourceType.MongoClusters}`;
-    const parentId = `${rootId}${isEmulator ? '/localEmulators' : ''}`;
-    const name = !isEmulator ? accountName : getEmulatorItemLabelForApi(api, emulatorPort);
-    const id = !isEmulator ? accountId : getEmulatorItemUniqueId(connectionString);
-    const fulId = `${parentId}/${id}`;
-    // Open the Azure Workspace view
-    await vscode.commands.executeCommand('azureWorkspace.focus');
-    if (rootId !== parentId) {
-        // TODO: this seems to be a bug in revealWorkspaceResource
-        // If the parentId is not the root it will fail to drill down into the hierarchy,
-        // we need to reveal the root first
-        await ext.rgApiV2.resources.revealWorkspaceResource(rootId, {
-            select: true,
-            focus: true,
-            expand: true,
-        });
-    }
-    // Reveal the parent node to show progress in the tree
-    await ext.rgApiV2.resources.revealWorkspaceResource(parentId, {
-        select: true,
-        focus: true,
-        expand: true,
-    });
-    await ext.state.showCreatingChild(parentId, l10n.t('Creating "{nodeName}"…', { nodeName: accountId }), async () => {
-        const storageItem: StorageItem = {
-            id,
-            name,
-            properties: { isEmulator, api, ...(disableEmulatorSecurity && { disableEmulatorSecurity }) },
-            secrets: [connectionString],
-        };
-
-        try {
-            await StorageService.get(StorageNames.Workspace).push(
-                WorkspaceResourceType.MongoClusters,
-                storageItem,
-                false,
-            );
-        } catch (error) {
-            if (error instanceof Error && error.message.includes('already exists')) {
-                let confirmed: boolean = false;
-                try {
-                    confirmed = await getConfirmationAsInSettings(
-                        l10n.t('Update existing {accountType} connection?', {
-                            accountType: getExperienceFromApi(api).longName,
-                        }),
-                        l10n.t('The connection "{connectionName}" already exists. Do you want to update it?', {
-                            connectionName: name,
-                        }),
-                        'update',
-                    );
-                } catch (error) {
-                    if (error instanceof UserCancelledError) {
-                        confirmed = false;
-                    } else {
-                        throw error;
-                    }
-                }
-
-                if (confirmed) {
-                    await StorageService.get(StorageNames.Workspace).push(
-                        WorkspaceResourceType.AttachedAccounts,
-                        storageItem,
-                        true,
-                    );
-                }
-            } else {
-                throw error;
+            if (connectionConfirmation !== l10n.t('Yes, continue')) {
+                context.telemetry.properties.userCancelledAtStep = 'CreateNewConnection';
+                return; // User cancelled
             }
         }
-    });
-    return fulId;
+
+        // Show the Connections View
+        await vscode.commands.executeCommand(`connectionsView.focus`);
+        await waitForTreeViewReady(context);
+
+        storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
+
+        let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+        // If a connection with the same label exists, append a number to the label
+        while (existingDuplicateLabel) {
+            newConnectionLabel = generateUniqueLabel(newConnectionLabel);
+            existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+        }
+
+        // Create the the storageItem
+        const storageItem: StorageItem = {
+            id: storageId,
+            name: newConnectionLabel,
+            properties: { isEmulator: isEmulator, disableEmulatorSecurity: disableEmulatorSecurity },
+            secrets: [parsedCS.toString()],
+        };
+
+        await StorageService.get(StorageNames.Connections).push(
+            isEmulator ? 'emulators' : 'clusters',
+            storageItem,
+            true,
+        );
+
+        ext.connectionsBranchDataProvider.refresh();
+
+        // add a delay to allow the Connections View to refresh
+        await waitForTreeViewReady(context);
+    }
+
+    // Second confirmation: Ask user about revealing the connection (if enabled)
+    if (showUrlHandlingConfirmations) {
+        const revealConfirmation = await vscode.window.showInformationMessage(
+            existingDuplicateConnection
+                ? l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.')
+                : l10n.t('The connection will now be opened in the Connections View.'),
+            {
+                modal: true,
+                detail: l10n.t(
+                    'You might be asked for credentials to establish the connection.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the extension settings.',
+                ),
+            },
+            l10n.t('Yes, open connection'),
+        );
+
+        if (revealConfirmation !== l10n.t('Yes, open connection')) {
+            context.telemetry.properties.userCancelledAtStep = 'RevealConnection';
+            return; // User cancelled
+        }
+    }
+
+    if (existingDuplicateConnection) {
+        // Show the Connections View
+        //
+        // Note:
+        // This is done only for the existing connection, as the new connection
+        // has already been shown in the previous step
+        await vscode.commands.executeCommand(`connectionsView.focus`);
+        await waitForTreeViewReady(context);
+    }
+
+    // For future code maintainers:
+    // This is a little trick: the first withProgress shows the notification with a user-friendly message,
+    // while the second withProgress is used to show the 'loading animation' in the Connections View.
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: l10n.t('Opening DocumentDB connection…'),
+            cancellable: false,
+        },
+        async () => {
+            await vscode.window.withProgress(
+                {
+                    location: { viewId: 'connectionsView' },
+                    cancellable: false,
+                },
+                async () => {
+                    await revealInConnectionsView(context, storageId, isEmulator, selectedDatabase, params.collection);
+                },
+            );
+        },
+    );
+
+    // Third confirmation: Ask user about opening collection view (if applicable and enabled)
+    if (selectedDatabase && params.collection) {
+        // Verify that the connection, database, and collection exist in the tree
+        // This is an easy way to verify that the connection is valid
+        // and that the database and collection exist.
+        const treePath = buildConnectionsViewTreePath(storageId, isEmulator, selectedDatabase, params.collection);
+        const collectionNode = await ext.connectionsBranchDataProvider.findNodeById(treePath, false);
+
+        if (!collectionNode) {
+            // Connection verification failed
+            throw new Error(
+                l10n.t(
+                    'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+                ),
+            );
+        }
+
+        if (showUrlHandlingConfirmations) {
+            const collectionViewConfirmation = await vscode.window.showInformationMessage(
+                l10n.t('Would you like to open the Collection View?'),
+                {
+                    modal: true,
+                    detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+                },
+                l10n.t('Yes, open Collection View'),
+            );
+
+            if (collectionViewConfirmation !== l10n.t('Yes, open Collection View')) {
+                context.telemetry.properties.userCancelledAtStep = 'CollectionView';
+                return;
+            }
+        }
+
+        await openDedicatedView(context, storageId, isEmulator, selectedDatabase, params.collection);
+    }
+}
+
+// #endregion
+
+// #region Connection Helpers
+
+/**
+ * Validates that the connection string is present and has the correct format
+ */
+function validateConnectionString(connectionString: string | undefined): void {
+    if (!connectionString) {
+        throw new Error(l10n.t('Connection string is not set'));
+    }
+
+    if (!connectionString.startsWith('mongodb://') && !connectionString.startsWith('mongodb+srv://')) {
+        throw new Error(
+            l10n.t('Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://"'),
+        );
+    }
 }
 
 /**
- * Reveals an attached account in the Azure Workspace Explorer.
- * First focuses on the Azure Workspace view, then reveals the specified resource in the tree.
- *
- * @param accountId - The ID of the account to reveal
- * @param api - Specifies whether this is a Core or MongoDB API account
- * @param database - Optional database name to reveal within the account
- * @param container - Optional container name to reveal within the database
- * @returns A Promise that resolves when the resource has been revealed in the workspace explorer
+ * Determines if a connection is to a local emulator based on host information
  */
-async function revealAttachedInWorkspaceExplorer(
-    accountId: string,
-    database?: string,
-    container?: string,
-): Promise<void> {
-    const fullResourceId = `${accountId}${database ? `/${database}${container ? `/${container}` : ''}` : ''}`;
-    await ext.rgApiV2.resources.revealWorkspaceResource(fullResourceId, {
-        select: true,
-        focus: true,
-        expand: true,
+function isEmulatorConnection(parsedCS: ConnectionString): boolean {
+    return parsedCS.hosts?.length > 0 && parsedCS.hosts[0].includes('localhost');
+}
+
+/**
+ * Creates a display label for a connection based on parsed connection string
+ */
+function createConnectionLabel(parsedCS: ConnectionString, joinedHosts: string): string {
+    return parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
+}
+
+/**
+ * Retrieves existing connections of the specified type
+ */
+async function getExistingConnections(isEmulator: boolean): Promise<StorageItem[]> {
+    return await StorageService.get(StorageNames.Connections).getItems(isEmulator ? 'emulators' : 'clusters');
+}
+
+/**
+ * Finds a duplicate connection in the existing connections list
+ */
+function findDuplicateConnection(
+    existingConnections: StorageItem[],
+    parsedCS: ConnectionString,
+    joinedHosts: string,
+): StorageItem | undefined {
+    return existingConnections.find((item) => {
+        const secret = item.secrets?.[0];
+        if (!secret) {
+            return false; // Skip if no secret string is found
+        }
+
+        const itemCS = new ConnectionString(secret);
+        return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
     });
 }
+
+/**
+ * Generates a unique label by appending or incrementing a number
+ */
+function generateUniqueLabel(existingLabel: string): string {
+    /**
+     * Matches and captures parts of a connection label string.
+     *
+     * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
+     * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
+     * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
+     *   which may be preceded by whitespace. For example, " (123)".
+     */
+    const match = existingLabel.match(/^(.*?)(\s*\(\d+\))?$/);
+    if (match) {
+        const baseName = match[1];
+        const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
+        return `${baseName} (${count})`;
+    }
+    return `${existingLabel} (1)`;
+}
+
+// #endregion
+
+// #region View Operations
+
+/**
+ * Builds a tree path for the Connections View based on the provided parameters.
+ * This code builds a tree path based on the structure of the Connections View.
+ * Any change to the Connections View structure will require changes here.
+ *
+ * @param storageId - The ID of the connection
+ * @param isEmulator - Whether the connection is to a local emulator
+ * @param database - Optional database name to include in the path
+ * @param collection - Optional collection name to include in the path
+ * @returns The constructed tree path string
+ */
+function buildConnectionsViewTreePath(
+    storageId: string,
+    isEmulator: boolean,
+    database?: string,
+    collection?: string,
+): string {
+    let treePath = `${Views.ConnectionsView}`;
+
+    // Add 'Local Emulators' node to the path, if needed
+    if (isEmulator) {
+        treePath += '/localEmulators';
+    }
+
+    // Add the storage ID
+    treePath += `/${storageId}`;
+
+    // Add database if provided
+    if (database) {
+        treePath += `/${database}`;
+
+        // Add collection only if database is present
+        if (collection) {
+            treePath += `/${collection}`;
+        }
+    }
+
+    return treePath;
+}
+
+/**
+ * Reveals an element in the Connections View.
+ *
+ * @param context - The action context for telemetry
+ * @param storageId - The ID of the connection to reveal
+ * @param isEmulator - Whether the connection is to a local emulator
+ * @param database - Optional database name to reveal
+ * @param collection - Optional collection name to reveal
+ */
+async function revealInConnectionsView(
+    context: IActionContext,
+    storageId: string,
+    isEmulator: boolean,
+    database?: string,
+    collection?: string,
+): Promise<void> {
+    // Validate that database is provided if collection is specified
+    if (collection && !database) {
+        throw new Error(l10n.t('Database name is required when collection is specified'));
+    }
+
+    // Progressive reveal workaround: The reveal function does not show the opened path
+    // if the full search fails, which causes our error nodes not to be shown.
+    // We implement a three-step reveal process to ensure intermediate nodes are expanded.
+
+    // Step 1: Reveal connection only
+    const connectionPath = buildConnectionsViewTreePath(storageId, isEmulator);
+    await revealConnectionsViewElement(context, connectionPath, {
+        select: true, // Only select if this is the final step
+        focus: !database, // Only focus if this is the final step
+        expand: true,
+    });
+
+    // Step 2: Reveal with database (if provided)
+    if (database) {
+        const databasePath = buildConnectionsViewTreePath(storageId, isEmulator, database);
+        await revealConnectionsViewElement(context, databasePath, {
+            select: true, // Only select if this is the final step
+            focus: !collection, // Only focus if this is the final step
+            expand: true,
+        });
+
+        // Step 3: Reveal with collection (if provided)
+        if (collection) {
+            const collectionPath = buildConnectionsViewTreePath(storageId, isEmulator, database, collection);
+            await revealConnectionsViewElement(context, collectionPath, {
+                select: true,
+                focus: true,
+                expand: true,
+            });
+        }
+    }
+}
+
+// #endregion
+
+// #region Parameter Processing
+
+/**
+ * Extracts query parameters from a URL query string.
+ *
+ * @param query - The URL query string to extract parameters from
+ * @returns UriParams object containing the extracted parameters
+ */
+function extractParams(query: string): UriParams {
+    const params: UriParams = {};
+    const queryParams = new URLSearchParams(query);
+
+    // Function to safely decode URI components, handling double encoding
+    const safeDoubleDecodeURIComponent = (value: string | null, fieldName: string): string | undefined => {
+        if (!value) return undefined;
+
+        try {
+            // Decode to handle URL encoding
+            return decodeURIComponent(value);
+        } catch (error) {
+            throw new Error(
+                l10n.t(
+                    'Invalid "{0}" parameter format: {1}',
+                    fieldName,
+                    error instanceof Error ? error.message : String(error),
+                ),
+            );
+        }
+    };
+
+    params.connectionString = safeDoubleDecodeURIComponent(queryParams.get('connectionString'), 'connectionString');
+    params.database = safeDoubleDecodeURIComponent(queryParams.get('database'), 'database');
+    params.collection = safeDoubleDecodeURIComponent(queryParams.get('collection'), 'collection');
+
+    return params;
+}
+
+/**
+ * Extracts and validates URI parameters from a query string.
+ *
+ * @param context - The action context used for telemetry tracking
+ * @param queryFragment - The query fragment string from the URL
+ * @returns The extracted and validated URI parameters
+ * @throws Error when the parameters are invalid
+ */
+function extractAndValidateParams(context: IActionContext, queryFragment: string): UriParams {
+    const params: UriParams = extractParams(queryFragment);
+
+    // Add sensitive values to valuesToMask to prevent sensitive data in logs
+    maskParamsInTelemetry(context, params);
+
+    if (!params.connectionString) {
+        throw new Error(l10n.t('The connection string is required.'));
+    }
+
+    context.telemetry.properties.hasParamConnectionString = params.connectionString ? 'true' : undefined;
+    context.telemetry.properties.hasParamDatabase = params.database ? 'true' : undefined;
+    context.telemetry.properties.hasParamCollection = params.collection ? 'true' : undefined;
+
+    return params;
+}
+
+/**
+ * Masks sensitive parameter values in telemetry data
+ */
+function maskParamsInTelemetry(context: IActionContext, params: UriParams): void {
+    Object.entries(params).forEach(([key, value]) => {
+        switch (key) {
+            case 'connectionString':
+            case 'database':
+            case 'collection':
+                if (value !== undefined && typeof value === 'string') {
+                    context.valuesToMask.push(value);
+                }
+                break;
+        }
+    });
+}
+
+/**
+ * Adds sensitive values from a connection string to the telemetry masking list
+ */
+function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: ConnectionString): void {
+    [parsedCS.username, parsedCS.password, parsedCS.port, ...(parsedCS.hosts || [])]
+        .filter(Boolean)
+        .forEach((value) => context.valuesToMask.push(value));
+}
+
+// #endregion
 
 /**
  * Opens an appropriate editor for a Cosmos DB connection.
@@ -448,197 +540,57 @@ async function revealAttachedInWorkspaceExplorer(
  * @throws Error if container name is not provided, or if database name is not provided for Core API connections.
  * @returns A promise that resolves when the editor is opened.
  */
-async function openAppropriateEditorForConnection(
+async function openDedicatedView(
     context: IActionContext,
-    parsedConnection: { api: API.MongoDB | API.MongoClusters; connectionString: ConnectionString },
-    database: string | undefined,
-    container: string | undefined,
+    storageId: string,
+    isEmulator: boolean,
+    database?: string,
+    collection?: string,
 ): Promise<void> {
-    if (!container) {
-        throw new Error(l10n.t("Can't open the Query Editor, Container name is required"));
-    }
+    const clusterId = buildConnectionsViewTreePath(storageId, isEmulator);
 
-    {
-        // Open MongoDB editor
-        const accountId = generateDocumentDBStorageId(parsedConnection.connectionString.toString()); // FYI: working with the prasedConnection string for to guarantee a consistent accountId in this file.
-        const expectedClusterId = `${WorkspaceResourceType.MongoClusters}/${accountId}`;
-
-        return openCollectionViewInternal(context, {
-            clusterId: expectedClusterId,
-            databaseName: nonNullValue(database),
-            collectionName: nonNullValue(container),
-        });
-    }
-}
-
-/**
- * Opens the appropriate editor for a Cosmos DB resource in Azure.
- *
- * @param context - The action context for the operation.
- * @param resourceId - The Azure resource ID of the Cosmos DB account.
- * @param database - The name of the database to open. Required for query editor.
- * @param container - The name of the container to open. Required for query editor.
- * @throws Error if database or container names are not provided.
- * @throws Error if the specified database and container combination cannot be found.
- * @throws Error if the experience type for the resource cannot be determined.
- * @returns Promise that resolves when the appropriate editor has been opened.
- */
-async function openAppropriateEditorForAzure(resource: TreeElement): Promise<void> {
-    if (
-        isTreeElementWithExperience(resource) &&
-        isTreeElementWithContextValue(resource) &&
-        (resource.contextValue.includes('treeItem.collection') || resource.contextValue.includes('treeItem.container'))
-    ) {
-        await vscode.commands.executeCommand('vscode-documentdb.command.containerView.open', resource);
-    } else {
-        throw new Error(l10n.t('Unable to determine the experience for the resource'));
-    }
-}
-
-/**
- * Removes the Azure tenant prefix from an ID string.
- *
- * @param id - The ID string to process. If not provided, an empty string is returned.
- * @returns The processed ID string without the Azure tenant prefix.
- *
- * @remarks
- * Azure Resourcegroups maintains the whole ID hierarchy including accounts and tenants.
- * Since we contribute and maintain just a subtree, we need to remove the prefix:
- * https://github.com/microsoft/vscode-azureresourcegroups/blob/71a0b12ad4b8f9cafef497e673abfb79c9ad208d/src/tree/ResourceTreeDataProviderBase.ts#L168
- * This function uses a regular expression to remove the "/accounts/{accountName}/tenants/{tenantId}/" prefix
- * from the given ID string. If the input is undefined or empty, it returns an empty string.
- */
-function removeAzureTenantPrefix(id?: string): string {
-    return id?.replace(/\/accounts\/.+\/tenants\/[^/]+\//i, '/') || '';
-}
-
-/**
- * Parses a connection string to determine the API type and return the appropriate connection object.
- *
- * @param connectionString - The connection string to parse. Cannot be empty.
- * @returns An object containing:
- *   - api: The API type (Core, MongoDB, or MongoClusters)
- *   - connectionString: The parsed connection string object, either a ParsedCosmosDBConnectionString or ConnectionString
- * @throws Error if the connection string is empty
- */
-function parseConnectionString(
-    context: IActionContext,
-    connectionString: string,
-): { api: API.MongoDB | API.MongoClusters; connectionString: ConnectionString } | undefined {
-    if (!connectionString) {
-        throw new Error(l10n.t('Connection string cannot be empty'));
-    }
-
-    const MONGODB_PREFIX = 'mongodb';
-
-    // MongoDB API connection strings always start with "mongodb"
-    if (connectionString.startsWith(MONGODB_PREFIX)) {
-        const parsedCS = new ConnectionString(connectionString);
-        [parsedCS.username, parsedCS.password, parsedCS.port, ...(parsedCS.hosts || [])]
-            .filter(Boolean)
-            .forEach((value) => context.valuesToMask.push(value));
-        return {
-            api: parsedCS.isSRV ? API.MongoClusters : API.MongoDB,
-            connectionString: parsedCS,
-        };
-    }
-
-    return;
-}
-
-/**
- * Extracts query parameters from a URL query string.
- * @param query - The URL query string to extract parameters from.
- * @returns An object containing the extracted parameters:
- *   - resourceId - The Azure resource ID (if present).
- *   - subscriptionId - The Azure subscription ID (if present).
- *   - resourceGroup - The Azure resource group name (if present).
- *   - connectionString - The connection string for the Cosmos DB account (if present). Extracted from 'cs' parameter.
- *   - database - The name of the database (if present).
- *   - container - The name of the container (if present).
- */
-function extractParams(query: string): {
-    resourceId?: string;
-    subscriptionId?: string;
-    resourceGroup?: string;
-    connectionString?: string;
-    database?: string;
-    container?: string;
-} {
-    const queryParams = new URLSearchParams(query);
-    return {
-        resourceId: queryParams.get('resourceId') ?? undefined,
-        subscriptionId: queryParams.get('subscriptionId') ?? undefined,
-        resourceGroup: queryParams.get('resourceGroup') ?? undefined,
-        connectionString: queryParams.get('cs') ?? undefined,
-        database: queryParams.get('database') ?? undefined,
-        container: queryParams.get('container') ?? undefined,
-    };
-}
-
-/**
- * Interface for URI parameters used for connecting to Azure Cosmos DB resources.
- * @property resourceId - The Azure resource ID of the Cosmos DB account.
- * @property subscriptionId - The Azure subscription ID.
- * @property resourceGroup - The Azure resource group name containing the Cosmos DB account.
- * @property connectionString - The connection string to the Cosmos DB account.
- * @property database - The name of the database in the Cosmos DB account.
- * @property container - The name of the container/collection within the database.
- */
-interface UriParams {
-    resourceId?: string | undefined;
-    subscriptionId?: string | undefined;
-    resourceGroup?: string | undefined;
-    connectionString?: string | undefined;
-    database?: string | undefined;
-    container?: string | undefined;
-}
-
-/**
- * Extracts and validates URI parameters from a query string.
- *
- * @param context - The action context used for telemetry tracking
- * @param query - The query string to extract parameters from
- * @returns The extracted URI parameters
- * @throws Error when neither resource ID nor connection string is provided
- *
- * @remarks
- * This function validates that either a resource ID or connection string is present in the query parameters.
- * It also tracks telemetry information about the URI type (resourceId/connectionString) and the presence
- * of database and container parameters.
- */
-function extractAndValidateParams(context: IActionContext, query: string): UriParams {
-    const params = extractParams(query);
-
-    // Add sensitive values to valuesToMask to prevent sensitive data in logs
-    Object.entries(params).forEach(([key, value]) => {
-        switch (key) {
-            case 'connectionString':
-            case 'database':
-            case 'container':
-                if (value !== undefined) {
-                    context.valuesToMask.push(value);
-                }
-                break;
-        }
+    return openCollectionViewInternal(context, {
+        clusterId: clusterId,
+        databaseName: nonNullValue(database, 'database'),
+        collectionName: nonNullValue(collection, 'collection'),
     });
+}
 
-    if (!params.resourceId && !params.connectionString) {
-        throw new Error(l10n.t('Either resource ID or connection string is required'));
+/**
+ * Waits for the connections tree view to be accessible with exponential backoff
+ */
+async function waitForTreeViewReady(context: IActionContext, maxAttempts: number = 5): Promise<void> {
+    const startTime = Date.now();
+    let attempt = 0;
+    let delay = 500; // Start with 500ms
+
+    while (attempt < maxAttempts) {
+        try {
+            // Try to access the tree view - if this succeeds, we're ready
+            const rootElements = await ext.connectionsBranchDataProvider.getChildren();
+            if (rootElements !== undefined) {
+                // Tree view is ready - record successful activation
+                const totalTime = Date.now() - startTime;
+                context.telemetry.measurements.connectionViewActivationTimeMs = totalTime;
+                context.telemetry.measurements.connectionViewActivationAttempts = attempt + 1;
+                context.telemetry.properties.connectionViewActivationResult = 'success';
+                return;
+            }
+        } catch {
+            // Tree view not ready yet, continue polling
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        attempt++;
+        delay = Math.min(delay * 1.5, 2000); // Cap at 2 seconds
     }
 
-    // Track which path we're taking
-    const isResourceId = query.includes('resourceId=');
-    const isConnectionString = query.includes('cs=');
+    // Exhausted all attempts - record timeout and continue optimistically
+    const totalTime = Date.now() - startTime;
+    context.telemetry.measurements.connectionViewActivationTimeMs = totalTime;
+    context.telemetry.measurements.connectionViewActivationAttempts = maxAttempts;
+    context.telemetry.properties.connectionViewActivationResult = 'timeout';
 
-    context.telemetry.properties.uriType = isResourceId
-        ? 'resourceId'
-        : isConnectionString
-          ? 'connectionString'
-          : 'unknown';
-
-    context.telemetry.properties.hasDatabase = params.database ? 'true' : 'false';
-    context.telemetry.properties.hasContainer = params.container ? 'true' : 'false';
-
-    return params;
+    // Let's just move forward, maybe it's ready, maybe something has failed
+    // The next step will handle the case when the tree view is not ready
 }

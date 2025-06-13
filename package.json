@@ -804,7 +804,13 @@
       {
         "title": "DocumentDB for VS Code",
         "properties": {
-          "documentDB.userInterface.confirmationStyle": {
+          "documentDB.confirmations.showUrlHandlingConfirmations": {
+            "order": 1,
+            "type": "boolean",
+            "default": true,
+            "description": "Show confirmation dialogs when handling external URLs that open DocumentDB connections in VS Code."
+          },
+          "documentDB.confirmations.confirmationStyle": {
             "order": 0,
             "type": "string",
             "description": "The behavior to use when confirming operations that cannot be undone, such as deleting resources.",
@@ -826,13 +832,13 @@
             "default": "wordConfirmation"
           },
           "documentDB.userInterface.ShowOperationSummaries": {
-            "order": 1,
+            "order": 11,
             "type": "boolean",
             "default": true,
             "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events."
           },
           "documentDB.local.port": {
-            "order": 2,
+            "order": 20,
             "type": "integer",
             "default": 10260,
             "description": "Port to use when connecting to DocumentDB Local instance"

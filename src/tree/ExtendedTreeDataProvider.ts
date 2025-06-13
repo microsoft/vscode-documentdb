@@ -44,10 +44,17 @@ export interface ExtendedTreeDataProvider<T extends TreeElement> extends vscode.
     /**
      * Finds a node in the tree by its ID.
      *
+     * Note: By default, this method only searches in the nodes that are known, i.e., nodes that have been processed
+     * by the data provider. Hidden nodes, such as those that haven't been expanded and their children,
+     * will not be discovered. However, if `enableRecursiveSearch` is set to `true`, the method will perform
+     * a more intensive search by automatically expanding nodes as needed. This can be time-consuming for
+     * large trees or deeply nested structures.
+     *
      * @param id The ID of the node to find
+     * @param enableRecursiveSearch Optional boolean to enable a deeper search with automatic node expansion
      * @returns A Promise that resolves to the found node or undefined if not found
      */
-    findNodeById(id: string): Promise<T | undefined>;
+    findNodeById(id: string, enableRecursiveSearch?: boolean): Promise<T | undefined>;
 
     /**
      * Refreshes the tree data.
