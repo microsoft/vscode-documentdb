@@ -1,4 +1,5 @@
 /dist
+/api/dist
 /out
 /node_modules
 **/__mocks__/**
