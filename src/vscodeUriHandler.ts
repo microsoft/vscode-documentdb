@@ -129,7 +129,7 @@ async function handleConnectionStringRequest(
             );
 
             if (connectionConfirmation !== l10n.t('Yes, continue')) {
-                context.telemetry.properties.userCancelledAtConnectionStep = 'true';
+                context.telemetry.properties.userCancelledAtStep = 'CreateNewConnection';
                 return; // User cancelled
             }
         }
@@ -185,7 +185,7 @@ async function handleConnectionStringRequest(
         );
 
         if (revealConfirmation !== l10n.t('Yes, open connection')) {
-            context.telemetry.properties.userCancelledAtRevealStep = 'true';
+            context.telemetry.properties.userCancelledAtStep = 'RevealConnection';
             return; // User cancelled
         }
     }
@@ -209,23 +209,38 @@ async function handleConnectionStringRequest(
     );
 
     // Third confirmation: Ask user about opening collection view (if applicable and enabled)
-    if (selectedDatabase && params.collection && showUrlHandlingConfirmations) {
-        const collectionViewConfirmation = await vscode.window.showInformationMessage(
-            l10n.t('Would you like to open the Collection View?'),
-            {
-                modal: true,
-                detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
-            },
-            l10n.t('Yes, open Collection View'),
-        );
+    if (selectedDatabase && params.collection) {
+        // Verify that the connection, database, and collection exist in the tree
+        // This is an easy way to verify that the connection is valid
+        // and that the database and collection exist.
+        const treePath = buildConnectionsViewTreePath(storageId, isEmulator, selectedDatabase, params.collection);
+        const collectionNode = await ext.connectionsBranchDataProvider.findNodeById(treePath, false);
 
-        if (collectionViewConfirmation === l10n.t('Yes, open Collection View')) {
-            await openDedicatedView(context, storageId, isEmulator, selectedDatabase, params.collection);
-        } else {
-            context.telemetry.properties.userCancelledAtCollectionViewStep = 'true';
+        if (!collectionNode) {
+            // Connection verification failed
+            throw new Error(
+                l10n.t(
+                    'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+                ),
+            );
         }
-    } else if (selectedDatabase && params.collection && !showUrlHandlingConfirmations) {
-        // If confirmations are disabled but we have a collection to open, open it directly
+
+        if (showUrlHandlingConfirmations) {
+            const collectionViewConfirmation = await vscode.window.showInformationMessage(
+                l10n.t('Would you like to open the Collection View?'),
+                {
+                    modal: true,
+                    detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+                },
+                l10n.t('Yes, open Collection View'),
+            );
+
+            if (collectionViewConfirmation !== l10n.t('Yes, open Collection View')) {
+                context.telemetry.properties.userCancelledAtStep = 'CollectionView';
+                return;
+            }
+        }
+
         await openDedicatedView(context, storageId, isEmulator, selectedDatabase, params.collection);
     }
 }
@@ -370,13 +385,42 @@ async function revealInConnectionsView(
     database?: string,
     collection?: string,
 ): Promise<void> {
-    const treePath = buildConnectionsViewTreePath(storageId, isEmulator, database, collection);
+    // Validate that database is provided if collection is specified
+    if (collection && !database) {
+        throw new Error(l10n.t('Database name is required when collection is specified'));
+    }
 
-    await revealConnectionsViewElement(context, treePath, {
-        select: true,
-        focus: true,
+    // Progressive reveal workaround: The reveal function does not show the opened path
+    // if the full search fails, which causes our error nodes not to be shown.
+    // We implement a three-step reveal process to ensure intermediate nodes are expanded.
+
+    // Step 1: Reveal connection only
+    const connectionPath = buildConnectionsViewTreePath(storageId, isEmulator);
+    await revealConnectionsViewElement(context, connectionPath, {
+        select: true, // Only select if this is the final step
+        focus: !database, // Only focus if this is the final step
         expand: true,
     });
+
+    // Step 2: Reveal with database (if provided)
+    if (database) {
+        const databasePath = buildConnectionsViewTreePath(storageId, isEmulator, database);
+        await revealConnectionsViewElement(context, databasePath, {
+            select: true, // Only select if this is the final step
+            focus: !collection, // Only focus if this is the final step
+            expand: true,
+        });
+
+        // Step 3: Reveal with collection (if provided)
+        if (collection) {
+            const collectionPath = buildConnectionsViewTreePath(storageId, isEmulator, database, collection);
+            await revealConnectionsViewElement(context, collectionPath, {
+                select: true,
+                focus: true,
+                expand: true,
+            });
+        }
+    }
 }
 
 // #endregion
