@@ -134,6 +134,9 @@ async function handleConnectionStringRequest(
             }
         }
 
+        // Show the Connections View
+        await vscode.commands.executeCommand(`connectionsView.focus`);
+
         storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
 
         let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
@@ -158,8 +161,11 @@ async function handleConnectionStringRequest(
         );
 
         ext.connectionsBranchDataProvider.refresh();
+
+        // add a delay to allow the Connections View to refresh
+        await new Promise((resolve) => setTimeout(resolve, 2000));
     } else {
-        // the connection already exists, let's just reveal it in the Connections View
+        // the connection already exists, let's just reveal it later in the Connections View
         storageId = existingDuplicateConnection.id;
     }
 
@@ -182,6 +188,13 @@ async function handleConnectionStringRequest(
             context.telemetry.properties.userCancelledAtRevealStep = 'true';
             return; // User cancelled
         }
+    }
+
+    if (existingDuplicateConnection) {
+        // Show the Connections View
+        // this is done only for the existing connection, as the new connection
+        // has already been shown in the previous step
+        await vscode.commands.executeCommand(`connectionsView.focus`);
     }
 
     await vscode.window.withProgress(
