@@ -84,27 +84,27 @@ vscode://ms-azuretools.vscode-documentdb?connectionString=mongodb%253A%252F%252F
 ### Example 2: Connection with Database Navigation
 
 ```
-vscode://ms-azuretools.vscode-documentdb?connectionString=mongodb%253A%252F%252Fmyuser%253Amypass%2540cluster.example.com%253A27017&database=analytics
+vscode://ms-azuretools.vscode-documentdb?connectionString=mongodb%253A%252F%252Fmyuser%253Amypass%2540localhost%253A27017&database=analytics
 ```
 
-| Parameter          | Decoded Value                                       |
-| ------------------ | --------------------------------------------------- |
-| `connectionString` | `mongodb://myuser:mypass@cluster.example.com:27017` |
-| `database`         | `analytics`                                         |
+| Parameter          | Decoded Value                             |
+| ------------------ | ----------------------------------------- |
+| `connectionString` | `mongodb://myuser:mypass@localhost:27017` |
+| `database`         | `analytics`                               |
 
 This URL will connect to the database and automatically navigate to the `analytics` database.
 
 ### Example 3: Direct Collection Access
 
 ```
-vscode://ms-azuretools.vscode-documentdb?connectionString=mongodb%252Bsrv%253A%252F%252Fadmin%253Asecret%2540cluster.mongodb.net%252Fproduction&database=ecommerce&collection=orders
+vscode://ms-azuretools.vscode-documentdb?connectionString=mongodb%253A%252F%252Fadmin%253Asecret%2540localhost%253A27017%252Fecommerce&database=ecommerce&collection=orders
 ```
 
-| Parameter          | Decoded Value                                               |
-| ------------------ | ----------------------------------------------------------- |
-| `connectionString` | `mongodb+srv://admin:secret@cluster.mongodb.net/production` |
-| `database`         | `ecommerce`                                                 |
-| `collection`       | `orders`                                                    |
+| Parameter          | Decoded Value                                      |
+| ------------------ | -------------------------------------------------- |
+| `connectionString` | `mongodb://admin:secret@localhost:27017/ecommerce` |
+| `database`         | `ecommerce`                                        |
+| `collection`       | `orders`                                           |
 
 This URL will connect to the database, navigate to the `ecommerce` database, and open the Collection View for the `orders` collection.
 
