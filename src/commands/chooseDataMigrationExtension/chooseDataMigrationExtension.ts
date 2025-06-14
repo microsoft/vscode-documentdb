@@ -82,6 +82,12 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                 if (!authenticated) {
                     void context.ui.showWarningMessage(
                         l10n.t('Authentication is required to use this migration provider.'),
+                        {
+                            modal: true,
+                            detail: l10n.t(
+                                'Please authenticate first by expanding the tree item of the selected cluster.',
+                            ),
+                        },
                     );
                     return;
                 }
@@ -144,7 +150,15 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                     if (selectedAction.requiresAuthentication) {
                         const authenticated = await ensureAuthentication(context, node);
                         if (!authenticated) {
-                            void context.ui.showWarningMessage(l10n.t('Authentication is required for this action.'));
+                            void context.ui.showWarningMessage(
+                                l10n.t('Authentication is required to run this action.'),
+                                {
+                                    modal: true,
+                                    detail: l10n.t(
+                                        'Please authenticate first by expanding the tree item of the selected cluster.',
+                                    ),
+                                },
+                            );
                             return;
                         }
                     }
