@@ -5,7 +5,7 @@
 
 import { nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { commands, QuickPickItemKind, ThemeIcon, type QuickPickItem } from 'vscode';
+import { QuickPickItemKind, type QuickPickItem } from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { MigrationService } from '../../services/migrationServices';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
@@ -27,15 +27,15 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
         .sort((a, b) => a.label.localeCompare(b.label));
 
     const commonItems = [
-        {
-            id: 'addMigrationProvider',
-            label: l10n.t('Add New Migration Provider…'),
-            detail: l10n.t('Explore more data migration providers.'),
-            iconPath: new ThemeIcon('plus'),
+        // {
+        //     id: 'addMigrationProvider',
+        //     label: l10n.t('Add New Migration Provider…'),
+        //     detail: l10n.t('Explore more data migration providers.'),
+        //     iconPath: new ThemeIcon('plus'),
 
-            group: 'Migration Providers',
-            alwaysShow: true,
-        },
+        //     group: 'Migration Providers',
+        //     alwaysShow: true,
+        // },
         { label: '', kind: QuickPickItemKind.Separator },
         {
             id: 'learnMore',
@@ -64,13 +64,12 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
         }
     }
 
-    if (selectedItem.id === 'addMigrationProvider') {
-        context.telemetry.properties.addMigrationProvider = 'true';
-        commands.executeCommand('workbench.extensions.search', '"DocumentDB Migration Plugin"');
-        return;
-    }
+    // if (selectedItem.id === 'addMigrationProvider') {
+    //     context.telemetry.properties.addMigrationProvider = 'true';
+    //     commands.executeCommand('workbench.extensions.search', '"DocumentDB Migration Plugin"');
+    //     return;
+    // }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (migrationProviders.some((provider) => provider.id === selectedItem.id)) {
         const selectedProvider = MigrationService.getProvider(nonNullValue(selectedItem.id, 'selectedItem.id'));
 

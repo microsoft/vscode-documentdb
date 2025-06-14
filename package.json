@@ -919,5 +919,11 @@
         ]
       }
     ]
+  },
+  "x-documentdbApi": {
+    "registeredClients": [
+      "vscode-cosmosdb",
+      "vscode-mongo-migration"
+    ]
   }
 }
