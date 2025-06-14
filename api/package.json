@@ -1,0 +1,35 @@
+{
+  "name": "vscode-documentdb-api-experimental-beta",
+  "version": "0.2.0",
+  "description": "Extension API for VS Code DocumentDB extension (preview)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode-documentdb.git",
+    "directory": "api"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "clean": "rimraf dist",
+    "compile": "npm run clean && npm run build",
+    "rollup": "api-extractor run --local",
+    "prepublishOnly": "npm run compile && npm run rollup",
+    "api-extractor": "npm run prepublishOnly"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@microsoft/api-extractor": "^7.38.0",
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.90.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.8.2"
+  }
+}

@@ -19,6 +19,7 @@ import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
+import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
@@ -158,6 +159,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand('vscode-documentdb.command.connectionsView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.ConnectionsView);
                 });
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.chooseDataMigrationExtension',
+                    chooseDataMigrationExtension,
+                );
 
                 //// Registry Commands:
 

@@ -22,11 +22,14 @@ import * as vscode from 'vscode';
 import { ClustersExtension } from './documentdb/ClustersExtension';
 import { ext } from './extensionVariables';
 import { globalUriHandler } from './vscodeUriHandler';
+// Import the DocumentDB Extension API interfaces
+import { type DocumentDBExtensionApi } from '../api/src';
+import { MigrationService } from './services/migrationServices';
 
 export async function activateInternal(
     context: vscode.ExtensionContext,
     perfStats: { loadStartTime: number; loadEndTime: number },
-): Promise<apiUtils.AzureExtensionApiProvider> {
+): Promise<apiUtils.AzureExtensionApiProvider | DocumentDBExtensionApi> {
     ext.context = context;
     ext.isBundle = !!process.env.IS_BUNDLE;
 
@@ -68,16 +71,35 @@ export async function activateInternal(
         //registerReportIssueCommand('azureDatabases.reportIssue');
     });
 
-    // TODO: we still don't know for sure if this is needed
-    //  If it is, we need to implement the logic to get the correct API version
-    return createApiProvider([
-        <AzureExtensionApi>{
-            findTreeItem: () => undefined,
-            pickTreeItem: () => undefined,
-            revealTreeItem: () => undefined,
-            apiVersion: '1.2.0',
+    // Create the DocumentDB Extension API
+    const documentDBApi: DocumentDBExtensionApi = {
+        apiVersion: '0.2.0',
+        migration: {
+            registerProvider: (provider) => {
+                MigrationService.registerProvider(provider);
+
+                ext.outputChannel.appendLine(
+                    vscode.l10n.t('API: Registered new migration provider: "{providerId}" - "{providerLabel}"', {
+                        providerId: provider.id,
+                        providerLabel: provider.label,
+                    }),
+                );
+            },
         },
-    ]);
+    };
+
+    // Return both the DocumentDB API and Azure Extension API
+    return {
+        ...documentDBApi,
+        ...createApiProvider([
+            <AzureExtensionApi>{
+                findTreeItem: () => undefined,
+                pickTreeItem: () => undefined,
+                revealTreeItem: () => undefined,
+                apiVersion: '1.2.0',
+            },
+        ]),
+    };
 }
 
 // this method is called when your extension is deactivated
