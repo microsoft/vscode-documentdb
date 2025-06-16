@@ -1,5 +1,22 @@
 # Change Log
 
+## 0.2.2
+
+### New Features & Improvements
+
+- **Data Migration Preview Support**: Introduced a new, experimental migration framework supporting extensible provider-based migrations. Enables advanced data movement scenarios across environments. Early adopters can join via GitHub. [#161](https://github.com/microsoft/vscode-documentdb/pull/161)
+- **Connection URL Handling**: Added support for deep linking into the extension via `vscode://` URLs, allowing pre-configured database connections and navigation to specific collections. [#148](https://github.com/microsoft/vscode-documentdb/issues/148)
+- **Import Performance Boost**: Imports are now buffered for significantly faster document loading. This greatly improves performance, especially for large datasets. _(Note: Currently disabled for Azure Cosmos DB for MongoDB (RU) until resource limit detection is refined.)_ [#130](https://github.com/microsoft/vscode-documentdb/issues/130)
+
+### Fixes
+
+- **Connection String Duplication**: Users are now notified if they attempt to add a connection string that already exists. [#88](https://github.com/microsoft/vscode-documentdb/issues/88)
+- **Service Discovery UX**: Improved guidance after login in Azure Service Discovery — users now receive clear feedback and prompts following authentication. [#91](https://github.com/microsoft/vscode-documentdb/issues/91)
+- **Challenge Dialog on macOS**: Fixed an issue where both default and active buttons were visually marked during confirmation dialogs, potentially leading to accidental confirmations. [#128](https://github.com/microsoft/vscode-documentdb/issues/128)
+- **VM Discovery Port Customization**: Users can now specify a custom port when connecting via Azure VM discovery. [#85](https://github.com/microsoft/vscode-documentdb/issues/85)
+- **Context Menu Cleanup**: Disabled default Cut/Copy/Paste options in table and tree views where those actions are not applicable. [#81](https://github.com/microsoft/vscode-documentdb/issues/81)
+- **Language Server Conflict**: Resolved duplicate CodeLens actions caused by conflict with Azure Databases extension. [#109](https://github.com/microsoft/vscode-documentdb/issues/109)
+
 ## 0.2.1
 
 ### Fixes
