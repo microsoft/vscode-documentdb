@@ -169,13 +169,32 @@ export class TreeParentCache<T extends TreeElement> {
         const item = this.nodeCache.get(id);
         if (item) return item;
 
-        // Try to find in child nodes if getChildrenFunc is provided
+        // Try to find the best starting point if getChildrenFunc is provided
         if (getChildrenFunc) {
+            // we'll try to find the best starting point by looking for the node
+            // with the given id, this means one with the longest path that matches
+            // the beginning of the id
+
+            // Find all potential ancestor nodes
+            const potentialAncestors: { key: string; node: T }[] = [];
+
             for (const [key, value] of this.nodeCache.entries()) {
-                if (key.startsWith(id)) {
-                    const child = await this.findChildById(value, id, getChildrenFunc);
-                    if (child) return child;
+                // Check if this cached node is an ancestor of our target
+                if (id.startsWith(key)) {
+                    potentialAncestors.push({ key, node: value });
                 }
+            }
+
+            // Sort by path length descending to start from the deepest common ancestor
+            potentialAncestors.sort((a, b) => b.key.length - a.key.length);
+
+            // Try each potential ancestor, starting with the deepest one
+            // The first one will most likely be the best candidate
+            // because it has the longest path that matches the beginning of the id
+            // but let's keep the loop just in case
+            for (const { node } of potentialAncestors) {
+                const child = await this.findChildById(node, id, getChildrenFunc);
+                if (child) return child;
             }
         }
 

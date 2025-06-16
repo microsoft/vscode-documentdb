@@ -54,9 +54,7 @@ export async function getConfirmationWithWordQuestion(
                 expectedConfirmationWord,
             }) +
             '\n\n' +
-            l10n.t(
-                'Note: This confirmation type can be configured in the settings (documentDB.userInterface.confirmationStyle).',
-            ),
+            l10n.t('Note: This confirmation type can be configured in the extension settings.'),
 
         ignoreFocusOut: true,
         validateInput: (val: string | undefined) => {
