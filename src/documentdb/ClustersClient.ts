@@ -286,6 +286,22 @@ export class ClustersClient {
         return documents;
     }
 
+    async countDocuments(databaseName: string, collectionName: string, findQuery: string = '{}'): Promise<number> {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        if (findQuery === undefined || findQuery.trim().length === 0) {
+            findQuery = '{}';
+        }
+        const findQueryObj: Filter<Document> = toFilterQueryObj(findQuery);
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+
+        const count = await collection.countDocuments(findQueryObj, {
+            // Use a read preference of 'primary' to ensure we get the most up-to-date
+            // count, especially important for sharded clusters.
+            readPreference: 'primary',
+        });
+        return count;
+    }
+
     async *streamDocuments(
         databaseName: string,
         collectionName: string,
