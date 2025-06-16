@@ -7,7 +7,7 @@ This package provides the Extension API for integrating with the VS Code Documen
 ## Installation
 
 ```bash
-npm install --save-dev @microsoft/vscode-documentdb-api
+npm install --save-dev @<to be published>
 ```
 
 ## Usage
