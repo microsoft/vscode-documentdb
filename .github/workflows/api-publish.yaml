@@ -1,20 +1,50 @@
-name: "API: Publish to npm"
+name: 'API: Publish to npm'
 
 # 🚀 This workflow manually publishes the API package to npm.
 # It should only be triggered via GitHub's UI or CLI using `workflow_dispatch`.
 
 on:
-  workflow_dispatch:
+    workflow_dispatch:
 
 permissions:
-  contents: read
+    contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.run_id }}
-  cancel-in-progress: true
+    group: ${{ github.workflow }}-${{ github.run_id }}
+    cancel-in-progress: true
 
 jobs:
-  echo:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "dummy action"
+    publish-api-package:
+        name: 🚀 Publish API Package to npm
+        runs-on: ubuntu-latest
+
+        defaults:
+            run:
+                working-directory: './api' # Ensure the workflow runs in the 'api' folder
+
+        steps:
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@v4
+
+            - name: 🛠 Setup Node.js Environment
+              uses: actions/setup-node@v4
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'npm'
+
+            - name: 💾 Restore npm Cache
+              uses: actions/cache@v3
+              with:
+                  path: ~/.npm
+                  key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node-
+
+            - name: 📦 Install Dependencies (npm ci)
+              run: npm ci
+
+            - name: 🚀 Publish Package to npm
+              uses: JS-DevTools/npm-publish@v1
+              with:
+                  package: ./api/package.json
+                  token: ${{ secrets.EXPERIMENTAL_NPM_ACCESS_TOKEN }}
