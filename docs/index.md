@@ -56,7 +56,7 @@ This section contains detailed documentation for specific features and concepts 
 - [Local Connection](./learn-more/local-connection.md)
   - [Local Connection: Azure CosmosDB for MongoDB (RU) Emulator](./learn-more/local-connection-mongodb-ru.md)
   - [Local Connection: DocumentDB Local](./learn-more/local-connection-documentdb-local.md)
-- [Data Migrations](./data-migrations.md) ⚠️ _Experimental_
+- [Data Migrations](./learn-more/data-migrations.md) ⚠️ _Experimental_
 
 ## Release Notes
 
