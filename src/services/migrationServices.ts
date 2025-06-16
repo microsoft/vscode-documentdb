@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 
 /**
  * Represents basic information about a migration provider.
@@ -68,8 +68,15 @@ export interface ActionsOptions {
 class MigrationServiceImpl {
     private migrationProviders: Map<string, MigrationProvider> = new Map();
 
-    public registerProvider(provider: MigrationProvider) {
+    public registerProvider(provider: MigrationProvider): void {
         this.migrationProviders.set(provider.id, provider);
+        this.updateContext();
+    }
+
+    public unregisterProvider(id: string): boolean {
+        const result = this.migrationProviders.delete(id);
+        this.updateContext();
+        return result;
     }
 
     public getProvider(id: string): MigrationProvider | undefined {
@@ -85,6 +92,15 @@ class MigrationServiceImpl {
         }));
 
         return providers;
+    }
+
+    /**
+     * Updates the VS Code context to reflect the current state of migration providers.
+     * Sets 'migrationProvidersAvailable' to true when providers are registered.
+     */
+    private updateContext(): void {
+        const hasProviders = this.migrationProviders.size > 0;
+        void vscode.commands.executeCommand('setContext', 'migrationProvidersAvailable', hasProviders);
     }
 }
 
