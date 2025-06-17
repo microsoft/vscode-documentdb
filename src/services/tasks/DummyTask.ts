@@ -41,8 +41,7 @@ export class DummyTask extends Task {
         for (let step = 0; step < totalSteps; step++) {
             // Check for abort signal
             if (signal.aborted) {
-                // Perform cleanup when stopping
-                this.updateMessage(vscode.l10n.t('Cleaning up task: {0}', this.name));
+                // Perform cleanup when stopping - no need for separate message update
                 await this.cleanup();
                 return;
             }

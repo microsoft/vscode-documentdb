@@ -115,7 +115,9 @@ export abstract class Task {
      * Event fired on any status update, including progress changes.
      * This is a more granular event that includes all updates.
      */
-    public readonly onDidChangeStatus = this._onDidChangeStatus.event; /**
+    public readonly onDidChangeStatus = this._onDidChangeStatus.event;
+
+    /**
      * Creates a new Task instance.
      *
      * @param id Unique identifier for the task.
@@ -137,22 +139,24 @@ export abstract class Task {
      */
     public getStatus(): TaskStatus {
         return { ...this._status };
-    }
-
-    /**
+    } /**
      * Updates the task status and emits appropriate events.
      * This method is protected to prevent external manipulation of task state.
      *
      * @param state The new task state.
      * @param message Optional status message.
+     * @param progress Optional progress value (0-100). Only applied if state is Running.
      * @param error Optional error object if the task failed.
      */
-    protected updateStatus(state: TaskState, message?: string, error?: unknown): void {
+    protected updateStatus(state: TaskState, message?: string, progress?: number, error?: unknown): void {
         const previousState = this._status.state;
+
+        // Only update progress if we're in a running state or transitioning to running
+        const newProgress = state === TaskState.Running && progress !== undefined ? progress : this._status.progress;
 
         this._status = {
             state,
-            progress: this._status.progress, // Keep existing progress
+            progress: newProgress,
             message: message ?? this._status.message,
             error: error instanceof Error ? error : error ? new Error(String(error)) : undefined,
         };
@@ -171,37 +175,19 @@ export abstract class Task {
     }
 
     /**
-     * Updates only the progress value without changing the state.
-     * Use this for reporting progress during task execution.
+     * Updates progress and message during task execution.
+     * This is a convenience method that only works when the task is running.
+     * If called when the task is not running, the update is ignored to prevent race conditions.
      *
      * @param progress Progress value (0-100).
      * @param message Optional progress message.
      */
     protected updateProgress(progress: number, message?: string): void {
-        this._status = {
-            ...this._status,
-            progress,
-            message: message ?? this._status.message,
-        };
-
-        // Emit status change event
-        this._onDidChangeStatus.fire(this.getStatus());
-    }
-
-    /**
-     * Updates only the message without changing state or progress.
-     * Use this for status updates that don't represent progress changes.
-     *
-     * @param message The new status message.
-     */
-    protected updateMessage(message: string): void {
-        this._status = {
-            ...this._status,
-            message,
-        };
-
-        // Emit status change event
-        this._onDidChangeStatus.fire(this.getStatus());
+        // Only allow progress updates when running to prevent race conditions
+        if (this._status.state === TaskState.Running) {
+            this.updateStatus(TaskState.Running, message, progress);
+        }
+        // Silently ignore progress updates in other states to prevent race conditions
     }
 
     /**
@@ -216,15 +202,13 @@ export abstract class Task {
         if (this._status.state !== TaskState.Pending) {
             throw new Error(vscode.l10n.t('Cannot start task in state: {0}', this._status.state));
         }
-        this.updateStatus(TaskState.Initializing, vscode.l10n.t('Initializing task...'));
-        this.updateProgress(0); // Set initial progress
+        this.updateStatus(TaskState.Initializing, vscode.l10n.t('Initializing task...'), 0);
 
         try {
             // Allow subclasses to perform initialization
             await this.onInitialize?.();
 
-            this.updateStatus(TaskState.Running, vscode.l10n.t('Task is running'));
-            this.updateProgress(0); // Reset progress for the main work
+            this.updateStatus(TaskState.Running, vscode.l10n.t('Task is running'), 0);
 
             // Start the actual work asynchronously
             void this.runWork().catch((error) => {
@@ -244,8 +228,7 @@ export abstract class Task {
         try {
             await this.doWork(this.abortController.signal); // If not aborted, mark as completed
             if (!this.abortController.signal.aborted) {
-                this.updateProgress(100);
-                this.updateStatus(TaskState.Completed, vscode.l10n.t('Task completed successfully'));
+                this.updateStatus(TaskState.Completed, vscode.l10n.t('Task completed successfully'), 100);
             }
         } catch (error) {
             // Only update to failed if not aborted
@@ -307,8 +290,7 @@ export abstract class Task {
      * Subclasses must implement this method with their specific functionality.
      *     * The implementation should:
      * - Check the abort signal periodically for long-running operations
-     * - Call updateProgress() to report progress updates
-     * - Call updateMessage() for status messages without progress
+     * - Call updateProgress() to report progress updates (safe to call anytime)
      * - Throw errors for failure conditions
      * - Handle cleanup when signal.aborted becomes true
      *
@@ -322,7 +304,6 @@ export abstract class Task {
      *     for (let i = 0; i < items.length; i++) {
      *         if (signal.aborted) {
      *             // Perform any necessary cleanup here
-     *             this.updateMessage('Cleaning up...');
      *             await this.cleanup();
      *             return;
      *         }
