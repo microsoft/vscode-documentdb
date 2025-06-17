@@ -115,14 +115,24 @@ export interface Task {
     /**
      * Initiates the task execution.
      *
-     * @returns A Promise that resolves when the task is started.
+     * This method should only start the task's execution and return immediately.
+     * It should NOT wait for the task to complete. The actual task execution
+     * should happen asynchronously, typically by spawning a separate promise chain
+     * that updates the task's state as it progresses.
+     *
+     * @returns A Promise that resolves when the task has been started (not when it completes).
      */
     start(): Promise<void>;
 
     /**
      * Requests a graceful stop of the task.
      *
-     * @returns A Promise that resolves when the task has acknowledged the stop request.
+     * This method should only signal the task to stop and return after acknowledging
+     * the request. The task's internal execution logic is responsible for detecting this
+     * signal and updating the task state to TaskState.Stopping and eventually to
+     * TaskState.Stopped once the termination is complete.
+     *
+     * @returns A Promise that resolves when the stop request has been acknowledged.
      */
     stop(): Promise<void>;
 
