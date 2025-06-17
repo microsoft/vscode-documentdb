@@ -7,19 +7,19 @@ import * as vscode from 'vscode';
 import { Task } from '../taskService';
 
 /**
- * A dummy task implementation that demonstrates the Task abstract class.
+ * A demo task implementation that demonstrates the Task abstract class.
  * This task simulates work by using timeouts and provides progress updates over a 10-second duration.
  *
  * The base class handles all state management, allowing this implementation
  * to focus solely on the business logic.
  */
-export class DummyTask extends Task {
-    public readonly type: string = 'dummy-task';
+export class DemoTask extends Task {
+    public readonly type: string = 'demo-task';
     public readonly name: string;
     private readonly shouldFail: boolean;
 
     /**
-     * Creates a new DummyTask instance.
+     * Creates a new DemoTask instance.
      *
      * @param id Unique identifier for the task.
      * @param name User-friendly name for the task.
