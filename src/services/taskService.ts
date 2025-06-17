@@ -212,10 +212,10 @@ export abstract class Task {
 
             // Start the actual work asynchronously
             void this.runWork().catch((error) => {
-                this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), error);
+                this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
             });
         } catch (error) {
-            this.updateStatus(TaskState.Failed, vscode.l10n.t('Failed to initialize task'), error);
+            this.updateStatus(TaskState.Failed, vscode.l10n.t('Failed to initialize task'), 0, error);
             throw error;
         }
     }
@@ -233,7 +233,7 @@ export abstract class Task {
         } catch (error) {
             // Only update to failed if not aborted
             if (!this.abortController.signal.aborted) {
-                this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), error);
+                this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
             }
         }
     }
@@ -450,7 +450,9 @@ class TaskServiceImpl implements TaskService {
         // Clean up event subscriptions
         const subscriptions = this.taskSubscriptions.get(id);
         if (subscriptions) {
-            subscriptions.forEach((sub) => sub.dispose());
+            subscriptions.forEach((sub) => {
+                sub.dispose(); // Explicitly ignore the return value
+            });
             this.taskSubscriptions.delete(id);
         }
 

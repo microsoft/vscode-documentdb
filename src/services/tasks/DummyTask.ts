@@ -16,16 +16,19 @@ import { Task } from '../taskService';
 export class DummyTask extends Task {
     public readonly type: string = 'dummy-task';
     public readonly name: string;
+    private readonly shouldFail: boolean;
 
     /**
      * Creates a new DummyTask instance.
      *
      * @param id Unique identifier for the task.
      * @param name User-friendly name for the task.
+     * @param shouldFail Optional parameter to make the task fail after a random amount of time for testing purposes.
      */
-    constructor(id: string, name: string) {
+    constructor(id: string, name: string, shouldFail: boolean = false) {
         super(id);
         this.name = name;
+        this.shouldFail = shouldFail;
     }
 
     /**
@@ -38,12 +41,20 @@ export class DummyTask extends Task {
         const totalSteps = 10;
         const stepDuration = 1000; // 1 second per step
 
+        // If shouldFail is true, determine a random failure point between step 2 and 8
+        const failureStep = this.shouldFail ? Math.floor(Math.random() * 6) + 2 : -1; // Random between 2-7
+
         for (let step = 0; step < totalSteps; step++) {
             // Check for abort signal
             if (signal.aborted) {
                 // Perform cleanup when stopping - no need for separate message update
                 await this.cleanup();
                 return;
+            }
+
+            // Check if we should fail at this step
+            if (this.shouldFail && step === failureStep) {
+                throw new Error(vscode.l10n.t('Simulated failure at step {0} for testing purposes', step + 1));
             }
 
             // Simulate work
