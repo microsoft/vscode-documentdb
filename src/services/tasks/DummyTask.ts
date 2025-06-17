@@ -3,21 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Task, TaskState, TaskStatus } from '../taskService';
+import * as vscode from 'vscode';
+import { Task } from '../taskService';
 
 /**
- * A dummy task implementation that demonstrates the basic Task interface.
+ * A dummy task implementation that demonstrates the Task abstract class.
  * This task simulates work by using timeouts and provides progress updates over a 10-second duration.
- * It properly handles abort signals and can be used as a reference for implementing other tasks.
+ *
+ * The base class handles all state management, allowing this implementation
+ * to focus solely on the business logic.
  */
-export class DummyTask implements Task {
-    public readonly id: string;
+export class DummyTask extends Task {
     public readonly type: string = 'dummy-task';
     public readonly name: string;
-
-    private status: TaskStatus;
-    private abortController: AbortController;
-    private timeoutId: NodeJS.Timeout | undefined;
 
     /**
      * Creates a new DummyTask instance.
@@ -26,72 +24,74 @@ export class DummyTask implements Task {
      * @param name User-friendly name for the task.
      */
     constructor(id: string, name: string) {
-        this.id = id;
+        super(id);
         this.name = name;
-        this.status = {
-            state: TaskState.Pending,
-            progress: 0,
-            message: 'Task created and ready to start',
-        };
-        this.abortController = new AbortController();
     }
 
     /**
-     * Gets the current status of the task.
+     * Implements the main task logic with progress updates.
+     * The base class handles all state transitions and error handling.
      *
-     * @returns The current TaskStatus.
+     * @param signal AbortSignal to check for stop requests.
      */
-    public getStatus(): TaskStatus {
-        return { ...this.status };
-    }
+    protected async doWork(signal: AbortSignal): Promise<void> {
+        const totalSteps = 10;
+        const stepDuration = 1000; // 1 second per step
 
-    /**
-     * Starts the task execution.
-     * This method only initiates the task and returns immediately.
-     * It does NOT wait for the task to complete.
-     *
-     * @returns A Promise that resolves when the task has been started (not when it completes).
-     */
-    public async start(): Promise<void> {
-        if (this.status.state !== TaskState.Pending) {
-            throw new Error(`Cannot start task in state: ${this.status.state}`);
-        }
+        for (let step = 0; step < totalSteps; step++) {
+            // Check for abort signal
+            if (signal.aborted) {
+                return;
+            }
 
-        this.updateStatus(TaskState.Initializing, 0, 'Initializing task...');
+            // Simulate work
+            await this.sleep(stepDuration);
 
-        // Simulate initialization delay
-        await this.sleep(100);
-
-        if (this.abortController.signal.aborted) {
-            this.updateStatus(TaskState.Stopped, 0, 'Task was aborted during initialization');
-            return;
-        }
-
-        this.updateStatus(TaskState.Running, 0, 'Starting task execution...');
-
-        // Start the task execution asynchronously without awaiting it
-        void this.executeTask().catch((error) => {
-            this.updateStatus(
-                TaskState.Failed,
-                this.status.progress,
-                `Task failed: ${error instanceof Error ? error.message : String(error)}`,
-                error,
+            // Update progress
+            const progress = ((step + 1) / totalSteps) * 100;
+            this.updateProgress(
+                progress,
+                vscode.l10n.t('Processing step {0} of {1}', step + 1, totalSteps),
             );
-        });
-
-        // Return immediately after starting the task
-        return Promise.resolve();
+        }
     }
 
     /**
-     * Requests a graceful stop of the task.
-     * This method only signals the task to stop and returns after acknowledging the request.
-     * The task's execution logic is responsible for detecting this signal and updating the state.
-     *
-     * @returns A Promise that resolves when the stop request has been acknowledged.
+     * Optional initialization logic.
+     * Called by the base class during start().
      */
-    public async stop(): Promise<void> {
-        if (
+    protected async onInitialize(): Promise<void> {
+        console.log(`Initializing task: ${this.name}`);
+        // Could perform resource allocation, connection setup, etc.
+    }
+
+    /**
+     * Optional cleanup logic when stopping.
+     * Called by the base class during stop().
+     */
+    protected async onStop(): Promise<void> {
+        console.log(`Stopping task: ${this.name}`);
+        // Could close connections, save state, etc.
+    }
+
+    /**
+     * Optional cleanup logic when deleting.
+     * Called by the base class during delete().
+     */
+    protected async onDelete(): Promise<void> {
+        console.log(`Deleting task: ${this.name}`);
+        // Could clean up temporary files, release resources, etc.
+    }
+
+    /**
+     * Helper method to create a delay.
+     *
+     * @param ms Delay in milliseconds.
+     */
+    private sleep(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+}
             this.status.state === TaskState.Completed ||
             this.status.state === TaskState.Failed ||
             this.status.state === TaskState.Stopped

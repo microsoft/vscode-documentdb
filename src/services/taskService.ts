@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as vscode from 'vscode';
+
 /**
  * Enumeration of possible states a task can be in.
  */
@@ -23,39 +25,24 @@ export enum TaskState {
     Running = 'running',
 
     /**
+     * Task is in the process of stopping.
+     */
+    Stopping = 'stopping',
+
+    /**
+     * Task has been stopped by user request.
+     */
+    Stopped = 'stopped',
+
+    /**
      * Task has successfully finished its work.
      */
     Completed = 'completed',
 
     /**
-     * Task encountered an error and could not complete successfully.
+     * Task has failed due to an error.
      */
     Failed = 'failed',
-
-    /**
-     * Task is in the process of stopping after receiving a stop request.
-     */
-    Stopping = 'stopping',
-
-    /**
-     * Task has been successfully stopped before completion.
-     */
-    Stopped = 'stopped',
-
-    /**
-     * Task is in the process of pausing its execution.
-     */
-    Pausing = 'pausing',
-
-    /**
-     * Task execution is temporarily suspended and can be resumed.
-     */
-    Paused = 'paused',
-
-    /**
-     * Task is in the process of resuming from a paused state.
-     */
-    Resuming = 'resuming',
 }
 
 /**
@@ -84,303 +71,412 @@ export interface TaskStatus {
 }
 
 /**
- * Represents a long-running task managed by the TaskService.
- *
- * When created, a task should be initialized with the default state of TaskState.Pending.
- * Tasks must be explicitly started via the start() method to begin execution.
+ * Event fired when a task's state changes.
  */
-export interface Task {
-    /**
-     * Unique identifier for the task, set at construction.
-     */
-    readonly id: string;
-
-    /**
-     * Type identifier for the task, e.g., 'copy-paste-collection', 'schema-analysis'.
-     */
-    readonly type: string;
-
-    /**
-     * User-friendly name/description of the task.
-     */
-    readonly name: string;
-
-    /**
-     * Retrieves the current status of the task.
-     *
-     * @returns The current TaskStatus.
-     */
-    getStatus(): TaskStatus;
-
-    /**
-     * Initiates the task execution.
-     *
-     * This method should only start the task's execution and return immediately.
-     * It should NOT wait for the task to complete. The actual task execution
-     * should happen asynchronously, typically by spawning a separate promise chain
-     * that updates the task's state as it progresses.
-     *
-     * @returns A Promise that resolves when the task has been started (not when it completes).
-     */
-    start(): Promise<void>;
-
-    /**
-     * Requests a graceful stop of the task.
-     *
-     * This method should only signal the task to stop and return after acknowledging
-     * the request. The task's internal execution logic is responsible for detecting this
-     * signal and updating the task state to TaskState.Stopping and eventually to
-     * TaskState.Stopped once the termination is complete.
-     *
-     * @returns A Promise that resolves when the stop request has been acknowledged.
-     */
-    stop(): Promise<void>;
-
-    /**
-     * Performs cleanup for the task.
-     * The TaskService will call this before removing the task from its tracking.
-     *
-     * @returns A Promise that resolves when cleanup is complete.
-     */
-    delete(): Promise<void>;
+export interface TaskStateChangeEvent {
+    readonly previousState: TaskState;
+    readonly newState: TaskState;
+    readonly taskId: string;
 }
 
 /**
- * Represents a task that supports pause and resume operations.
+ * Abstract base class for long-running tasks managed by the TaskService.
  *
- * Implementation of pause and resume methods is optional for tasks.
- * A task that implements this interface indicates it can be paused during execution
- * and later resumed from the point it was paused.
+ * This class implements the template method pattern to handle complex state
+ * transitions and lifecycle management, allowing subclasses to focus solely
+ * on their business logic.
+ *
+ * Tasks are created in the Pending state and must be explicitly started.
+ * The base class guarantees proper state transitions and provides comprehensive
+ * event support for real-time monitoring.
+ *
+ * Subclasses only need to implement the doWork() method with their
+ * specific task logic.
  */
-export interface PausableTask extends Task {
-    /**
-     * Temporarily suspends the task execution while preserving its state.
-     *
-     * @returns A Promise that resolves when the task has successfully paused.
-     */
-    pause(): Promise<void>;
+export abstract class Task extends vscode.EventEmitter<{
+    onDidChangeState: [TaskStateChangeEvent];
+    onDidChangeStatus: [TaskStatus];
+}> {
+    public readonly id: string;
+    public abstract readonly type: string;
+    public abstract readonly name: string;
+
+    private _status: TaskStatus;
+    private abortController: AbortController;
 
     /**
-     * Resumes task execution from the point it was paused.
-     *
-     * @returns A Promise that resolves when the task has successfully resumed.
+     * Event fired when the task's state changes (e.g., Running to Completed).
+     * This event is guaranteed to capture all state transitions.
      */
-    resume(): Promise<void>;
+    public readonly onDidChangeState = this.event<TaskStateChangeEvent>('onDidChangeState');
 
     /**
-     * Indicates whether the task supports pause and resume operations.
-     *
-     * @returns True if the task can be paused and resumed, false otherwise.
+     * Event fired on any status update, including progress changes.
+     * This is a more granular event that includes all updates.
      */
-    canPause(): boolean;
+    public readonly onDidChangeStatus = this.event<TaskStatus>('onDidChangeStatus');
+
+    /**
+     * Creates a new Task instance.
+     *
+     * @param id Unique identifier for the task.
+     */
+    protected constructor(id: string) {
+        super();
+        this.id = id;
+        this._status = {
+            state: TaskState.Pending,
+            progress: 0,
+            message: vscode.l10n.t('Task created and ready to start'),
+        };
+        this.abortController = new AbortController();
+    }
+
+    /**
+     * Gets the current status of the task.
+     *
+     * @returns A copy of the current TaskStatus.
+     */
+    public getStatus(): TaskStatus {
+        return { ...this._status };
+    }
+
+    /**
+     * Updates the task status and emits appropriate events.
+     * This method is protected to prevent external manipulation of task state.
+     *
+     * @param state The new task state.
+     * @param progress Optional progress value (0-100).
+     * @param message Optional status message.
+     * @param error Optional error object if the task failed.
+     */
+    protected updateStatus(state: TaskState, progress?: number, message?: string, error?: unknown): void {
+        const previousState = this._status.state;
+
+        this._status = {
+            state,
+            progress: progress ?? this._status.progress,
+            message: message ?? this._status.message,
+            error: error instanceof Error ? error : error ? new Error(String(error)) : undefined,
+        };
+
+        // Always emit the granular status change event
+        this.fire('onDidChangeStatus', this.getStatus());
+
+        // Emit state change event only if state actually changed
+        if (previousState !== state) {
+            this.fire('onDidChangeState', {
+                previousState,
+                newState: state,
+                taskId: this.id,
+            });
+        }
+    }
+
+    /**
+     * Updates only the progress value without changing the state.
+     * Convenience method for progress updates during task execution.
+     *
+     * @param progress Progress value (0-100).
+     * @param message Optional progress message.
+     */
+    protected updateProgress(progress: number, message?: string): void {
+        this.updateStatus(this._status.state, progress, message);
+    }
+
+    /**
+     * Starts the task execution.
+     * This method implements the template method pattern, handling all state
+     * transitions and error handling automatically.
+     *
+     * @returns A Promise that resolves when the task has been started (not when it completes).
+     * @throws Error if the task is not in a valid state to start.
+     */
+    public async start(): Promise<void> {
+        if (this._status.state !== TaskState.Pending) {
+            throw new Error(vscode.l10n.t('Cannot start task in state: {0}', this._status.state));
+        }
+
+        this.updateStatus(TaskState.Initializing, 0, vscode.l10n.t('Initializing task...'));
+
+        try {
+            // Allow subclasses to perform initialization
+            await this.onInitialize?.();
+
+            this.updateStatus(TaskState.Running, 0, vscode.l10n.t('Task is running'));
+
+            // Start the actual work asynchronously
+            void this.runWork().catch((error) => {
+                this.updateStatus(TaskState.Failed, this._status.progress, vscode.l10n.t('Task failed'), error);
+            });
+        } catch (error) {
+            this.updateStatus(TaskState.Failed, 0, vscode.l10n.t('Failed to initialize task'), error);
+            throw error;
+        }
+    }
+
+    /**
+     * Executes the main task work with proper error handling and state management.
+     * This method is private to ensure proper lifecycle management.
+     */
+    private async runWork(): Promise<void> {
+        try {
+            await this.doWork(this.abortController.signal);
+
+            // If not aborted, mark as completed
+            if (!this.abortController.signal.aborted) {
+                this.updateStatus(TaskState.Completed, 100, vscode.l10n.t('Task completed successfully'));
+            }
+        } catch (error) {
+            // Only update to failed if not aborted
+            if (!this.abortController.signal.aborted) {
+                this.updateStatus(TaskState.Failed, this._status.progress, vscode.l10n.t('Task failed'), error);
+            }
+        }
+    }
+
+    /**
+     * Requests a graceful stop of the task.
+     * This method signals the task to stop via AbortSignal and updates the state accordingly.
+     *
+     * @returns A Promise that resolves when the stop request has been acknowledged.
+     */
+    public async stop(): Promise<void> {
+        if (this.isFinalState()) {
+            return;
+        }
+
+        this.updateStatus(TaskState.Stopping, this._status.progress, vscode.l10n.t('Stopping task...'));
+        this.abortController.abort();
+
+        // Allow subclasses to perform cleanup
+        try {
+            await this.onStop?.();
+        } catch (error) {
+            // Log but don't throw - we're stopping anyway
+            console.error('Error during task stop:', error);
+        }
+
+        // Update to stopped state
+        this.updateStatus(TaskState.Stopped, this._status.progress, vscode.l10n.t('Task stopped'));
+    }
+
+    /**
+     * Performs cleanup for the task.
+     * This should be called when the task is no longer needed.
+     *
+     * @returns A Promise that resolves when cleanup is complete.
+     */
+    public async delete(): Promise<void> {
+        // Ensure task is stopped
+        if (!this.isFinalState()) {
+            await this.stop();
+        }
+
+        // Allow subclasses to perform cleanup
+        try {
+            await this.onDelete?.();
+        } catch (error) {
+            // Log but don't throw
+            console.error('Error during task deletion:', error);
+        }
+
+        // Dispose of event emitter resources
+        this.dispose();
+    }
+
+    /**
+     * Checks if the task is in a final state (completed, failed, or stopped).
+     */
+    private isFinalState(): boolean {
+        return [TaskState.Completed, TaskState.Failed, TaskState.Stopped].includes(this._status.state);
+    }
+
+    /**
+     * Implements the actual task logic.
+     * Subclasses must implement this method with their specific functionality.
+     *
+     * The implementation should:
+     * - Check the abort signal periodically for long-running operations
+     * - Call updateProgress() to report progress
+     * - Throw errors for failure conditions
+     *
+     * @param signal AbortSignal that will be triggered when stop() is called.
+     *               Check signal.aborted to exit gracefully.
+     *
+     * @example
+     * protected async doWork(signal: AbortSignal): Promise<void> {
+     *     const items = await this.loadItems();
+     *
+     *     for (let i = 0; i < items.length; i++) {
+     *         if (signal.aborted) return;
+     *
+     *         await this.processItem(items[i]);
+     *         this.updateProgress((i + 1) / items.length * 100);
+     *     }
+     * }
+     */
+    protected abstract doWork(signal: AbortSignal): Promise<void>;
+
+    /**
+     * Optional hook called during task initialization.
+     * Override this to perform setup operations before the main work begins.
+     */
+    protected onInitialize?(): Promise<void>;
+
+    /**
+     * Optional hook called when the task is being stopped.
+     * Override this to perform cleanup operations specific to stopping.
+     */
+    protected onStop?(): Promise<void>;
+
+    /**
+     * Optional hook called when the task is being deleted.
+     * Override this to clean up resources like file handles or connections.
+     */
+    protected onDelete?(): Promise<void>;
 }
 
 /**
  * Service for managing long-running tasks within the extension.
+ *
+ * Provides centralized task management with comprehensive event support
+ * for monitoring task lifecycle and status changes.
  */
 export interface TaskService {
     /**
-     * Registers a pre-constructed task instance with the engine.
-     * The task's `id` must be unique.
+     * Registers a new task with the service.
+     * The task must have a unique ID.
      *
-     * @param task The task instance to register.
-     * @throws Error if a task with the same ID is already registered.
+     * @param task The task to register.
+     * @throws Error if a task with the same ID already exists.
      */
     registerTask(task: Task): void;
 
     /**
-     * Retrieves a registered task by its ID.
+     * Retrieves a task by its ID.
      *
-     * @param id The ID of the task.
-     * @returns The task instance, or undefined if not found.
+     * @param id The unique identifier of the task.
+     * @returns The task if found, undefined otherwise.
      */
     getTask(id: string): Task | undefined;
 
     /**
      * Lists all currently registered tasks.
      *
-     * @returns An array of task instances.
+     * @returns An array of all registered tasks.
      */
     listTasks(): Task[];
 
     /**
-     * Unregisters a task and calls its delete() method.
-     * This effectively removes the task from the engine's management.
+     * Deletes a task from the service.
+     * This will call the task's delete() method for cleanup.
      *
-     * @param id The ID of the task to delete.
-     * @throws Error if the task is not found or if deletion fails.
+     * @param id The unique identifier of the task to delete.
+     * @returns A Promise that resolves when the task has been deleted.
+     * @throws Error if the task is not found.
      */
     deleteTask(id: string): Promise<void>;
 
     /**
-     * Pauses a task if it implements the PausableTask interface.
-     *
-     * @param id The ID of the task to pause.
-     * @throws Error if the task is not found, does not support pausing, or if pausing fails.
+     * Event fired when a new task is registered.
+     * Use this to update UI or start monitoring a new task.
      */
-    pauseTask(id: string): Promise<void>;
+    readonly onDidRegisterTask: vscode.Event<Task>;
 
     /**
-     * Resumes a paused task if it implements the PausableTask interface.
-     *
-     * @param id The ID of the task to resume.
-     * @throws Error if the task is not found, does not support resuming, or if resuming fails.
+     * Event fired when a task is deleted.
+     * The event provides the task ID that was deleted.
      */
-    resumeTask(id: string): Promise<void>;
+    readonly onDidDeleteTask: vscode.Event<string>;
 
     /**
-     * Checks if a task supports pause and resume operations.
-     *
-     * @param id The ID of the task to check.
-     * @returns True if the task supports pause and resume, false otherwise.
-     * @throws Error if the task is not found.
+     * Event fired when any task's status changes.
+     * This aggregates status changes from all registered tasks,
+     * providing a single subscription point for monitoring all task activity.
      */
-    isTaskPausable(id: string): boolean;
+    readonly onDidChangeTaskStatus: vscode.Event<{ taskId: string; status: TaskStatus }>;
+
+    /**
+     * Event fired when a task's state changes.
+     * This provides detailed information about the state transition.
+     */
+    readonly onDidChangeTaskState: vscode.Event<TaskStateChangeEvent>;
 }
 
 /**
  * Private implementation of TaskService that manages long-running task operations
  * within the extension.
  *
- * Tasks are registered with unique IDs and can be retrieved individually,
- * listed, or deleted when complete.
- *
- * This class cannot be instantiated directly - use the exported TaskService singleton instead.
+ * This implementation provides comprehensive event support for both individual
+ * tasks and aggregated task monitoring.
  */
-class TaskServiceImpl implements TaskService {
-    private tasks: Map<string, Task> = new Map();
+class TaskServiceImpl
+    extends vscode.EventEmitter<{
+        onDidRegisterTask: [Task];
+        onDidDeleteTask: [string];
+        onDidChangeTaskStatus: [{ taskId: string; status: TaskStatus }];
+        onDidChangeTaskState: [TaskStateChangeEvent];
+    }>
+    implements TaskService
+{
+    private readonly tasks = new Map<string, Task>();
+    private readonly taskSubscriptions = new Map<string, vscode.Disposable[]>();
 
-    /**
-     * Implementation of TaskService.registerTask that adds a task to the task manager.
-     *
-     * @param task The task instance to register.
-     * @throws Error if a task with the same ID is already registered.
-     */
+    public readonly onDidRegisterTask = this.event<Task>('onDidRegisterTask');
+    public readonly onDidDeleteTask = this.event<string>('onDidDeleteTask');
+    public readonly onDidChangeTaskStatus = this.event<{ taskId: string; status: TaskStatus }>('onDidChangeTaskStatus');
+    public readonly onDidChangeTaskState = this.event<TaskStateChangeEvent>('onDidChangeTaskState');
+
     public registerTask(task: Task): void {
         if (this.tasks.has(task.id)) {
-            throw new Error(`Task with ID '${task.id}' already exists`);
+            throw new Error(vscode.l10n.t('Task with ID {0} already exists', task.id));
         }
+
+        // Subscribe to task events and aggregate them
+        const subscriptions: vscode.Disposable[] = [
+            task.onDidChangeStatus((status) => {
+                this.fire('onDidChangeTaskStatus', { taskId: task.id, status });
+            }),
+            task.onDidChangeState((e) => {
+                this.fire('onDidChangeTaskState', e);
+            }),
+        ];
+
         this.tasks.set(task.id, task);
+        this.taskSubscriptions.set(task.id, subscriptions);
+
+        // Notify listeners about the new task
+        this.fire('onDidRegisterTask', task);
     }
 
-    /**
-     * Implementation of TaskService.getTask that retrieves a task by its ID.
-     *
-     * @param id The ID of the task.
-     * @returns The task instance, or undefined if not found.
-     */
     public getTask(id: string): Task | undefined {
         return this.tasks.get(id);
     }
 
-    /**
-     * Implementation of TaskService.listTasks that returns all registered tasks.
-     *
-     * @returns An array of all registered task instances.
-     */
     public listTasks(): Task[] {
         return Array.from(this.tasks.values());
     }
 
-    /**
-     * Implementation of TaskService.deleteTask that unregisters a task and calls its delete() method.
-     *
-     * @param id The ID of the task to delete.
-     * @throws Error if the task is not found or if deletion fails.
-     */
     public async deleteTask(id: string): Promise<void> {
         const task = this.tasks.get(id);
         if (!task) {
-            throw new Error(`Task with ID '${id}' not found`);
+            throw new Error(vscode.l10n.t('Task with ID {0} not found', id));
         }
 
-        try {
-            await task.delete();
-            this.tasks.delete(id);
-        } catch (error) {
-            throw new Error(`Failed to delete task '${id}'`, { cause: error });
-        }
-    }
-
-    /**
-     * Implementation of TaskService.pauseTask that pauses a pausable task.
-     *
-     * @param id The ID of the task to pause.
-     * @throws Error if the task is not found, does not support pausing, or if pausing fails.
-     */
-    public async pauseTask(id: string): Promise<void> {
-        const task = this.tasks.get(id);
-        if (!task) {
-            throw new Error(`Task with ID '${id}' not found`);
+        // Clean up event subscriptions
+        const subscriptions = this.taskSubscriptions.get(id);
+        if (subscriptions) {
+            subscriptions.forEach((sub) => sub.dispose());
+            this.taskSubscriptions.delete(id);
         }
 
-        if (!this.isPausableTask(task)) {
-            throw new Error(`Task with ID '${id}' does not support pause operation`);
-        }
+        // Delete the task (this will stop it if needed)
+        await task.delete();
+        this.tasks.delete(id);
 
-        try {
-            await task.pause();
-        } catch (error) {
-            throw new Error(`Failed to pause task '${id}': ${error instanceof Error ? error.message : String(error)}`, {
-                cause: error,
-            });
-        }
-    }
-
-    /**
-     * Implementation of TaskService.resumeTask that resumes a paused task.
-     *
-     * @param id The ID of the task to resume.
-     * @throws Error if the task is not found, does not support resuming, or if resuming fails.
-     */
-    public async resumeTask(id: string): Promise<void> {
-        const task = this.tasks.get(id);
-        if (!task) {
-            throw new Error(`Task with ID '${id}' not found`);
-        }
-
-        if (!this.isPausableTask(task)) {
-            throw new Error(`Task with ID '${id}' does not support resume operation`);
-        }
-
-        try {
-            await task.resume();
-        } catch (error) {
-            throw new Error(`Failed to resume task '${id}'`, { cause: error });
-        }
-    }
-
-    /**
-     * Implementation of TaskService.isTaskPausable that checks if a task supports pause and resume operations.
-     *
-     * @param id The ID of the task to check.
-     * @returns True if the task supports pause and resume, false otherwise.
-     * @throws Error if the task is not found.
-     */
-    public isTaskPausable(id: string): boolean {
-        const task = this.tasks.get(id);
-        if (!task) {
-            throw new Error(`Task with ID '${id}' not found`);
-        }
-
-        return this.isPausableTask(task);
-    }
-
-    /**
-     * Helper method to check if a task implements the PausableTask interface.
-     *
-     * @param task The task to check.
-     * @returns True if the task is pausable, false otherwise.
-     */
-    private isPausableTask(task: Task): task is PausableTask {
-        return (
-            'pause' in task &&
-            'resume' in task &&
-            'canPause' in task &&
-            typeof (task as PausableTask).pause === 'function' &&
-            typeof (task as PausableTask).resume === 'function' &&
-            typeof (task as PausableTask).canPause === 'function'
-        );
+        // Notify listeners
+        this.fire('onDidDeleteTask', id);
     }
 }
 
