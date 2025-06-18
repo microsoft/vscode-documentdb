@@ -316,6 +316,12 @@
         "icon": "$(refresh)"
       },
       {
+        "//": "[Testing] Start Demo Task",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.testing.startDemoTask",
+        "title": "Start Demo Task"
+      },
+      {
         "//": "[DiscoveryView] Enable Registry",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.addRegistry",

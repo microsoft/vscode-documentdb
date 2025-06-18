@@ -201,7 +201,17 @@ export abstract class Task {
 
         try {
             // Allow subclasses to perform initialization
-            await this.onInitialize?.();
+            await this.onInitialize?.(this.abortController.signal);
+
+            // Check if abort was requested during initialization
+            if (this.abortController.signal.aborted) {
+                this.updateStatus(TaskState.Stopping, vscode.l10n.t('Task stopped during initialization'));
+                // Let runWork handle the final state transition
+                void this.runWork().catch((error) => {
+                    this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
+                });
+                return;
+            }
 
             this.updateStatus(TaskState.Running, vscode.l10n.t('Task is running'), 0);
 
@@ -314,8 +324,11 @@ export abstract class Task {
     protected abstract doWork(signal: AbortSignal): Promise<void>; /**
      * Optional hook called during task initialization.
      * Override this to perform setup operations before the main work begins.
+     *
+     * @param signal AbortSignal that will be triggered when stop() is called.
+     *               Check signal.aborted to exit initialization early if needed.
      */
-    protected onInitialize?(): Promise<void>;
+    protected onInitialize?(signal: AbortSignal): Promise<void>;
 
     /**
      * Optional hook called when the task is being deleted.
