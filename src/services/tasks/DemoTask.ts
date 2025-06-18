@@ -21,12 +21,11 @@ export class DemoTask extends Task {
     /**
      * Creates a new DemoTask instance.
      *
-     * @param id Unique identifier for the task.
      * @param name User-friendly name for the task.
      * @param shouldFail Optional parameter to make the task fail after a random amount of time for testing purposes.
      */
-    constructor(id: string, name: string, shouldFail: boolean = false) {
-        super(id);
+    constructor(name: string, shouldFail: boolean = false) {
+        super();
         this.name = name;
         this.shouldFail = shouldFail;
     }

@@ -115,15 +115,11 @@ export abstract class Task {
      * Event fired on any status update, including progress changes.
      * This is a more granular event that includes all updates.
      */
-    public readonly onDidChangeStatus = this._onDidChangeStatus.event;
-
-    /**
-     * Creates a new Task instance.
-     *
-     * @param id Unique identifier for the task.
+    public readonly onDidChangeStatus = this._onDidChangeStatus.event; /**
+     * Creates a new Task instance with an auto-generated unique ID.
      */
-    protected constructor(id: string) {
-        this.id = id;
+    protected constructor() {
+        this.id = crypto.randomUUID();
         this._status = {
             state: TaskState.Pending,
             progress: 0,
