@@ -149,12 +149,11 @@ export abstract class Task {
 
         // Only update progress if we're in a running state or transitioning to running
         const newProgress = state === TaskState.Running && progress !== undefined ? progress : this._status.progress;
-
         this._status = {
             state,
             progress: newProgress,
             message: message ?? this._status.message,
-            error: error instanceof Error ? error : error ? new Error(String(error)) : undefined,
+            error: error instanceof Error ? error : error ? new Error(JSON.stringify(error)) : undefined,
         };
 
         // Always emit the granular status change event
@@ -214,41 +213,45 @@ export abstract class Task {
             this.updateStatus(TaskState.Failed, vscode.l10n.t('Failed to initialize task'), 0, error);
             throw error;
         }
-    }
-
-    /**
+    } /**
      * Executes the main task work with proper error handling and state management.
      * This method is private to ensure proper lifecycle management.
      */
     private async runWork(): Promise<void> {
         try {
-            await this.doWork(this.abortController.signal); // If not aborted, mark as completed
-            if (!this.abortController.signal.aborted) {
+            await this.doWork(this.abortController.signal);
+
+            // Determine final state based on abort status
+            if (this.abortController.signal.aborted) {
+                this.updateStatus(TaskState.Stopped, vscode.l10n.t('Task stopped'));
+            } else {
                 this.updateStatus(TaskState.Completed, vscode.l10n.t('Task completed successfully'), 100);
             }
         } catch (error) {
-            // Only update to failed if not aborted
-            if (!this.abortController.signal.aborted) {
+            // Determine final state based on abort status
+            if (this.abortController.signal.aborted) {
+                this.updateStatus(TaskState.Stopped, vscode.l10n.t('Task stopped'));
+            } else {
                 this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
             }
         }
-    }
-
-    /**
+    } /**
      * Requests a graceful stop of the task.
      * This method signals the task to stop via AbortSignal and updates the state accordingly.
+     * The final state transition to Stopped will be handled by runWork() when it detects the abort signal.
      *
-     * @returns A Promise that resolves when the stop request has been acknowledged.
+     * This method returns immediately after signaling the stop request. The actual stopping
+     * is handled asynchronously by the running task when it detects the abort signal.
      */
-    public async stop(): Promise<void> {
+    public stop(): void {
         if (this.isFinalState()) {
             return;
         }
         this.updateStatus(TaskState.Stopping, vscode.l10n.t('Stopping task...'));
         this.abortController.abort();
 
-        // Update to stopped state
-        this.updateStatus(TaskState.Stopped, vscode.l10n.t('Task stopped'));
+        // Note: The actual state transition to Stopped will be handled by runWork()
+        // when it detects the abort signal and completes gracefully
     }
 
     /**
@@ -256,11 +259,10 @@ export abstract class Task {
      * This should be called when the task is no longer needed.
      *
      * @returns A Promise that resolves when cleanup is complete.
-     */
-    public async delete(): Promise<void> {
+     */ public async delete(): Promise<void> {
         // Ensure task is stopped
         if (!this.isFinalState()) {
-            await this.stop();
+            this.stop();
         }
 
         // Allow subclasses to perform cleanup
