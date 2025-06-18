@@ -56,23 +56,25 @@ export class DemoTask extends Task {
                 throw new Error(vscode.l10n.t('Simulated failure at step {0} for testing purposes', step + 1));
             }
 
-            // Simulate work
-            await this.sleep(stepDuration);
-
             // Update progress
             const progress = ((step + 1) / totalSteps) * 100;
             this.updateProgress(progress, vscode.l10n.t('Processing step {0} of {1}', step + 1, totalSteps));
+
+            // Simulate work
+            await this.sleep(stepDuration);
         }
     }
 
     /**
      * Optional initialization logic.
      * Called by the base class during start().
+     *
+     * @param signal AbortSignal (not used in this demo, but part of the API)
      */
-    protected async onInitialize(): Promise<void> {
+    protected async onInitialize(_signal: AbortSignal): Promise<void> {
         console.log(`Initializing task: ${this.name}`);
         // Could perform resource allocation, connection setup, etc.
-        await this.sleep(2000); // Simulate some initialization delay
+        await this.sleep(3000); // Simulate some initialization delay
     }
 
     /**
