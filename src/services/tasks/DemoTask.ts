@@ -72,6 +72,7 @@ export class DemoTask extends Task {
     protected async onInitialize(): Promise<void> {
         console.log(`Initializing task: ${this.name}`);
         // Could perform resource allocation, connection setup, etc.
+        await this.sleep(2000); // Simulate some initialization delay
     }
 
     /**
@@ -81,6 +82,7 @@ export class DemoTask extends Task {
     protected async onDelete(): Promise<void> {
         console.log(`Deleting task: ${this.name}`);
         // Could clean up temporary files, release resources, etc.
+        return this.sleep(2000); // Simulate cleanup delay
     }
 
     /**
@@ -90,6 +92,7 @@ export class DemoTask extends Task {
     private async cleanup(): Promise<void> {
         console.log(`Cleaning up task: ${this.name}`);
         // Could close connections, save state, etc.
+        return this.sleep(2000); // Simulate cleanup delay - longer to better demonstrate stopping state
         // This demonstrates how to handle cleanup using AbortSignal instead of onStop
     }
 

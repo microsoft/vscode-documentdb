@@ -168,6 +168,36 @@ class TaskReportingServiceImpl implements TaskReportingService {
 
     private handleTaskStateChange(taskId: string, newState: TaskState): void {
         const context = this.activeReports.get(taskId);
+
+        if (newState === TaskState.Stopping) {
+            // When user cancels, VS Code dismisses the progress dialog
+            // We need to create a new one for the stopping state
+            if (context && context.token.isCancellationRequested) {
+                // Get the task and create a new stopping progress
+                const task = this.taskService?.getTask(taskId);
+
+                if (task) {
+                    // Clean up the old context
+                    this.stopMonitoringTask(taskId);
+                    this.showStoppingProgress(task);
+                }
+                return;
+            }
+
+            // If not cancelled by user, just update the existing progress
+            if (context) {
+                context.progress.report({
+                    message: vscode.l10n.t('Stopping task...'),
+                });
+                // Clear any running intervals since we're stopping
+                if (context.interval) {
+                    clearInterval(context.interval);
+                    context.interval = undefined;
+                }
+            }
+            return;
+        }
+
         if (!context) {
             return;
         }
@@ -181,6 +211,35 @@ class TaskReportingServiceImpl implements TaskReportingService {
             this.updateProgressDisplay(taskId);
             this.setupProgressPolling(taskId);
         }
+    }
+
+    private showStoppingProgress(task: Task): void {
+        const progressOptions: vscode.ProgressOptions = {
+            location: vscode.ProgressLocation.Notification,
+            title: vscode.l10n.t('Stopping {0}', task.name),
+            cancellable: false,
+        };
+
+        vscode.window.withProgress(progressOptions, (progress, token) => {
+            return new Promise<void>((resolve) => {
+                const progressContext: ProgressContext = {
+                    progress,
+                    token,
+                    task,
+                    previousProgress: 0,
+                    resolve,
+                };
+
+                this.activeReports.set(task.id, progressContext);
+
+                // Show stopping message
+                progress.report({
+                    message: vscode.l10n.t('Stopping task...'),
+                });
+
+                // No polling needed - wait for the final state
+            });
+        });
     }
 
     private updateProgressDisplay(taskId: string): void {

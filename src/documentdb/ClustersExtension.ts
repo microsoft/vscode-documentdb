@@ -262,8 +262,30 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 // Testing command for DemoTask
-                registerCommand('vscode-documentdb.command.testing.startDemoTask', (_context: IActionContext) => {
-                    const task = new DemoTask(vscode.l10n.t('Demo Task {0}', Date.now()));
+                registerCommand('vscode-documentdb.command.testing.startDemoTask', async (_context: IActionContext) => {
+                    const failureOptions = [
+                        {
+                            label: vscode.l10n.t('$(check) Success'),
+                            description: vscode.l10n.t('Task will complete successfully'),
+                            shouldFail: false,
+                        },
+                        {
+                            label: vscode.l10n.t('$(error) Failure'),
+                            description: vscode.l10n.t('Task will fail at a random step for testing'),
+                            shouldFail: true,
+                        },
+                    ];
+
+                    const selectedOption = await vscode.window.showQuickPick(failureOptions, {
+                        title: vscode.l10n.t('Demo Task Configuration'),
+                        placeHolder: vscode.l10n.t('Choose whether the task should succeed or fail'),
+                    });
+
+                    if (!selectedOption) {
+                        return; // User cancelled
+                    }
+
+                    const task = new DemoTask(vscode.l10n.t('Demo Task {0}', Date.now()), selectedOption.shouldFail);
                     TaskService.registerTask(task);
                     void task.start();
                 });
