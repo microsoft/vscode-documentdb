@@ -41,7 +41,7 @@ export class DemoTask extends Task {
         const stepDuration = 1000; // 1 second per step
 
         // If shouldFail is true, determine a random failure point between step 2 and 8
-        const failureStep = this.shouldFail ? Math.floor(Math.random() * 6) + 2 : -1; // Random between 2-7
+        const failureStep = this.shouldFail ? Math.floor(Math.random() * 7) + 2 : -1; // Random between 2-8
 
         for (let step = 0; step < totalSteps; step++) {
             // Check for abort signal
