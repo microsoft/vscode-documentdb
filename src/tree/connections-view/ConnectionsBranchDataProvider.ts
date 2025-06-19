@@ -100,7 +100,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
         this.errorNodeCache.delete(nodeId);
     }
 
-    async getChildren(element: TreeElement): Promise<TreeElement[] | null | undefined> {
+    async getChildren(element?: TreeElement): Promise<TreeElement[] | null | undefined> {
         return callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.ConnectionsView;
 
@@ -293,7 +293,16 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
         return this.parentCache.getParent(element);
     }
 
-    async findNodeById(id: string): Promise<TreeElement | undefined> {
-        return this.parentCache.findNodeById(id);
+    async findNodeById(id: string, enableRecursiveSearch?: boolean): Promise<TreeElement | undefined> {
+        if (enableRecursiveSearch) {
+            // Pass this.getChildren as the second parameter to enable recursive search
+            return this.parentCache.findNodeById(
+                id,
+                this.getChildren.bind(this) as (element: TreeElement) => Promise<TreeElement[] | null | undefined>,
+            );
+        } else {
+            // If recursive search is not enabled, we only search in the known nodes
+            return this.parentCache.findNodeById(id);
+        }
     }
 }

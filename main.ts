@@ -12,6 +12,7 @@
 
 import { type apiUtils } from '@microsoft/vscode-azext-utils';
 import type * as vscode from 'vscode';
+import { type DocumentDBExtensionApi } from './api/src';
 import * as extension from './src/extension';
 
 const perfStats = {
@@ -19,7 +20,9 @@ const perfStats = {
     loadEndTime: -1,
 };
 
-export async function activate(ctx: vscode.ExtensionContext): Promise<apiUtils.AzureExtensionApiProvider> {
+export async function activate(
+    ctx: vscode.ExtensionContext,
+): Promise<apiUtils.AzureExtensionApiProvider | DocumentDBExtensionApi> {
     if (process.env['STOP_ON_ENTRY'] === 'true') {
         /**
          * It's useful to have a debugger statement here to stop the extension at the very beginning.

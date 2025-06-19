@@ -2,6 +2,9 @@
 /api/dist
 /out
 /node_modules
+/api/dist
+/api/node_modules
+vscode-documentdb-api.d.ts
 **/__mocks__/**
 **/*.d.ts
 .eslintrc.js

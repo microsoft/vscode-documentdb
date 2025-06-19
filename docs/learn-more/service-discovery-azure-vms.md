@@ -15,7 +15,7 @@ You can access this plugin in two ways:
 - Through the `Service Discovery` panel in the extension sidebar.
 - When adding a new connection, select the `Azure VMs (DocumentDB)` option.
 
-![Service Discovery Activation](./images/service-discovery-activation.png)
+![Service Discovery Activation](./images/service-discovery-activation-vm.png)
 
 ## How It Works
 
@@ -29,7 +29,7 @@ When you use the Azure VMs (DocumentDB) plugin, the following steps are performe
 
    > **Tip:** You can `filter` which subscriptions are shown in the `Service Discovery` panel. Click the funnel icon next to the service discovery provider name, wait for the list to populate, and select the subscriptions you want to include.
    >
-   > ![Service Discovery Filter Feature Location](./images/service-discovery-filter.png)
+   > ![Service Discovery Filter Feature Location](./images/service-discovery-filter-vm.png)
 
 3. **VM Filtering by Tag:**
    The plugin searches for virtual machines within your selected subscriptions that have a specific tag assigned. By default, the tag is set to `DocumentDB`, but you can change this in the filter function as needed.
