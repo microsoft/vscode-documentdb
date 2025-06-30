@@ -77,6 +77,12 @@ async function handleConnectionStringRequest(
 
     // Parse the connection string
     const parsedCS = new ConnectionString(params.connectionString!);
+    if (
+        parsedCS.password &&
+        decodeURIComponent(parsedCS.password.trim()) === '<password>'
+    ) {
+        parsedCS.password = '';
+    }
 
     // Extract database name from connection string pathname if params.database is not provided
     let selectedDatabase = params.database;

@@ -18,7 +18,7 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewConnectionWizar
             prompt: prompt,
             ignoreFocusOut: true,
             password: true,
-            value: decodeURIComponent(new ConnectionString(context.connectionString!).password?.trim() || '') === '<password>' ? '' : context.password,
+            value: context.password,
             validateInput: (password?: string) => this.validateInput(context, password),
         });
 
