@@ -77,10 +77,7 @@ async function handleConnectionStringRequest(
 
     // Parse the connection string
     const parsedCS = new ConnectionString(params.connectionString!);
-    if (
-        parsedCS.password &&
-        decodeURIComponent(parsedCS.password.trim()) === '<password>'
-    ) {
+    if (parsedCS.password && decodeURIComponent(parsedCS.password.trim()) === '<password>') {
         parsedCS.password = '';
     }
 
