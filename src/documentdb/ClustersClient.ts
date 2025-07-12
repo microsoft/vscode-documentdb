@@ -21,6 +21,7 @@ import {
     type Document,
     type Filter,
     type FindOptions,
+    type InsertManyResult,
     type ListDatabasesResult,
     type MongoClientOptions,
     type WithId,
@@ -57,12 +58,9 @@ export interface IndexItemModel {
     version?: number;
 }
 
-// Currently we only return insertedCount, but we can add more fields in the future if needed
-// Keep the type definition here for future extensibility
-export type InsertDocumentsResult = {
-    /** The number of inserted documents for this operations */
-    insertedCount: number;
-};
+export function isMongoBulkWriteError(error: unknown): error is MongoBulkWriteError {
+    return error instanceof MongoBulkWriteError;
+}
 
 export class ClustersClient {
     // cache of active/existing clients
@@ -475,9 +473,13 @@ export class ClustersClient {
         databaseName: string,
         collectionName: string,
         documents: Document[],
-    ): Promise<InsertDocumentsResult> {
+        ordered: boolean = true,
+    ): Promise<{ result: InsertManyResult | null; error: MongoBulkWriteError | Error | null }> {
         if (documents.length === 0) {
-            return { insertedCount: 0 };
+            return {
+                result: { acknowledged: false, insertedIds: {}, insertedCount: 0 },
+                error: null,
+            };
         }
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -487,13 +489,11 @@ export class ClustersClient {
 
                 // Setting `ordered` to be false allows MongoDB to continue inserting remaining documents even if previous fails.
                 // More details: https://www.mongodb.com/docs/manual/reference/method/db.collection.insertMany/#syntax
-                ordered: false,
+                ordered: ordered,
             });
-            return {
-                insertedCount: insertManyResults.insertedCount,
-            };
+            return { result: insertManyResults, error: null };
         } catch (error) {
-            // print error messages to the console
+            // Log error messages to the console
             if (error instanceof MongoBulkWriteError) {
                 const writeErrors: WriteError[] = Array.isArray(error.writeErrors)
                     ? (error.writeErrors as WriteError[])
@@ -510,13 +510,27 @@ export class ClustersClient {
                     ext.outputChannel.appendLog(l10n.t('Write error: {0}', fullErrorMessage));
                 }
                 ext.outputChannel.show();
+
+                // Return the error with any partial results
+                return {
+                    result: null,
+                    error: error,
+                };
             } else if (error instanceof Error) {
                 ext.outputChannel.appendLog(l10n.t('Error: {0}', error.message));
                 ext.outputChannel.show();
+
+                // Return the error
+                return {
+                    result: null,
+                    error: error,
+                };
             }
 
+            // Return unknown error
             return {
-                insertedCount: error instanceof MongoBulkWriteError ? error.insertedCount || 0 : 0,
+                result: null,
+                error: new Error('Unknown error occurred'),
             };
         }
     }

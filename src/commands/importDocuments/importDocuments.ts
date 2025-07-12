@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fse from 'fs-extra';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ClustersClient, isMongoBulkWriteError } from '../../documentdb/ClustersClient';
 import {
     AzureDomains,
     getHostsFromConnectionString,
@@ -285,10 +285,19 @@ async function insertDocumentWithBufferIntoCluster(
     // Documents to process could be the current document (if too large)
     // or the contents of the buffer (if it was full)
     const client = await ClustersClient.getClient(node.cluster.id);
-    const insertResult = await client.insertDocuments(databaseName, collectionName, documentsToProcess as Document[]);
+    const insertResult = await client.insertDocuments(
+        databaseName,
+        collectionName,
+        documentsToProcess as Document[],
+        false,
+    );
 
     return {
-        count: insertResult.insertedCount,
-        errorOccurred: insertResult.insertedCount < (documentsToProcess?.length || 0),
+        count:
+            insertResult.result?.insertedCount ??
+            (insertResult.error && isMongoBulkWriteError(insertResult.error)
+                ? insertResult.error.result?.insertedCount
+                : 0),
+        errorOccurred: insertResult.error !== null,
     };
 }

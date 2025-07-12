@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Document, type WithId } from 'mongodb';
-import { ClustersClient } from '../documentdb/ClustersClient';
+import { ClustersClient, isMongoBulkWriteError } from '../documentdb/ClustersClient';
 import {
     type BulkWriteResult,
     type DocumentDetails,
@@ -94,10 +94,14 @@ export class MongoDocumentWriter implements DocumentWriter {
 
             // Convert DocumentDetails to MongoDB documents
             const mongoDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
-            const result = await client.insertDocuments(databaseName, collectionName, mongoDocuments);
+            const insertResult = await client.insertDocuments(databaseName, collectionName, mongoDocuments);
 
             return {
-                insertedCount: result.insertedCount,
+                insertedCount:
+                    insertResult.result?.insertedCount ??
+                    (insertResult.error && isMongoBulkWriteError(insertResult.error)
+                        ? insertResult.error.result?.insertedCount
+                        : 0),
                 errors: [], // ClustersClient.insertDocuments doesn't return detailed errors in the current implementation
             };
         } catch (error: unknown) {
