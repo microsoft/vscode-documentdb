@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ext } from '../../extensionVariables';
 import {
     type CopyPasteConfig,
     type DocumentDetails,
@@ -185,6 +186,7 @@ export class CopyPasteCollectionTask extends Task {
             this.config.target.connectionId,
             this.config.target.databaseName,
             this.config.target.collectionName,
+            this.config,
             buffer,
             { batchSize: buffer.length },
         );
@@ -193,11 +195,29 @@ export class CopyPasteCollectionTask extends Task {
         this.processedDocuments += result.insertedCount;
 
         // Check for errors in the write result
-        if (result.errors.length > 0) {
+        if (result.errors !== null) {
             // For basic implementation with abort strategy, any error should fail the task
             if (this.config.onConflict === ConflictResolutionStrategy.Abort) {
-                const firstError = result.errors[0];
-                throw new Error(vscode.l10n.t('Write operation failed: {0}', firstError.error.message));
+                const firstError = result.errors[0] as { error: Error };
+                throw new Error(
+                    vscode.l10n.t(
+                        'Task aborted because of error: {0}, {1} document(s) were inserted in total',
+                        firstError.error?.message ?? 'Unknown error',
+                        this.processedDocuments.toString(),
+                    ),
+                );
+            } else if (this.config.onConflict === ConflictResolutionStrategy.Skip) {
+                // For skip strategy, we can log the errors but continue
+                for (const error of result.errors) {
+                    ext.outputChannel.appendLog(
+                        vscode.l10n.t(
+                            'Skipped document {0} due to error: {1}',
+                            String(error.documentId ?? 'unknown'),
+                            error.error?.message ?? 'Unknown error',
+                        ),
+                    );
+                }
+                ext.outputChannel.show();
             }
             // Future: Handle other conflict resolution strategies
         }

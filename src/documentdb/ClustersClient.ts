@@ -26,10 +26,8 @@ import {
     type MongoClientOptions,
     type WithId,
     type WithoutId,
-    type WriteError,
 } from 'mongodb';
 import { Links } from '../constants';
-import { ext } from '../extensionVariables';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { CredentialCache } from './CredentialCache';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
@@ -474,12 +472,9 @@ export class ClustersClient {
         collectionName: string,
         documents: Document[],
         ordered: boolean = true,
-    ): Promise<{ result: InsertManyResult | null; error: MongoBulkWriteError | Error | null }> {
+    ): Promise<InsertManyResult> {
         if (documents.length === 0) {
-            return {
-                result: { acknowledged: false, insertedIds: {}, insertedCount: 0 },
-                error: null,
-            };
+            return { acknowledged: false, insertedIds: {}, insertedCount: 0 };
         }
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -491,47 +486,16 @@ export class ClustersClient {
                 // More details: https://www.mongodb.com/docs/manual/reference/method/db.collection.insertMany/#syntax
                 ordered: ordered,
             });
-            return { result: insertManyResults, error: null };
+            return insertManyResults;
         } catch (error) {
             // Log error messages to the console
             if (error instanceof MongoBulkWriteError) {
-                const writeErrors: WriteError[] = Array.isArray(error.writeErrors)
-                    ? (error.writeErrors as WriteError[])
-                    : [error.writeErrors as WriteError];
-
-                for (const writeError of writeErrors) {
-                    const generalErrorMessage = parseError(writeError).message;
-                    const descriptiveErrorMessage = writeError.err?.errmsg;
-
-                    const fullErrorMessage = descriptiveErrorMessage
-                        ? `${generalErrorMessage} - ${descriptiveErrorMessage}`
-                        : generalErrorMessage;
-
-                    ext.outputChannel.appendLog(l10n.t('Write error: {0}', fullErrorMessage));
-                }
-                ext.outputChannel.show();
-
-                // Return the error with any partial results
-                return {
-                    result: null,
-                    error: error,
-                };
+                throw error;
             } else if (error instanceof Error) {
-                ext.outputChannel.appendLog(l10n.t('Error: {0}', error.message));
-                ext.outputChannel.show();
-
-                // Return the error
-                return {
-                    result: null,
-                    error: error,
-                };
+                throw error;
             }
 
-            // Return unknown error
-            return {
-                result: null,
-                error: new Error('Unknown error occurred'),
-            };
+            throw new Error(l10n.t('An unknown error occurred while inserting documents.'));
         }
     }
 }

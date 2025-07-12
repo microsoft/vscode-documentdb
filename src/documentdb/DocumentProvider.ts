@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Document, type WithId } from 'mongodb';
+import { type Document, type InsertManyResult, type WithId, type WriteError } from 'mongodb';
 import { ClustersClient, isMongoBulkWriteError } from '../documentdb/ClustersClient';
 import {
+    ConflictResolutionStrategy,
     type BulkWriteResult,
+    type CopyPasteConfig,
     type DocumentDetails,
     type DocumentReader,
     type DocumentWriter,
@@ -79,6 +81,7 @@ export class MongoDocumentWriter implements DocumentWriter {
         connectionId: string,
         databaseName: string,
         collectionName: string,
+        config: CopyPasteConfig,
         documents: DocumentDetails[],
         _options?: DocumentWriterOptions,
     ): Promise<BulkWriteResult> {
@@ -94,49 +97,48 @@ export class MongoDocumentWriter implements DocumentWriter {
 
             // Convert DocumentDetails to MongoDB documents
             const mongoDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
-            const insertResult = await client.insertDocuments(databaseName, collectionName, mongoDocuments);
+            let insertResult: InsertManyResult;
 
-            return {
-                insertedCount:
-                    insertResult.result?.insertedCount ??
-                    (insertResult.error && isMongoBulkWriteError(insertResult.error)
-                        ? insertResult.error.result?.insertedCount
-                        : 0),
-                errors: [], // ClustersClient.insertDocuments doesn't return detailed errors in the current implementation
-            };
-        } catch (error: unknown) {
-            // Handle MongoDB bulk write errors
-            const errors: Array<{ documentId?: unknown; error: Error }> = [];
-
-            if (error && typeof error === 'object' && 'writeErrors' in error) {
-                const writeErrors = (error as { writeErrors: unknown[] }).writeErrors;
-                for (const writeError of writeErrors) {
-                    if (writeError && typeof writeError === 'object' && 'index' in writeError) {
-                        const docIndex = writeError.index as number;
-                        const documentId = docIndex < documents.length ? documents[docIndex].id : undefined;
-                        const errorMessage =
-                            'errmsg' in writeError ? (writeError.errmsg as string) : 'Unknown write error';
-                        errors.push({
-                            documentId,
-                            error: new Error(errorMessage),
-                        });
-                    }
-                }
-            } else {
-                errors.push({
-                    error: error instanceof Error ? error : new Error(String(error)),
-                });
+            switch (config.onConflict) {
+                case ConflictResolutionStrategy.Skip:
+                    insertResult = await client.insertDocuments(databaseName, collectionName, mongoDocuments, false);
+                    break;
+                case ConflictResolutionStrategy.Abort:
+                    insertResult = await client.insertDocuments(databaseName, collectionName, mongoDocuments, false);
+                    break;
+                default:
+                    throw new Error(`Unsupported conflict resolution strategy: ${config.onConflict}`);
             }
 
-            const insertedCount =
-                error && typeof error === 'object' && 'result' in error
-                    ? ((error as { result?: { insertedCount?: number } }).result?.insertedCount ?? 0)
-                    : 0;
-
             return {
-                insertedCount,
-                errors,
+                insertedCount: insertResult.insertedCount,
+                errors: null, // MongoDB bulk write errors will be handled in the catch block
             };
+        } catch (error: unknown) {
+            if (isMongoBulkWriteError(error)) {
+                // Handle MongoDB bulk write errors
+                const writeErrorsArray = (
+                    Array.isArray(error.writeErrors) ? error.writeErrors : [error.writeErrors]
+                ) as Array<WriteError>;
+                return {
+                    insertedCount: error.result.insertedCount,
+                    errors: writeErrorsArray.map((writeError) => ({
+                        documentId: (writeError.getOperation()._id as string) || undefined,
+                        error: new Error(writeError.errmsg || 'Unknown write error'),
+                    })),
+                };
+            } else if (error instanceof Error) {
+                return {
+                    insertedCount: 0,
+                    errors: [{ documentId: undefined, error }],
+                };
+            } else {
+                // Handle unknown error types
+                return {
+                    insertedCount: 0,
+                    errors: [{ documentId: undefined, error: new Error(String(error)) }],
+                };
+            }
         }
     }
 

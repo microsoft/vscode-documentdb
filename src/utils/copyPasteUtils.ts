@@ -11,7 +11,12 @@ export enum ConflictResolutionStrategy {
      * Abort the operation if any conflict or error occurs
      */
     Abort = 'abort',
-    // Future options: Overwrite = 'overwrite', Skip = 'skip'
+
+    /**
+     * Skip the conflicting document and continue with the operation
+     */
+    Skip = 'skip',
+    // Future options: Overwrite = 'overwrite'
 }
 
 /**
@@ -114,10 +119,8 @@ export interface BulkWriteResult {
     /**
      * Array of errors that occurred during the write operation.
      */
-    errors: Array<{
-        documentId?: unknown;
-        error: Error;
-    }>;
+    errors: Array<{ documentId?: string; error: Error }> | null; // Should be typed more specifically based on the implementation
+    // e.g., for MongoDB, this could be an array of MongoBulkWriteError objects
 }
 
 /**
@@ -138,6 +141,7 @@ export interface DocumentWriter {
         connectionId: string,
         databaseName: string,
         collectionName: string,
+        config: CopyPasteConfig,
         documents: DocumentDetails[],
         options?: DocumentWriterOptions,
     ): Promise<BulkWriteResult>;

@@ -285,19 +285,31 @@ async function insertDocumentWithBufferIntoCluster(
     // Documents to process could be the current document (if too large)
     // or the contents of the buffer (if it was full)
     const client = await ClustersClient.getClient(node.cluster.id);
-    const insertResult = await client.insertDocuments(
-        databaseName,
-        collectionName,
-        documentsToProcess as Document[],
-        false,
-    );
-
-    return {
-        count:
-            insertResult.result?.insertedCount ??
-            (insertResult.error && isMongoBulkWriteError(insertResult.error)
-                ? insertResult.error.result?.insertedCount
-                : 0),
-        errorOccurred: insertResult.error !== null,
-    };
+    try {
+        const insertResult = await client.insertDocuments(
+            databaseName,
+            collectionName,
+            documentsToProcess as Document[],
+            false,
+        );
+        return {
+            count: insertResult.insertedCount,
+            errorOccurred: false,
+        };
+    } catch (error) {
+        if (isMongoBulkWriteError(error)) {
+            // Handle MongoDB bulk write errors
+            // It could be a partial failure, so we need to check the result
+            return {
+                count: error.result.insertedCount,
+                errorOccurred: true,
+            };
+        } else {
+            // Handle other errors
+            return {
+                count: 0,
+                errorOccurred: true,
+            };
+        }
+    }
 }
