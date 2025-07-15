@@ -236,7 +236,7 @@ function processData(data: unknown): string | undefined {
 
 ### Testing Structure
 
-- Keep tests in the same directory structure as the code they test.
+- Keep tests in the same directory as the code they test.
 - Test business logic in services; mock dependencies using `jest.mock()` for unit tests.
 - Use descriptive test names that explain the expected behavior.
 - Group related tests with `describe` blocks.
