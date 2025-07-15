@@ -211,15 +211,19 @@ export class CopyPasteCollectionTask extends Task {
                 for (const error of result.errors) {
                     ext.outputChannel.appendLog(
                         vscode.l10n.t(
-                            'Skipped document {0} due to error: {1}',
+                            'Skipped document with _id: {0} due to error: {1}',
                             String(error.documentId ?? 'unknown'),
                             error.error?.message ?? 'Unknown error',
                         ),
                     );
                 }
                 ext.outputChannel.show();
+            } else {
+                ext.outputChannel.appendLog(
+                    vscode.l10n.t('Task failed due to error: {0}', result.errors[0].error?.message ?? 'Unknown error'),
+                );
+                ext.outputChannel.show();
             }
-            // Future: Handle other conflict resolution strategies
         }
 
         // Update progress

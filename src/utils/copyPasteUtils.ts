@@ -16,7 +16,11 @@ export enum ConflictResolutionStrategy {
      * Skip the conflicting document and continue with the operation
      */
     Skip = 'skip',
-    // Future options: Overwrite = 'overwrite'
+
+    /**
+     * Overwrite the existing document in the target collection with the source document
+     */
+    Overwrite = 'overwrite',
 }
 
 /**

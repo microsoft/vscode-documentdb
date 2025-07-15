@@ -75,8 +75,9 @@ export async function pasteCollection(_context: IActionContext, targetNode: Coll
                 collectionName: targetNode.collectionInfo.name,
             },
             // Currently we only support aborting and skipping on conflict
-            onConflict: ConflictResolutionStrategy.Abort,
+            // onConflict: ConflictResolutionStrategy.Abort,
             // onConflict: ConflictResolutionStrategy.Skip,
+            onConflict: ConflictResolutionStrategy.Overwrite,
         };
 
         // Create task with documentDB document providers

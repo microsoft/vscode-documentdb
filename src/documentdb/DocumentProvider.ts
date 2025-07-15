@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Document, type InsertManyResult, type WithId, type WriteError } from 'mongodb';
+import { parseError } from '@microsoft/vscode-azext-utils';
+import { type Document, type ObjectId, type WithId, type WriteError } from 'mongodb';
+import { l10n } from 'vscode';
 import { ClustersClient, isMongoBulkWriteError } from '../documentdb/ClustersClient';
 import {
     ConflictResolutionStrategy,
@@ -92,23 +94,21 @@ export class MongoDocumentWriter implements DocumentWriter {
             };
         }
 
+        const client = await ClustersClient.getClient(connectionId);
+
+        // Convert DocumentDetails to MongoDB documents
+        const mongoDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
+
         try {
-            const client = await ClustersClient.getClient(connectionId);
-
-            // Convert DocumentDetails to MongoDB documents
-            const mongoDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
-            let insertResult: InsertManyResult;
-
-            switch (config.onConflict) {
-                case ConflictResolutionStrategy.Skip:
-                    insertResult = await client.insertDocuments(databaseName, collectionName, mongoDocuments, false);
-                    break;
-                case ConflictResolutionStrategy.Abort:
-                    insertResult = await client.insertDocuments(databaseName, collectionName, mongoDocuments, false);
-                    break;
-                default:
-                    throw new Error(`Unsupported conflict resolution strategy: ${config.onConflict}`);
-            }
+            const insertResult = await client.insertDocuments(
+                databaseName,
+                collectionName,
+                mongoDocuments,
+                // For abort on conflict, we set ordered to true to make it throw on the first error
+                // For skip on conflict, we set ordered to false
+                // For overwrite on conflict, we use ordered as a filter to find documents that should be overwritten
+                config.onConflict === ConflictResolutionStrategy.Abort,
+            );
 
             return {
                 insertedCount: insertResult.insertedCount,
@@ -116,10 +116,33 @@ export class MongoDocumentWriter implements DocumentWriter {
             };
         } catch (error: unknown) {
             if (isMongoBulkWriteError(error)) {
-                // Handle MongoDB bulk write errors
                 const writeErrorsArray = (
                     Array.isArray(error.writeErrors) ? error.writeErrors : [error.writeErrors]
                 ) as Array<WriteError>;
+
+                if (config.onConflict === ConflictResolutionStrategy.Overwrite) {
+                    // For overwrite strategy, we need to delete the conflicting documents and then re-insert
+                    const session = client.startTransaction();
+                    const collection = client.getCollection(databaseName, collectionName);
+                    try {
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+                        const idsToOverwrite = writeErrorsArray.map((we) => we.getOperation()._id) as Array<ObjectId>;
+                        const documentsToOverwrite = mongoDocuments.filter((doc) =>
+                            idsToOverwrite.includes((doc as WithId<Document>)._id as ObjectId),
+                        );
+                        await collection.deleteMany({ _id: { $in: idsToOverwrite } }, { session });
+                        const insertResult = await collection.insertMany(documentsToOverwrite, { session });
+                        await client.commitTransaction(session);
+                        return {
+                            insertedCount: insertResult.insertedCount,
+                            errors: null,
+                        };
+                    } catch (error) {
+                        await client.abortTransaction(session);
+                        throw new Error(l10n.t('Failed to overwrite documents: {0}', parseError(error).message));
+                    }
+                }
+
                 return {
                     insertedCount: error.result.insertedCount,
                     errors: writeErrorsArray.map((writeError) => ({

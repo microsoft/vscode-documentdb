@@ -16,6 +16,7 @@ import {
     MongoBulkWriteError,
     MongoClient,
     ObjectId,
+    type ClientSession,
     type Collection,
     type DeleteResult,
     type Document,
@@ -193,6 +194,62 @@ export class ClustersClient {
         }
     }
 
+    startTransaction(): ClientSession {
+        try {
+            const session = this._mongoClient.startSession();
+            session.startTransaction();
+            return session;
+        } catch (error) {
+            throw new Error(l10n.t('Failed to start a transaction: {0}', parseError(error).message));
+        }
+    }
+
+    startTransactionWithSession(session: ClientSession): void {
+        try {
+            session.startTransaction();
+        } catch (error) {
+            throw new Error(
+                l10n.t('Failed to start a transaction with the provided session: {0}', parseError(error).message),
+            );
+        }
+    }
+
+    async commitTransaction(session: ClientSession): Promise<void> {
+        try {
+            await session.commitTransaction();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to commit transaction: {0}', parseError(error).message));
+        } finally {
+            this.endSession(session);
+        }
+    }
+
+    async abortTransaction(session: ClientSession): Promise<void> {
+        try {
+            await session.abortTransaction();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to abort transaction: {0}', parseError(error).message));
+        } finally {
+            this.endSession(session);
+        }
+    }
+
+    startSession(): ClientSession {
+        try {
+            return this._mongoClient.startSession();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to start a session: {0}', parseError(error).message));
+        }
+    }
+
+    endSession(session: ClientSession): void {
+        try {
+            void session.endSession();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to end session: {0}', parseError(error).message));
+        }
+    }
+
     getUserName() {
         return CredentialCache.getCredentials(this.credentialId)?.connectionUser;
     }
@@ -202,6 +259,21 @@ export class ClustersClient {
 
     getConnectionStringWithPassword() {
         return CredentialCache.getConnectionStringWithPassword(this.credentialId);
+    }
+
+    getCollection(databaseName: string, collectionName: string): Collection<Document> {
+        try {
+            return this._mongoClient.db(databaseName).collection(collectionName);
+        } catch (error) {
+            throw new Error(
+                l10n.t(
+                    'Failed to get collection {0} in database {1}: {2}',
+                    collectionName,
+                    databaseName,
+                    parseError(error).message,
+                ),
+            );
+        }
     }
 
     async listDatabases(): Promise<DatabaseItemModel[]> {
