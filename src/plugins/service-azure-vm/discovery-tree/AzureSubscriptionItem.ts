@@ -6,8 +6,8 @@
 import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
-import { ConnectionString } from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../documentdb/Views';
 import { MongoClustersExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
@@ -93,7 +93,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
 
                         const host = fqdn || publicIpAddress;
 
-                        const connectionString = new ConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
+                        const connectionString = new DocumentDBConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
 
                         connectionString.hosts = [host + ':27017']; // Set the actual host and default port
                         connectionString.protocol = 'mongodb';

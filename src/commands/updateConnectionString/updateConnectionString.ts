@@ -5,7 +5,7 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
@@ -30,7 +30,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     const currentItem = await storage.getItem(resourceType, node.storageId);
     const connectionString = currentItem?.secrets?.[0] || '';
     context.valuesToMask.push(connectionString);
-    const parsedCS = new ConnectionString(connectionString);
+    const parsedCS = new DocumentDBConnectionString(connectionString);
 
     parsedCS.username = '';
     parsedCS.password = '';

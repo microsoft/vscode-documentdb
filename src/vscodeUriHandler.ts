@@ -5,9 +5,9 @@
 
 import { callWithTelemetryAndErrorHandling, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
+import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
 import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
 import { StorageNames, StorageService, type StorageItem } from './services/storageService';
@@ -76,7 +76,7 @@ async function handleConnectionStringRequest(
     validateConnectionString(params.connectionString);
 
     // Parse the connection string
-    const parsedCS = new ConnectionString(params.connectionString!);
+    const parsedCS = new DocumentDBConnectionString(params.connectionString!);
 
     // Extract database name from connection string pathname if params.database is not provided
     let selectedDatabase = params.database;
@@ -282,14 +282,14 @@ function validateConnectionString(connectionString: string | undefined): void {
 /**
  * Determines if a connection is to a local emulator based on host information
  */
-function isEmulatorConnection(parsedCS: ConnectionString): boolean {
+function isEmulatorConnection(parsedCS: DocumentDBConnectionString): boolean {
     return parsedCS.hosts?.length > 0 && parsedCS.hosts[0].includes('localhost');
 }
 
 /**
  * Creates a display label for a connection based on parsed connection string
  */
-function createConnectionLabel(parsedCS: ConnectionString, joinedHosts: string): string {
+function createConnectionLabel(parsedCS: DocumentDBConnectionString, joinedHosts: string): string {
     return parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
 }
 
@@ -305,7 +305,7 @@ async function getExistingConnections(isEmulator: boolean): Promise<StorageItem[
  */
 function findDuplicateConnection(
     existingConnections: StorageItem[],
-    parsedCS: ConnectionString,
+    parsedCS: DocumentDBConnectionString,
     joinedHosts: string,
 ): StorageItem | undefined {
     return existingConnections.find((item) => {
@@ -314,7 +314,7 @@ function findDuplicateConnection(
             return false; // Skip if no secret string is found
         }
 
-        const itemCS = new ConnectionString(secret);
+        const itemCS = new DocumentDBConnectionString(secret);
         return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
     });
 }
@@ -522,7 +522,7 @@ function maskParamsInTelemetry(context: IActionContext, params: UriParams): void
 /**
  * Adds sensitive values from a connection string to the telemetry masking list
  */
-function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: ConnectionString): void {
+function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: DocumentDBConnectionString): void {
     [parsedCS.username, parsedCS.password, parsedCS.port, ...(parsedCS.hosts || [])]
         .filter(Boolean)
         .forEach((value) => context.valuesToMask.push(value));

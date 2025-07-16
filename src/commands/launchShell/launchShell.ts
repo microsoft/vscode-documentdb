@@ -5,10 +5,10 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ConnectionString } from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { isWindows } from '../../constants';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
 import { MongoRUResourceItem } from '../../tree/azure-resources-view/documentdb/mongo-ru/MongoRUResourceItem';
 import { MongoVCoreResourceItem } from '../../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreResourceItem';
@@ -52,7 +52,7 @@ export async function launchShell(
     }
     context.valuesToMask.push(rawConnectionString);
 
-    const connectionString: ConnectionString = new ConnectionString(rawConnectionString);
+    const connectionString: DocumentDBConnectionString = new DocumentDBConnectionString(rawConnectionString);
 
     const actualPassword = connectionString.password;
     context.valuesToMask.push(actualPassword);

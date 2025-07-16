@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
@@ -21,7 +21,7 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
             validateInput: (username?: string) => this.validateInput(context, username),
         });
 
-        const parsedConnectionString = new ConnectionString(context.connectionString!);
+        const parsedConnectionString = new DocumentDBConnectionString(context.connectionString!);
         parsedConnectionString.username = username;
 
         context.connectionString = parsedConnectionString.toString();
@@ -43,12 +43,12 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
         }
 
         try {
-            const parsedConnectionString = new ConnectionString(context.connectionString!);
+            const parsedConnectionString = new DocumentDBConnectionString(context.connectionString!);
             parsedConnectionString.username = username;
 
             const connectionString = parsedConnectionString.toString();
 
-            new ConnectionString(connectionString);
+            new DocumentDBConnectionString(connectionString);
         } catch (error) {
             if (error instanceof Error && error.name === 'MongoParseError') {
                 return error.message;

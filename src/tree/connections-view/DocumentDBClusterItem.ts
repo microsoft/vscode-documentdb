@@ -14,9 +14,9 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
-import ConnectionString from 'mongodb-connection-string-url';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/ProvidePasswordStep';
@@ -61,7 +61,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             let clustersClient: ClustersClient;
 
-            const connectionString = new ConnectionString(nonNullValue(this.cluster.connectionString));
+            const connectionString = new DocumentDBConnectionString(nonNullValue(this.cluster.connectionString));
 
             let username: string | undefined = connectionString.username;
             let password: string | undefined = connectionString.password;

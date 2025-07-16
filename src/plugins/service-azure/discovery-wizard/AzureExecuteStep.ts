@@ -13,7 +13,7 @@ import { type NewConnectionWizardContext } from '../../../commands/newConnection
 import { type GenericResource } from '@azure/arm-resources';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { getResourceGroupFromId } from '@microsoft/vscode-azext-azureutils';
-import ConnectionString from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../documentdb/Views';
 import { createMongoClustersManagementClient } from '../../../utils/azureClients';
 import { AzureContextProperties } from '../AzureDiscoveryProvider';
@@ -69,7 +69,7 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
             }
 
             context.valuesToMask.push(clusterInformation.connectionString);
-            const connectionString = new ConnectionString(clusterInformation.connectionString as string);
+            const connectionString = new DocumentDBConnectionString(clusterInformation.connectionString as string);
 
             if (clusterInformation.administratorLogin) {
                 context.valuesToMask.push(clusterInformation.administratorLogin);
