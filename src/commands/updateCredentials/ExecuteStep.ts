@@ -5,9 +5,9 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { DocumentDBConnectionString } from '../../utils/DocumentDBConnectionString';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardContext> {

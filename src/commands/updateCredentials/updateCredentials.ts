@@ -7,10 +7,10 @@ import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils'
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
-import { DocumentDBConnectionString } from '../../utils/DocumentDBConnectionString';
 import { refreshView } from '../refreshView/refreshView';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
