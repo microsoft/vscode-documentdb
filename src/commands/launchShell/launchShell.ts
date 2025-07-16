@@ -53,9 +53,11 @@ export async function launchShell(
     context.valuesToMask.push(rawConnectionString);
 
     const connectionString: DocumentDBConnectionString = new DocumentDBConnectionString(rawConnectionString);
-
-    const actualPassword = connectionString.password;
-    context.valuesToMask.push(actualPassword);
+    // Note to code maintainers:
+    // We're encoding the password to ensure it is safe to use in the connection string
+    // shared with the shell process.
+    const encodedPassword = encodeURIComponent(connectionString.password);
+    context.valuesToMask.push(encodedPassword);
 
     // Use unique environment variable names to avoid conflicts
     const randomSuffix = Math.floor(100000 + Math.random() * 900000).toString(); // Generate a 6-digit random number string
@@ -120,7 +122,7 @@ export async function launchShell(
     connectionString.password = PASSWORD_SENTINEL;
 
     // If the username or password is empty, remove them from the connection string to avoid invalid connection strings
-    if (!connectionString.username || !actualPassword) {
+    if (!connectionString.username || !encodedPassword) {
         connectionString.password = '';
     }
 
@@ -137,7 +139,7 @@ export async function launchShell(
         name: `MongoDB Shell (${connectionString.username || 'default'})`, // Display actual username or a default
         hideFromUser: false,
         env: {
-            [uniquePassEnvVar]: actualPassword,
+            [uniquePassEnvVar]: encodedPassword,
         },
     });
 
