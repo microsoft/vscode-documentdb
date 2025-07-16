@@ -5,12 +5,12 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { Views } from '../../documentdb/Views';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { DocumentDBConnectionString } from '../../utils/DocumentDBConnectionString';
 import { refreshView } from '../refreshView/refreshView';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
@@ -34,7 +34,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const connectionString = currentItem?.secrets?.[0] || '';
     context.valuesToMask.push(connectionString);
 
-    const parsedCS = new ConnectionString(connectionString);
+    const parsedCS = new DocumentDBConnectionString(connectionString);
 
     const username: string | undefined = parsedCS.username;
     const password: string | undefined = parsedCS.password;

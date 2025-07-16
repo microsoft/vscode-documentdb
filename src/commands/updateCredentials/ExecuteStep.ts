@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
-import ConnectionString from 'mongodb-connection-string-url';
 import { l10n, window } from 'vscode';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { DocumentDBConnectionString } from '../../utils/DocumentDBConnectionString';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardContext> {
@@ -34,7 +34,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
 
             const connectionString = item.secrets[0];
 
-            const parsedConnectionString = new ConnectionString(connectionString);
+            const parsedConnectionString = new DocumentDBConnectionString(connectionString);
             parsedConnectionString.username = context.username || '';
             parsedConnectionString.password = context.password || '';
 
