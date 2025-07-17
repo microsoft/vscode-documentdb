@@ -5,6 +5,7 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { StorageNames, StorageService } from '../../services/storageService';
@@ -29,8 +30,11 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     const storage = StorageService.get(StorageNames.Connections);
     const currentItem = await storage.getItem(resourceType, node.storageId);
     const connectionString = currentItem?.secrets?.[0] || '';
+
     context.valuesToMask.push(connectionString);
+
     const parsedCS = new DocumentDBConnectionString(connectionString);
+    maskSensitiveValuesInTelemetry(context, parsedCS);
 
     parsedCS.username = '';
     parsedCS.password = '';

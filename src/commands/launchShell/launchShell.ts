@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { isWindows } from '../../constants';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
 import { MongoRUResourceItem } from '../../tree/azure-resources-view/documentdb/mongo-ru/MongoRUResourceItem';
@@ -53,12 +54,12 @@ export async function launchShell(
     context.valuesToMask.push(rawConnectionString);
 
     const connectionString: DocumentDBConnectionString = new DocumentDBConnectionString(rawConnectionString);
+    maskSensitiveValuesInTelemetry(context, connectionString);
 
     // Note to code maintainers:
     // We're encoding the password to ensure it is safe to use in the connection string
     // shared with the shell process.
     const shellSafePassword = encodeURIComponent(connectionString.password);
-
     context.valuesToMask.push(shellSafePassword);
 
     // Use unique environment variable names to avoid conflicts

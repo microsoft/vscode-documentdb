@@ -16,6 +16,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
@@ -168,6 +169,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
             const finalConnectionString = new DocumentDBConnectionString(
                 nonNullValue(connectionString, 'connectionString'),
             );
+            maskSensitiveValuesInTelemetry(context, finalConnectionString);
 
             const wizardContext: AuthenticateWizardContext = {
                 ...context,

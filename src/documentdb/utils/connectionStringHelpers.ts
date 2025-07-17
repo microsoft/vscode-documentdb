@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { DocumentDBConnectionString } from './DocumentDBConnectionString';
 
 export const removePasswordFromConnectionString = (connectionString: string): string => {
@@ -39,6 +40,17 @@ export const addDatabasePathToConnectionString = (connectionString: string, data
     connectionStringOb.pathname = databaseName;
     return connectionStringOb.toString();
 };
+
+/**
+ * Masks sensitive values from DocumentDB connection string in telemetry.
+ * This includes username, password, port, and hosts.
+ */
+export function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: DocumentDBConnectionString): void {
+    [parsedCS.username, parsedCS.password, parsedCS.port, ...(parsedCS.hosts || [])]
+        .filter(Boolean)
+        .forEach((value) => context.valuesToMask.push(value));
+}
+
 /**
  * Checks if any of the given hosts end with the provided domain name suffix.
  *

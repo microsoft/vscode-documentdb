@@ -16,6 +16,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
@@ -62,6 +63,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
 
             context.valuesToMask.push(clusterInformation.connectionString);
             const connectionString = new DocumentDBConnectionString(clusterInformation.connectionString as string);
+            maskSensitiveValuesInTelemetry(context, connectionString);
 
             if (clusterInformation.administratorLogin) {
                 context.valuesToMask.push(clusterInformation.administratorLogin);
