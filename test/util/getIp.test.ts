@@ -12,8 +12,21 @@ import { getPublicIpv4, isIpInRanges } from '../../extension.bundle';
 suite('getPublicIpv4', () => {
     test('get IP', async () => {
         try {
-            const context = await { telemetry: { suppressIfSuccessful: false } } as IActionContext;
-            const ip = await getPublicIpv4(context as IActionContext);
+            const context: IActionContext = {
+                telemetry: {
+                    suppressIfSuccessful: false,
+                    properties: {},
+                    measurements: {},
+                },
+                errorHandling: {
+                    suppressReportIssue: false,
+                    rethrow: false,
+                    issueProperties: {},
+                },
+                ui: undefined as any,
+                valuesToMask: [],
+            };
+            const ip = await getPublicIpv4(context);
             assert(isIPv4(ip), "IP address isn't v4");
         } catch (error) {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
