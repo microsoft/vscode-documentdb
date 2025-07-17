@@ -39,13 +39,21 @@ interface UriParams {
  * - the default is a connection string to a DocumentDB / MongoDB resource
  * - other modes will be added in the future, these will be handled by our discoverability plugins
  *
- * @param uri - The VS Code URI to handle, typically from an external source
+ * **URL Parameter Encoding:**
+ * Input URLs should have double-encoded parameters as documented in how-to-construct-url.md.
+ * The double decoding happens automatically in two stages:
+ * 1. First decode: VS Code automatically decodes the URI when creating the vscode.Uri object
+ * 2. Second decode: URLSearchParams constructor automatically decodes query parameters
+ * This ensures proper handling of special characters in connection strings and other parameters.
+ *
+ * @param uri - The VS Code URI to handle, typically from an external source (already decoded once by VS Code)
  * @returns {Promise<void>} A Promise that resolves when the URI has been handled
  */
 export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
     return callWithTelemetryAndErrorHandling('globalUriHandler', async (context: IActionContext) => {
         try {
             // Extract and validate parameters
+            // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
             const params = extractAndValidateParams(context, uri.query);
 
             // Process the URI with user confirmation
@@ -445,34 +453,19 @@ async function revealInConnectionsView(
 /**
  * Extracts query parameters from a URL query string.
  *
- * @param query - The URL query string to extract parameters from
+ * @param query - The URL query string to extract parameters from (already decoded once by VS Code)
  * @returns UriParams object containing the extracted parameters
  */
 function extractParams(query: string): UriParams {
     const params: UriParams = {};
+    // Note: URLSearchParams constructor performs the second URI decode automatically
+    // This completes the double decoding process for parameters that were double-encoded in the original URL
     const queryParams = new URLSearchParams(query);
 
-    // Function to safely decode URI components, handling double encoding
-    const safeDoubleDecodeURIComponent = (value: string | null, fieldName: string): string | undefined => {
-        if (!value) return undefined;
-
-        try {
-            // Decode to handle URL encoding
-            return decodeURIComponent(value);
-        } catch (error) {
-            throw new Error(
-                l10n.t(
-                    'Invalid "{0}" parameter format: {1}',
-                    fieldName,
-                    error instanceof Error ? error.message : String(error),
-                ),
-            );
-        }
-    };
-
-    params.connectionString = safeDoubleDecodeURIComponent(queryParams.get('connectionString'), 'connectionString');
-    params.database = safeDoubleDecodeURIComponent(queryParams.get('database'), 'database');
-    params.collection = safeDoubleDecodeURIComponent(queryParams.get('collection'), 'collection');
+    // URLSearchParams.get() returns already decoded values
+    params.connectionString = queryParams.get('connectionString') || undefined;
+    params.database = queryParams.get('database') || undefined;
+    params.collection = queryParams.get('collection') || undefined;
 
     return params;
 }
