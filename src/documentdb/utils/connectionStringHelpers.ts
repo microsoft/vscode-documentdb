@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import ConnectionString from 'mongodb-connection-string-url';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { DocumentDBConnectionString } from './DocumentDBConnectionString';
 
 export const removePasswordFromConnectionString = (connectionString: string): string => {
-    const connectionStringOb = new ConnectionString(connectionString);
+    const connectionStringOb = new DocumentDBConnectionString(connectionString);
     connectionStringOb.password = '';
     return connectionStringOb.toString();
 };
@@ -16,29 +17,40 @@ export const addAuthenticationDataToConnectionString = (
     username: string,
     password: string | undefined,
 ): string => {
-    const connectionStringOb = new ConnectionString(connectionString);
+    const connectionStringOb = new DocumentDBConnectionString(connectionString);
     connectionStringOb.username = username;
     connectionStringOb.password = password ?? '';
     return connectionStringOb.toString();
 };
 
 export const getUserNameFromConnectionString = (connectionString: string): string => {
-    return new ConnectionString(connectionString).username;
+    return new DocumentDBConnectionString(connectionString).username;
 };
 
 export const getPasswordFromConnectionString = (connectionString: string): string => {
-    return new ConnectionString(connectionString).password;
+    return new DocumentDBConnectionString(connectionString).password;
 };
 
 export const getHostsFromConnectionString = (connectionString: string): string[] => {
-    return new ConnectionString(connectionString).hosts;
+    return new DocumentDBConnectionString(connectionString).hosts;
 };
 
 export const addDatabasePathToConnectionString = (connectionString: string, databaseName: string): string => {
-    const connectionStringOb = new ConnectionString(connectionString);
+    const connectionStringOb = new DocumentDBConnectionString(connectionString);
     connectionStringOb.pathname = databaseName;
     return connectionStringOb.toString();
 };
+
+/**
+ * Masks sensitive values from DocumentDB connection string in telemetry.
+ * This includes username, password, port, and hosts.
+ */
+export function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: DocumentDBConnectionString): void {
+    [parsedCS.username, parsedCS.password, parsedCS.port, ...(parsedCS.hosts || [])]
+        .filter(Boolean)
+        .forEach((value) => context.valuesToMask.push(value));
+}
+
 /**
  * Checks if any of the given hosts end with the provided domain name suffix.
  *

@@ -5,9 +5,9 @@
 
 import { callWithTelemetryAndErrorHandling, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
+import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
 import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
 import { StorageNames, StorageService, type StorageItem } from './services/storageService';
@@ -39,13 +39,21 @@ interface UriParams {
  * - the default is a connection string to a DocumentDB / MongoDB resource
  * - other modes will be added in the future, these will be handled by our discoverability plugins
  *
- * @param uri - The VS Code URI to handle, typically from an external source
+ * **URL Parameter Encoding:**
+ * Input URLs should have double-encoded parameters as documented in how-to-construct-url.md.
+ * The double decoding happens automatically in two stages:
+ * 1. First decode: VS Code automatically decodes the URI when creating the vscode.Uri object
+ * 2. Second decode: URLSearchParams constructor automatically decodes query parameters
+ * This ensures proper handling of special characters in connection strings and other parameters.
+ *
+ * @param uri - The VS Code URI to handle, typically from an external source (already decoded once by VS Code)
  * @returns {Promise<void>} A Promise that resolves when the URI has been handled
  */
 export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
     return callWithTelemetryAndErrorHandling('globalUriHandler', async (context: IActionContext) => {
         try {
             // Extract and validate parameters
+            // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
             const params = extractAndValidateParams(context, uri.query);
 
             // Process the URI with user confirmation
@@ -76,7 +84,7 @@ async function handleConnectionStringRequest(
     validateConnectionString(params.connectionString);
 
     // Parse the connection string
-    const parsedCS = new ConnectionString(params.connectionString!);
+    const parsedCS = new DocumentDBConnectionString(params.connectionString!);
 
     // Extract database name from connection string pathname if params.database is not provided
     let selectedDatabase = params.database;
@@ -282,14 +290,14 @@ function validateConnectionString(connectionString: string | undefined): void {
 /**
  * Determines if a connection is to a local emulator based on host information
  */
-function isEmulatorConnection(parsedCS: ConnectionString): boolean {
+function isEmulatorConnection(parsedCS: DocumentDBConnectionString): boolean {
     return parsedCS.hosts?.length > 0 && parsedCS.hosts[0].includes('localhost');
 }
 
 /**
  * Creates a display label for a connection based on parsed connection string
  */
-function createConnectionLabel(parsedCS: ConnectionString, joinedHosts: string): string {
+function createConnectionLabel(parsedCS: DocumentDBConnectionString, joinedHosts: string): string {
     return parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
 }
 
@@ -305,7 +313,7 @@ async function getExistingConnections(isEmulator: boolean): Promise<StorageItem[
  */
 function findDuplicateConnection(
     existingConnections: StorageItem[],
-    parsedCS: ConnectionString,
+    parsedCS: DocumentDBConnectionString,
     joinedHosts: string,
 ): StorageItem | undefined {
     return existingConnections.find((item) => {
@@ -314,7 +322,7 @@ function findDuplicateConnection(
             return false; // Skip if no secret string is found
         }
 
-        const itemCS = new ConnectionString(secret);
+        const itemCS = new DocumentDBConnectionString(secret);
         return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
     });
 }
@@ -445,34 +453,19 @@ async function revealInConnectionsView(
 /**
  * Extracts query parameters from a URL query string.
  *
- * @param query - The URL query string to extract parameters from
+ * @param query - The URL query string to extract parameters from (already decoded once by VS Code)
  * @returns UriParams object containing the extracted parameters
  */
 function extractParams(query: string): UriParams {
     const params: UriParams = {};
+    // Note: URLSearchParams constructor performs the second URI decode automatically
+    // This completes the double decoding process for parameters that were double-encoded in the original URL
     const queryParams = new URLSearchParams(query);
 
-    // Function to safely decode URI components, handling double encoding
-    const safeDoubleDecodeURIComponent = (value: string | null, fieldName: string): string | undefined => {
-        if (!value) return undefined;
-
-        try {
-            // Decode to handle URL encoding
-            return decodeURIComponent(value);
-        } catch (error) {
-            throw new Error(
-                l10n.t(
-                    'Invalid "{0}" parameter format: {1}',
-                    fieldName,
-                    error instanceof Error ? error.message : String(error),
-                ),
-            );
-        }
-    };
-
-    params.connectionString = safeDoubleDecodeURIComponent(queryParams.get('connectionString'), 'connectionString');
-    params.database = safeDoubleDecodeURIComponent(queryParams.get('database'), 'database');
-    params.collection = safeDoubleDecodeURIComponent(queryParams.get('collection'), 'collection');
+    // URLSearchParams.get() returns already decoded values
+    params.connectionString = queryParams.get('connectionString') || undefined;
+    params.database = queryParams.get('database') || undefined;
+    params.collection = queryParams.get('collection') || undefined;
 
     return params;
 }
@@ -522,7 +515,7 @@ function maskParamsInTelemetry(context: IActionContext, params: UriParams): void
 /**
  * Adds sensitive values from a connection string to the telemetry masking list
  */
-function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: ConnectionString): void {
+function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: DocumentDBConnectionString): void {
     [parsedCS.username, parsedCS.password, parsedCS.port, ...(parsedCS.hosts || [])]
         .filter(Boolean)
         .forEach((value) => context.valuesToMask.push(value));

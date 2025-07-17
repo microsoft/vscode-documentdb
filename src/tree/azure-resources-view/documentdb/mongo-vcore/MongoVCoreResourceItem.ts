@@ -13,10 +13,10 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
@@ -50,7 +50,7 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
                 }
 
                 context.valuesToMask.push(clusterInformation.connectionString);
-                const connectionString = new ConnectionString(clusterInformation.connectionString as string);
+                const connectionString = new DocumentDBConnectionString(clusterInformation.connectionString as string);
 
                 if (clusterInformation.administratorLogin) {
                     context.valuesToMask.push(clusterInformation.administratorLogin);

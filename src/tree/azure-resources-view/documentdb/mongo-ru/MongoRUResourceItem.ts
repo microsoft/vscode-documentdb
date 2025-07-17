@@ -6,10 +6,10 @@
 import { callWithTelemetryAndErrorHandling, nonNullProp, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../../../extensionVariables';
 import { createCosmosDBManagementClient } from '../../../../utils/azureClients';
 import { ClusterItemBase } from '../../../documentdb/ClusterItemBase';
@@ -81,7 +81,7 @@ export class MongoRUResourceItem extends ClusterItemBase {
 
                 context.valuesToMask.push(this.cluster.connectionString);
 
-                const cString = new ConnectionString(this.cluster.connectionString);
+                const cString = new DocumentDBConnectionString(this.cluster.connectionString);
 
                 // // Azure MongoDB accounts need to have the name passed in for private endpoints
                 // mongoClient = await connectToMongoClient(

@@ -5,7 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type DocumentDBResourceItem } from '../../plugins/service-azure/discovery-tree/documentdb/DocumentDBResourceItem';
@@ -28,7 +28,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
         throw new Error(l10n.t('Unable to retrieve connection string for the selected cluster.'));
     }
 
-    const parsedCS = new ConnectionString(connectionString);
+    const parsedCS = new DocumentDBConnectionString(connectionString);
     const label =
         parsedCS.username && parsedCS.username.length > 0
             ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`

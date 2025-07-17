@@ -5,7 +5,7 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
@@ -21,7 +21,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
         const connectionString = context.connectionString!;
         const parentId = context.parentId;
 
-        const parsedCS = new ConnectionString(connectionString);
+        const parsedCS = new DocumentDBConnectionString(connectionString);
         const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
@@ -33,7 +33,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 return false; // Skip if no secret string is found
             }
 
-            const itemCS = new ConnectionString(secret);
+            const itemCS = new DocumentDBConnectionString(secret);
             return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
         });
 
