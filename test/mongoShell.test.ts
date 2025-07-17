@@ -7,7 +7,7 @@
 import { parseError } from '@microsoft/vscode-azext-utils';
 import assert from 'assert';
 import * as cp from 'child_process';
-import * as fse from 'fs-extra';
+import * as fs from 'node:fs';
 import * as os from 'os';
 import * as path from 'path';
 import { isNumber } from 'util';
@@ -49,15 +49,15 @@ suite('MongoShell', async function (this: Mocha.Suite): Promise<void> {
     let mongoDErrors = '';
     let isClosed = false;
 
-    if (!fse.existsSync(mongodPath)) {
+    if (!fs.existsSync(mongodPath)) {
         console.log(`Couldn't find mongod.exe at ${mongodPath} - skipping MongoShell tests`);
         testsSupported = false;
-    } else if (!fse.existsSync(mongodPath)) {
+    } else if (!fs.existsSync(mongodPath)) {
         console.log(`Couldn't find mongo.exe at ${mongoPath} - skipping MongoShell tests`);
         testsSupported = false;
     } else {
         // Prevent code 100 error: https://stackoverflow.com/questions/41420466/mongodb-shuts-down-with-code-100
-        await fse.ensureDir('D:\\data\\db\\');
+        fs.mkdirSync('D:\\data\\db\\', { recursive: true });
     }
 
     class FakeOutputChannel implements vscode.OutputChannel {
@@ -102,8 +102,8 @@ suite('MongoShell', async function (this: Mocha.Suite): Promise<void> {
 
     suiteSetup(() => {
         if (testsSupported) {
-            assert(fse.existsSync(mongodPath), "Couldn't find mongod.exe at " + mongodPath);
-            assert(fse.existsSync(mongoPath), "Couldn't find mongo.exe at " + mongoPath);
+            assert(fs.existsSync(mongodPath), "Couldn't find mongod.exe at " + mongodPath);
+            assert(fs.existsSync(mongoPath), "Couldn't find mongo.exe at " + mongoPath);
 
             // Shut down any still-running mongo server
             try {

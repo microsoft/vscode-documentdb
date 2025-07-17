@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createTestActionContext } from '@microsoft/vscode-azext-dev';
+// import { createTestActionContext } from '@microsoft/vscode-azext-dev';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import assert from 'assert';
 import { isIPv4 } from 'net';
@@ -12,7 +12,7 @@ import { getPublicIpv4, isIpInRanges } from '../../extension.bundle';
 suite('getPublicIpv4', () => {
     test('get IP', async () => {
         try {
-            const context = await createTestActionContext();
+            const context = await { telemetry: { suppressIfSuccessful: false } } as IActionContext;
             const ip = await getPublicIpv4(context as IActionContext);
             assert(isIPv4(ip), "IP address isn't v4");
         } catch (error) {

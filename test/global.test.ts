@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TestOutputChannel, TestUserInput } from '@microsoft/vscode-azext-dev';
-import { type IAzureUserInput, registerOnActionStartHandler } from '@microsoft/vscode-azext-utils';
+// import { TestOutputChannel, TestUserInput } from '@microsoft/vscode-azext-dev';
+import { registerOnActionStartHandler } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../extension.bundle';
 
@@ -21,10 +21,10 @@ export const longRunningTestsEnabled: boolean = longRunningLocalTestsEnabled || 
 suiteSetup(async function (this: Mocha.Context): Promise<void> {
     this.timeout(2 * 60 * 1000);
     await vscode.commands.executeCommand('vscode-documentdb.command.refresh'); // activate the extension before tests begin
-    ext.outputChannel = new TestOutputChannel();
+    ext.outputChannel = undefined as any;
 
     registerOnActionStartHandler((context) => {
         // Use `TestUserInput` by default so we get an error if an unexpected call to `context.ui` occurs, rather than timing out
-        context.ui = new TestUserInput(vscode) as IAzureUserInput;
+        context.ui = undefined as any;
     });
 });

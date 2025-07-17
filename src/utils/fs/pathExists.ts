@@ -3,19 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { LanguageService } from './services/languageService';
+import * as fs from 'node:fs/promises';
 
-//
-//
-//
-// HOW TO DEBUG THE LANGUAGE SERVER
-//
-//
-// 1. Start the extension via F5
-// 2. Under vscode Debug pane, switch to "Attach to Language Server"
-// 3. F5
-//
-//
-//
-
-new LanguageService();
+/**
+ * Check if a path exists
+ */
+export async function pathExists(path: string): Promise<boolean> {
+    try {
+        await fs.access(path);
+        return true;
+    } catch {
+        return false;
+    }
+}
