@@ -22,6 +22,13 @@
       "*": ["node_modules/@types/*", "*"]
     },
     "jsx": "react-jsx"
+    /* keept this as comment during the PR work, to be removed
+    "types": ["jest", "mocha", "node"],
+    "typeRoots": [
+      //"typings",
+      "node_modules/@types"
+    ]
+      */
   },
   "exclude": ["node_modules", ".vscode-test"]
 }
