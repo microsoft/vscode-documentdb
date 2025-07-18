@@ -7,7 +7,7 @@
 import { ProgressBar } from '@fluentui/react-components';
 import { loader } from '@monaco-editor/react';
 import * as l10n from '@vscode/l10n';
-import debounce from 'lodash.debounce';
+import { debounce } from 'es-toolkit';
 import { type JSX, useEffect, useRef, useState } from 'react';
 // eslint-disable-next-line import/no-internal-modules
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';

@@ -393,7 +393,7 @@ export class ClustersClient {
         documentId: string,
         document: Document,
     ): Promise<{ documentId: unknown; document: WithId<Document> | null }> {
-        // eslint-disable-next-line , @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let parsedId: any;
 
         if (documentId === '') {
@@ -416,14 +416,14 @@ export class ClustersClient {
         delete document._id;
 
         const replaceResult = await collection.replaceOne(
-            // eslint-disable-next-line
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             { _id: parsedId },
 
             document as WithoutId<Document>,
             { upsert: true },
         );
 
-        // eslint-disable-next-line , @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
         const newDocumentId = (replaceResult.upsertedId as any) ?? parsedId;
 
         // eslint-disable-next-line
