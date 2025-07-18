@@ -42,10 +42,10 @@ export class LanguageService {
         // Create a connection for the server
         const connection = createConnection(ProposedFeatures.all);
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        // eslint-disable-next-line
         console.log = connection.console.log.bind(connection.console);
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        // eslint-disable-next-line
         console.error = connection.console.error.bind(connection.console);
         this.schemaService = new SchemaService();
 

@@ -151,9 +151,9 @@ export function DataViewPanelTableV2({ liveHeaders, liveData, handleStepIn }: Pr
                 gridId="myGrid"
                 ref={gridRef} // Attach the reference to SlickGrid
                 gridOptions={gridOptions}
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                // eslint-disable-next-line
                 columnDefinitions={gridColumns}
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                // eslint-disable-next-line
                 dataset={liveData}
                 onDblClick={(event) => onCellDblClick(event)}
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-argument

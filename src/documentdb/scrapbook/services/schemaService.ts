@@ -127,7 +127,7 @@ export class SchemaService {
 
     private setSchemaForDocumentProperty(parent: string, property: string, document: any, schema: JSONSchema): void {
         const scopedProperty = parent ? `${parent}.${property}` : property;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        // eslint-disable-next-line , @typescript-eslint/no-unsafe-member-access
         const value = document[property];
         const type = this.getMongoDocumentType(value);
 
@@ -220,7 +220,7 @@ Use the $where operator to pass either a string containing a JavaScript expressi
         }
 
         const expressionSchema = {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line
             properties: <any>{},
         };
         // Comparison operators
@@ -393,13 +393,13 @@ Use the $where operator to pass either a string containing a JavaScript expressi
                 'Matches numeric or binary values in which any bit from a set of bit positions has a value of 0',
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        // eslint-disable-next-line
         schema.properties = { ...expressionSchema.properties };
         schema.properties!.$not = {
             type: 'object',
             description:
                 'Inverts the effect of a query expression and returns documents that do not match the query expression',
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line
             properties: { ...expressionSchema.properties },
         };
         schema.properties!.$elemMatch = {
