@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// eslint-disable-next-line import/no-internal-modules
 import { ProgressBar } from '@fluentui/react-components';
 import { loader } from '@monaco-editor/react';
 import * as l10n from '@vscode/l10n';
@@ -221,7 +220,7 @@ export const DocumentView = (): JSX.Element => {
         void trpcClient.mongoClusters.documentView.saveDocument
             .mutate({ documentContent: editorContent })
             .then((response) => {
-                // update the configuration for potential refreshes of the document
+                // Update the configuration for potential refreshes of the document
                 configuration.documentId = response.documentId;
                 setContent(response.documentStringified);
                 setIsLoading(false);

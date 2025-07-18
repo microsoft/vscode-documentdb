@@ -19,11 +19,9 @@ export const MonacoEditor = (props: EditorProps) => {
     const uncontrolledFocus = useUncontrolledFocus();
 
     useEffect(() => {
-        if (monaco) {
-            if (themeState.monaco.theme) {
-                monaco.editor.defineTheme(themeState.monaco.themeName, themeState.monaco.theme);
-                monaco.editor.setTheme(themeState.monaco.themeName);
-            }
+        if (monaco && themeState.monaco.theme) {
+            monaco.editor.defineTheme(themeState.monaco.themeName, themeState.monaco.theme);
+            monaco.editor.setTheme(themeState.monaco.themeName);
         }
     }, [monaco, themeState]);
 
