@@ -22,6 +22,7 @@ export default ts.config(
             'dist',
             'out',
             'node_modules',
+            'vscode-documentdb-api.d.ts',
             '**/__mocks__/**/*',
             '**/*.d.ts',
             '**/jest.config.js',
