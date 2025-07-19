@@ -100,7 +100,7 @@ export class ClustersExtension implements vscode.Disposable {
                 // TODO: Implement https://github.com/microsoft/vscode-documentdb/issues/30
                 // for staged hand-over from Azure Databases to this DocumentDB extension
 
-                // eslint-disable-next-line no-constant-condition
+                // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
                 if (false && enableMongoVCoreSupport()) {
                     // on purpose, transition is still in progress
                     activateContext.telemetry.properties.enabledVCore = 'true';
@@ -112,7 +112,7 @@ export class ClustersExtension implements vscode.Disposable {
                     );
                 }
 
-                // eslint-disable-next-line no-constant-condition
+                // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
                 if (false && enableWorkspaceSupport()) {
                     // on purpose, transition is still in progress
                     activateContext.telemetry.properties.enabledWorkspace = 'true';

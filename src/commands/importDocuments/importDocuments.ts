@@ -6,7 +6,7 @@
 import { nonNullProp, parseError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
-import * as fse from 'fs-extra';
+import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import {
@@ -205,7 +205,7 @@ async function parseAndValidateFile(
  * @returns A promise that resolves to an array of parsed documents as unknown objects.
  */
 async function parseAndValidateFileForMongo(uri: vscode.Uri): Promise<{ documents: unknown[]; errors: string[] }> {
-    const fileContent = await fse.readFile(uri.fsPath, 'utf8');
+    const fileContent = await fs.readFile(uri.fsPath, 'utf8');
     const parsed = EJSON.parse(fileContent) as unknown;
     const errors: string[] = [];
     const documents: unknown[] = [];

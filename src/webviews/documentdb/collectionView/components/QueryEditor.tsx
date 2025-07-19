@@ -13,7 +13,11 @@ import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { CollectionViewContext } from '../collectionViewContext';
 import { MonacoAdaptive } from './MonacoAdaptive';
 
-export const QueryEditor = ({ onExecuteRequest }): JSX.Element => {
+interface QueryEditorProps {
+    onExecuteRequest: (query: string) => void;
+}
+
+export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
     const [, setCurrentContext] = useContext(CollectionViewContext);
 
     const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
@@ -54,7 +58,7 @@ export const QueryEditor = ({ onExecuteRequest }): JSX.Element => {
                             {
                                 uri: 'mongodb-filter-query-schema.json', // Unique identifier
                                 fileMatch: ['*'], // Apply to all JSON files or specify as needed
-                                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
                                 schema: schema,
                             },
                         ],
@@ -72,7 +76,7 @@ export const QueryEditor = ({ onExecuteRequest }): JSX.Element => {
                 {
                     uri: 'mongodb-filter-query-schema.json', // Unique identifier
                     fileMatch: ['*'], // Apply to all JSON files or specify as needed
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
                     schema: basicFindQuerySchema,
                     // schema: generateMongoFindJsonSchema(fieldEntries)
                 },
@@ -115,7 +119,6 @@ export const QueryEditor = ({ onExecuteRequest }): JSX.Element => {
                 lineHeight: 19,
             }}
             onExecuteRequest={(input) => {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-call
                 onExecuteRequest(input);
             }}
             onMount={handleEditorDidMount}

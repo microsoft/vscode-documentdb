@@ -120,11 +120,10 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
      */
     private async handleSubscriptionMessage(message: VsCodeLinkRequestMessage, context: BaseRouterContext) {
         try {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             const callerFactory = createCallerFactory(appRouter);
             const caller = callerFactory(context);
 
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line
             const procedure = caller[message.op.path];
 
             if (typeof procedure !== 'function') {
@@ -139,14 +138,14 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
             context.signal = abortController.signal;
 
             // Await the procedure call to get the async iterator (async generator) for the subscription
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+            // eslint-disable-next-line , @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
             const asyncIter = await procedure(message.op.input);
 
             void (async () => {
                 try {
                     for await (const value of asyncIter) {
                         // Each yielded value is sent to the webview
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                        // eslint-disable-next-line
                         this._panel.webview.postMessage({ id: message.id, result: value });
                     }
 
@@ -191,22 +190,21 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
      */
     private async handleDefaultMessage(message: VsCodeLinkRequestMessage, context: BaseRouterContext) {
         try {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             const callerFactory = createCallerFactory(appRouter);
             const caller = callerFactory(context);
 
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line
             const procedure = caller[message.op.path];
 
             if (typeof procedure !== 'function') {
                 throw new Error(l10n.t('Procedure not found: {name}', { name: message.op.path }));
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+            // eslint-disable-next-line , @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
             const result = await procedure(message.op.input);
 
             // Send the result back to the client
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line
             const response = { id: message.id, result };
             this._panel.webview.postMessage(response);
         } catch (error) {
