@@ -65,7 +65,9 @@ export const MonacoAdaptive = (props: MonacoAdaptiveProps) => {
     // also, let's exclude onMount as we're adding our own handler and will invoke the provided one
     // once we're done with our setup
 
-    const { adaptiveHeight: _, onExecuteRequest: _, onMount: _, ...editorProps } = props;
+    // These props are intentionally destructured but not used directly - they're handled specially
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { adaptiveHeight, onExecuteRequest, onMount, ...editorProps } = props;
 
     const handleMonacoEditorMount = (
         editor: monacoEditor.editor.IStandaloneCodeEditor,
