@@ -84,7 +84,7 @@ export class LanguageService {
         });
 
         connection.onRequest('disconnect', () => {
-            this.db = null!;
+            this.db = null;
             for (const schema of this.schemas) {
                 this.jsonLanguageService.resetSchema(schema.uri);
             }

@@ -45,10 +45,11 @@ export function DataViewPanelTableV2({ liveHeaders, liveData, handleStepIn }: Pr
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const gridRef = useRef<SlickgridReact>(null);
 
-    // IMPORTANT: Store latest data in refs to solve React closure issues with third-party components
-    // SlickGrid binds event handlers during initialization and doesn't automatically update them on re-renders.
-    // This creates a classic React "stale closure" problem where callbacks capture values from the render
-    // they were defined in, not the latest values when the callback executes.
+    // IMPORTANT: Store latest data in refs to solve React closure issues with third-party components.
+    // React closure issues occur when event handlers or callbacks capture outdated state or props
+    // from the render in which they were defined. This is known as "stale state capturing."
+    // SlickGrid binds event handlers during initialization and doesn't automatically update them on re-renders,
+    // leading to potential bugs if the state changes after the handlers are initialized.
     const liveDataRef = useRef<TableDataEntry[]>(liveData);
 
     // Also keep a ref for grid columns to solve the same issue
