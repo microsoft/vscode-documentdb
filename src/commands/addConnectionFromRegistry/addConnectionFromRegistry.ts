@@ -10,6 +10,11 @@ import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type DocumentDBResourceItem } from '../../plugins/service-azure/discovery-tree/documentdb/DocumentDBResourceItem';
 import { StorageNames, StorageService, type StorageItem } from '../../services/storageService';
+import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
+import {
+    buildConnectionsViewTreePath,
+    waitForConnectionsViewReady,
+} from '../../tree/connections-view/connectionsViewHelpers';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 
@@ -44,7 +49,18 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
     };
 
     await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
+
     ext.connectionsBranchDataProvider.refresh();
+
+    await waitForConnectionsViewReady(context);
+
+    // Reveal the connection
+    const connectionPath = buildConnectionsViewTreePath(storageItem.id, false);
+    await revealConnectionsViewElement(context, connectionPath, {
+        select: true,
+        focus: false,
+        expand: false, // Don't expand immediately to avoid login prompts
+    });
 
     showConfirmationAsInSettings(l10n.t('New connection has been added to your DocumentDB Connections.'));
 }

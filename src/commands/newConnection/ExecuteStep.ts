@@ -9,6 +9,11 @@ import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBCon
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
+import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
+import {
+    buildConnectionsViewTreePath,
+    waitForConnectionsViewReady,
+} from '../../tree/connections-view/connectionsViewHelpers';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
@@ -96,12 +101,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             // Refresh the connections tree when adding a new root-level connection
             if (parentId === undefined || parentId === '') {
                 ext.connectionsBranchDataProvider.refresh();
+                await waitForConnectionsViewReady(context);
 
-                // TODO: Find the actual tree element by ID before revealing it
-                // const treeItem = await ext.connectionsBranchDataProvider.findItemById(storageItem.id); // `findItemById` is a placeholder, does not exist in the current code
-                // if (treeItem) {
-                //     ext.connectionsTreeView.reveal(treeItem, { select: true, focus: true });
-                // }
+                // Step 1: Reveal connection only
+                const connectionPath = buildConnectionsViewTreePath(storageId, false);
+                await revealConnectionsViewElement(context, connectionPath, {
+                    select: true,
+                    focus: true,
+                    expand: false, // Don't expand immediately to avoid login prompts
+                });
             }
 
             showConfirmationAsInSettings(l10n.t('New connection has been added.'));
