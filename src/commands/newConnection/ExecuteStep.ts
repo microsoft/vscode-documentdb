@@ -43,6 +43,14 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
         });
 
         if (existingDuplicateConnection) {
+            // Reveal the existing duplicate connection
+            const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
+            await revealConnectionsViewElement(context, connectionPath, {
+                select: true,
+                focus: false,
+                expand: false, // Don't expand to avoid login prompts
+            });
+
             throw new Error(
                 l10n.t('A connection "{existingName}" with the same username and host already exists.', {
                     existingName: existingDuplicateConnection.name,
