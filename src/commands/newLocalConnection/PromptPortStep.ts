@@ -5,14 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import {
-    DocumentDBExperience,
-    MongoClustersExperience,
-    MongoExperience,
-    type Experience,
-} from '../../DocumentDBExperiences';
-import { wellKnownEmulatorPassword } from '../../constants';
-import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
+import { DocumentDBExperience, MongoExperience } from '../../DocumentDBExperiences';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
 export class PromptPortStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
@@ -40,9 +33,8 @@ export class PromptPortStep extends AzureWizardPromptStep<NewLocalConnectionWiza
             validateInput: (input: string) => this.validateInput(input),
         });
 
-        if (port && context.experience) {
+        if (port) {
             context.port = Number(port);
-            context.connectionString = this.buildConnectionString(context, Number(port), context.experience);
         }
     }
 
@@ -70,27 +62,27 @@ export class PromptPortStep extends AzureWizardPromptStep<NewLocalConnectionWiza
         return undefined;
     }
 
-    private buildConnectionString(
-        context: NewLocalConnectionWizardContext,
-        port: number,
-        experience: Experience,
-    ): string | undefined {
-        switch (experience) {
-            case MongoExperience:
-            case MongoClustersExperience:
-            case DocumentDBExperience: {
-                if (context.emulatorType === 'documentdb') {
-                    if (!context.mongoEmulatorConfiguration) {
-                        context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
-                    }
+    // private buildConnectionString(
+    //     context: NewLocalConnectionWizardContext,
+    //     port: number,
+    //     experience: Experience,
+    // ): string | undefined {
+    //     switch (experience) {
+    //         case MongoExperience:
+    //         case MongoClustersExperience:
+    //         case DocumentDBExperience: {
+    //             if (context.emulatorType === 'documentdb') {
+    //                 if (!context.mongoEmulatorConfiguration) {
+    //                     context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
+    //                 }
 
-                    return `mongodb://localhost:${port}/?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`;
-                }
+    //                 return `mongodb://localhost:${port}/?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`;
+    //             }
 
-                return `mongodb://localhost:${encodeURIComponent(wellKnownEmulatorPassword)}@localhost:${port}/?ssl=true&retrywrites=false`;
-            }
-            default:
-                return `AccountEndpoint=https://localhost:${port}/;AccountKey=${wellKnownEmulatorPassword};`;
-        }
-    }
+    //             return `mongodb://localhost:${encodeURIComponent(wellKnownEmulatorPassword)}@localhost:${port}/?ssl=true&retrywrites=false`;
+    //         }
+    //         default:
+    //             return `AccountEndpoint=https://localhost:${port}/;AccountKey=${wellKnownEmulatorPassword};`;
+    //     }
+    // }
 }

@@ -9,6 +9,7 @@ import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBCon
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
+import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { nonNullValue } from '../../utils/nonNull';
@@ -40,6 +41,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         }
 
         const parsedCS = new DocumentDBConnectionString(connectionString);
+        parsedCS.username = context.userName ?? '';
+        parsedCS.password = context.password ?? '';
+
         const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
@@ -56,10 +60,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         });
 
         if (existingDuplicateConnection) {
-            throw new Error(
-                l10n.t('A connection "{existingName}" with the same username and host already exists.', {
+            throw new UserFacingError(
+                l10n.t('A connection with the same username and host already exists ("{existingName}").', {
                     existingName: existingDuplicateConnection.name,
                 }),
+                {
+                    details: l10n.t('If you want to create a new connection, please use a different username or host.'),
+                },
             );
         }
 
