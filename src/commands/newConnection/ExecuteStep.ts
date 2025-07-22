@@ -14,6 +14,7 @@ import {
     buildConnectionsViewTreePath,
     waitForConnectionsViewReady,
 } from '../../tree/connections-view/connectionsViewHelpers';
+import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
@@ -51,10 +52,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 expand: false, // Don't expand to avoid login prompts
             });
 
-            throw new Error(
-                l10n.t('A connection "{existingName}" with the same username and host already exists.', {
-                    existingName: existingDuplicateConnection.name,
-                }),
+            throw new UserFacingError(
+                l10n.t(
+                    'A connection with the same username and host already exists. It has been selected in the connections view.',
+                ),
+                {
+                    details: l10n.t('If you want to create a new connection, please use a different username or host.'),
+                },
             );
         }
 
