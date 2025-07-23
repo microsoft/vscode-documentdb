@@ -61,28 +61,4 @@ export class PromptPortStep extends AzureWizardPromptStep<NewLocalConnectionWiza
 
         return undefined;
     }
-
-    // private buildConnectionString(
-    //     context: NewLocalConnectionWizardContext,
-    //     port: number,
-    //     experience: Experience,
-    // ): string | undefined {
-    //     switch (experience) {
-    //         case MongoExperience:
-    //         case MongoClustersExperience:
-    //         case DocumentDBExperience: {
-    //             if (context.emulatorType === 'documentdb') {
-    //                 if (!context.mongoEmulatorConfiguration) {
-    //                     context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
-    //                 }
-
-    //                 return `mongodb://localhost:${port}/?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`;
-    //             }
-
-    //             return `mongodb://localhost:${encodeURIComponent(wellKnownEmulatorPassword)}@localhost:${port}/?ssl=true&retrywrites=false`;
-    //         }
-    //         default:
-    //             return `AccountEndpoint=https://localhost:${port}/;AccountKey=${wellKnownEmulatorPassword};`;
-    //     }
-    // }
 }
