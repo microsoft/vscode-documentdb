@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.2.3
+
+### New Features & Improvements
+
+- **Connection Focus Enhancement**: Newly created connections are automatically selected and focused in the Connections View. If a connection already exists, the existing one is highlighted for better user awareness. [#122](https://github.com/microsoft/vscode-documentdb/issues/122)
+
+### Fixes
+
+- **Complex Password Handling**: Improved connection string parsing and URL handler to properly support complex passwords with special characters. [#190](https://github.com/microsoft/vscode-documentdb/issues/190)
+- **Dependency Updates**: Updated and removed obsolete dependencies to improve security and performance. [#167](https://github.com/microsoft/vscode-documentdb/issues/167)
+- **Development Tooling**: Modernized ESLint, Prettier, and TypeScript configurations with updated dependencies and ES2023 target support. [#168](https://github.com/microsoft/vscode-documentdb/issues/168)
+
 ## 0.2.2
 
 ### New Features & Improvements
@@ -31,7 +43,6 @@
 - Support for DocumentDB and MongoDB databases.
 - Universal DoumentDB and MongoDB connectivity using connection strings.
 - Built in Service Discovery with an extensible API:
-
   - Support for Azure Cosmos DB for MongoDB (vCore)
   - Support for Virtual Machines on Azure with a user-specified `tag`
 
