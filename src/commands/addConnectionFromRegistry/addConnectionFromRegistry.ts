@@ -15,6 +15,7 @@ import {
     buildConnectionsViewTreePath,
     waitForConnectionsViewReady,
 } from '../../tree/connections-view/connectionsViewHelpers';
+import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 
@@ -23,29 +24,58 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
         throw new Error(l10n.t('No node selected.'));
     }
 
-    const connectionString = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
+    const newConnectionString = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
         context.telemetry.properties.experience = node.experience.api;
 
         return node.getConnectionString();
     });
 
-    if (!connectionString) {
+    if (!newConnectionString) {
         throw new Error(l10n.t('Unable to retrieve connection string for the selected cluster.'));
     }
 
-    const parsedCS = new DocumentDBConnectionString(connectionString);
-    const label =
-        parsedCS.username && parsedCS.username.length > 0
-            ? `${parsedCS.username}@${parsedCS.hosts.join(',')}`
-            : parsedCS.hosts.join(',');
+    const parsedCS = new DocumentDBConnectionString(newConnectionString);
+    const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
-    const storageId = generateDocumentDBStorageId(connectionString);
+    //  Sanity Check 1/2: is there a connection with the same username + host in there?
+    const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
+
+    const existingDuplicateConnection = existingConnections.find((item) => {
+        const secret = item.secrets?.[0];
+        if (!secret) {
+            return false; // Skip if no secret string is found
+        }
+
+        const itemCS = new DocumentDBConnectionString(secret);
+        return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
+    });
+
+    if (existingDuplicateConnection) {
+        // Reveal the existing duplicate connection
+        const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
+        await revealConnectionsViewElement(context, connectionPath, {
+            select: true,
+            focus: false,
+            expand: false, // Don't expand to avoid login prompts
+        });
+
+        throw new UserFacingError(
+            l10n.t(
+                'A connection with the same username and host already exists. It has been selected in the connections view.',
+            ),
+        );
+    }
+
+    const newConnectionLabel =
+        parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
+
+    const storageId = generateDocumentDBStorageId(newConnectionString);
 
     const storageItem: StorageItem = {
         id: storageId,
-        name: label,
+        name: newConnectionLabel,
         properties: { isEmulator: false, api: API.MongoClusters },
-        secrets: [connectionString],
+        secrets: [newConnectionString],
     };
 
     await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);

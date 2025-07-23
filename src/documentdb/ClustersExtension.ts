@@ -191,7 +191,7 @@ export class ClustersExtension implements vscode.Disposable {
                     learnMoreAboutServiceProvider,
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.discoveryView.addConnectionToConnectionsView',
                     addConnectionFromRegistry,
                 );
