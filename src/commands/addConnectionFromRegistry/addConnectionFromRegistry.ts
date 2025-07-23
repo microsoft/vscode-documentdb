@@ -5,7 +5,9 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import vscode from 'vscode';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { Views } from '../../documentdb/Views';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type DocumentDBResourceItem } from '../../plugins/service-azure/discovery-tree/documentdb/DocumentDBResourceItem';
@@ -24,74 +26,86 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
         throw new Error(l10n.t('No node selected.'));
     }
 
-    const newConnectionString = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
-        context.telemetry.properties.experience = node.experience.api;
+    return vscode.window.withProgress(
+        {
+            location: { viewId: Views.ConnectionsView },
+            cancellable: false,
+        },
+        async () => {
+            const newConnectionString = await ext.state.runWithTemporaryDescription(
+                node.id,
+                l10n.t('Working…'),
+                async () => {
+                    context.telemetry.properties.experience = node.experience.api;
 
-        return node.getConnectionString();
-    });
+                    return node.getConnectionString();
+                },
+            );
 
-    if (!newConnectionString) {
-        throw new Error(l10n.t('Unable to retrieve connection string for the selected cluster.'));
-    }
+            if (!newConnectionString) {
+                throw new Error(l10n.t('Unable to retrieve connection string for the selected cluster.'));
+            }
 
-    const parsedCS = new DocumentDBConnectionString(newConnectionString);
-    const joinedHosts = [...parsedCS.hosts].sort().join(',');
+            const parsedCS = new DocumentDBConnectionString(newConnectionString);
+            const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
-    //  Sanity Check 1/2: is there a connection with the same username + host in there?
-    const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
+            //  Sanity Check 1/2: is there a connection with the same username + host in there?
+            const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
 
-    const existingDuplicateConnection = existingConnections.find((item) => {
-        const secret = item.secrets?.[0];
-        if (!secret) {
-            return false; // Skip if no secret string is found
-        }
+            const existingDuplicateConnection = existingConnections.find((item) => {
+                const secret = item.secrets?.[0];
+                if (!secret) {
+                    return false; // Skip if no secret string is found
+                }
 
-        const itemCS = new DocumentDBConnectionString(secret);
-        return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
-    });
+                const itemCS = new DocumentDBConnectionString(secret);
+                return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
+            });
 
-    if (existingDuplicateConnection) {
-        // Reveal the existing duplicate connection
-        const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
-        await revealConnectionsViewElement(context, connectionPath, {
-            select: true,
-            focus: false,
-            expand: false, // Don't expand to avoid login prompts
-        });
+            if (existingDuplicateConnection) {
+                // Reveal the existing duplicate connection
+                const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
+                await revealConnectionsViewElement(context, connectionPath, {
+                    select: true,
+                    focus: false,
+                    expand: false, // Don't expand to avoid login prompts
+                });
 
-        throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
-            details: l10n.t(
-                'The existing connection has been selected in the Connections View.\n\nConnection Name:\n"{0}"',
-                existingDuplicateConnection.name,
-            ),
-        });
-    }
+                throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
+                    details: l10n.t(
+                        'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
+                        existingDuplicateConnection.name,
+                    ),
+                });
+            }
 
-    const newConnectionLabel =
-        parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
+            const newConnectionLabel =
+                parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
 
-    const storageId = generateDocumentDBStorageId(newConnectionString);
+            const storageId = generateDocumentDBStorageId(newConnectionString);
 
-    const storageItem: StorageItem = {
-        id: storageId,
-        name: newConnectionLabel,
-        properties: { isEmulator: false, api: API.MongoClusters },
-        secrets: [newConnectionString],
-    };
+            const storageItem: StorageItem = {
+                id: storageId,
+                name: newConnectionLabel,
+                properties: { isEmulator: false, api: API.MongoClusters },
+                secrets: [newConnectionString],
+            };
 
-    await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
+            await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
 
-    ext.connectionsBranchDataProvider.refresh();
+            await vscode.commands.executeCommand(`connectionsView.focus`);
+            ext.connectionsBranchDataProvider.refresh();
+            await waitForConnectionsViewReady(context);
 
-    await waitForConnectionsViewReady(context);
+            // Reveal the connection
+            const connectionPath = buildConnectionsViewTreePath(storageItem.id, false);
+            await revealConnectionsViewElement(context, connectionPath, {
+                select: true,
+                focus: false,
+                expand: false, // Don't expand immediately to avoid login prompts
+            });
 
-    // Reveal the connection
-    const connectionPath = buildConnectionsViewTreePath(storageItem.id, false);
-    await revealConnectionsViewElement(context, connectionPath, {
-        select: true,
-        focus: false,
-        expand: false, // Don't expand immediately to avoid login prompts
-    });
-
-    showConfirmationAsInSettings(l10n.t('New connection has been added to your DocumentDB Connections.'));
+            showConfirmationAsInSettings(l10n.t('New connection has been added to your DocumentDB Connections.'));
+        },
+    );
 }

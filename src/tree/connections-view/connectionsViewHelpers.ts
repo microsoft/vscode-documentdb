@@ -125,7 +125,7 @@ export async function revealInConnectionsView(
     // if the full search fails, which causes our error nodes not to be shown.
     // We implement a three-step reveal process to ensure intermediate nodes are expanded.
 
-    // Step 0: reveal local connections:
+    // Step 0: Reveal local connections:
     if (isEmulator) {
         await revealConnectionsViewElement(context, `${Views.ConnectionsView}/localEmulators`, {
             select: false, // Don't select yet
@@ -134,7 +134,7 @@ export async function revealInConnectionsView(
         });
     }
 
-    // Step 1: Reveal connection only
+    // Step 1: Reveal the connection
     const connectionPath = buildConnectionsViewTreePath(storageId, isEmulator);
     await revealConnectionsViewElement(context, connectionPath, {
         select: true, // Only select if this is the final step
@@ -142,7 +142,7 @@ export async function revealInConnectionsView(
         expand: true,
     });
 
-    // Step 2: Reveal with database (if provided)
+    // Step 2: Reveal the database (if provided)
     if (database) {
         const databasePath = buildConnectionsViewTreePath(storageId, isEmulator, database);
         await revealConnectionsViewElement(context, databasePath, {
@@ -151,7 +151,7 @@ export async function revealInConnectionsView(
             expand: true,
         });
 
-        // Step 3: Reveal with collection (if provided)
+        // Step 3: Reveal the collection (if provided)
         if (collection) {
             const collectionPath = buildConnectionsViewTreePath(storageId, isEmulator, database, collection);
             await revealConnectionsViewElement(context, collectionPath, {

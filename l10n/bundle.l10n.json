@@ -387,7 +387,7 @@
   "The default port: 10255": "The default port: 10255",
   "The document with the _id \"{0}\" has been saved.": "The document with the _id \"{0}\" has been saved.",
   "The entered value does not match the original.": "The entered value does not match the original.",
-  "The existing connection has been selected in the Connections View.\n\nConnection Name:\n\"{0}\"": "The existing connection has been selected in the Connections View.\n\nConnection Name:\n\"{0}\"",
+  "The existing connection has been selected in the Connections View.\n\nSelected connection name:\n\"{0}\"": "The existing connection has been selected in the Connections View.\n\nSelected connection name:\n\"{0}\"",
   "The existing connection name:\n\"{0}\"": "The existing connection name:\n\"{0}\"",
   "The export operation was canceled.": "The export operation was canceled.",
   "The issue text was copied to the clipboard.  Please paste it into this window.": "The issue text was copied to the clipboard.  Please paste it into this window.",
