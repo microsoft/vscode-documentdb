@@ -169,6 +169,7 @@
     "mongodb": "~6.17.0",
     "mongodb-connection-string-url": "~3.0.2",
     "react-hotkeys-hook": "~5.1.0",
+    "regenerator-runtime": "^0.14.1",
     "semver": "~7.7.2",
     "slickgrid-react": "~5.14.1",
     "vscode-json-languageservice": "~5.6.1",
