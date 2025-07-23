@@ -24,7 +24,10 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
             })
         ).trim();
 
-        context.port = extractPortFromConnectionString(context.connectionString);
+        const parsedConnectionString = new DocumentDBConnectionString(context.connectionString);
+        context.userName = parsedConnectionString.username;
+        context.password = parsedConnectionString.password;
+        context.port = extractPortFromConnectionString(parsedConnectionString);
 
         context.valuesToMask.push(context.connectionString);
     }
@@ -63,9 +66,10 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
         return undefined;
     }
 }
-function extractPortFromConnectionString(connectionString: string): number | undefined {
+
+function extractPortFromConnectionString(parsedConnectionString: DocumentDBConnectionString): number | undefined {
     try {
-        const { hosts } = new DocumentDBConnectionString(connectionString);
+        const { hosts } = parsedConnectionString;
 
         // Access the first host and split it by ':' to separate hostname and port, then extract the port part
         const portStr = hosts?.[0]?.split(':')[1];

@@ -6,12 +6,13 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 
 import * as l10n from '@vscode/l10n';
-import { type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
+import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
 export class PromptUsernameStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
     public async prompt(context: NewLocalConnectionWizardContext): Promise<void> {
         const username = await context.ui.showInputBox({
             prompt: l10n.t('Enter the username'),
+            value: context.userName,
             ignoreFocusOut: true,
         });
 
@@ -20,6 +21,8 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewLocalConnection
     }
 
     public shouldPrompt(context: NewLocalConnectionWizardContext): boolean {
-        return context.emulatorType === 'documentdb';
+        return (
+            context.emulatorType === 'documentdb' || context.mode === NewEmulatorConnectionMode.CustomConnectionString
+        );
     }
 }
