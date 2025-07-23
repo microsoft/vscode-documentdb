@@ -52,14 +52,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 expand: false, // Don't expand to avoid login prompts
             });
 
-            throw new UserFacingError(
-                l10n.t(
-                    'A connection with the same username and host already exists. It has been selected in the connections view.',
+            throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
+                details: l10n.t(
+                    'The existing connection has been selected in the Connections View.\n\nConnection Name:\n"{0}"',
+                    existingDuplicateConnection.name,
                 ),
-                {
-                    details: l10n.t('If you want to create a new connection, please use a different username or host.'),
-                },
-            );
+            });
         }
 
         let newConnectionLabel =

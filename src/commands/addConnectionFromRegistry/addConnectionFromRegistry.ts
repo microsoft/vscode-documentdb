@@ -59,11 +59,12 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
             expand: false, // Don't expand to avoid login prompts
         });
 
-        throw new UserFacingError(
-            l10n.t(
-                'A connection with the same username and host already exists. It has been selected in the connections view.',
+        throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
+            details: l10n.t(
+                'The existing connection has been selected in the Connections View.\n\nConnection Name:\n"{0}"',
+                existingDuplicateConnection.name,
             ),
-        );
+        });
     }
 
     const newConnectionLabel =

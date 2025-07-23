@@ -69,14 +69,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         });
 
         if (existingDuplicateConnection) {
-            throw new UserFacingError(
-                l10n.t('A connection with the same username and host already exists ("{existingName}").', {
-                    existingName: existingDuplicateConnection.name,
-                }),
-                {
-                    details: l10n.t('If you want to create a new connection, please use a different username or host.'),
-                },
-            );
+            throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
+                details: l10n.t('The existing connection name:\n"{0}"', existingDuplicateConnection.name),
+            });
         }
 
         let newConnectionLabel =
