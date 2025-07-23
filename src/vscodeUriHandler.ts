@@ -8,10 +8,13 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
-import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
 import { StorageNames, StorageService, type StorageItem } from './services/storageService';
-import { revealConnectionsViewElement } from './tree/api/revealConnectionsViewElement';
+import {
+    buildConnectionsViewTreePath,
+    revealInConnectionsView,
+    waitForConnectionsViewReady,
+} from './tree/connections-view/connectionsViewHelpers';
 import { generateDocumentDBStorageId } from './utils/storageUtils';
 
 // #region Type Definitions
@@ -147,7 +150,7 @@ async function handleConnectionStringRequest(
 
         // Show the Connections View
         await vscode.commands.executeCommand(`connectionsView.focus`);
-        await waitForTreeViewReady(context);
+        await waitForConnectionsViewReady(context);
 
         storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
 
@@ -175,7 +178,7 @@ async function handleConnectionStringRequest(
         ext.connectionsBranchDataProvider.refresh();
 
         // add a delay to allow the Connections View to refresh
-        await waitForTreeViewReady(context);
+        await waitForConnectionsViewReady(context);
     }
 
     // Second confirmation: Ask user about revealing the connection (if enabled)
@@ -206,7 +209,7 @@ async function handleConnectionStringRequest(
         // This is done only for the existing connection, as the new connection
         // has already been shown in the previous step
         await vscode.commands.executeCommand(`connectionsView.focus`);
-        await waitForTreeViewReady(context);
+        await waitForConnectionsViewReady(context);
     }
 
     // For future code maintainers:
@@ -350,104 +353,6 @@ function generateUniqueLabel(existingLabel: string): string {
 
 // #endregion
 
-// #region View Operations
-
-/**
- * Builds a tree path for the Connections View based on the provided parameters.
- * This code builds a tree path based on the structure of the Connections View.
- * Any change to the Connections View structure will require changes here.
- *
- * @param storageId - The ID of the connection
- * @param isEmulator - Whether the connection is to a local emulator
- * @param database - Optional database name to include in the path
- * @param collection - Optional collection name to include in the path
- * @returns The constructed tree path string
- */
-function buildConnectionsViewTreePath(
-    storageId: string,
-    isEmulator: boolean,
-    database?: string,
-    collection?: string,
-): string {
-    let treePath = `${Views.ConnectionsView}`;
-
-    // Add 'Local Emulators' node to the path, if needed
-    if (isEmulator) {
-        treePath += '/localEmulators';
-    }
-
-    // Add the storage ID
-    treePath += `/${storageId}`;
-
-    // Add database if provided
-    if (database) {
-        treePath += `/${database}`;
-
-        // Add collection only if database is present
-        if (collection) {
-            treePath += `/${collection}`;
-        }
-    }
-
-    return treePath;
-}
-
-/**
- * Reveals an element in the Connections View.
- *
- * @param context - The action context for telemetry
- * @param storageId - The ID of the connection to reveal
- * @param isEmulator - Whether the connection is to a local emulator
- * @param database - Optional database name to reveal
- * @param collection - Optional collection name to reveal
- */
-async function revealInConnectionsView(
-    context: IActionContext,
-    storageId: string,
-    isEmulator: boolean,
-    database?: string,
-    collection?: string,
-): Promise<void> {
-    // Validate that database is provided if collection is specified
-    if (collection && !database) {
-        throw new Error(l10n.t('Database name is required when collection is specified'));
-    }
-
-    // Progressive reveal workaround: The reveal function does not show the opened path
-    // if the full search fails, which causes our error nodes not to be shown.
-    // We implement a three-step reveal process to ensure intermediate nodes are expanded.
-
-    // Step 1: Reveal connection only
-    const connectionPath = buildConnectionsViewTreePath(storageId, isEmulator);
-    await revealConnectionsViewElement(context, connectionPath, {
-        select: true, // Only select if this is the final step
-        focus: !database, // Only focus if this is the final step
-        expand: true,
-    });
-
-    // Step 2: Reveal with database (if provided)
-    if (database) {
-        const databasePath = buildConnectionsViewTreePath(storageId, isEmulator, database);
-        await revealConnectionsViewElement(context, databasePath, {
-            select: true, // Only select if this is the final step
-            focus: !collection, // Only focus if this is the final step
-            expand: true,
-        });
-
-        // Step 3: Reveal with collection (if provided)
-        if (collection) {
-            const collectionPath = buildConnectionsViewTreePath(storageId, isEmulator, database, collection);
-            await revealConnectionsViewElement(context, collectionPath, {
-                select: true,
-                focus: true,
-                expand: true,
-            });
-        }
-    }
-}
-
-// #endregion
-
 // #region Parameter Processing
 
 /**
@@ -547,43 +452,4 @@ async function openDedicatedView(
         databaseName: nonNullValue(database, 'database'),
         collectionName: nonNullValue(collection, 'collection'),
     });
-}
-
-/**
- * Waits for the connections tree view to be accessible with exponential backoff
- */
-async function waitForTreeViewReady(context: IActionContext, maxAttempts: number = 5): Promise<void> {
-    const startTime = Date.now();
-    let attempt = 0;
-    let delay = 500; // Start with 500ms
-
-    while (attempt < maxAttempts) {
-        try {
-            // Try to access the tree view - if this succeeds, we're ready
-            const rootElements = await ext.connectionsBranchDataProvider.getChildren();
-            if (rootElements !== undefined) {
-                // Tree view is ready - record successful activation
-                const totalTime = Date.now() - startTime;
-                context.telemetry.measurements.connectionViewActivationTimeMs = totalTime;
-                context.telemetry.measurements.connectionViewActivationAttempts = attempt + 1;
-                context.telemetry.properties.connectionViewActivationResult = 'success';
-                return;
-            }
-        } catch {
-            // Tree view not ready yet, continue polling
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        attempt++;
-        delay = Math.min(delay * 1.5, 2000); // Cap at 2 seconds
-    }
-
-    // Exhausted all attempts - record timeout and continue optimistically
-    const totalTime = Date.now() - startTime;
-    context.telemetry.measurements.connectionViewActivationTimeMs = totalTime;
-    context.telemetry.measurements.connectionViewActivationAttempts = maxAttempts;
-    context.telemetry.properties.connectionViewActivationResult = 'timeout';
-
-    // Let's just move forward, maybe it's ready, maybe something has failed
-    // The next step will handle the case when the tree view is not ready
 }

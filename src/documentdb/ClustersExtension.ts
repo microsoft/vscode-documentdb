@@ -52,6 +52,10 @@ import { ConnectionsBranchDataProvider } from '../tree/connections-view/Connecti
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
+import {
+    registerCommandWithModalErrors,
+    registerCommandWithTreeNodeUnwrappingAndModalErrors,
+} from '../utils/commandErrorHandling';
 import { enableMongoVCoreSupport, enableWorkspaceSupport } from './activationConditions';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
 import { Views } from './Views';
@@ -139,7 +143,10 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 //// Connections View Commands:
-                registerCommand('vscode-documentdb.command.connectionsView.newConnection', newConnection);
+                registerCommandWithModalErrors(
+                    'vscode-documentdb.command.connectionsView.newConnection',
+                    newConnection,
+                );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.updateCredentials',
@@ -151,7 +158,7 @@ export class ClustersExtension implements vscode.Disposable {
                     updateConnectionString,
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.connectionsView.newEmulatorConnection',
                     newLocalConnection,
                 );
@@ -184,7 +191,7 @@ export class ClustersExtension implements vscode.Disposable {
                     learnMoreAboutServiceProvider,
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.discoveryView.addConnectionToConnectionsView',
                     addConnectionFromRegistry,
                 );
