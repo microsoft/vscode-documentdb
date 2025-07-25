@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { useContext, useRef, type JSX } from 'react'; // 1. Import useRef
+import { useContext, useEffect, useRef, type JSX } from 'react'; // Add useEffect import
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
@@ -127,6 +127,16 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         scrollBeyondLastLine: false,
         automaticLayout: false,
     };
+
+    // Cleanup any pending operations when component unmounts
+    useEffect(() => {
+        return () => {
+            if (schemaAbortControllerRef.current) {
+                schemaAbortControllerRef.current.abort();
+                schemaAbortControllerRef.current = null;
+            }
+        };
+    }, []);
 
     return (
         <MonacoAdaptive
