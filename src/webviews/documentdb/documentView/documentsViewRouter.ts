@@ -60,13 +60,13 @@ export const documentsViewRouter = router({
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
 
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line
             const documentBson: Document = EJSON.parse(input.documentContent);
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let documentId: any;
             if (documentBson['_id']) {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+                // eslint-disable-next-line , @typescript-eslint/no-unsafe-assignment
                 documentId = documentBson['_id'];
             }
 
@@ -109,7 +109,7 @@ export const documentsViewRouter = router({
 //     // Use JSON.parse with a reviver function
 //     JSON.parse(jsonString, (key, value) => {
 //         if (key === '_id') {
-//             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+//             // eslint-disable-next-line
 //             extractedId = value; // Extract _id when found
 //         }
 //         // Return the value to keep parsing

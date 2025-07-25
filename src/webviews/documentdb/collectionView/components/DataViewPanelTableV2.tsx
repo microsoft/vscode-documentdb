@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import debounce from 'lodash.debounce';
+import { debounce } from 'es-toolkit';
 import * as React from 'react';
 import { useContext, useRef } from 'react';
 import {
@@ -43,9 +43,24 @@ const cellFormatter: Formatter<object> = (_row: number, _cell: number, value: Ce
 
 export function DataViewPanelTableV2({ liveHeaders, liveData, handleStepIn }: Props): React.JSX.Element {
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
-
     const gridRef = useRef<SlickgridReact>(null);
 
+    // IMPORTANT: Store latest data in refs to solve React closure issues with third-party components.
+    // React closure issues occur when event handlers or callbacks capture outdated state or props
+    // from the render in which they were defined. This is known as "stale state capturing."
+    // SlickGrid binds event handlers during initialization and doesn't automatically update them on re-renders,
+    // leading to potential bugs if the state changes after the handlers are initialized.
+    const liveDataRef = useRef<TableDataEntry[]>(liveData);
+
+    // Also keep a ref for grid columns to solve the same issue
+    const gridColumnsRef = useRef<Array<{ id: string; name: string; field: string; minWidth: number }>>([]);
+
+    // Update data ref whenever liveData changes
+    React.useEffect(() => {
+        liveDataRef.current = liveData;
+    }, [liveData]);
+
+    // Create grid columns
     type GridColumn = { id: string; name: string; field: string; minWidth: number };
 
     const gridColumns: GridColumn[] = liveHeaders.map((header) => {
@@ -58,33 +73,56 @@ export function DataViewPanelTableV2({ liveHeaders, liveData, handleStepIn }: Pr
         };
     });
 
-    function onSelectedRowsChanged(_eventData: unknown, _args: OnSelectedRowsChangedEventArgs) {
-        setCurrentContext((prev) => ({
-            ...prev,
-            commands: {
-                ...currentContext.commands,
-                disableAddDocument: false,
-                disableDeleteDocument: _args.rows.length === 0,
-                disableEditDocument: _args.rows.length !== 1,
-                disableViewDocument: _args.rows.length !== 1,
-            },
-            dataSelection: {
-                selectedDocumentIndexes: _args.rows,
-                selectedDocumentObjectIds: _args.rows.map((row) => liveData[row]['x-objectid'] ?? ''),
-            },
-        }));
-    }
+    // Update grid columns ref whenever they change
+    React.useEffect(() => {
+        gridColumnsRef.current = gridColumns;
+    }, [gridColumns]);
 
-    function onCellDblClick(event: CustomEvent<{ eventData: unknown; args: OnDblClickEventArgs }>) {
-        const activeDocument = liveData[event.detail.args.row];
-        const activeColumn = gridColumns[event.detail.args.cell].field;
+    // Using useCallback for reference stability, but the critical solution is the ref pattern
+    const onCellDblClick = React.useCallback(
+        (event: CustomEvent<{ eventData: unknown; args: OnDblClickEventArgs }>): void => {
+            // Use ref to always get latest data and columns
+            const activeDocument = liveDataRef.current[event.detail.args.row];
 
-        const activeCell = activeDocument[activeColumn] as { type?: string };
+            // Access columns from the ref instead of the closure-captured variable
+            const columnsData = gridColumnsRef.current;
+            if (!activeDocument || event.detail.args.cell >= columnsData.length) {
+                return; // Guard against invalid indexes
+            }
 
-        if (activeCell && activeCell.type === 'object') {
-            handleStepIn(event.detail.args.row, event.detail.args.cell);
-        }
-    }
+            const activeColumn = columnsData[event.detail.args.cell].field;
+            const activeCell = activeDocument[activeColumn] as { type?: string };
+
+            if (activeCell && activeCell.type === 'object') {
+                handleStepIn(event.detail.args.row, event.detail.args.cell);
+            }
+        },
+        [handleStepIn],
+    );
+
+    // Add this handler definition after onCellDblClick but before gridOptions
+    const onSelectedRowsChanged = React.useCallback(
+        (_eventData: unknown, _args: OnSelectedRowsChangedEventArgs): void => {
+            // Use the ref pattern to access latest data
+            setCurrentContext((prev) => ({
+                ...prev,
+                commands: {
+                    // Use prev instead of currentContext to avoid stale state references
+                    ...prev.commands,
+                    disableAddDocument: false,
+                    disableDeleteDocument: _args.rows.length === 0,
+                    disableEditDocument: _args.rows.length !== 1,
+                    disableViewDocument: _args.rows.length !== 1,
+                },
+                dataSelection: {
+                    selectedDocumentIndexes: _args.rows,
+                    // Always use the ref to get the latest data, not the prop value captured in closure
+                    selectedDocumentObjectIds: _args.rows.map((row) => liveDataRef.current[row]?.['x-objectid'] ?? ''),
+                },
+            }));
+        },
+        [setCurrentContext], // Only depends on setCurrentContext, not liveData since we use the ref
+    );
 
     const gridOptions: GridOption = {
         autoResize: {
@@ -149,15 +187,11 @@ export function DataViewPanelTableV2({ liveHeaders, liveData, handleStepIn }: Pr
         return (
             <SlickgridReact
                 gridId="myGrid"
-                ref={gridRef} // Attach the reference to SlickGrid
+                ref={gridRef}
                 gridOptions={gridOptions}
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 columnDefinitions={gridColumns}
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 dataset={liveData}
                 onDblClick={(event) => onCellDblClick(event)}
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                // debouncing here as multiple events are fired on multiselect
                 onSelectedRowsChanged={debounce(
                     (event: { detail: { eventData: unknown; args: OnSelectedRowsChangedEventArgs } }) =>
                         onSelectedRowsChanged(event.detail.eventData, event.detail.args),

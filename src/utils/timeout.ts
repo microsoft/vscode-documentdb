@@ -46,7 +46,7 @@ export async function rejectOnTimeout<T>(
             clearTimeout(timer);
             resolve(value);
         } catch (err) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line
             error = err;
             clearTimeout(timer);
             // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors

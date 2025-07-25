@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from '../NewLocalConnectionWizardContext';
 
 // TODO: create one that can be shared for adding an account and adding an emulator
@@ -24,7 +24,10 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
             })
         ).trim();
 
-        context.port = extractPortFromConnectionString(context.connectionString);
+        const parsedConnectionString = new DocumentDBConnectionString(context.connectionString);
+        context.userName = parsedConnectionString.username;
+        context.password = parsedConnectionString.password;
+        context.port = extractPortFromConnectionString(parsedConnectionString);
 
         context.valuesToMask.push(context.connectionString);
     }
@@ -32,7 +35,7 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
     //eslint-disable-next-line @typescript-eslint/require-await
     private async validateConnectionString(connectionString: string): Promise<string | null | undefined> {
         try {
-            new ConnectionString(connectionString);
+            new DocumentDBConnectionString(connectionString);
         } catch (error) {
             if (error instanceof Error && error.name === 'MongoParseError') {
                 return error.message;
@@ -63,9 +66,10 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
         return undefined;
     }
 }
-function extractPortFromConnectionString(connectionString: string): number | undefined {
+
+function extractPortFromConnectionString(parsedConnectionString: DocumentDBConnectionString): number | undefined {
     try {
-        const { hosts } = new ConnectionString(connectionString);
+        const { hosts } = parsedConnectionString;
 
         // Access the first host and split it by ':' to separate hostname and port, then extract the port part
         const portStr = hosts?.[0]?.split(':')[1];

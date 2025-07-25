@@ -5,13 +5,16 @@
 
 import { callWithTelemetryAndErrorHandling, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
-import { Views } from './documentdb/Views';
+import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
 import { ext } from './extensionVariables';
 import { StorageNames, StorageService, type StorageItem } from './services/storageService';
-import { revealConnectionsViewElement } from './tree/api/revealConnectionsViewElement';
+import {
+    buildConnectionsViewTreePath,
+    revealInConnectionsView,
+    waitForConnectionsViewReady,
+} from './tree/connections-view/connectionsViewHelpers';
 import { generateDocumentDBStorageId } from './utils/storageUtils';
 
 // #region Type Definitions
@@ -39,13 +42,21 @@ interface UriParams {
  * - the default is a connection string to a DocumentDB / MongoDB resource
  * - other modes will be added in the future, these will be handled by our discoverability plugins
  *
- * @param uri - The VS Code URI to handle, typically from an external source
+ * **URL Parameter Encoding:**
+ * Input URLs should have double-encoded parameters as documented in how-to-construct-url.md.
+ * The double decoding happens automatically in two stages:
+ * 1. First decode: VS Code automatically decodes the URI when creating the vscode.Uri object
+ * 2. Second decode: URLSearchParams constructor automatically decodes query parameters
+ * This ensures proper handling of special characters in connection strings and other parameters.
+ *
+ * @param uri - The VS Code URI to handle, typically from an external source (already decoded once by VS Code)
  * @returns {Promise<void>} A Promise that resolves when the URI has been handled
  */
 export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
     return callWithTelemetryAndErrorHandling('globalUriHandler', async (context: IActionContext) => {
         try {
             // Extract and validate parameters
+            // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
             const params = extractAndValidateParams(context, uri.query);
 
             // Process the URI with user confirmation
@@ -76,7 +87,7 @@ async function handleConnectionStringRequest(
     validateConnectionString(params.connectionString);
 
     // Parse the connection string
-    const parsedCS = new ConnectionString(params.connectionString!);
+    const parsedCS = new DocumentDBConnectionString(params.connectionString!);
 
     // Extract database name from connection string pathname if params.database is not provided
     let selectedDatabase = params.database;
@@ -139,7 +150,7 @@ async function handleConnectionStringRequest(
 
         // Show the Connections View
         await vscode.commands.executeCommand(`connectionsView.focus`);
-        await waitForTreeViewReady(context);
+        await waitForConnectionsViewReady(context);
 
         storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
 
@@ -167,7 +178,7 @@ async function handleConnectionStringRequest(
         ext.connectionsBranchDataProvider.refresh();
 
         // add a delay to allow the Connections View to refresh
-        await waitForTreeViewReady(context);
+        await waitForConnectionsViewReady(context);
     }
 
     // Second confirmation: Ask user about revealing the connection (if enabled)
@@ -198,7 +209,7 @@ async function handleConnectionStringRequest(
         // This is done only for the existing connection, as the new connection
         // has already been shown in the previous step
         await vscode.commands.executeCommand(`connectionsView.focus`);
-        await waitForTreeViewReady(context);
+        await waitForConnectionsViewReady(context);
     }
 
     // For future code maintainers:
@@ -282,14 +293,14 @@ function validateConnectionString(connectionString: string | undefined): void {
 /**
  * Determines if a connection is to a local emulator based on host information
  */
-function isEmulatorConnection(parsedCS: ConnectionString): boolean {
+function isEmulatorConnection(parsedCS: DocumentDBConnectionString): boolean {
     return parsedCS.hosts?.length > 0 && parsedCS.hosts[0].includes('localhost');
 }
 
 /**
  * Creates a display label for a connection based on parsed connection string
  */
-function createConnectionLabel(parsedCS: ConnectionString, joinedHosts: string): string {
+function createConnectionLabel(parsedCS: DocumentDBConnectionString, joinedHosts: string): string {
     return parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
 }
 
@@ -305,7 +316,7 @@ async function getExistingConnections(isEmulator: boolean): Promise<StorageItem[
  */
 function findDuplicateConnection(
     existingConnections: StorageItem[],
-    parsedCS: ConnectionString,
+    parsedCS: DocumentDBConnectionString,
     joinedHosts: string,
 ): StorageItem | undefined {
     return existingConnections.find((item) => {
@@ -314,7 +325,7 @@ function findDuplicateConnection(
             return false; // Skip if no secret string is found
         }
 
-        const itemCS = new ConnectionString(secret);
+        const itemCS = new DocumentDBConnectionString(secret);
         return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
     });
 }
@@ -342,137 +353,24 @@ function generateUniqueLabel(existingLabel: string): string {
 
 // #endregion
 
-// #region View Operations
-
-/**
- * Builds a tree path for the Connections View based on the provided parameters.
- * This code builds a tree path based on the structure of the Connections View.
- * Any change to the Connections View structure will require changes here.
- *
- * @param storageId - The ID of the connection
- * @param isEmulator - Whether the connection is to a local emulator
- * @param database - Optional database name to include in the path
- * @param collection - Optional collection name to include in the path
- * @returns The constructed tree path string
- */
-function buildConnectionsViewTreePath(
-    storageId: string,
-    isEmulator: boolean,
-    database?: string,
-    collection?: string,
-): string {
-    let treePath = `${Views.ConnectionsView}`;
-
-    // Add 'Local Emulators' node to the path, if needed
-    if (isEmulator) {
-        treePath += '/localEmulators';
-    }
-
-    // Add the storage ID
-    treePath += `/${storageId}`;
-
-    // Add database if provided
-    if (database) {
-        treePath += `/${database}`;
-
-        // Add collection only if database is present
-        if (collection) {
-            treePath += `/${collection}`;
-        }
-    }
-
-    return treePath;
-}
-
-/**
- * Reveals an element in the Connections View.
- *
- * @param context - The action context for telemetry
- * @param storageId - The ID of the connection to reveal
- * @param isEmulator - Whether the connection is to a local emulator
- * @param database - Optional database name to reveal
- * @param collection - Optional collection name to reveal
- */
-async function revealInConnectionsView(
-    context: IActionContext,
-    storageId: string,
-    isEmulator: boolean,
-    database?: string,
-    collection?: string,
-): Promise<void> {
-    // Validate that database is provided if collection is specified
-    if (collection && !database) {
-        throw new Error(l10n.t('Database name is required when collection is specified'));
-    }
-
-    // Progressive reveal workaround: The reveal function does not show the opened path
-    // if the full search fails, which causes our error nodes not to be shown.
-    // We implement a three-step reveal process to ensure intermediate nodes are expanded.
-
-    // Step 1: Reveal connection only
-    const connectionPath = buildConnectionsViewTreePath(storageId, isEmulator);
-    await revealConnectionsViewElement(context, connectionPath, {
-        select: true, // Only select if this is the final step
-        focus: !database, // Only focus if this is the final step
-        expand: true,
-    });
-
-    // Step 2: Reveal with database (if provided)
-    if (database) {
-        const databasePath = buildConnectionsViewTreePath(storageId, isEmulator, database);
-        await revealConnectionsViewElement(context, databasePath, {
-            select: true, // Only select if this is the final step
-            focus: !collection, // Only focus if this is the final step
-            expand: true,
-        });
-
-        // Step 3: Reveal with collection (if provided)
-        if (collection) {
-            const collectionPath = buildConnectionsViewTreePath(storageId, isEmulator, database, collection);
-            await revealConnectionsViewElement(context, collectionPath, {
-                select: true,
-                focus: true,
-                expand: true,
-            });
-        }
-    }
-}
-
-// #endregion
-
 // #region Parameter Processing
 
 /**
  * Extracts query parameters from a URL query string.
  *
- * @param query - The URL query string to extract parameters from
+ * @param query - The URL query string to extract parameters from (already decoded once by VS Code)
  * @returns UriParams object containing the extracted parameters
  */
 function extractParams(query: string): UriParams {
     const params: UriParams = {};
+    // Note: URLSearchParams constructor performs the second URI decode automatically
+    // This completes the double decoding process for parameters that were double-encoded in the original URL
     const queryParams = new URLSearchParams(query);
 
-    // Function to safely decode URI components, handling double encoding
-    const safeDoubleDecodeURIComponent = (value: string | null, fieldName: string): string | undefined => {
-        if (!value) return undefined;
-
-        try {
-            // Decode to handle URL encoding
-            return decodeURIComponent(value);
-        } catch (error) {
-            throw new Error(
-                l10n.t(
-                    'Invalid "{0}" parameter format: {1}',
-                    fieldName,
-                    error instanceof Error ? error.message : String(error),
-                ),
-            );
-        }
-    };
-
-    params.connectionString = safeDoubleDecodeURIComponent(queryParams.get('connectionString'), 'connectionString');
-    params.database = safeDoubleDecodeURIComponent(queryParams.get('database'), 'database');
-    params.collection = safeDoubleDecodeURIComponent(queryParams.get('collection'), 'collection');
+    // URLSearchParams.get() returns already decoded values
+    params.connectionString = queryParams.get('connectionString') || undefined;
+    params.database = queryParams.get('database') || undefined;
+    params.collection = queryParams.get('collection') || undefined;
 
     return params;
 }
@@ -522,7 +420,7 @@ function maskParamsInTelemetry(context: IActionContext, params: UriParams): void
 /**
  * Adds sensitive values from a connection string to the telemetry masking list
  */
-function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: ConnectionString): void {
+function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: DocumentDBConnectionString): void {
     [parsedCS.username, parsedCS.password, parsedCS.port, ...(parsedCS.hosts || [])]
         .filter(Boolean)
         .forEach((value) => context.valuesToMask.push(value));
@@ -554,43 +452,4 @@ async function openDedicatedView(
         databaseName: nonNullValue(database, 'database'),
         collectionName: nonNullValue(collection, 'collection'),
     });
-}
-
-/**
- * Waits for the connections tree view to be accessible with exponential backoff
- */
-async function waitForTreeViewReady(context: IActionContext, maxAttempts: number = 5): Promise<void> {
-    const startTime = Date.now();
-    let attempt = 0;
-    let delay = 500; // Start with 500ms
-
-    while (attempt < maxAttempts) {
-        try {
-            // Try to access the tree view - if this succeeds, we're ready
-            const rootElements = await ext.connectionsBranchDataProvider.getChildren();
-            if (rootElements !== undefined) {
-                // Tree view is ready - record successful activation
-                const totalTime = Date.now() - startTime;
-                context.telemetry.measurements.connectionViewActivationTimeMs = totalTime;
-                context.telemetry.measurements.connectionViewActivationAttempts = attempt + 1;
-                context.telemetry.properties.connectionViewActivationResult = 'success';
-                return;
-            }
-        } catch {
-            // Tree view not ready yet, continue polling
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        attempt++;
-        delay = Math.min(delay * 1.5, 2000); // Cap at 2 seconds
-    }
-
-    // Exhausted all attempts - record timeout and continue optimistically
-    const totalTime = Date.now() - startTime;
-    context.telemetry.measurements.connectionViewActivationTimeMs = totalTime;
-    context.telemetry.measurements.connectionViewActivationAttempts = maxAttempts;
-    context.telemetry.properties.connectionViewActivationResult = 'timeout';
-
-    // Let's just move forward, maybe it's ready, maybe something has failed
-    // The next step will handle the case when the tree view is not ready
 }

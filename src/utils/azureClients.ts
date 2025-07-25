@@ -6,8 +6,6 @@
 import { type ComputeManagementClient } from '@azure/arm-compute'; // Modified import
 import { type CosmosDBManagementClient } from '@azure/arm-cosmosdb';
 import { type NetworkManagementClient } from '@azure/arm-network'; // Add this import
-import { type PostgreSQLManagementClient } from '@azure/arm-postgresql';
-import { type PostgreSQLManagementFlexibleServerClient } from '@azure/arm-postgresql-flexible';
 import { type ResourceManagementClient } from '@azure/arm-resources';
 import { createAzureClient, type AzExtClientContext } from '@microsoft/vscode-azext-azureutils';
 import { createSubscriptionContext, type IActionContext } from '@microsoft/vscode-azext-utils';
@@ -42,19 +40,6 @@ export async function createMongoClustersManagementClient(
 ): Promise<CosmosDBManagementClient> {
     const subContext = createSubscriptionContext(subscription);
     return createAzureClient([context, subContext], (await import('@azure/arm-cosmosdb')).CosmosDBManagementClient);
-}
-
-export async function createPostgreSQLClient(context: AzExtClientContext): Promise<PostgreSQLManagementClient> {
-    return createAzureClient(context, (await import('@azure/arm-postgresql')).PostgreSQLManagementClient);
-}
-
-export async function createPostgreSQLFlexibleClient(
-    context: AzExtClientContext,
-): Promise<PostgreSQLManagementFlexibleServerClient> {
-    return createAzureClient(
-        context,
-        (await import('@azure/arm-postgresql-flexible')).PostgreSQLManagementFlexibleServerClient,
-    );
 }
 
 export async function createComputeManagementClient(

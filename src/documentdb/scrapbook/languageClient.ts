@@ -3,10 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/* eslint-disable import/no-internal-modules */
+
 import { appendExtensionUserAgent } from '@microsoft/vscode-azext-utils';
-import * as l10n from '@vscode/l10n';
 import * as path from 'path';
-import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient';
+import {
+    LanguageClient,
+    TransportKind,
+    type LanguageClientOptions,
+    type ServerOptions,
+} from 'vscode-languageclient/node';
 import { ext } from '../../extensionVariables';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { type IConnectionParams } from './services/IConnectionParams';
@@ -39,18 +45,28 @@ export class MongoDBLanguageClient {
             ],
         };
 
-        // Create the language client and start the client.
+        // Create the language client.
         this.client = new LanguageClient(
             'vscode-documentdb-scrapbook-language',
-            l10n.t('DocumentDB Language Server'),
+            'DocumentDB Language Server',
             serverOptions,
             clientOptions,
         );
-        const disposable = this.client.start();
 
         // Push the disposable to the context's subscriptions so that the
         // client can be deactivated on extension deactivation
-        ext.context.subscriptions.push(disposable);
+        ext.context.subscriptions.push({
+            dispose: async () => {
+                try {
+                    await this.client?.stop();
+                } catch (error) {
+                    console.error('Failed to stop the language client:', error);
+                }
+            },
+        });
+
+        // Start the client. This will also launch the server
+        void this.client.start();
     }
 
     public async connect(

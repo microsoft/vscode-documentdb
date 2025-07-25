@@ -6,12 +6,13 @@
 import * as fs from 'node:fs/promises';
 
 /**
- * Appends content to a file at the specified path
- *
- * @param filePath The path to the file
- * @param content The content to append
- * @returns Promise that resolves when the append operation completes
+ * Check if a path exists
  */
-export async function appendToFile(filePath: string, content: string): Promise<void> {
-    return fs.appendFile(filePath, content);
+export async function pathExists(path: string): Promise<boolean> {
+    try {
+        await fs.access(path);
+        return true;
+    } catch {
+        return false;
+    }
 }

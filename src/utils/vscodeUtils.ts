@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import * as fse from 'fs-extra';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { type EditableFileSystemItem } from '../DatabasesFileSystem';
 import { ext } from '../extensionVariables';
 import { type TreeElement } from '../tree/TreeElement';
+import { pathExists } from './fs/pathExists';
 import { getRootPath } from './workspacUtils';
 
 export interface IDisposable {
@@ -68,10 +68,10 @@ async function getUniqueFileName(folderPath: string, fileName: string, fileExten
         const fullFileName: string = fileName + fileSuffix + fileExtension;
 
         const fullPath: string = path.join(folderPath, fullFileName);
-        const pathExists: boolean = await fse.pathExists(fullPath);
+        const pathExistsResult: boolean = await pathExists(fullPath);
         const editorExists: boolean =
             vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === fullPath) !== undefined;
-        if (!pathExists && !editorExists) {
+        if (!pathExistsResult && !editorExists) {
             return fullFileName;
         }
         count += 1;

@@ -23,7 +23,7 @@ import { ClusterItemBase } from '../../documentdb/ClusterItemBase';
 import { type AttachedClusterModel } from '../../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../../TreeElementWithStorageId';
 
-import ConnectionString from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 
 export class ClusterItem extends ClusterItemBase implements TreeElementWithStorageId {
     public override readonly cluster: AttachedClusterModel;
@@ -60,7 +60,7 @@ export class ClusterItem extends ClusterItemBase implements TreeElementWithStora
 
                 let clustersClient: ClustersClient;
 
-                const connectionString = new ConnectionString(nonNullValue(this.cluster.connectionString));
+                const connectionString = new DocumentDBConnectionString(nonNullValue(this.cluster.connectionString));
 
                 let username: string | undefined = connectionString.username;
                 let password: string | undefined = connectionString.password;
