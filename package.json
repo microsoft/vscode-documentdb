@@ -912,9 +912,17 @@
     ]
   },
   "x-documentdbApi": {
-    "registeredClients": [
-      "vscode-cosmosdb",
-      "vscode-mongo-migration"
+    "verifiedClients": [
+      "ms-azurecosmosdbtools.vscode-mongo-migration"
+    ],
+    "announcedClients": [
+      {
+        "id": "ms-azurecosmosdbtools.vscode-mongo-migration",
+        "name": "Azure Cosmos DB Migration",
+        "description": "Assess and migrate your databases to Azure Cosmos DB.",
+        "icon": "$(extensions)",
+        "url": "https://marketplace.visualstudio.com/items?itemName=ms-azurecosmosdbtools.vscode-mongo-migration"
+      }
     ]
   }
 }

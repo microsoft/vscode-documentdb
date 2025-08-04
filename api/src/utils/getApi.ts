@@ -10,11 +10,23 @@ import { type DocumentDBExtensionApi } from '../extensionApi';
 const DOCUMENTDB_EXTENSION_ID = 'ms-azuretools.vscode-documentdb';
 
 /**
+ * Interface for announced client configuration
+ */
+interface AnnouncedClient {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    url: string;
+}
+
+/**
  * Interface for the DocumentDB API configuration in package.json
  */
 interface DocumentDBApiConfig {
     'x-documentdbApi'?: {
-        registeredClients?: string[];
+        verifiedClients?: string[];
+        announcedClients?: AnnouncedClient[];
     };
 }
 
@@ -59,7 +71,7 @@ export async function getDocumentDBExtensionApi(
     // Check if the calling extension is whitelisted
     const packageJson = extension.packageJSON as unknown;
     const registeredClients = isValidPackageJson(packageJson)
-        ? packageJson['x-documentdbApi']?.registeredClients
+        ? packageJson['x-documentdbApi']?.verifiedClients
         : undefined;
 
     if (!registeredClients || !Array.isArray(registeredClients)) {
