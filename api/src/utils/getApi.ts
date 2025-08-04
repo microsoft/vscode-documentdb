@@ -10,23 +10,11 @@ import { type DocumentDBExtensionApi } from '../extensionApi';
 const DOCUMENTDB_EXTENSION_ID = 'ms-azuretools.vscode-documentdb';
 
 /**
- * Interface for announced client configuration
- */
-interface AnnouncedClient {
-    id: string;
-    name: string;
-    description: string;
-    icon: string;
-    url: string;
-}
-
-/**
  * Interface for the DocumentDB API configuration in package.json
  */
 interface DocumentDBApiConfig {
     'x-documentdbApi'?: {
         verifiedClients?: string[];
-        announcedClients?: AnnouncedClient[];
     };
 }
 

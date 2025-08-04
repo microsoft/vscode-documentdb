@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 
 /**
  * Represents basic information about a migration provider.
@@ -57,6 +58,16 @@ export interface ActionsOptions {
 }
 
 /**
+ * Interface for announced provider configuration
+ */
+export interface AnnouncedMigrationProvider {
+    id: string;
+    name: string;
+    description: string;
+    url: string;
+}
+
+/**
  * Private implementation of MigrationService that manages migration providers
  * for migration-related functionality.
  *
@@ -92,6 +103,22 @@ class MigrationServiceImpl {
         }));
 
         return providers;
+    }
+
+    public listAnnouncedProviders(hideInstalled: boolean = true): AnnouncedMigrationProvider[] {
+        const packageJson = ext.context.extension.packageJSON as unknown;
+        if (!packageJson || !packageJson['x-announcedMigrationProviders']) {
+            return [];
+        }
+
+        const announcedProviders = packageJson['x-announcedMigrationProviders'] as AnnouncedMigrationProvider[];
+
+        if (hideInstalled) {
+            // Filter out providers that are already registered
+            return announcedProviders.filter((provider) => !this.migrationProviders.has(provider.id));
+        }
+
+        return announcedProviders;
     }
 
     /**
