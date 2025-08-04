@@ -417,7 +417,7 @@
       {
         "//": "Data Migration",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.chooseDataMigrationExtension",
+        "command": "vscode-documentdb.command.accessDataMigrationServices",
         "title": "Data Migration…"
       },
       {
@@ -636,8 +636,8 @@
         },
         {
           "//": "[Collection] Data Migration",
-          "command": "vscode-documentdb.command.chooseDataMigrationExtension",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i && migrationProvidersAvailable",
+          "command": "vscode-documentdb.command.accessDataMigrationServices",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "1@2"
         },
         {
@@ -748,7 +748,7 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.chooseDataMigrationExtension",
+          "command": "vscode-documentdb.command.accessDataMigrationServices",
           "when": "never"
         },
         {

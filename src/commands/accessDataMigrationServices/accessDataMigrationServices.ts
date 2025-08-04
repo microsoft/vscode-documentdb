@@ -11,7 +11,7 @@ import { MigrationService } from '../../services/migrationServices';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { openUrl } from '../../utils/openUrl';
 
-export async function chooseDataMigrationExtension(context: IActionContext, node: ClusterItemBase) {
+export async function accessDataMigrationServices(context: IActionContext, node: ClusterItemBase) {
     const migrationProviders: (QuickPickItem & { id: string })[] = MigrationService.listProviders()
         // Map to QuickPickItem format
         .map((provider) => ({
