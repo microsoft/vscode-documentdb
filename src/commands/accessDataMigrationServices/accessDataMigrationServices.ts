@@ -66,12 +66,15 @@ export async function accessDataMigrationServices(context: IActionContext, node:
         },
     ];
 
-    const selectedItem = await context.ui.showQuickPick([...installedProviders, ...announcedProviders, ...commonItems], {
-        enableGrouping: true,
-        placeHolder: l10n.t('Choose the data migration provider…'),
-        stepName: 'selectMigrationProvider',
-        suppressPersistence: true,
-    });
+    const selectedItem = await context.ui.showQuickPick(
+        [...installedProviders, ...announcedProviders, ...commonItems],
+        {
+            enableGrouping: true,
+            placeHolder: l10n.t('Choose the data migration provider…'),
+            stepName: 'selectMigrationProvider',
+            suppressPersistence: true,
+        },
+    );
 
     context.telemetry.properties.connectionMode = selectedItem.id;
 
