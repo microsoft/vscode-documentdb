@@ -88,6 +88,21 @@ export async function activateInternal(
         },
     };
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            'vscode-documentdb.command.internal.api.registerClientExtension',
+            (clientExtensionId: string) => {
+                try {
+                    MigrationService.registerClientExtension(clientExtensionId);
+                    return true;
+                } catch (error) {
+                    console.error('Failed to register client:', error);
+                    return false;
+                }
+            },
+        ),
+    );
+
     // Return both the DocumentDB API and Azure Extension API
     return {
         ...documentDBApi,

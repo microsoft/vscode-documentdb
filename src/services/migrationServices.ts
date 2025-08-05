@@ -78,6 +78,19 @@ export interface AnnouncedMigrationProvider {
  */
 class MigrationServiceImpl {
     private migrationProviders: Map<string, MigrationProvider> = new Map();
+    private registeredClientExtensions: Set<string> = new Set();
+
+    /**
+     * Registers the calling extension as a client of the DocumentDB API.
+     * This is used to correctly handle announced providers and avoiding "double-announcements".
+     * @param clientContext The context of the calling extension.
+     */
+    public registerClientExtension(clientExtensionId: string): void {
+        this.registeredClientExtensions.add(clientExtensionId);
+
+        // Note: we don't support "unregistering" clients, this would require
+        // detecting when the extension is deactivated and removing it from the set...
+    }
 
     public registerProvider(provider: MigrationProvider): void {
         this.migrationProviders.set(provider.id, provider);
@@ -115,7 +128,7 @@ class MigrationServiceImpl {
 
         if (hideInstalled) {
             // Filter out providers that are already registered
-            return announcedProviders.filter((provider) => !this.migrationProviders.has(provider.id));
+            return announcedProviders.filter((provider) => !this.registeredClientExtensions.has(provider.id));
         }
 
         return announcedProviders;
