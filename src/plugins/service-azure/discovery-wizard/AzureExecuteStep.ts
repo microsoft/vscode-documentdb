@@ -64,16 +64,18 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
                 cluster.name!,
             );
 
-            if (!clusterInformation.connectionString) {
+            if (!clusterInformation.properties?.connectionString) {
                 return undefined;
             }
 
-            context.valuesToMask.push(clusterInformation.connectionString);
-            const connectionString = new DocumentDBConnectionString(clusterInformation.connectionString as string);
+            context.valuesToMask.push(clusterInformation.properties?.connectionString);
+            const connectionString = new DocumentDBConnectionString(
+                clusterInformation.properties?.connectionString as string,
+            );
 
-            if (clusterInformation.administratorLogin) {
-                context.valuesToMask.push(clusterInformation.administratorLogin);
-                connectionString.username = clusterInformation.administratorLogin;
+            if (clusterInformation.properties?.administrator?.userName) {
+                context.valuesToMask.push(clusterInformation.properties?.administrator?.userName);
+                connectionString.username = clusterInformation.properties?.administrator?.userName;
             }
 
             /**
