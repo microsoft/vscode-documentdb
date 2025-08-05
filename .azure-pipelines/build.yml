@@ -222,7 +222,7 @@ extends:
                                           Write-Warning "[Warning] VSIX signature verification completed with unexpected exit code: $exitCodeValue"
                                       }
                                   } else {
-                                      Write-Warning "[Warning] Could not parse exit code from vsce verify-signature output."
+                                      Write-Warning "[Warning] Could not parse exit code from vsce verify-signature output. Raw output: $output"
                                   }
 
                         - task: CopyFiles@2
