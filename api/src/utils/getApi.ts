@@ -90,7 +90,7 @@ export async function getDocumentDBExtensionApi(
     }
 
     try {
-        // going via an "internal" command here to avoid making the registraction function public
+        // going via an "internal" command here to avoid making the registration function public
         const success = await vscode.commands.executeCommand(
             'vscode-documentdb.command.internal.api.registerClientExtension',
             context.extension.id,

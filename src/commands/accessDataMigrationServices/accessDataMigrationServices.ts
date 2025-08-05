@@ -28,7 +28,7 @@ export async function accessDataMigrationServices(context: IActionContext, node:
         // Sort alphabetically
         .sort((a, b) => a.label.localeCompare(b.label));
 
-    const announcedProviers: (QuickPickItem & { id: string })[] = MigrationService.listAnnouncedProviders(true)
+    const announcedProviders: (QuickPickItem & { id: string })[] = MigrationService.listAnnouncedProviders(true)
         // Map to QuickPickItem format
         .map((provider) => ({
             id: `${ANNOUNCED_PROVIDER_PREFIX}-${provider.id}`, // please note, the prefix is a magic string here, and needed to correctly support vs code marketplace integration
@@ -66,7 +66,7 @@ export async function accessDataMigrationServices(context: IActionContext, node:
         },
     ];
 
-    const selectedItem = await context.ui.showQuickPick([...installedProviders, ...announcedProviers, ...commonItems], {
+    const selectedItem = await context.ui.showQuickPick([...installedProviders, ...announcedProviders, ...commonItems], {
         enableGrouping: true,
         placeHolder: l10n.t('Choose the data migration provider…'),
         stepName: 'selectMigrationProvider',
