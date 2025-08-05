@@ -13,6 +13,7 @@ import { type NewConnectionWizardContext } from '../../../commands/newConnection
 import { type GenericResource } from '@azure/arm-resources';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { getResourceGroupFromId } from '@microsoft/vscode-azext-azureutils';
+import { maskSensitiveValuesInTelemetry } from '../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../documentdb/Views';
 import { createMongoClustersManagementClient } from '../../../utils/azureClients';
@@ -52,6 +53,7 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
             const subscription = wizardContext.properties[
                 AzureContextProperties.SelectedSubscription
             ] as unknown as AzureSubscription;
+
             const cluster = wizardContext.properties[
                 AzureContextProperties.SelectedCluster
             ] as unknown as GenericResource;
@@ -68,14 +70,13 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
                 return undefined;
             }
 
-            context.valuesToMask.push(clusterInformation.properties?.connectionString);
-            const connectionString = new DocumentDBConnectionString(
-                clusterInformation.properties?.connectionString as string,
-            );
+            context.valuesToMask.push(clusterInformation.properties.connectionString);
+            const connectionString = new DocumentDBConnectionString(clusterInformation.properties.connectionString);
+            maskSensitiveValuesInTelemetry(context, connectionString);
 
             if (clusterInformation.properties?.administrator?.userName) {
-                context.valuesToMask.push(clusterInformation.properties?.administrator?.userName);
-                connectionString.username = clusterInformation.properties?.administrator?.userName;
+                context.valuesToMask.push(clusterInformation.properties.administrator.userName);
+                connectionString.username = clusterInformation.properties.administrator.userName;
             }
 
             /**
