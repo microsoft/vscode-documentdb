@@ -128,7 +128,20 @@ class MigrationServiceImpl {
 
         if (hideInstalled) {
             // Filter out providers that are already registered
-            return announcedProviders.filter((provider) => !this.registeredClientExtensions.has(provider.id));
+            const filteredList = announcedProviders.filter(
+                (provider) => !this.registeredClientExtensions.has(provider.id),
+            );
+
+            // Hardcoded fix for an older version of the migration extension that used a generic provider ID.
+            // If the old provider is detected, we hide the announcement to avoid duplicates.
+            const oldMigrationProvider = this.migrationProviders.get('one-action-provider');
+            if (oldMigrationProvider?.label === 'Pre-Migration Assessment for Azure Cosmos DB') {
+                return filteredList.filter(
+                    (provider) => provider.id !== 'ms-azurecosmosdbtools.vscode-mongo-migration',
+                );
+            }
+
+            return filteredList;
         }
 
         return announcedProviders;
