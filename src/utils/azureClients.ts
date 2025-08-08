@@ -5,6 +5,7 @@
 
 import { type ComputeManagementClient } from '@azure/arm-compute'; // Modified import
 import { type CosmosDBManagementClient } from '@azure/arm-cosmosdb';
+import { type MongoClusterManagementClient } from '@azure/arm-mongocluster';
 import { type NetworkManagementClient } from '@azure/arm-network'; // Add this import
 import { type ResourceManagementClient } from '@azure/arm-resources';
 import { createAzureClient, type AzExtClientContext } from '@microsoft/vscode-azext-azureutils';
@@ -37,9 +38,14 @@ export async function createCosmosDBManagementClient(
 export async function createMongoClustersManagementClient(
     context: IActionContext,
     subscription: AzureSubscription,
-): Promise<CosmosDBManagementClient> {
+): Promise<MongoClusterManagementClient> {
     const subContext = createSubscriptionContext(subscription);
-    return createAzureClient([context, subContext], (await import('@azure/arm-cosmosdb')).CosmosDBManagementClient);
+    return createAzureClient(
+        [context, subContext],
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-expect-error
+        (await import('@azure/arm-mongocluster')).MongoClusterManagementClient,
+    ) as unknown as MongoClusterManagementClient;
 }
 
 export async function createComputeManagementClient(
