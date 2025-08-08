@@ -16,6 +16,7 @@ import {
     MinKey,
     ObjectId,
     Timestamp,
+    UUID,
     type Document,
     type WithId,
 } from 'mongodb';
@@ -40,6 +41,13 @@ export const flatDocument: WithId<Document> = {
     maxKeyField: new MaxKey(),
     minKeyField: new MinKey(),
     undefinedField: undefined,
+    uuidField: new UUID(), // new UUID type
+    uuidLegacyField: (() => {
+        const u = new UUID();
+        // force legacy subtype for testing (so inferType picks UUID_LEGACY)
+        (u as unknown as { sub_type: number }).sub_type = Binary.SUBTYPE_UUID_OLD;
+        return u;
+    })(),
 };
 
 export const embeddedDocumentOnly: WithId<Document> = {
