@@ -49,27 +49,33 @@ export class DocumentDBResourceItem extends ClusterItemBase {
     public async getConnectionString(): Promise<string | undefined> {
         return callWithTelemetryAndErrorHandling('getConnectionString', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
+            context.telemetry.properties.discoveryProvider = 'azure-discovery';
+
             // Create a client to interact with the MongoDB vCore management API and read the cluster details
             const managementClient = await createMongoClustersManagementClient(context, this.subscription);
 
             const clusterInformation = await managementClient.mongoClusters.get(
-                this.cluster.resourceGroup as string,
+                this.cluster.resourceGroup!,
                 this.cluster.name,
             );
 
-            if (!clusterInformation.connectionString) {
+            if (!clusterInformation.properties?.connectionString) {
                 return undefined;
             }
 
-            context.valuesToMask.push(clusterInformation.connectionString);
-            const connectionString = new DocumentDBConnectionString(clusterInformation.connectionString as string);
+            context.valuesToMask.push(clusterInformation.properties.connectionString);
+            const connectionString = new DocumentDBConnectionString(clusterInformation.properties.connectionString);
             maskSensitiveValuesInTelemetry(context, connectionString);
 
-            if (clusterInformation.administratorLogin) {
-                context.valuesToMask.push(clusterInformation.administratorLogin);
-                connectionString.username = clusterInformation.administratorLogin;
+            if (clusterInformation.properties?.administrator?.userName) {
+                context.valuesToMask.push(clusterInformation.properties.administrator.userName);
+                connectionString.username = clusterInformation.properties.administrator.userName;
             }
 
+            /**
+             * The connection string returned from Azure does not include the actual password.
+             * Instead, it contains a placeholder. We explicitly set the password to an empty string here.
+             */
             connectionString.password = '';
 
             return connectionString.toString();
@@ -95,20 +101,19 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             // Create a client to interact with the MongoDB vCore management API and read the cluster details
             const managementClient = await createMongoClustersManagementClient(context, this.subscription);
             const clusterInformation = await managementClient.mongoClusters.get(
-                this.cluster.resourceGroup as string,
+                this.cluster.resourceGroup!,
                 this.cluster.name,
             );
 
-            const clusterConnectionString = nonNullValue(clusterInformation.connectionString);
-
-            context.valuesToMask.push(clusterConnectionString);
-            if (clusterInformation.administratorLogin) {
-                context.valuesToMask.push(clusterInformation.administratorLogin);
+            if (!clusterInformation.properties?.connectionString) {
+                return undefined;
             }
+
+            context.valuesToMask.push(clusterInformation.properties.connectionString);
 
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
-                adminUserName: clusterInformation.administratorLogin,
+                adminUserName: clusterInformation.properties?.administrator?.userName,
                 resourceName: this.cluster.name,
             };
 
@@ -125,7 +130,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             // Cache the credentials
             CredentialCache.setCredentials(
                 this.id,
-                nonNullValue(clusterConnectionString),
+                nonNullValue(clusterInformation.properties?.connectionString),
                 nonNullProp(wizardContext, 'selectedUserName'),
                 nonNullProp(wizardContext, 'password'),
                 // here, emulatorConfiguration is not set, as it's a resource item from Azure resources, not a workspace item, therefore, no emulator support needed
