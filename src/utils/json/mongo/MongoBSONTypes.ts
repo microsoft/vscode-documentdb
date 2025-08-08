@@ -42,7 +42,7 @@ export enum MongoBSONTypes {
     ObjectId = 'objectid',
     Symbol = 'symbol',
     Timestamp = 'timestamp',
-    UUID = 'uuid', //todo-verify
+    UUID = 'uuid',
     UUID_LEGACY = 'uuid-legacy', // old UUID subtype, used in some legacy data
     MinKey = 'minkey',
     MaxKey = 'maxkey',
