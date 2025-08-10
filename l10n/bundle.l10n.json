@@ -413,6 +413,7 @@
   "This functionality requires updating the Azure Account extension to at least version \"{0}\".": "This functionality requires updating the Azure Account extension to at least version \"{0}\".",
   "This operation is not supported.": "This operation is not supported.",
   "This table view presents data at the root level by default.": "This table view presents data at the root level by default.",
+  "Throttled writes (code 16500). Will retry {0} doc(s) after {1}s. Remaining retries: {2}.": "Throttled writes (code 16500). Will retry {0} doc(s) after {1}s. Remaining retries: {2}.",
   "Timed out trying to execute the Mongo script. To use a longer timeout, modify the VS Code 'mongo.shell.timeout' setting.": "Timed out trying to execute the Mongo script. To use a longer timeout, modify the VS Code 'mongo.shell.timeout' setting.",
   "TODO: Share the steps needed to reliably reproduce the problem. Please include actual and expected results.": "TODO: Share the steps needed to reliably reproduce the problem. Please include actual and expected results.",
   "Too many arguments. Expecting 0 or 1 argument(s) to {constructorCall}": "Too many arguments. Expecting 0 or 1 argument(s) to {constructorCall}",

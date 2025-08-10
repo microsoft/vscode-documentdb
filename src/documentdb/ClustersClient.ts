@@ -29,6 +29,7 @@ import {
 } from 'mongodb';
 import { Links } from '../constants';
 import { ext } from '../extensionVariables';
+import { type DocumentBuffer } from '../utils/documentBuffer';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { CredentialCache } from './CredentialCache';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
@@ -456,6 +457,9 @@ export class ClustersClient {
         databaseName: string,
         collectionName: string,
         documents: Document[],
+        buffer: DocumentBuffer<unknown>,
+        retryCount: number = 3,
+        waitTime: number = 3,
     ): Promise<InsertDocumentsResult> {
         if (documents.length === 0) {
             return { insertedCount: 0 };
@@ -465,29 +469,61 @@ export class ClustersClient {
         try {
             const insertManyResults = await collection.insertMany(documents, {
                 forceServerObjectId: true,
-
-                // Setting `ordered` to be false allows MongoDB to continue inserting remaining documents even if previous fails.
-                // More details: https://www.mongodb.com/docs/manual/reference/method/db.collection.insertMany/#syntax
                 ordered: false,
             });
-            return {
-                insertedCount: insertManyResults.insertedCount,
-            };
+            return { insertedCount: insertManyResults.insertedCount };
         } catch (error) {
-            // print error messages to the console
             if (error instanceof MongoBulkWriteError) {
                 const writeErrors: WriteError[] = Array.isArray(error.writeErrors)
                     ? (error.writeErrors as WriteError[])
                     : [error.writeErrors as WriteError];
 
+                // Throttled writes retry (code 16500)
+                if (error.errorResponse.code === 16500 && retryCount > 0) {
+                    const throttledErrorIndexes = new Set<number>(
+                        writeErrors
+                            .filter(
+                                (we) => (we as { code?: number }).code === 16500 || error.errorResponse.code === 16500,
+                            )
+                            .map((we) => we.index),
+                    );
+
+                    const retryDocuments: Document[] = documents.filter((_, idx) => throttledErrorIndexes.has(idx));
+                    const successfulInThisAttempt = documents.length - retryDocuments.length;
+
+                    const nextRetryCount = retryCount - 1;
+                    const nextWaitTime = Math.min(waitTime ** 2, 300);
+
+                    ext.outputChannel.appendLog(
+                        l10n.t(
+                            'Throttled writes (code 16500). Will retry {0} doc(s) after {1}s. Remaining retries: {2}.',
+                            retryDocuments.length.toString(),
+                            waitTime.toString(),
+                            nextRetryCount.toString(),
+                        ),
+                    );
+                    ext.outputChannel.show();
+
+                    await new Promise<void>((resolve) => setTimeout(resolve, waitTime * 1000));
+                    const retriedInserted = await this.insertDocuments(
+                        databaseName,
+                        collectionName,
+                        retryDocuments,
+                        buffer,
+                        nextRetryCount,
+                        nextWaitTime,
+                    );
+
+                    buffer.reduceBatchSize();
+                    return { insertedCount: successfulInThisAttempt + retriedInserted.insertedCount };
+                }
+
                 for (const writeError of writeErrors) {
                     const generalErrorMessage = parseError(writeError).message;
                     const descriptiveErrorMessage = writeError.err?.errmsg;
-
                     const fullErrorMessage = descriptiveErrorMessage
                         ? `${generalErrorMessage} - ${descriptiveErrorMessage}`
                         : generalErrorMessage;
-
                     ext.outputChannel.appendLog(l10n.t('Write error: {0}', fullErrorMessage));
                 }
                 ext.outputChannel.show();
@@ -496,9 +532,7 @@ export class ClustersClient {
                 ext.outputChannel.show();
             }
 
-            return {
-                insertedCount: error instanceof MongoBulkWriteError ? error.insertedCount || 0 : 0,
-            };
+            return { insertedCount: error instanceof MongoBulkWriteError ? error.insertedCount || 0 : 0 };
         }
     }
 }
