@@ -100,6 +100,14 @@
         content: 'DB'; // For 'DBRef', shorthand for database reference
     }
 
+    &.type-uuid:before {
+        content: 'U'; // For 'UUID'
+    }
+
+    &.type-uuid-legacy:before {
+        content: 'U~'; // For 'UUID (Legacy)'
+    }
+
     &.type-code:before {
         content: '</>'; // For 'Code', using code brackets as shorthand
     }

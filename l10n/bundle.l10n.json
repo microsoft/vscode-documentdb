@@ -155,7 +155,6 @@
   "Error deleting selected documents": "Error deleting selected documents",
   "Error exporting documents: {error}": "Error exporting documents: {error}",
   "Error opening the document view": "Error opening the document view",
-  "Error parsing filter query": "Error parsing filter query",
   "Error running process: ": "Error running process: ",
   "Error saving the document": "Error saving the document",
   "Error while loading the autocompletion data": "Error while loading the autocompletion data",
