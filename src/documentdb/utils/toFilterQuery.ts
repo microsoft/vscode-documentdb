@@ -163,10 +163,40 @@ function markStringLiterals(input: string): boolean[] {
     return isInString;
 }
 
-// --- Pattern match helpers (anchored at start of provided substring) ---
+// --- Regex constants for BSON-like constructor calls ---
+
+/**
+ * Matches UUID constructor calls, e.g. UUID("...") or new UUID('...'), case-insensitive.
+ * Captures the quoted UUID string.
+ * Pattern details:
+ *   - Optional "new" prefix with whitespace: (?:new\s+)?
+ *   - "uuid" keyword, case-insensitive
+ *   - Optional whitespace before and inside parentheses
+ *   - Quoted string (single or double quotes) as argument, captured in group 1
+ */
 const UUID_REGEX = /^(?:new\s+)?uuid\s*\(\s*["']([^"']+)["']\s*\)/i;
+
+/**
+ * Matches MinKey constructor calls, e.g. MinKey() or new MinKey(), case-insensitive.
+ * No arguments.
+ */
 const MIN_KEY_REGEX = /^(?:new\s+)?minkey\s*\(\s*\)/i;
+
+/**
+ * Matches MaxKey constructor calls, e.g. MaxKey() or new MaxKey(), case-insensitive.
+ * No arguments.
+ */
 const MAX_KEY_REGEX = /^(?:new\s+)?maxkey\s*\(\s*\)/i;
+
+/**
+ * Matches Date constructor calls, e.g. Date("...") or new Date('...'), case-insensitive.
+ * Captures the quoted date string.
+ * Pattern details:
+ *   - Optional "new" prefix with whitespace: (?:new\s+)?
+ *   - "date" keyword, case-insensitive
+ *   - Optional whitespace before and inside parentheses
+ *   - Quoted string (single or double quotes) as argument, captured in group 1
+ */
 const DATE_REGEX = /^(?:new\s+)?date\s*\(\s*["']([^"']+)["']\s*\)/i;
 
 function matchUUID(src: string): { raw: string; uuidString: string } | undefined {
