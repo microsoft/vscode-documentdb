@@ -87,6 +87,8 @@ describe('DocumentDB Schema Analyzer', () => {
         expect(getBsonType('dateField')).toBe('date');
         expect(getBsonType('objectIdField')).toBe('objectid');
         expect(getBsonType('codeField')).toBe('code');
+        expect(getBsonType('uuidField')).toBe('uuid');
+        expect(getBsonType('uuidLegacyField')).toBe('uuid-legacy');
     });
 
     it('detects embedded objects correctly', () => {

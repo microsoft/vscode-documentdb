@@ -16,11 +16,13 @@ import {
     MinKey,
     ObjectId,
     Timestamp,
+    UUID,
 } from 'mongodb';
 
 /**
  * Represents the different data types that can be stored in a MongoDB document.
  * The string representation is casesensitive and should match the MongoDB documentation.
+ * https://www.mongodb.com/docs/manual/reference/bson-types/
  */
 export enum MongoBSONTypes {
     String = 'string',
@@ -40,6 +42,8 @@ export enum MongoBSONTypes {
     ObjectId = 'objectid',
     Symbol = 'symbol',
     Timestamp = 'timestamp',
+    UUID = 'uuid',
+    UUID_LEGACY = 'uuid-legacy', // old UUID subtype, used in some legacy data
     MinKey = 'minkey',
     MaxKey = 'maxkey',
     DBRef = 'dbref',
@@ -76,6 +80,8 @@ export namespace MongoBSONTypes {
         [MongoBSONTypes.CodeWithScope]: 'CodeWithScope',
         [MongoBSONTypes.Map]: 'Map',
         [MongoBSONTypes._UNKNOWN_]: 'Unknown',
+        [MongoBSONTypes.UUID]: 'UUID',
+        [MongoBSONTypes.UUID_LEGACY]: 'UUID (Legacy)',
     };
 
     export function toDisplayString(type: MongoBSONTypes): string {
@@ -101,6 +107,8 @@ export namespace MongoBSONTypes {
             case MongoBSONTypes.RegExp:
             case MongoBSONTypes.Binary:
             case MongoBSONTypes.Code:
+            case MongoBSONTypes.UUID:
+            case MongoBSONTypes.UUID_LEGACY:
                 return 'string';
 
             case MongoBSONTypes.Boolean:
@@ -168,6 +176,9 @@ export namespace MongoBSONTypes {
                 if (value instanceof BSONSymbol) return MongoBSONTypes.Symbol;
                 if (value instanceof DBRef) return MongoBSONTypes.DBRef;
                 if (value instanceof Map) return MongoBSONTypes.Map;
+                if (value instanceof UUID && value.sub_type === Binary.SUBTYPE_UUID) return MongoBSONTypes.UUID;
+                if (value instanceof UUID && value.sub_type === Binary.SUBTYPE_UUID_OLD)
+                    return MongoBSONTypes.UUID_LEGACY;
                 if (value instanceof Buffer || value instanceof Binary) return MongoBSONTypes.Binary;
                 if (value instanceof RegExp) return MongoBSONTypes.RegExp;
                 if (value instanceof Code) {

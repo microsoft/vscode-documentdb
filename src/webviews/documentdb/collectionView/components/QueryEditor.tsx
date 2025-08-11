@@ -69,7 +69,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         // Check if JSON language features are available and set the schema
                         if (monaco.languages.json?.jsonDefaults) {
                             monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-                                validate: true,
+                                validate: false,
                                 schemas: [
                                     {
                                         uri: 'mongodb-filter-query-schema.json',

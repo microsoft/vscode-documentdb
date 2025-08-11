@@ -27,6 +27,8 @@ const bsonToDisplayStringMap: Record<string, string> = {
     code: 'Code',
     codewithscope: 'CodeWithScope',
     map: 'Map',
+    uuid: 'UUID',
+    'uuid-legacy': 'UUID (Legacy)',
     unknown: 'Unknown',
 };
 
