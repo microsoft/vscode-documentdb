@@ -1,5 +1,16 @@
 # Change Log
 
+## 0.2.4
+
+### New Features & Improvements
+
+- **UUID Query Support**: Enabled querying for documents using UUIDs in MongoDB clusters, addressing a key workflow limitation for users with UUID-based identifiers. [#172](https://github.com/microsoft/vscode-documentdb/issues/172)
+
+### Fixes
+
+- **Azure Discovery Update**: Migrated to the new `@azure/arm-mongocluster` package for improved Azure vCore/DocumentDB discovery. [#194](https://github.com/microsoft/vscode-documentdb/issues/194)
+- **Development Tooling**: Updated build pipelines to support extension signing, preparing for automated releases to the VS Code Marketplace. [#163](https://github.com/microsoft/vscode-documentdb/issues/163)
+
 ## 0.2.3
 
 ### New Features & Improvements
