@@ -14,7 +14,7 @@ const DOCUMENTDB_EXTENSION_ID = 'ms-azuretools.vscode-documentdb';
  */
 interface DocumentDBApiConfig {
     'x-documentdbApi'?: {
-        registeredClients?: string[];
+        verifiedClients?: string[];
     };
 }
 
@@ -44,11 +44,11 @@ function isValidPackageJson(packageJson: unknown): packageJson is DocumentDBApiC
  * ```
  */
 export async function getDocumentDBExtensionApi(
-    _context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     apiVersionRange: string,
 ): Promise<DocumentDBExtensionApi> {
     // Get the calling extension's ID from the context
-    const callingExtensionId = _context.extension.id;
+    const callingExtensionId = context.extension.id;
 
     // Get the DocumentDB extension to access its package.json configuration
     const extension = vscode.extensions.getExtension<DocumentDBExtensionApi>(DOCUMENTDB_EXTENSION_ID);
@@ -58,15 +58,15 @@ export async function getDocumentDBExtensionApi(
 
     // Check if the calling extension is whitelisted
     const packageJson = extension.packageJSON as unknown;
-    const registeredClients = isValidPackageJson(packageJson)
-        ? packageJson['x-documentdbApi']?.registeredClients
+    const verifiedClients = isValidPackageJson(packageJson)
+        ? packageJson['x-documentdbApi']?.verifiedClients
         : undefined;
 
-    if (!registeredClients || !Array.isArray(registeredClients)) {
-        throw new Error(`DocumentDB for VS Code API configuration is invalid. No registered clients found.`);
+    if (!verifiedClients || !Array.isArray(verifiedClients)) {
+        throw new Error(`DocumentDB for VS Code API configuration is invalid. No verified client list found.`);
     }
 
-    if (!registeredClients.includes(callingExtensionId)) {
+    if (!verifiedClients.includes(callingExtensionId)) {
         throw new Error(
             `Extension '${callingExtensionId}' is not authorized to use the DocumentDB for VS Code API. ` +
                 `This is an experimental API with whitelisted access. ` +
@@ -87,6 +87,21 @@ export async function getDocumentDBExtensionApi(
     // Simple version check (you can enhance this later)
     if (api.apiVersion !== apiVersionRange) {
         console.warn(`API version mismatch. Expected ${apiVersionRange}, got ${api.apiVersion}`);
+    }
+
+    try {
+        // going via an "internal" command here to avoid making the registration function public
+        const success = await vscode.commands.executeCommand(
+            'vscode-documentdb.command.internal.api.registerClientExtension',
+            context.extension.id,
+        );
+
+        if (success !== true) {
+            console.warn(`Client registration may have failed for "${callingExtensionId}"`);
+        }
+    } catch (error) {
+        // Log error but don't fail API retrieval
+        console.warn(`Failed to register client "${callingExtensionId}": ${error}`);
     }
 
     return api;

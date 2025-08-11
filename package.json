@@ -418,7 +418,7 @@
       {
         "//": "Data Migration",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.chooseDataMigrationExtension",
+        "command": "vscode-documentdb.command.accessDataMigrationServices",
         "title": "Data Migration…"
       },
       {
@@ -637,8 +637,8 @@
         },
         {
           "//": "[Collection] Data Migration",
-          "command": "vscode-documentdb.command.chooseDataMigrationExtension",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i && migrationProvidersAvailable",
+          "command": "vscode-documentdb.command.accessDataMigrationServices",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "1@2"
         },
         {
@@ -749,7 +749,7 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.chooseDataMigrationExtension",
+          "command": "vscode-documentdb.command.accessDataMigrationServices",
           "when": "never"
         },
         {
@@ -913,9 +913,16 @@
     ]
   },
   "x-documentdbApi": {
-    "registeredClients": [
-      "vscode-cosmosdb",
-      "vscode-mongo-migration"
+    "verifiedClients": [
+      "ms-azurecosmosdbtools.vscode-mongo-migration"
     ]
-  }
+  },
+  "x-announcedMigrationProviders": [
+    {
+      "id": "ms-azurecosmosdbtools.vscode-mongo-migration",
+      "name": "Azure Cosmos DB Migration",
+      "description": "Assess and migrate your databases to Azure Cosmos DB.",
+      "url": "https://marketplace.visualstudio.com/items?itemName=ms-azurecosmosdbtools.vscode-mongo-migration"
+    }
+  ]
 }

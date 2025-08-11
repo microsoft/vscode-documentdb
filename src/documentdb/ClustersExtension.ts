@@ -17,9 +17,9 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
+import { accessDataMigrationServices } from '../commands/accessDataMigrationServices/accessDataMigrationServices';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
-import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
@@ -168,8 +168,8 @@ export class ClustersExtension implements vscode.Disposable {
                 });
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.chooseDataMigrationExtension',
-                    chooseDataMigrationExtension,
+                    'vscode-documentdb.command.accessDataMigrationServices',
+                    accessDataMigrationServices,
                 );
 
                 //// Registry Commands:

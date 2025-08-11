@@ -10,6 +10,7 @@ import {
     callWithTelemetryAndErrorHandling,
     createApiProvider,
     createAzExtLogOutputChannel,
+    registerCommand,
     registerErrorHandler,
     registerUIExtensionVariables,
     TreeElementStateManager,
@@ -73,7 +74,7 @@ export async function activateInternal(
 
     // Create the DocumentDB Extension API
     const documentDBApi: DocumentDBExtensionApi = {
-        apiVersion: '0.2.0',
+        apiVersion: '0.3.0',
         migration: {
             registerProvider: (provider) => {
                 MigrationService.registerProvider(provider);
@@ -87,6 +88,24 @@ export async function activateInternal(
             },
         },
     };
+
+    registerCommand(
+        'vscode-documentdb.command.internal.api.registerClientExtension',
+        (_context: IActionContext, clientExtensionId: string) => {
+            try {
+                MigrationService.registerClientExtension(clientExtensionId);
+                ext.outputChannel.appendLine(
+                    vscode.l10n.t('API: Registered new client extension: "{clientExtensionId}"', {
+                        clientExtensionId,
+                    }),
+                );
+                return true;
+            } catch (error) {
+                console.error('Failed to register client:', error);
+                return false;
+            }
+        },
+    );
 
     // Return both the DocumentDB API and Azure Extension API
     return {

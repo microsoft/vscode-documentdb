@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 
 /**
  * Represents basic information about a migration provider.
@@ -57,6 +58,16 @@ export interface ActionsOptions {
 }
 
 /**
+ * Interface for announced provider configuration
+ */
+export interface AnnouncedMigrationProvider {
+    id: string;
+    name: string;
+    description: string;
+    url: string;
+}
+
+/**
  * Private implementation of MigrationService that manages migration providers
  * for migration-related functionality.
  *
@@ -67,6 +78,19 @@ export interface ActionsOptions {
  */
 class MigrationServiceImpl {
     private migrationProviders: Map<string, MigrationProvider> = new Map();
+    private registeredClientExtensions: Set<string> = new Set();
+
+    /**
+     * Registers the calling extension as a client of the DocumentDB API.
+     * This is used to correctly handle announced providers and avoiding "double-announcements".
+     * @param clientContext The context of the calling extension.
+     */
+    public registerClientExtension(clientExtensionId: string): void {
+        this.registeredClientExtensions.add(clientExtensionId);
+
+        // Note: we don't support "unregistering" clients, this would require
+        // detecting when the extension is deactivated and removing it from the set...
+    }
 
     public registerProvider(provider: MigrationProvider): void {
         this.migrationProviders.set(provider.id, provider);
@@ -92,6 +116,35 @@ class MigrationServiceImpl {
         }));
 
         return providers;
+    }
+
+    public listAnnouncedProviders(hideInstalled: boolean = true): AnnouncedMigrationProvider[] {
+        const packageJson = ext.context.extension.packageJSON as unknown;
+        if (!packageJson || !packageJson['x-announcedMigrationProviders']) {
+            return [];
+        }
+
+        const announcedProviders = packageJson['x-announcedMigrationProviders'] as AnnouncedMigrationProvider[];
+
+        if (hideInstalled) {
+            // Filter out providers that are already registered
+            const filteredList = announcedProviders.filter(
+                (provider) => !this.registeredClientExtensions.has(provider.id),
+            );
+
+            // Hardcoded fix for an older version of the migration extension that used a generic provider ID.
+            // If the old provider is detected, we hide the announcement to avoid duplicates.
+            const oldMigrationProvider = this.migrationProviders.get('one-action-provider');
+            if (oldMigrationProvider?.label === 'Pre-Migration Assessment for Azure Cosmos DB') {
+                return filteredList.filter(
+                    (provider) => provider.id !== 'ms-azurecosmosdbtools.vscode-mongo-migration',
+                );
+            }
+
+            return filteredList;
+        }
+
+        return announcedProviders;
     }
 
     /**
