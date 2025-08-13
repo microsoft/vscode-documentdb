@@ -48,8 +48,8 @@ import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDis
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
 import { TaskReportingService } from '../services/taskReportingService';
-import { TaskService } from '../services/taskService';
 import { DemoTask } from '../services/tasks/DemoTask';
+import { TaskService } from '../services/taskService';
 import { MongoVCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
@@ -61,6 +61,7 @@ import {
 } from '../utils/commandErrorHandling';
 import { enableMongoVCoreSupport, enableWorkspaceSupport } from './activationConditions';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
+import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
     dispose(): Promise<void> {
