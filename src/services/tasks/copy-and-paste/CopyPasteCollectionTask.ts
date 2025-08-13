@@ -45,10 +45,13 @@ export class CopyPasteCollectionTask extends Task {
 
         // Generate a descriptive name for the task
         this.name = vscode.l10n.t(
-            'Copy collection "{0}" from "{1}" to "{2}"',
-            config.source.collectionName,
-            config.source.databaseName,
-            config.target.databaseName,
+            'Copy "{sourceCollection}" from "{sourceDatabase}" to "{targetDatabase}/{targetCollection}"',
+            {
+                sourceCollection: config.source.collectionName,
+                sourceDatabase: config.source.databaseName,
+                targetDatabase: config.target.databaseName,
+                targetCollection: config.target.collectionName,
+            },
         );
     }
 

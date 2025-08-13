@@ -109,7 +109,7 @@
   "Copied {0} of {1} documents": "Copied {0} of {1} documents",
   "Copy": "Copy",
   "Copy \"{0}\"\nto \"{1}\"?\nThis will add all documents from the source collection to the target collection.": "Copy \"{0}\"\nto \"{1}\"?\nThis will add all documents from the source collection to the target collection.",
-  "Copy collection \"{0}\" from \"{1}\" to \"{2}\"": "Copy collection \"{0}\" from \"{1}\" to \"{2}\"",
+  "Copy \"{sourceCollection}\" from \"{sourceDatabase}\" to \"{targetDatabase}/{targetCollection}\"": "Copy \"{sourceCollection}\" from \"{sourceDatabase}\" to \"{targetDatabase}/{targetCollection}\"",
   "Copy operation completed successfully": "Copy operation completed successfully",
   "CosmosDB Accounts": "CosmosDB Accounts",
   "Could not find {0}": "Could not find {0}",
