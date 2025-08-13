@@ -6,7 +6,7 @@
 import { parseError } from '@microsoft/vscode-azext-utils';
 import { type Document, type ObjectId, type WithId, type WriteError } from 'mongodb';
 import { l10n } from 'vscode';
-import { ClustersClient, isMongoBulkWriteError } from '../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError } from '../documentdb/ClustersClient';
 import {
     ConflictResolutionStrategy,
     type BulkWriteResult,
@@ -18,13 +18,13 @@ import {
 } from '../utils/copyPasteUtils';
 
 /**
- * MongoDB-specific implementation of DocumentReader.
+ * DocumentDB-specific implementation of DocumentReader.
  */
-export class MongoDocumentReader implements DocumentReader {
+export class DocumentDbDocumentReader implements DocumentReader {
     /**
-     * Streams documents from a MongoDB collection.
+     * Streams documents from a DocumentDB collection.
      *
-     * @param connectionId Connection identifier to get the MongoDB client
+     * @param connectionId Connection identifier to get the DocumentDB client
      * @param databaseName Name of the database
      * @param collectionName Name of the collection
      * @returns AsyncIterable of document details
@@ -46,9 +46,9 @@ export class MongoDocumentReader implements DocumentReader {
     }
 
     /**
-     * Counts the total number of documents in a MongoDB collection.
+     * Counts the total number of documents in the DocumentDB collection.
      *
-     * @param connectionId Connection identifier to get the MongoDB client
+     * @param connectionId Connection identifier to get the DocumentDB client
      * @param databaseName Name of the database
      * @param collectionName Name of the collection,
      * @param filter Optional filter to apply to the count operation (default is '{}')
@@ -66,13 +66,13 @@ export class MongoDocumentReader implements DocumentReader {
 }
 
 /**
- * MongoDB-specific implementation of DocumentWriter.
+ * DocumentDB-specific implementation of DocumentWriter.
  */
-export class MongoDocumentWriter implements DocumentWriter {
+export class DocumentDbDocumentWriter implements DocumentWriter {
     /**
-     * Writes documents to a MongoDB collection using bulk operations.
+     * Writes documents to a DocumentDB collection using bulk operations.
      *
-     * @param connectionId Connection identifier to get the MongoDB client
+     * @param connectionId Connection identifier to get the DocumentDB client
      * @param databaseName Name of the target database
      * @param collectionName Name of the target collection
      * @param documents Array of documents to write
@@ -96,14 +96,14 @@ export class MongoDocumentWriter implements DocumentWriter {
 
         const client = await ClustersClient.getClient(connectionId);
 
-        // Convert DocumentDetails to MongoDB documents
-        const mongoDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
+        // Convert DocumentDetails to DocumentDB documents
+        const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
 
         try {
             const insertResult = await client.insertDocuments(
                 databaseName,
                 collectionName,
-                mongoDocuments,
+                rawDocuments,
                 // For abort on conflict, we set ordered to true to make it throw on the first error
                 // For skip on conflict, we set ordered to false
                 // For overwrite on conflict, we use ordered as a filter to find documents that should be overwritten
@@ -112,10 +112,10 @@ export class MongoDocumentWriter implements DocumentWriter {
 
             return {
                 insertedCount: insertResult.insertedCount,
-                errors: null, // MongoDB bulk write errors will be handled in the catch block
+                errors: null, // DocumentDB bulk write errors will be handled in the catch block
             };
         } catch (error: unknown) {
-            if (isMongoBulkWriteError(error)) {
+            if (isBulkWriteError(error)) {
                 const writeErrorsArray = (
                     Array.isArray(error.writeErrors) ? error.writeErrors : [error.writeErrors]
                 ) as Array<WriteError>;
@@ -127,7 +127,7 @@ export class MongoDocumentWriter implements DocumentWriter {
                     try {
                         // eslint-disable-next-line @typescript-eslint/no-unsafe-return
                         const idsToOverwrite = writeErrorsArray.map((we) => we.getOperation()._id) as Array<ObjectId>;
-                        const documentsToOverwrite = mongoDocuments.filter((doc) =>
+                        const documentsToOverwrite = rawDocuments.filter((doc) =>
                             idsToOverwrite.includes((doc as WithId<Document>)._id as ObjectId),
                         );
                         await collection.deleteMany({ _id: { $in: idsToOverwrite } }, { session });
@@ -166,9 +166,9 @@ export class MongoDocumentWriter implements DocumentWriter {
     }
 
     /**
-     * Ensures the target collection exists in MongoDB.
+     * Ensures the target collection exists.
      *
-     * @param connectionId Connection identifier to get the MongoDB client
+     * @param connectionId Connection identifier to get the DocumentDB client
      * @param databaseName Name of the target database
      * @param collectionName Name of the target collection
      * @returns Promise that resolves when the collection is ready
@@ -179,6 +179,10 @@ export class MongoDocumentWriter implements DocumentWriter {
         // Check if collection exists by trying to list collections
         const collections = await client.listCollections(databaseName);
         const collectionExists = collections.some((col) => col.name === collectionName);
+
+        // we could have just run 'createCollection' without this check. This will work just fine
+        // for basic scenarios. However, an exiting collection with the same name but a different
+        // configuration could lead to unexpected behavior.
 
         if (!collectionExists) {
             // Create the collection by running createCollection

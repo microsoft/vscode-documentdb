@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { ClustersClient, isMongoBulkWriteError } from '../../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError } from '../../documentdb/ClustersClient';
 import {
     AzureDomains,
     getHostsFromConnectionString,
@@ -297,7 +297,7 @@ async function insertDocumentWithBufferIntoCluster(
             errorOccurred: false,
         };
     } catch (error) {
-        if (isMongoBulkWriteError(error)) {
+        if (isBulkWriteError(error)) {
             // Handle MongoDB bulk write errors
             // It could be a partial failure, so we need to check the result
             return {

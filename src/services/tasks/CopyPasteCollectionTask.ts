@@ -64,11 +64,7 @@ export class CopyPasteCollectionTask extends Task {
      */
     protected async onInitialize(signal: AbortSignal): Promise<void> {
         // Count total documents for progress calculation
-        this.updateStatus(this.getStatus().state, vscode.l10n.t('Counting documents in source collection...'), 0);
-
-        if (signal.aborted) {
-            return;
-        }
+        this.updateStatus(this.getStatus().state, vscode.l10n.t('Counting documents in source collection...'));
 
         try {
             this.totalDocuments = await this.documentReader.countDocuments(
@@ -90,7 +86,7 @@ export class CopyPasteCollectionTask extends Task {
         }
 
         // Ensure target collection exists
-        this.updateStatus(this.getStatus().state, vscode.l10n.t('Ensuring target collection exists...'), 0);
+        this.updateStatus(this.getStatus().state, vscode.l10n.t('Ensuring target collection exists...'));
 
         try {
             await this.documentWriter.ensureCollectionExists(
@@ -116,11 +112,8 @@ export class CopyPasteCollectionTask extends Task {
     protected async doWork(signal: AbortSignal): Promise<void> {
         // Handle the case where there are no documents to copy
         if (this.totalDocuments === 0) {
-            this.updateProgress(100, vscode.l10n.t('No documents to copy. Operation completed.'));
             return;
         }
-
-        this.updateProgress(0, vscode.l10n.t('Starting document copy...'));
 
         const documentStream = this.documentReader.streamDocuments(
             this.config.source.connectionId,
@@ -134,10 +127,8 @@ export class CopyPasteCollectionTask extends Task {
         try {
             for await (const document of documentStream) {
                 if (signal.aborted) {
-                    // Cleanup any remaining buffer
-                    if (buffer.length > 0) {
-                        await this.flushBuffer(buffer);
-                    }
+                    buffer.length = 0; // Clear buffer
+                    bufferMemoryEstimate = 0;
                     return;
                 }
 
@@ -153,9 +144,19 @@ export class CopyPasteCollectionTask extends Task {
                 }
             }
 
+            if (signal.aborted) {
+                buffer.length = 0; // Clear buffer
+                bufferMemoryEstimate = 0;
+                return;
+            }
+
             // Flush any remaining documents in the buffer
             if (buffer.length > 0) {
                 await this.flushBuffer(buffer);
+
+                // not needed here, but left in place for consistency and for future maintainers.
+                buffer.length = 0; // Clear buffer
+                bufferMemoryEstimate = 0;
             }
 
             // Ensure we report 100% completion

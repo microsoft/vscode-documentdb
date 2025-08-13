@@ -57,7 +57,7 @@ export interface IndexItemModel {
     version?: number;
 }
 
-export function isMongoBulkWriteError(error: unknown): error is MongoBulkWriteError {
+export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
     return error instanceof MongoBulkWriteError;
 }
 
@@ -354,7 +354,6 @@ export class ClustersClient {
     }
 
     async countDocuments(databaseName: string, collectionName: string, findQuery: string = '{}'): Promise<number> {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         if (findQuery === undefined || findQuery.trim().length === 0) {
             findQuery = '{}';
         }

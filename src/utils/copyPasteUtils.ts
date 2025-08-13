@@ -53,10 +53,10 @@ export interface CopyPasteConfig {
     /**
      * Optional reference to a connection manager or client object.
      * For now, this is typed as `unknown` to allow flexibility.
-     * Specific task implementations (e.g., for MongoDB) will cast this to their
+     * Specific task implementations (e.g., for DocumentDB) will cast this to their
      * required client/connection type.
      */
-    connectionManager?: unknown; // e.g. could be cast to a MongoDB client instance
+    connectionManager?: unknown; // e.g. could be cast to a DocumentDB client instance
 }
 
 /**
@@ -64,14 +64,14 @@ export interface CopyPasteConfig {
  */
 export interface DocumentDetails {
     /**
-     * The document's unique identifier (e.g., _id in MongoDB)
+     * The document's unique identifier (e.g., _id in DocumentDB)
      */
     id: unknown;
 
     /**
      * The document content treated as opaque data by the core task logic.
      * Specific readers/writers will know how to interpret/serialize this.
-     * For MongoDB, this would typically be a BSON document.
+     * For DocumentDB, this would typically be a BSON document.
      */
     documentContent: unknown;
 }
@@ -124,7 +124,6 @@ export interface BulkWriteResult {
      * Array of errors that occurred during the write operation.
      */
     errors: Array<{ documentId?: string; error: Error }> | null; // Should be typed more specifically based on the implementation
-    // e.g., for MongoDB, this could be an array of MongoBulkWriteError objects
 }
 
 /**

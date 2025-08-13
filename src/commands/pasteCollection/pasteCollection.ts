@@ -6,7 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { MongoDocumentReader, MongoDocumentWriter } from '../../documentdb/DocumentProvider';
+import { DocumentDbDocumentReader, DocumentDbDocumentWriter } from '../../documentdb/DocumentProvider';
 import { ext } from '../../extensionVariables';
 import { CopyPasteCollectionTask } from '../../services/tasks/CopyPasteCollectionTask';
 import { TaskService, TaskState } from '../../services/taskService';
@@ -82,9 +82,9 @@ export async function pasteCollection(_context: IActionContext, targetNode: Coll
 
         // Create task with documentDB document providers
         // Need to check reader and writer implementations before creating the task
-        // For now, we only support MongoDB collections
-        const reader = new MongoDocumentReader();
-        const writer = new MongoDocumentWriter();
+        // For now, we only support DocumentDB collections
+        const reader = new DocumentDbDocumentReader();
+        const writer = new DocumentDbDocumentWriter();
         const task = new CopyPasteCollectionTask(config, reader, writer);
 
         // // Get total number of documents in the source collection
@@ -97,42 +97,46 @@ export async function pasteCollection(_context: IActionContext, targetNode: Coll
         // Register task with the task service
         TaskService.registerTask(task);
 
-        // Start and monitor the task without showing a progress notification
+        task.onDidChangeState((event) => {
+            if (event.newState === TaskState.Completed) {
+                const summary = task.getStatus();
+                ext.outputChannel.appendLine(
+                    l10n.t("✅ Task '{taskName}' completed successfully. {message}", {
+                        taskName: task.name,
+                        message: summary.message || '',
+                    }),
+                );
+            } else if (event.newState === TaskState.Stopped) {
+                ext.outputChannel.appendLine(
+                    l10n.t("⏹️ Task '{taskName}' was stopped. {message}", {
+                        taskName: task.name,
+                        message: task.getStatus().message || '',
+                    }),
+                );
+            } else if (event.newState === TaskState.Failed) {
+                const summary = task.getStatus();
+                ext.outputChannel.appendLine(
+                    l10n.t("⚠️ Task '{taskName}' failed. {message}", {
+                        taskName: task.name,
+                        message: summary.message || '',
+                    }),
+                );
+            }
+        });
+
+        ext.outputChannel.appendLine(l10n.t("▶️ Task '{taskName}' starting...", { taskName: 'Copy Collection' }));
+
+        // Start the copy-paste task
         await task.start();
-
-        // Wait for the task to complete
-        while (task.getStatus().state === TaskState.Running || task.getStatus().state === TaskState.Initializing) {
-            // Simple polling with a small delay
-            await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-
-        // Check final status and show result
-        const finalStatus = task.getStatus();
-        if (finalStatus.state === TaskState.Completed) {
-            void vscode.window.showInformationMessage(
-                l10n.t('Collection copied successfully: {0}', finalStatus.message || ''),
-            );
-        } else if (finalStatus.state === TaskState.Failed) {
-            const errorToThrow =
-                finalStatus.error instanceof Error ? finalStatus.error : new Error('Copy operation failed');
-            throw errorToThrow;
-        } else if (finalStatus.state === TaskState.Stopped) {
-            void vscode.window.showInformationMessage(l10n.t('Copy operation was cancelled.'));
-        }
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(l10n.t('Failed to copy collection: {0}', errorMessage));
+        ext.outputChannel.appendLine(
+            l10n.t('⚠️ Task failed. {errorMessage}', {
+                errorMessage: errorMessage,
+            }),
+        );
+
         throw error;
-    } finally {
-        // Clean up - remove the task from the service after completion
-        try {
-            const task = TaskService.listTasks().find((t) => t.type === 'copy-paste-collection');
-            if (task) {
-                await TaskService.deleteTask(task.id);
-            }
-        } catch (cleanupError) {
-            // Log cleanup error but don't throw
-            console.warn('Failed to clean up copy-paste task:', cleanupError);
-        }
     }
 }
