@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 
 /**
  * Enumeration of possible states a task can be in.
@@ -166,6 +167,36 @@ export abstract class Task {
                 newState: state,
                 taskId: this.id,
             });
+
+            // Centralized logging for final state transitions
+            if (state === TaskState.Completed) {
+                const msg = this._status.message ?? '';
+                ext.outputChannel.appendLine(
+                    vscode.l10n.t("✅ Task '{taskName}' completed successfully. {message}", {
+                        taskName: this.name,
+                        message: msg,
+                    }),
+                );
+            } else if (state === TaskState.Stopped) {
+                const msg = this._status.message ?? '';
+                ext.outputChannel.appendLine(
+                    vscode.l10n.t("⏹️ Task '{taskName}' was stopped. {message}", {
+                        taskName: this.name,
+                        message: msg,
+                    }),
+                );
+            } else if (state === TaskState.Failed) {
+                const msg = this._status.message ?? '';
+                const err = this._status.error instanceof Error ? this._status.error.message : '';
+                // Include error details if available
+                const detail = err ? ` ${vscode.l10n.t('Error: {0}', err)}` : '';
+                ext.outputChannel.appendLine(
+                    vscode.l10n.t("⚠️ Task '{taskName}' failed. {message}", {
+                        taskName: this.name,
+                        message: `${msg}${detail}`.trim(),
+                    }),
+                );
+            }
         }
     }
 
@@ -197,6 +228,9 @@ export abstract class Task {
         if (this._status.state !== TaskState.Pending) {
             throw new Error(vscode.l10n.t('Cannot start task in state: {0}', this._status.state));
         }
+
+        ext.outputChannel.appendLine(vscode.l10n.t("Task '{taskName}' initializing...", { taskName: this.name }));
+
         this.updateStatus(TaskState.Initializing, vscode.l10n.t('Initializing task...'), 0);
 
         try {
@@ -214,6 +248,7 @@ export abstract class Task {
             }
 
             this.updateStatus(TaskState.Running, vscode.l10n.t('Task is running'), 0);
+            ext.outputChannel.appendLine(vscode.l10n.t("▶️ Task '{taskName}' starting...", { taskName: this.name }));
 
             // Start the actual work asynchronously
             void this.runWork().catch((error) => {

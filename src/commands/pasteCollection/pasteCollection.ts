@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { DocumentDbDocumentReader, DocumentDbDocumentWriter } from '../../documentdb/DocumentProvider';
 import { ext } from '../../extensionVariables';
 import { CopyPasteCollectionTask } from '../../services/tasks/CopyPasteCollectionTask';
-import { TaskService, TaskState } from '../../services/taskService';
+import { TaskService } from '../../services/taskService';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { ConflictResolutionStrategy, type CopyPasteConfig } from '../../utils/copyPasteUtils';
 
@@ -97,45 +97,48 @@ export async function pasteCollection(_context: IActionContext, targetNode: Coll
         // Register task with the task service
         TaskService.registerTask(task);
 
-        task.onDidChangeState((event) => {
-            if (event.newState === TaskState.Completed) {
-                const summary = task.getStatus();
-                ext.outputChannel.appendLine(
-                    l10n.t("✅ Task '{taskName}' completed successfully. {message}", {
-                        taskName: task.name,
-                        message: summary.message || '',
-                    }),
-                );
-            } else if (event.newState === TaskState.Stopped) {
-                ext.outputChannel.appendLine(
-                    l10n.t("⏹️ Task '{taskName}' was stopped. {message}", {
-                        taskName: task.name,
-                        message: task.getStatus().message || '',
-                    }),
-                );
-            } else if (event.newState === TaskState.Failed) {
-                const summary = task.getStatus();
-                ext.outputChannel.appendLine(
-                    l10n.t("⚠️ Task '{taskName}' failed. {message}", {
-                        taskName: task.name,
-                        message: summary.message || '',
-                    }),
-                );
-            }
-        });
+        // Remove manual logging; now handled by Task base class
+        // task.onDidChangeState((event) => {
+        //     if (event.newState === TaskState.Completed) {
+        //         const summary = task.getStatus();
+        //         ext.outputChannel.appendLine(
+        //             l10n.t("✅ Task '{taskName}' completed successfully. {message}", {
+        //                 taskName: task.name,
+        //                 message: summary.message || '',
+        //             }),
+        //         );
+        //     } else if (event.newState === TaskState.Stopped) {
+        //         ext.outputChannel.appendLine(
+        //             l10n.t("⏹️ Task '{taskName}' was stopped. {message}", {
+        //                 taskName: task.name,
+        //                 message: task.getStatus().message || '',
+        //             }),
+        //         );
+        //     } else if (event.newState === TaskState.Failed) {
+        //         const summary = task.getStatus();
+        //         ext.outputChannel.appendLine(
+        //             l10n.t("⚠️ Task '{taskName}' failed. {message}", {
+        //                 taskName: task.name,
+        //                 message: summary.message || '',
+        //             }),
+        //         );
+        //     }
+        // });
 
-        ext.outputChannel.appendLine(l10n.t("▶️ Task '{taskName}' starting...", { taskName: 'Copy Collection' }));
+        // ext.outputChannel.appendLine(l10n.t("▶️ Task '{taskName}' starting...", { taskName: 'Copy Collection' }));
 
         // Start the copy-paste task
         await task.start();
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(l10n.t('Failed to copy collection: {0}', errorMessage));
-        ext.outputChannel.appendLine(
-            l10n.t('⚠️ Task failed. {errorMessage}', {
-                errorMessage: errorMessage,
-            }),
-        );
+
+        // Remove duplicate output log; Task base class logs failures centrally
+        // ext.outputChannel.appendLine(
+        //     l10n.t('⚠️ Task failed. {errorMessage}', {
+        //         errorMessage: errorMessage,
+        //     }),
+        // );
 
         throw error;
     }
