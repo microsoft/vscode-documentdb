@@ -229,7 +229,7 @@ export abstract class Task {
             throw new Error(vscode.l10n.t('Cannot start task in state: {0}', this._status.state));
         }
 
-        ext.outputChannel.appendLine(vscode.l10n.t("Task '{taskName}' initializing...", { taskName: this.name }));
+        ext.outputChannel.appendLine(vscode.l10n.t("🟡 Task '{taskName}' initializing...", { taskName: this.name }));
 
         this.updateStatus(TaskState.Initializing, vscode.l10n.t('Initializing task...'), 0);
 
