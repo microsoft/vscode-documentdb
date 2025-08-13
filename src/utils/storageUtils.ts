@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import ConnectionString from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { randomUtils } from './randomUtils';
 
 /**
@@ -20,9 +20,9 @@ export function generateDocumentDBStorageId(connectionString: string): string {
         throw new Error('Connection string cannot be empty');
     }
 
-    let parsedCS: ConnectionString;
+    let parsedCS: DocumentDBConnectionString;
     try {
-        parsedCS = new ConnectionString(connectionString);
+        parsedCS = new DocumentDBConnectionString(connectionString);
     } catch (error) {
         throw new Error(`Failed to parse connection string: ${error instanceof Error ? error.message : String(error)}`);
     }

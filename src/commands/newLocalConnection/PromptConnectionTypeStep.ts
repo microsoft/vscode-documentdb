@@ -6,6 +6,7 @@
 import { AzureWizardPromptStep, openUrl, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { wellKnownEmulatorPassword } from '../../constants';
 import { getExperienceFromApi, type API } from '../../DocumentDBExperiences';
 import { defaultMongoEmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
@@ -70,7 +71,7 @@ export class PromptConnectionTypeStep extends AzureWizardPromptStep<NewLocalConn
 
         if (selectedItem.id === 'learnMore') {
             context.telemetry.properties.emulatorLearnMore = 'true';
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
             await openUrl(selectedItem.learnMoreUrl!);
             throw new UserCancelledError();
         }
@@ -84,16 +85,30 @@ export class PromptConnectionTypeStep extends AzureWizardPromptStep<NewLocalConn
             return;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         if (preconfiguredEmulators.some((emulator) => emulator.id === selectedItem.id)) {
             context.mode = NewEmulatorConnectionMode.Preconfigured;
             context.experience = getExperienceFromApi(this.preselectedAPI);
-
             context.mongoEmulatorConfiguration = { ...defaultMongoEmulatorConfiguration };
-
             context.emulatorType = selectedItem.id;
 
-            return;
+            switch (context.emulatorType) {
+                case 'documentdb':
+                    context.connectionString = `mongodb://localhost/?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`;
+                    context.port = 10255;
+                    break;
+                case 'mongo-ru':
+                    context.connectionString = `mongodb://localhost/?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`;
+                    context.port = 10255;
+                    context.userName = 'localhost';
+                    context.password = wellKnownEmulatorPassword;
+                    break;
+                default:
+                    throw new Error(
+                        l10n.t('Unsupported emulator type: "{emulatorType}"', {
+                            emulatorType: context.emulatorType ?? 'undefined',
+                        }),
+                    );
+            }
         }
     }
 

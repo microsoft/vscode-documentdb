@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// eslint-disable-next-line import/no-internal-modules
 import { ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
@@ -332,10 +331,25 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function handleStepInRequest(row: number, cell: number): void {
-        const activeDocument: TableDataEntry = currentQueryResults?.tableData?.[row] ?? {};
-        const activeColumn: string = currentQueryResults?.tableHeaders?.[cell] ?? '';
+        // Always use the ref to access latest data
+        const queryResults = currentQueryResultsRef.current;
 
-        const activeCell = activeDocument[activeColumn] as { value?: string; type?: string };
+        const activeDocument: TableDataEntry = queryResults?.tableData?.[row] ?? {};
+        const activeColumn: string = queryResults?.tableHeaders?.[cell] ?? '';
+
+        // Add proper property existence check
+        if (!(activeColumn in activeDocument)) {
+            console.debug('Column does not exist in document:', activeColumn);
+            return;
+        }
+
+        const activeCell = activeDocument[activeColumn];
+
+        // Add proper null check
+        if (activeCell === undefined || activeCell === null) {
+            console.debug('Cell value is undefined for column:', activeColumn);
+            return;
+        }
 
         console.debug('Step-in requested on cell', activeCell, 'in row', row, 'column', cell);
 
@@ -344,12 +358,18 @@ export const CollectionView = (): JSX.Element => {
             return;
         }
 
-        if (activeCell.type !== 'object') {
+        // Type guard for safer property access
+        if (
+            typeof activeCell !== 'object' ||
+            activeCell === null ||
+            !('type' in activeCell) ||
+            activeCell.type !== 'object'
+        ) {
             console.debug('Cell is not an object, skipping step-in');
             return;
         }
 
-        const newPath = [...(currentContext.currentViewState?.currentPath ?? []), activeColumn];
+        const newPath = [...(currentContextRef.current.currentViewState?.currentPath ?? []), activeColumn];
 
         setCurrentContext((prev) => ({
             ...prev,

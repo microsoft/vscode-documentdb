@@ -7,7 +7,7 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 
 import { type VirtualMachine } from '@azure/arm-compute'; // For typing the selected VM
-import ConnectionString from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { AzureVMContextProperties } from '../AzureVMDiscoveryProvider';
 
 export class AzureVMExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
@@ -33,7 +33,7 @@ export class AzureVMExecuteStep extends AzureWizardExecuteStep<NewConnectionWiza
         }
 
         // Constructing a template connection string. User will be prompted for credentials by the resource item.
-        const connectionString = new ConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
+        const connectionString = new DocumentDBConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
         connectionString.hosts = [`${host}:${selectedPort}`]; // Set the actual host and actual port
         connectionString.protocol = 'mongodb';
 

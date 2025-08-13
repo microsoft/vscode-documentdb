@@ -297,7 +297,7 @@ export class ClustersClient {
                                  ];
                              } else {
                                  // https://mongodb.github.io/node-mongodb-native/3.1/api/index.html
-                                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                                 // eslint-disable-next-line
                                  const result: { databases: IDatabaseInfo[] } = await mongoClient
                                      .db(testDb)
                                      .admin()
@@ -334,7 +334,6 @@ export class ClustersClient {
         skip: number,
         limit: number,
     ): Promise<WithId<Document>[]> {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         if (findQuery === undefined || findQuery.trim().length === 0) {
             findQuery = '{}';
         }
@@ -382,7 +381,6 @@ export class ClustersClient {
          * Configuration
          */
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         if (findQuery === undefined || findQuery.trim().length === 0) {
             findQuery = '{}';
         }
@@ -428,7 +426,7 @@ export class ClustersClient {
         const parsedDocumentIds = documentIds.map((id) => {
             let parsedId;
             try {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                // eslint-disable-next-line
                 parsedId = EJSON.parse(id);
             } catch {
                 if (ObjectId.isValid(id)) {
@@ -452,7 +450,7 @@ export class ClustersClient {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let parsedDocumentId: any;
         try {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line
             parsedDocumentId = EJSON.parse(documentId);
         } catch (error) {
             if (ObjectId.isValid(documentId)) {
@@ -465,7 +463,7 @@ export class ClustersClient {
         // connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        // eslint-disable-next-line
         const documentContent = await collection.findOne({ _id: parsedDocumentId });
 
         return documentContent;
@@ -479,7 +477,7 @@ export class ClustersClient {
         documentId: string,
         document: Document,
     ): Promise<{ documentId: unknown; document: WithId<Document> | null }> {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let parsedId: any;
 
         if (documentId === '') {
@@ -487,7 +485,7 @@ export class ClustersClient {
             parsedId = new ObjectId();
         } else {
             try {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                // eslint-disable-next-line
                 parsedId = EJSON.parse(documentId);
             } catch {
                 if (ObjectId.isValid(documentId)) {
@@ -499,13 +497,12 @@ export class ClustersClient {
         // connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         delete document._id;
 
         const replaceResult = await collection.replaceOne(
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             { _id: parsedId },
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
             document as WithoutId<Document>,
             { upsert: true },
         );
@@ -513,7 +510,7 @@ export class ClustersClient {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
         const newDocumentId = (replaceResult.upsertedId as any) ?? parsedId;
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        // eslint-disable-next-line
         const newDocument = await collection.findOne({ _id: newDocumentId });
 
         return { documentId: newDocumentId, document: newDocument };

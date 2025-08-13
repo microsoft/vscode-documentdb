@@ -13,10 +13,11 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
+import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
@@ -41,22 +42,27 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
                 const managementClient = await createMongoClustersManagementClient(context, this.subscription);
 
                 const clusterInformation = await managementClient.mongoClusters.get(
-                    this.cluster.resourceGroup as string,
+                    this.cluster.resourceGroup!,
                     this.cluster.name,
                 );
 
-                if (!clusterInformation.connectionString) {
+                if (!clusterInformation.properties?.connectionString) {
                     return undefined;
                 }
 
-                context.valuesToMask.push(clusterInformation.connectionString);
-                const connectionString = new ConnectionString(clusterInformation.connectionString as string);
+                context.valuesToMask.push(clusterInformation.properties.connectionString);
+                const connectionString = new DocumentDBConnectionString(clusterInformation.properties.connectionString);
+                maskSensitiveValuesInTelemetry(context, connectionString);
 
-                if (clusterInformation.administratorLogin) {
-                    context.valuesToMask.push(clusterInformation.administratorLogin);
-                    connectionString.username = clusterInformation.administratorLogin;
+                if (clusterInformation.properties?.administrator?.userName) {
+                    context.valuesToMask.push(clusterInformation.properties.administrator.userName);
+                    connectionString.username = clusterInformation.properties.administrator.userName;
                 }
 
+                /**
+                 * The connection string returned from Azure does not include the actual password.
+                 * Instead, it contains a placeholder. We explicitly set the password to an empty string here.
+                 */
                 connectionString.password = '';
 
                 return connectionString.toString();
@@ -82,20 +88,22 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
                 // Create a client to interact with the MongoDB vCore management API and read the cluster details
                 const managementClient = await createMongoClustersManagementClient(context, this.subscription);
                 const clusterInformation = await managementClient.mongoClusters.get(
-                    this.cluster.resourceGroup as string,
+                    this.cluster.resourceGroup!,
                     this.cluster.name,
                 );
 
-                const clusterConnectionString = nonNullValue(clusterInformation.connectionString);
+                if (!clusterInformation.properties?.connectionString) {
+                    return undefined;
+                }
 
-                context.valuesToMask.push(clusterConnectionString);
-                if (clusterInformation.administratorLogin) {
-                    context.valuesToMask.push(clusterInformation.administratorLogin);
+                context.valuesToMask.push(clusterInformation.properties.connectionString);
+                if (clusterInformation.properties?.administrator?.userName) {
+                    context.valuesToMask.push(clusterInformation.properties.administrator.userName);
                 }
 
                 const wizardContext: AuthenticateWizardContext = {
                     ...context,
-                    adminUserName: clusterInformation.administratorLogin,
+                    adminUserName: clusterInformation.properties?.administrator?.userName,
                     resourceName: this.cluster.name,
                 };
 
@@ -112,7 +120,7 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
                 // Cache the credentials
                 CredentialCache.setCredentials(
                     this.id,
-                    nonNullValue(clusterConnectionString),
+                    nonNullValue(clusterInformation.properties.connectionString),
                     nonNullProp(wizardContext, 'selectedUserName'),
                     nonNullProp(wizardContext, 'password'),
                     // here, emulatorConfiguration is not set, as it's a resource item from Azure resources, not a workspace item, therefore, no emulator support needed

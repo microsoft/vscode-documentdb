@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// eslint-disable-next-line import/no-internal-modules
 import { ProgressBar } from '@fluentui/react-components';
 import { loader } from '@monaco-editor/react';
 import * as l10n from '@vscode/l10n';
-import debounce from 'lodash.debounce';
+import { debounce } from 'es-toolkit';
 import { type JSX, useEffect, useRef, useState } from 'react';
 // eslint-disable-next-line import/no-internal-modules
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
@@ -97,7 +96,7 @@ export const DocumentView = (): JSX.Element => {
         //         {
         //             uri: 'mongodb-filter-query-schema.json', // Unique identifier
         //             fileMatch: ['*'], // Apply to all JSON files or specify as needed
-        //             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        //             // eslint-disable-next-line
         //             schema: basicFindQuerySchema,
         //             // schema: generateMongoFindJsonSchema(fieldEntries)
         //         },
@@ -221,7 +220,7 @@ export const DocumentView = (): JSX.Element => {
         void trpcClient.mongoClusters.documentView.saveDocument
             .mutate({ documentContent: editorContent })
             .then((response) => {
-                // update the configuration for potential refreshes of the document
+                // Update the configuration for potential refreshes of the document
                 configuration.documentId = response.documentId;
                 setContent(response.documentStringified);
                 setIsLoading(false);

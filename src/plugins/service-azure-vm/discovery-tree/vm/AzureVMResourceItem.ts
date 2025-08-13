@@ -13,10 +13,11 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
-import ConnectionString from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
+import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
@@ -97,7 +98,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
 
             const portNumber = newPort ? parseInt(newPort, 10) : DEFAULT_PORT;
 
-            const parsedCS = new ConnectionString(this.cluster.connectionString ?? '');
+            const parsedCS = new DocumentDBConnectionString(this.cluster.connectionString ?? '');
 
             const newHosts: string[] = [];
             if (parsedCS.hosts && parsedCS.hosts.length > 0) {
@@ -165,7 +166,10 @@ export class AzureVMResourceItem extends ClusterItemBase {
             const connectionString = await this.getConnectionString();
             context.valuesToMask.push(nonNullValue(connectionString, 'connectionString'));
 
-            const finalConnectionString = new ConnectionString(nonNullValue(connectionString, 'connectionString'));
+            const finalConnectionString = new DocumentDBConnectionString(
+                nonNullValue(connectionString, 'connectionString'),
+            );
+            maskSensitiveValuesInTelemetry(context, finalConnectionString);
 
             const wizardContext: AuthenticateWizardContext = {
                 ...context,

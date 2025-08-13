@@ -9,7 +9,7 @@ import { MonacoEditor } from '../../../MonacoEditor';
 // eslint-disable-next-line import/no-internal-modules
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 
-import debounce from 'lodash.debounce';
+import { debounce } from 'es-toolkit';
 import { useEffect, useRef, useState } from 'react';
 import './monacoAdaptive.scss';
 
@@ -46,11 +46,27 @@ export const MonacoAdaptive = (props: MonacoAdaptiveProps) => {
     const [editorHeight, setEditorHeight] = useState<number>(1 * 19); // Initial height
     const [lastLineCount, setLastLineCount] = useState<number>(0);
 
+    // IMPORTANT: Store refs to solve React "stale closure" problems
+    // Monaco editor attaches event handlers during initialization that
+    // won't automatically update when state changes
+    const lastLineCountRef = useRef(lastLineCount);
+    const propsRef = useRef(props);
+
+    // Keep refs updated with the latest values
+    useEffect(() => {
+        lastLineCountRef.current = lastLineCount;
+    }, [lastLineCount]);
+
+    useEffect(() => {
+        propsRef.current = props;
+    }, [props]);
+
     // Exclude adaptiveHeight prop and onExecuteRequest prop from being passed to the Monaco editor
     // also, let's exclude onMount as we're adding our own handler and will invoke the provided one
     // once we're done with our setup
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    // These props are intentionally destructured but not used directly - they're handled specially
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { adaptiveHeight, onExecuteRequest, onMount, ...editorProps } = props;
 
     const handleMonacoEditorMount = (
@@ -62,21 +78,21 @@ export const MonacoAdaptive = (props: MonacoAdaptiveProps) => {
 
         handleResize();
 
-        if (adaptiveHeight?.enabled) {
+        if (propsRef.current.adaptiveHeight?.enabled) {
             setupAdaptiveHeight(editor);
         }
 
         // Register a command for Ctrl + Enter / Cmd + Enter
-        if (props.onExecuteRequest) {
+        if (propsRef.current.onExecuteRequest) {
             editor.addCommand(monacoEditor.KeyMod.CtrlCmd | monacoEditor.KeyCode.Enter, () => {
-                // This function will be triggered when Ctrl+Enter or Cmd+Enter is pressed
-                props.onExecuteRequest?.(editor.getValue());
+                // Use the ref to get the latest onExecuteRequest handler
+                propsRef.current.onExecuteRequest?.(editor.getValue());
             });
         }
 
-        // // If the parent has provided the onMount handler, call it now
-        if (onMount) {
-            onMount(editor, monaco); // Pass the editor instance to the parent
+        // If the parent has provided the onMount handler, call it now
+        if (propsRef.current.onMount) {
+            propsRef.current.onMount(editor, monaco); // Pass the editor instance to the parent
         }
     };
 
@@ -118,14 +134,14 @@ export const MonacoAdaptive = (props: MonacoAdaptiveProps) => {
     // Update the editor height based on the number of lines in the document
     const updateEditorHeight = (editor: monacoEditor.editor.IStandaloneCodeEditor) => {
         // Safely access adaptiveHeight properties with defaults
-        const lineHeight = adaptiveHeight?.lineHeight ?? 19;
-        const minLines = adaptiveHeight?.minLines ?? 1;
-        const maxLines = adaptiveHeight?.maxLines ?? 10;
+        const lineHeight = propsRef.current.adaptiveHeight?.lineHeight ?? 19;
+        const minLines = propsRef.current.adaptiveHeight?.minLines ?? 1;
+        const maxLines = propsRef.current.adaptiveHeight?.maxLines ?? 10;
 
         const lineCount = editor.getModel()?.getLineCount() || 1;
 
         // Only update if the number of lines changes
-        if (lineCount !== lastLineCount) {
+        if (lineCount !== lastLineCountRef.current) {
             const lines = Math.min(lineCount, maxLines);
             const finalLines = Math.max(lines, minLines);
 

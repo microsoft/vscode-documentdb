@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { useContext, type JSX } from 'react';
+import { useContext, useEffect, useRef, type JSX } from 'react'; // Add useEffect import
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
@@ -13,8 +13,14 @@ import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { CollectionViewContext } from '../collectionViewContext';
 import { MonacoAdaptive } from './MonacoAdaptive';
 
-export const QueryEditor = ({ onExecuteRequest }): JSX.Element => {
+interface QueryEditorProps {
+    onExecuteRequest: (query: string) => void;
+}
+
+export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
     const [, setCurrentContext] = useContext(CollectionViewContext);
+
+    const schemaAbortControllerRef = useRef<AbortController | null>(null);
 
     const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
         editor.setValue('{  }');
@@ -25,40 +31,59 @@ export const QueryEditor = ({ onExecuteRequest }): JSX.Element => {
             ...prev,
             queryEditor: {
                 getCurrentContent: getCurrentContentFunction,
+                /**
+                 * Dynamically sets the JSON schema for the Monaco editor's validation and autocompletion.
+                 *
+                 * NOTE: This function can encounter network errors if called immediately after the
+                 * editor mounts, as the underlying JSON web worker may not have finished loading.
+                 * To mitigate this, a delay is introduced before attempting to set the schema.
+                 *
+                 * A more robust long-term solution should be implemented to programmatically
+                 * verify that the JSON worker is initialized before this function proceeds.
+                 *
+                 * An AbortController is used to prevent race conditions when this function is
+                 * called in quick succession (e.g., rapid "refresh" clicks). It ensures that
+                 * any pending schema update is cancelled before a new one begins, guaranteeing
+                 * a clean, predictable state and allowing the Monaco worker to initialize correctly.
+                 */
                 setJsonSchema: async (schema) => {
-                    /**
-                     * allows me to set the schema for the monaco editor
-                     * at runtime.
-                     *
-                     * TODO: facing some errors when trying to set it using this callback
-                     * during the initialization phase of the editor. Currently a workaorund
-                     * is in place, but it'd be good to know how to avoid / catch
-                     * these Network Errors in general.
-                     *
-                     * Even though it works just fine when done below in the on mount handler.
-                     *
-                     * Added a delay to get it operational for feature completeness.
-                     * But we should find a way to confirm that the json worker is loaded/initialized
-                     * and only then update the diagnostics options.
-                     */
+                    // Use the ref to cancel the previous operation
+                    if (schemaAbortControllerRef.current) {
+                        schemaAbortControllerRef.current.abort();
+                    }
 
-                    void (await new Promise((resolve) => {
-                        // a delay of 2s to ensure the json worker is loaded
-                        // TODO: find a way to confirm that it's loaded
-                        setTimeout(resolve, 2000);
-                    }));
+                    // Create and store the new AbortController in the ref
+                    const abortController = new AbortController();
+                    schemaAbortControllerRef.current = abortController;
+                    const signal = abortController.signal;
 
-                    monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-                        validate: true,
-                        schemas: [
-                            {
-                                uri: 'mongodb-filter-query-schema.json', // Unique identifier
-                                fileMatch: ['*'], // Apply to all JSON files or specify as needed
-                                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                                schema: schema,
-                            },
-                        ],
-                    });
+                    try {
+                        // Wait for 2 seconds to give the worker time to initialize
+                        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                        // If the operation was cancelled during the delay, abort early
+                        if (signal.aborted) {
+                            return;
+                        }
+
+                        // Check if JSON language features are available and set the schema
+                        if (monaco.languages.json?.jsonDefaults) {
+                            monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+                                validate: false,
+                                schemas: [
+                                    {
+                                        uri: 'mongodb-filter-query-schema.json',
+                                        fileMatch: ['*'],
+                                        schema: schema,
+                                    },
+                                ],
+                            });
+                        }
+                    } catch (error) {
+                        // The error is likely an uncaught exception in the worker,
+                        // but we catch here just in case.
+                        console.warn('Error setting JSON schema:', error);
+                    }
                 },
             },
         }));
@@ -72,7 +97,7 @@ export const QueryEditor = ({ onExecuteRequest }): JSX.Element => {
                 {
                     uri: 'mongodb-filter-query-schema.json', // Unique identifier
                     fileMatch: ['*'], // Apply to all JSON files or specify as needed
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
                     schema: basicFindQuerySchema,
                     // schema: generateMongoFindJsonSchema(fieldEntries)
                 },
@@ -103,6 +128,16 @@ export const QueryEditor = ({ onExecuteRequest }): JSX.Element => {
         automaticLayout: false,
     };
 
+    // Cleanup any pending operations when component unmounts
+    useEffect(() => {
+        return () => {
+            if (schemaAbortControllerRef.current) {
+                schemaAbortControllerRef.current.abort();
+                schemaAbortControllerRef.current = null;
+            }
+        };
+    }, []);
+
     return (
         <MonacoAdaptive
             height={'100%'}
@@ -115,7 +150,6 @@ export const QueryEditor = ({ onExecuteRequest }): JSX.Element => {
                 lineHeight: 19,
             }}
             onExecuteRequest={(input) => {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-call
                 onExecuteRequest(input);
             }}
             onMount={handleEditorDidMount}

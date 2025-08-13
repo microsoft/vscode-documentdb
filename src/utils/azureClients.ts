@@ -5,9 +5,8 @@
 
 import { type ComputeManagementClient } from '@azure/arm-compute'; // Modified import
 import { type CosmosDBManagementClient } from '@azure/arm-cosmosdb';
+import { type MongoClusterManagementClient } from '@azure/arm-mongocluster';
 import { type NetworkManagementClient } from '@azure/arm-network'; // Add this import
-import { type PostgreSQLManagementClient } from '@azure/arm-postgresql';
-import { type PostgreSQLManagementFlexibleServerClient } from '@azure/arm-postgresql-flexible';
 import { type ResourceManagementClient } from '@azure/arm-resources';
 import { createAzureClient, type AzExtClientContext } from '@microsoft/vscode-azext-azureutils';
 import { createSubscriptionContext, type IActionContext } from '@microsoft/vscode-azext-utils';
@@ -39,22 +38,14 @@ export async function createCosmosDBManagementClient(
 export async function createMongoClustersManagementClient(
     context: IActionContext,
     subscription: AzureSubscription,
-): Promise<CosmosDBManagementClient> {
+): Promise<MongoClusterManagementClient> {
     const subContext = createSubscriptionContext(subscription);
-    return createAzureClient([context, subContext], (await import('@azure/arm-cosmosdb')).CosmosDBManagementClient);
-}
-
-export async function createPostgreSQLClient(context: AzExtClientContext): Promise<PostgreSQLManagementClient> {
-    return createAzureClient(context, (await import('@azure/arm-postgresql')).PostgreSQLManagementClient);
-}
-
-export async function createPostgreSQLFlexibleClient(
-    context: AzExtClientContext,
-): Promise<PostgreSQLManagementFlexibleServerClient> {
     return createAzureClient(
-        context,
-        (await import('@azure/arm-postgresql-flexible')).PostgreSQLManagementFlexibleServerClient,
-    );
+        [context, subContext],
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-expect-error
+        (await import('@azure/arm-mongocluster')).MongoClusterManagementClient,
+    ) as unknown as MongoClusterManagementClient;
 }
 
 export async function createComputeManagementClient(

@@ -84,7 +84,7 @@ export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
             gridId="myGridTree"
             gridOptions={gridOptions}
             columnDefinitions={columnsDef}
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line
             dataset={liveData}
             onReactGridCreated={() => console.log('Tree View created')}
         />
