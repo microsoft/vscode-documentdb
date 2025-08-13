@@ -16,19 +16,19 @@ import {
     MongoBulkWriteError,
     MongoClient,
     ObjectId,
+    type ClientSession,
     type Collection,
     type DeleteResult,
     type Document,
     type Filter,
     type FindOptions,
+    type InsertManyResult,
     type ListDatabasesResult,
     type MongoClientOptions,
     type WithId,
     type WithoutId,
-    type WriteError,
 } from 'mongodb';
 import { Links } from '../constants';
-import { ext } from '../extensionVariables';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { CredentialCache } from './CredentialCache';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
@@ -57,12 +57,9 @@ export interface IndexItemModel {
     version?: number;
 }
 
-// Currently we only return insertedCount, but we can add more fields in the future if needed
-// Keep the type definition here for future extensibility
-export type InsertDocumentsResult = {
-    /** The number of inserted documents for this operations */
-    insertedCount: number;
-};
+export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
+    return error instanceof MongoBulkWriteError;
+}
 
 export class ClustersClient {
     // cache of active/existing clients
@@ -197,6 +194,62 @@ export class ClustersClient {
         }
     }
 
+    startTransaction(): ClientSession {
+        try {
+            const session = this._mongoClient.startSession();
+            session.startTransaction();
+            return session;
+        } catch (error) {
+            throw new Error(l10n.t('Failed to start a transaction: {0}', parseError(error).message));
+        }
+    }
+
+    startTransactionWithSession(session: ClientSession): void {
+        try {
+            session.startTransaction();
+        } catch (error) {
+            throw new Error(
+                l10n.t('Failed to start a transaction with the provided session: {0}', parseError(error).message),
+            );
+        }
+    }
+
+    async commitTransaction(session: ClientSession): Promise<void> {
+        try {
+            await session.commitTransaction();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to commit transaction: {0}', parseError(error).message));
+        } finally {
+            this.endSession(session);
+        }
+    }
+
+    async abortTransaction(session: ClientSession): Promise<void> {
+        try {
+            await session.abortTransaction();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to abort transaction: {0}', parseError(error).message));
+        } finally {
+            this.endSession(session);
+        }
+    }
+
+    startSession(): ClientSession {
+        try {
+            return this._mongoClient.startSession();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to start a session: {0}', parseError(error).message));
+        }
+    }
+
+    endSession(session: ClientSession): void {
+        try {
+            void session.endSession();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to end session: {0}', parseError(error).message));
+        }
+    }
+
     getUserName() {
         return CredentialCache.getCredentials(this.credentialId)?.connectionUser;
     }
@@ -206,6 +259,21 @@ export class ClustersClient {
 
     getConnectionStringWithPassword() {
         return CredentialCache.getConnectionStringWithPassword(this.credentialId);
+    }
+
+    getCollection(databaseName: string, collectionName: string): Collection<Document> {
+        try {
+            return this._mongoClient.db(databaseName).collection(collectionName);
+        } catch (error) {
+            throw new Error(
+                l10n.t(
+                    'Failed to get collection {0} in database {1}: {2}',
+                    collectionName,
+                    databaseName,
+                    parseError(error).message,
+                ),
+            );
+        }
     }
 
     async listDatabases(): Promise<DatabaseItemModel[]> {
@@ -283,6 +351,21 @@ export class ClustersClient {
         //TODO: add the FindCursor to the return type for paging
 
         return documents;
+    }
+
+    async countDocuments(databaseName: string, collectionName: string, findQuery: string = '{}'): Promise<number> {
+        if (findQuery === undefined || findQuery.trim().length === 0) {
+            findQuery = '{}';
+        }
+        const findQueryObj: Filter<Document> = toFilterQueryObj(findQuery);
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+
+        const count = await collection.countDocuments(findQueryObj, {
+            // Use a read preference of 'primary' to ensure we get the most up-to-date
+            // count, especially important for sharded clusters.
+            readPreference: 'primary',
+        });
+        return count;
     }
 
     async *streamDocuments(
@@ -456,9 +539,10 @@ export class ClustersClient {
         databaseName: string,
         collectionName: string,
         documents: Document[],
-    ): Promise<InsertDocumentsResult> {
+        ordered: boolean = true,
+    ): Promise<InsertManyResult> {
         if (documents.length === 0) {
-            return { insertedCount: 0 };
+            return { acknowledged: false, insertedIds: {}, insertedCount: 0 };
         }
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -468,37 +552,18 @@ export class ClustersClient {
 
                 // Setting `ordered` to be false allows MongoDB to continue inserting remaining documents even if previous fails.
                 // More details: https://www.mongodb.com/docs/manual/reference/method/db.collection.insertMany/#syntax
-                ordered: false,
+                ordered: ordered,
             });
-            return {
-                insertedCount: insertManyResults.insertedCount,
-            };
+            return insertManyResults;
         } catch (error) {
-            // print error messages to the console
+            // Log error messages to the console
             if (error instanceof MongoBulkWriteError) {
-                const writeErrors: WriteError[] = Array.isArray(error.writeErrors)
-                    ? (error.writeErrors as WriteError[])
-                    : [error.writeErrors as WriteError];
-
-                for (const writeError of writeErrors) {
-                    const generalErrorMessage = parseError(writeError).message;
-                    const descriptiveErrorMessage = writeError.err?.errmsg;
-
-                    const fullErrorMessage = descriptiveErrorMessage
-                        ? `${generalErrorMessage} - ${descriptiveErrorMessage}`
-                        : generalErrorMessage;
-
-                    ext.outputChannel.appendLog(l10n.t('Write error: {0}', fullErrorMessage));
-                }
-                ext.outputChannel.show();
+                throw error;
             } else if (error instanceof Error) {
-                ext.outputChannel.appendLog(l10n.t('Error: {0}', error.message));
-                ext.outputChannel.show();
+                throw error;
             }
 
-            return {
-                insertedCount: error instanceof MongoBulkWriteError ? error.insertedCount || 0 : 0,
-            };
+            throw new Error(l10n.t('An unknown error occurred while inserting documents.'));
         }
     }
 }
