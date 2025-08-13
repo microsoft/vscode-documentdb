@@ -15,11 +15,11 @@ import {
 import { Task } from '../taskService';
 
 /**
- * Task for copying documents from a source collection to a target collection.
+ * Task for copying documents from a source to a target collection.
  *
- * This task implements a database-agnostic approach using DocumentReader and DocumentWriter
- * interfaces to handle the actual data operations. It manages memory efficiently through
- * a buffer-based streaming approach where documents are read and written in batches.
+ * This task uses a database-agnostic approach with `DocumentReader` and `DocumentWriter`
+ * interfaces. It streams documents from the source and writes them in batches to the
+ * target, managing memory usage with a configurable buffer.
  */
 export class CopyPasteCollectionTask extends Task {
     public readonly type: string = 'copy-paste-collection';
@@ -112,6 +112,7 @@ export class CopyPasteCollectionTask extends Task {
     protected async doWork(signal: AbortSignal): Promise<void> {
         // Handle the case where there are no documents to copy
         if (this.totalDocuments === 0) {
+            this.updateProgress(100, vscode.l10n.t('Source collection is empty.'));
             return;
         }
 
@@ -124,62 +125,45 @@ export class CopyPasteCollectionTask extends Task {
         const buffer: DocumentDetails[] = [];
         let bufferMemoryEstimate = 0;
 
-        try {
-            for await (const document of documentStream) {
-                if (signal.aborted) {
-                    buffer.length = 0; // Clear buffer
-                    bufferMemoryEstimate = 0;
-                    return;
-                }
-
-                // Add document to buffer
-                buffer.push(document);
-                bufferMemoryEstimate += this.estimateDocumentMemory(document);
-
-                // Check if we need to flush the buffer
-                if (this.shouldFlushBuffer(buffer.length, bufferMemoryEstimate)) {
-                    await this.flushBuffer(buffer);
-                    buffer.length = 0; // Clear buffer
-                    bufferMemoryEstimate = 0;
-                }
-            }
-
+        for await (const document of documentStream) {
             if (signal.aborted) {
-                buffer.length = 0; // Clear buffer
-                bufferMemoryEstimate = 0;
+                // Buffer is a local variable, no need to clear, just exit.
                 return;
             }
 
-            // Flush any remaining documents in the buffer
-            if (buffer.length > 0) {
-                await this.flushBuffer(buffer);
+            // Add document to buffer
+            buffer.push(document);
+            bufferMemoryEstimate += this.estimateDocumentMemory(document);
 
-                // not needed here, but left in place for consistency and for future maintainers.
+            // Check if we need to flush the buffer
+            if (this.shouldFlushBuffer(buffer.length, bufferMemoryEstimate)) {
+                await this.flushBuffer(buffer, signal);
                 buffer.length = 0; // Clear buffer
                 bufferMemoryEstimate = 0;
             }
-
-            // Ensure we report 100% completion
-            this.updateProgress(100, vscode.l10n.t('Copy operation completed successfully'));
-        } catch (error) {
-            // For basic implementation, any error should abort the operation
-            if (this.config.onConflict === ConflictResolutionStrategy.Abort) {
-                throw new Error(
-                    vscode.l10n.t('Copy operation failed: {0}', error instanceof Error ? error.message : String(error)),
-                );
-            }
-            // Future: Handle other conflict resolution strategies
-            throw error;
         }
+
+        if (signal.aborted) {
+            return;
+        }
+
+        // Flush any remaining documents in the buffer
+        if (buffer.length > 0) {
+            await this.flushBuffer(buffer, signal);
+        }
+
+        // Ensure we report 100% completion
+        this.updateProgress(100, vscode.l10n.t('Copy operation completed successfully'));
     }
 
     /**
      * Flushes the document buffer by writing all documents to the target collection.
      *
-     * @param buffer Array of documents to write
+     * @param buffer Array of documents to write.
+     * @param signal AbortSignal to check for cancellation.
      */
-    private async flushBuffer(buffer: DocumentDetails[]): Promise<void> {
-        if (buffer.length === 0) {
+    private async flushBuffer(buffer: DocumentDetails[], signal: AbortSignal): Promise<void> {
+        if (buffer.length === 0 || signal.aborted) {
             return;
         }
 
@@ -196,19 +180,20 @@ export class CopyPasteCollectionTask extends Task {
         this.processedDocuments += result.insertedCount;
 
         // Check for errors in the write result
-        if (result.errors !== null) {
-            // For basic implementation with abort strategy, any error should fail the task
+        if (result.errors && result.errors.length > 0) {
+            // Handle errors based on the configured conflict resolution strategy.
             if (this.config.onConflict === ConflictResolutionStrategy.Abort) {
+                // Abort strategy: fail the entire task on the first error.
                 const firstError = result.errors[0] as { error: Error };
                 throw new Error(
                     vscode.l10n.t(
-                        'Task aborted because of error: {0}, {1} document(s) were inserted in total',
+                        'Task aborted due to an error: {0}. {1} document(s) were inserted in total.',
                         firstError.error?.message ?? 'Unknown error',
                         this.processedDocuments.toString(),
                     ),
                 );
             } else if (this.config.onConflict === ConflictResolutionStrategy.Skip) {
-                // For skip strategy, we can log the errors but continue
+                // Skip strategy: log each error and continue.
                 for (const error of result.errors) {
                     ext.outputChannel.appendLog(
                         vscode.l10n.t(
@@ -220,10 +205,15 @@ export class CopyPasteCollectionTask extends Task {
                 }
                 ext.outputChannel.show();
             } else {
-                ext.outputChannel.appendLog(
-                    vscode.l10n.t('Task failed due to error: {0}', result.errors[0].error?.message ?? 'Unknown error'),
+                // Overwrite or other strategies: treat errors as fatal for now.
+                // This can be expanded if other strategies need more nuanced error handling.
+                const firstError = result.errors[0] as { error: Error };
+                throw new Error(
+                    vscode.l10n.t(
+                        'An error occurred while writing documents: {0}',
+                        firstError.error?.message ?? 'Unknown error',
+                    ),
                 );
-                ext.outputChannel.show();
             }
         }
 
@@ -266,12 +256,13 @@ export class CopyPasteCollectionTask extends Task {
      */
     private estimateDocumentMemory(document: DocumentDetails): number {
         try {
-            // Rough estimate: JSON stringify the document content
+            // A rough estimate based on the length of the JSON string representation.
+            // V8 strings are typically 2 bytes per character (UTF-16).
             const jsonString = JSON.stringify(document.documentContent);
-            return jsonString.length * 2; // Rough estimate for UTF-16 encoding
+            return jsonString.length * 2;
         } catch {
-            // If we can't serialize, use a conservative estimate
-            return 1024; // 1KB default estimate
+            // If serialization fails, return a conservative default.
+            return 1024; // 1KB
         }
     }
 }
