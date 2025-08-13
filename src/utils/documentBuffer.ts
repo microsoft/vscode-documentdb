@@ -99,7 +99,7 @@ export class DocumentBuffer<T> {
      *
      * @param options Configuration options for the buffer
      */
-    constructor(private readonly options: DocumentBufferOptions) {}
+    constructor(private options: DocumentBufferOptions) {}
 
     /**
      * Calculate the size of a document using the provided size calculation function
@@ -227,6 +227,22 @@ export class DocumentBuffer<T> {
             documentCount: this.documents.length,
             currentSizeBytes: this.currentSize,
         };
+    }
+
+    /**
+     * Reduce the batch size of the buffer
+     * This is useful for going through throttling issues
+     */
+    public reduceBatchSize(): void {
+        this.options.maxDocumentCount = Math.max(1, Math.floor(this.options.maxDocumentCount / 2));
+    }
+
+    /**
+     * Set the maximum size of the buffer in bytes
+     * Throws an error if the size is less than 1 byte
+     */
+    public setMaxBufferSize(size: number): void {
+        this.options.maxBufferSizeBytes = size > 0 ? size : 1; // Ensure it is at least 1 byte
     }
 }
 
