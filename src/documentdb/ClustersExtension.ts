@@ -55,7 +55,10 @@ import { ConnectionsBranchDataProvider } from '../tree/connections-view/Connecti
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
-import { Views } from './Views';
+import {
+    registerCommandWithModalErrors,
+    registerCommandWithTreeNodeUnwrappingAndModalErrors,
+} from '../utils/commandErrorHandling';
 import { enableMongoVCoreSupport, enableWorkspaceSupport } from './activationConditions';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
 
@@ -103,7 +106,7 @@ export class ClustersExtension implements vscode.Disposable {
                 // TODO: Implement https://github.com/microsoft/vscode-documentdb/issues/30
                 // for staged hand-over from Azure Databases to this DocumentDB extension
 
-                // eslint-disable-next-line no-constant-condition
+                // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
                 if (false && enableMongoVCoreSupport()) {
                     // on purpose, transition is still in progress
                     activateContext.telemetry.properties.enabledVCore = 'true';
@@ -115,7 +118,7 @@ export class ClustersExtension implements vscode.Disposable {
                     );
                 }
 
-                // eslint-disable-next-line no-constant-condition
+                // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
                 if (false && enableWorkspaceSupport()) {
                     // on purpose, transition is still in progress
                     activateContext.telemetry.properties.enabledWorkspace = 'true';
@@ -145,7 +148,10 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 //// Connections View Commands:
-                registerCommand('vscode-documentdb.command.connectionsView.newConnection', newConnection);
+                registerCommandWithModalErrors(
+                    'vscode-documentdb.command.connectionsView.newConnection',
+                    newConnection,
+                );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.updateCredentials',
@@ -157,7 +163,7 @@ export class ClustersExtension implements vscode.Disposable {
                     updateConnectionString,
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.connectionsView.newEmulatorConnection',
                     newLocalConnection,
                 );
@@ -190,7 +196,7 @@ export class ClustersExtension implements vscode.Disposable {
                     learnMoreAboutServiceProvider,
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.discoveryView.addConnectionToConnectionsView',
                     addConnectionFromRegistry,
                 );

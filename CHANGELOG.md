@@ -1,5 +1,29 @@
 # Change Log
 
+## 0.2.4
+
+### New Features & Improvements
+
+- **UUID Query Support**: Enabled querying for documents using UUIDs in MongoDB clusters, addressing a key workflow limitation for users with UUID-based identifiers. [#172](https://github.com/microsoft/vscode-documentdb/issues/172)
+
+### Fixes
+
+- **Azure Discovery Update**: Migrated to the new `@azure/arm-mongocluster` package for improved Azure vCore/DocumentDB discovery. [#194](https://github.com/microsoft/vscode-documentdb/issues/194)
+- **Development Tooling**: Updated build pipelines to support extension signing, preparing for automated releases to the VS Code Marketplace. [#163](https://github.com/microsoft/vscode-documentdb/issues/163)
+
+## 0.2.3
+
+### New Features & Improvements
+
+- **Connection Focus Enhancement**: Newly created connections are automatically selected and focused in the Connections View. If a connection already exists, the existing one is highlighted for better user awareness. [#122](https://github.com/microsoft/vscode-documentdb/issues/122)
+
+### Fixes
+
+- **JSON Schema Stability**: Improved JSON schema handling in the "Collection View" to prevent worker errors during rapid refresh operations. [#202](https://github.com/microsoft/vscode-documentdb/pull/202)
+- **Complex Password Handling**: Improved connection string parsing and URL handler to properly support complex passwords with special characters. [#190](https://github.com/microsoft/vscode-documentdb/issues/190)
+- **Dependency Updates**: Updated and removed obsolete dependencies to improve security and performance. [#167](https://github.com/microsoft/vscode-documentdb/issues/167)
+- **Development Tooling**: Modernized ESLint, Prettier, and TypeScript configurations with updated dependencies and ES2023 target support. [#168](https://github.com/microsoft/vscode-documentdb/issues/168)
+
 ## 0.2.2
 
 ### New Features & Improvements
@@ -31,7 +55,6 @@
 - Support for DocumentDB and MongoDB databases.
 - Universal DoumentDB and MongoDB connectivity using connection strings.
 - Built in Service Discovery with an extensible API:
-
   - Support for Azure Cosmos DB for MongoDB (vCore)
   - Support for Virtual Machines on Azure with a user-specified `tag`
 

@@ -5,10 +5,11 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ConnectionString } from 'mongodb-connection-string-url';
 import * as vscode from 'vscode';
 import { isWindows } from '../../constants';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
 import { MongoRUResourceItem } from '../../tree/azure-resources-view/documentdb/mongo-ru/MongoRUResourceItem';
 import { MongoVCoreResourceItem } from '../../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreResourceItem';
@@ -52,10 +53,14 @@ export async function launchShell(
     }
     context.valuesToMask.push(rawConnectionString);
 
-    const connectionString: ConnectionString = new ConnectionString(rawConnectionString);
+    const connectionString: DocumentDBConnectionString = new DocumentDBConnectionString(rawConnectionString);
+    maskSensitiveValuesInTelemetry(context, connectionString);
 
-    const actualPassword = connectionString.password;
-    context.valuesToMask.push(actualPassword);
+    // Note to code maintainers:
+    // We're encoding the password to ensure it is safe to use in the connection string
+    // shared with the shell process.
+    const shellSafePassword = encodeURIComponent(connectionString.password);
+    context.valuesToMask.push(shellSafePassword);
 
     // Use unique environment variable names to avoid conflicts
     const randomSuffix = Math.floor(100000 + Math.random() * 900000).toString(); // Generate a 6-digit random number string
@@ -120,7 +125,7 @@ export async function launchShell(
     connectionString.password = PASSWORD_SENTINEL;
 
     // If the username or password is empty, remove them from the connection string to avoid invalid connection strings
-    if (!connectionString.username || !actualPassword) {
+    if (!connectionString.username || !shellSafePassword) {
         connectionString.password = '';
     }
 
@@ -137,7 +142,7 @@ export async function launchShell(
         name: `MongoDB Shell (${connectionString.username || 'default'})`, // Display actual username or a default
         hideFromUser: false,
         env: {
-            [uniquePassEnvVar]: actualPassword,
+            [uniquePassEnvVar]: shellSafePassword,
         },
     });
 

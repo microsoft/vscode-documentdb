@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import type ConnectionString from 'mongodb-connection-string-url';
+import { type DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type Experience } from '../../DocumentDBExperiences';
 
 export enum ConnectionMode {
@@ -17,7 +17,7 @@ export interface NewConnectionWizardContext extends IActionContext {
 
     experience?: Experience;
     connectionString?: string;
-    parsedConnectionString?: URL | ConnectionString;
+    parsedConnectionString?: URL | DocumentDBConnectionString;
 
     username?: string;
     password?: string;

@@ -99,7 +99,7 @@ export function documentToSlickGridTree(document: WithId<Document>, idPrefix?: s
         ([key, value]) => ({
             parentId: rootId,
             key: key,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the value can be anything here as it comes from a MongoDB document
+            // eslint-disable-next-line  -- the value can be anything here as it comes from a MongoDB document
             value: value,
         }),
     );

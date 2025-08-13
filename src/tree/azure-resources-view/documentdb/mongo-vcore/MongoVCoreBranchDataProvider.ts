@@ -97,37 +97,24 @@ export class MongoVCoreBranchDataProvider extends BaseCachedBranchDataProvider<M
                     const client = await createMongoClustersManagementClient(_context, subscription);
                     const accounts = await uiUtils.listAllIterator(client.mongoClusters.list());
 
-                    accounts.map((MongoClustersAccount) => {
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                        this.detailsCache.set(nonNullProp(MongoClustersAccount, 'id'), {
+                    accounts.map((mongoClusterAccount) => {
+                        this.detailsCache.set(nonNullProp(mongoClusterAccount, 'id'), {
                             dbExperience: MongoClustersExperience,
-                            id: MongoClustersAccount.id as string,
-                            name: MongoClustersAccount.name as string,
-                            resourceGroup: getResourceGroupFromId(MongoClustersAccount.id as string),
+                            id: mongoClusterAccount.id!,
+                            name: mongoClusterAccount.name!,
+                            resourceGroup: getResourceGroupFromId(mongoClusterAccount.id!),
 
-                            location: MongoClustersAccount.location as string,
-                            serverVersion: MongoClustersAccount.serverVersion as string,
+                            location: mongoClusterAccount.location,
+                            serverVersion: mongoClusterAccount.properties?.serverVersion,
 
                             systemData: {
-                                createdAt: MongoClustersAccount.systemData?.createdAt,
+                                createdAt: mongoClusterAccount.systemData?.createdAt,
                             },
 
-                            sku:
-                                MongoClustersAccount.nodeGroupSpecs !== undefined
-                                    ? (MongoClustersAccount.nodeGroupSpecs[0]?.sku as string)
-                                    : undefined,
-                            diskSize:
-                                MongoClustersAccount.nodeGroupSpecs !== undefined
-                                    ? (MongoClustersAccount.nodeGroupSpecs[0]?.diskSizeGB as number)
-                                    : undefined,
-                            nodeCount:
-                                MongoClustersAccount.nodeGroupSpecs !== undefined
-                                    ? (MongoClustersAccount.nodeGroupSpecs[0]?.nodeCount as number)
-                                    : undefined,
-                            enableHa:
-                                MongoClustersAccount.nodeGroupSpecs !== undefined
-                                    ? (MongoClustersAccount.nodeGroupSpecs[0]?.enableHa as boolean)
-                                    : undefined,
+                            sku: mongoClusterAccount.properties?.compute?.tier,
+                            diskSize: mongoClusterAccount.properties?.storage?.sizeGb,
+                            nodeCount: mongoClusterAccount.properties?.sharding?.shardCount,
+                            enableHa: mongoClusterAccount.properties?.highAvailability?.targetMode !== 'Disabled',
                         });
                     });
                 } catch (e) {

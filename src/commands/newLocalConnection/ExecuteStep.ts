@@ -5,10 +5,11 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ConnectionString } from 'mongodb-connection-string-url';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
+import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { nonNullValue } from '../../utils/nonNull';
@@ -20,18 +21,16 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
 
     public async execute(context: NewLocalConnectionWizardContext): Promise<void> {
         const parentId = context.parentTreeElementId;
-        let connectionString = context.connectionString;
-        const port = context.port;
         const experience = context.experience;
 
         switch (context.mode) {
             case NewEmulatorConnectionMode.Preconfigured:
-                if (connectionString === undefined || port === undefined || experience === undefined) {
+                if (context.connectionString === undefined || context.port === undefined || experience === undefined) {
                     throw new Error(l10n.t('Internal error: connectionString, port, and api must be defined.'));
                 }
                 break;
             case NewEmulatorConnectionMode.CustomConnectionString:
-                if (connectionString === undefined || experience === undefined) {
+                if (context.connectionString === undefined || experience === undefined) {
                     throw new Error(l10n.t('Internal error: connectionString must be defined.'));
                 }
                 break;
@@ -39,8 +38,19 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 throw new Error(l10n.t('Internal error: mode must be defined.'));
         }
 
-        const parsedCS = new ConnectionString(connectionString);
-        const joinedHosts = [...parsedCS.hosts].sort().join(',');
+        const newConnectionStringParsed = new DocumentDBConnectionString(context.connectionString);
+        newConnectionStringParsed.username = context.userName ?? '';
+        newConnectionStringParsed.password = context.password ?? '';
+
+        newConnectionStringParsed.hosts = newConnectionStringParsed.hosts.map((host) => {
+            if (context.port) {
+                const [hostname] = host.split(':');
+                return `${hostname}:${context.port}`;
+            }
+            return host;
+        });
+
+        const joinedHosts = [...newConnectionStringParsed.hosts].sort().join(',');
 
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
         const existingConnections = await StorageService.get(StorageNames.Connections).getItems('emulators');
@@ -51,20 +61,23 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 return false; // Skip if no secret string is found
             }
 
-            const itemCS = new ConnectionString(secret);
-            return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
+            const itemCS = new DocumentDBConnectionString(secret);
+            return (
+                itemCS.username === newConnectionStringParsed.username &&
+                [...itemCS.hosts].sort().join(',') === joinedHosts
+            );
         });
 
         if (existingDuplicateConnection) {
-            throw new Error(
-                l10n.t('A connection "{existingName}" with the same username and host already exists.', {
-                    existingName: existingDuplicateConnection.name,
-                }),
-            );
+            throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
+                details: l10n.t('The existing connection name:\n"{0}"', existingDuplicateConnection.name),
+            });
         }
 
         let newConnectionLabel =
-            parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
+            newConnectionStringParsed.username && newConnectionStringParsed.username.length > 0
+                ? `${newConnectionStringParsed.username}@${joinedHosts}`
+                : joinedHosts;
 
         return ext.state.showCreatingChild(parentId, l10n.t('Creating new connection…'), async () => {
             await new Promise((resolve) => setTimeout(resolve, 250));
@@ -110,14 +123,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                         const mongoConfig = context.mongoEmulatorConfiguration as EmulatorConfiguration;
                         isEmulator = mongoConfig?.isEmulator ?? true;
                         disableEmulatorSecurity = mongoConfig?.disableEmulatorSecurity;
-
-                        if (context.userName || context.password) {
-                            const parsedConnectionString = new ConnectionString(nonNullValue(connectionString));
-                            parsedConnectionString.username = context.userName ?? '';
-                            parsedConnectionString.password = context.password ?? '';
-
-                            connectionString = parsedConnectionString.toString();
-                        }
                     }
                     break;
                 // Add additional cases here for APIs that require different handling
@@ -127,8 +132,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 }
             }
 
+            const connectionString = newConnectionStringParsed.toString();
+
             const storageItem: StorageItem = {
-                id: generateDocumentDBStorageId(connectionString!),
+                id: generateDocumentDBStorageId(connectionString),
                 name: newConnectionLabel,
                 properties: {
                     api: experience.api === API.DocumentDB ? API.MongoClusters : experience.api,

@@ -120,7 +120,7 @@ export class ClusterSession {
                 return !documentIds.some((id) => {
                     let parsedId;
                     try {
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                        // eslint-disable-next-line
                         parsedId = EJSON.parse(id);
                     } catch {
                         if (ObjectId.isValid(id)) {
