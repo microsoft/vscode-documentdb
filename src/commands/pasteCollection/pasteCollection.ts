@@ -88,58 +88,14 @@ export async function pasteCollection(_context: IActionContext, targetNode: Coll
         const writer = new DocumentDbDocumentWriter();
         const task = new CopyPasteCollectionTask(config, reader, writer);
 
-        // // Get total number of documents in the source collection
-        // const totalDocuments = await reader.countDocuments(
-        //     config.source.connectionId,
-        //     config.source.databaseName,
-        //     config.source.collectionName,
-        // );
-
         // Register task with the task service
         TaskService.registerTask(task);
-
-        // Remove manual logging; now handled by Task base class
-        // task.onDidChangeState((event) => {
-        //     if (event.newState === TaskState.Completed) {
-        //         const summary = task.getStatus();
-        //         ext.outputChannel.appendLine(
-        //             l10n.t("✅ Task '{taskName}' completed successfully. {message}", {
-        //                 taskName: task.name,
-        //                 message: summary.message || '',
-        //             }),
-        //         );
-        //     } else if (event.newState === TaskState.Stopped) {
-        //         ext.outputChannel.appendLine(
-        //             l10n.t("⏹️ Task '{taskName}' was stopped. {message}", {
-        //                 taskName: task.name,
-        //                 message: task.getStatus().message || '',
-        //             }),
-        //         );
-        //     } else if (event.newState === TaskState.Failed) {
-        //         const summary = task.getStatus();
-        //         ext.outputChannel.appendLine(
-        //             l10n.t("⚠️ Task '{taskName}' failed. {message}", {
-        //                 taskName: task.name,
-        //                 message: summary.message || '',
-        //             }),
-        //         );
-        //     }
-        // });
-
-        // ext.outputChannel.appendLine(l10n.t("▶️ Task '{taskName}' starting...", { taskName: 'Copy Collection' }));
 
         // Start the copy-paste task
         await task.start();
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(l10n.t('Failed to copy collection: {0}', errorMessage));
-
-        // Remove duplicate output log; Task base class logs failures centrally
-        // ext.outputChannel.appendLine(
-        //     l10n.t('⚠️ Task failed. {errorMessage}', {
-        //         errorMessage: errorMessage,
-        //     }),
-        // );
 
         throw error;
     }
