@@ -6,64 +6,14 @@
 import { parseError } from '@microsoft/vscode-azext-utils';
 import { type Document, type ObjectId, type WithId, type WriteError } from 'mongodb';
 import { l10n } from 'vscode';
-import { ClustersClient, isBulkWriteError } from '../../../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError } from '../../../../documentdb/ClustersClient';
+import { ConflictResolutionStrategy, type CopyPasteConfig } from '../copyPasteConfig';
 import {
-    ConflictResolutionStrategy,
     type BulkWriteResult,
-    type CopyPasteConfig,
     type DocumentDetails,
-    type DocumentReader,
     type DocumentWriter,
     type DocumentWriterOptions,
-} from './copyPasteUtils';
-
-/**
- * DocumentDB-specific implementation of DocumentReader.
- */
-export class DocumentDbDocumentReader implements DocumentReader {
-    /**
-     * Streams documents from a DocumentDB collection.
-     *
-     * @param connectionId Connection identifier to get the DocumentDB client
-     * @param databaseName Name of the database
-     * @param collectionName Name of the collection
-     * @returns AsyncIterable of document details
-     */
-    async *streamDocuments(
-        connectionId: string,
-        databaseName: string,
-        collectionName: string,
-    ): AsyncIterable<DocumentDetails> {
-        const client = await ClustersClient.getClient(connectionId);
-
-        const documentStream = client.streamDocuments(databaseName, collectionName, new AbortController().signal);
-        for await (const document of documentStream) {
-            yield {
-                id: (document as WithId<Document>)._id,
-                documentContent: document,
-            };
-        }
-    }
-
-    /**
-     * Counts the total number of documents in the DocumentDB collection.
-     *
-     * @param connectionId Connection identifier to get the DocumentDB client
-     * @param databaseName Name of the database
-     * @param collectionName Name of the collection,
-     * @param filter Optional filter to apply to the count operation (default is '{}')
-     * @returns Promise resolving to the document count
-     */
-    async countDocuments(
-        connectionId: string,
-        databaseName: string,
-        collectionName: string,
-        filter: string = '{}',
-    ): Promise<number> {
-        const client = await ClustersClient.getClient(connectionId);
-        return await client.countDocuments(databaseName, collectionName, filter);
-    }
-}
+} from '../documentInterfaces';
 
 /**
  * DocumentDB-specific implementation of DocumentWriter.
