@@ -4,15 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ext } from '../../extensionVariables';
+import { ext } from '../../../extensionVariables';
 import {
     type CopyPasteConfig,
     type DocumentDetails,
     type DocumentReader,
     type DocumentWriter,
     ConflictResolutionStrategy,
-} from '../../utils/copyPasteUtils';
-import { Task } from '../taskService';
+} from './copyPasteUtils';
+import { Task } from '../../taskService';
 
 /**
  * Task for copying documents from a source to a target collection.

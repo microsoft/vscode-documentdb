@@ -6,7 +6,7 @@
 import { parseError } from '@microsoft/vscode-azext-utils';
 import { type Document, type ObjectId, type WithId, type WriteError } from 'mongodb';
 import { l10n } from 'vscode';
-import { ClustersClient, isBulkWriteError } from '../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError } from '../../../documentdb/ClustersClient';
 import {
     ConflictResolutionStrategy,
     type BulkWriteResult,
@@ -15,7 +15,7 @@ import {
     type DocumentReader,
     type DocumentWriter,
     type DocumentWriterOptions,
-} from '../utils/copyPasteUtils';
+} from './copyPasteUtils';
 
 /**
  * DocumentDB-specific implementation of DocumentReader.

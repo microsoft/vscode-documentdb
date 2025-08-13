@@ -6,12 +6,12 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { DocumentDbDocumentReader, DocumentDbDocumentWriter } from '../../documentdb/DocumentProvider';
+import { DocumentDbDocumentReader, DocumentDbDocumentWriter } from '../../services/tasks/copy-and-paste/DocumentProvider';
 import { ext } from '../../extensionVariables';
-import { CopyPasteCollectionTask } from '../../services/tasks/CopyPasteCollectionTask';
+import { CopyPasteCollectionTask } from '../../services/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { TaskService } from '../../services/taskService';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
-import { ConflictResolutionStrategy, type CopyPasteConfig } from '../../utils/copyPasteUtils';
+import { ConflictResolutionStrategy, type CopyPasteConfig } from '../../services/tasks/copy-and-paste/copyPasteUtils';
 
 export async function pasteCollection(_context: IActionContext, targetNode: CollectionItem): Promise<void> {
     const sourceNode = ext.copiedCollectionNode;
