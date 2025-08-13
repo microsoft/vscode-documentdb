@@ -444,6 +444,18 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open",
         "title": "Open Collection"
+      },
+      {
+        "//": "Copy Collection",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.copyCollection",
+        "title": "Copy Collection…"
+      },
+      {
+        "//": "Paste Collection",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.pasteCollection",
+        "title": "Paste Collection…"
       }
     ],
     "submenus": [
@@ -682,6 +694,18 @@
           "command": "vscode-documentdb.command.refresh",
           "when": "view =~ /discoveryView/ && viewItem =~ /\\benableRefreshCommand\\b/i",
           "group": "zheLastGroup@1"
+        },
+        {
+          "//": "[Collection] Copy Collection",
+          "command": "vscode-documentdb.command.copyCollection",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "group": "A@2"
+        },
+        {
+          "//": "[Collection] Paste Collection",
+          "command": "vscode-documentdb.command.pasteCollection",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "group": "A@2"
         }
       ],
       "explorer/context": [],

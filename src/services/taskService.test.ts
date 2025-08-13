@@ -5,6 +5,15 @@
 
 import { Task, TaskService, TaskState, type TaskStatus } from './taskService';
 
+// Mock extensionVariables (ext) module
+jest.mock('../extensionVariables', () => ({
+    ext: {
+        outputChannel: {
+            appendLine: jest.fn(), // Mock appendLine as a no-op function
+        },
+    },
+}));
+
 // Mock vscode module
 jest.mock('vscode', () => ({
     l10n: {

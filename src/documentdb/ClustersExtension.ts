@@ -20,6 +20,7 @@ import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
+import { copyCollection } from '../commands/copyCollection/copyCollection';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
@@ -35,6 +36,7 @@ import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
+import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
@@ -215,6 +217,9 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.connectionsView.renameConnection',
                     renameConnection,
                 );
+
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.copyCollection', copyCollection);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.pasteCollection', pasteCollection);
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling
