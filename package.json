@@ -386,6 +386,20 @@
         "icon": "$(new-file)"
       },
       {
+        "//": "MCP: Link MCP Server",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.linkMcp",
+        "title": "Link MCP",
+        "icon": "$(link)"
+      },
+      {
+        "//": "MCP: Chat with Cluster",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.mcpChat",
+        "title": "MCP Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "//": "Delete Collection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.dropCollection",
@@ -586,6 +600,12 @@
           "command": "vscode-documentdb.command.launchShell",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "2@2"
+        },
+        {
+          "//": "[Account] MCP Chat",
+          "command": "vscode-documentdb.command.mcpChat",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "group": "2@3"
         },
         {
           "//": "[Database] Create collection",
@@ -862,6 +882,22 @@
             "type": "number",
             "description": "The batch size to be used when querying working with the shell.",
             "default": 50
+          },
+          "documentDB.mcp.enabled": {
+            "order": 100,
+            "type": "boolean",
+            "default": false,
+            "description": "Enable Model Context Protocol (MCP) support for AI-powered database interactions."
+          },
+          "documentDB.mcp.azureOpenAiKey": {
+            "order": 101,
+            "type": "string",
+            "description": "Azure OpenAI API key for MCP server integration. Leave empty to configure interactively."
+          },
+          "documentDB.mcp.azureOpenAiEndpoint": {
+            "order": 102,
+            "type": "string",
+            "description": "Azure OpenAI endpoint URL for MCP server integration."
           }
         }
       }

@@ -43,6 +43,8 @@ import { renameConnection } from '../commands/renameConnection/renameConnection'
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
+import { linkMcp } from '../commands/linkMcp/linkMcp';
+import { mcpChat } from '../commands/mcpChat/mcpChat';
 import { ext } from '../extensionVariables';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
@@ -245,6 +247,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.importDocuments', importDocuments);
 
                 registerScrapbookCommands();
+
+                //// MCP Commands:
+
+                registerCommand('vscode-documentdb.command.linkMcp', linkMcp);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.mcpChat', mcpChat);
 
                 /**
                  * Here, exporting documents is done in two ways: one is accessible from the tree view
