@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type MongoCluster } from '@azure/arm-mongocluster';
 import {
     AzureWizard,
     callWithTelemetryAndErrorHandling,
@@ -19,7 +20,11 @@ import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../../documentdb/Views';
-import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
+import {
+    AuthMethod,
+    type AuthenticateWizardContext,
+} from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
+import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
@@ -100,13 +105,44 @@ export class DocumentDBResourceItem extends ClusterItemBase {
 
             // Create a client to interact with the MongoDB vCore management API and read the cluster details
             const managementClient = await createMongoClustersManagementClient(context, this.subscription);
-            const clusterInformation = await managementClient.mongoClusters.get(
+            const clusterInformation = (await managementClient.mongoClusters.get(
                 this.cluster.resourceGroup!,
                 this.cluster.name,
-            );
+            )) as unknown as MongoCluster;
+
+            // Check if authConfig exists and cast to ensure proper typing
+            const clusterAuthConfig = clusterInformation.properties?.authConfig as
+                | { allowedModes?: string[] }
+                | undefined;
+
+            if (!clusterAuthConfig || !clusterAuthConfig.allowedModes) {
+                context.telemetry.properties.error = 'missing-authconfig';
+                throw new Error(
+                    l10n.t('Authentication configuration is missing for "{cluster}".', {
+                        cluster: this.cluster.name,
+                    }),
+                );
+            }
+
+            // Evaluate available authentication methods
+            const authMethods = clusterAuthConfig.allowedModes;
+
+            if (authMethods.length === 0) {
+                context.telemetry.properties.error = 'authconfig-no-authentication-methods';
+                throw new Error(
+                    l10n.t('No authentication methods available for "{cluster}".', {
+                        cluster: this.cluster.name,
+                    }),
+                );
+            }
 
             if (!clusterInformation.properties?.connectionString) {
-                return undefined;
+                context.telemetry.properties.error = 'missing-connection-string';
+                throw new Error(
+                    l10n.t('Authentication data (properties.connectionString) is missing for "{cluster}".', {
+                        cluster: this.cluster.name,
+                    }),
+                );
             }
 
             context.valuesToMask.push(clusterInformation.properties.connectionString);
@@ -115,6 +151,25 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 ...context,
                 adminUserName: clusterInformation.properties?.administrator?.userName,
                 resourceName: this.cluster.name,
+                availableAuthMethods: [
+                    ...new Set(
+                        authMethods.map((method: string) => {
+                            switch (method) {
+                                case 'NativeAuth':
+                                    return AuthMethod.NativeAuth_ConnectionString;
+                                case 'MicrosoftEntraID':
+                                    return AuthMethod.MicrosoftEntraID;
+                                default:
+                                    context.telemetry.properties.warning = 'unknown-authmethod';
+                                    context.telemetry.properties.authMethod = method;
+                                    console.warn(
+                                        `Unknown auth method from Azure SDK: ${method}, defaulting to NativeAuth`,
+                                    );
+                                    return AuthMethod.NativeAuth_ConnectionString;
+                            }
+                        }),
+                    ),
+                ],
             };
 
             // Prompt the user for credentials
@@ -191,7 +246,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [new ProvideUserNameStep(), new ProvidePasswordStep()],
+            promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
             title: l10n.t('Authenticate to connect with your MongoDB cluster'),
             showLoadingPrompt: true,
         });

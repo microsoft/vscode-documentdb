@@ -36,6 +36,10 @@ export class SaveCredentialsStep extends AzureWizardPromptStep<AuthenticateWizar
     }
 
     public shouldPrompt(context: AuthenticateWizardContext): boolean {
-        return Boolean(context.isUserNameUpdated) || Boolean(context.isPasswordUpdated);
+        return (
+            Boolean(context.isUserNameUpdated) ||
+            Boolean(context.isPasswordUpdated) ||
+            Boolean(context.isAuthMethodUpdated)
+        );
     }
 }

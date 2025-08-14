@@ -5,20 +5,31 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
+export enum AuthMethod {
+    NativeAuth_ConnectionString = 'NativeAuth',
+    MicrosoftEntraID = 'MicrosoftEntraID',
+}
+
 export interface AuthenticateWizardContext extends IActionContext {
     /** These values have to be provided for the wizard to function correctly. */
     adminUserName: string | undefined;
     resourceName: string;
 
+    /** This is optional, and was introduced when MicrosoftEntraID was added behond the default "NativeAuth" */
+    availableAuthMethods?: AuthMethod[];
+
     /** These values will be populated by the wizard. */
-    selectedUserName?: string;
 
     /** States whether the username was set during the wizard flow. */
     isUserNameUpdated?: boolean;
-    password?: string;
+    selectedUserName?: string;
 
     /** States whether the password was set during the wizard flow. */
     isPasswordUpdated?: boolean;
+    password?: string;
+
+    isAuthMethodUpdated?: boolean;
+    selectedAuthMethod?: AuthMethod;
 
     aborted?: boolean;
 

@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
+import { AuthMethod, type AuthenticateWizardContext } from './AuthenticateWizardContext';
 
 export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizardContext> {
     public async prompt(context: AuthenticateWizardContext): Promise<void> {
@@ -17,7 +17,7 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizar
             placeHolder: l10n.t('Password for {username_at_resource}', {
                 username_at_resource: `${context.selectedUserName}@${context.resourceName}`,
             }),
-            title: l10n.t('Authenticate to connect with your MongoDB cluster'),
+            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             password: true,
             ignoreFocusOut: true,
         });
@@ -29,6 +29,14 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizar
     }
 
     public shouldPrompt(context: AuthenticateWizardContext): boolean {
+        // If availableAuthMethods is provided, only prompt when native auth is selected and password is undefined
+        if (context.availableAuthMethods) {
+            return (
+                context.selectedAuthMethod === AuthMethod.NativeAuth_ConnectionString && context.password === undefined
+            );
+        }
+
+        // If availableAuthMethods is not provided, prompt when password is undefined
         return context.password === undefined;
     }
 }
