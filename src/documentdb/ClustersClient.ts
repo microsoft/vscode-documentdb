@@ -9,8 +9,6 @@
  * singletone on a client with a getter from a connection pool..
  */
 
-// eslint-disable-next-line import/no-internal-modules
-import { getSessionFromVSCode } from '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode';
 import { appendExtensionUserAgent, callWithTelemetryAndErrorHandling, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
@@ -25,8 +23,6 @@ import {
     type FindOptions,
     type ListDatabasesResult,
     type MongoClientOptions,
-    type OIDCCallbackParams,
-    type OIDCResponse,
     type WithId,
     type WithoutId,
     type WriteError,
@@ -34,10 +30,12 @@ import {
 import { Links } from '../constants';
 import { ext } from '../extensionVariables';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
+import { type AuthHandler } from './auth/AuthHandler';
+import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
+import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { AuthMethod } from './AuthMethod';
 import { CredentialCache } from './CredentialCache';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
-import { DocumentDBConnectionString } from './utils/DocumentDBConnectionString';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
@@ -120,75 +118,32 @@ export class ClustersClient {
         // default to NativeAuth if nothing is configured
         const authMethod = credentials?.authMechanism ?? AuthMethod.NativeAuth;
 
-        const rawConnectionString = credentials.connectionString;
-        const hosts = getHostsFromConnectionString(rawConnectionString);
-        const userAgentString = hasAzureDomain(...hosts) ? appendExtensionUserAgent() : undefined;
-
-        // Prepare base MongoDB client options
-        const mongoClientOptions: MongoClientOptions = {
-            // appName should be wrapped in '@'s when trying to connect to a Mongo account, this doesn't effect the appendUserAgent string
-            appName: userAgentString,
-        };
-
-        // Handle authentication based on the auth method
+        // TODO: add a proper factory pattern here when more methods are added
+        let authHandler: AuthHandler;
         switch (authMethod) {
-            case AuthMethod.NativeAuth: {
-                this.emulatorConfiguration = CredentialCache.getEmulatorConfiguration(this.credentialId);
-
-                if (this.emulatorConfiguration?.isEmulator) {
-                    mongoClientOptions.serverSelectionTimeoutMS = 4000;
-
-                    if (this.emulatorConfiguration?.disableEmulatorSecurity) {
-                        // Prevents self signed certificate error for emulator https://github.com/microsoft/vscode-cosmosdb/issues/1241#issuecomment-614446198
-                        mongoClientOptions.tlsAllowInvalidCertificates = true;
-                    }
-                }
-
-                const cStringPassword = CredentialCache.getConnectionStringWithPassword(this.credentialId);
-                await this.connect(cStringPassword, mongoClientOptions);
+            case AuthMethod.NativeAuth:
+                authHandler = new NativeAuthHandler(credentials);
                 break;
-            }
-            case AuthMethod.MicrosoftEntraID: {
-                const session = await getSessionFromVSCode(
-                    ['https://ossrdbms-aad.database.windows.net/.default'],
-                    undefined, // currently, we don't see any requirements for support of scoping by tenantIds here, waiting for first feature request / feedback
-                    {
-                        createIfNone: true,
-                    },
-                );
-
-                if (!session) {
-                    throw new Error(l10n.t('Failed to obtain Entra ID token.'));
-                }
-
-                const connectionString = new DocumentDBConnectionString(rawConnectionString);
-                // simplify the connection string
-                connectionString.username = ''; // required to move forward with Entra ID
-                connectionString.password = ''; // required to move forward with Entra ID
-                connectionString.searchParams.delete('authMechanism'); // we'll set this in mongoClientOptions
-                connectionString.searchParams.delete('tls'); // we'll set this in mongoClientOptions
-
-                // configure client options
-                mongoClientOptions.authMechanism = 'MONGODB-OIDC';
-                mongoClientOptions.tls = true;
-                mongoClientOptions.authMechanismProperties = {
-                    ALLOWED_HOSTS: ['*.azure.com'],
-                    OIDC_CALLBACK: (_params: OIDCCallbackParams): Promise<OIDCResponse> =>
-                        Promise.resolve({
-                            accessToken: session.accessToken,
-                            // TODO: VS Code session tokens have no expiration time, should we limit this to 1h?
-                            expiresInSeconds: 0,
-                        }),
-                };
-
-                await this.connect(connectionString.toString(), mongoClientOptions);
+            case AuthMethod.MicrosoftEntraID:
+                authHandler = new MicrosoftEntraIDAuthHandler(credentials);
                 break;
-            }
-            default: {
-                throw new Error(l10n.t('Unsupported authentication method: {authMethod}', { authMethod }));
-            }
+            default:
+                throw new Error(l10n.t('Unsupported authentication method: {0}', authMethod));
         }
 
+        // Configure auth and get connection options
+        const { connectionString, options } = await authHandler.configureAuth();
+
+        const hosts = getHostsFromConnectionString(connectionString);
+        const userAgentString = hasAzureDomain(...hosts) ? appendExtensionUserAgent() : undefined;
+        if (userAgentString) {
+            options.appName = userAgentString;
+        }
+
+        // Connect with the configured options
+        await this.connect(connectionString, options);
+
+        // Collect telemetry (non-blocking)
         void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
             const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
 

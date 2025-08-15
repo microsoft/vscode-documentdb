@@ -14,7 +14,7 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { isSupportedAuthMethod } from '../../../../documentdb/AuthMethod';
+import { AuthMethod, isSupportedAuthMethod } from '../../../../documentdb/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
@@ -187,19 +187,24 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 wizardContext.password,
             );
 
-            ext.outputChannel.append(
-                l10n.t('Connecting to the cluster as "{username}"…', {
-                    username: wizardContext.selectedUserName ?? '',
-                }),
-            );
+            switch (wizardContext.selectedAuthMethod) {
+                case AuthMethod.MicrosoftEntraID:
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
+                    break;
+                default:
+                    ext.outputChannel.append(
+                        l10n.t('Connecting to the cluster as "{username}"…', {
+                            username: wizardContext.selectedUserName ?? '',
+                        }),
+                    );
+            }
 
             try {
                 const clustersClient = await ClustersClient.getClient(this.id);
 
                 ext.outputChannel.appendLine(
-                    l10n.t('Connected to "{cluster}" as "{username}".', {
+                    l10n.t('Connected to the cluster "{cluster}".', {
                         cluster: this.cluster.name,
-                        username: wizardContext.selectedUserName ?? '',
                     }),
                 );
 
