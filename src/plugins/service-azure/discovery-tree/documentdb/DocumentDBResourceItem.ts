@@ -85,6 +85,51 @@ export class DocumentDBResourceItem extends ClusterItemBase {
     }
 
     /**
+     * Retrieves and validates cluster information from Azure.
+     */
+    private async getClusterInformation(context: IActionContext): Promise<MongoCluster> {
+        const managementClient = await createMongoClustersManagementClient(context, this.subscription);
+        const clusterInformation = (await managementClient.mongoClusters.get(
+            this.cluster.resourceGroup!,
+            this.cluster.name,
+        )) as unknown as MongoCluster;
+
+        // Validate connection string
+        if (!clusterInformation.properties?.connectionString) {
+            context.telemetry.properties.error = 'missing-connection-string';
+            throw new Error(
+                l10n.t('Authentication data (properties.connectionString) is missing for "{cluster}".', {
+                    cluster: this.cluster.name,
+                }),
+            );
+        }
+
+        // Validate auth configuration
+        const clusterAuthConfig = clusterInformation.properties?.authConfig as { allowedModes?: string[] } | undefined;
+
+        if (!clusterAuthConfig?.allowedModes) {
+            context.telemetry.properties.error = 'missing-authconfig';
+            throw new Error(
+                l10n.t('Authentication configuration is missing for "{cluster}".', {
+                    cluster: this.cluster.name,
+                }),
+            );
+        }
+
+        if (clusterAuthConfig.allowedModes.length === 0) {
+            context.telemetry.properties.error = 'authconfig-no-authentication-methods';
+            throw new Error(
+                l10n.t('No authentication methods available for "{cluster}".', {
+                    cluster: this.cluster.name,
+                }),
+            );
+        }
+
+        context.valuesToMask.push(clusterInformation.properties.connectionString);
+        return clusterInformation;
+    }
+
+    /**
      * Authenticates and connects to the MongoDB cluster.
      * @param context The action context.
      * @returns An instance of ClustersClient if successful; otherwise, null.
@@ -100,76 +145,31 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 }),
             );
 
-            // Create a client to interact with the MongoDB vCore management API and read the cluster details
-            const managementClient = await createMongoClustersManagementClient(context, this.subscription);
-            const clusterInformation = (await managementClient.mongoClusters.get(
-                this.cluster.resourceGroup!,
-                this.cluster.name,
-            )) as unknown as MongoCluster;
+            // Get and validate cluster information
+            const clusterInformation = await this.getClusterInformation(context);
+            const authMethods = (clusterInformation.properties?.authConfig as { allowedModes: string[] }).allowedModes;
 
-            // Check if authConfig exists and cast to ensure proper typing
-            const clusterAuthConfig = clusterInformation.properties?.authConfig as
-                | { allowedModes?: string[] }
-                | undefined;
-
-            if (!clusterAuthConfig || !clusterAuthConfig.allowedModes) {
-                context.telemetry.properties.error = 'missing-authconfig';
-                throw new Error(
-                    l10n.t('Authentication configuration is missing for "{cluster}".', {
-                        cluster: this.cluster.name,
-                    }),
-                );
-            }
-
-            // Evaluate available authentication methods
-            const authMethods = clusterAuthConfig.allowedModes;
-
-            if (authMethods.length === 0) {
-                context.telemetry.properties.error = 'authconfig-no-authentication-methods';
-                throw new Error(
-                    l10n.t('No authentication methods available for "{cluster}".', {
-                        cluster: this.cluster.name,
-                    }),
-                );
-            }
-
-            if (!clusterInformation.properties?.connectionString) {
-                context.telemetry.properties.error = 'missing-connection-string';
-                throw new Error(
-                    l10n.t('Authentication data (properties.connectionString) is missing for "{cluster}".', {
-                        cluster: this.cluster.name,
-                    }),
-                );
-            }
-
-            context.valuesToMask.push(clusterInformation.properties.connectionString);
-
+            // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
                 adminUserName: clusterInformation.properties?.administrator?.userName,
                 resourceName: this.cluster.name,
                 availableAuthMethods: [
                     ...new Set(
-                        // Pass through the string values directly
                         authMethods.map((method: string) => {
-                            // Use the type guard to check if it's a known method
                             if (!isSupportedAuthMethod(method)) {
-                                // Log unknown auth methods for telemetry
                                 context.telemetry.properties.warning = 'unknown-authmethod';
                                 context.telemetry.properties.authMethod = method;
                                 console.warn(`Unknown auth method from Azure SDK: ${method}`);
                             }
-                            // Return the method as-is (known or unknown)
                             return method;
                         }),
                     ),
                 ],
             };
 
-            // Prompt the user for credentials
+            // Prompt for credentials
             const credentialsProvided = await this.promptForCredentials(wizardContext);
-
-            // If the wizard was aborted or failed, return null
             if (!credentialsProvided) {
                 return null;
             }
@@ -178,14 +178,13 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 context.valuesToMask.push(wizardContext.password);
             }
 
-            // Cache the credentials
+            // Cache credentials and attempt connection
             CredentialCache.setAuthCredentials(
                 this.id,
                 nonNullValue(wizardContext.selectedAuthMethod, 'authMethod'),
                 nonNullValue(clusterInformation.properties?.connectionString),
-                wizardContext.selectedUserName, // can be undefined
-                wizardContext.password, // can be undefined
-                // emulatorConfiguration is not set, as it's a resource item from Azure resources, not a workspace item, therefore, no emulator support needed
+                wizardContext.selectedUserName,
+                wizardContext.password,
             );
 
             ext.outputChannel.append(
@@ -194,42 +193,37 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 }),
             );
 
-            // Attempt to create the client with the provided credentials
-            let clustersClient: ClustersClient;
             try {
-                clustersClient = await ClustersClient.getClient(this.id).catch((error: Error) => {
-                    ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: error.message }));
+                const clustersClient = await ClustersClient.getClient(this.id);
 
-                    void vscode.window.showErrorMessage(
-                        l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                        {
-                            modal: true,
-                            detail:
-                                l10n.t('Revisit connection details and try again.') +
-                                '\n\n' +
-                                l10n.t('Error: {error}', { error: error.message }),
-                        },
-                    );
+                ext.outputChannel.appendLine(
+                    l10n.t('Connected to "{cluster}" as "{username}".', {
+                        cluster: this.cluster.name,
+                        username: wizardContext.selectedUserName ?? '',
+                    }),
+                );
 
-                    throw error;
-                });
-            } catch {
-                // If connection fails, remove cached credentials
+                return clustersClient;
+            } catch (error) {
+                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+
+                void vscode.window.showErrorMessage(
+                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
+                    {
+                        modal: true,
+                        detail:
+                            l10n.t('Revisit connection details and try again.') +
+                            '\n\n' +
+                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                    },
+                );
+
+                // Clean up failed connection
                 await ClustersClient.deleteClient(this.id);
                 CredentialCache.deleteCredentials(this.id);
 
-                // Return null to indicate failure
                 return null;
             }
-
-            ext.outputChannel.appendLine(
-                l10n.t('Connected to "{cluster}" as "{username}".', {
-                    cluster: this.cluster.name,
-                    username: wizardContext.selectedUserName ?? '',
-                }),
-            );
-
-            return clustersClient;
         });
 
         return result ?? null;
