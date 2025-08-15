@@ -73,7 +73,6 @@ export class ClustersClient {
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
-    private emulatorConfiguration?: EmulatorConfiguration;
 
     /**
      * Use getClient instead of a constructor. Connections/Client are being cached and reused.
@@ -141,7 +140,7 @@ export class ClustersClient {
         }
 
         // Connect with the configured options
-        await this.connect(connectionString, options);
+        await this.connect(connectionString, options, credentials.emulatorConfiguration);
 
         // Collect telemetry (non-blocking)
         void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
@@ -155,18 +154,22 @@ export class ClustersClient {
         });
     }
 
-    private async connect(connectionString: string, options: MongoClientOptions): Promise<void> {
+    private async connect(
+        connectionString: string,
+        options: MongoClientOptions,
+        emulatorConfiguration?: EmulatorConfiguration,
+    ): Promise<void> {
         try {
             this._mongoClient = await MongoClient.connect(connectionString, options);
         } catch (error) {
             const message = parseError(error).message;
-            if (this.emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
+            if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.',
                     { link: Links.LocalConnectionDebuggingTips },
                 );
-            } else if (this.emulatorConfiguration?.isEmulator && message.includes('self-signed certificate')) {
+            } else if (emulatorConfiguration?.isEmulator && message.includes('self-signed certificate')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'The local instance is using a self-signed certificate. To connect, you must import the appropriate TLS/SSL certificate. See {link} for tips.',
