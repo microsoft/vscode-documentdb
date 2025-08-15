@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
+import { type AuthMethod } from './AuthMethod';
 import { addAuthenticationDataToConnectionString } from './utils/connectionStringHelpers';
 
 export interface ClustersCredentials {
@@ -11,6 +12,9 @@ export interface ClustersCredentials {
     connectionStringWithPassword?: string;
     connectionString: string;
     connectionUser: string;
+    connectionPassword?: string;
+
+    authMechanism?: AuthMethod;
     // Optional, as it's only relevant for local workspace connetions
     emulatorConfiguration?: EmulatorConfiguration;
 }
@@ -42,6 +46,8 @@ export class CredentialCache {
     /**
      * Sets the credentials for a given connection string and stores them in the credential cache.
      *
+     * @deprecated Use {@link CredentialCache.setAuthCredentials} instead and provide an explicit AuthMethod.
+     *
      * @param id - The credential id. It's supposed to be the same as the tree item id of the mongo cluster item to simplify the lookup.
      * @param connectionString - The connection string to which the credentials will be added.
      * @param username - The username to be used for authentication.
@@ -53,6 +59,49 @@ export class CredentialCache {
         connectionString: string,
         username: string,
         password: string,
+        emulatorConfiguration?: EmulatorConfiguration,
+    ): void {
+        console.warn(
+            'CredentialCache.setCredentials is deprecated. Please migrate to CredentialCache.setAuthCredentials and provide an explicit AuthMethod.',
+        );
+
+        const connectionStringWithPassword = addAuthenticationDataToConnectionString(
+            connectionString,
+            username,
+            password,
+        );
+
+        const credentials: ClustersCredentials = {
+            mongoClusterId: mongoClusterId,
+            connectionStringWithPassword: connectionStringWithPassword,
+            connectionString: connectionString,
+            connectionUser: username,
+            emulatorConfiguration: emulatorConfiguration,
+        };
+
+        CredentialCache._store.set(mongoClusterId, credentials);
+    }
+
+    /**
+     * New implementation of setCredentials that adds support for authentication methods (authMechanism).
+     * Introduced during the Entra ID integration to support Entra/Microsoft identity and other authentication flows.
+     * This stores authentication-aware credentials for a given cluster in the cache.
+     *
+     * NOTE: The original `setCredentials` remains for compatibility but will be deprecated in a future change.
+     *
+     * @param mongoClusterId - The credential id. It's supposed to be the same as the tree item id of the mongo cluster item to simplify the lookup.
+     * @param authMethod - The authentication method/mechanism to be used (e.g. SCRAM, X509, Azure/Entra flows).
+     * @param connectionString - The connection string to which optional credentials will be added.
+     * @param username - The username to be used for authentication (optional for some auth methods).
+     * @param password - The password to be used for authentication (optional for some auth methods).
+     * @param emulatorConfiguration - The emulator configuration object (optional, only relevant for local workspace connections).
+     */
+    public static setAuthCredentials(
+        mongoClusterId: string,
+        authMethod: AuthMethod,
+        connectionString: string,
+        username: string = '',
+        password: string = '',
         emulatorConfiguration?: EmulatorConfiguration,
     ): void {
         const connectionStringWithPassword = addAuthenticationDataToConnectionString(
@@ -67,6 +116,7 @@ export class CredentialCache {
             connectionString: connectionString,
             connectionUser: username,
             emulatorConfiguration: emulatorConfiguration,
+            authMechanism: authMethod,
         };
 
         CredentialCache._store.set(mongoClusterId, credentials);

@@ -7,7 +7,6 @@ import { type MongoCluster } from '@azure/arm-mongocluster';
 import {
     AzureWizard,
     callWithTelemetryAndErrorHandling,
-    nonNullProp,
     nonNullValue,
     UserCancelledError,
     type IActionContext,
@@ -15,15 +14,13 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { isSupportedAuthMethod } from '../../../../documentdb/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../../documentdb/Views';
-import {
-    AuthMethod,
-    type AuthenticateWizardContext,
-} from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
+import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
@@ -153,20 +150,17 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 resourceName: this.cluster.name,
                 availableAuthMethods: [
                     ...new Set(
+                        // Pass through the string values directly
                         authMethods.map((method: string) => {
-                            switch (method) {
-                                case 'NativeAuth':
-                                    return AuthMethod.NativeAuth_ConnectionString;
-                                case 'MicrosoftEntraID':
-                                    return AuthMethod.MicrosoftEntraID;
-                                default:
-                                    context.telemetry.properties.warning = 'unknown-authmethod';
-                                    context.telemetry.properties.authMethod = method;
-                                    console.warn(
-                                        `Unknown auth method from Azure SDK: ${method}, defaulting to NativeAuth`,
-                                    );
-                                    return AuthMethod.NativeAuth_ConnectionString;
+                            // Use the type guard to check if it's a known method
+                            if (!isSupportedAuthMethod(method)) {
+                                // Log unknown auth methods for telemetry
+                                context.telemetry.properties.warning = 'unknown-authmethod';
+                                context.telemetry.properties.authMethod = method;
+                                console.warn(`Unknown auth method from Azure SDK: ${method}`);
                             }
+                            // Return the method as-is (known or unknown)
+                            return method;
                         }),
                     ),
                 ],
@@ -180,15 +174,18 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 return null;
             }
 
-            context.valuesToMask.push(nonNullProp(wizardContext, 'password'));
+            if (wizardContext.password) {
+                context.valuesToMask.push(wizardContext.password);
+            }
 
             // Cache the credentials
-            CredentialCache.setCredentials(
+            CredentialCache.setAuthCredentials(
                 this.id,
+                nonNullValue(wizardContext.selectedAuthMethod, 'authMethod'),
                 nonNullValue(clusterInformation.properties?.connectionString),
-                nonNullProp(wizardContext, 'selectedUserName'),
-                nonNullProp(wizardContext, 'password'),
-                // here, emulatorConfiguration is not set, as it's a resource item from Azure resources, not a workspace item, therefore, no emulator support needed
+                wizardContext.selectedUserName, // can be undefined
+                wizardContext.password, // can be undefined
+                // emulatorConfiguration is not set, as it's a resource item from Azure resources, not a workspace item, therefore, no emulator support needed
             );
 
             ext.outputChannel.append(
@@ -247,7 +244,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
-            title: l10n.t('Authenticate to connect with your MongoDB cluster'),
+            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             showLoadingPrompt: true,
         });
 
