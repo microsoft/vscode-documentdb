@@ -26,12 +26,12 @@ export class ProvideUserNameStep extends AzureWizardPromptStep<AuthenticateWizar
     }
 
     public shouldPrompt(context: AuthenticateWizardContext): boolean {
-        // If availableAuthMethods is provided, only prompt when native auth is selected and password is undefined
+        // If availableAuthMethods is provided, only prompt when native auth is selected and username is undefined
         if (context.availableAuthMethods) {
-            return context.selectedAuthMethod === AuthMethod.NativeAuth && context.password === undefined;
+            return context.selectedAuthMethod === AuthMethod.NativeAuth && context.selectedUserName === undefined;
         }
 
-        // If availableAuthMethods is not provided, prompt when password is undefined
-        return context.password === undefined;
+        // If availableAuthMethods is not provided, prompt when username is undefined
+        return context.selectedUserName === undefined;
     }
 }
