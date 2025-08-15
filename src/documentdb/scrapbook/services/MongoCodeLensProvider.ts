@@ -95,18 +95,29 @@ export class MongoCodeLensProvider implements vscode.CodeLensProvider {
     private createIndividualCommandLenses(commands: { range: vscode.Range }[]): vscode.CodeLens[] {
         const currentCommandInExectution = ScrapbookService.getSingleCommandInExecution();
 
-        return commands.map((cmd) => {
+        return commands.flatMap((cmd) => {
             const running = currentCommandInExectution && cmd.range.isEqual(currentCommandInExectution.range);
-            const title = running ? l10n.t('⏳ Running Command…') : l10n.t('▶️ Run Command');
+            const runTitle = running ? l10n.t('⏳ Running Command…') : l10n.t('▶️ Run Command');
 
-            return <vscode.CodeLens>{
-                command: {
-                    title,
-                    command: 'vscode-documentdb.command.scrapbook.executeCommand',
-                    arguments: [cmd.range.start],
+            // Create both Run and Explain lenses for each command
+            return [
+                <vscode.CodeLens>{
+                    command: {
+                        title: runTitle,
+                        command: 'vscode-documentdb.command.scrapbook.executeCommand',
+                        arguments: [cmd.range.start],
+                    },
+                    range: cmd.range,
                 },
-                range: cmd.range,
-            };
+                <vscode.CodeLens>{
+                    command: {
+                        title: l10n.t('🔍 Explain'),
+                        command: 'vscode-documentdb.command.scrapbook.explainCommand',
+                        arguments: [cmd.range.start],
+                    },
+                    range: cmd.range,
+                },
+            ];
         });
     }
 }
