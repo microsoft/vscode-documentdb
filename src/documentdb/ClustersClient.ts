@@ -30,6 +30,7 @@ import {
 import { Links } from '../constants';
 import { ext } from '../extensionVariables';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
+import { AuthMethod } from './AuthMethod';
 import { CredentialCache } from './CredentialCache';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
@@ -106,37 +107,64 @@ export class ClustersClient {
     // }
 
     private async initClient(): Promise<void> {
-        // TODO: why is this a separate function? move its contents to the constructor.
-
-        if (!CredentialCache.hasCredentials(this.credentialId)) {
+        const credentials = CredentialCache.getCredentials(this.credentialId);
+        if (!credentials) {
             throw new Error(l10n.t('No credentials found for id {credentialId}', { credentialId: this.credentialId }));
         }
 
-        const cString = CredentialCache.getCredentials(this.credentialId)?.connectionString as string;
+        // default to NativeAuth if nothing is configured
+        const authMethod = credentials?.authMechanism ?? AuthMethod.NativeAuth;
+
+        const cString = credentials.connectionString;
         const hosts = getHostsFromConnectionString(cString);
         const userAgentString = hasAzureDomain(...hosts) ? appendExtensionUserAgent() : undefined;
 
-        const cStringPassword = CredentialCache.getConnectionStringWithPassword(this.credentialId);
-        this.emulatorConfiguration = CredentialCache.getEmulatorConfiguration(this.credentialId);
-
-        // Prepare the options object and prepare the appName
-        // appname appears to be the correct equivalent to user-agent for mongo
-        const mongoClientOptions = <MongoClientOptions>{
+        // Prepare base MongoDB client options
+        const mongoClientOptions: MongoClientOptions = {
             // appName should be wrapped in '@'s when trying to connect to a Mongo account, this doesn't effect the appendUserAgent string
             appName: userAgentString,
         };
 
-        if (this.emulatorConfiguration?.isEmulator) {
-            mongoClientOptions.serverSelectionTimeoutMS = 4000;
+        // Handle authentication based on the auth method
+        switch (authMethod) {
+            case AuthMethod.NativeAuth: {
+                this.emulatorConfiguration = CredentialCache.getEmulatorConfiguration(this.credentialId);
 
-            if (this.emulatorConfiguration?.disableEmulatorSecurity) {
-                // Prevents self signed certificate error for emulator https://github.com/microsoft/vscode-cosmosdb/issues/1241#issuecomment-614446198
-                mongoClientOptions.tlsAllowInvalidCertificates = true;
+                if (this.emulatorConfiguration?.isEmulator) {
+                    mongoClientOptions.serverSelectionTimeoutMS = 4000;
+
+                    if (this.emulatorConfiguration?.disableEmulatorSecurity) {
+                        // Prevents self signed certificate error for emulator https://github.com/microsoft/vscode-cosmosdb/issues/1241#issuecomment-614446198
+                        mongoClientOptions.tlsAllowInvalidCertificates = true;
+                    }
+                }
+
+                const cStringPassword = CredentialCache.getConnectionStringWithPassword(this.credentialId);
+                await this.connect(cStringPassword, mongoClientOptions);
+                break;
+            }
+            case AuthMethod.MicrosoftEntraID: {
+                // TODO: Implement Entra ID authentication
+                throw new Error(l10n.t('Entra ID authentication is not yet implemented'));
+            }
+            default: {
+                throw new Error(l10n.t('Unsupported authentication method: {authMethod}', { authMethod }));
             }
         }
 
+        void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
+            const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
+
+            context.telemetry.properties = {
+                ...context.telemetry.properties,
+                ...metadata,
+            };
+        });
+    }
+
+    private async connect(connectionString: string, options: MongoClientOptions): Promise<void> {
         try {
-            this._mongoClient = await MongoClient.connect(cStringPassword as string, mongoClientOptions);
+            this._mongoClient = await MongoClient.connect(connectionString, options);
         } catch (error) {
             const message = parseError(error).message;
             if (this.emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
@@ -154,15 +182,6 @@ export class ClustersClient {
             }
             throw error;
         }
-
-        void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
-            const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
-
-            context.telemetry.properties = {
-                ...context.telemetry.properties,
-                ...metadata,
-            };
-        });
     }
 
     /**
