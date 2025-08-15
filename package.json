@@ -361,6 +361,12 @@
         "title": "Create Database…"
       },
       {
+        "//": "Performance Insight",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.performanceInsight",
+        "title": "Performance Insight"
+      },
+      {
         "//": "Scrapbook: Connect Database",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.scrapbook.connect",
@@ -606,10 +612,16 @@
           "group": "2@1"
         },
         {
+          "//": "[Database] Performance Insight",
+          "command": "vscode-documentdb.command.performanceInsight",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "group": "2@2"
+        },
+        {
           "//": "[Database] Mongo DB|Cluster Scrapbook Submenu",
           "submenu": "documentDB.submenus.mongo.database.scrapbook",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
-          "group": "2@2"
+          "group": "2@3"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Open collection",
