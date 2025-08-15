@@ -31,6 +31,9 @@ import { filterProviderContent } from '../commands/filterProviderContent/filterP
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
+import { setMcpConnection, switchMcpCollection, switchMcpDatabase } from '../commands/mcp/mcpConnectionCommands';
+import { startMcpServer } from '../commands/mcp/startMcpServer';
+import { stopMcpServer } from '../commands/mcp/stopMcpServer';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
@@ -261,6 +264,14 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.exportDocuments',
                     exportEntireCollection,
                 );
+
+                //// MCP (Model Context Protocol) Commands:
+                registerCommand('vscode-documentdb.command.mcp.startServer', startMcpServer);
+                registerCommand('vscode-documentdb.command.mcp.stopServer', stopMcpServer);
+                registerCommand('vscode-documentdb.command.mcp.switchDatabase', switchMcpDatabase);
+                registerCommand('vscode-documentdb.command.mcp.switchCollection', switchMcpCollection);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.mcp.setConnection', setMcpConnection);
+
                 // This is an optional task - if it fails, we don't want to break extension activation,
                 // but we should log the error for diagnostics
                 try {

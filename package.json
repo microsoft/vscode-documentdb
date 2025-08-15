@@ -157,6 +157,7 @@
     "@microsoft/vscode-azext-azureutils": "~3.4.5",
     "@microsoft/vscode-azext-utils": "~3.3.1",
     "@microsoft/vscode-azureresources-api": "~2.5.0",
+    "@modelcontextprotocol/sdk": "^1.17.3",
     "@monaco-editor/react": "~4.7.0",
     "@trpc/client": "~11.4.3",
     "@trpc/server": "~11.4.3",
@@ -438,6 +439,38 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open",
         "title": "Open Collection"
+      },
+      {
+        "//": "MCP Start Server",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.mcp.startServer",
+        "title": "MCP: Start Server",
+        "icon": "$(play)"
+      },
+      {
+        "//": "MCP Stop Server",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.mcp.stopServer",
+        "title": "MCP: Stop Server",
+        "icon": "$(stop)"
+      },
+      {
+        "//": "MCP Switch Database",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.mcp.switchDatabase",
+        "title": "MCP: Switch Database"
+      },
+      {
+        "//": "MCP Switch Collection",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.mcp.switchCollection",
+        "title": "MCP: Switch Collection"
+      },
+      {
+        "//": "MCP Set Connection",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.mcp.setConnection",
+        "title": "MCP: Set Connection"
       }
     ],
     "submenus": [
@@ -489,6 +522,16 @@
           "command": "vscode-documentdb.command.connectionsView.newConnection",
           "when": "view == connectionsView",
           "group": "navigation@5"
+        },
+        {
+          "command": "vscode-documentdb.command.mcp.startServer",
+          "when": "view == connectionsView && !documentdb.mcpServerActive",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vscode-documentdb.command.mcp.stopServer",
+          "when": "view == connectionsView && documentdb.mcpServerActive",
+          "group": "navigation@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.refresh",
@@ -586,6 +629,12 @@
           "command": "vscode-documentdb.command.launchShell",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
           "group": "2@2"
+        },
+        {
+          "//": "[Account] MCP Set Connection",
+          "command": "vscode-documentdb.command.mcp.setConnection",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "group": "3@1"
         },
         {
           "//": "[Database] Create collection",
