@@ -506,9 +506,16 @@ class McpServiceImpl implements vscode.Disposable {
     }
 
     /**
-     * Check if MCP server is active and has a connection
+     * Check if MCP server is active
      */
     public isActive(): boolean {
+        return !!this.server;
+    }
+
+    /**
+     * Check if MCP server has an active connection
+     */
+    public hasActiveConnection(): boolean {
         return !!this.server && !!this.clusterSession;
     }
 
