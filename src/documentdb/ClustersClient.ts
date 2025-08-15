@@ -9,6 +9,8 @@
  * singletone on a client with a getter from a connection pool..
  */
 
+// eslint-disable-next-line import/no-internal-modules
+import { getSessionFromVSCode } from '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode';
 import { appendExtensionUserAgent, callWithTelemetryAndErrorHandling, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
@@ -23,6 +25,8 @@ import {
     type FindOptions,
     type ListDatabasesResult,
     type MongoClientOptions,
+    type OIDCCallbackParams,
+    type OIDCResponse,
     type WithId,
     type WithoutId,
     type WriteError,
@@ -33,6 +37,7 @@ import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { AuthMethod } from './AuthMethod';
 import { CredentialCache } from './CredentialCache';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
+import { DocumentDBConnectionString } from './utils/DocumentDBConnectionString';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
@@ -115,8 +120,8 @@ export class ClustersClient {
         // default to NativeAuth if nothing is configured
         const authMethod = credentials?.authMechanism ?? AuthMethod.NativeAuth;
 
-        const cString = credentials.connectionString;
-        const hosts = getHostsFromConnectionString(cString);
+        const rawConnectionString = credentials.connectionString;
+        const hosts = getHostsFromConnectionString(rawConnectionString);
         const userAgentString = hasAzureDomain(...hosts) ? appendExtensionUserAgent() : undefined;
 
         // Prepare base MongoDB client options
@@ -144,8 +149,40 @@ export class ClustersClient {
                 break;
             }
             case AuthMethod.MicrosoftEntraID: {
-                // TODO: Implement Entra ID authentication
-                throw new Error(l10n.t('Entra ID authentication is not yet implemented'));
+                const session = await getSessionFromVSCode(
+                    ['https://ossrdbms-aad.database.windows.net/.default'],
+                    undefined, // currently, we don't see any requirements for support of scoping by tenantIds here, waiting for first feature request / feedback
+                    {
+                        createIfNone: true,
+                    },
+                );
+
+                if (!session) {
+                    throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+                }
+
+                const connectionString = new DocumentDBConnectionString(rawConnectionString);
+                // simplify the connection string
+                connectionString.username = ''; // required to move forward with Entra ID
+                connectionString.password = ''; // required to move forward with Entra ID
+                connectionString.searchParams.delete('authMechanism'); // we'll set this in mongoClientOptions
+                connectionString.searchParams.delete('tls'); // we'll set this in mongoClientOptions
+
+                // configure client options
+                mongoClientOptions.authMechanism = 'MONGODB-OIDC';
+                mongoClientOptions.tls = true;
+                mongoClientOptions.authMechanismProperties = {
+                    ALLOWED_HOSTS: ['*.azure.com'],
+                    OIDC_CALLBACK: (_params: OIDCCallbackParams): Promise<OIDCResponse> =>
+                        Promise.resolve({
+                            accessToken: session.accessToken,
+                            // TODO: VS Code session tokens have no expiration time, should we limit this to 1h?
+                            expiresInSeconds: 0,
+                        }),
+                };
+
+                await this.connect(connectionString.toString(), mongoClientOptions);
+                break;
             }
             default: {
                 throw new Error(l10n.t('Unsupported authentication method: {authMethod}', { authMethod }));
@@ -156,6 +193,7 @@ export class ClustersClient {
             const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
 
             context.telemetry.properties = {
+                authmethod: authMethod,
                 ...context.telemetry.properties,
                 ...metadata,
             };
