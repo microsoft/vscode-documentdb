@@ -82,8 +82,7 @@ export class ConnectionStorageService {
      * Returns a single connection by id, or undefined if not found.
      */
     public static async get(connectionId: string, connectionType: ConnectionType): Promise<ConnectionItem | undefined> {
-        const items = await this.storageService.getItems<ConnectionProperties>(connectionType);
-        const storageItem = items.find((i) => i.id === connectionId);
+        const storageItem = await this.storageService.getItem<ConnectionProperties>(connectionType, connectionId);
         return storageItem ? this.fromStorageItem(storageItem) : undefined;
     }
 
