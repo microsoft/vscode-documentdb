@@ -367,6 +367,19 @@
         "title": "Performance Insight"
       },
       {
+        "//": "Configure LLM Resource",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.configureLlm",
+        "title": "Configure LLM Resource…",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "//": "Scrapbook: Explain Command",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scrapbook.explainCommand",
+        "title": "Explain Command"
+      },
+      {
         "//": "Scrapbook: Connect Database",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.scrapbook.connect",
@@ -874,6 +887,28 @@
             "type": "number",
             "description": "The batch size to be used when querying working with the shell.",
             "default": 50
+          },
+          "documentDB.llm.provider": {
+            "order": 30,
+            "type": "string",
+            "description": "The LLM provider to use for enhanced features (Azure OpenAI or OpenAI).",
+            "enum": [
+              "",
+              "azure-openai",
+              "openai"
+            ],
+            "enumItemLabels": [
+              "Not Configured",
+              "Azure OpenAI",
+              "OpenAI"
+            ],
+            "default": ""
+          },
+          "documentDB.llm.endpoint": {
+            "order": 31,
+            "type": "string",
+            "description": "The endpoint URL for the LLM service (required for Azure OpenAI, optional for OpenAI).",
+            "default": ""
           }
         }
       }
