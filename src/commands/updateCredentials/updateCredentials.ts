@@ -32,7 +32,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const resourceType = node.cluster.emulatorConfiguration?.isEmulator
         ? ConnectionType.Emulators
         : ConnectionType.Clusters;
-    const items = await ConnectionStorageService.getItems(resourceType);
+    const items = await ConnectionStorageService.get(resourceType);
     const currentItem = items.find((i) => i.id === node.storageId) as ConnectionItem | undefined;
     const connectionString = currentItem?.secrets?.connectionString || '';
     context.valuesToMask.push(connectionString);

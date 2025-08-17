@@ -73,12 +73,12 @@ const enum SecretIndex {
 export class ConnectionStorageService {
     private static readonly storageService = StorageService.get(StorageNames.Connections);
 
-    public static async getItems(connectionType: ConnectionType): Promise<ConnectionItem[]> {
+    public static async get(connectionType: ConnectionType): Promise<ConnectionItem[]> {
         const items = await this.storageService.getItems<ConnectionProperties>(connectionType);
         return items.map((item) => this.fromStorageItem(item));
     }
 
-    public static async push(connectionType: ConnectionType, item: ConnectionItem, overwrite?: boolean): Promise<void> {
+    public static async save(connectionType: ConnectionType, item: ConnectionItem, overwrite?: boolean): Promise<void> {
         await this.storageService.push(connectionType, this.toStorageItem(item), overwrite);
     }
 

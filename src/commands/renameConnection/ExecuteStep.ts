@@ -14,7 +14,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameConnectionWizardCo
 
     public async execute(context: RenameConnectionWizardContext): Promise<void> {
         const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
-        const items = await ConnectionStorageService.getItems(resourceType);
+        const items = await ConnectionStorageService.get(resourceType);
 
         // TODO: create a getItem method in storageService, otherwise too many secrets
         // are being read from the storage
@@ -24,7 +24,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameConnectionWizardCo
             item.name = nonNullValue(context.newConnectionName);
 
             try {
-                await ConnectionStorageService.push(resourceType, item, true);
+                await ConnectionStorageService.save(resourceType, item, true);
             } catch (pushError) {
                 console.error(`Failed to rename the item "${context.storageId}":`, pushError);
                 void window.showErrorMessage(l10n.t('Failed to rename the connection.'));

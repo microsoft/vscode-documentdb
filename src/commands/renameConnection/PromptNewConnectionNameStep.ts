@@ -35,7 +35,7 @@ export class PromptNewConnectionNameStep extends AzureWizardPromptStep<RenameCon
 
         try {
             const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
-            const items = await ConnectionStorageService.getItems(resourceType);
+            const items = await ConnectionStorageService.get(resourceType);
 
             if (items.filter((connection) => 0 === connection.name.localeCompare(name, undefined)).length > 0) {
                 return l10n.t('The connection with the name "{0}" already exists.', name);

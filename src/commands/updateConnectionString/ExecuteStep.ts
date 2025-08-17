@@ -15,7 +15,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
 
     public async execute(context: UpdateCSWizardContext): Promise<void> {
         const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
-        const items = await ConnectionStorageService.getItems(resourceType);
+        const items = await ConnectionStorageService.get(resourceType);
         const item = items.find((i) => i.id === context.storageId) as ConnectionItem | undefined;
 
         if (!item || !item.secrets?.connectionString) {
@@ -37,7 +37,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
             item.secrets = { ...item.secrets, connectionString: nonNullValue(newCS.toString()) };
 
             try {
-                await ConnectionStorageService.push(resourceType, item, true);
+                await ConnectionStorageService.save(resourceType, item, true);
             } catch (pushError) {
                 console.error(`Failed to update the item "${context.storageId}":`, pushError);
                 void window.showErrorMessage(l10n.t('Failed to update the connection.'));

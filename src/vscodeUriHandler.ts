@@ -116,7 +116,7 @@ async function handleConnectionStringRequest(
     let newConnectionLabel = createConnectionLabel(parsedCS, joinedHosts);
 
     // Check for existing connections with the same parameters
-    const existingConnections = await ConnectionStorageService.getItems(
+    const existingConnections = await ConnectionStorageService.get(
         isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters,
     );
     const existingDuplicateConnection = findDuplicateConnection(existingConnections, parsedCS, joinedHosts);
@@ -177,7 +177,7 @@ async function handleConnectionStringRequest(
             secrets: { connectionString: parsedCS.toString() },
         };
 
-        await ConnectionStorageService.push(
+        await ConnectionStorageService.save(
             isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters,
             storageItem,
             true,

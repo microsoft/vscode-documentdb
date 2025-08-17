@@ -106,12 +106,12 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         ? ConnectionType.Emulators
                         : ConnectionType.Clusters;
 
-                    const items = await ConnectionStorageService.getItems(connectionType);
+                    const items = await ConnectionStorageService.get(connectionType);
                     const item = items.find((i) => i.id === this.storageId) as ConnectionItem | undefined;
                     if (item) {
                         item.secrets = { connectionString: connectionString.toString() };
                         try {
-                            await ConnectionStorageService.push(connectionType, item, true);
+                            await ConnectionStorageService.save(connectionType, item, true);
                         } catch (pushError) {
                             console.error(`Failed to save credentials for item "${this.id}":`, pushError);
                             void vscode.window.showErrorMessage(

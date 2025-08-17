@@ -40,7 +40,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
                 //  Sanity Check 1/2: is there a connection with the same username + host in there?
-                const existingConnections = await ConnectionStorageService.getItems(ConnectionType.Clusters);
+                const existingConnections = await ConnectionStorageService.get(ConnectionType.Clusters);
 
                 const existingDuplicateConnection = existingConnections.find((item) => {
                     const secret = item.secrets?.connectionString;
@@ -113,7 +113,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     secrets: { connectionString },
                 };
 
-                await ConnectionStorageService.push(ConnectionType.Clusters, storageItem, true);
+                await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
 
                 // Refresh the connections tree when adding a new root-level connection
                 if (parentId === undefined || parentId === '') {

@@ -15,7 +15,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
 
     public async execute(context: UpdateCredentialsWizardContext): Promise<void> {
         const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
-        const items = await ConnectionStorageService.getItems(resourceType);
+        const items = await ConnectionStorageService.get(resourceType);
 
         // TODO: create a getItem method in storageService, otherwise too many secrets
         // are being read from the storage
@@ -40,7 +40,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
             item.secrets = { ...item.secrets, connectionString: parsedConnectionString.toString() };
 
             try {
-                await ConnectionStorageService.push(resourceType, item, true);
+                await ConnectionStorageService.save(resourceType, item, true);
             } catch (pushError) {
                 console.error(`Failed to save credentials for item "${context.storageId}":`, pushError);
                 void window.showErrorMessage(l10n.t('Failed to save credentials.'));
