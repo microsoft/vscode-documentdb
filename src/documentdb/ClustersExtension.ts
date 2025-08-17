@@ -20,6 +20,7 @@ import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
+import { configureLlm } from '../commands/configureLlm/configureLlm';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
@@ -146,6 +147,8 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.performanceInsight',
                     performanceInsight,
                 );
+                
+                registerCommandWithModalErrors('vscode-documentdb.command.configureLlm', configureLlm);
 
                 //// Connections View Commands:
                 registerCommandWithModalErrors(

@@ -59,6 +59,10 @@ export namespace ext {
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
         export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
         export const localPort = 'documentDB.local.port';
+        
+        // LLM Configuration settings
+        export const llmProvider = 'documentDB.llm.provider';
+        export const llmEndpoint = 'documentDB.llm.endpoint';
 
         export namespace vsCode {
             export const proxyStrictSSL = 'http.proxyStrictSSL';

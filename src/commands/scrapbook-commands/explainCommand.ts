@@ -9,9 +9,10 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { findCommandAtPosition, getAllCommandsFromText } from '../../documentdb/scrapbook/ScrapbookHelpers';
 import { ScrapbookService } from '../../documentdb/scrapbook/ScrapbookService';
+import { ensureLlmConfigured } from '../../utils/llmHelpers';
 import { withProgress } from '../../utils/withProgress';
 
-export async function explainCommand(_context: IActionContext, position?: vscode.Position): Promise<void> {
+export async function explainCommand(context: IActionContext, position?: vscode.Position): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
         throw new Error(l10n.t('You must open a *.vscode-documentdb-scrapbook file to explain commands.'));
@@ -19,6 +20,12 @@ export async function explainCommand(_context: IActionContext, position?: vscode
 
     if (!ScrapbookService.isConnected()) {
         throw new Error(l10n.t('Please connect to a MongoDB database before explaining a command.'));
+    }
+
+    // Check if LLM is configured and prompt user if not
+    const isLlmConfigured = await ensureLlmConfigured(context, 'explainCommand');
+    if (!isLlmConfigured) {
+        return; // User declined to configure LLM or configuration failed
     }
 
     const pos = position ?? editor.selection.start;

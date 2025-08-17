@@ -8,9 +8,16 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
+import { ensureLlmConfigured } from '../../utils/llmHelpers';
 import { withProgress } from '../../utils/withProgress';
 
-export async function performanceInsight(_context: IActionContext, databaseItem: DatabaseItem): Promise<void> {
+export async function performanceInsight(context: IActionContext, databaseItem: DatabaseItem): Promise<void> {
+    // Check if LLM is configured and prompt user if not
+    const isLlmConfigured = await ensureLlmConfigured(context, 'performanceInsight');
+    if (!isLlmConfigured) {
+        return; // User declined to configure LLM or configuration failed
+    }
+
     const performanceOperation = async (): Promise<void> => {
         const client: ClustersClient = await ClustersClient.getClient(databaseItem.cluster.id);
         const result = await client.runProfileCommand(databaseItem.databaseInfo.name);
