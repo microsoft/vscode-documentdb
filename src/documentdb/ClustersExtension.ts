@@ -35,6 +35,7 @@ import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
+import { performanceInsight } from '../commands/performanceInsight/performanceInsight';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
@@ -140,6 +141,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.copyConnectionString',
                     copyAzureConnectionString,
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.performanceInsight',
+                    performanceInsight,
                 );
 
                 //// Connections View Commands:
