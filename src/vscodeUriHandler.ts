@@ -157,11 +157,11 @@ async function handleConnectionStringRequest(
 
         storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
 
-        let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+        let existingDuplicateLabel = existingConnections.find((connection) => connection.name === newConnectionLabel);
         // If a connection with the same label exists, append a number to the label
         while (existingDuplicateLabel) {
             newConnectionLabel = generateUniqueLabel(newConnectionLabel);
-            existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+            existingDuplicateLabel = existingConnections.find((connection) => connection.name === newConnectionLabel);
         }
 
         // Create the the storageItem
@@ -320,8 +320,8 @@ function findDuplicateConnection(
     parsedCS: DocumentDBConnectionString,
     joinedHosts: string,
 ): ConnectionItem | undefined {
-    return existingConnections.find((item) => {
-        const secret = item.secrets?.connectionString;
+    return existingConnections.find((connection) => {
+        const secret = connection.secrets?.connectionString;
         if (!secret) {
             return false; // Skip if no secret string is found
         }

@@ -55,8 +55,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
         const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Emulators);
 
-        const existingDuplicateConnection = existingConnections.find((item) => {
-            const secret = item.secrets?.connectionString;
+        const existingDuplicateConnection = existingConnections.find((connection) => {
+            const secret = connection.secrets?.connectionString;
             if (!secret) {
                 return false; // Skip if no secret string is found
             }
@@ -89,7 +89,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
             // If so, append a number to the label.
             // This scenario is possible as users are allowed to rename their connections.
 
-            let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+            let existingDuplicateLabel = existingConnections.find(
+                (connection) => connection.name === newConnectionLabel,
+            );
             // If a connection with the same label exists, append a number to the label
             while (existingDuplicateLabel) {
                 /**
@@ -110,7 +112,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                     const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
                     newConnectionLabel = `${baseName} (${count})`;
                 }
-                existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+                existingDuplicateLabel = existingConnections.find(
+                    (connection) => connection.name === newConnectionLabel,
+                );
             }
 
             // Now, we're safe to create a new connection with the new unique label

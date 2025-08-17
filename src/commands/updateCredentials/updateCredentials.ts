@@ -10,7 +10,7 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
-import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { refreshView } from '../refreshView/refreshView';
 import { ExecuteStep } from './ExecuteStep';
@@ -32,9 +32,8 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const resourceType = node.cluster.emulatorConfiguration?.isEmulator
         ? ConnectionType.Emulators
         : ConnectionType.Clusters;
-    const items = await ConnectionStorageService.getAll(resourceType);
-    const currentItem = items.find((i) => i.id === node.storageId) as ConnectionItem | undefined;
-    const connectionString = currentItem?.secrets?.connectionString || '';
+    const connection = await ConnectionStorageService.get(node.storageId, resourceType);
+    const connectionString = connection?.secrets?.connectionString || '';
     context.valuesToMask.push(connectionString);
 
     const parsedCS = new DocumentDBConnectionString(connectionString);

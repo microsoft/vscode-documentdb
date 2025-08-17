@@ -32,19 +32,19 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
     async getChildren(): Promise<TreeElement[]> {
         const emulatorItems = await ConnectionStorageService.getAll(ConnectionType.Emulators);
         return [
-            ...emulatorItems.map((item: ConnectionItem) => {
+            ...emulatorItems.map((connection: ConnectionItem) => {
                 // we need to create the emulator configuration object from the typed properties object
                 const emulatorConfiguration: EmulatorConfiguration = {
                     isEmulator: true,
-                    disableEmulatorSecurity: !!item.properties?.emulatorConfiguration?.disableEmulatorSecurity,
+                    disableEmulatorSecurity: !!connection.properties?.emulatorConfiguration?.disableEmulatorSecurity,
                 };
 
                 const model: ClusterModelWithStorage = {
-                    id: `${this.id}/${item.id}`,
-                    storageId: item.id,
-                    name: item.name,
+                    id: `${this.id}/${connection.id}`,
+                    storageId: connection.id,
+                    name: connection.name,
                     dbExperience: MongoClustersExperience,
-                    connectionString: item?.secrets?.connectionString,
+                    connectionString: connection?.secrets?.connectionString,
                     emulatorConfiguration: emulatorConfiguration,
                 };
 

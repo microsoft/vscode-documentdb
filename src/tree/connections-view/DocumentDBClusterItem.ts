@@ -23,7 +23,7 @@ import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/Provi
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { ClusterItemBase } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
@@ -106,14 +106,13 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         ? ConnectionType.Emulators
                         : ConnectionType.Clusters;
 
-                    const items = await ConnectionStorageService.getAll(connectionType);
-                    const item = items.find((i) => i.id === this.storageId) as ConnectionItem | undefined;
-                    if (item) {
-                        item.secrets = { connectionString: connectionString.toString() };
+                    const connection = await ConnectionStorageService.get(this.storageId, connectionType);
+                    if (connection) {
+                        connection.secrets = { connectionString: connectionString.toString() };
                         try {
-                            await ConnectionStorageService.save(connectionType, item, true);
+                            await ConnectionStorageService.save(connectionType, connection, true);
                         } catch (pushError) {
-                            console.error(`Failed to save credentials for item "${this.id}":`, pushError);
+                            console.error(`Failed to save credentials for connection "${this.id}":`, pushError);
                             void vscode.window.showErrorMessage(
                                 l10n.t('Failed to save credentials for "{cluster}".', {
                                     cluster: this.cluster.name,
@@ -121,7 +120,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                             );
                         }
                     } else {
-                        console.error(`Item with ID "${this.storageId}" not found in storage.`);
+                        console.error(`Connection with ID "${this.storageId}" not found in storage.`);
                         void vscode.window.showErrorMessage(
                             l10n.t('Failed to save credentials for "{cluster}".', {
                                 cluster: this.cluster.name,

@@ -78,6 +78,15 @@ export class ConnectionStorageService {
         return items.map((item) => this.fromStorageItem(item));
     }
 
+    /**
+     * Returns a single connection by id, or undefined if not found.
+     */
+    public static async get(connectionId: string, connectionType: ConnectionType): Promise<ConnectionItem | undefined> {
+        const items = await this.storageService.getItems<ConnectionProperties>(connectionType);
+        const storageItem = items.find((i) => i.id === connectionId);
+        return storageItem ? this.fromStorageItem(storageItem) : undefined;
+    }
+
     public static async save(connectionType: ConnectionType, item: ConnectionItem, overwrite?: boolean): Promise<void> {
         await this.storageService.push(connectionType, this.toStorageItem(item), overwrite);
     }
