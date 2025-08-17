@@ -6,7 +6,7 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 
 import * as l10n from '@vscode/l10n';
-import { StorageNames, StorageService } from '../../services/storageService';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';
 
 export class PromptNewConnectionNameStep extends AzureWizardPromptStep<RenameConnectionWizardContext> {
@@ -34,10 +34,8 @@ export class PromptNewConnectionNameStep extends AzureWizardPromptStep<RenameCon
         }
 
         try {
-            const resourceType = context.isEmulator ? 'emulators' : 'clusters';
-
-            const storage = StorageService.get(StorageNames.Connections);
-            const items = await storage.getItems(resourceType);
+            const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
+            const items = await ConnectionStorageService.getItems(resourceType);
 
             if (items.filter((connection) => 0 === connection.name.localeCompare(name, undefined)).length > 0) {
                 return l10n.t('The connection with the name "{0}" already exists.', name);

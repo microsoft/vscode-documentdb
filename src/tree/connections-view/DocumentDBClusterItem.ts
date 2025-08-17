@@ -23,7 +23,7 @@ import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/Provi
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
-import { StorageNames, StorageService } from '../../services/storageService';
+import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
 import { ClusterItemBase } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
@@ -102,19 +102,16 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                     connectionString.username = username;
                     connectionString.password = password;
 
-                    let resourceType = 'clusters';
-                    if (this.cluster.emulatorConfiguration?.isEmulator) {
-                        resourceType = 'emulators';
-                    }
+                    const connectionType = this.cluster.emulatorConfiguration?.isEmulator
+                        ? ConnectionType.Emulators
+                        : ConnectionType.Clusters;
 
-                    const storage = StorageService.get(StorageNames.Connections);
-                    const items = await storage.getItems(resourceType);
-
-                    const item = items.find((item) => item.id === this.storageId);
+                    const items = await ConnectionStorageService.getItems(connectionType);
+                    const item = items.find((i) => i.id === this.storageId) as ConnectionItem | undefined;
                     if (item) {
-                        item.secrets = [connectionString.toString()];
+                        item.secrets = { connectionString: connectionString.toString() };
                         try {
-                            await storage.push(resourceType, item, true);
+                            await ConnectionStorageService.push(connectionType, item, true);
                         } catch (pushError) {
                             console.error(`Failed to save credentials for item "${this.id}":`, pushError);
                             void vscode.window.showErrorMessage(

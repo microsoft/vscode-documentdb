@@ -11,7 +11,7 @@ import { Views } from '../../documentdb/Views';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type DocumentDBResourceItem } from '../../plugins/service-azure/discovery-tree/documentdb/DocumentDBResourceItem';
-import { StorageNames, StorageService, type StorageItem } from '../../services/storageService';
+import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,
@@ -50,10 +50,10 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
             const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
             //  Sanity Check 1/2: is there a connection with the same username + host in there?
-            const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
+            const existingConnections = await ConnectionStorageService.getItems(ConnectionType.Clusters);
 
             const existingDuplicateConnection = existingConnections.find((item) => {
-                const secret = item.secrets?.[0];
+                const secret = item.secrets?.connectionString;
                 if (!secret) {
                     return false; // Skip if no secret string is found
                 }
@@ -84,14 +84,14 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
 
             const storageId = generateDocumentDBStorageId(newConnectionString);
 
-            const storageItem: StorageItem = {
+            const storageItem: ConnectionItem = {
                 id: storageId,
                 name: newConnectionLabel,
-                properties: { isEmulator: false, api: API.MongoClusters },
-                secrets: [newConnectionString],
+                properties: { api: API.MongoClusters, availableAuthMethods: [] },
+                secrets: { connectionString: newConnectionString },
             };
 
-            await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
+            await ConnectionStorageService.push(ConnectionType.Clusters, storageItem, true);
 
             await vscode.commands.executeCommand(`connectionsView.focus`);
             ext.connectionsBranchDataProvider.refresh();

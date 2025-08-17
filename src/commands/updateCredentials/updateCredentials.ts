@@ -10,7 +10,7 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
-import { StorageNames, StorageService } from '../../services/storageService';
+import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { refreshView } from '../refreshView/refreshView';
 import { ExecuteStep } from './ExecuteStep';
@@ -29,10 +29,12 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     // as the object is cached in the tree view, and in the 'retry/error' nodes
     // that's why we need to get the fresh one each time.
 
-    const resourceType = node.cluster.emulatorConfiguration?.isEmulator ? 'emulators' : 'clusters';
-    const storage = StorageService.get(StorageNames.Connections);
-    const currentItem = await storage.getItem(resourceType, node.storageId);
-    const connectionString = currentItem?.secrets?.[0] || '';
+    const resourceType = node.cluster.emulatorConfiguration?.isEmulator
+        ? ConnectionType.Emulators
+        : ConnectionType.Clusters;
+    const items = await ConnectionStorageService.getItems(resourceType);
+    const currentItem = items.find((i) => i.id === node.storageId) as ConnectionItem | undefined;
+    const connectionString = currentItem?.secrets?.connectionString || '';
     context.valuesToMask.push(connectionString);
 
     const parsedCS = new DocumentDBConnectionString(connectionString);

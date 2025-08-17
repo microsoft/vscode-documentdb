@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
+import { type ConnectionItem, ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
@@ -53,10 +53,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         const joinedHosts = [...newConnectionStringParsed.hosts].sort().join(',');
 
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
-        const existingConnections = await StorageService.get(StorageNames.Connections).getItems('emulators');
+        const existingConnections = await ConnectionStorageService.getItems(ConnectionType.Emulators);
 
         const existingDuplicateConnection = existingConnections.find((item) => {
-            const secret = item.secrets?.[0];
+            const secret = item.secrets?.connectionString;
             if (!secret) {
                 return false; // Skip if no secret string is found
             }
@@ -134,18 +134,18 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
 
             const connectionString = newConnectionStringParsed.toString();
 
-            const storageItem: StorageItem = {
+            const storageItem: ConnectionItem = {
                 id: generateDocumentDBStorageId(connectionString),
                 name: newConnectionLabel,
                 properties: {
                     api: experience.api === API.DocumentDB ? API.MongoClusters : experience.api,
-                    isEmulator,
-                    ...(disableEmulatorSecurity && { disableEmulatorSecurity }),
+                    emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
+                    availableAuthMethods: [],
                 },
-                secrets: [nonNullValue(connectionString)],
+                secrets: { connectionString: nonNullValue(connectionString) },
             };
 
-            await StorageService.get(StorageNames.Connections).push('emulators', storageItem, true);
+            await ConnectionStorageService.push(ConnectionType.Emulators, storageItem, true);
 
             // We're not refreshing the tree here, the new connection is a child node, the parent node will refresh itself
 

@@ -11,7 +11,7 @@ import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 
 import { Views } from '../../documentdb/Views';
-import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
+import { type ConnectionItem, ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,
@@ -40,10 +40,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
                 //  Sanity Check 1/2: is there a connection with the same username + host in there?
-                const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
+                const existingConnections = await ConnectionStorageService.getItems(ConnectionType.Clusters);
 
                 const existingDuplicateConnection = existingConnections.find((item) => {
-                    const secret = item.secrets?.[0];
+                    const secret = item.secrets?.connectionString;
                     if (!secret) {
                         return false; // Skip if no secret string is found
                     }
@@ -106,14 +106,14 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
                 const storageId = generateDocumentDBStorageId(connectionString);
 
-                const storageItem: StorageItem = {
+                const storageItem: ConnectionItem = {
                     id: storageId,
                     name: newConnectionLabel,
-                    properties: { isEmulator: false, api: api },
-                    secrets: [connectionString],
+                    properties: { api: api, availableAuthMethods: [] },
+                    secrets: { connectionString },
                 };
 
-                await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
+                await ConnectionStorageService.push(ConnectionType.Clusters, storageItem, true);
 
                 // Refresh the connections tree when adding a new root-level connection
                 if (parentId === undefined || parentId === '') {

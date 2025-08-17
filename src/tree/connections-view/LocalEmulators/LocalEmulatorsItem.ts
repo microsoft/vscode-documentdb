@@ -9,7 +9,11 @@ import * as vscode from 'vscode';
 import path from 'path';
 import { getResourcesPath, type IThemedIconPath } from '../../../constants';
 import { MongoClustersExperience } from '../../../DocumentDBExperiences';
-import { StorageNames, StorageService } from '../../../services/storageService';
+import {
+    ConnectionStorageService,
+    ConnectionType,
+    type ConnectionItem,
+} from '../../../services/connectionStorageService';
 import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
 import { type ClusterModelWithStorage } from '../../documentdb/ClusterModel';
 import { type TreeElement } from '../../TreeElement';
@@ -26,14 +30,13 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const emulatorItems = await StorageService.get(StorageNames.Connections).getItems('emulators');
+        const emulatorItems = await ConnectionStorageService.getItems(ConnectionType.Emulators);
         return [
-            ...emulatorItems.map((item) => {
-                // we need to create the emulator configuration object from
-                // the flat properties object
+            ...emulatorItems.map((item: ConnectionItem) => {
+                // we need to create the emulator configuration object from the typed properties object
                 const emulatorConfiguration: EmulatorConfiguration = {
                     isEmulator: true,
-                    disableEmulatorSecurity: !!item.properties?.disableEmulatorSecurity,
+                    disableEmulatorSecurity: !!item.properties?.emulatorConfiguration?.disableEmulatorSecurity,
                 };
 
                 const model: ClusterModelWithStorage = {
@@ -41,7 +44,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                     storageId: item.id,
                     name: item.name,
                     dbExperience: MongoClustersExperience,
-                    connectionString: item?.secrets?.[0],
+                    connectionString: item?.secrets?.connectionString,
                     emulatorConfiguration: emulatorConfiguration,
                 };
 
