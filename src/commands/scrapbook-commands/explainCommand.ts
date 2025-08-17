@@ -43,9 +43,9 @@ export async function explainCommand(_context: IActionContext, position?: vscode
             throw new Error(l10n.t('No database selected.'));
         }
 
-        // For MVP, we'll use a hardcoded collection name as suggested in the issue
-        // In practice, this would need to be extracted from the command or provided by user
-        const collectionName = 'collection'; // Hardcoded as suggested in the issue
+        // use regex to extract collection name from command text
+        const collectionNameMatch = command.text.match(/db\.(\w+)\./);
+        const collectionName = collectionNameMatch ? collectionNameMatch[1] : 'collection';
 
         const result = await client.explainQuery(databaseName, collectionName, command.text);
 
