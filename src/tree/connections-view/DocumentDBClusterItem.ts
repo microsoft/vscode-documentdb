@@ -106,7 +106,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         ? ConnectionType.Emulators
                         : ConnectionType.Clusters;
 
-                    const items = await ConnectionStorageService.get(connectionType);
+                    const items = await ConnectionStorageService.getAll(connectionType);
                     const item = items.find((i) => i.id === this.storageId) as ConnectionItem | undefined;
                     if (item) {
                         item.secrets = { connectionString: connectionString.toString() };

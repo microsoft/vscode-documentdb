@@ -14,7 +14,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameConnectionWizardCo
 
     public async execute(context: RenameConnectionWizardContext): Promise<void> {
         const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
-        const items = await ConnectionStorageService.get(resourceType);
+        const items = await ConnectionStorageService.getAll(resourceType);
 
         // TODO: create a getItem method in storageService, otherwise too many secrets
         // are being read from the storage

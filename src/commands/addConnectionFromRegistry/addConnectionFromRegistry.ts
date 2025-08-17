@@ -50,7 +50,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
             const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
             //  Sanity Check 1/2: is there a connection with the same username + host in there?
-            const existingConnections = await ConnectionStorageService.get(ConnectionType.Clusters);
+            const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
             const existingDuplicateConnection = existingConnections.find((item) => {
                 const secret = item.secrets?.connectionString;

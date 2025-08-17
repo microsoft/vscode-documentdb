@@ -188,14 +188,14 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
      * Helper function to get the root items of the connections tree.
      */
     private async getRootItems(parentId: string): Promise<TreeElement[] | null | undefined> {
-        const connectionItems = await ConnectionStorageService.get(ConnectionType.Clusters);
+        const connectionItems = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
         if (connectionItems.length === 0) {
             /**
              * we have a special case here as we want to show a "welcome screen" in the case when no connections were found.
              * However, we need to lookup the emulator items as well, so we need to check if there are any emulators.
              */
-            const emulatorItems = await ConnectionStorageService.get(ConnectionType.Emulators);
+            const emulatorItems = await ConnectionStorageService.getAll(ConnectionType.Emulators);
             if (emulatorItems.length === 0) {
                 return null;
             }

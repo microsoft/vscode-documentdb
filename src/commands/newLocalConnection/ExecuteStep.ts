@@ -53,7 +53,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         const joinedHosts = [...newConnectionStringParsed.hosts].sort().join(',');
 
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
-        const existingConnections = await ConnectionStorageService.get(ConnectionType.Emulators);
+        const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Emulators);
 
         const existingDuplicateConnection = existingConnections.find((item) => {
             const secret = item.secrets?.connectionString;

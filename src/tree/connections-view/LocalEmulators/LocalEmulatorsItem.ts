@@ -30,7 +30,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const emulatorItems = await ConnectionStorageService.get(ConnectionType.Emulators);
+        const emulatorItems = await ConnectionStorageService.getAll(ConnectionType.Emulators);
         return [
             ...emulatorItems.map((item: ConnectionItem) => {
                 // we need to create the emulator configuration object from the typed properties object
