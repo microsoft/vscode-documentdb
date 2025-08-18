@@ -14,7 +14,7 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { AuthMethod, isSupportedAuthMethod } from '../../../../documentdb/AuthMethod';
+import { AuthMethod, isSupportedAuthMethod } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
@@ -25,7 +25,7 @@ import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticat
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
-import { ClusterItemBase } from '../../../../tree/documentdb/ClusterItemBase';
+import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
 
@@ -82,6 +82,54 @@ export class DocumentDBResourceItem extends ClusterItemBase {
 
             return connectionString.toString();
         });
+    }
+
+    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+        return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
+            context.telemetry.properties.view = Views.DiscoveryView;
+            context.telemetry.properties.discoveryProvider = 'azure-discovery';
+
+            // Retrieve and validate cluster information (throws if invalid)
+            const clusterInformation = await this.getClusterInformation(context);
+            return this.extractCredentials(context, clusterInformation);
+        });
+    }
+
+    /**
+     * Extracts and processes credentials from cluster information.
+     * @param context The action context for telemetry and masking.
+     * @param clusterInformation The MongoCluster object containing cluster details.
+     * @returns A ClusterCredentials object.
+     */
+    private extractCredentials(context: IActionContext, clusterInformation: MongoCluster): ClusterCredentials {
+        // Ensure connection string and admin username are masked
+        if (clusterInformation.properties?.connectionString) {
+            context.valuesToMask.push(clusterInformation.properties.connectionString);
+        }
+        if (clusterInformation.properties?.administrator?.userName) {
+            context.valuesToMask.push(clusterInformation.properties.administrator.userName);
+        }
+
+        // Prepare credentials object.
+        const credentials: ClusterCredentials = {
+            connectionString: clusterInformation.properties!.connectionString!,
+            connectionUser: clusterInformation.properties?.administrator?.userName,
+            availableAuthMethods: [],
+        };
+
+        const allowedModes = clusterInformation.properties?.authConfig?.allowedModes ?? [];
+        context.telemetry.properties.receivedAuthMethods = allowedModes.join(',');
+
+        for (const method of allowedModes) {
+            if (isSupportedAuthMethod(method)) {
+                credentials.availableAuthMethods.push(method);
+            } else {
+                context.telemetry.properties.warning = 'unknown-authmethod';
+                console.warn(`Unknown auth method from Azure SDK: ${method}`);
+            }
+        }
+
+        return credentials;
     }
 
     /**
@@ -147,25 +195,14 @@ export class DocumentDBResourceItem extends ClusterItemBase {
 
             // Get and validate cluster information
             const clusterInformation = await this.getClusterInformation(context);
-            const authMethods = (clusterInformation.properties?.authConfig as { allowedModes: string[] }).allowedModes;
+            const credentials = this.extractCredentials(context, clusterInformation);
 
             // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
-                adminUserName: clusterInformation.properties?.administrator?.userName,
+                adminUserName: credentials.connectionUser,
                 resourceName: this.cluster.name,
-                availableAuthMethods: [
-                    ...new Set(
-                        authMethods.map((method: string) => {
-                            if (!isSupportedAuthMethod(method)) {
-                                context.telemetry.properties.warning = 'unknown-authmethod';
-                                context.telemetry.properties.authMethod = method;
-                                console.warn(`Unknown auth method from Azure SDK: ${method}`);
-                            }
-                            return method;
-                        }),
-                    ),
-                ],
+                availableAuthMethods: credentials.availableAuthMethods,
             };
 
             // Prompt for credentials
@@ -182,7 +219,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             CredentialCache.setAuthCredentials(
                 this.id,
                 nonNullValue(wizardContext.selectedAuthMethod, 'authMethod'),
-                nonNullValue(clusterInformation.properties?.connectionString),
+                nonNullValue(credentials.connectionString),
                 wizardContext.selectedUserName,
                 wizardContext.password,
             );

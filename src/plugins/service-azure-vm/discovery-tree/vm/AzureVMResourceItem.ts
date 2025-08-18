@@ -23,7 +23,7 @@ import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/a
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
-import { ClusterItemBase } from '../../../../tree/documentdb/ClusterItemBase';
+import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 
 // Define a model for VM, similar to ClusterModel but for VM properties
@@ -36,6 +36,10 @@ export interface VirtualMachineModel extends ClusterModel {
 const DEFAULT_PORT = 27017;
 
 export class AzureVMResourceItem extends ClusterItemBase {
+    public getCredentials(): Promise<ClusterCredentials | undefined> {
+        throw new Error('Method not implemented.');
+    }
+
     iconPath = new vscode.ThemeIcon('server-environment');
 
     constructor(

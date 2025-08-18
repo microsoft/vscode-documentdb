@@ -24,11 +24,14 @@ import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/Provi
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
-import { ClusterItemBase } from '../documentdb/ClusterItemBase';
+import { ClusterItemBase, type ClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 
 export class DocumentDBClusterItem extends ClusterItemBase implements TreeElementWithStorageId {
+    public getCredentials(): Promise<ClusterCredentials | undefined> {
+        throw new Error('Method not implemented.');
+    }
     public override readonly cluster: ClusterModelWithStorage;
 
     constructor(mongoCluster: ClusterModelWithStorage) {

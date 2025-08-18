@@ -5,7 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
-import { type AuthMethod } from '../../AuthMethod';
+import { type AuthMethod } from '../../auth/AuthMethod';
 
 export interface AuthenticateWizardContext extends IActionContext {
     /** These values have to be provided for the wizard to function correctly. */

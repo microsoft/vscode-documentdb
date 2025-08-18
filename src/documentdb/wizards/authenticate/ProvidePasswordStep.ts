@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { AuthMethod } from '../../AuthMethod';
+import { AuthMethod } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 
 export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizardContext> {

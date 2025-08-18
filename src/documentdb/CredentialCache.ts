@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
-import { type AuthMethod } from './AuthMethod';
+import { type AuthMethod } from './auth/AuthMethod';
 import { addAuthenticationDataToConnectionString } from './utils/connectionStringHelpers';
 
 export interface ClustersCredentials {
