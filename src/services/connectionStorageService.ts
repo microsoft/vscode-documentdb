@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AuthMethod } from '../documentdb/auth/AuthMethod';
+import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
 import { StorageNames, StorageService, type Storage, type StorageItem } from './storageService';
 
@@ -159,6 +160,13 @@ export class ConnectionStorageService {
      * @returns A `ConnectionItem` in the v2 format.
      */
     private static migrateToV2(item: StorageItem): ConnectionItem {
+        // in V2, the connection string shouldn't contain the username/password combo
+        const parsedCS = new DocumentDBConnectionString(item?.secrets?.[0] ?? '');
+        const username = parsedCS.username;
+        const password = parsedCS.password;
+        parsedCS.username = '';
+        parsedCS.password = '';
+
         return {
             id: item.id,
             name: item.name,
@@ -169,9 +177,12 @@ export class ConnectionStorageService {
                     disableEmulatorSecurity: !!item.properties?.disableEmulatorSecurity,
                 },
                 availableAuthMethods: [AuthMethod.NativeAuth],
+                selectedAuthMethod: AuthMethod.NativeAuth,
             },
             secrets: {
-                connectionString: item?.secrets?.[0] ?? '',
+                connectionString: parsedCS.toString(),
+                userName: username,
+                password: password,
             },
         };
     }
