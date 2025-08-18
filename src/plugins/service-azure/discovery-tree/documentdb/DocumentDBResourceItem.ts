@@ -290,14 +290,20 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         });
 
         // Prompt the user for credentials
+        await callWithTelemetryAndErrorHandling('connect.promptForCredentials', async (context: IActionContext) => {
+            context.telemetry.properties.view = Views.DiscoveryView;
+            context.telemetry.properties.discoveryProvider = 'azure-discovery';
 
-        try {
-            await wizard.prompt(); // This will prompt the user; results are stored in wizardContext
-        } catch (error) {
-            if (error instanceof UserCancelledError) {
-                wizardContext.aborted = true;
+            context.errorHandling.rethrow = true;
+            context.errorHandling.suppressDisplay = false;
+            try {
+                await wizard.prompt(); // This will prompt the user; results are stored in wizardContext
+            } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    wizardContext.aborted = true;
+                }
             }
-        }
+        });
 
         // Return true if the wizard completed successfully; false otherwise
         return !wizardContext.aborted;

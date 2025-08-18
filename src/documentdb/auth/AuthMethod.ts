@@ -26,3 +26,15 @@ export type AuthMethod = (typeof AuthMethod)[keyof typeof AuthMethod];
 export function isSupportedAuthMethod(method: string): method is AuthMethod {
     return Object.values(AuthMethod).includes(method as AuthMethod);
 }
+
+/**
+ * Converts a string to an AuthMethod enum value.
+ * @param method The string to convert.
+ * @returns The corresponding AuthMethod, or undefined if no match is found.
+ */
+export function authMethodFromString(method: string | undefined): AuthMethod | undefined {
+    if (method && isSupportedAuthMethod(method)) {
+        return method;
+    }
+    return undefined;
+}
