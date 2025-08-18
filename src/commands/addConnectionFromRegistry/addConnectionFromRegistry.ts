@@ -32,34 +32,37 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
             cancellable: false,
         },
         async () => {
-            const newConnectionString = await ext.state.runWithTemporaryDescription(
+            const newCredentials = await ext.state.runWithTemporaryDescription(
                 node.id,
                 l10n.t('Working…'),
                 async () => {
                     context.telemetry.properties.experience = node.experience.api;
 
-                    return node.getConnectionString();
+                    return node.getCredentials();
                 },
             );
 
-            if (!newConnectionString) {
-                throw new Error(l10n.t('Unable to retrieve connection string for the selected cluster.'));
+            if (!newCredentials) {
+                throw new Error(l10n.t('Unable to retrieve credentials for the selected cluster.'));
             }
 
-            const parsedCS = new DocumentDBConnectionString(newConnectionString);
-            const joinedHosts = [...parsedCS.hosts].sort().join(',');
+            const newParsedCS = new DocumentDBConnectionString(newCredentials.connectionString);
+            newParsedCS.username = newCredentials.connectionUser || newParsedCS.username;
+            const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
 
             //  Sanity Check 1/2: is there a connection with the same username + host in there?
             const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
-            const existingDuplicateConnection = existingConnections.find((connection) => {
-                const secret = connection.secrets?.connectionString;
-                if (!secret) {
+            const existingDuplicateConnection = existingConnections.find((existingConnection) => {
+                if (!existingConnection.secrets?.connectionString) {
                     return false; // Skip if no secret string is found
                 }
-
-                const itemCS = new DocumentDBConnectionString(secret);
-                return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
+                const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
+                const existingHostsJoined = [...existingCS.hosts].sort().join(',');
+                return (
+                    existingConnection.secrets?.userName === newParsedCS.username &&
+                    existingHostsJoined === newJoinedHosts
+                );
             });
 
             if (existingDuplicateConnection) {
@@ -80,25 +83,31 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
             }
 
             const newConnectionLabel =
-                parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
+                newParsedCS.username && newParsedCS.username.length > 0
+                    ? `${newParsedCS.username}@${newJoinedHosts}`
+                    : newJoinedHosts;
 
-            const storageId = generateDocumentDBStorageId(newConnectionString);
+            const storageId = generateDocumentDBStorageId(newCredentials.connectionString);
 
-            const storageItem: ConnectionItem = {
+            const connectionItem: ConnectionItem = {
                 id: storageId,
                 name: newConnectionLabel,
-                properties: { api: API.MongoClusters, availableAuthMethods: [] },
-                secrets: { connectionString: newConnectionString },
+                properties: { api: API.DocumentDB, availableAuthMethods: newCredentials.availableAuthMethods },
+                secrets: {
+                    connectionString: newCredentials.connectionString,
+                    userName: newCredentials.connectionUser,
+                    password: newCredentials.connectionPassword,
+                },
             };
 
-            await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
+            await ConnectionStorageService.save(ConnectionType.Clusters, connectionItem, true);
 
             await vscode.commands.executeCommand(`connectionsView.focus`);
             ext.connectionsBranchDataProvider.refresh();
             await waitForConnectionsViewReady(context);
 
             // Reveal the connection
-            const connectionPath = buildConnectionsViewTreePath(storageItem.id, false);
+            const connectionPath = buildConnectionsViewTreePath(connectionItem.id, false);
             await revealConnectionsViewElement(context, connectionPath, {
                 select: true,
                 focus: false,

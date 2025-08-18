@@ -41,6 +41,7 @@ export interface ConnectionItem {
     name: string;
     properties: ConnectionProperties;
     secrets?: {
+        /** assume that the connection string doesn't contain the username and password */
         connectionString: string;
         userName?: string;
         password?: string;

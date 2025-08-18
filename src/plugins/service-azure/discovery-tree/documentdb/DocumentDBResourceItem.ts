@@ -110,9 +110,14 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             context.valuesToMask.push(clusterInformation.properties.administrator.userName);
         }
 
+        // we need to sanitize the data sent from azure, it contains placeholders for the username and the password
+        const parsedCS = new DocumentDBConnectionString(clusterInformation.properties!.connectionString!);
+        parsedCS.username = '';
+        parsedCS.password = '';
+
         // Prepare credentials object.
         const credentials: ClusterCredentials = {
-            connectionString: clusterInformation.properties!.connectionString!,
+            connectionString: parsedCS.toString(),
             connectionUser: clusterInformation.properties?.administrator?.userName,
             availableAuthMethods: [],
         };

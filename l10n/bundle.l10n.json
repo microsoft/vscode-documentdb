@@ -433,7 +433,7 @@
   "Unable to connect to the local database instance. Make sure it is started correctly. See {link} for tips.": "Unable to connect to the local database instance. Make sure it is started correctly. See {link} for tips.",
   "Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.": "Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.",
   "Unable to parse syntax near line {line}, col {column}: {message}": "Unable to parse syntax near line {line}, col {column}: {message}",
-  "Unable to retrieve connection string for the selected cluster.": "Unable to retrieve connection string for the selected cluster.",
+  "Unable to retrieve credentials for the selected cluster.": "Unable to retrieve credentials for the selected cluster.",
   "Unexpected status code: {0}": "Unexpected status code: {0}",
   "Unknown authentication method (experimental support)": "Unknown authentication method (experimental support)",
   "Unknown error": "Unknown error",
