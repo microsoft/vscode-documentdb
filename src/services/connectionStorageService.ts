@@ -5,7 +5,7 @@
 
 import { AuthMethod } from '../documentdb/auth/AuthMethod';
 import { API } from '../DocumentDBExperiences';
-import { type StorageItem, StorageNames, StorageService } from './storageService';
+import { StorageNames, StorageService, type Storage, type StorageItem } from './storageService';
 
 export enum ConnectionType {
     Clusters = 'clusters',
@@ -71,7 +71,17 @@ const enum SecretIndex {
  * underlying storage and migration complexity.
  */
 export class ConnectionStorageService {
-    private static readonly storageService = StorageService.get(StorageNames.Connections);
+    // Lazily-initialized underlying storage instance. We must not call StorageService.get
+    // at module-load time because `ext.context` may not be available until the extension
+    // is activated. Create the Storage on first access instead.
+    private static _storageService: Storage | undefined;
+
+    private static get storageService(): Storage {
+        if (!this._storageService) {
+            this._storageService = StorageService.get(StorageNames.Connections);
+        }
+        return this._storageService;
+    }
 
     public static async getAll(connectionType: ConnectionType): Promise<ConnectionItem[]> {
         const items = await this.storageService.getItems<ConnectionProperties>(connectionType);
