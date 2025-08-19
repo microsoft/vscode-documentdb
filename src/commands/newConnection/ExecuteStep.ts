@@ -33,23 +33,26 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             },
             async () => {
                 const api = context.experience?.api ?? API.DocumentDB;
-                const connectionString = context.connectionString!;
                 const parentId = context.parentId;
 
-                const parsedCS = new DocumentDBConnectionString(connectionString);
-                const joinedHosts = [...parsedCS.hosts].sort().join(',');
+                const newConnectionString = context.connectionString!;
+                const newPassword = context.password;
+                const newUsername = context.username;
+                const newAuthenticationMethod = context.authenticationMethod;
+
+                const newParsedCS = new DocumentDBConnectionString(newConnectionString);
+                const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
 
                 //  Sanity Check 1/2: is there a connection with the same username + host in there?
                 const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
-                const existingDuplicateConnection = existingConnections.find((connection) => {
-                    const secret = connection.secrets?.connectionString;
-                    if (!secret) {
-                        return false; // Skip if no secret string is found
-                    }
+                const existingDuplicateConnection = existingConnections.find((existingConnection) => {
+                    const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
+                    const existingHostsJoined = [...existingCS.hosts].sort().join(',');
 
-                    const itemCS = new DocumentDBConnectionString(secret);
-                    return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
+                    return (
+                        existingConnection.secrets.userName === newUsername && existingHostsJoined === newJoinedHosts
+                    );
                 });
 
                 if (existingDuplicateConnection) {
@@ -70,17 +73,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 }
 
                 let newConnectionLabel =
-                    parsedCS.username && parsedCS.username.length > 0
-                        ? `${parsedCS.username}@${joinedHosts}`
-                        : joinedHosts;
+                    newUsername && newUsername.length > 0 ? `${newUsername}@${newJoinedHosts}` : newJoinedHosts;
 
                 // Sanity Check 2/2: is there a connection with the same 'label' in there?
                 // If so, append a number to the label.
                 // This scenario is possible as users are allowed to rename their connections.
-
                 let existingDuplicateLabel = existingConnections.find(
                     (connection) => connection.name === newConnectionLabel,
                 );
+
                 // If a connection with the same label exists, append a number to the label
                 while (existingDuplicateLabel) {
                     /**
@@ -108,13 +109,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
                 // Now, we're safe to create a new connection with the new unique label
 
-                const storageId = generateDocumentDBStorageId(connectionString);
+                const storageId = generateDocumentDBStorageId(newConnectionString);
 
                 const storageItem: ConnectionItem = {
                     id: storageId,
                     name: newConnectionLabel,
-                    properties: { api: api, availableAuthMethods: [] },
-                    secrets: { connectionString },
+                    properties: {
+                        api: api,
+                        availableAuthMethods: newAuthenticationMethod ? [newAuthenticationMethod] : [],
+                        selectedAuthMethod: newAuthenticationMethod,
+                    },
+                    secrets: { connectionString: newConnectionString, userName: newUsername, password: newPassword },
                 };
 
                 await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);

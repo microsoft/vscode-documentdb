@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type AuthMethod } from '../../documentdb/auth/AuthMethod';
 import { type DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type Experience } from '../../DocumentDBExperiences';
 
@@ -19,6 +20,7 @@ export interface NewConnectionWizardContext extends IActionContext {
     connectionString?: string;
     parsedConnectionString?: URL | DocumentDBConnectionString;
 
+    authenticationMethod?: AuthMethod;
     username?: string;
     password?: string;
 

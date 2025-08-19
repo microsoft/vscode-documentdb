@@ -5,6 +5,7 @@
 
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { AuthMethod } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
@@ -30,8 +31,8 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
         context.valuesToMask.push(username);
     }
 
-    public shouldPrompt(): boolean {
-        return true;
+    public shouldPrompt(context: NewConnectionWizardContext): boolean {
+        return context.authenticationMethod === AuthMethod.NativeAuth;
     }
 
     public validateInput(context: NewConnectionWizardContext, username: string | undefined): string | undefined {

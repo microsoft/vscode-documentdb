@@ -54,13 +54,10 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
             const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
             const existingDuplicateConnection = existingConnections.find((existingConnection) => {
-                if (!existingConnection.secrets?.connectionString) {
-                    return false; // Skip if no secret string is found
-                }
                 const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
                 const existingHostsJoined = [...existingCS.hosts].sort().join(',');
                 return (
-                    existingConnection.secrets?.userName === newParsedCS.username &&
+                    existingConnection.secrets.userName === newParsedCS.username &&
                     existingHostsJoined === newJoinedHosts
                 );
             });

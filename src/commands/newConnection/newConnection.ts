@@ -23,6 +23,7 @@ export async function newConnection(context: IActionContext): Promise<void> {
         promptSteps: [new PromptConnectionModeStep()],
         executeSteps: [],
         showLoadingPrompt: true,
+        hideStepCount: true, // it's incorrect as we have optional steps and subwizards: better hide the count
     });
 
     await wizard.prompt();
