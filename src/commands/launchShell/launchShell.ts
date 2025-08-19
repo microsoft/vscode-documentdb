@@ -7,6 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { isWindows } from '../../constants';
+import { AuthMethod } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -31,35 +32,77 @@ export async function launchShell(
     context.telemetry.properties.experience = node.experience.api;
     context.telemetry.properties.isWindows = isWindows.toString();
 
-    let rawConnectionString: string | undefined;
+    let connectionString: string | undefined = undefined;
+    let connectionUser: string | undefined = undefined;
+    let connectionPassword: string | undefined;
+    let authMechanism: AuthMethod | undefined;
 
     // connection string discovery for these items can be slow, so we need to run it with a temporary description
-
     if (node instanceof ClusterItemBase) {
-        // connecting at the account level
-        // we need to discover the connection string
-        rawConnectionString = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
-            return node.getConnectionString();
-        });
+        // connecting at the account level, not connected, we need to discover options
+        const discoveredClusterCredentials = await ext.state.runWithTemporaryDescription(
+            node.id,
+            l10n.t('Working…'),
+            async () => {
+                return node.getCredentials();
+            },
+        );
+
+        if (discoveredClusterCredentials) {
+            if (
+                discoveredClusterCredentials.availableAuthMethods.find(
+                    (authMethod) => authMethod === AuthMethod.NativeAuth,
+                )
+            ) {
+                connectionString = discoveredClusterCredentials.connectionString;
+                connectionUser = discoveredClusterCredentials.connectionUser;
+                connectionPassword = discoveredClusterCredentials.connectionPassword;
+                authMechanism = AuthMethod.NativeAuth;
+            } else {
+                // Only SCRAM-SHA-256 (username/password) authentication is supported here.
+                // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
+                // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
+                throw Error(
+                    l10n.t(
+                        'Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.',
+                    ),
+                );
+            }
+        }
     } else {
         // node is instanceof DatabaseItem or CollectionItem and we alrady have the connection string somewhere
         const client: ClustersClient = await ClustersClient.getClient(node.cluster.id);
-        rawConnectionString = client.getConnectionStringWithPassword();
+        const clusterCredentials = client.getCredentials();
+        if (clusterCredentials) {
+            connectionString = clusterCredentials.connectionString;
+            connectionUser = clusterCredentials.connectionString;
+            connectionPassword = clusterCredentials.connectionPassword;
+            authMechanism = clusterCredentials.authMechanism;
+        }
     }
 
-    if (!rawConnectionString) {
-        void vscode.window.showErrorMessage(l10n.t('Failed to extract the connection string from the selected node.'));
+    if (!connectionString) {
+        void vscode.window.showErrorMessage(l10n.t('Failed to extract cluster credentials from the selected node.'));
         return;
     }
-    context.valuesToMask.push(rawConnectionString);
 
-    const connectionString: DocumentDBConnectionString = new DocumentDBConnectionString(rawConnectionString);
-    maskSensitiveValuesInTelemetry(context, connectionString);
+    if (authMechanism !== AuthMethod.NativeAuth) {
+        // Only SCRAM-SHA-256 (username/password) authentication is supported here.
+        // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
+        // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
+        throw Error(
+            l10n.t('Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.'),
+        );
+    }
+
+    const parsedConnectionString: DocumentDBConnectionString = new DocumentDBConnectionString(connectionString);
+    parsedConnectionString.username = connectionUser ?? '';
+    maskSensitiveValuesInTelemetry(context, parsedConnectionString);
 
     // Note to code maintainers:
     // We're encoding the password to ensure it is safe to use in the connection string
     // shared with the shell process.
-    const shellSafePassword = encodeURIComponent(connectionString.password);
+    const shellSafePassword = encodeURIComponent(connectionPassword ?? '');
     context.valuesToMask.push(shellSafePassword);
 
     // Use unique environment variable names to avoid conflicts
@@ -122,15 +165,15 @@ export async function launchShell(
     // variable reference after toString() is called, we ensure the shell correctly interprets the
     // environment variable.
     const PASSWORD_SENTINEL = '__MONGO_PASSWORD_PLACEHOLDER__';
-    connectionString.password = PASSWORD_SENTINEL;
+    parsedConnectionString.password = PASSWORD_SENTINEL;
 
     // If the username or password is empty, remove them from the connection string to avoid invalid connection strings
-    if (!connectionString.username || !shellSafePassword) {
-        connectionString.password = '';
+    if (!parsedConnectionString.username || !shellSafePassword) {
+        parsedConnectionString.password = '';
     }
 
     if ('databaseInfo' in node && node.databaseInfo?.name) {
-        connectionString.pathname = node.databaseInfo.name;
+        parsedConnectionString.pathname = node.databaseInfo.name;
     }
 
     // } else if (node instanceof CollectionItem) { // --> --eval terminates, we'd have to launch with a script etc. let's look into it latter
@@ -139,7 +182,7 @@ export async function launchShell(
     // }
 
     const terminal: vscode.Terminal = vscode.window.createTerminal({
-        name: `MongoDB Shell (${connectionString.username || 'default'})`, // Display actual username or a default
+        name: `MongoDB Shell (${parsedConnectionString.username || 'default'})`, // Display actual username or a default
         hideFromUser: false,
         env: {
             [uniquePassEnvVar]: shellSafePassword,
@@ -158,7 +201,7 @@ export async function launchShell(
     const tlsConfiguration = isEmulatorWithSecurityDisabled ? '--tlsAllowInvalidCertificates' : '';
 
     // Get the connection string and replace the sentinel with the environment variable syntax
-    const finalConnectionString = connectionString.toString().replace(PASSWORD_SENTINEL, envVarSyntax);
+    const finalConnectionString = parsedConnectionString.toString().replace(PASSWORD_SENTINEL, envVarSyntax);
 
     terminal.sendText(`mongosh "${finalConnectionString}" ${tlsConfiguration}`);
     terminal.show();
