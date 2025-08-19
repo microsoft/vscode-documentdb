@@ -40,17 +40,17 @@ export class DocumentDbDocumentReader implements DocumentReader {
      *
      * @param connectionId Connection identifier to get the DocumentDB client
      * @param databaseName Name of the database
-     * @param collectionName Name of the collection,
-     * @param filter Optional filter to apply to the count operation (default is '{}')
+     * @param collectionName Name of the collection
      * @returns Promise resolving to the document count
      */
-    async countDocuments(
-        connectionId: string,
-        databaseName: string,
-        collectionName: string,
-        filter: string = '{}',
-    ): Promise<number> {
+    async countDocuments(connectionId: string, databaseName: string, collectionName: string): Promise<number> {
         const client = await ClustersClient.getClient(connectionId);
-        return await client.countDocuments(databaseName, collectionName, filter);
+        // Currently we use estimatedDocumentCount to get a rough idea of the document count
+        // estimatedDocumentCount evaluates document counts based on metadata with O(1) complexity
+        // We gain performance benefits by avoiding a full collection scan, especially for large collections
+        //
+        // NOTE: estimatedDocumentCount doesn't support filtering
+        //       so we need to provide alternative count method for filtering implementation in later iteration
+        return await client.estimateDocumentCount(databaseName, collectionName);
     }
 }
