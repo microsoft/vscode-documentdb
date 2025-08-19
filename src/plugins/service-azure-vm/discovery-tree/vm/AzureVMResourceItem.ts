@@ -14,6 +14,7 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { AuthMethod } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
@@ -36,10 +37,6 @@ export interface VirtualMachineModel extends ClusterModel {
 const DEFAULT_PORT = 27017;
 
 export class AzureVMResourceItem extends ClusterItemBase {
-    public getCredentials(): Promise<ClusterCredentials | undefined> {
-        throw new Error('Method not implemented.');
-    }
-
     iconPath = new vscode.ThemeIcon('server-environment');
 
     constructor(
@@ -69,8 +66,8 @@ export class AzureVMResourceItem extends ClusterItemBase {
         this.tooltipOverride = new vscode.MarkdownString(tooltipParts.join('\n\n'));
     }
 
-    public async getConnectionString(): Promise<string | undefined> {
-        return callWithTelemetryAndErrorHandling('getConnectionString', async (context: IActionContext) => {
+    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+        return callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.discoveryProvider = 'azure-vm-discovery';
             context.telemetry.properties.view = Views.DiscoveryView;
 
@@ -146,7 +143,12 @@ export class AzureVMResourceItem extends ClusterItemBase {
 
             parsedCS.hosts = newHosts;
 
-            return parsedCS.toString();
+            return {
+                connectionString: parsedCS.toString(),
+                connectionUser: parsedCS.username,
+                connectionPassword: parsedCS.password,
+                availableAuthMethods: [AuthMethod.NativeAuth],
+            };
         });
     }
 
@@ -157,7 +159,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            context.telemetry.properties.discoveryProvider = 'azure-discovery';
+            context.telemetry.properties.discoveryProvider = 'azure-vm-discovery';
             context.telemetry.properties.view = Views.DiscoveryView;
 
             ext.outputChannel.appendLine(
@@ -167,7 +169,8 @@ export class AzureVMResourceItem extends ClusterItemBase {
             );
 
             // Construct the final connection string with user-provided credentials
-            const connectionString = await this.getConnectionString();
+            const connectionString = (await this.getCredentials())?.connectionString;
+
             context.valuesToMask.push(nonNullValue(connectionString, 'connectionString'));
 
             const finalConnectionString = new DocumentDBConnectionString(

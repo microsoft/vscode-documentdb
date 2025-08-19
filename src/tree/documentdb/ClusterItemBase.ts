@@ -84,16 +84,6 @@ export abstract class ClusterItemBase
     protected abstract authenticateAndConnect(): Promise<ClustersClient | null>;
 
     /**
-     * Abstract method to get the connection string for the MongoDB cluster.
-     * Must be implemented by subclasses.
-     *
-     * @deprecated This function is going to be replaced with `getCredentials`
-     *
-     * @returns A promise that resolves to the connection string if successful; otherwise, undefined.
-     */
-    public abstract getConnectionString(): Promise<string | undefined>;
-
-    /**
      * Abstract method to get the credentials for the MongoDB cluster.
      * Must be implemented by subclasses.
      * This is relevant for service discovery scenarios

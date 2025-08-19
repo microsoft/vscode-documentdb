@@ -296,6 +296,7 @@
   "No commands found in this document.": "No commands found in this document.",
   "No Connectivity": "No Connectivity",
   "No credentials found for id {credentialId}": "No credentials found for id {credentialId}",
+  "No credentials found for the selected cluster.": "No credentials found for the selected cluster.",
   "No matching resources found.": "No matching resources found.",
   "No node selected.": "No node selected.",
   "No properties found in the schema at path \"{0}\"": "No properties found in the schema at path \"{0}\"",

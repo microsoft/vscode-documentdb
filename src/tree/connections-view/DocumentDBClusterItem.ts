@@ -41,12 +41,27 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
         return this.cluster.storageId;
     }
 
-    public getConnectionString(): Promise<string | undefined> {
-        return Promise.resolve(this.cluster.connectionString);
-    }
+    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+        const connectionType = this.cluster.emulatorConfiguration?.isEmulator
+            ? ConnectionType.Emulators
+            : ConnectionType.Clusters;
+        const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
-    public getCredentials(): Promise<ClusterCredentials | undefined> {
-        throw new Error('Method not implemented.');
+        if (!connectionCredentials) {
+            return undefined;
+        }
+
+        const rawMethods = connectionCredentials.properties.availableAuthMethods;
+        const availableAuthMethods: AuthMethod[] = Array.isArray(rawMethods)
+            ? rawMethods.map((m) => authMethodFromString(m)).filter((m) => typeof m !== 'undefined')
+            : [];
+
+        return {
+            connectionString: connectionCredentials.secrets.connectionString,
+            connectionUser: connectionCredentials.secrets.userName,
+            connectionPassword: connectionCredentials.secrets.password,
+            availableAuthMethods,
+        };
     }
 
     /**

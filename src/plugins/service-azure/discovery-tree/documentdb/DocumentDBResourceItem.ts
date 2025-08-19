@@ -17,8 +17,6 @@ import * as vscode from 'vscode';
 import { AuthMethod } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
-import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
-import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
@@ -27,7 +25,6 @@ import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate
 import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
-import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
 import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../../utils/clusterHelpers';
 
 export class DocumentDBResourceItem extends ClusterItemBase {
@@ -47,42 +44,6 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         cluster: ClusterModel,
     ) {
         super(cluster);
-    }
-
-    public async getConnectionString(): Promise<string | undefined> {
-        return callWithTelemetryAndErrorHandling('getConnectionString', async (context: IActionContext) => {
-            context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-discovery';
-
-            // Create a client to interact with the MongoDB vCore management API and read the cluster details
-            const managementClient = await createMongoClustersManagementClient(context, this.subscription);
-
-            const clusterInformation = await managementClient.mongoClusters.get(
-                this.cluster.resourceGroup!,
-                this.cluster.name,
-            );
-
-            if (!clusterInformation.properties?.connectionString) {
-                return undefined;
-            }
-
-            context.valuesToMask.push(clusterInformation.properties.connectionString);
-            const connectionString = new DocumentDBConnectionString(clusterInformation.properties.connectionString);
-            maskSensitiveValuesInTelemetry(context, connectionString);
-
-            if (clusterInformation.properties?.administrator?.userName) {
-                context.valuesToMask.push(clusterInformation.properties.administrator.userName);
-                connectionString.username = clusterInformation.properties.administrator.userName;
-            }
-
-            /**
-             * The connection string returned from Azure does not include the actual password.
-             * Instead, it contains a placeholder. We explicitly set the password to an empty string here.
-             */
-            connectionString.password = '';
-
-            return connectionString.toString();
-        });
     }
 
     public async getCredentials(): Promise<ClusterCredentials | undefined> {

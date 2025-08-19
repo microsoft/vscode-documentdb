@@ -7,6 +7,7 @@ import { nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils
 import * as l10n from '@vscode/l10n';
 import { QuickPickItemKind, type QuickPickItem } from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { MigrationService } from '../../services/migrationServices';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { openUrl } from '../../utils/openUrl';
@@ -95,8 +96,17 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
 
             try {
                 // Construct the options object with available context
+                const creds = await node.getCredentials();
+                if (!creds) {
+                    throw new Error(l10n.t('No credentials found for the selected cluster.'));
+                }
+
+                const parsedCS = new DocumentDBConnectionString(creds.connectionString);
+                parsedCS.username = creds?.connectionUser ?? '';
+                parsedCS.password = creds?.connectionPassword ?? '';
+
                 const options = {
-                    connectionString: await node.getConnectionString(),
+                    connectionString: parsedCS.toString(),
                     extendedProperties: {
                         clusterId: node.cluster.id,
                     },

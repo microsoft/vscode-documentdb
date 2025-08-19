@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 
@@ -21,7 +22,16 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
     const connectionString = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
         context.telemetry.properties.experience = node.experience.api;
 
-        return node.getConnectionString();
+        const creds = await node.getCredentials();
+
+        if (!creds) {
+            return;
+        }
+
+        const parsedConnectionString = new DocumentDBConnectionString(creds.connectionString);
+        parsedConnectionString.username = creds.connectionUser ?? '';
+
+        return parsedConnectionString.toString();
     });
 
     if (!connectionString) {
