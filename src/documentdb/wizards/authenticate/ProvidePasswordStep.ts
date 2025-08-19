@@ -19,6 +19,7 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizar
                 username_at_resource: `${context.selectedUserName}@${context.resourceName}`,
             }),
             title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
+            value: context.password ?? '',
             password: true,
             ignoreFocusOut: true,
         });
@@ -30,12 +31,8 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizar
     }
 
     public shouldPrompt(context: AuthenticateWizardContext): boolean {
-        // If availableAuthMethods is provided, only prompt when native auth is selected and password is undefined
-        if (context.availableAuthMethods) {
-            return context.selectedAuthMethod === AuthMethod.NativeAuth && context.password === undefined;
-        }
-
-        // If availableAuthMethods is not provided, prompt when password is undefined
-        return context.password === undefined;
+        // with no availableAuthMethods, we're in the 'old' mode, so we just prompt for the password,
+        // otherwise, we prompt only with only for NativeAuth
+        return !context.availableAuthMethods || context.selectedAuthMethod === AuthMethod.NativeAuth;
     }
 }

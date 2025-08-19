@@ -112,12 +112,12 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                     selectedAuthMethod: authMethod,
 
                     // provide the default value for the username
-                    adminUserName: username && username.length > 0 ? username : undefined,
+                    adminUserName: username,
+                    password: password,
                     resourceName: this.cluster.name,
 
                     // enforce the user to confirm theusername
                     selectedUserName: undefined,
-                    // no setting needed for password, we'll always ask for the password
                 };
 
                 // Prompt the user for credentials using the extracted method
