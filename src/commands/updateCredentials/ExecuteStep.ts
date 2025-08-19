@@ -29,12 +29,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
             const connectionString = connection.secrets.connectionString;
 
             const parsedConnectionString = new DocumentDBConnectionString(connectionString);
-            parsedConnectionString.username = context.username || '';
-            parsedConnectionString.password = context.password || '';
+            parsedConnectionString.username = '';
+            parsedConnectionString.password = '';
 
             // Update the item in storage
 
-            connection.secrets = { ...connection.secrets, connectionString: parsedConnectionString.toString() };
+            connection.secrets = {
+                ...connection.secrets,
+                connectionString: parsedConnectionString.toString(),
+                userName: context.username || '',
+                password: context.password || '',
+            };
 
             try {
                 await ConnectionStorageService.save(resourceType, connection, true);
