@@ -3,19 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    AzureWizardExecuteStep,
-    callWithTelemetryAndErrorHandling,
-    type IActionContext,
-} from '@microsoft/vscode-azext-utils';
+import { AzureWizardExecuteStep, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 
+import { type MongoCluster } from '@azure/arm-mongocluster';
 import { type GenericResource } from '@azure/arm-resources';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { getResourceGroupFromId } from '@microsoft/vscode-azext-azureutils';
-import { maskSensitiveValuesInTelemetry } from '../../../documentdb/utils/connectionStringHelpers';
+import { l10n } from 'vscode';
+import { isSupportedAuthMethod } from '../../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
-import { Views } from '../../../documentdb/Views';
+import { type ClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { createMongoClustersManagementClient } from '../../../utils/azureClients';
 import { AzureContextProperties } from '../AzureDiscoveryProvider';
 
@@ -30,14 +28,19 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
             throw new Error('SelectedCluster is not set.');
         }
 
-        const connectionString = await this.getConnectionString(context);
+        const subscription = context.properties[
+            AzureContextProperties.SelectedSubscription
+        ] as unknown as AzureSubscription;
 
-        if (!connectionString) {
-            throw new Error('Failed to discover the connection string.');
-        }
+        const cluster = context.properties[AzureContextProperties.SelectedCluster] as unknown as GenericResource;
 
-        context.valuesToMask.push(connectionString);
-        context.connectionString = connectionString;
+        const clusterInformation = await this.getClusterInformation(cluster, subscription, context);
+        const credentials = this.extractCredentials(context, clusterInformation);
+
+        context.connectionString = credentials.connectionString;
+        context.username = credentials.connectionUser;
+        context.password = credentials.connectionPassword;
+        context.availableAuthenticationMethods = credentials.availableAuthMethods;
 
         // clean-up
         context.properties[AzureContextProperties.SelectedSubscription] = undefined;
@@ -45,48 +48,95 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         context.properties[AzureContextProperties.AzureSubscriptionProvider] = undefined;
     }
 
-    async getConnectionString(wizardContext: NewConnectionWizardContext): Promise<string | undefined> {
-        return callWithTelemetryAndErrorHandling('getConnectionString', async (context: IActionContext) => {
-            context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-discovery';
-
-            const subscription = wizardContext.properties[
-                AzureContextProperties.SelectedSubscription
-            ] as unknown as AzureSubscription;
-
-            const cluster = wizardContext.properties[
-                AzureContextProperties.SelectedCluster
-            ] as unknown as GenericResource;
-
-            // Create a client to interact with the MongoDB vCore management API and read the cluster details
-            const managementClient = await createMongoClustersManagementClient(context, subscription);
-
-            const clusterInformation = await managementClient.mongoClusters.get(
-                getResourceGroupFromId(cluster.id!),
-                cluster.name!,
-            );
-
-            if (!clusterInformation.properties?.connectionString) {
-                return undefined;
-            }
-
+    /**
+     * Extracts and processes credentials from cluster information.
+     * @param context The action context for telemetry and masking.
+     * @param clusterInformation The MongoCluster object containing cluster details.
+     * @returns A ClusterCredentials object.
+     */
+    private extractCredentials(context: IActionContext, clusterInformation: MongoCluster): ClusterCredentials {
+        // Ensure connection string and admin username are masked
+        if (clusterInformation.properties?.connectionString) {
             context.valuesToMask.push(clusterInformation.properties.connectionString);
-            const connectionString = new DocumentDBConnectionString(clusterInformation.properties.connectionString);
-            maskSensitiveValuesInTelemetry(context, connectionString);
+        }
+        if (clusterInformation.properties?.administrator?.userName) {
+            context.valuesToMask.push(clusterInformation.properties.administrator.userName);
+        }
 
-            if (clusterInformation.properties?.administrator?.userName) {
-                context.valuesToMask.push(clusterInformation.properties.administrator.userName);
-                connectionString.username = clusterInformation.properties.administrator.userName;
+        // we need to sanitize the data sent from azure, it contains placeholders for the username and the password
+        const parsedCS = new DocumentDBConnectionString(clusterInformation.properties!.connectionString!);
+        parsedCS.username = '';
+        parsedCS.password = '';
+
+        // Prepare credentials object.
+        const credentials: ClusterCredentials = {
+            connectionString: parsedCS.toString(),
+            connectionUser: clusterInformation.properties?.administrator?.userName,
+            availableAuthMethods: [],
+        };
+
+        const allowedModes = clusterInformation.properties?.authConfig?.allowedModes ?? [];
+        context.telemetry.properties.receivedAuthMethods = allowedModes.join(',');
+
+        for (const method of allowedModes) {
+            if (isSupportedAuthMethod(method)) {
+                credentials.availableAuthMethods.push(method);
+            } else {
+                context.telemetry.properties.warning = 'unknown-authmethod';
+                console.warn(`Unknown auth method from Azure SDK: ${method}`);
             }
+        }
 
-            /**
-             * The connection string returned from Azure does not include the actual password.
-             * Instead, it contains a placeholder. We explicitly set the password to an empty string here.
-             */
-            connectionString.password = '';
+        return credentials;
+    }
 
-            return connectionString.toString();
-        });
+    /**
+     * Retrieves and validates cluster information from Azure.
+     */
+    private async getClusterInformation(
+        cluster: GenericResource,
+        subscription: AzureSubscription,
+        context: IActionContext,
+    ): Promise<MongoCluster> {
+        const managementClient = await createMongoClustersManagementClient(context, subscription);
+        const clusterInformation = (await managementClient.mongoClusters.get(
+            getResourceGroupFromId(cluster.id!),
+            cluster.name!,
+        )) as unknown as MongoCluster;
+
+        // Validate connection string
+        if (!clusterInformation.properties?.connectionString) {
+            context.telemetry.properties.error = 'missing-connection-string';
+            throw new Error(
+                l10n.t('Authentication data (properties.connectionString) is missing for "{cluster}".', {
+                    cluster: cluster.name!,
+                }),
+            );
+        }
+
+        // Validate auth configuration
+        const clusterAuthConfig = clusterInformation.properties?.authConfig as { allowedModes?: string[] } | undefined;
+
+        if (!clusterAuthConfig?.allowedModes) {
+            context.telemetry.properties.error = 'missing-authconfig';
+            throw new Error(
+                l10n.t('Authentication configuration is missing for "{cluster}".', {
+                    cluster: cluster.name,
+                }),
+            );
+        }
+
+        if (clusterAuthConfig.allowedModes.length === 0) {
+            context.telemetry.properties.error = 'authconfig-no-authentication-methods';
+            throw new Error(
+                l10n.t('No authentication methods available for "{cluster}".', {
+                    cluster: cluster.name,
+                }),
+            );
+        }
+
+        context.valuesToMask.push(clusterInformation.properties.connectionString);
+        return clusterInformation;
     }
 
     public shouldExecute(): boolean {

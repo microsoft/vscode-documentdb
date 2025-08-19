@@ -39,6 +39,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 const newPassword = context.password;
                 const newUsername = context.username;
                 const newAuthenticationMethod = context.authenticationMethod;
+                const newAvailableAuthenticationMethods =
+                    context.availableAuthenticationMethods ??
+                    (newAuthenticationMethod ? [newAuthenticationMethod] : []);
 
                 const newParsedCS = new DocumentDBConnectionString(newConnectionString);
                 const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
@@ -116,7 +119,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     name: newConnectionLabel,
                     properties: {
                         api: api,
-                        availableAuthMethods: newAuthenticationMethod ? [newAuthenticationMethod] : [],
+                        availableAuthMethods: newAvailableAuthenticationMethods,
                         selectedAuthMethod: newAuthenticationMethod,
                     },
                     secrets: { connectionString: newConnectionString, userName: newUsername, password: newPassword },
