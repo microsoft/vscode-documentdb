@@ -14,7 +14,7 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { AuthMethod, isSupportedAuthMethod } from '../../../../documentdb/auth/AuthMethod';
+import { AuthMethod } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
@@ -28,6 +28,7 @@ import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
+import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../../utils/clusterHelpers';
 
 export class DocumentDBResourceItem extends ClusterItemBase {
     iconPath = vscode.Uri.joinPath(
@@ -90,96 +91,27 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             context.telemetry.properties.discoveryProvider = 'azure-discovery';
 
             // Retrieve and validate cluster information (throws if invalid)
-            const clusterInformation = await this.getClusterInformation(context);
-            return this.extractCredentials(context, clusterInformation);
+            const clusterInformation = await getClusterInformationFromAzure(
+                context,
+                this.subscription,
+                this.cluster.resourceGroup!,
+                this.cluster.name,
+            );
+
+            return extractCredentialsFromCluster(context, clusterInformation);
         });
-    }
-
-    /**
-     * Extracts and processes credentials from cluster information.
-     * @param context The action context for telemetry and masking.
-     * @param clusterInformation The MongoCluster object containing cluster details.
-     * @returns A ClusterCredentials object.
-     */
-    private extractCredentials(context: IActionContext, clusterInformation: MongoCluster): ClusterCredentials {
-        // Ensure connection string and admin username are masked
-        if (clusterInformation.properties?.connectionString) {
-            context.valuesToMask.push(clusterInformation.properties.connectionString);
-        }
-        if (clusterInformation.properties?.administrator?.userName) {
-            context.valuesToMask.push(clusterInformation.properties.administrator.userName);
-        }
-
-        // we need to sanitize the data sent from azure, it contains placeholders for the username and the password
-        const parsedCS = new DocumentDBConnectionString(clusterInformation.properties!.connectionString!);
-        parsedCS.username = '';
-        parsedCS.password = '';
-
-        // Prepare credentials object.
-        const credentials: ClusterCredentials = {
-            connectionString: parsedCS.toString(),
-            connectionUser: clusterInformation.properties?.administrator?.userName,
-            availableAuthMethods: [],
-        };
-
-        const allowedModes = clusterInformation.properties?.authConfig?.allowedModes ?? [];
-        context.telemetry.properties.receivedAuthMethods = allowedModes.join(',');
-
-        for (const method of allowedModes) {
-            if (isSupportedAuthMethod(method)) {
-                credentials.availableAuthMethods.push(method);
-            } else {
-                context.telemetry.properties.warning = 'unknown-authmethod';
-                console.warn(`Unknown auth method from Azure SDK: ${method}`);
-            }
-        }
-
-        return credentials;
     }
 
     /**
      * Retrieves and validates cluster information from Azure.
      */
     private async getClusterInformation(context: IActionContext): Promise<MongoCluster> {
-        const managementClient = await createMongoClustersManagementClient(context, this.subscription);
-        const clusterInformation = (await managementClient.mongoClusters.get(
+        return getClusterInformationFromAzure(
+            context,
+            this.subscription,
             this.cluster.resourceGroup!,
             this.cluster.name,
-        )) as unknown as MongoCluster;
-
-        // Validate connection string
-        if (!clusterInformation.properties?.connectionString) {
-            context.telemetry.properties.error = 'missing-connection-string';
-            throw new Error(
-                l10n.t('Authentication data (properties.connectionString) is missing for "{cluster}".', {
-                    cluster: this.cluster.name,
-                }),
-            );
-        }
-
-        // Validate auth configuration
-        const clusterAuthConfig = clusterInformation.properties?.authConfig as { allowedModes?: string[] } | undefined;
-
-        if (!clusterAuthConfig?.allowedModes) {
-            context.telemetry.properties.error = 'missing-authconfig';
-            throw new Error(
-                l10n.t('Authentication configuration is missing for "{cluster}".', {
-                    cluster: this.cluster.name,
-                }),
-            );
-        }
-
-        if (clusterAuthConfig.allowedModes.length === 0) {
-            context.telemetry.properties.error = 'authconfig-no-authentication-methods';
-            throw new Error(
-                l10n.t('No authentication methods available for "{cluster}".', {
-                    cluster: this.cluster.name,
-                }),
-            );
-        }
-
-        context.valuesToMask.push(clusterInformation.properties.connectionString);
-        return clusterInformation;
+        );
     }
 
     /**
@@ -200,7 +132,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
 
             // Get and validate cluster information
             const clusterInformation = await this.getClusterInformation(context);
-            const credentials = this.extractCredentials(context, clusterInformation);
+            const credentials = extractCredentialsFromCluster(context, clusterInformation);
 
             // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {
