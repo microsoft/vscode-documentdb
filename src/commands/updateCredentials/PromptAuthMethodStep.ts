@@ -10,24 +10,36 @@ import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardCo
 
 export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
     public async prompt(context: UpdateCredentialsWizardContext): Promise<void> {
-        const quickPickItems = [
-            {
-                authMethod: AuthMethod.NativeAuth,
-                label: l10n.t('Username and Password'),
-                detail: l10n.t('Authenticate using a username and password'),
-            },
-            {
-                authMethod: AuthMethod.MicrosoftEntraID,
-                label: l10n.t('Microsoft Entra ID'),
-                detail: l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
-            },
-        ].map((item) => ({
+        /**
+         * Note to future maintainers: This step prompts the user to select an authentication method.
+         * There is no direct way to pre-select an item in the Quick Pick. The workaround is to place
+         * the current authentication method first in the list, which ensures it is selected by default
+         * when the picker is displayed.
+         */
+
+        const nativeAuthItem = {
+            authMethod: AuthMethod.NativeAuth,
+            label: l10n.t('Username and Password'),
+            detail: l10n.t('Authenticate using a username and password'),
+        };
+
+        const entraIdItem = {
+            authMethod: AuthMethod.MicrosoftEntraID,
+            label: l10n.t('Microsoft Entra ID'),
+            detail: l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
+        };
+
+        const allItems =
+            context.selectedAuthenticationMethod === AuthMethod.MicrosoftEntraID
+                ? [entraIdItem, nativeAuthItem]
+                : [nativeAuthItem, entraIdItem];
+
+        const quickPickItems = allItems.map((item) => ({
             ...item,
             alwaysShow: true,
             description: context.availableAuthenticationMethods.includes(item.authMethod)
                 ? undefined
                 : l10n.t('Cluster support unknown $(info)'),
-            picked: item.authMethod === context.selectedAuthenticationMethod,
         }));
 
         const selectedItem = await context.ui.showQuickPick(quickPickItems, {
