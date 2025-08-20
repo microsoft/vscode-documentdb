@@ -37,47 +37,51 @@ export async function launchShell(
     let connectionPassword: string | undefined;
     let authMechanism: AuthMethod | undefined;
 
-    // connection string discovery for these items can be slow, so we need to run it with a temporary description
-    if (node instanceof ClusterItemBase) {
-        // connecting at the account level, not connected, we need to discover options
-        const discoveredClusterCredentials = await ext.state.runWithTemporaryDescription(
-            node.id,
-            l10n.t('Working…'),
-            async () => {
-                return node.getCredentials();
-            },
-        );
-
-        if (discoveredClusterCredentials) {
-            if (
-                discoveredClusterCredentials.availableAuthMethods.find(
-                    (authMethod) => authMethod === AuthMethod.NativeAuth,
-                )
-            ) {
-                connectionString = discoveredClusterCredentials.connectionString;
-                connectionUser = discoveredClusterCredentials.connectionUser;
-                connectionPassword = discoveredClusterCredentials.connectionPassword;
-                authMechanism = AuthMethod.NativeAuth;
-            } else {
-                // Only SCRAM-SHA-256 (username/password) authentication is supported here.
-                // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
-                // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
-                throw Error(
-                    l10n.t(
-                        'Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.',
-                    ),
-                );
-            }
-        }
-    } else {
-        // node is instanceof DatabaseItem or CollectionItem and we alrady have the connection string somewhere
-        const client: ClustersClient = await ClustersClient.getClient(node.cluster.id);
-        const clusterCredentials = client.getCredentials();
+    // 1. In case we're connected, we should use the preferred authentication method and settings
+    //    This can be true for ClusterItemBase (cluster level), and will for sure be true on the database and the collection level
+    if (ClustersClient.exists(node.cluster.id)) {
+        const activeClient: ClustersClient = await ClustersClient.getClient(node.cluster.id);
+        const clusterCredentials = activeClient.getCredentials();
         if (clusterCredentials) {
             connectionString = clusterCredentials.connectionString;
-            connectionUser = clusterCredentials.connectionString;
+            connectionUser = clusterCredentials.connectionUser;
             connectionPassword = clusterCredentials.connectionPassword;
             authMechanism = clusterCredentials.authMechanism;
+        }
+    } else {
+        // it looks like there is no active connection.
+        // We can attemp to read connection info from the cluster information in case we're at the cluster level
+        if (node instanceof ClusterItemBase) {
+            const discoveredClusterCredentials = await ext.state.runWithTemporaryDescription(
+                node.id,
+                l10n.t('Working…'),
+                async () => {
+                    return node.getCredentials();
+                },
+            );
+
+            if (discoveredClusterCredentials) {
+                const selectedAuthMethod = discoveredClusterCredentials.selectedAuthMethod;
+                const nativeAuthIsAvailable = discoveredClusterCredentials.availableAuthMethods.includes(
+                    AuthMethod.NativeAuth,
+                );
+
+                if (selectedAuthMethod === AuthMethod.NativeAuth || (nativeAuthIsAvailable && !selectedAuthMethod)) {
+                    connectionString = discoveredClusterCredentials.connectionString;
+                    connectionUser = discoveredClusterCredentials.connectionUser;
+                    connectionPassword = discoveredClusterCredentials.connectionPassword;
+                    authMechanism = AuthMethod.NativeAuth;
+                } else {
+                    // Only SCRAM-SHA-256 (username/password) authentication is supported here.
+                    // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
+                    // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
+                    throw Error(
+                        l10n.t(
+                            'Unsupported authentication mechanism. Only "Username and Password" (SCRAM-SHA-256) is supported.',
+                        ),
+                    );
+                }
+            }
         }
     }
 

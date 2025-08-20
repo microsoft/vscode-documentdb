@@ -204,6 +204,13 @@ export class ClustersClient {
         return client;
     }
 
+    /**
+     * Determines whether a client for the given credential identifier is present in the internal cache.
+     */
+    public static exists(credentialId: string): boolean {
+        return ClustersClient._clients.has(credentialId);
+    }
+
     public static async deleteClient(credentialId: string): Promise<void> {
         if (ClustersClient._clients.has(credentialId)) {
             const client = ClustersClient._clients.get(credentialId) as ClustersClient;

@@ -37,6 +37,7 @@ export type ClusterCredentials = {
     connectionUser?: string;
     connectionPassword?: string;
     availableAuthMethods: AuthMethod[];
+    selectedAuthMethod?: AuthMethod; // some providers can pre-select a method
 };
 
 // This info will be available at every level in the tree for immediate access

@@ -56,6 +56,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             connectionUser: connectionCredentials.secrets.userName,
             connectionPassword: connectionCredentials.secrets.password,
             availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
+            selectedAuthMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         };
     }
 

@@ -445,6 +445,7 @@
   "Unrecognized node type encountered. Could not parse {constructorCall} as part of {functionCall}": "Unrecognized node type encountered. Could not parse {constructorCall} as part of {functionCall}",
   "Unrecognized node type encountered. We could not parse {text}": "Unrecognized node type encountered. We could not parse {text}",
   "Unrecognized token. Token text: {text}": "Unrecognized token. Token text: {text}",
+  "Unsupported authentication mechanism. Only \"Username and Password\" (SCRAM-SHA-256) is supported.": "Unsupported authentication mechanism. Only \"Username and Password\" (SCRAM-SHA-256) is supported.",
   "Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.": "Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.",
   "Unsupported authentication method: {0}": "Unsupported authentication method: {0}",
   "Unsupported emulator type: \"{emulatorType}\"": "Unsupported emulator type: \"{emulatorType}\"",
