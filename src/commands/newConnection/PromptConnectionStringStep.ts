@@ -34,7 +34,12 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         context.connectionString = parsedConnectionString.toString();
         context.valuesToMask.push(context.connectionString);
 
-        // 2. Detect and/or guess available authentication methods
+        // 2. Remove obsolete authMechanism entry
+        if (parsedConnectionString.searchParams.get('authMechanism') === 'SCRAM-SHA-256') {
+            parsedConnectionString.searchParams.delete('authMechanism');
+        }
+
+        // 3. Detect and/or guess available authentication methods
         const supportedAuthMethods: AuthMethod[] = [AuthMethod.NativeAuth];
 
         if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {

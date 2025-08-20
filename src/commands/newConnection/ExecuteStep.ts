@@ -75,6 +75,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     });
                 }
 
+                // remove obsolete authMechanism entry
+                if (newParsedCS.searchParams.get('authMechanism') === 'SCRAM-SHA-256') {
+                    newParsedCS.searchParams.delete('authMechanism');
+                }
+                newParsedCS.username = '';
+                newParsedCS.password = '';
+
                 let newConnectionLabel =
                     newUsername && newUsername.length > 0 ? `${newUsername}@${newJoinedHosts}` : newJoinedHosts;
 
@@ -112,7 +119,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
                 // Now, we're safe to create a new connection with the new unique label
 
-                const storageId = generateDocumentDBStorageId(newConnectionString);
+                const storageId = generateDocumentDBStorageId(newParsedCS.toString());
 
                 const storageItem: ConnectionItem = {
                     id: storageId,
@@ -122,7 +129,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                         availableAuthMethods: newAvailableAuthenticationMethods,
                         selectedAuthMethod: newAuthenticationMethod,
                     },
-                    secrets: { connectionString: newConnectionString, userName: newUsername, password: newPassword },
+                    secrets: { connectionString: newParsedCS.toString(), userName: newUsername, password: newPassword },
                 };
 
                 await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
