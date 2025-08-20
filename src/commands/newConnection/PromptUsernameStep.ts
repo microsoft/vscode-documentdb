@@ -22,17 +22,12 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
             validateInput: (username?: string) => this.validateInput(context, username),
         });
 
-        const parsedConnectionString = new DocumentDBConnectionString(context.connectionString!);
-        parsedConnectionString.username = username;
-
-        context.connectionString = parsedConnectionString.toString();
-        context.username = username;
-
         context.valuesToMask.push(username);
+        context.username = username;
     }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
-        return context.authenticationMethod === AuthMethod.NativeAuth;
+        return context.selectedAuthenticationMethod === AuthMethod.NativeAuth;
     }
 
     public validateInput(context: NewConnectionWizardContext, username: string | undefined): string | undefined {

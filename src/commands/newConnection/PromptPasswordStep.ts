@@ -23,17 +23,12 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewConnectionWizar
             validateInput: (password?: string) => this.validateInput(context, password),
         });
 
-        const parsedConnectionString = new DocumentDBConnectionString(context.connectionString!);
-        parsedConnectionString.password = password;
-
-        context.connectionString = parsedConnectionString.toString();
-        context.password = password;
-
         context.valuesToMask.push(password);
+        context.password = password;
     }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
-        return context.authenticationMethod === AuthMethod.NativeAuth;
+        return context.selectedAuthenticationMethod === AuthMethod.NativeAuth;
     }
 
     public validateInput(context: NewConnectionWizardContext, password: string | undefined): string | undefined {

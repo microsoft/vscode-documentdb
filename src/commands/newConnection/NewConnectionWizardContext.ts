@@ -21,7 +21,7 @@ export interface NewConnectionWizardContext extends IActionContext {
     parsedConnectionString?: URL | DocumentDBConnectionString;
 
     availableAuthenticationMethods?: AuthMethod[];
-    authenticationMethod?: AuthMethod;
+    selectedAuthenticationMethod?: AuthMethod;
     username?: string;
     password?: string;
 

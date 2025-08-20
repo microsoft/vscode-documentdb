@@ -96,14 +96,14 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
 
             try {
                 // Construct the options object with available context
-                const creds = await node.getCredentials();
-                if (!creds) {
+                const credentials = await node.getCredentials();
+                if (!credentials) {
                     throw new Error(l10n.t('No credentials found for the selected cluster.'));
                 }
 
-                const parsedCS = new DocumentDBConnectionString(creds.connectionString);
-                parsedCS.username = creds?.connectionUser ?? '';
-                parsedCS.password = creds?.connectionPassword ?? '';
+                const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
+                parsedCS.username = credentials?.connectionUser ?? '';
+                parsedCS.password = credentials?.connectionPassword ?? '';
 
                 const options = {
                     connectionString: parsedCS.toString(),

@@ -41,10 +41,10 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<NewConnectionWiz
             throw new Error(vscode.l10n.t('No authentication method selected.'));
         }
 
-        context.authenticationMethod = selectedItem.authMethod;
+        context.selectedAuthenticationMethod = selectedItem.authMethod;
     }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
-        return !context.authenticationMethod;
+        return !context.selectedAuthenticationMethod;
     }
 }

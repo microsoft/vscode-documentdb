@@ -33,8 +33,8 @@ export async function launchShell(
     context.telemetry.properties.isWindows = isWindows.toString();
 
     let connectionString: string | undefined = undefined;
-    let connectionUser: string | undefined = undefined;
-    let connectionPassword: string | undefined;
+    let username: string | undefined = undefined;
+    let password: string | undefined;
     let authMechanism: AuthMethod | undefined;
 
     // 1. In case we're connected, we should use the preferred authentication method and settings
@@ -44,8 +44,8 @@ export async function launchShell(
         const clusterCredentials = activeClient.getCredentials();
         if (clusterCredentials) {
             connectionString = clusterCredentials.connectionString;
-            connectionUser = clusterCredentials.connectionUser;
-            connectionPassword = clusterCredentials.connectionPassword;
+            username = clusterCredentials.connectionUser;
+            password = clusterCredentials.connectionPassword;
             authMechanism = clusterCredentials.authMechanism;
         }
     } else {
@@ -68,8 +68,8 @@ export async function launchShell(
 
                 if (selectedAuthMethod === AuthMethod.NativeAuth || (nativeAuthIsAvailable && !selectedAuthMethod)) {
                     connectionString = discoveredClusterCredentials.connectionString;
-                    connectionUser = discoveredClusterCredentials.connectionUser;
-                    connectionPassword = discoveredClusterCredentials.connectionPassword;
+                    username = discoveredClusterCredentials.connectionUser;
+                    password = discoveredClusterCredentials.connectionPassword;
                     authMechanism = AuthMethod.NativeAuth;
                 } else {
                     // Only SCRAM-SHA-256 (username/password) authentication is supported here.
@@ -100,13 +100,13 @@ export async function launchShell(
     }
 
     const parsedConnectionString: DocumentDBConnectionString = new DocumentDBConnectionString(connectionString);
-    parsedConnectionString.username = connectionUser ?? '';
+    parsedConnectionString.username = username ?? '';
     maskSensitiveValuesInTelemetry(context, parsedConnectionString);
 
     // Note to code maintainers:
     // We're encoding the password to ensure it is safe to use in the connection string
     // shared with the shell process.
-    const shellSafePassword = encodeURIComponent(connectionPassword ?? '');
+    const shellSafePassword = encodeURIComponent(password ?? '');
     context.valuesToMask.push(shellSafePassword);
 
     // Use unique environment variable names to avoid conflicts
@@ -162,7 +162,7 @@ export async function launchShell(
     // Note to code maintainers:
     // We're using a sentinel value approach here to avoid URL encoding issues with environment variable
     // references. For example, in PowerShell the environment variable reference "$env:VAR_NAME" contains
-    // a colon character (":") which gets URL encoded to "%3A" when added directly to connectionString.password.
+    // a colon character (":") which gets URL encoded to "%3A" when added directly to parsedConnectionString.password.
     // This encoding breaks the environment variable reference syntax in the shell.
     //
     // By using a unique sentinel string first and then replacing it with the raw (unencoded) environment

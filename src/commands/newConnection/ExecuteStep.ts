@@ -38,7 +38,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 const newConnectionString = context.connectionString!;
                 const newPassword = context.password;
                 const newUsername = context.username;
-                const newAuthenticationMethod = context.authenticationMethod;
+                const newAuthenticationMethod = context.selectedAuthenticationMethod;
                 const newAvailableAuthenticationMethods =
                     context.availableAuthenticationMethods ??
                     (newAuthenticationMethod ? [newAuthenticationMethod] : []);

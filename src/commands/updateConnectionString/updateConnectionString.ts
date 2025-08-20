@@ -42,7 +42,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
 
     const wizardContext: UpdateCSWizardContext = {
         ...context,
-        originalCS_NoCredentials: parsedCS.toString(),
+        originalConnectionString: parsedCS.toString(),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageId: node.storageId,
     };

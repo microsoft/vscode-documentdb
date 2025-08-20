@@ -25,26 +25,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
             return;
         }
 
-        if (connection) {
-            // now, copy the credentials from the original connection string,
-            // take it directly from the storage item
-            // and update the new connection string with the credentials
-            const originalCS_WithCredentials = new URL(connection.secrets.connectionString || '');
-            const newCS = new URL(context.newCS_NoCredentials || '');
+        try {
+            connection.secrets = {
+                ...connection.secrets,
+                connectionString: nonNullValue(context.newConnectionString?.toString(), 'newConnectionString'),
+            };
 
-            newCS.username = originalCS_WithCredentials.username;
-            newCS.password = originalCS_WithCredentials.password;
-
-            connection.secrets = { ...connection.secrets, connectionString: nonNullValue(newCS.toString()) };
-
-            try {
-                await ConnectionStorageService.save(resourceType, connection, true);
-            } catch (pushError) {
-                console.error(`Failed to update the connection "${context.storageId}":`, pushError);
-                void window.showErrorMessage(l10n.t('Failed to update the connection.'));
-            }
-        } else {
-            console.error(`Connection with ID "${context.storageId}" not found in storage.`);
+            await ConnectionStorageService.save(resourceType, connection, true);
+        } catch (pushError) {
+            console.error(`Failed to update the connection "${context.storageId}":`, pushError);
             void window.showErrorMessage(l10n.t('Failed to update the connection.'));
         }
 
@@ -52,6 +41,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
     }
 
     public shouldExecute(context: UpdateCSWizardContext): boolean {
-        return !!context.newCS_NoCredentials && context.newCS_NoCredentials !== context.originalCS_NoCredentials;
+        return !!context.newConnectionString && context.newConnectionString !== context.originalConnectionString;
     }
 }

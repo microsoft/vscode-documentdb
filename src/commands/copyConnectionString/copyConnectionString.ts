@@ -23,16 +23,16 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
     const connectionString = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
         context.telemetry.properties.experience = node.experience.api;
 
-        const creds = await node.getCredentials();
+        const credentials = await node.getCredentials();
 
-        if (!creds) {
+        if (!credentials) {
             return;
         }
 
-        const parsedConnectionString = new DocumentDBConnectionString(creds.connectionString);
-        parsedConnectionString.username = creds.connectionUser ?? '';
+        const parsedConnectionString = new DocumentDBConnectionString(credentials.connectionString);
+        parsedConnectionString.username = credentials.connectionUser ?? '';
 
-        if (creds.selectedAuthMethod === AuthMethod.MicrosoftEntraID) {
+        if (credentials.selectedAuthMethod === AuthMethod.MicrosoftEntraID) {
             parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');
         }
 

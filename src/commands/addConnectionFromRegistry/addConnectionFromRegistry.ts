@@ -32,23 +32,21 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
             cancellable: false,
         },
         async () => {
-            const newCredentials = await ext.state.runWithTemporaryDescription(
-                node.id,
-                l10n.t('Working…'),
-                async () => {
-                    context.telemetry.properties.experience = node.experience.api;
+            const credentials = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
+                context.telemetry.properties.experience = node.experience.api;
 
-                    return node.getCredentials();
-                },
-            );
+                return node.getCredentials();
+            });
 
-            if (!newCredentials) {
+            if (!credentials) {
                 throw new Error(l10n.t('Unable to retrieve credentials for the selected cluster.'));
             }
 
-            const newParsedCS = new DocumentDBConnectionString(newCredentials.connectionString);
-            newParsedCS.username = newCredentials.connectionUser || newParsedCS.username;
-            const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
+            const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
+            const username = credentials.connectionUser || parsedCS.username;
+            parsedCS.username = '';
+
+            const joinedHosts = [...parsedCS.hosts].sort().join(',');
 
             //  Sanity Check 1/2: is there a connection with the same username + host in there?
             const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
@@ -56,10 +54,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
             const existingDuplicateConnection = existingConnections.find((existingConnection) => {
                 const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
                 const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-                return (
-                    existingConnection.secrets.userName === newParsedCS.username &&
-                    existingHostsJoined === newJoinedHosts
-                );
+                return existingConnection.secrets.userName === username && existingHostsJoined === joinedHosts;
             });
 
             if (existingDuplicateConnection) {
@@ -79,21 +74,52 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
                 });
             }
 
-            const newConnectionLabel =
-                newParsedCS.username && newParsedCS.username.length > 0
-                    ? `${newParsedCS.username}@${newJoinedHosts}`
-                    : newJoinedHosts;
+            let newConnectionLabel = username && username.length > 0 ? `${username}@${joinedHosts}` : joinedHosts;
 
-            const storageId = generateDocumentDBStorageId(newCredentials.connectionString);
+            // Sanity Check 2/2: is there a connection with the same 'label' in there?
+            // If so, append a number to the label.
+            // This scenario is possible as users are allowed to rename their connections.
+            let existingDuplicateLabel = existingConnections.find(
+                (connection) => connection.name === newConnectionLabel,
+            );
+
+            // If a connection with the same label exists, append a number to the label
+            while (existingDuplicateLabel) {
+                /**
+                 * Matches and captures parts of a connection label string.
+                 *
+                 * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
+                 * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
+                 * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
+                 *   which may be preceded by whitespace. For example, " (123)".
+                 *
+                 * Examples:
+                 * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
+                 * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
+                 */
+                const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
+                if (match) {
+                    const baseName = match[1];
+                    const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
+                    newConnectionLabel = `${baseName} (${count})`;
+                }
+                existingDuplicateLabel = existingConnections.find(
+                    (connection) => connection.name === newConnectionLabel,
+                );
+            }
+
+            // Now, we're safe to create a new connection with the new unique label
+
+            const storageId = generateDocumentDBStorageId(parsedCS.toString());
 
             const connectionItem: ConnectionItem = {
                 id: storageId,
                 name: newConnectionLabel,
-                properties: { api: API.DocumentDB, availableAuthMethods: newCredentials.availableAuthMethods },
+                properties: { api: API.DocumentDB, availableAuthMethods: credentials.availableAuthMethods },
                 secrets: {
-                    connectionString: newCredentials.connectionString,
-                    userName: newCredentials.connectionUser,
-                    password: newCredentials.connectionPassword,
+                    connectionString: parsedCS.toString(),
+                    userName: credentials.connectionUser,
+                    password: credentials.connectionPassword,
                 },
             };
 
