@@ -15,15 +15,19 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<NewConnectionWiz
                 label: vscode.l10n.t('Username and Password'),
                 detail: vscode.l10n.t('Authenticate using a username and password'),
                 authMethod: AuthMethod.NativeAuth,
-                alwaysShow: true,
             },
             {
                 label: vscode.l10n.t('Microsoft Entra ID'),
                 detail: vscode.l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
                 authMethod: AuthMethod.MicrosoftEntraID,
-                alwaysShow: true,
             },
-        ];
+        ].map((item) => ({
+            ...item,
+            alwaysShow: true,
+            description: context.availableAuthenticationMethods?.includes(item.authMethod)
+                ? undefined
+                : vscode.l10n.t('Cluster support unknown $(info)'),
+        }));
 
         const selectedItem = await context.ui.showQuickPick(quickPickItems, {
             placeHolder: vscode.l10n.t('Select an authentication method'),

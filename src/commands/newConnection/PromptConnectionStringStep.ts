@@ -5,6 +5,8 @@
 
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { AuthMethod } from '../../documentdb/auth/AuthMethod';
+import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
@@ -13,7 +15,7 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const prompt: string = l10n.t('Enter the connection string of your MongoDB cluster.');
-        context.connectionString = (
+        const newConnectionString = (
             await context.ui.showInputBox({
                 prompt: prompt,
                 ignoreFocusOut: true,
@@ -23,11 +25,23 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             })
         ).trim();
 
-        const parsedConnectionString = new DocumentDBConnectionString(context.connectionString);
+        // 1. Parse the connection string and extract credentials
+        const parsedConnectionString = new DocumentDBConnectionString(newConnectionString);
         context.username = parsedConnectionString.username;
         context.password = parsedConnectionString.password;
-
+        parsedConnectionString.username = '';
+        parsedConnectionString.password = '';
+        context.connectionString = parsedConnectionString.toString();
         context.valuesToMask.push(context.connectionString);
+
+        // 2. Detect and/or guess available authentication methods
+        const supportedAuthMethods: AuthMethod[] = [AuthMethod.NativeAuth];
+
+        if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {
+            supportedAuthMethods.push(AuthMethod.MicrosoftEntraID);
+        }
+
+        context.availableAuthenticationMethods = supportedAuthMethods;
     }
 
     //eslint-disable-next-line @typescript-eslint/require-await
