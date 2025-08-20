@@ -15,18 +15,18 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
 
     public async execute(context: UpdateCredentialsWizardContext): Promise<void> {
         const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
-        const connection = await ConnectionStorageService.get(context.storageId, resourceType);
+        const connectionCredentials = await ConnectionStorageService.get(context.storageId, resourceType);
 
-        if (!connection) {
+        if (!connectionCredentials) {
             console.error(`Connection with ID "${context.storageId}" not found in storage.`);
             void window.showErrorMessage(l10n.t('Failed to save credentials.'));
             return;
         }
 
-        if (connection && connection.secrets?.connectionString) {
+        if (connectionCredentials && connectionCredentials.secrets?.connectionString) {
             // Update the connection string with the new username and password
 
-            const connectionString = connection.secrets.connectionString;
+            const connectionString = connectionCredentials.secrets.connectionString;
 
             const parsedConnectionString = new DocumentDBConnectionString(connectionString);
             parsedConnectionString.username = '';
@@ -34,15 +34,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
 
             // Update the item in storage
 
-            connection.secrets = {
-                ...connection.secrets,
+            connectionCredentials.secrets = {
+                ...connectionCredentials.secrets,
                 connectionString: parsedConnectionString.toString(),
-                userName: context.username || '',
-                password: context.password || '',
+                ...(context.username ? { userName: context.username } : {}),
+                ...(context.password ? { password: context.password } : {}),
             };
 
+            connectionCredentials.properties.selectedAuthMethod = context.selectedAuthenticationMethod?.toString();
+
             try {
-                await ConnectionStorageService.save(resourceType, connection, true);
+                await ConnectionStorageService.save(resourceType, connectionCredentials, true);
             } catch (pushError) {
                 console.error(`Failed to save credentials for connection "${context.storageId}":`, pushError);
                 void window.showErrorMessage(l10n.t('Failed to save credentials.'));

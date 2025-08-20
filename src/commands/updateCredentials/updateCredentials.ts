@@ -5,12 +5,14 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { Views } from '../../documentdb/Views';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { refreshView } from '../refreshView/refreshView';
+import { PromptAuthMethodStep } from '../updateCredentials/PromptAuthMethodStep';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
 import { PromptUserNameStep } from './PromptUserNameStep';
@@ -30,21 +32,23 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         ? ConnectionType.Emulators
         : ConnectionType.Clusters;
 
-    const connection = await ConnectionStorageService.get(node.storageId, resourceType);
-    const connectionString = connection?.secrets?.connectionString || '';
+    const connectionCredentials = await ConnectionStorageService.get(node.storageId, resourceType);
+    const connectionString = connectionCredentials?.secrets?.connectionString || '';
     context.valuesToMask.push(connectionString);
 
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
-        username: connection?.secrets.userName,
-        password: connection?.secrets.password,
+        username: connectionCredentials?.secrets.userName,
+        password: connectionCredentials?.secrets.password,
+        availableAuthenticationMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
+        selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageId: node.storageId,
     };
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Update cluster credentials'),
-        promptSteps: [new PromptUserNameStep(), new PromptPasswordStep()],
+        promptSteps: [new PromptAuthMethodStep(), new PromptUserNameStep(), new PromptPasswordStep()],
         executeSteps: [new ExecuteStep()],
         showLoadingPrompt: true,
     });

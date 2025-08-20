@@ -38,3 +38,17 @@ export function authMethodFromString(method: string | undefined): AuthMethod | u
     }
     return undefined;
 }
+
+/**
+ * Convert an array of authentication method identifiers (strings)
+ * into an array of AuthMethod values.
+ *
+ * The order of returned AuthMethod values follows the order of valid entries
+ * in the input array; no additional deduplication is performed.
+ */
+export function authMethodsFromString(methods?: string[]) {
+    const availableAuthMethods: AuthMethod[] = Array.isArray(methods)
+        ? methods.map((m) => authMethodFromString(m)).filter((m) => typeof m !== 'undefined')
+        : [];
+    return availableAuthMethods;
+}

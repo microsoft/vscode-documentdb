@@ -79,6 +79,7 @@
   "Click here to retry": "Click here to retry",
   "Click here to update credentials": "Click here to update credentials",
   "Click to view resource": "Click to view resource",
+  "Cluster support unknown $(info)": "Cluster support unknown $(info)",
   "Collection name cannot begin with the system. prefix (Reserved for internal use).": "Collection name cannot begin with the system. prefix (Reserved for internal use).",
   "Collection name cannot contain .system.": "Collection name cannot contain .system.",
   "Collection name cannot contain the $.": "Collection name cannot contain the $.",

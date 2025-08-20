@@ -4,13 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type AuthMethod } from '../../documentdb/auth/AuthMethod';
 
 export interface UpdateCredentialsWizardContext extends IActionContext {
     // target item details
     isEmulator: boolean;
     storageId: string;
 
+    availableAuthenticationMethods: AuthMethod[];
+
     // user input
-    username: string | undefined;
-    password: string | undefined;
+    username?: string;
+    password?: string;
+    selectedAuthenticationMethod?: AuthMethod;
 }

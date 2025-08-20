@@ -29,6 +29,7 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<NewConnectionWiz
             placeHolder: vscode.l10n.t('Select an authentication method'),
             stepName: 'selectAuthMethod',
             ignoreFocusOut: true,
+            suppressPersistence: true,
         });
 
         if (!selectedItem) {

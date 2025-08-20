@@ -13,7 +13,7 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
-import { AuthMethod, authMethodFromString } from '../../documentdb/auth/AuthMethod';
+import { AuthMethod, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -51,16 +51,11 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             return undefined;
         }
 
-        const rawMethods = connectionCredentials.properties.availableAuthMethods;
-        const availableAuthMethods: AuthMethod[] = Array.isArray(rawMethods)
-            ? rawMethods.map((m) => authMethodFromString(m)).filter((m) => typeof m !== 'undefined')
-            : [];
-
         return {
             connectionString: connectionCredentials.secrets.connectionString,
             connectionUser: connectionCredentials.secrets.userName,
             connectionPassword: connectionCredentials.secrets.password,
-            availableAuthMethods,
+            availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
         };
     }
 
