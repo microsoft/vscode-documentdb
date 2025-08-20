@@ -5,9 +5,11 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import { AuthMethod, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
@@ -36,11 +38,23 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const connectionString = connectionCredentials?.secrets?.connectionString || '';
     context.valuesToMask.push(connectionString);
 
+    const parsedCS = new DocumentDBConnectionString(connectionCredentials?.secrets.connectionString ?? '');
+    const supportedAuthMethods = [...(connectionCredentials?.properties.availableAuthMethods ?? [])];
+
+    if (hasDomainSuffix(AzureDomains.vCore, ...parsedCS.hosts)) {
+        if (!supportedAuthMethods.includes(AuthMethod.MicrosoftEntraID)) {
+            supportedAuthMethods.push(AuthMethod.MicrosoftEntraID);
+        }
+        if (!supportedAuthMethods.includes(AuthMethod.NativeAuth)) {
+            supportedAuthMethods.push(AuthMethod.NativeAuth);
+        }
+    }
+
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
         username: connectionCredentials?.secrets.userName,
         password: connectionCredentials?.secrets.password,
-        availableAuthenticationMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
+        availableAuthenticationMethods: authMethodsFromString(supportedAuthMethods),
         selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageId: node.storageId,
