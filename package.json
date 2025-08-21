@@ -361,6 +361,25 @@
         "title": "Create Database…"
       },
       {
+        "//": "Performance Insight",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.performanceInsight",
+        "title": "Performance Insight"
+      },
+      {
+        "//": "Configure LLM Resource",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.configureLlm",
+        "title": "Configure LLM Resource…",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "//": "Scrapbook: Explain Command",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scrapbook.explainCommand",
+        "title": "Explain Command"
+      },
+      {
         "//": "Scrapbook: Connect Database",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.scrapbook.connect",
@@ -606,10 +625,16 @@
           "group": "2@1"
         },
         {
+          "//": "[Database] Performance Insight",
+          "command": "vscode-documentdb.command.performanceInsight",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "group": "2@2"
+        },
+        {
           "//": "[Database] Mongo DB|Cluster Scrapbook Submenu",
           "submenu": "documentDB.submenus.mongo.database.scrapbook",
           "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
-          "group": "2@2"
+          "group": "2@3"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Open collection",
@@ -862,6 +887,28 @@
             "type": "number",
             "description": "The batch size to be used when querying working with the shell.",
             "default": 50
+          },
+          "documentDB.llm.provider": {
+            "order": 30,
+            "type": "string",
+            "description": "The LLM provider to use for enhanced features (Azure OpenAI or OpenAI).",
+            "enum": [
+              "",
+              "azure-openai",
+              "openai"
+            ],
+            "enumItemLabels": [
+              "Not Configured",
+              "Azure OpenAI",
+              "OpenAI"
+            ],
+            "default": ""
+          },
+          "documentDB.llm.endpoint": {
+            "order": 31,
+            "type": "string",
+            "description": "The endpoint URL for the LLM service (required for Azure OpenAI, optional for OpenAI).",
+            "default": ""
           }
         }
       }

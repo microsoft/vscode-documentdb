@@ -501,4 +501,87 @@ export class ClustersClient {
             };
         }
     }
+
+    private async explainAggregate(dbName: string, collectionName: string, pipeline: Document[]): Promise<Document> {
+        const db = this._mongoClient.db(dbName);
+        return await db.command({
+            aggregate: collectionName,
+            pipeline: pipeline,
+            explain: true,
+        });
+    }
+
+    private async explainFind(dbName: string, collectionName: string, filter: Filter<Document>): Promise<Document> {
+        const collection = this._mongoClient.db(dbName).collection(collectionName);
+        return await collection.find(filter).explain();
+    }
+
+    // ---- type guards ----
+    private isPlainObject(v: unknown): v is Document {
+        return typeof v === 'object' && v !== null && !Array.isArray(v);
+    }
+    private isPipelineArray(v: unknown): v is Document[] {
+        return Array.isArray(v) && v.every((item) => this.isPlainObject(item));
+    }
+
+    async explainQuery(databaseName: string, collectionName: string, query: string): Promise<Document> {
+        try {
+            const trimmed = query.replace(/\s+/g, ' ');
+
+            if (trimmed.includes('.aggregate(')) {
+                const match = trimmed.match(/\.aggregate\s*\(\s*(\[[\s\S]*?\])\s*\)/);
+                if (!match) return { error: 'Failed to parse aggregate pipeline' };
+
+                let parsed: unknown;
+                try {
+                    parsed = JSON.parse(match[1]);
+                } catch (e) {
+                    return { error: 'Invalid JSON in aggregate pipeline: ' + (e as Error).message };
+                }
+
+                if (!this.isPipelineArray(parsed)) {
+                    return { error: 'Aggregate pipeline must be an array of stage documents' };
+                }
+                const pipeline: Document[] = parsed;
+                return await this.explainAggregate(databaseName, collectionName, pipeline);
+            } else if (trimmed.includes('.find(')) {
+                const match = trimmed.match(/\.find\s*\(\s*(\{[\s\S]*?\})\s*\)/);
+                if (!match) return { error: 'Failed to parse find filter' };
+
+                let parsed: unknown;
+                try {
+                    parsed = JSON.parse(match[1]);
+                } catch (e) {
+                    return { error: 'Invalid JSON in find filter: ' + (e as Error).message };
+                }
+
+                if (!this.isPlainObject(parsed)) {
+                    return { error: 'Find filter must be a JSON object' };
+                }
+                const filter: Filter<Document> = parsed as Filter<Document>;
+                return await this.explainFind(databaseName, collectionName, filter);
+            } else {
+                return { error: 'Unsupported query type. Only aggregate and find are supported.' };
+            }
+        } catch (err) {
+            return { error: (err as Error).message };
+        }
+    }
+
+    async runProfileCommand(
+        databaseName: string,
+        // , collectionName?: string
+    ): Promise<Document> {
+        const db = this._mongoClient.db(databaseName);
+
+        const command: Document = { profile: {} };
+        // if (databaseName) {
+        //     command.profile.db = databaseName;
+        // }
+        // if (collectionName) {
+        //     command.profile.col = collectionName;
+        // }
+
+        return await db.command(command);
+    }
 }
