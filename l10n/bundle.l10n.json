@@ -447,6 +447,7 @@
   "Unsupported authentication mechanism. Only \"Username and Password\" (SCRAM-SHA-256) is supported.": "Unsupported authentication mechanism. Only \"Username and Password\" (SCRAM-SHA-256) is supported.",
   "Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.": "Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.",
   "Unsupported authentication method: {0}": "Unsupported authentication method: {0}",
+  "Unsupported authentication method.": "Unsupported authentication method.",
   "Unsupported emulator type: \"{emulatorType}\"": "Unsupported emulator type: \"{emulatorType}\"",
   "Unsupported resource: {0}": "Unsupported resource: {0}",
   "Unsupported view for an authentication retry.": "Unsupported view for an authentication retry.",

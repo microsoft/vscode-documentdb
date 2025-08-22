@@ -68,7 +68,7 @@ export function getAuthMethod(id: AuthMethodId): AuthMethodInfo {
  * @param method - The authentication method string to check
  * @returns True if the method is a known AuthMethodId, false otherwise
  */
-export function isSupportedAuthMethod(method: string): method is AuthMethodId {
+export function isSupportedAuthMethod(method?: string): method is AuthMethodId {
     return Object.values(AuthMethodId).includes(method as AuthMethodId);
 }
 
@@ -107,7 +107,7 @@ export function createAuthMethodQuickPickItems(
 ): Array<{
     label: string;
     detail: string;
-    authMethod: AuthMethodId;
+    authMethod?: AuthMethodId;
     alwaysShow: boolean;
     description?: string;
 }> {

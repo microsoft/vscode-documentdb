@@ -35,6 +35,18 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
             filterUnsupported: false,
         });
 
+        const unknownMethodIds = availableMethods.filter((methodId) => !isSupportedAuthMethod(methodId));
+        context.telemetry.properties.unknownAuthMethods = unknownMethodIds.join(',');
+
+        // Add unknown methods to quickPickItems
+        for (const methodId of unknownMethodIds) {
+            quickPickItems.push({
+                label: methodId,
+                detail: l10n.t('Unsupported authentication method.'),
+                alwaysShow: true,
+            });
+        }
+
         const selectedItem = await context.ui.showQuickPick(quickPickItems, {
             placeHolder: l10n.t('Select an authentication method for "{resourceName}"', {
                 resourceName: context.resourceName,
