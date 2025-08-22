@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import { l10n } from 'vscode';
-import { AuthMethodId, createAuthMethodQuickPickItemsWithSupportInfo } from '../../documentdb/auth/AuthMethod';
+import { createAuthMethodQuickPickItemsWithSupportInfo } from '../../documentdb/auth/AuthMethod';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
@@ -20,11 +20,13 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredential
         const quickPickItems = createAuthMethodQuickPickItemsWithSupportInfo(context.availableAuthenticationMethods);
 
         // Reorder items to put the current selection first
-        if (context.selectedAuthenticationMethod === AuthMethodId.MicrosoftEntraID) {
-            const entraIdIndex = quickPickItems.findIndex((item) => item.authMethod === AuthMethodId.MicrosoftEntraID);
-            if (entraIdIndex > 0) {
-                const entraIdItem = quickPickItems.splice(entraIdIndex, 1)[0];
-                quickPickItems.unshift(entraIdItem);
+        if (context.selectedAuthenticationMethod) {
+            const selectedMethodIndex = quickPickItems.findIndex(
+                (item) => item.authMethod === context.selectedAuthenticationMethod,
+            );
+            if (selectedMethodIndex > 0) {
+                const selectedMethodItem = quickPickItems.splice(selectedMethodIndex, 1)[0];
+                quickPickItems.unshift(selectedMethodItem);
             }
         }
 
