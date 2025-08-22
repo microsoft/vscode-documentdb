@@ -45,6 +45,12 @@ export function getThemeAgnosticIconPath(iconName: string): IThemedIconPath {
     return a;
 }
 
+export function getIconURI(iconName: string): URI {
+    const uri = Utils.joinPath(ext.context.extensionUri, 'resources', 'icons', iconName);
+    assert.ok(fs.existsSync(uri.path));
+    return uri;
+}
+
 export function getThemeAgnosticIconURI(iconName: string): IThemedIconURI {
     const a = {
         light: Utils.joinPath(ext.context.extensionUri, 'resources', 'icons', 'theme-agnostic', iconName),

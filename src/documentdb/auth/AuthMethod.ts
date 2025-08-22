@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { getIconURI } from '../../constants';
 
 /**
  * Authentication method identifiers
@@ -26,7 +27,7 @@ export interface AuthMethodInfo {
     /** Localized detailed description for display in UI */
     readonly detail: string;
     /** Optional icon identifier for the authentication method */
-    readonly icon?: string;
+    readonly iconName?: string;
 }
 
 // Individual auth method definitions
@@ -40,7 +41,7 @@ export const MicrosoftEntraIDAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.MicrosoftEntraID,
     label: vscode.l10n.t('Entra ID for Azure Cosmos DB for MongoDB (vCore)'),
     detail: vscode.l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
-    // icon: 'Microsoft-Entra-ID-color-icon.svg',
+    // iconName: 'Microsoft-Entra-ID-BW-icon.svg',
 } as const;
 
 // Arrays for different contexts
@@ -104,13 +105,7 @@ export function authMethodsFromString(methods?: string[]): AuthMethodId[] {
 export function createAuthMethodQuickPickItems(
     availableMethods?: AuthMethodId[],
     options: { showSupportInfo?: boolean; filterUnsupported?: boolean } = {},
-): Array<{
-    label: string;
-    detail: string;
-    authMethod?: AuthMethodId;
-    alwaysShow: boolean;
-    description?: string;
-}> {
+): Array<vscode.QuickPickItem & { authMethod?: AuthMethodId }> {
     const { showSupportInfo = false, filterUnsupported = false } = options;
 
     let methodsToShow: AuthMethodInfo[];
@@ -127,6 +122,7 @@ export function createAuthMethodQuickPickItems(
         label: method.label,
         detail: method.detail,
         authMethod: method.id,
+        iconPath: method.iconName ? getIconURI(method.iconName) : undefined,
         alwaysShow: true,
         description:
             showSupportInfo && availableMethods && !availableMethods.includes(method.id)
