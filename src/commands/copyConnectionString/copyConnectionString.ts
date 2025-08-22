@@ -6,7 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { AuthMethod } from '../../documentdb/auth/AuthMethod';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
@@ -32,7 +32,7 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
         const parsedConnectionString = new DocumentDBConnectionString(credentials.connectionString);
         parsedConnectionString.username = credentials.connectionUser ?? '';
 
-        if (credentials.selectedAuthMethod === AuthMethod.MicrosoftEntraID) {
+        if (credentials.selectedAuthMethod === AuthMethodId.MicrosoftEntraID) {
             parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');
         }
 

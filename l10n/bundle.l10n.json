@@ -439,7 +439,6 @@
   "Unable to parse syntax near line {line}, col {column}: {message}": "Unable to parse syntax near line {line}, col {column}: {message}",
   "Unable to retrieve credentials for the selected cluster.": "Unable to retrieve credentials for the selected cluster.",
   "Unexpected status code: {0}": "Unexpected status code: {0}",
-  "Unknown authentication method (experimental support)": "Unknown authentication method (experimental support)",
   "Unknown error": "Unknown error",
   "Unknown Error": "Unknown Error",
   "Unrecognized node type encountered. Could not parse {constructorCall} as part of {functionCall}": "Unrecognized node type encountered. Could not parse {constructorCall} as part of {functionCall}",

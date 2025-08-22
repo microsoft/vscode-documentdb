@@ -5,7 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
-import { type AuthMethod } from '../../auth/AuthMethod';
+import { type AuthMethodId } from '../../auth/AuthMethod';
 
 export interface AuthenticateWizardContext extends IActionContext {
     /** These values have to be provided for the wizard to function correctly. */
@@ -14,7 +14,7 @@ export interface AuthenticateWizardContext extends IActionContext {
 
     /**
      * Available authentication methods.
-     * These are raw strings that may include unknown methods not yet in our AuthMethod const.
+     * These are raw strings that may include unknown methods not yet in our AuthMethodId enum.
      */
     availableAuthMethods?: string[];
 
@@ -31,9 +31,8 @@ export interface AuthenticateWizardContext extends IActionContext {
     isAuthMethodUpdated?: boolean;
     /**
      * The selected authentication method.
-     * Can be either a known AuthMethod or an unknown string value.
      */
-    selectedAuthMethod?: AuthMethod;
+    selectedAuthMethod?: AuthMethodId;
 
     aborted?: boolean;
 

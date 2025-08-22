@@ -13,7 +13,7 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
-import { AuthMethod, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -89,7 +89,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             let username: string | undefined = connectionCredentials.secrets.userName;
             let password: string | undefined = connectionCredentials.secrets.password;
-            let authMethod: AuthMethod | undefined = authMethodFromString(
+            let authMethod: AuthMethodId | undefined = authMethodFromString(
                 connectionCredentials.properties.selectedAuthMethod,
             );
 
@@ -99,12 +99,12 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
              */
             if (
                 !authMethod ||
-                (authMethod === AuthMethod.NativeAuth &&
+                (authMethod === AuthMethodId.NativeAuth &&
                     (!username || username.length === 0 || !password || password.length === 0))
             ) {
                 const wizardContext: AuthenticateWizardContext = {
                     ...context,
-                    availableAuthMethods: connectionCredentials.properties.availableAuthMethods,
+                    availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
                     selectedAuthMethod: authMethod,
 
                     // provide the default value for the username
@@ -173,7 +173,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             }
 
             switch (authMethod) {
-                case AuthMethod.MicrosoftEntraID:
+                case AuthMethodId.MicrosoftEntraID:
                     ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
                     break;
                 default:

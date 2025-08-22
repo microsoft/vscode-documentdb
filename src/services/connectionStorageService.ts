@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AuthMethod } from '../documentdb/auth/AuthMethod';
+import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
 import { StorageNames, StorageService, type Storage, type StorageItem } from './storageService';
@@ -176,8 +176,8 @@ export class ConnectionStorageService {
                     isEmulator: !!item.properties?.isEmulator,
                     disableEmulatorSecurity: !!item.properties?.disableEmulatorSecurity,
                 },
-                availableAuthMethods: [AuthMethod.NativeAuth],
-                selectedAuthMethod: AuthMethod.NativeAuth,
+                availableAuthMethods: [AuthMethodId.NativeAuth],
+                selectedAuthMethod: AuthMethodId.NativeAuth,
             },
             secrets: {
                 connectionString: parsedCS.toString(),

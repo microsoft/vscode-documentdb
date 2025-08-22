@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
-import { type AuthMethod } from './auth/AuthMethod';
+import { type AuthMethodId } from './auth/AuthMethod';
 import { addAuthenticationDataToConnectionString } from './utils/connectionStringHelpers';
 
 export interface ClustersCredentials {
@@ -14,7 +14,7 @@ export interface ClustersCredentials {
     connectionUser: string;
     connectionPassword?: string;
 
-    authMechanism?: AuthMethod;
+    authMechanism?: AuthMethodId;
     // Optional, as it's only relevant for local workspace connetions
     emulatorConfiguration?: EmulatorConfiguration;
 }
@@ -98,7 +98,7 @@ export class CredentialCache {
      */
     public static setAuthCredentials(
         mongoClusterId: string,
-        authMethod: AuthMethod,
+        authMethod: AuthMethodId,
         connectionString: string,
         username: string = '',
         password: string = '',

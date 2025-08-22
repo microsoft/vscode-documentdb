@@ -14,7 +14,7 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { AuthMethod } from '../../../../documentdb/auth/AuthMethod';
+import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
@@ -147,7 +147,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
                 connectionString: parsedCS.toString(),
                 connectionUser: parsedCS.username,
                 connectionPassword: parsedCS.password,
-                availableAuthMethods: [AuthMethod.NativeAuth],
+                availableAuthMethods: [AuthMethodId.NativeAuth],
             };
         });
     }

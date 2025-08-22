@@ -6,7 +6,7 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 
 import * as l10n from '@vscode/l10n';
-import { AuthMethod } from '../../auth/AuthMethod';
+import { AuthMethodId } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 
 export class ProvideUserNameStep extends AzureWizardPromptStep<AuthenticateWizardContext> {
@@ -28,7 +28,7 @@ export class ProvideUserNameStep extends AzureWizardPromptStep<AuthenticateWizar
     public shouldPrompt(context: AuthenticateWizardContext): boolean {
         // If availableAuthMethods is provided, only prompt when native auth is selected and username is undefined
         if (context.availableAuthMethods) {
-            return context.selectedAuthMethod === AuthMethod.NativeAuth && context.selectedUserName === undefined;
+            return context.selectedAuthMethod === AuthMethodId.NativeAuth && context.selectedUserName === undefined;
         }
 
         // If availableAuthMethods is not provided, prompt when username is undefined

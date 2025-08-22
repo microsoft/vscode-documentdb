@@ -31,7 +31,7 @@ import { Links } from '../constants';
 import { ext } from '../extensionVariables';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthHandler } from './auth/AuthHandler';
-import { AuthMethod } from './auth/AuthMethod';
+import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { CredentialCache, type ClustersCredentials } from './CredentialCache';
@@ -115,15 +115,15 @@ export class ClustersClient {
         }
 
         // default to NativeAuth if nothing is configured
-        const authMethod = credentials?.authMechanism ?? AuthMethod.NativeAuth;
+        const authMethod = credentials?.authMechanism ?? AuthMethodId.NativeAuth;
 
         // TODO: add a proper factory pattern here when more methods are added
         let authHandler: AuthHandler;
         switch (authMethod) {
-            case AuthMethod.NativeAuth:
+            case AuthMethodId.NativeAuth:
                 authHandler = new NativeAuthHandler(credentials);
                 break;
-            case AuthMethod.MicrosoftEntraID:
+            case AuthMethodId.MicrosoftEntraID:
                 authHandler = new MicrosoftEntraIDAuthHandler(credentials);
                 break;
             default:

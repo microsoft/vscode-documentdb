@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { type AuthMethod } from '../../documentdb/auth/AuthMethod';
+import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ext } from '../../extensionVariables';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { type TreeElement } from '../TreeElement';
@@ -36,8 +36,8 @@ export type ClusterCredentials = {
     connectionString: string;
     connectionUser?: string;
     connectionPassword?: string;
-    availableAuthMethods: AuthMethod[];
-    selectedAuthMethod?: AuthMethod; // some providers can pre-select a method
+    availableAuthMethods: AuthMethodId[];
+    selectedAuthMethod?: AuthMethodId; // some providers can pre-select a method
 };
 
 // This info will be available at every level in the tree for immediate access

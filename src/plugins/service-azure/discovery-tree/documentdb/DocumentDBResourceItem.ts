@@ -14,7 +14,7 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { AuthMethod } from '../../../../documentdb/auth/AuthMethod';
+import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { Views } from '../../../../documentdb/Views';
@@ -123,7 +123,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             );
 
             switch (wizardContext.selectedAuthMethod) {
-                case AuthMethod.MicrosoftEntraID:
+                case AuthMethodId.MicrosoftEntraID:
                     ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
                     break;
                 default:

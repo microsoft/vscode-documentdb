@@ -5,7 +5,7 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { AuthMethod, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import { AuthMethodId, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
@@ -42,11 +42,11 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const supportedAuthMethods = [...(connectionCredentials?.properties.availableAuthMethods ?? [])];
 
     if (hasDomainSuffix(AzureDomains.vCore, ...parsedCS.hosts)) {
-        if (!supportedAuthMethods.includes(AuthMethod.MicrosoftEntraID)) {
-            supportedAuthMethods.push(AuthMethod.MicrosoftEntraID);
+        if (!supportedAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
+            supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
         }
-        if (!supportedAuthMethods.includes(AuthMethod.NativeAuth)) {
-            supportedAuthMethods.push(AuthMethod.NativeAuth);
+        if (!supportedAuthMethods.includes(AuthMethodId.NativeAuth)) {
+            supportedAuthMethods.push(AuthMethodId.NativeAuth);
         }
     }
 

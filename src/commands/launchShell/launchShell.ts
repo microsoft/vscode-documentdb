@@ -7,7 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { isWindows } from '../../constants';
-import { AuthMethod } from '../../documentdb/auth/AuthMethod';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -35,7 +35,7 @@ export async function launchShell(
     let connectionString: string | undefined = undefined;
     let username: string | undefined = undefined;
     let password: string | undefined;
-    let authMechanism: AuthMethod | undefined;
+    let authMechanism: AuthMethodId | undefined;
 
     // 1. In case we're connected, we should use the preferred authentication method and settings
     //    This can be true for ClusterItemBase (cluster level), and will for sure be true on the database and the collection level
@@ -63,14 +63,14 @@ export async function launchShell(
             if (discoveredClusterCredentials) {
                 const selectedAuthMethod = discoveredClusterCredentials.selectedAuthMethod;
                 const nativeAuthIsAvailable = discoveredClusterCredentials.availableAuthMethods.includes(
-                    AuthMethod.NativeAuth,
+                    AuthMethodId.NativeAuth,
                 );
 
-                if (selectedAuthMethod === AuthMethod.NativeAuth || (nativeAuthIsAvailable && !selectedAuthMethod)) {
+                if (selectedAuthMethod === AuthMethodId.NativeAuth || (nativeAuthIsAvailable && !selectedAuthMethod)) {
                     connectionString = discoveredClusterCredentials.connectionString;
                     username = discoveredClusterCredentials.connectionUser;
                     password = discoveredClusterCredentials.connectionPassword;
-                    authMechanism = AuthMethod.NativeAuth;
+                    authMechanism = AuthMethodId.NativeAuth;
                 } else {
                     // Only SCRAM-SHA-256 (username/password) authentication is supported here.
                     // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
@@ -90,7 +90,7 @@ export async function launchShell(
         return;
     }
 
-    if (authMechanism !== AuthMethod.NativeAuth) {
+    if (authMechanism !== AuthMethodId.NativeAuth) {
         // Only SCRAM-SHA-256 (username/password) authentication is supported here.
         // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
         // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication

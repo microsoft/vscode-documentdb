@@ -12,7 +12,7 @@ import { type ClusterModel } from '../../tree/documentdb/ClusterModel';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { type DatabaseItemModel } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
-import { AuthMethod } from '../auth/AuthMethod';
+import { AuthMethodId } from '../auth/AuthMethod';
 import { type MongoCommand } from './MongoCommand';
 import { findCommandAtPosition, getAllCommandsFromText } from './ScrapbookHelpers';
 import { ShellScriptRunner } from './ShellScriptRunner';
@@ -38,7 +38,7 @@ export class ScrapbookServiceImpl {
      * Sets the current cluster and database, updating the CodeLens provider.
      */
     public async setConnectedCluster(cluster: ClusterModel, database: DatabaseItemModel) {
-        if (CredentialCache.getCredentials(cluster.id)?.authMechanism !== AuthMethod.NativeAuth) {
+        if (CredentialCache.getCredentials(cluster.id)?.authMechanism !== AuthMethodId.NativeAuth) {
             throw Error(
                 l10n.t('Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.'),
             );

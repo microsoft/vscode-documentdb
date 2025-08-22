@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { AuthMethod } from '../../documentdb/auth/AuthMethod';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
@@ -41,10 +41,10 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         context.valuesToMask.push(context.connectionString);
 
         // 3. Detect and/or guess available authentication methods
-        const supportedAuthMethods: AuthMethod[] = [AuthMethod.NativeAuth];
+        const supportedAuthMethods: AuthMethodId[] = [AuthMethodId.NativeAuth];
 
         if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {
-            supportedAuthMethods.push(AuthMethod.MicrosoftEntraID);
+            supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
         }
 
         context.availableAuthenticationMethods = supportedAuthMethods;

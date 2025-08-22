@@ -5,29 +5,12 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { AuthMethod } from '../../documentdb/auth/AuthMethod';
+import { createAuthMethodQuickPickItemsWithSupportInfo } from '../../documentdb/auth/AuthMethod';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 export class PromptAuthMethodStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const quickPickItems = [
-            {
-                label: vscode.l10n.t('Username and Password'),
-                detail: vscode.l10n.t('Authenticate using a username and password'),
-                authMethod: AuthMethod.NativeAuth,
-            },
-            {
-                label: vscode.l10n.t('Microsoft Entra ID'),
-                detail: vscode.l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
-                authMethod: AuthMethod.MicrosoftEntraID,
-            },
-        ].map((item) => ({
-            ...item,
-            alwaysShow: true,
-            description: context.availableAuthenticationMethods?.includes(item.authMethod)
-                ? undefined
-                : vscode.l10n.t('Cluster support unknown $(info)'),
-        }));
+        const quickPickItems = createAuthMethodQuickPickItemsWithSupportInfo(context.availableAuthenticationMethods);
 
         const selectedItem = await context.ui.showQuickPick(quickPickItems, {
             placeHolder: vscode.l10n.t('Select an authentication method'),

@@ -6,12 +6,17 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 
-import { AuthMethod, isSupportedAuthMethod } from '../../auth/AuthMethod';
+import {
+    AuthMethodId,
+    authMethodsFromString,
+    createAuthMethodQuickPickItems,
+    isSupportedAuthMethod,
+} from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 
 export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWizardContext> {
     public async prompt(context: AuthenticateWizardContext): Promise<void> {
-        const availableMethods = context.availableAuthMethods ?? [AuthMethod.NativeAuth];
+        const availableMethods = context.availableAuthMethods ?? [AuthMethodId.NativeAuth];
 
         // If there's only one method available, auto-select it
         if (availableMethods.length === 1) {
@@ -24,32 +29,10 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
             throw new Error(l10n.t('Unsupported authentication method: {0}', availableMethods[0]));
         }
 
-        // Create quick pick items for each auth method
-        const quickPickItems = availableMethods.map((method) => {
-            switch (method) {
-                case AuthMethod.NativeAuth:
-                    return {
-                        label: l10n.t('Username and Password'),
-                        detail: l10n.t('Authenticate using a username and password'),
-                        authMethod: AuthMethod.NativeAuth,
-                        alwaysShow: true,
-                    };
-                case AuthMethod.MicrosoftEntraID:
-                    return {
-                        label: l10n.t('Microsoft Entra ID'),
-                        detail: l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
-                        authMethod: AuthMethod.MicrosoftEntraID,
-                        alwaysShow: true,
-                    };
-                default:
-                    // Handle unknown methods gracefully
-                    return {
-                        label: method,
-                        detail: l10n.t('Unknown authentication method (experimental support)'),
-                        authMethod: method,
-                        alwaysShow: true,
-                    };
-            }
+        // Create quick pick items for each auth method - show all methods with support info
+        const quickPickItems = createAuthMethodQuickPickItems(authMethodsFromString(availableMethods), {
+            showSupportInfo: true,
+            filterUnsupported: false,
         });
 
         const selectedItem = await context.ui.showQuickPick(quickPickItems, {

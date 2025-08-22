@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import { l10n } from 'vscode';
-import { AuthMethod } from '../../documentdb/auth/AuthMethod';
+import { AuthMethodId, createAuthMethodQuickPickItemsWithSupportInfo } from '../../documentdb/auth/AuthMethod';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
@@ -17,30 +17,16 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredential
          * when the picker is displayed.
          */
 
-        const nativeAuthItem = {
-            authMethod: AuthMethod.NativeAuth,
-            label: l10n.t('Username and Password'),
-            detail: l10n.t('Authenticate using a username and password'),
-        };
+        const quickPickItems = createAuthMethodQuickPickItemsWithSupportInfo(context.availableAuthenticationMethods);
 
-        const entraIdItem = {
-            authMethod: AuthMethod.MicrosoftEntraID,
-            label: l10n.t('Microsoft Entra ID'),
-            detail: l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
-        };
-
-        const allItems =
-            context.selectedAuthenticationMethod === AuthMethod.MicrosoftEntraID
-                ? [entraIdItem, nativeAuthItem]
-                : [nativeAuthItem, entraIdItem];
-
-        const quickPickItems = allItems.map((item) => ({
-            ...item,
-            alwaysShow: true,
-            description: context.availableAuthenticationMethods.includes(item.authMethod)
-                ? undefined
-                : l10n.t('Cluster support unknown $(info)'),
-        }));
+        // Reorder items to put the current selection first
+        if (context.selectedAuthenticationMethod === AuthMethodId.MicrosoftEntraID) {
+            const entraIdIndex = quickPickItems.findIndex((item) => item.authMethod === AuthMethodId.MicrosoftEntraID);
+            if (entraIdIndex > 0) {
+                const entraIdItem = quickPickItems.splice(entraIdIndex, 1)[0];
+                quickPickItems.unshift(entraIdItem);
+            }
+        }
 
         const selectedItem = await context.ui.showQuickPick(quickPickItems, {
             placeHolder: l10n.t('Select an authentication method'),
