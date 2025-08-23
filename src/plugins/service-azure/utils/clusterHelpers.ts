@@ -93,15 +93,12 @@ export function extractCredentialsFromCluster(
 
     const allowedModes = clusterInformation.properties?.authConfig?.allowedModes ?? [];
     context.telemetry.properties.receivedAuthMethods = allowedModes.join(',');
+    context.telemetry.properties.receivedAuthMethodsCount = allowedModes.length.toString();
 
-    for (const method of allowedModes) {
-        if (isSupportedAuthMethod(method)) {
-            credentials.availableAuthMethods.push(method);
-        } else {
-            context.telemetry.properties.warning = 'unknown-authmethod';
-            console.warn(`Unknown auth method from Azure SDK: ${method}`);
-        }
-    }
+    credentials.availableAuthMethods = allowedModes.filter(isSupportedAuthMethod);
+
+    const unknownMethodIds = allowedModes.filter((methodId) => !isSupportedAuthMethod(methodId));
+    context.telemetry.properties.unknownAuthMethods = unknownMethodIds.join(',');
 
     return credentials;
 }
