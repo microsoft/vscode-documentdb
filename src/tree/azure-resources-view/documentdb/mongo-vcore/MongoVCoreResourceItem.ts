@@ -23,10 +23,13 @@ import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
 import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
-import { ClusterItemBase } from '../../../documentdb/ClusterItemBase';
+import { ClusterItemBase, type ClusterCredentials } from '../../../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../documentdb/ClusterModel';
 
 export class MongoVCoreResourceItem extends ClusterItemBase {
+    public getCredentials(): Promise<ClusterCredentials | undefined> {
+        throw new Error('Method not implemented.');
+    }
     constructor(
         readonly subscription: AzureSubscription,
         cluster: ClusterModel,

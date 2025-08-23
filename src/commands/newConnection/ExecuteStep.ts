@@ -11,7 +11,7 @@ import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 
 import { Views } from '../../documentdb/Views';
-import { type StorageItem, StorageNames, StorageService } from '../../services/storageService';
+import { type ConnectionItem, ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,
@@ -33,23 +33,29 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             },
             async () => {
                 const api = context.experience?.api ?? API.DocumentDB;
-                const connectionString = context.connectionString!;
                 const parentId = context.parentId;
 
-                const parsedCS = new DocumentDBConnectionString(connectionString);
-                const joinedHosts = [...parsedCS.hosts].sort().join(',');
+                const newConnectionString = context.connectionString!;
+                const newPassword = context.password;
+                const newUsername = context.username;
+                const newAuthenticationMethod = context.selectedAuthenticationMethod;
+                const newAvailableAuthenticationMethods =
+                    context.availableAuthenticationMethods ??
+                    (newAuthenticationMethod ? [newAuthenticationMethod] : []);
+
+                const newParsedCS = new DocumentDBConnectionString(newConnectionString);
+                const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
 
                 //  Sanity Check 1/2: is there a connection with the same username + host in there?
-                const existingConnections = await StorageService.get(StorageNames.Connections).getItems('clusters');
+                const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
-                const existingDuplicateConnection = existingConnections.find((item) => {
-                    const secret = item.secrets?.[0];
-                    if (!secret) {
-                        return false; // Skip if no secret string is found
-                    }
+                const existingDuplicateConnection = existingConnections.find((existingConnection) => {
+                    const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
+                    const existingHostsJoined = [...existingCS.hosts].sort().join(',');
 
-                    const itemCS = new DocumentDBConnectionString(secret);
-                    return itemCS.username === parsedCS.username && [...itemCS.hosts].sort().join(',') === joinedHosts;
+                    return (
+                        existingConnection.secrets.userName === newUsername && existingHostsJoined === newJoinedHosts
+                    );
                 });
 
                 if (existingDuplicateConnection) {
@@ -69,16 +75,23 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     });
                 }
 
+                // remove obsolete authMechanism entry
+                if (newParsedCS.searchParams.get('authMechanism') === 'SCRAM-SHA-256') {
+                    newParsedCS.searchParams.delete('authMechanism');
+                }
+                newParsedCS.username = '';
+                newParsedCS.password = '';
+
                 let newConnectionLabel =
-                    parsedCS.username && parsedCS.username.length > 0
-                        ? `${parsedCS.username}@${joinedHosts}`
-                        : joinedHosts;
+                    newUsername && newUsername.length > 0 ? `${newUsername}@${newJoinedHosts}` : newJoinedHosts;
 
                 // Sanity Check 2/2: is there a connection with the same 'label' in there?
                 // If so, append a number to the label.
                 // This scenario is possible as users are allowed to rename their connections.
+                let existingDuplicateLabel = existingConnections.find(
+                    (connection) => connection.name === newConnectionLabel,
+                );
 
-                let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
                 // If a connection with the same label exists, append a number to the label
                 while (existingDuplicateLabel) {
                     /**
@@ -99,21 +112,27 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                         const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
                         newConnectionLabel = `${baseName} (${count})`;
                     }
-                    existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+                    existingDuplicateLabel = existingConnections.find(
+                        (connection) => connection.name === newConnectionLabel,
+                    );
                 }
 
                 // Now, we're safe to create a new connection with the new unique label
 
-                const storageId = generateDocumentDBStorageId(connectionString);
+                const storageId = generateDocumentDBStorageId(newParsedCS.toString());
 
-                const storageItem: StorageItem = {
+                const storageItem: ConnectionItem = {
                     id: storageId,
                     name: newConnectionLabel,
-                    properties: { isEmulator: false, api: api },
-                    secrets: [connectionString],
+                    properties: {
+                        api: api,
+                        availableAuthMethods: newAvailableAuthenticationMethods,
+                        selectedAuthMethod: newAuthenticationMethod,
+                    },
+                    secrets: { connectionString: newParsedCS.toString(), userName: newUsername, password: newPassword },
                 };
 
-                await StorageService.get(StorageNames.Connections).push('clusters', storageItem, true);
+                await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
 
                 // Refresh the connections tree when adding a new root-level connection
                 if (parentId === undefined || parentId === '') {

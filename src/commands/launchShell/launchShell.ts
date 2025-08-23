@@ -7,6 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { isWindows } from '../../constants';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -31,35 +32,81 @@ export async function launchShell(
     context.telemetry.properties.experience = node.experience.api;
     context.telemetry.properties.isWindows = isWindows.toString();
 
-    let rawConnectionString: string | undefined;
+    let connectionString: string | undefined = undefined;
+    let username: string | undefined = undefined;
+    let password: string | undefined;
+    let authMechanism: AuthMethodId | undefined;
 
-    // connection string discovery for these items can be slow, so we need to run it with a temporary description
-
-    if (node instanceof ClusterItemBase) {
-        // connecting at the account level
-        // we need to discover the connection string
-        rawConnectionString = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
-            return node.getConnectionString();
-        });
+    // 1. In case we're connected, we should use the preferred authentication method and settings
+    //    This can be true for ClusterItemBase (cluster level), and will for sure be true on the database and the collection level
+    if (ClustersClient.exists(node.cluster.id)) {
+        const activeClient: ClustersClient = await ClustersClient.getClient(node.cluster.id);
+        const clusterCredentials = activeClient.getCredentials();
+        if (clusterCredentials) {
+            connectionString = clusterCredentials.connectionString;
+            username = clusterCredentials.connectionUser;
+            password = clusterCredentials.connectionPassword;
+            authMechanism = clusterCredentials.authMechanism;
+        }
     } else {
-        // node is instanceof DatabaseItem or CollectionItem and we alrady have the connection string somewhere
-        const client: ClustersClient = await ClustersClient.getClient(node.cluster.id);
-        rawConnectionString = client.getConnectionStringWithPassword();
+        // it looks like there is no active connection.
+        // We can attemp to read connection info from the cluster information in case we're at the cluster level
+        if (node instanceof ClusterItemBase) {
+            const discoveredClusterCredentials = await ext.state.runWithTemporaryDescription(
+                node.id,
+                l10n.t('Working…'),
+                async () => {
+                    return node.getCredentials();
+                },
+            );
+
+            if (discoveredClusterCredentials) {
+                const selectedAuthMethod = discoveredClusterCredentials.selectedAuthMethod;
+                const nativeAuthIsAvailable = discoveredClusterCredentials.availableAuthMethods.includes(
+                    AuthMethodId.NativeAuth,
+                );
+
+                if (selectedAuthMethod === AuthMethodId.NativeAuth || (nativeAuthIsAvailable && !selectedAuthMethod)) {
+                    connectionString = discoveredClusterCredentials.connectionString;
+                    username = discoveredClusterCredentials.connectionUser;
+                    password = discoveredClusterCredentials.connectionPassword;
+                    authMechanism = AuthMethodId.NativeAuth;
+                } else {
+                    // Only SCRAM-SHA-256 (username/password) authentication is supported here.
+                    // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
+                    // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
+                    throw Error(
+                        l10n.t(
+                            'Unsupported authentication mechanism. Only "Username and Password" (SCRAM-SHA-256) is supported.',
+                        ),
+                    );
+                }
+            }
+        }
     }
 
-    if (!rawConnectionString) {
-        void vscode.window.showErrorMessage(l10n.t('Failed to extract the connection string from the selected node.'));
+    if (!connectionString) {
+        void vscode.window.showErrorMessage(l10n.t('Failed to extract cluster credentials from the selected node.'));
         return;
     }
-    context.valuesToMask.push(rawConnectionString);
 
-    const connectionString: DocumentDBConnectionString = new DocumentDBConnectionString(rawConnectionString);
-    maskSensitiveValuesInTelemetry(context, connectionString);
+    if (authMechanism !== AuthMethodId.NativeAuth) {
+        // Only SCRAM-SHA-256 (username/password) authentication is supported here.
+        // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
+        // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
+        throw Error(
+            l10n.t('Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.'),
+        );
+    }
+
+    const parsedConnectionString: DocumentDBConnectionString = new DocumentDBConnectionString(connectionString);
+    parsedConnectionString.username = username ?? '';
+    maskSensitiveValuesInTelemetry(context, parsedConnectionString);
 
     // Note to code maintainers:
     // We're encoding the password to ensure it is safe to use in the connection string
     // shared with the shell process.
-    const shellSafePassword = encodeURIComponent(connectionString.password);
+    const shellSafePassword = encodeURIComponent(password ?? '');
     context.valuesToMask.push(shellSafePassword);
 
     // Use unique environment variable names to avoid conflicts
@@ -115,22 +162,22 @@ export async function launchShell(
     // Note to code maintainers:
     // We're using a sentinel value approach here to avoid URL encoding issues with environment variable
     // references. For example, in PowerShell the environment variable reference "$env:VAR_NAME" contains
-    // a colon character (":") which gets URL encoded to "%3A" when added directly to connectionString.password.
+    // a colon character (":") which gets URL encoded to "%3A" when added directly to parsedConnectionString.password.
     // This encoding breaks the environment variable reference syntax in the shell.
     //
     // By using a unique sentinel string first and then replacing it with the raw (unencoded) environment
     // variable reference after toString() is called, we ensure the shell correctly interprets the
     // environment variable.
     const PASSWORD_SENTINEL = '__MONGO_PASSWORD_PLACEHOLDER__';
-    connectionString.password = PASSWORD_SENTINEL;
+    parsedConnectionString.password = PASSWORD_SENTINEL;
 
     // If the username or password is empty, remove them from the connection string to avoid invalid connection strings
-    if (!connectionString.username || !shellSafePassword) {
-        connectionString.password = '';
+    if (!parsedConnectionString.username || !shellSafePassword) {
+        parsedConnectionString.password = '';
     }
 
     if ('databaseInfo' in node && node.databaseInfo?.name) {
-        connectionString.pathname = node.databaseInfo.name;
+        parsedConnectionString.pathname = node.databaseInfo.name;
     }
 
     // } else if (node instanceof CollectionItem) { // --> --eval terminates, we'd have to launch with a script etc. let's look into it latter
@@ -139,7 +186,7 @@ export async function launchShell(
     // }
 
     const terminal: vscode.Terminal = vscode.window.createTerminal({
-        name: `MongoDB Shell (${connectionString.username || 'default'})`, // Display actual username or a default
+        name: `MongoDB Shell (${parsedConnectionString.username || 'default'})`, // Display actual username or a default
         hideFromUser: false,
         env: {
             [uniquePassEnvVar]: shellSafePassword,
@@ -158,7 +205,7 @@ export async function launchShell(
     const tlsConfiguration = isEmulatorWithSecurityDisabled ? '--tlsAllowInvalidCertificates' : '';
 
     // Get the connection string and replace the sentinel with the environment variable syntax
-    const finalConnectionString = connectionString.toString().replace(PASSWORD_SENTINEL, envVarSyntax);
+    const finalConnectionString = parsedConnectionString.toString().replace(PASSWORD_SENTINEL, envVarSyntax);
 
     terminal.sendText(`mongosh "${finalConnectionString}" ${tlsConfiguration}`);
     terminal.show();

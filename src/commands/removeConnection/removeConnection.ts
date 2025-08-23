@@ -7,6 +7,7 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 import * as l10n from '@vscode/l10n';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { StorageNames, StorageService } from '../../services/storageService';
 import { DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
@@ -48,9 +49,9 @@ export async function removeConnection(
     if (node instanceof DocumentDBClusterItem) {
         await ext.state.showDeleting(node.id, async () => {
             if ((node as DocumentDBClusterItem).cluster.emulatorConfiguration?.isEmulator) {
-                await StorageService.get(StorageNames.Connections).delete('emulators', node.storageId);
+                await ConnectionStorageService.delete(ConnectionType.Emulators, node.storageId);
             } else {
-                await StorageService.get(StorageNames.Connections).delete('clusters', node.storageId);
+                await ConnectionStorageService.delete(ConnectionType.Clusters, node.storageId);
             }
         });
 

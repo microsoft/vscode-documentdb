@@ -6,7 +6,7 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
-import { StorageNames, StorageService } from '../../services/storageService';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
@@ -14,38 +14,41 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
     public priority: number = 100;
 
     public async execute(context: UpdateCredentialsWizardContext): Promise<void> {
-        const resourceType = context.isEmulator ? 'emulators' : 'clusters';
+        const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
+        const connectionCredentials = await ConnectionStorageService.get(context.storageId, resourceType);
 
-        const storage = StorageService.get(StorageNames.Connections);
-        const items = await storage.getItems(resourceType);
-
-        // TODO: create a getItem method in storageService, otherwise too many secrets
-        // are being read from the storage
-        const item = items.find((item) => item.id === context.storageId);
-
-        if (!item) {
-            console.error(`Item with ID "${context.storageId}" not found in storage.`);
+        if (!connectionCredentials) {
+            console.error(`Connection with ID "${context.storageId}" not found in storage.`);
             void window.showErrorMessage(l10n.t('Failed to save credentials.'));
             return;
         }
 
-        if (item && item.secrets?.[0]) {
+        if (connectionCredentials && connectionCredentials.secrets?.connectionString) {
             // Update the connection string with the new username and password
 
-            const connectionString = item.secrets[0];
+            const connectionString = connectionCredentials.secrets.connectionString;
 
             const parsedConnectionString = new DocumentDBConnectionString(connectionString);
-            parsedConnectionString.username = context.username || '';
-            parsedConnectionString.password = context.password || '';
+            parsedConnectionString.username = '';
+            parsedConnectionString.password = '';
 
             // Update the item in storage
-            item.secrets = [parsedConnectionString.toString()];
+
+            connectionCredentials.secrets = {
+                ...connectionCredentials.secrets,
+                connectionString: parsedConnectionString.toString(),
+                ...(context.username ? { userName: context.username } : {}),
+                ...(context.password ? { password: context.password } : {}),
+            };
+
+            connectionCredentials.properties.selectedAuthMethod = context.selectedAuthenticationMethod?.toString();
 
             try {
-                await storage.push(resourceType, item, true);
+                await ConnectionStorageService.save(resourceType, connectionCredentials, true);
             } catch (pushError) {
-                console.error(`Failed to save credentials for item "${context.storageId}":`, pushError);
+                console.error(`Failed to save credentials for connection "${context.storageId}":`, pushError);
                 void window.showErrorMessage(l10n.t('Failed to save credentials.'));
+                return;
             }
 
             showConfirmationAsInSettings(l10n.t('Credentials updated successfully.'));
