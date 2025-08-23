@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { MongoClustersExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { StorageNames, StorageService } from '../../services/storageService';
+import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type ExtendedTreeDataProvider } from '../ExtendedTreeDataProvider';
@@ -188,14 +188,14 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
      * Helper function to get the root items of the connections tree.
      */
     private async getRootItems(parentId: string): Promise<TreeElement[] | null | undefined> {
-        const connectionItems = await StorageService.get(StorageNames.Connections).getItems('clusters');
+        const connectionItems = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
         if (connectionItems.length === 0) {
             /**
              * we have a special case here as we want to show a "welcome screen" in the case when no connections were found.
              * However, we need to lookup the emulator items as well, so we need to check if there are any emulators.
              */
-            const emulatorItems = await StorageService.get(StorageNames.Connections).getItems('emulators');
+            const emulatorItems = await ConnectionStorageService.getAll(ConnectionType.Emulators);
             if (emulatorItems.length === 0) {
                 return null;
             }
@@ -203,13 +203,13 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
 
         const rootItems = [
             new LocalEmulatorsItem(parentId),
-            ...connectionItems.map((item) => {
+            ...connectionItems.map((connection: ConnectionItem) => {
                 const model: ClusterModelWithStorage = {
-                    id: `${parentId}/${item.id}`,
-                    storageId: item.id,
-                    name: item.name,
+                    id: `${parentId}/${connection.id}`,
+                    storageId: connection.id,
+                    name: connection.name,
                     dbExperience: MongoClustersExperience,
-                    connectionString: item?.secrets?.[0] ?? undefined,
+                    connectionString: connection?.secrets?.connectionString ?? undefined,
                 };
 
                 return new DocumentDBClusterItem(model);

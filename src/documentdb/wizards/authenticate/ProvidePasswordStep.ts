@@ -5,6 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { AuthMethodId } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 
 export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizardContext> {
@@ -17,7 +18,8 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizar
             placeHolder: l10n.t('Password for {username_at_resource}', {
                 username_at_resource: `${context.selectedUserName}@${context.resourceName}`,
             }),
-            title: l10n.t('Authenticate to connect with your MongoDB cluster'),
+            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
+            value: context.password ?? '',
             password: true,
             ignoreFocusOut: true,
         });
@@ -29,6 +31,8 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizar
     }
 
     public shouldPrompt(context: AuthenticateWizardContext): boolean {
-        return context.password === undefined;
+        // with no availableAuthMethods, we're in the 'old' mode, so we just prompt for the password,
+        // otherwise, we prompt only with only for NativeAuth
+        return !context.availableAuthMethods || context.selectedAuthMethod === AuthMethodId.NativeAuth;
     }
 }

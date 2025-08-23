@@ -12,10 +12,13 @@ import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../../../extensionVariables';
 import { createCosmosDBManagementClient } from '../../../../utils/azureClients';
-import { ClusterItemBase } from '../../../documentdb/ClusterItemBase';
+import { ClusterItemBase, type ClusterCredentials } from '../../../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../documentdb/ClusterModel';
 
 export class MongoRUResourceItem extends ClusterItemBase {
+    public getCredentials(): Promise<ClusterCredentials | undefined> {
+        throw new Error('Method not implemented.');
+    }
     constructor(
         readonly subscription: AzureSubscription,
         mongoCluster: ClusterModel,

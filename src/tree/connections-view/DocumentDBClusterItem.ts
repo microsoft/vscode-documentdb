@@ -7,24 +7,25 @@ import {
     AzureWizard,
     callWithTelemetryAndErrorHandling,
     nonNullProp,
-    nonNullValue,
     UserCancelledError,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
+import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../documentdb/wizards/authenticate/AuthenticateWizardContext';
+import { ChooseAuthMethodStep } from '../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
 import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
-import { StorageNames, StorageService } from '../../services/storageService';
-import { ClusterItemBase } from '../documentdb/ClusterItemBase';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { ClusterItemBase, type ClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 
@@ -40,8 +41,23 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
         return this.cluster.storageId;
     }
 
-    public getConnectionString(): Promise<string | undefined> {
-        return Promise.resolve(this.cluster.connectionString);
+    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+        const connectionType = this.cluster.emulatorConfiguration?.isEmulator
+            ? ConnectionType.Emulators
+            : ConnectionType.Clusters;
+        const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
+
+        if (!connectionCredentials) {
+            return undefined;
+        }
+
+        return {
+            connectionString: connectionCredentials.secrets.connectionString,
+            connectionUser: connectionCredentials.secrets.userName,
+            connectionPassword: connectionCredentials.secrets.password,
+            availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
+            selectedAuthMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
+        };
     }
 
     /**
@@ -54,28 +70,50 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             context.telemetry.properties.view = Views.ConnectionsView;
 
             ext.outputChannel.appendLine(
-                l10n.t('Attempting to authenticate with {cluster}', {
+                l10n.t('Attempting to authenticate with "{cluster}"…', {
                     cluster: this.cluster.name,
                 }),
             );
 
-            let clustersClient: ClustersClient;
+            const connectionType = this.cluster.emulatorConfiguration?.isEmulator
+                ? ConnectionType.Emulators
+                : ConnectionType.Clusters;
 
-            const connectionString = new DocumentDBConnectionString(nonNullValue(this.cluster.connectionString));
+            const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
-            let username: string | undefined = connectionString.username;
-            let password: string | undefined = connectionString.password;
+            if (!connectionCredentials) {
+                return null;
+            }
 
-            if (!username || username.length === 0 || !password || password.length === 0) {
+            const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
+
+            let username: string | undefined = connectionCredentials.secrets.userName;
+            let password: string | undefined = connectionCredentials.secrets.password;
+            let authMethod: AuthMethodId | undefined = authMethodFromString(
+                connectionCredentials.properties.selectedAuthMethod,
+            );
+
+            /**
+             * Prompt for credentials if no auth method selected or
+             * native auth but no username/password set
+             */
+            if (
+                !authMethod ||
+                (authMethod === AuthMethodId.NativeAuth &&
+                    (!username || username.length === 0 || !password || password.length === 0))
+            ) {
                 const wizardContext: AuthenticateWizardContext = {
                     ...context,
+                    availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
+                    selectedAuthMethod: authMethod,
+
                     // provide the default value for the username
-                    adminUserName: username && username.length > 0 ? username : undefined,
+                    adminUserName: username,
+                    password: password,
                     resourceName: this.cluster.name,
 
                     // enforce the user to confirm theusername
                     selectedUserName: undefined,
-                    // no setting needed for password, we'll always ask for the password
                 };
 
                 // Prompt the user for credentials using the extracted method
@@ -86,10 +124,13 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                     return null;
                 }
 
-                context.valuesToMask.push(nonNullProp(wizardContext, 'password'));
+                if (wizardContext.password) {
+                    context.valuesToMask.push(wizardContext.password);
+                }
 
-                username = nonNullProp(wizardContext, 'selectedUserName');
-                password = nonNullProp(wizardContext, 'password');
+                username = wizardContext.selectedUserName;
+                password = wizardContext.password;
+                authMethod = nonNullProp(wizardContext, 'selectedAuthMethod');
 
                 if (wizardContext.saveCredentials) {
                     ext.outputChannel.append(
@@ -98,25 +139,22 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         }),
                     );
 
-                    // Save the credentials to the connection string
-                    connectionString.username = username;
-                    connectionString.password = password;
+                    const connectionType = this.cluster.emulatorConfiguration?.isEmulator
+                        ? ConnectionType.Emulators
+                        : ConnectionType.Clusters;
 
-                    let resourceType = 'clusters';
-                    if (this.cluster.emulatorConfiguration?.isEmulator) {
-                        resourceType = 'emulators';
-                    }
-
-                    const storage = StorageService.get(StorageNames.Connections);
-                    const items = await storage.getItems(resourceType);
-
-                    const item = items.find((item) => item.id === this.storageId);
-                    if (item) {
-                        item.secrets = [connectionString.toString()];
+                    const connection = await ConnectionStorageService.get(this.storageId, connectionType);
+                    if (connection) {
+                        connection.properties.selectedAuthMethod = authMethod;
+                        connection.secrets = {
+                            connectionString: connectionString.toString(),
+                            userName: username,
+                            password: password,
+                        };
                         try {
-                            await storage.push(resourceType, item, true);
+                            await ConnectionStorageService.save(connectionType, connection, true);
                         } catch (pushError) {
-                            console.error(`Failed to save credentials for item "${this.id}":`, pushError);
+                            console.error(`Failed to save credentials for connection "${this.id}":`, pushError);
                             void vscode.window.showErrorMessage(
                                 l10n.t('Failed to save credentials for "{cluster}".', {
                                     cluster: this.cluster.name,
@@ -124,7 +162,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                             );
                         }
                     } else {
-                        console.error(`Item with ID "${this.storageId}" not found in storage.`);
+                        console.error(`Connection with ID "${this.storageId}" not found in storage.`);
                         void vscode.window.showErrorMessage(
                             l10n.t('Failed to save credentials for "{cluster}".', {
                                 cluster: this.cluster.name,
@@ -134,38 +172,47 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                 }
             }
 
-            ext.outputChannel.append(l10n.t('Connecting to the cluster as "{username}"…', { username }));
+            switch (authMethod) {
+                case AuthMethodId.MicrosoftEntraID:
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
+                    break;
+                default:
+                    ext.outputChannel.append(
+                        l10n.t('Connecting to the cluster as "{username}"…', {
+                            username: username ?? '',
+                        }),
+                    );
+            }
 
             // Cache the credentials
-            CredentialCache.setCredentials(
+            CredentialCache.setAuthCredentials(
                 this.id,
+                authMethod,
                 connectionString.toString(),
                 username,
                 password,
                 this.cluster.emulatorConfiguration, // workspace items can potentially be connecting to an emulator, so we always pass it
             );
 
+            let clustersClient: ClustersClient;
+
             // Attempt to create the client with the provided credentials
             try {
-                clustersClient = await ClustersClient.getClient(this.id).catch((error: Error) => {
-                    ext.outputChannel.appendLine(l10n.t('failed.'));
-                    ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: error.message }));
-
-                    void vscode.window.showErrorMessage(
-                        l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                        {
-                            modal: true,
-                            detail:
-                                l10n.t('Revisit connection details and try again.') +
-                                '\n\n' +
-                                l10n.t('Error: {error}', { error: error.message }),
-                        },
-                    );
-
-                    throw error;
-                });
+                clustersClient = await ClustersClient.getClient(this.id);
             } catch (error) {
-                console.error(error);
+                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+
+                void vscode.window.showErrorMessage(
+                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
+                    {
+                        modal: true,
+                        detail:
+                            l10n.t('Revisit connection details and try again.') +
+                            '\n\n' +
+                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                    },
+                );
+
                 // If connection fails, remove cached credentials
                 await ClustersClient.deleteClient(this.id);
                 CredentialCache.deleteCredentials(this.id);
@@ -175,9 +222,8 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             }
 
             ext.outputChannel.appendLine(
-                l10n.t('Connected to "{cluster}" as "{username}"', {
+                l10n.t('Connected to the cluster "{cluster}".', {
                     cluster: this.cluster.name,
-                    username,
                 }),
             );
 
@@ -193,9 +239,13 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [new ProvideUserNameStep(), new ProvidePasswordStep(), new SaveCredentialsStep()],
-            executeSteps: [],
-            title: l10n.t('Authenticate to connect with your MongoDB cluster'),
+            promptSteps: [
+                new ChooseAuthMethodStep(),
+                new ProvideUserNameStep(),
+                new ProvidePasswordStep(),
+                new SaveCredentialsStep(),
+            ],
+            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             showLoadingPrompt: true,
         });
 

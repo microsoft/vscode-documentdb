@@ -10,6 +10,6 @@ export interface UpdateCSWizardContext extends IActionContext {
     isEmulator: boolean;
     storageId: string;
 
-    originalCS_NoCredentials: string;
-    newCS_NoCredentials?: string;
+    originalConnectionString: string;
+    newConnectionString?: string;
 }

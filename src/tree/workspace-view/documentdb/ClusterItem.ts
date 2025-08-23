@@ -19,13 +19,16 @@ import { type AuthenticateWizardContext } from '../../../documentdb/wizards/auth
 import { ProvidePasswordStep } from '../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../extensionVariables';
-import { ClusterItemBase } from '../../documentdb/ClusterItemBase';
+import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type AttachedClusterModel } from '../../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../../TreeElementWithStorageId';
 
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 
 export class ClusterItem extends ClusterItemBase implements TreeElementWithStorageId {
+    public getCredentials(): Promise<ClusterCredentials | undefined> {
+        throw new Error('Method not implemented.');
+    }
     public override readonly cluster: AttachedClusterModel;
 
     constructor(mongoCluster: AttachedClusterModel) {
