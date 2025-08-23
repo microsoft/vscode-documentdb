@@ -37,6 +37,7 @@ When you use the Azure CosmosDB for MongoDB (vCore) plugin, the following steps 
 4. **Connection Options:**
    - You can connect to a cluster by expanding its entry in the tree view.
    - You can save a cluster to your `DocumentDB Connections` list using the context menu or by clicking the save icon next to its name.
+   - When connecting or saving, the extension detects the authentication methods supported by the cluster (e.g., **Username/Password** or **Entra ID**). If multiple are available, you will be prompted to choose your preferred method.
 
 ## Additional Notes
 

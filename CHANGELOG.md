@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.3.0
+
+### New Features & Improvements
+
+- **Entra ID Authentication for Azure Cosmos DB for MongoDB (vCore)**: Added support for Microsoft Entra ID (formerly Azure AD) as an authentication method. This allows for secure, passwordless connections and is integrated into the service discovery and connection workflows. [#123](https://github.com/microsoft/vscode-documentdb/issues/123)
+
 ## 0.2.4
 
 ### New Features & Improvements
