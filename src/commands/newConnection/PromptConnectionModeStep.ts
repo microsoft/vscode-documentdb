@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { MongoClustersExperience } from '../../DocumentDBExperiences';
 import { ExecuteStep } from './ExecuteStep';
 import { ConnectionMode, type NewConnectionWizardContext } from './NewConnectionWizardContext';
+import { PromptAuthMethodStep } from './PromptAuthMethodStep';
 import { PromptConnectionStringStep } from './PromptConnectionStringStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
 import { PromptServiceDiscoveryStep } from './PromptServiceDiscoveryStep';
@@ -60,7 +61,12 @@ export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectio
             case ConnectionMode.ConnectionString:
                 return {
                     title: l10n.t('Connection String'),
-                    promptSteps: [new PromptConnectionStringStep(), new PromptUsernameStep(), new PromptPasswordStep()],
+                    promptSteps: [
+                        new PromptConnectionStringStep(),
+                        new PromptAuthMethodStep(),
+                        new PromptUsernameStep(),
+                        new PromptPasswordStep(),
+                    ],
                     executeSteps: [new ExecuteStep()],
                 };
             case ConnectionMode.ServiceDiscovery:

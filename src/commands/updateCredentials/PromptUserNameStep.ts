@@ -6,6 +6,7 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 
 import * as l10n from '@vscode/l10n';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 export class PromptUserNameStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
@@ -20,7 +21,7 @@ export class PromptUserNameStep extends AzureWizardPromptStep<UpdateCredentialsW
         context.valuesToMask.push(context.username, username);
     }
 
-    public shouldPrompt(): boolean {
-        return true;
+    public shouldPrompt(context: UpdateCredentialsWizardContext): boolean {
+        return context.selectedAuthenticationMethod === AuthMethodId.NativeAuth;
     }
 }
