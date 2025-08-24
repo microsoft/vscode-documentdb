@@ -1,88 +1,124 @@
 {
-    "hydrated": true,
-    "properties": {
-      "helpUri": "https://eng.ms/docs/microsoft-security/security/azure-security/cloudai-security-fundamentals-engineering/security-integration/guardian-wiki/microsoft-guardian/general/suppressions"
+  "hydrated": false,
+  "properties": {
+    "helpUri": "https://eng.ms/docs/microsoft-security/security/azure-security/cloudai-security-fundamentals-engineering/security-integration/guardian-wiki/microsoft-guardian/general/suppressions"
+  },
+  "version": "1.0.0",
+  "suppressionSets": {
+    "default": {
+      "name": "default",
+      "createdDate": "2025-08-23 12:30:03Z",
+      "lastUpdatedDate": "2025-08-23 12:30:03Z"
+    }
+  },
+  "results": {
+    "b08a165649ed301b5ae938065104eb0f3edc4834951b3a76a1c1c36ce49f1446": {
+      "signature": "b08a165649ed301b5ae938065104eb0f3edc4834951b3a76a1c1c36ce49f1446",
+      "alternativeSignatures": [
+        "52896ed10abcfee8557d59753cf9ec41cb813a78f6f6c23cae66cf7dcfd2b820"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
     },
-    "version": "1.0.0",
-    "suppressionSets": {
-      "default": {
-        "name": "default",
-        "createdDate": "2025-03-27 17:54:16Z",
-        "lastUpdatedDate": "2025-03-27 17:54:16Z"
-      }
+    "e39fb0a42b56b7098050b3762a0469cf22d6c2d32d3cea5138fe41cb30ad555e": {
+      "signature": "e39fb0a42b56b7098050b3762a0469cf22d6c2d32d3cea5138fe41cb30ad555e",
+      "alternativeSignatures": [
+        "d4af7c66a7aa500bf43a7e8822f4a53ef63fb17eff6be907f4acd39c6fcb5135"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
     },
-    "results": {
-      "4a44b074103b8de844f2a3dd0aa0e87a955f55e92d09e49315808e33427f1e5c": {
-        "signature": "4a44b074103b8de844f2a3dd0aa0e87a955f55e92d09e49315808e33427f1e5c",
-        "alternativeSignatures": [],
-        "target": "src/cosmosdb/cosmosDBConnectionStrings.test.ts",
-        "line": 170,
-        "memberOf": [
-          "default"
-        ],
-        "tool": "credscan",
-        "ruleId": "CSCAN-AZURE0080",
-        "createdDate": "2025-03-27 17:54:16Z"
-      },
-      "b08417e3ba882d36901ca4c3a9804181c65c3291cc08387fe055e5301707efd9": {
-        "signature": "b08417e3ba882d36901ca4c3a9804181c65c3291cc08387fe055e5301707efd9",
-        "alternativeSignatures": [],
-        "target": "src/documentdb/scrapbook/mongoConnectionStrings.test.ts",
-        "line": 26,
-        "memberOf": [
-          "default"
-        ],
-        "tool": "credscan",
-        "ruleId": "CSCAN-GENERAL0030",
-        "createdDate": "2025-03-27 17:54:16Z"
-      },
-      "bd651964b55980da9eb4edd52139f1de56d3ec5602dd57a9aed15d1efec2cff0": {
-        "signature": "bd651964b55980da9eb4edd52139f1de56d3ec5602dd57a9aed15d1efec2cff0",
-        "alternativeSignatures": [],
-        "target": "src/documentdb/scrapbook/mongoConnectionStrings.test.ts",
-        "line": 130,
-        "memberOf": [
-          "default"
-        ],
-        "tool": "credscan",
-        "ruleId": "CSCAN-GENERAL0030",
-        "createdDate": "2025-03-27 17:54:16Z"
-      },
-      "8044154d9fe49ad985951fdf7997f9b5be92b944e3a76684bc3f9488ac5a1205": {
-        "signature": "8044154d9fe49ad985951fdf7997f9b5be92b944e3a76684bc3f9488ac5a1205",
-        "alternativeSignatures": [],
-        "target": "src/documentdb/scrapbook/mongoConnectionStrings.test.ts",
-        "line": 135,
-        "memberOf": [
-          "default"
-        ],
-        "tool": "credscan",
-        "ruleId": "CSCAN-GENERAL0030",
-        "createdDate": "2025-03-27 17:54:16Z"
-      },
-      "13421dd8faedf41977bbb08957f6442c12cf60ab4469a8fefaec09391bd16f4c": {
-        "signature": "13421dd8faedf41977bbb08957f6442c12cf60ab4469a8fefaec09391bd16f4c",
-        "alternativeSignatures": [],
-        "target": "src/documentdb/scrapbook/mongoConnectionStrings.test.ts",
-        "line": 282,
-        "memberOf": [
-          "default"
-        ],
-        "tool": "credscan",
-        "ruleId": "CSCAN-GENERAL0030",
-        "createdDate": "2025-03-27 17:54:16Z"
-      },
-      "8b7bf7c20cf69f69b2012006cc05f90ac987edd53ee324800c4964f5deb51d88": {
-        "signature": "8b7bf7c20cf69f69b2012006cc05f90ac987edd53ee324800c4964f5deb51d88",
-        "alternativeSignatures": [],
-        "target": "src/documentdb/scrapbook/mongoConnectionStrings.test.ts",
-        "line": 371,
-        "memberOf": [
-          "default"
-        ],
-        "tool": "credscan",
-        "ruleId": "CSCAN-GENERAL0030",
-        "createdDate": "2025-03-27 17:54:16Z"
-      }
+    "23d7775764d9d21e71bb90633b512dc225d7411cb38a224a437f64c53830e478": {
+      "signature": "23d7775764d9d21e71bb90633b512dc225d7411cb38a224a437f64c53830e478",
+      "alternativeSignatures": [
+        "d4af7c66a7aa500bf43a7e8822f4a53ef63fb17eff6be907f4acd39c6fcb5135"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
+    },
+    "28ab3777fd21accc042a31207e30845a8742059cf767a82c009e643bb3eafedc": {
+      "signature": "28ab3777fd21accc042a31207e30845a8742059cf767a82c009e643bb3eafedc",
+      "alternativeSignatures": [
+        "0f7a603f3b16a81c57627b356295b5d3d94e5f6280bd536c65d2a75035e8f92e"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
+    },
+    "04c250e3019467b1f5aeec5e0fc9b4574198d32f89daf42b07c8ff38c9b26958": {
+      "signature": "04c250e3019467b1f5aeec5e0fc9b4574198d32f89daf42b07c8ff38c9b26958",
+      "alternativeSignatures": [
+        "0f7a603f3b16a81c57627b356295b5d3d94e5f6280bd536c65d2a75035e8f92e"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
+    },
+    "4edf2353c5785b03b283e20253bc3582c8baf8d672ef51b87498ca6708be4d15": {
+      "signature": "4edf2353c5785b03b283e20253bc3582c8baf8d672ef51b87498ca6708be4d15",
+      "alternativeSignatures": [
+        "0f7a603f3b16a81c57627b356295b5d3d94e5f6280bd536c65d2a75035e8f92e"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
+    },
+    "a931f060998decc38efcbc801da3b9d049b07897046589c5951feb447dc8ef5e": {
+      "signature": "a931f060998decc38efcbc801da3b9d049b07897046589c5951feb447dc8ef5e",
+      "alternativeSignatures": [
+        "0f7a603f3b16a81c57627b356295b5d3d94e5f6280bd536c65d2a75035e8f92e"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
+    },
+    "ff07e311f72ade88d2578cd76af9a42f8ffcf57912423da7c2c3332bbd253529": {
+      "signature": "ff07e311f72ade88d2578cd76af9a42f8ffcf57912423da7c2c3332bbd253529",
+      "alternativeSignatures": [],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
+    },
+    "2937771a8022222cc479e3ae6b09bf65fc21f7a7ca2f31876cd116530f3454e7": {
+      "signature": "2937771a8022222cc479e3ae6b09bf65fc21f7a7ca2f31876cd116530f3454e7",
+      "alternativeSignatures": [
+        "a58cc1fe5f874467cefb97bb9dd934c70722b09a2c1d9ec33cb6690f82bed23f"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
+    },
+    "a1ee655be9571e33e0a38160b8dab7286e9caf19daffa103f9b273cbb6418712": {
+      "signature": "a1ee655be9571e33e0a38160b8dab7286e9caf19daffa103f9b273cbb6418712",
+      "alternativeSignatures": [
+        "a58cc1fe5f874467cefb97bb9dd934c70722b09a2c1d9ec33cb6690f82bed23f"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
+    },
+    "52b28505c4d97b747f3d0540401a814acdc2ca00c4575b96971a9a30694d4130": {
+      "signature": "52b28505c4d97b747f3d0540401a814acdc2ca00c4575b96971a9a30694d4130",
+      "alternativeSignatures": [
+        "71c9e899c749efa0bcd76411c636eab09f8b09a704413d79a73b062f9a83ca8e"
+      ],
+      "memberOf": [
+        "default"
+      ],
+      "createdDate": "2025-08-23 12:30:03Z"
     }
   }
+}
