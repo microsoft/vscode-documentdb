@@ -260,7 +260,9 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements Ex
                     ) as TreeElement;
 
                     // Register parent-child relationship in the cache
-                    if (element.id && wrappedChild.id) {
+                    // Note: The check for `typeof wrappedChild.id === 'string'` is necessary because `wrapItemInStateHandling`
+                    // can process temporary nodes that don't have an `id` property, which would otherwise cause a runtime error.
+                    if (element.id && typeof wrappedChild.id === 'string') {
                         this.parentCache.registerRelationship(element, wrappedChild);
                     }
 

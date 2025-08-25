@@ -165,7 +165,13 @@ export abstract class ClusterItemBase
      * @returns True if any child in the array is an error node, false otherwise.
      */
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        return !!(children && children.length > 0 && children.some((child) => child.id.endsWith('/reconnect')));
+        // Note: The check for `typeof child.id === 'string'` is necessary because `showCreatingChild`
+        // can add temporary nodes that don't have an `id` property, which would otherwise cause a runtime error.
+        return !!(
+            children &&
+            children.length > 0 &&
+            children.some((child) => typeof child.id === 'string' && child.id.endsWith('/reconnect'))
+        );
     }
 
     /**
