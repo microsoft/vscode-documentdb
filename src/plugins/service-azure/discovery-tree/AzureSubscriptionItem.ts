@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
-import { callWithTelemetryAndErrorHandling, nonNullProp, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { MongoClustersExperience } from '../../../DocumentDBExperiences';
@@ -13,6 +13,7 @@ import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { type ClusterModel } from '../../../tree/documentdb/ClusterModel';
 import { createResourceManagementClient } from '../../../utils/azureClients';
+import { nonNullProp } from '../../../utils/nonNull';
 import { DocumentDBResourceItem } from './documentdb/DocumentDBResourceItem';
 
 export interface AzureSubscriptionModel {
@@ -45,7 +46,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 return accounts
                     .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
                     .map((account) => {
-                        const resourceId = nonNullProp(account, 'id');
+                        const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureSubscriptionItem.ts');
 
                         const clusterInfo: ClusterModel = {
                             ...account,
