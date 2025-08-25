@@ -28,7 +28,11 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
         try {
             connection.secrets = {
                 ...connection.secrets,
-                connectionString: nonNullValue(context.newConnectionString?.toString(), 'newConnectionString'),
+                connectionString: nonNullValue(
+                    context.newConnectionString?.toString(),
+                    'context.newConnectionString',
+                    'ExecuteStep.ts',
+                ),
             };
 
             await ConnectionStorageService.save(resourceType, connection, true);

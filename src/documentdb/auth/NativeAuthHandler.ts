@@ -30,7 +30,8 @@ export class NativeAuthHandler implements AuthHandler {
         return Promise.resolve({
             connectionString: nonNullValue(
                 this.clusterCredentials.connectionStringWithPassword,
-                'connectionStringWithPassword',
+                'clusterCredentials.connectionStringWithPassword',
+                'NativeAuthHandler.ts',
             ),
             options,
         });

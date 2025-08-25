@@ -7,7 +7,6 @@ import { type MongoCluster } from '@azure/arm-mongocluster';
 import {
     AzureWizard,
     callWithTelemetryAndErrorHandling,
-    nonNullValue,
     UserCancelledError,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
@@ -25,6 +24,7 @@ import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate
 import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { nonNullValue } from '../../../../utils/nonNull';
 import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../../utils/clusterHelpers';
 
 export class DocumentDBResourceItem extends ClusterItemBase {
@@ -116,8 +116,12 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             // Cache credentials and attempt connection
             CredentialCache.setAuthCredentials(
                 this.id,
-                nonNullValue(wizardContext.selectedAuthMethod, 'authMethod'),
-                nonNullValue(credentials.connectionString),
+                nonNullValue(
+                    wizardContext.selectedAuthMethod,
+                    'wizardContext.selectedAuthMethod',
+                    'DocumentDBResourceItem.ts',
+                ),
+                nonNullValue(credentials.connectionString, 'credentials.connectionString', 'DocumentDBResourceItem.ts'),
                 wizardContext.selectedUserName,
                 wizardContext.password,
             );

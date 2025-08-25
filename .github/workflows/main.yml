@@ -60,7 +60,7 @@ jobs:
                       ${{ runner.os }}-node-
 
             - name: 📦 Install Dependencies (npm ci)
-              run: npm ci
+              run: npm ci --verbose
 
             - name: 🌐 Check Localization Files
               run: npm run l10n:check
