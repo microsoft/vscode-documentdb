@@ -6,8 +6,6 @@
 import {
     AzureWizard,
     callWithTelemetryAndErrorHandling,
-    nonNullProp,
-    nonNullValue,
     UserCancelledError,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
@@ -26,6 +24,7 @@ import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate
 import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
 
 // Define a model for VM, similar to ClusterModel but for VM properties
 export interface VirtualMachineModel extends ClusterModel {
@@ -171,10 +170,10 @@ export class AzureVMResourceItem extends ClusterItemBase {
             // Construct the final connection string with user-provided credentials
             const connectionString = (await this.getCredentials())?.connectionString;
 
-            context.valuesToMask.push(nonNullValue(connectionString, 'connectionString'));
+            context.valuesToMask.push(nonNullValue(connectionString, 'connectionString', 'AzureVMResourceItem.ts'));
 
             const finalConnectionString = new DocumentDBConnectionString(
-                nonNullValue(connectionString, 'connectionString'),
+                nonNullValue(connectionString, 'connectionString', 'AzureVMResourceItem.ts'),
             );
             maskSensitiveValuesInTelemetry(context, finalConnectionString);
 
@@ -191,7 +190,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
                 return null;
             }
 
-            context.valuesToMask.push(nonNullProp(wizardContext, 'password'));
+            context.valuesToMask.push(nonNullProp(wizardContext, 'password', undefined, 'AzureVMResourceItem.ts'));
 
             finalConnectionString.username = wizardContext.selectedUserName;
 

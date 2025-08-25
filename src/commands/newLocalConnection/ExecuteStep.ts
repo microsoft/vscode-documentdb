@@ -146,7 +146,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                     emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
                     availableAuthMethods: [],
                 },
-                secrets: { connectionString: nonNullValue(connectionString) },
+                secrets: {
+                    connectionString: nonNullValue(connectionString, 'secrets.connectionString', 'ExecuteStep.ts'),
+                },
             };
 
             await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);

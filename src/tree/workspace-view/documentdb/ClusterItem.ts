@@ -6,8 +6,6 @@
 import {
     AzureWizard,
     callWithTelemetryAndErrorHandling,
-    nonNullProp,
-    nonNullValue,
     UserCancelledError,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
@@ -19,6 +17,7 @@ import { type AuthenticateWizardContext } from '../../../documentdb/wizards/auth
 import { ProvidePasswordStep } from '../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../extensionVariables';
+import { nonNullProp, nonNullValue } from '../../../utils/nonNull';
 import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type AttachedClusterModel } from '../../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../../TreeElementWithStorageId';
@@ -63,7 +62,9 @@ export class ClusterItem extends ClusterItemBase implements TreeElementWithStora
 
                 let clustersClient: ClustersClient;
 
-                const connectionString = new DocumentDBConnectionString(nonNullValue(this.cluster.connectionString));
+                const connectionString = new DocumentDBConnectionString(
+                    nonNullValue(this.cluster.connectionString, 'cluster.connectionString', 'ClusterItem.ts'),
+                );
 
                 let username: string | undefined = connectionString.username;
                 let password: string | undefined = connectionString.password;
@@ -87,10 +88,10 @@ export class ClusterItem extends ClusterItemBase implements TreeElementWithStora
                         return null;
                     }
 
-                    context.valuesToMask.push(nonNullProp(wizardContext, 'password'));
+                    context.valuesToMask.push(nonNullProp(wizardContext, 'password', undefined, 'ClusterItem.ts'));
 
-                    username = nonNullProp(wizardContext, 'selectedUserName');
-                    password = nonNullProp(wizardContext, 'password');
+                    username = nonNullProp(wizardContext, 'selectedUserName', undefined, 'ClusterItem.ts');
+                    password = nonNullProp(wizardContext, 'password', undefined, 'ClusterItem.ts');
                 }
 
                 ext.outputChannel.append(l10n.t('Connecting to the cluster as "{username}"…', { username }));
