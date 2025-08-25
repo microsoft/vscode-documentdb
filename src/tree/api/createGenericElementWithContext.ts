@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { nonNullValue, type GenericElementOptions } from '@microsoft/vscode-azext-utils';
+import { type GenericElementOptions } from '@microsoft/vscode-azext-utils';
 import { type TreeItem } from 'vscode';
+import { nonNullValue } from '../../utils/nonNull';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 
@@ -13,8 +14,8 @@ export function createGenericElementWithContext(
 ): TreeElement & TreeElementWithContextValue {
     let commandArgs = options.commandArgs;
     const item = {
-        id: nonNullValue(options.id, 'options.id'),
-        contextValue: nonNullValue(options.contextValue, 'options.contextValue'),
+        id: nonNullValue(options.id, 'options.id', 'createGenericElementWithContext.ts'),
+        contextValue: nonNullValue(options.contextValue, 'options.contextValue', 'createGenericElementWithContext.ts'),
 
         getTreeItem(): TreeItem {
             return {

@@ -6,12 +6,12 @@
 import {
     AzureWizard,
     callWithTelemetryAndErrorHandling,
-    nonNullProp,
     UserCancelledError,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { nonNullProp } from '../../utils/nonNull';
 
 import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
@@ -130,7 +130,12 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
                 username = wizardContext.selectedUserName;
                 password = wizardContext.password;
-                authMethod = nonNullProp(wizardContext, 'selectedAuthMethod');
+                authMethod = nonNullProp(
+                    wizardContext,
+                    'selectedAuthMethod',
+                    'wizardContext.selectedAuthMethod',
+                    'DocumentDBClusterItem.ts',
+                );
 
                 if (wizardContext.saveCredentials) {
                     ext.outputChannel.append(

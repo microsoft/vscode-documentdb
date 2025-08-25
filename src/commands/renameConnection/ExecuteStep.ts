@@ -17,7 +17,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameConnectionWizardCo
         const connection = await ConnectionStorageService.get(context.storageId, resourceType);
 
         if (connection) {
-            connection.name = nonNullValue(context.newConnectionName);
+            connection.name = nonNullValue(context.newConnectionName, 'connection.name', 'ExecuteStep.ts');
 
             try {
                 await ConnectionStorageService.save(resourceType, connection, true);
