@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.3.1
+
+### Fixes
+
+- **Tree View Stability**: Improved the stability of the Connections View when adding or removing databases and collections. This change prevents internal warnings that could occur when displaying temporary items in the tree. [#233](https://github.com/microsoft/vscode-documentdb/pull/233)
+
 ## 0.3.0
 
 ### New Features & Improvements
