@@ -88,10 +88,17 @@ export class ClusterItem extends ClusterItemBase implements TreeElementWithStora
                         return null;
                     }
 
-                    context.valuesToMask.push(nonNullProp(wizardContext, 'password', undefined, 'ClusterItem.ts'));
+                    context.valuesToMask.push(
+                        nonNullProp(wizardContext, 'password', 'wizardContext.password', 'ClusterItem.ts'),
+                    );
 
-                    username = nonNullProp(wizardContext, 'selectedUserName', undefined, 'ClusterItem.ts');
-                    password = nonNullProp(wizardContext, 'password', undefined, 'ClusterItem.ts');
+                    username = nonNullProp(
+                        wizardContext,
+                        'selectedUserName',
+                        'wizardContext.selectedUserName',
+                        'ClusterItem.ts',
+                    );
+                    password = nonNullProp(wizardContext, 'password', 'wizardContext.password', 'ClusterItem.ts');
                 }
 
                 ext.outputChannel.append(l10n.t('Connecting to the cluster as "{username}"…', { username }));

@@ -190,7 +190,9 @@ export class AzureVMResourceItem extends ClusterItemBase {
                 return null;
             }
 
-            context.valuesToMask.push(nonNullProp(wizardContext, 'password', undefined, 'AzureVMResourceItem.ts'));
+            context.valuesToMask.push(
+                nonNullProp(wizardContext, 'password', 'wizardContext.password', 'AzureVMResourceItem.ts'),
+            );
 
             finalConnectionString.username = wizardContext.selectedUserName;
 

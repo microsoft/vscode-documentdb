@@ -15,14 +15,11 @@ import * as l10n from '@vscode/l10n';
 export function nonNullProp<TSource, TKey extends keyof TSource>(
     sourceObj: TSource,
     name: TKey,
-    message?: string,
-    details?: string,
+    message: string,
+    details: string,
 ): NonNullable<TSource[TKey]> {
     const value: NonNullable<TSource[TKey]> = <NonNullable<TSource[TKey]>>sourceObj[name];
-    if (message) {
-        return nonNullValue(value, `${<string>name}, ${message}`, details);
-    }
-    return nonNullValue(value, <string>name, details);
+    return nonNullValue(value, `${<string>name}, ${message}`, details);
 }
 
 /**
@@ -35,7 +32,7 @@ export function nonNullProp<TSource, TKey extends keyof TSource>(
  * @param propertyNameOrMessage Optional property name or human message.
  * @param details Optional short context (file name or identifier). Recommended for open-source issue triage.
  */
-export function nonNullValue<T>(value: T | undefined | null, propertyNameOrMessage?: string, details?: string): T {
+export function nonNullValue<T>(value: T | undefined | null, propertyNameOrMessage: string, details: string): T {
     if (value === undefined || value === null) {
         throw new Error(
             l10n.t('Internal error: Expected value to be neither null nor undefined') +
@@ -57,11 +54,7 @@ export function nonNullValue<T>(value: T | undefined | null, propertyNameOrMessa
  * @param propertyNameOrMessage Optional property name or human message.
  * @param details Optional short context (file name or identifier). Recommended for open-source issue triage.
  */
-export function nonNullOrEmptyValue(
-    value: string | undefined,
-    propertyNameOrMessage?: string,
-    details?: string,
-): string {
+export function nonNullOrEmptyValue(value: string | undefined, propertyNameOrMessage: string, details: string): string {
     if (!value) {
         throw new Error(
             l10n.t('Internal error: Expected value to be neither null, undefined, nor empty') +

@@ -19,5 +19,6 @@ export function getBatchSizeSetting(): number {
     return nonNullValue(
         config.get<number>(ext.settingsKeys.batchSize),
         'config.get<number>(ext.settingsKeys.batchSize)',
+        'workspacUtils.ts',
     );
 }

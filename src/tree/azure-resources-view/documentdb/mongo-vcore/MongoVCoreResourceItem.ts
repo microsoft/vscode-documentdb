@@ -129,8 +129,13 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
                         'clusterInformation.properties.connectionString',
                         'MongoVCoreResourceItem.ts',
                     ),
-                    nonNullProp(wizardContext, 'selectedUserName', undefined, 'MongoVCoreResourceItem.ts'),
-                    nonNullProp(wizardContext, 'password', undefined, 'MongoVCoreResourceItem.ts'),
+                    nonNullProp(
+                        wizardContext,
+                        'selectedUserName',
+                        'wizardContext.selectedUserName',
+                        'MongoVCoreResourceItem.ts',
+                    ),
+                    nonNullProp(wizardContext, 'password', 'wizardContext.password', 'MongoVCoreResourceItem.ts'),
                     // here, emulatorConfiguration is not set, as it's a resource item from Azure resources, not a workspace item, therefore, no emulator support needed
                 );
 
