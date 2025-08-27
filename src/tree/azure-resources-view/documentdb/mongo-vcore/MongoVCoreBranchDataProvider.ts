@@ -5,10 +5,11 @@
 
 import { type GenericResource } from '@azure/arm-resources';
 import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
-import { callWithTelemetryAndErrorHandling, nonNullProp, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureResource, type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import { API, MongoClustersExperience } from '../../../../DocumentDBExperiences';
 import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
+import { nonNullProp } from '../../../../utils/nonNull';
 import { BaseCachedBranchDataProvider } from '../../../BaseCachedBranchDataProvider';
 import { type ClusterModel } from '../../../documentdb/ClusterModel';
 import { type TreeElement } from '../../../TreeElement';
@@ -98,24 +99,32 @@ export class MongoVCoreBranchDataProvider extends BaseCachedBranchDataProvider<M
                     const accounts = await uiUtils.listAllIterator(client.mongoClusters.list());
 
                     accounts.map((mongoClusterAccount) => {
-                        this.detailsCache.set(nonNullProp(mongoClusterAccount, 'id'), {
-                            dbExperience: MongoClustersExperience,
-                            id: mongoClusterAccount.id!,
-                            name: mongoClusterAccount.name!,
-                            resourceGroup: getResourceGroupFromId(mongoClusterAccount.id!),
+                        this.detailsCache.set(
+                            nonNullProp(
+                                mongoClusterAccount,
+                                'id',
+                                'mongoClusterAccount.id',
+                                'MongoVCoreBranchDataProvider.ts',
+                            ),
+                            {
+                                dbExperience: MongoClustersExperience,
+                                id: mongoClusterAccount.id!,
+                                name: mongoClusterAccount.name!,
+                                resourceGroup: getResourceGroupFromId(mongoClusterAccount.id!),
 
-                            location: mongoClusterAccount.location,
-                            serverVersion: mongoClusterAccount.properties?.serverVersion,
+                                location: mongoClusterAccount.location,
+                                serverVersion: mongoClusterAccount.properties?.serverVersion,
 
-                            systemData: {
-                                createdAt: mongoClusterAccount.systemData?.createdAt,
+                                systemData: {
+                                    createdAt: mongoClusterAccount.systemData?.createdAt,
+                                },
+
+                                sku: mongoClusterAccount.properties?.compute?.tier,
+                                diskSize: mongoClusterAccount.properties?.storage?.sizeGb,
+                                nodeCount: mongoClusterAccount.properties?.sharding?.shardCount,
+                                enableHa: mongoClusterAccount.properties?.highAvailability?.targetMode !== 'Disabled',
                             },
-
-                            sku: mongoClusterAccount.properties?.compute?.tier,
-                            diskSize: mongoClusterAccount.properties?.storage?.sizeGb,
-                            nodeCount: mongoClusterAccount.properties?.sharding?.shardCount,
-                            enableHa: mongoClusterAccount.properties?.highAvailability?.targetMode !== 'Disabled',
-                        });
+                        );
                     });
                 } catch (e) {
                     console.debug({ ...context, ...subscription });

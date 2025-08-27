@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, nonNullProp, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
@@ -12,6 +12,7 @@ import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../../../extensionVariables';
 import { createCosmosDBManagementClient } from '../../../../utils/azureClients';
+import { nonNullProp } from '../../../../utils/nonNull';
 import { ClusterItemBase, type ClusterCredentials } from '../../../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../documentdb/ClusterModel';
 
@@ -41,7 +42,17 @@ export class MongoRUResourceItem extends ClusterItemBase {
                 );
 
                 const connectionString: URL = new URL(
-                    nonNullProp(nonNullProp(connectionStringsInfo, 'connectionStrings')[0], 'connectionString'),
+                    nonNullProp(
+                        nonNullProp(
+                            connectionStringsInfo,
+                            'connectionStrings',
+                            'connectionStringsInfo.connectionStrings',
+                            'MongoRUResourceItem.ts',
+                        )[0],
+                        'connectionString',
+                        'connectionStringsInfo.connectionStrings[0].connectionString',
+                        'MongoRUResourceItem.ts',
+                    ),
                 );
 
                 // for any Mongo connectionString, append this query param because the Cosmos Mongo API v3.6 doesn't support retrywrites

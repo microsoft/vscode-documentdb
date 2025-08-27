@@ -6,8 +6,6 @@
 import {
     AzureWizard,
     callWithTelemetryAndErrorHandling,
-    nonNullProp,
-    nonNullValue,
     UserCancelledError,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
@@ -23,6 +21,7 @@ import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
 import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
+import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
 import { ClusterItemBase, type ClusterCredentials } from '../../../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../documentdb/ClusterModel';
 
@@ -118,14 +117,25 @@ export class MongoVCoreResourceItem extends ClusterItemBase {
                     return null;
                 }
 
-                context.valuesToMask.push(nonNullProp(wizardContext, 'password'));
+                context.valuesToMask.push(
+                    nonNullProp(wizardContext, 'password', 'wizardContext.password', 'MongoVCoreResourceItem.ts'),
+                );
 
                 // Cache the credentials
                 CredentialCache.setCredentials(
                     this.id,
-                    nonNullValue(clusterInformation.properties.connectionString),
-                    nonNullProp(wizardContext, 'selectedUserName'),
-                    nonNullProp(wizardContext, 'password'),
+                    nonNullValue(
+                        clusterInformation.properties.connectionString,
+                        'clusterInformation.properties.connectionString',
+                        'MongoVCoreResourceItem.ts',
+                    ),
+                    nonNullProp(
+                        wizardContext,
+                        'selectedUserName',
+                        'wizardContext.selectedUserName',
+                        'MongoVCoreResourceItem.ts',
+                    ),
+                    nonNullProp(wizardContext, 'password', 'wizardContext.password', 'MongoVCoreResourceItem.ts'),
                     // here, emulatorConfiguration is not set, as it's a resource item from Azure resources, not a workspace item, therefore, no emulator support needed
                 );
 
