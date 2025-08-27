@@ -15,7 +15,7 @@ import { extensions } from 'vscode';
  */
 
 const AZURE_DATABASES_WORKSPACE_HANDOVER_VERSION = '10.25.3'; // This is the version that stops supporting documentdb workspaces
-const AZURE_DATABASES_VCORE_HANDOVER_VERSION = '10.26.0'; // This is the version that stops supporting vCore Azure Resources
+const AZURE_DATABASES_VCORE_HANDOVER_VERSION = '11.0.0'; // This is the version that stops supporting vCore Azure Resources
 const AZURE_DATABASES_RU_HANDOVER_VERSION = '10.26.0'; // This is the version that stops supporting RU Azure Resources
 
 let cachedAzureDatabasesVersion: semver.SemVer | null | undefined = undefined;
@@ -66,7 +66,7 @@ export function enableWorkspaceSupport(): boolean {
 export function enableMongoVCoreSupport(): boolean {
     const azureDatabasesVersion = getAzureDatabasesVersion();
     if (!azureDatabasesVersion) {
-        return false;
+        return true;
     }
     return semver.gte(azureDatabasesVersion, AZURE_DATABASES_VCORE_HANDOVER_VERSION);
 }
@@ -79,7 +79,7 @@ export function enableMongoVCoreSupport(): boolean {
 export function enableMongoRUSupport(): boolean {
     const azureDatabasesVersion = getAzureDatabasesVersion();
     if (!azureDatabasesVersion) {
-        return false;
+        return true;
     }
     return semver.gte(azureDatabasesVersion, AZURE_DATABASES_RU_HANDOVER_VERSION);
 }

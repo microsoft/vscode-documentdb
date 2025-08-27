@@ -8,7 +8,7 @@ import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-a
 import type * as vscode from 'vscode';
 import { type DatabasesFileSystem } from './DatabasesFileSystem';
 import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClient';
-import { type MongoVCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
+import { type VCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/VCoreBranchDataProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
 import { type TreeElement } from './tree/TreeElement';
@@ -33,8 +33,11 @@ export namespace ext {
 
     export let state: TreeElementStateManager;
 
-    // used for the resources tree
-    export let mongoVCoreBranchDataProvider: MongoVCoreBranchDataProvider;
+    // Azure Resources Extension integration
+    //  > Azure Resources Extension: "Resources View"
+    export let azureResourcesVCoreBranchDataProvider: VCoreBranchDataProvider;
+
+    //  > Azure Resources Extension: "Workspace View"
     // used for the workspace: these are the dedicated providers
     export let mongoClustersWorkspaceBranchDataProvider: ClustersWorkspaceBranchDataProvider;
     export let mongoClusterWorkspaceBranchDataResource: AccountsItem;

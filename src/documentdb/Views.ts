@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 export enum Views {
-    ConnectionsView = 'connectionsView',
-    DiscoveryView = 'discoveryView',
+    ConnectionsView = 'connectionsView', // do not change this value
+    DiscoveryView = 'discoveryView', // do not change this value
+    AzureResourcesView = 'azureResourcesView',
 
     /**
      * Note to future maintainers: do not modify these string constants.

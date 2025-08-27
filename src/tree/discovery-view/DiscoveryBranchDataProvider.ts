@@ -287,8 +287,10 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements Ex
     }
 
     async getTreeItem(element: TreeElement): Promise<vscode.TreeItem> {
-        /** note that due to caching done by the TreeElementStateManager,
-         * changes to the TreeItem added here might get lost */
+        /**
+         * Note that due to caching done by the TreeElementStateManager,
+         * changes to the TreeItem added here might get lost
+         */
         return element.getTreeItem();
     }
 

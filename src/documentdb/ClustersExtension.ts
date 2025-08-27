@@ -15,7 +15,8 @@ import {
     registerCommand,
     registerCommandWithTreeNodeUnwrapping,
 } from '@microsoft/vscode-azext-utils';
-import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
+import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
+import { AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
@@ -47,7 +48,7 @@ import { ext } from '../extensionVariables';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
-import { MongoVCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
+import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/VCoreBranchDataProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
@@ -104,15 +105,21 @@ export class ClustersExtension implements vscode.Disposable {
                 // TODO: Implement https://github.com/microsoft/vscode-documentdb/issues/30
                 // for staged hand-over from Azure Databases to this DocumentDB extension
 
-                // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
-                if (false && enableMongoVCoreSupport()) {
+                if (enableMongoVCoreSupport() || enableWorkspaceSupport()) {
+                    ext.rgApiV2 = (await getAzureResourcesExtensionApi(
+                        ext.context,
+                        '2.0.0',
+                    )) as AzureResourcesExtensionApiWithActivity;
+                }
+
+                if (enableMongoVCoreSupport()) {
                     // on purpose, transition is still in progress
                     activateContext.telemetry.properties.enabledVCore = 'true';
 
-                    ext.mongoVCoreBranchDataProvider = new MongoVCoreBranchDataProvider();
+                    ext.azureResourcesVCoreBranchDataProvider = new VCoreBranchDataProvider();
                     ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
                         AzExtResourceType.MongoClusters,
-                        ext.mongoVCoreBranchDataProvider,
+                        ext.azureResourcesVCoreBranchDataProvider,
                     );
                 }
 
