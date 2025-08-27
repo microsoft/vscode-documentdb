@@ -11,15 +11,18 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResource, type BranchDataProvider } from '@microsoft/vscode-azureresources-api';
+import { MongoClustersExperience } from '../../../../DocumentDBExperiences';
 import { Views } from '../../../../documentdb/Views';
 import { ext } from '../../../../extensionVariables';
 import { type ExtendedTreeDataProvider } from '../../../ExtendedTreeDataProvider';
-import { type ExtTreeElementBase, type TreeElement } from '../../../TreeElement';
+import { type TreeElement } from '../../../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../../../TreeElementWithContextValue';
 import { isTreeElementWithRetryChildren } from '../../../TreeElementWithRetryChildren';
 import { TreeParentCache } from '../../../TreeParentCache';
+import { type ClusterModel } from '../../../documentdb/ClusterModel';
+import { VCoreResourceItem } from './VCoreResourceItem';
 
-// export type MongoVCoreResource = AzureResource &
+// export type VCoreResource = AzureResource &
 //     GenericResource & {
 //         readonly raw: GenericResource; // Resource object from Azure SDK
 //     };
@@ -120,8 +123,7 @@ export class VCoreBranchDataProvider
             return children?.map((child) => {
                 if (child.id) {
                     if (isTreeElementWithContextValue(child)) {
-                        this.appendContextValue(child, Views.AzureResourcesView);
-                        this.appendContextValue(child, 'documentdbBranch');
+                        this.appendContextValues(child, Views.AzureResourcesView, 'documentdbBranch');
                     }
 
                     // Register parent-child relationship in the cache
@@ -223,8 +225,16 @@ export class VCoreBranchDataProvider
         }
     }
 
-    getResourceItem(_element: AzureResource): ExtTreeElementBase | Thenable<ExtTreeElementBase> {
-        throw new Error('Method not implemented.');
+    getResourceItem(resource: AzureResource): TreeElement | Thenable<TreeElement> {
+        // 1. extract the basic info from the element (subscription, resource group, etc., provided by Azure Resources)
+        const clusterInfo: ClusterModel = {
+            ...resource,
+            dbExperience: MongoClustersExperience,
+        } as ClusterModel;
+
+        const clusterItem = new VCoreResourceItem(resource.subscription, clusterInfo);
+
+        return clusterItem;
     }
 
     async getTreeItem(element: TreeElement): Promise<vscode.TreeItem> {
@@ -235,9 +245,9 @@ export class VCoreBranchDataProvider
         return element.getTreeItem();
     }
 
-    appendContextValue(treeItem: TreeElementWithContextValue, contextValueToAppend: string): void {
+    appendContextValues(treeItem: TreeElementWithContextValue, ...contextValuesToAppend: string[]): void {
         // all items returned from this view need that context value assigned
-        const contextValues: string[] = [contextValueToAppend];
+        const contextValues: string[] = contextValuesToAppend;
 
         // keep original contextValues if any
         if (treeItem.contextValue) {
