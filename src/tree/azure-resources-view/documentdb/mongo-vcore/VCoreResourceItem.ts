@@ -7,7 +7,6 @@ import { type MongoCluster } from '@azure/arm-mongocluster';
 import {
     AzureWizard,
     callWithTelemetryAndErrorHandling,
-    nonNullValue,
     UserCancelledError,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
@@ -29,6 +28,7 @@ import {
 } from '../../../../plugins/service-azure/utils/clusterHelpers';
 import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { nonNullValue } from '../../../../utils/nonNull';
 
 export class VCoreResourceItem extends ClusterItemBase {
     iconPath = vscode.Uri.joinPath(
@@ -117,8 +117,12 @@ export class VCoreResourceItem extends ClusterItemBase {
             // Cache credentials and attempt connection
             CredentialCache.setAuthCredentials(
                 this.id,
-                nonNullValue(wizardContext.selectedAuthMethod, 'authMethod'),
-                nonNullValue(credentials.connectionString),
+                nonNullValue(
+                    wizardContext.selectedAuthMethod,
+                    'wizardContext.selectedAuthMethod',
+                    'VCoreResourceItem.ts',
+                ),
+                nonNullValue(credentials.connectionString, 'credentials.connectionString', 'VCoreResourceItem.ts'),
                 wizardContext.selectedUserName,
                 wizardContext.password,
             );
