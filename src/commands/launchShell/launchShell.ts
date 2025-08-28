@@ -12,8 +12,8 @@ import { ClustersClient } from '../../documentdb/ClustersClient';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
-import { MongoVCoreResourceItem } from '../../tree/azure-resources-view/documentdb/MongoVCoreResourceItem';
-import { MongoRUResourceItem } from '../../tree/azure-resources-view/mongo-ru/MongoRUResourceItem';
+import { VCoreResourceItem } from '../../tree/azure-resources-view/documentdb/VCoreResourceItem';
+import { RUResourceItem } from '../../tree/azure-resources-view/mongo-ru/RUCoreResourceItem';
 import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -195,7 +195,7 @@ export async function launchShell(
 
     // Determine if TLS certificate validation should be disabled
     // This only applies to emulator connections with security disabled
-    const isRegularCloudAccount = node instanceof MongoVCoreResourceItem || node instanceof MongoRUResourceItem;
+    const isRegularCloudAccount = node instanceof VCoreResourceItem || node instanceof RUResourceItem;
     const isEmulatorWithSecurityDisabled =
         !isRegularCloudAccount &&
         node.cluster.emulatorConfiguration &&
