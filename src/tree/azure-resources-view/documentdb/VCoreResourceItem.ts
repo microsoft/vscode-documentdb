@@ -13,22 +13,22 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../../documentdb/CredentialCache';
-import { Views } from '../../../../documentdb/Views';
-import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
-import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
-import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
-import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
-import { ext } from '../../../../extensionVariables';
+import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
+import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { Views } from '../../../documentdb/Views';
+import { type AuthenticateWizardContext } from '../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
+import { ChooseAuthMethodStep } from '../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
+import { ProvidePasswordStep } from '../../../documentdb/wizards/authenticate/ProvidePasswordStep';
+import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/ProvideUsernameStep';
+import { ext } from '../../../extensionVariables';
 import {
     extractCredentialsFromCluster,
     getClusterInformationFromAzure,
-} from '../../../../plugins/service-azure/utils/clusterHelpers';
-import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
-import { nonNullValue } from '../../../../utils/nonNull';
+} from '../../../plugins/service-azure/utils/clusterHelpers';
+import { nonNullValue } from '../../../utils/nonNull';
+import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { type ClusterModel } from '../../documentdb/ClusterModel';
 
 export class VCoreResourceItem extends ClusterItemBase {
     iconPath = vscode.Uri.joinPath(

@@ -7,17 +7,17 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../../documentdb/CredentialCache';
-import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
-import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
-import { Views } from '../../../../documentdb/Views';
-import { ext } from '../../../../extensionVariables';
-import { createCosmosDBManagementClient } from '../../../../utils/azureClients';
-import { nonNullValue } from '../../../../utils/nonNull';
-import { ClusterItemBase, type ClusterCredentials } from '../../../documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../documentdb/ClusterModel';
+import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
+import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { maskSensitiveValuesInTelemetry } from '../../../documentdb/utils/connectionStringHelpers';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
+import { Views } from '../../../documentdb/Views';
+import { ext } from '../../../extensionVariables';
+import { createCosmosDBManagementClient } from '../../../utils/azureClients';
+import { nonNullValue } from '../../../utils/nonNull';
+import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { type ClusterModel } from '../../documentdb/ClusterModel';
 
 export class RUResourceItem extends ClusterItemBase {
     iconPath = vscode.Uri.joinPath(

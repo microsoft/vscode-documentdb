@@ -7,14 +7,14 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../../documentdb/CredentialCache';
-import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
-import { ext } from '../../../../extensionVariables';
-import { createCosmosDBManagementClient } from '../../../../utils/azureClients';
-import { nonNullProp } from '../../../../utils/nonNull';
-import { ClusterItemBase, type ClusterCredentials } from '../../../documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../documentdb/ClusterModel';
+import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
+import { ext } from '../../../extensionVariables';
+import { createCosmosDBManagementClient } from '../../../utils/azureClients';
+import { nonNullProp } from '../../../utils/nonNull';
+import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { type ClusterModel } from '../../documentdb/ClusterModel';
 
 export class MongoRUResourceItem extends ClusterItemBase {
     public getCredentials(): Promise<ClusterCredentials | undefined> {

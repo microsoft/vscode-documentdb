@@ -12,18 +12,18 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../../documentdb/CredentialCache';
-import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
-import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
-import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
-import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
-import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
-import { ext } from '../../../../extensionVariables';
-import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
-import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
-import { ClusterItemBase, type ClusterCredentials } from '../../../documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../documentdb/ClusterModel';
+import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { maskSensitiveValuesInTelemetry } from '../../../documentdb/utils/connectionStringHelpers';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
+import { type AuthenticateWizardContext } from '../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
+import { ProvidePasswordStep } from '../../../documentdb/wizards/authenticate/ProvidePasswordStep';
+import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/ProvideUsernameStep';
+import { ext } from '../../../extensionVariables';
+import { createMongoClustersManagementClient } from '../../../utils/azureClients';
+import { nonNullProp, nonNullValue } from '../../../utils/nonNull';
+import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { type ClusterModel } from '../../documentdb/ClusterModel';
 
 export class MongoVCoreResourceItem extends ClusterItemBase {
     public getCredentials(): Promise<ClusterCredentials | undefined> {

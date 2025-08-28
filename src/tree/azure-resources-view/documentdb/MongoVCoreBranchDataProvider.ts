@@ -7,12 +7,12 @@ import { type GenericResource } from '@azure/arm-resources';
 import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureResource, type AzureSubscription } from '@microsoft/vscode-azureresources-api';
-import { API, MongoClustersExperience } from '../../../../DocumentDBExperiences';
-import { createMongoClustersManagementClient } from '../../../../utils/azureClients';
-import { nonNullProp } from '../../../../utils/nonNull';
-import { BaseCachedBranchDataProvider } from '../../../BaseCachedBranchDataProvider';
-import { type ClusterModel } from '../../../documentdb/ClusterModel';
-import { type TreeElement } from '../../../TreeElement';
+import { API, MongoClustersExperience } from '../../../DocumentDBExperiences';
+import { createMongoClustersManagementClient } from '../../../utils/azureClients';
+import { nonNullProp } from '../../../utils/nonNull';
+import { BaseCachedBranchDataProvider } from '../../BaseCachedBranchDataProvider';
+import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { type TreeElement } from '../../TreeElement';
 import { MongoVCoreResourceItem } from './MongoVCoreResourceItem';
 
 export type MongoVCoreResource = AzureResource &

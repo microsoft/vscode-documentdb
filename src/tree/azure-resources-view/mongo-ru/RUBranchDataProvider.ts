@@ -11,15 +11,15 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResource, type BranchDataProvider } from '@microsoft/vscode-azureresources-api';
-import { MongoClustersExperience } from '../../../../DocumentDBExperiences';
-import { Views } from '../../../../documentdb/Views';
-import { ext } from '../../../../extensionVariables';
-import { type ExtendedTreeDataProvider } from '../../../ExtendedTreeDataProvider';
-import { type TreeElement } from '../../../TreeElement';
-import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../../../TreeElementWithContextValue';
-import { isTreeElementWithRetryChildren } from '../../../TreeElementWithRetryChildren';
-import { TreeParentCache } from '../../../TreeParentCache';
-import { type ClusterModel } from '../../../documentdb/ClusterModel';
+import { MongoClustersExperience } from '../../../DocumentDBExperiences';
+import { Views } from '../../../documentdb/Views';
+import { ext } from '../../../extensionVariables';
+import { type ExtendedTreeDataProvider } from '../../ExtendedTreeDataProvider';
+import { type TreeElement } from '../../TreeElement';
+import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
+import { isTreeElementWithRetryChildren } from '../../TreeElementWithRetryChildren';
+import { TreeParentCache } from '../../TreeParentCache';
+import { type ClusterModel } from '../../documentdb/ClusterModel';
 import { RUResourceItem } from './RUCoreResourceItem';
 
 // export type VCoreResource = AzureResource &

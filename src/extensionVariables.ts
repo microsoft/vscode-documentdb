@@ -8,8 +8,8 @@ import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-a
 import type * as vscode from 'vscode';
 import { type DatabasesFileSystem } from './DatabasesFileSystem';
 import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClient';
-import { type RUBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-ru/RUBranchDataProvider';
-import { type VCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/VCoreBranchDataProvider';
+import { type VCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
+import { type RUBranchDataProvider } from './tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
 import { type TreeElement } from './tree/TreeElement';
