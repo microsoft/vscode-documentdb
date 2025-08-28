@@ -56,7 +56,6 @@ import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
-import { enableMongoVCoreSupport, enableWorkspaceSupport } from './activationConditions';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
 import { Views } from './Views';
 
@@ -95,51 +94,59 @@ export class ClustersExtension implements vscode.Disposable {
         ext.context.subscriptions.push(treeView);
     }
 
+    async registerAzureResourcesIntegration(activateContext: IActionContext): Promise<void> {
+        // Dynamic registration so this file compiles when the enum members aren't present
+        // This is how we detect whether the update to Azure Resources has been deployed
+
+        const ruResourceType = (AzExtResourceType as unknown as Record<string, unknown>)['AzureCosmosDbForMongoDbRu'];
+        const documentDbResourceType = (AzExtResourceType as unknown as Record<string, unknown>)['MongoClusters'];
+
+        if (!ruResourceType || !documentDbResourceType) {
+            activateContext.telemetry.properties.skippedAzureResourcesActivation = 'true';
+            console.log(
+                'Azure resource types not available in this environment; skipping Azure Resources provider registration.',
+            );
+
+            return;
+        }
+
+        ext.rgApiV2 = (await getAzureResourcesExtensionApi(
+            ext.context,
+            '2.0.0',
+        )) as AzureResourcesExtensionApiWithActivity;
+
+        ext.azureResourcesVCoreBranchDataProvider = new VCoreBranchDataProvider();
+        ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
+            documentDbResourceType as unknown as AzExtResourceType,
+            ext.azureResourcesVCoreBranchDataProvider,
+        );
+
+        ext.azureResourcesRUBranchDataProvider = new RUBranchDataProvider();
+        ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
+            ruResourceType as unknown as AzExtResourceType,
+            ext.azureResourcesRUBranchDataProvider,
+        );
+
+        // // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
+        // if (false && enableWorkspaceSupport()) {
+        //     // on purpose, transition is still in progress
+        //     activateContext.telemetry.properties.enabledWorkspace = 'true';
+
+        //     ext.mongoClustersWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
+        //     ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
+        //         WorkspaceResourceType.MongoClusters,
+        //         ext.mongoClustersWorkspaceBranchDataProvider,
+        //     );
+        // }
+    }
+
     async activateClustersSupport(): Promise<void> {
         await callWithTelemetryAndErrorHandling(
             'clustersExtension.activate',
             async (activateContext: IActionContext) => {
                 activateContext.telemetry.properties.isActivationEvent = 'true';
 
-                // TODO: Implement https://github.com/microsoft/vscode-documentdb/issues/30
-                // for staged hand-over from Azure Databases to this DocumentDB extension
-
-                if (enableMongoVCoreSupport() || enableWorkspaceSupport()) {
-                    ext.rgApiV2 = (await getAzureResourcesExtensionApi(
-                        ext.context,
-                        '2.0.0',
-                    )) as AzureResourcesExtensionApiWithActivity;
-                }
-
-                if (enableMongoVCoreSupport()) {
-                    // on purpose, transition is still in progress
-                    activateContext.telemetry.properties.enabledVCore = 'true';
-
-                    ext.azureResourcesVCoreBranchDataProvider = new VCoreBranchDataProvider();
-                    ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
-                        AzExtResourceType.MongoClusters,
-                        ext.azureResourcesVCoreBranchDataProvider,
-                    );
-
-                    ext.azureResourcesRUBranchDataProvider = new RUBranchDataProvider();
-                    ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
-                        AzExtResourceType.AzureCosmosDbForMongoDbRu,
-                        ext.azureResourcesRUBranchDataProvider,
-                    );
-                }
-
-                // // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
-                // if (false && enableWorkspaceSupport()) {
-                //     // on purpose, transition is still in progress
-                //     activateContext.telemetry.properties.enabledWorkspace = 'true';
-
-                //     ext.mongoClustersWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
-                //     ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
-                //         WorkspaceResourceType.MongoClusters,
-                //         ext.mongoClustersWorkspaceBranchDataProvider,
-                //     );
-                // }
-
+                await this.registerAzureResourcesIntegration(activateContext);
                 this.registerDiscoveryServices(activateContext);
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
