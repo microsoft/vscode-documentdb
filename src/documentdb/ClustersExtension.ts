@@ -48,11 +48,10 @@ import { ext } from '../extensionVariables';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
+import { RUBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-ru/RUBranchDataProvider';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/VCoreBranchDataProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
-import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
-import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
@@ -121,19 +120,25 @@ export class ClustersExtension implements vscode.Disposable {
                         AzExtResourceType.MongoClusters,
                         ext.azureResourcesVCoreBranchDataProvider,
                     );
-                }
 
-                // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
-                if (false && enableWorkspaceSupport()) {
-                    // on purpose, transition is still in progress
-                    activateContext.telemetry.properties.enabledWorkspace = 'true';
-
-                    ext.mongoClustersWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
-                    ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
-                        WorkspaceResourceType.MongoClusters,
-                        ext.mongoClustersWorkspaceBranchDataProvider,
+                    ext.azureResourcesRUBranchDataProvider = new RUBranchDataProvider();
+                    ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
+                        AzExtResourceType.AzureCosmosDbForMongoDbRu,
+                        ext.azureResourcesRUBranchDataProvider,
                     );
                 }
+
+                // // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
+                // if (false && enableWorkspaceSupport()) {
+                //     // on purpose, transition is still in progress
+                //     activateContext.telemetry.properties.enabledWorkspace = 'true';
+
+                //     ext.mongoClustersWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
+                //     ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
+                //         WorkspaceResourceType.MongoClusters,
+                //         ext.mongoClustersWorkspaceBranchDataProvider,
+                //     );
+                // }
 
                 this.registerDiscoveryServices(activateContext);
                 this.registerConnectionsTree(activateContext);

@@ -52,6 +52,7 @@
   "Authenticate using a username and password": "Authenticate using a username and password",
   "Authenticate using Microsoft Entra ID (Azure AD)": "Authenticate using Microsoft Entra ID (Azure AD)",
   "Authentication configuration is missing for \"{cluster}\".": "Authentication configuration is missing for \"{cluster}\".",
+  "Authentication data (primary connection string) is missing for \"{cluster}\".": "Authentication data (primary connection string) is missing for \"{cluster}\".",
   "Authentication data (properties.connectionString) is missing for \"{cluster}\".": "Authentication data (properties.connectionString) is missing for \"{cluster}\".",
   "Authentication is required to run this action.": "Authentication is required to run this action.",
   "Authentication is required to use this migration provider.": "Authentication is required to use this migration provider.",

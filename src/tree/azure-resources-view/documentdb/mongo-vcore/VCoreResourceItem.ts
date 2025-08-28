@@ -52,6 +52,7 @@ export class VCoreResourceItem extends ClusterItemBase {
     public async getCredentials(): Promise<ClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
+            context.telemetry.properties.branch = 'documentdb';
 
             // Retrieve and validate cluster information (throws if invalid)
             const clusterInformation = await getClusterInformationFromAzure(
@@ -85,6 +86,7 @@ export class VCoreResourceItem extends ClusterItemBase {
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
+            context.telemetry.properties.branch = 'documentdb';
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -190,6 +192,7 @@ export class VCoreResourceItem extends ClusterItemBase {
         // Prompt the user for credentials
         await callWithTelemetryAndErrorHandling('connect.promptForCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
+            context.telemetry.properties.branch = 'documentdb';
 
             context.errorHandling.rethrow = true;
             context.errorHandling.suppressDisplay = false;
