@@ -5,15 +5,22 @@
 
 import * as vscode from 'vscode';
 
+import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import {
     callWithTelemetryAndErrorHandling,
     createContextValue,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
-import { type AzureResource, type BranchDataProvider } from '@microsoft/vscode-azureresources-api';
-import { MongoClustersExperience } from '../../../DocumentDBExperiences';
+import {
+    type AzureResource,
+    type AzureSubscription,
+    type BranchDataProvider,
+} from '@microsoft/vscode-azureresources-api';
+import { API, MongoClustersExperience } from '../../../DocumentDBExperiences';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
+import { createMongoClustersManagementClient } from '../../../utils/azureClients';
+import { nonNullProp } from '../../../utils/nonNull';
 import { type ExtendedTreeDataProvider } from '../../ExtendedTreeDataProvider';
 import { type TreeElement } from '../../TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
@@ -22,15 +29,15 @@ import { TreeParentCache } from '../../TreeParentCache';
 import { type ClusterModel } from '../../documentdb/ClusterModel';
 import { VCoreResourceItem } from './VCoreResourceItem';
 
-// export type VCoreResource = AzureResource &
-//     GenericResource & {
-//         readonly raw: GenericResource; // Resource object from Azure SDK
-//     };
-
 export class VCoreBranchDataProvider
     extends vscode.Disposable
     implements BranchDataProvider<AzureResource, TreeElement>, ExtendedTreeDataProvider<TreeElement>
 {
+    // these three properties support lazy detail information loading
+    private detailsCacheUpdateRequested = false; // Current arm-mongoclusters beta fails on detail loading
+    private detailsCache: Map<string, ClusterModel> = new Map<string, ClusterModel>();
+    private itemsToUpdateInfo: Map<string, VCoreResourceItem> = new Map<string, VCoreResourceItem>();
+
     /**
      * Cache for tracking parent-child relationships to support the getParent method.
      */
@@ -226,15 +233,51 @@ export class VCoreBranchDataProvider
     }
 
     getResourceItem(resource: AzureResource): TreeElement | Thenable<TreeElement> {
-        // 1. extract the basic info from the element (subscription, resource group, etc., provided by Azure Resources)
-        const clusterInfo: ClusterModel = {
-            ...resource,
-            dbExperience: MongoClustersExperience,
-        } as ClusterModel;
+        return callWithTelemetryAndErrorHandling('getResourceItem', async (context: IActionContext) => {
+            context.telemetry.properties.view = Views.AzureResourcesView;
+            context.telemetry.properties.branch = 'documentdb';
 
-        const clusterItem = new VCoreResourceItem(resource.subscription, clusterInfo);
+            if (this.detailsCacheUpdateRequested) {
+                void this.updateMetadataCache(context, resource.subscription, 1000 * 60 * 5).then(() => {
+                    /**
+                     * Instances of MongoClusterItem were  stored in the itemsToUpdateInfo map,
+                     * so that when the cache is updated, the items can be refreshed.
+                     * I had to keep all of them in the map becasuse refresh requires the actual MongoClusterItem instance.
+                     */
+                    this.itemsToUpdateInfo.forEach((value: VCoreResourceItem) => {
+                        value.cluster = {
+                            ...value.cluster,
+                            ...this.detailsCache.get(value.cluster.id),
+                        };
+                        this.refresh(value);
+                    });
 
-        return clusterItem;
+                    this.itemsToUpdateInfo.clear();
+                });
+            }
+
+            // 1. extract the basic info from the element (subscription, resource group, etc., provided by Azure Resources)
+            let clusterInfo: ClusterModel = {
+                ...resource,
+                dbExperience: MongoClustersExperience,
+            } as ClusterModel;
+
+            // 2. lookup the details in the cache, on subsequent refreshes, the details will be available in the cache
+            if (this.detailsCache.has(clusterInfo.id)) {
+                clusterInfo = {
+                    ...clusterInfo,
+                    ...this.detailsCache.get(clusterInfo.id),
+                };
+            }
+
+            const clusterItem = new VCoreResourceItem(resource.subscription, clusterInfo);
+            ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
+
+            // 3. store the item in the update queue, so that when the cache is updated, the item can be refreshed
+            this.itemsToUpdateInfo.set(clusterItem.id, clusterItem);
+
+            return clusterItem;
+        }) as TreeElement | Thenable<TreeElement>; // Cast to ensure correct type;
     }
 
     async getTreeItem(element: TreeElement): Promise<vscode.TreeItem> {
@@ -255,5 +298,89 @@ export class VCoreBranchDataProvider
         }
 
         treeItem.contextValue = createContextValue(contextValues);
+    }
+
+    async updateMetadataCache(
+        _context: IActionContext,
+        subscription: AzureSubscription,
+        cacheDuration: number,
+    ): Promise<void> {
+        return callWithTelemetryAndErrorHandling(
+            'getResourceItem.updateMetadataCache',
+            async (context: IActionContext) => {
+                context.telemetry.properties.view = Views.AzureResourcesView;
+                context.telemetry.properties.branch = 'documentdb';
+
+                try {
+                    context.telemetry.properties.experience = API.MongoClusters;
+                    console.debug(
+                        'Loading metadata cache for %s/%s',
+                        context.telemetry.properties.view,
+                        context.telemetry.properties.branch,
+                    );
+
+                    this.detailsCacheUpdateRequested = false;
+
+                    setTimeout(() => {
+                        this.detailsCache.clear();
+                        this.detailsCacheUpdateRequested = true;
+                        console.debug(
+                            'Cleared metadata cache for %s/%s',
+                            context.telemetry.properties.view,
+                            context.telemetry.properties.branch,
+                        );
+                    }, cacheDuration); // clear cache when the it expires
+
+                    // subscription comes from different azure packages in callers; cast here intentionally
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+                    const managementClient = await createMongoClustersManagementClient(context, subscription as any);
+                    const accounts = await uiUtils.listAllIterator(managementClient.mongoClusters.list());
+
+                    console.debug(
+                        'Loaded metadata for %s/%s: %d entries',
+                        context.telemetry.properties.view,
+                        context.telemetry.properties.branch,
+                        accounts.length,
+                    );
+
+                    accounts.map((mongoClusterAccount) => {
+                        this.detailsCache.set(
+                            nonNullProp(
+                                mongoClusterAccount,
+                                'id',
+                                'mongoClusterAccount.id',
+                                'MongoVCoreBranchDataProvider.ts',
+                            ),
+                            {
+                                dbExperience: MongoClustersExperience,
+                                id: mongoClusterAccount.id!,
+                                name: mongoClusterAccount.name!,
+                                resourceGroup: getResourceGroupFromId(mongoClusterAccount.id!),
+
+                                location: mongoClusterAccount.location,
+                                serverVersion: mongoClusterAccount.properties?.serverVersion,
+
+                                systemData: {
+                                    createdAt: mongoClusterAccount.systemData?.createdAt,
+                                },
+
+                                sku: mongoClusterAccount.properties?.compute?.tier,
+                                diskSize: mongoClusterAccount.properties?.storage?.sizeGb,
+                                nodeCount: mongoClusterAccount.properties?.sharding?.shardCount,
+                                enableHa: mongoClusterAccount.properties?.highAvailability?.targetMode !== 'Disabled',
+                            },
+                        );
+                    });
+                } catch (e) {
+                    console.debug(
+                        'Failed to load metadata for %s/%s',
+                        context.telemetry.properties.view,
+                        context.telemetry.properties.branch,
+                    );
+                    console.debug({ ...context, ...subscription });
+                    throw e;
+                }
+            },
+        );
     }
 }
