@@ -4,9 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 export enum API {
-    MongoDB = 'MongoDB',
-    MongoClusters = 'MongoClusters',
-    DocumentDB = 'DocumentDB',
+    CosmosDBMongoRU = 'mongoRU',
+    DocumentDB = 'documentDB',
 }
 
 export function getExperienceFromApi(api: API): Experience {
@@ -34,6 +33,14 @@ export interface Experience {
     tag?: string;
 }
 
+export const CosmosDBMongoRUExperience: Experience = {
+    api: API.CosmosDBMongoRU,
+    longName: 'Azure Cosmos DB for MongoDB (RU)',
+    shortName: 'MongoDB (RU)',
+    telemetryName: 'mongoru',
+    tag: 'Azure Cosmos DB for MongoDB (RU)',
+} as const;
+
 export const DocumentDBExperience: Experience = {
     api: API.DocumentDB,
     longName: 'DocumentDB',
@@ -42,22 +49,7 @@ export const DocumentDBExperience: Experience = {
     tag: 'DocumentDB',
 } as const;
 
-export const MongoExperience: Experience = {
-    api: API.MongoDB,
-    longName: 'Cosmos DB for MongoDB',
-    shortName: 'MongoDB',
-    telemetryName: 'mongo',
-    tag: 'Azure Cosmos DB for MongoDB (RU)',
-} as const;
-
-export const MongoClustersExperience: Experience = {
-    api: API.MongoClusters,
-    longName: 'Azure Cosmos DB for MongoDB (vCore)',
-    shortName: 'MongoDB (vCore)',
-    telemetryName: 'mongoClusters',
-} as const;
-
-const experiencesArray: Experience[] = [MongoClustersExperience, DocumentDBExperience, MongoExperience];
+const experiencesArray: Experience[] = [DocumentDBExperience, CosmosDBMongoRUExperience];
 const experiencesMap = new Map<API, Experience>(
     experiencesArray.map((info: Experience): [API, Experience] => [info.api, info]),
 );

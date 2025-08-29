@@ -7,7 +7,7 @@ import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureut
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
-import { MongoClustersExperience } from '../../../DocumentDBExperiences';
+import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
@@ -51,7 +51,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         const clusterInfo: ClusterModel = {
                             ...account,
                             resourceGroup: getResourceGroupFromId(resourceId),
-                            dbExperience: MongoClustersExperience,
+                            dbExperience: DocumentDBExperience,
                         } as ClusterModel;
 
                         return new DocumentDBResourceItem(this.subscription.subscription, clusterInfo);

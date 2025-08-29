@@ -12,7 +12,7 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResource, type BranchDataProvider } from '@microsoft/vscode-azureresources-api';
-import { MongoClustersExperience } from '../../../DocumentDBExperiences';
+import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { CaseInsensitiveMap } from '../../../utils/CaseInsensitiveMap';
@@ -59,7 +59,7 @@ export class VCoreBranchDataProvider
             const cache = new CaseInsensitiveMap<ClusterModel>();
             accounts.forEach((documentDbAccount) => {
                 cache.set(nonNullProp(documentDbAccount, 'id', 'vCoreAccount.id', 'VCoreBranchDataProvider.ts'), {
-                    dbExperience: MongoClustersExperience,
+                    dbExperience: DocumentDBExperience,
                     id: documentDbAccount.id!,
                     name: documentDbAccount.name!,
                     resourceGroup: getResourceGroupFromId(documentDbAccount.id!),
@@ -294,7 +294,7 @@ export class VCoreBranchDataProvider
 
             let clusterInfo: ClusterModel = {
                 ...resource,
-                dbExperience: MongoClustersExperience,
+                dbExperience: DocumentDBExperience,
             } as ClusterModel;
 
             // Merge with cached metadata if available

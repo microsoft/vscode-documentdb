@@ -10,7 +10,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
-import { MongoClustersExperience } from '../../DocumentDBExperiences';
+import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
@@ -208,7 +208,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
                     id: `${parentId}/${connection.id}`,
                     storageId: connection.id,
                     name: connection.name,
-                    dbExperience: MongoClustersExperience,
+                    dbExperience: DocumentDBExperience,
                     connectionString: connection?.secrets?.connectionString ?? undefined,
                 };
 

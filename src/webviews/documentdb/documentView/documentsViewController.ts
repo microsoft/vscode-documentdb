@@ -34,17 +34,10 @@ export class DocumentsViewController extends WebviewController<DocumentsViewWebv
             }
         }
 
-        super(
-            ext.context,
-            API.MongoClusters,
-            title,
-            'mongoClustersDocumentView',
-            initialData,
-            vscode.ViewColumn.Active,
-        );
+        super(ext.context, API.DocumentDB, title, 'mongoClustersDocumentView', initialData, vscode.ViewColumn.Active);
 
         const trpcContext: RouterContext = {
-            dbExperience: API.MongoClusters,
+            dbExperience: API.DocumentDB,
             webviewName: 'documentView',
             clusterId: initialData.clusterId,
             databaseName: initialData.databaseName,

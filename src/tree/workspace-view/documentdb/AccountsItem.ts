@@ -5,7 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { MongoClustersExperience, type Experience } from '../../../DocumentDBExperiences';
+import { DocumentDBExperience, type Experience } from '../../../DocumentDBExperiences';
 import { StorageNames, StorageService } from '../../../services/storageService';
 import { generateDocumentDBStorageId } from '../../../utils/storageUtils'; // Import the new utility function
 import { type AttachedClusterModel } from '../../documentdb/ClusterModel';
@@ -22,7 +22,7 @@ export class AccountsItem implements TreeElement, TreeElementWithExperience {
 
     constructor() {
         this.id = `${WorkspaceResourceType.MongoClusters}`;
-        this.experience = MongoClustersExperience;
+        this.experience = DocumentDBExperience;
     }
 
     async getChildren(): Promise<TreeElement[]> {
@@ -95,7 +95,7 @@ export class AccountsItem implements TreeElement, TreeElementWithExperience {
                         id: `${this.id}/${item.id}`, // To enable TreeView.reveal, we need to have a unique nested id
                         storageId: item.id,
                         name: item.name,
-                        dbExperience: MongoClustersExperience,
+                        dbExperience: DocumentDBExperience,
                         connectionString: item?.secrets?.[0] ?? undefined,
                     };
 

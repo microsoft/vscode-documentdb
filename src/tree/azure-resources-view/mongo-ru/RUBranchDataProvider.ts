@@ -12,7 +12,7 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResource, type BranchDataProvider } from '@microsoft/vscode-azureresources-api';
-import { MongoExperience } from '../../../DocumentDBExperiences';
+import { CosmosDBMongoRUExperience } from '../../../DocumentDBExperiences';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { CaseInsensitiveMap } from '../../../utils/CaseInsensitiveMap';
@@ -65,7 +65,7 @@ export class RUBranchDataProvider
             const cache = new CaseInsensitiveMap<ClusterModel>();
             ruAccounts.forEach((ruAccount) => {
                 cache.set(nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts'), {
-                    dbExperience: MongoExperience,
+                    dbExperience: CosmosDBMongoRUExperience,
                     id: ruAccount.id!,
                     name: ruAccount.name!,
                     resourceGroup: getResourceGroupFromId(ruAccount.id!),
@@ -306,7 +306,7 @@ export class RUBranchDataProvider
 
             let clusterInfo: ClusterModel = {
                 ...resource,
-                dbExperience: MongoExperience,
+                dbExperience: CosmosDBMongoRUExperience,
             } as ClusterModel;
 
             // Merge with cached metadata if available

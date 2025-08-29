@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 
 import path from 'path';
 import { getResourcesPath, type IThemedIconPath } from '../../../constants';
-import { MongoClustersExperience } from '../../../DocumentDBExperiences';
+import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import {
     ConnectionStorageService,
     ConnectionType,
@@ -43,7 +43,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                     id: `${this.id}/${connection.id}`,
                     storageId: connection.id,
                     name: connection.name,
-                    dbExperience: MongoClustersExperience,
+                    dbExperience: DocumentDBExperience,
                     connectionString: connection?.secrets?.connectionString,
                     emulatorConfiguration: emulatorConfiguration,
                 };
