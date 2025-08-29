@@ -11,15 +11,12 @@ import {
     createContextValue,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
-import {
-    type AzureResource,
-    type AzureSubscription,
-    type BranchDataProvider,
-} from '@microsoft/vscode-azureresources-api';
+import { type AzureResource, type BranchDataProvider } from '@microsoft/vscode-azureresources-api';
 import { MongoExperience } from '../../../DocumentDBExperiences';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { CaseInsensitiveMap } from '../../../utils/CaseInsensitiveMap';
+import { LazyMetadataLoader } from '../../../utils/LazyMetadataLoader';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullProp } from '../../../utils/nonNull';
 import { type ExtendedTreeDataProvider } from '../../ExtendedTreeDataProvider';
@@ -39,26 +36,65 @@ export class RUBranchDataProvider
     extends vscode.Disposable
     implements BranchDataProvider<AzureResource, TreeElement>, ExtendedTreeDataProvider<TreeElement>
 {
-    // these three properties support lazy detail information loading
-    private detailsCacheUpdateRequested = true; // this is just a "wip" and low prio disabled for this iteration
-
     /**
-     * A case-insensitive map is used for the details cache to address inconsistencies in Azure resource ID casing.
-     *
-     * The resource ID for the same Azure resource can vary in casing depending on the source.
-     * For instance, the Azure Resources extension (likely using `@azure/arm-resources`) may provide an ID
-     * with a different casing than the ID retrieved from the dedicated `@azure/arm-cosmosdb` client, which is
-     * used to populate this cache. This discrepancy is likely due to hardcoded provider strings in the different SDKs.
-     *
-     * Example of differing IDs for the same resource (look for Document>>DB<< and Document>>Db<<):
-     * - From Azure Resources extension: `/subscriptions/sub-id/resourceGroups/rg-name/providers/Microsoft.DocumentDb/databaseAccounts/account-name`
-     * - From `@azure/arm-cosmosdb`:   `/subscriptions/sub-id/resourceGroups/rg-name/providers/Microsoft.DocumentDB/databaseAccounts/account-name`
-     *
-     * To ensure reliable lookups regardless of the source, we normalize the keys by using a case-insensitive map,
-     * which internally converts all keys to lowercase.
+     * Helper for managing lazy metadata loading with proper caching and item updates.
+     * This replaces the manual cache management that was previously done with
+     * detailsCacheUpdateRequested, detailsCache, and itemsToUpdateInfo properties.
      */
-    private detailsCache: Map<string, ClusterModel> = new CaseInsensitiveMap<ClusterModel>();
-    private itemsToUpdateInfo: Map<string, RUResourceItem> = new CaseInsensitiveMap<RUResourceItem>();
+    private readonly metadataLoader = new LazyMetadataLoader<ClusterModel, RUResourceItem>({
+        cacheDuration: 5 * 60 * 1000, // 5 minutes
+        loadMetadata: async (subscription, context) => {
+            console.debug(
+                'Loading metadata cache for %s/%s',
+                context.telemetry.properties.view,
+                context.telemetry.properties.branch,
+            );
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+            const managementClient = await createCosmosDBManagementClient(context, subscription as any);
+            let ruAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
+            ruAccounts = ruAccounts.filter((account) => account.kind === 'MongoDB'); // ignore non-ru accounts
+
+            console.debug(
+                'Loaded metadata for %s/%s: %d entries',
+                context.telemetry.properties.view,
+                context.telemetry.properties.branch,
+                ruAccounts.length,
+            );
+
+            const cache = new CaseInsensitiveMap<ClusterModel>();
+            ruAccounts.forEach((ruAccount) => {
+                cache.set(nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts'), {
+                    dbExperience: MongoExperience,
+                    id: ruAccount.id!,
+                    name: ruAccount.name!,
+                    resourceGroup: getResourceGroupFromId(ruAccount.id!),
+                    location: ruAccount.location,
+                    serverVersion: ruAccount?.apiProperties?.serverVersion,
+                    systemData: {
+                        createdAt: ruAccount.systemData?.createdAt,
+                    },
+                    capabilities:
+                        ruAccount.capabilities && ruAccount.capabilities.length > 0
+                            ? ruAccount.capabilities
+                                  .map((cap) => cap.name)
+                                  .filter((name) => name !== undefined)
+                                  .join(', ')
+                            : undefined,
+                });
+            });
+            return cache;
+        },
+        updateItem: (item, metadata) => {
+            if (metadata) {
+                item.cluster = { ...item.cluster, ...metadata };
+                if (item.cluster.serverVersion) {
+                    item.descriptionOverride = `v${item.cluster.serverVersion}`;
+                }
+            }
+        },
+        refreshCallback: (item) => this.refresh(item),
+    });
 
     /**
      * Cache for tracking parent-child relationships to support the getParent method.
@@ -105,6 +141,7 @@ export class RUBranchDataProvider
     constructor() {
         super(() => {
             this.onDidChangeTreeDataEmitter.dispose();
+            this.metadataLoader.dispose();
         });
     }
 
@@ -259,48 +296,29 @@ export class RUBranchDataProvider
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'ru';
 
-            if (this.detailsCacheUpdateRequested) {
-                void this.updateMetadataCache(context, resource.subscription, 1000 * 60 * 5).then(() => {
-                    /**
-                     * Instances of MongoClusterItem were  stored in the itemsToUpdateInfo map,
-                     * so that when the cache is updated, the items can be refreshed.
-                     * I had to keep all of them in the map becasuse refresh requires the actual MongoClusterItem instance.
-                     */
-                    this.itemsToUpdateInfo.forEach((value: RUResourceItem) => {
-                        value.cluster = {
-                            ...value.cluster,
-                            ...this.detailsCache.get(value.cluster.id),
-                        };
-
-                        if (value.cluster.serverVersion) {
-                            value.descriptionOverride = `v${value.cluster.serverVersion}`;
-                        }
-
-                        this.refresh(value);
-                    });
-
-                    this.itemsToUpdateInfo.clear();
-                });
+            // Trigger cache loading if needed
+            if (this.metadataLoader.needsCacheUpdate) {
+                void this.metadataLoader.loadCacheAndRefreshItems(resource.subscription, context);
             }
+
+            // Get metadata from cache (may be undefined if not yet loaded)
+            const cachedMetadata = this.metadataLoader.getCachedMetadata(resource.id);
 
             let clusterInfo: ClusterModel = {
                 ...resource,
                 dbExperience: MongoExperience,
             } as ClusterModel;
 
-            // 2. lookup the details in the cache, on subsequent refreshes, the details will be available in the cache
-            if (this.detailsCache.has(clusterInfo.id)) {
-                clusterInfo = {
-                    ...clusterInfo,
-                    ...this.detailsCache.get(clusterInfo.id),
-                };
+            // Merge with cached metadata if available
+            if (cachedMetadata) {
+                clusterInfo = { ...clusterInfo, ...cachedMetadata };
             }
 
             const clusterItem = new RUResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
 
-            // 3. store the item in the update queue, so that when the cache is updated, the item can be refreshed
-            this.itemsToUpdateInfo.set(clusterItem.id, clusterItem);
+            // Register item for refresh when cache loading completes
+            this.metadataLoader.addItemForRefresh(resource.id, clusterItem);
 
             return clusterItem;
         }) as TreeElement | Thenable<TreeElement>; // Cast to ensure correct type;
@@ -324,86 +342,5 @@ export class RUBranchDataProvider
         }
 
         treeItem.contextValue = createContextValue(contextValues);
-    }
-
-    async updateMetadataCache(
-        _context: IActionContext,
-        subscription: AzureSubscription,
-        cacheDuration: number,
-    ): Promise<void> {
-        return callWithTelemetryAndErrorHandling(
-            'getResourceItem.updateMetadataCache',
-            async (context: IActionContext) => {
-                context.telemetry.properties.view = Views.AzureResourcesView;
-                context.telemetry.properties.branch = 'documentdb';
-
-                try {
-                    console.debug(
-                        'Loading metadata cache for %s/%s',
-                        context.telemetry.properties.view,
-                        context.telemetry.properties.branch,
-                    );
-
-                    this.detailsCacheUpdateRequested = false;
-
-                    setTimeout(() => {
-                        this.detailsCache.clear();
-                        this.detailsCacheUpdateRequested = true;
-                        console.debug(
-                            'Cleared metadata cache for %s/%s',
-                            context.telemetry.properties.view,
-                            context.telemetry.properties.branch,
-                        );
-                    }, cacheDuration); // clear cache when the it expires
-
-                    // subscription comes from different azure packages in callers; cast here intentionally
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-                    const managementClient = await createCosmosDBManagementClient(context, subscription as any);
-
-                    let accounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
-                    accounts = accounts.filter((account) => account.kind === 'MongoDB'); // ignore non-ru accounts
-
-                    console.debug(
-                        'Loaded metadata for %s/%s: %d entries',
-                        context.telemetry.properties.view,
-                        context.telemetry.properties.branch,
-                        accounts.length,
-                    );
-
-                    accounts.map((ruAccount) => {
-                        this.detailsCache.set(nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts'), {
-                            dbExperience: MongoExperience,
-                            id: ruAccount.id!,
-                            name: ruAccount.name!,
-                            resourceGroup: getResourceGroupFromId(ruAccount.id!),
-
-                            location: ruAccount.location,
-                            serverVersion: ruAccount?.apiProperties?.serverVersion,
-
-                            systemData: {
-                                createdAt: ruAccount.systemData?.createdAt,
-                            },
-                            ...{
-                                capabilities:
-                                    ruAccount.capabilities && ruAccount.capabilities.length > 0
-                                        ? ruAccount.capabilities
-                                              .map((cap) => cap.name)
-                                              .filter((name) => name !== undefined)
-                                              .join(', ')
-                                        : undefined,
-                            },
-                        });
-                    });
-                } catch (e) {
-                    console.debug(
-                        'Failed to load metadata for %s/%s',
-                        context.telemetry.properties.view,
-                        context.telemetry.properties.branch,
-                    );
-                    console.debug({ ...context, ...subscription });
-                    throw e;
-                }
-            },
-        );
     }
 }
