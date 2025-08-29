@@ -541,7 +541,7 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /\\btreeitem_.documentdbcluster\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@1"
         },
         {
