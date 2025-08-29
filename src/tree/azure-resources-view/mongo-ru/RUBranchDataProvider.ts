@@ -16,9 +16,10 @@ import {
     type AzureSubscription,
     type BranchDataProvider,
 } from '@microsoft/vscode-azureresources-api';
-import { MongoClustersExperience, MongoExperience } from '../../../DocumentDBExperiences';
+import { MongoExperience } from '../../../DocumentDBExperiences';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
+import { CaseInsensitiveMap } from '../../../utils/CaseInsensitiveMap';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullProp } from '../../../utils/nonNull';
 import { type ExtendedTreeDataProvider } from '../../ExtendedTreeDataProvider';
@@ -39,9 +40,25 @@ export class RUBranchDataProvider
     implements BranchDataProvider<AzureResource, TreeElement>, ExtendedTreeDataProvider<TreeElement>
 {
     // these three properties support lazy detail information loading
-    private detailsCacheUpdateRequested = false; // this is just a "wip" and low prio disabled for this iteration
-    private detailsCache: Map<string, ClusterModel> = new Map<string, ClusterModel>();
-    private itemsToUpdateInfo: Map<string, RUResourceItem> = new Map<string, RUResourceItem>();
+    private detailsCacheUpdateRequested = true; // this is just a "wip" and low prio disabled for this iteration
+
+    /**
+     * A case-insensitive map is used for the details cache to address inconsistencies in Azure resource ID casing.
+     *
+     * The resource ID for the same Azure resource can vary in casing depending on the source.
+     * For instance, the Azure Resources extension (likely using `@azure/arm-resources`) may provide an ID
+     * with a different casing than the ID retrieved from the dedicated `@azure/arm-cosmosdb` client, which is
+     * used to populate this cache. This discrepancy is likely due to hardcoded provider strings in the different SDKs.
+     *
+     * Example of differing IDs for the same resource (look for Document>>DB<< and Document>>Db<<):
+     * - From Azure Resources extension: `/subscriptions/sub-id/resourceGroups/rg-name/providers/Microsoft.DocumentDb/databaseAccounts/account-name`
+     * - From `@azure/arm-cosmosdb`:   `/subscriptions/sub-id/resourceGroups/rg-name/providers/Microsoft.DocumentDB/databaseAccounts/account-name`
+     *
+     * To ensure reliable lookups regardless of the source, we normalize the keys by using a case-insensitive map,
+     * which internally converts all keys to lowercase.
+     */
+    private detailsCache: Map<string, ClusterModel> = new CaseInsensitiveMap<ClusterModel>();
+    private itemsToUpdateInfo: Map<string, RUResourceItem> = new CaseInsensitiveMap<RUResourceItem>();
 
     /**
      * Cache for tracking parent-child relationships to support the getParent method.
@@ -263,7 +280,7 @@ export class RUBranchDataProvider
 
             let clusterInfo: ClusterModel = {
                 ...resource,
-                dbExperience: MongoClustersExperience,
+                dbExperience: MongoExperience,
             } as ClusterModel;
 
             // 2. lookup the details in the cache, on subsequent refreshes, the details will be available in the cache
@@ -275,11 +292,10 @@ export class RUBranchDataProvider
             }
 
             const clusterItem = new RUResourceItem(resource.subscription, clusterInfo);
+            ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
 
             // 3. store the item in the update queue, so that when the cache is updated, the item can be refreshed
             this.itemsToUpdateInfo.set(clusterItem.id, clusterItem);
-
-            ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
 
             return clusterItem;
         }) as TreeElement | Thenable<TreeElement>; // Cast to ensure correct type;
