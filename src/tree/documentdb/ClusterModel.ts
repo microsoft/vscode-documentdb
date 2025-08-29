@@ -46,6 +46,7 @@ interface ResourceModelInUse extends Resource {
     connectionString?: string;
 
     location?: string;
+    capabilities?: string;
     serverVersion?: string;
     systemData?: {
         createdAt?: Date;

@@ -38,8 +38,6 @@ export class RUResourceItem extends ClusterItemBase {
         super(cluster);
     }
 
-    protected descriptionOverride: string | undefined = this.cluster.serverVersion;
-
     public async getCredentials(): Promise<ClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;

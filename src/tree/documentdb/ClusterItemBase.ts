@@ -48,7 +48,7 @@ export abstract class ClusterItemBase
     public readonly experience: Experience;
     public contextValue: string = 'treeItem.mongoCluster';
 
-    protected descriptionOverride?: string;
+    public descriptionOverride?: string;
     protected tooltipOverride?: string | vscode.MarkdownString;
 
     protected iconPath?:
@@ -204,6 +204,7 @@ export abstract class ClusterItemBase
                               : '') +
                           (this.cluster.nodeCount ? `- Node Count: **${this.cluster.nodeCount}**\n\n` : '') +
                           (this.cluster.serverVersion ? `- Server Version: **${this.cluster.serverVersion}**\n` : '') +
+                          (this.cluster.capabilities ? `- Capabilities: **${this.cluster.capabilities}**\n` : '') +
                           (this.cluster.systemData?.createdAt
                               ? `---\n- Created Date: **${this.cluster.systemData.createdAt.toLocaleString()}**\n`
                               : ''),

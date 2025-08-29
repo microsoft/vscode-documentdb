@@ -271,6 +271,11 @@ export class RUBranchDataProvider
                             ...value.cluster,
                             ...this.detailsCache.get(value.cluster.id),
                         };
+
+                        if (value.cluster.serverVersion) {
+                            value.descriptionOverride = `v${value.cluster.serverVersion}`;
+                        }
+
                         this.refresh(value);
                     });
 
@@ -365,23 +370,29 @@ export class RUBranchDataProvider
                         accounts.length,
                     );
 
-                    accounts.map((mongoClusterAccount) => {
-                        this.detailsCache.set(
-                            nonNullProp(mongoClusterAccount, 'id', 'mongoClusterAccount.id', 'RUBranchDataProvider.ts'),
-                            {
-                                dbExperience: MongoExperience,
-                                id: mongoClusterAccount.id!,
-                                name: mongoClusterAccount.name!,
-                                resourceGroup: getResourceGroupFromId(mongoClusterAccount.id!),
+                    accounts.map((ruAccount) => {
+                        this.detailsCache.set(nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts'), {
+                            dbExperience: MongoExperience,
+                            id: ruAccount.id!,
+                            name: ruAccount.name!,
+                            resourceGroup: getResourceGroupFromId(ruAccount.id!),
 
-                                location: mongoClusterAccount.location,
-                                serverVersion: mongoClusterAccount?.apiProperties?.serverVersion,
+                            location: ruAccount.location,
+                            serverVersion: ruAccount?.apiProperties?.serverVersion,
 
-                                systemData: {
-                                    createdAt: mongoClusterAccount.systemData?.createdAt,
-                                },
+                            systemData: {
+                                createdAt: ruAccount.systemData?.createdAt,
                             },
-                        );
+                            ...{
+                                capabilities:
+                                    ruAccount.capabilities && ruAccount.capabilities.length > 0
+                                        ? ruAccount.capabilities
+                                              .map((cap) => cap.name)
+                                              .filter((name) => name !== undefined)
+                                              .join(', ')
+                                        : undefined,
+                            },
+                        });
                     });
                 } catch (e) {
                     console.debug(
