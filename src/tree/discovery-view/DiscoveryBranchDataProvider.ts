@@ -132,9 +132,9 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements Ex
         });
     }
 
-    appendContextValue(treeItem: TreeElementWithContextValue, contextValueToAppend: string): void {
+    appendContextValues(treeItem: TreeElementWithContextValue, ...contextValuesToAppend: string[]): void {
         // all items returned from this view need that context value assigned
-        const contextValues: string[] = [contextValueToAppend];
+        const contextValues: string[] = contextValuesToAppend;
 
         // keep original contextValues if any
         if (treeItem.contextValue) {
@@ -179,8 +179,7 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements Ex
             const rootItem = discoveryProvider.getDiscoveryTreeRootItem(Views.DiscoveryView);
 
             if (isTreeElementWithContextValue(rootItem)) {
-                this.appendContextValue(rootItem, Views.DiscoveryView);
-                this.appendContextValue(rootItem, 'rootItem');
+                this.appendContextValues(rootItem, Views.DiscoveryView, 'rootItem');
             }
 
             // Wrap the root item with state handling for refresh support
@@ -252,7 +251,7 @@ export class DiscoveryBranchDataProvider extends vscode.Disposable implements Ex
                 // Wrap each child with state handling for refresh support
                 return children.map((child) => {
                     if (isTreeElementWithContextValue(child)) {
-                        this.appendContextValue(child, Views.DiscoveryView);
+                        this.appendContextValues(child, Views.DiscoveryView);
                     }
 
                     const wrappedChild = ext.state.wrapItemInStateHandling(child, () =>

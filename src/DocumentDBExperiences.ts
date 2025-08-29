@@ -6,7 +6,7 @@
 export enum API {
     MongoDB = 'MongoDB',
     MongoClusters = 'MongoClusters',
-    DocumentDB = 'DocumentDB', // This the entry for new API (DocumentDB).
+    DocumentDB = 'DocumentDB',
 }
 
 export function getExperienceFromApi(api: API): Experience {

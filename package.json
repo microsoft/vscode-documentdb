@@ -455,13 +455,13 @@
         {
           "//": "[Database] Scrapbook: New Scrapbook",
           "command": "vscode-documentdb.command.scrapbook.new",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "1@1"
         },
         {
           "//": "[Database] Scrapbook: Connect",
           "command": "vscode-documentdb.command.scrapbook.connect",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "1@2"
         }
       ],
@@ -469,13 +469,13 @@
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook New",
           "command": "vscode-documentdb.command.scrapbook.new",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "1@1"
         },
         {
           "//": "[Collection] Scrapbook / Connect",
           "command": "vscode-documentdb.command.scrapbook.connect",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "1@2"
         }
       ],
@@ -515,23 +515,23 @@
       "view/item/context": [
         {
           "command": "vscode-documentdb.command.connectionsView.updateConnectionString",
-          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@2"
         },
         {
           "command": "vscode-documentdb.command.connectionsView.updateCredentials",
-          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@3"
         },
         {
           "command": "vscode-documentdb.command.connectionsView.renameConnection",
-          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@4"
         },
         {
           "//": "Remove Connection...",
           "command": "vscode-documentdb.command.connectionsView.removeConnection",
-          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@5"
         },
         {
@@ -541,12 +541,12 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
+          "when": "view == discoveryView && viewItem =~ /\\btreeitem_.documentdbcluster\\b/i",
           "group": "0@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
+          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "inline"
         },
         {
@@ -572,103 +572,103 @@
         {
           "//": "Create database",
           "command": "vscode-documentdb.command.createDatabase",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_(documentdbcluster|account)\\b/i",
           "group": "1@1"
         },
         {
           "//": "Copy connection string",
           "command": "vscode-documentdb.command.copyConnectionString",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView|Workspace)/ && viewItem =~ /\\btreeitem_(documentdbcluster|account)\\b/i",
           "group": "0@1"
         },
         {
           "//": "[Account] Mongo DB|Cluster Launch Shell",
           "command": "vscode-documentdb.command.launchShell",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "2@2"
         },
         {
           "//": "[Database] Create collection",
           "command": "vscode-documentdb.command.createCollection",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "1@1"
         },
         {
           "//": "[Database] Delete database",
           "command": "vscode-documentdb.command.dropDatabase",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "1@2"
         },
         {
           "//": "[Database] Mongo DB|Cluster Launch Shell",
           "command": "vscode-documentdb.command.launchShell",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "2@1"
         },
         {
           "//": "[Database] Mongo DB|Cluster Scrapbook Submenu",
           "submenu": "documentDB.submenus.mongo.database.scrapbook",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "2@2"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "1@1"
         },
         {
           "//": "[Collection] Create document",
           "command": "vscode-documentdb.command.createDocument",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "1@2"
         },
         {
           "//": "[Collection] Import Documents",
           "command": "vscode-documentdb.command.importDocuments",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "2@1"
         },
         {
           "//": "[Collection] Export documents",
           "command": "vscode-documentdb.command.exportDocuments",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "2@2"
         },
         {
           "//": "[Collection] Data Migration",
           "command": "vscode-documentdb.command.chooseDataMigrationExtension",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i && migrationProvidersAvailable",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && migrationProvidersAvailable",
           "group": "1@2"
         },
         {
           "//": "[Collection] Drop collection",
           "command": "vscode-documentdb.command.dropCollection",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "3@1"
         },
         {
           "//": "[Collection] Launch shell",
           "command": "vscode-documentdb.command.launchShell",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "4@1"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook Submenu",
           "submenu": "documentDB.submenus.mongo.collection.scrapbook",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "4@2"
         },
         {
           "//": "[Collection/Documents] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]documents(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_documents\\b/i && viewItem =~ /\\bexperience_(mongoClusters|mongodb)\\b/i",
           "group": "1@1"
         },
         {
           "//": "[TreeItem] Refresh Item (cluster, database, collection, documents, indexes)",
           "command": "vscode-documentdb.command.refresh",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem[.](mongoCluster|database|collection|documents|indexes|index)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection|documents|indexes|index)\\b/i",
           "group": "zheLastGroup@1"
         },
         {

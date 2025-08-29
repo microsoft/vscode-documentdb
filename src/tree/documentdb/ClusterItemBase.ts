@@ -46,7 +46,7 @@ export abstract class ClusterItemBase
 {
     public readonly id: string;
     public readonly experience: Experience;
-    public contextValue: string = 'treeItem.mongoCluster';
+    public contextValue: string = 'treeItem_documentdbcluster';
 
     public descriptionOverride?: string;
     protected tooltipOverride?: string | vscode.MarkdownString;
@@ -71,7 +71,7 @@ export abstract class ClusterItemBase
     protected constructor(public cluster: ClusterModel) {
         this.id = cluster.id ?? '';
         this.experience = cluster.dbExperience;
-        this.experienceContextValue = `experience.${this.experience.api}`;
+        this.experienceContextValue = `experience_${this.experience.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 
@@ -144,7 +144,7 @@ export abstract class ClusterItemBase
             if (databases.length === 0) {
                 return [
                     createGenericElement({
-                        contextValue: createContextValue(['treeItem.no-databases', this.experienceContextValue]),
+                        contextValue: createContextValue(['treeItem_no-databases', this.experienceContextValue]),
                         id: `${this.id}/no-databases`,
                         label: l10n.t('Create Database…'),
                         iconPath: new vscode.ThemeIcon('plus'),
@@ -183,11 +183,7 @@ export abstract class ClusterItemBase
             id: this.id,
             contextValue: this.contextValue,
             label: this.cluster.name,
-            description: this.descriptionOverride
-                ? this.descriptionOverride
-                : this.cluster.sku !== undefined
-                  ? `(${this.cluster.sku})`
-                  : false,
+            description: this.contextValue,
             iconPath: this.iconPath ?? undefined,
             tooltip: this.tooltipOverride
                 ? this.tooltipOverride

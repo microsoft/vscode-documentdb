@@ -86,7 +86,7 @@ export async function pickWorkspaceResource<T extends TreeElement>(
 ): Promise<T> {
     options ??= {
         type: [WorkspaceResourceType.AttachedAccounts, WorkspaceResourceType.MongoClusters],
-        expectedChildContextValue: ['treeItem.account', 'treeItem.mongoCluster'],
+        expectedChildContextValue: ['treeItem_account', 'treeItem_documentdbcluster'],
     };
 
     const types = Array.isArray(options.type) ? options.type : [options.type];

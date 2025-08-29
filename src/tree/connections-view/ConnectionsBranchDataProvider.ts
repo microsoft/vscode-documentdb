@@ -78,9 +78,9 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
         });
     }
 
-    appendContextValue(treeItem: TreeElementWithContextValue, contextValueToAppend: string): void {
+    appendContextValues(treeItem: TreeElementWithContextValue, ...contextValuesToAppend: string[]): void {
         // all items returned from this view need that context value assigned
-        const contextValues: string[] = [contextValueToAppend];
+        const contextValues: string[] = contextValuesToAppend;
 
         // keep original contextValues if any
         if (treeItem.contextValue) {
@@ -120,7 +120,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
                 // Now process and add each root item to the cache
                 for (const item of rootItems) {
                     if (isTreeElementWithContextValue(item)) {
-                        this.appendContextValue(item, Views.ConnectionsView);
+                        this.appendContextValues(item, Views.ConnectionsView);
                     }
 
                     // Add root items to the cache
@@ -169,7 +169,7 @@ export class ConnectionsBranchDataProvider extends vscode.Disposable implements 
             return children?.map((child) => {
                 if (child.id) {
                     if (isTreeElementWithContextValue(child)) {
-                        this.appendContextValue(child, Views.ConnectionsView);
+                        this.appendContextValues(child, Views.ConnectionsView);
                     }
 
                     // Register parent-child relationship in the cache

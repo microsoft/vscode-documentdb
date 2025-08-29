@@ -177,7 +177,7 @@ export class VCoreBranchDataProvider
             return children?.map((child) => {
                 if (child.id) {
                     if (isTreeElementWithContextValue(child)) {
-                        this.appendContextValues(child, Views.AzureResourcesView, 'documentdbBranch');
+                        this.appendContextValues(child, Views.AzureResourcesView, 'documentDbBranch');
                     }
 
                     // Register parent-child relationship in the cache
@@ -304,6 +304,10 @@ export class VCoreBranchDataProvider
 
             const clusterItem = new VCoreResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
+
+            if (isTreeElementWithContextValue(clusterItem)) {
+                this.appendContextValues(clusterItem, Views.AzureResourcesView, 'documentDbBranch');
+            }
 
             // Register item for refresh when cache loading completes
             this.metadataLoader.addItemForRefresh(resource.id, clusterItem);
