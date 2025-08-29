@@ -6,12 +6,12 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type WorkspaceResource, type WorkspaceResourceBranchDataProvider } from '@microsoft/vscode-azureresources-api';
 import { ext } from '../../../extensionVariables';
-import { BaseCachedBranchDataProvider } from '../../BaseCachedBranchDataProvider';
+import { RemoveMeBaseCachedBranchDataProvider } from '../../RemoveMeBaseCachedBranchDataProvider';
 import { type TreeElement } from '../../TreeElement';
 import { AccountsItem } from './AccountsItem';
 
 export class ClustersWorkspaceBranchDataProvider
-    extends BaseCachedBranchDataProvider<WorkspaceResource>
+    extends RemoveMeBaseCachedBranchDataProvider<WorkspaceResource>
     implements WorkspaceResourceBranchDataProvider<TreeElement>
 {
     protected get contextValue(): string {

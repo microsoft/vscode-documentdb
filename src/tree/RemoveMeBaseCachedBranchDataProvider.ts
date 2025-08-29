@@ -48,7 +48,7 @@ import { isTreeElementWithExperience } from './TreeElementWithExperience';
  * @extends vscode.Disposable
  * @implements {BranchDataProvider<T, TreeElement>}
  */
-export abstract class BaseCachedBranchDataProvider<T extends AzureResource | WorkspaceResource>
+export abstract class RemoveMeBaseCachedBranchDataProvider<T extends AzureResource | WorkspaceResource>
     extends vscode.Disposable
     implements BranchDataProvider<T, TreeElement>
 {
@@ -365,7 +365,7 @@ export abstract class BaseCachedBranchDataProvider<T extends AzureResource | Wor
             return undefined;
         }
         let node = element;
-        // eslint-disable-next-line no-constant-condition
+
         outerLoop: while (true) {
             const children: TreeElement[] | null | undefined = await this.getChildren(node);
 
