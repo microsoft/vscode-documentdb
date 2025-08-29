@@ -317,6 +317,10 @@ export class RUBranchDataProvider
             const clusterItem = new RUResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
 
+            if (cachedMetadata?.serverVersion) {
+                clusterItem.descriptionOverride = `v${cachedMetadata.serverVersion}`;
+            }
+
             // Register item for refresh when cache loading completes
             this.metadataLoader.addItemForRefresh(resource.id, clusterItem);
 
