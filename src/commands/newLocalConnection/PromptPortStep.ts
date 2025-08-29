@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { DocumentDBExperience, MongoExperience } from '../../DocumentDBExperiences';
+import { CosmosDBMongoRUExperience, DocumentDBExperience } from '../../DocumentDBExperiences';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
 export class PromptPortStep extends AzureWizardPromptStep<NewLocalConnectionWizardContext> {
@@ -17,7 +17,7 @@ export class PromptPortStep extends AzureWizardPromptStep<NewLocalConnectionWiza
         let placeHolder: string | undefined;
 
         switch (context.experience) {
-            case MongoExperience:
+            case CosmosDBMongoRUExperience:
             case DocumentDBExperience:
             default:
                 defaultPort = context.port ? context.port.toString() : '10255';

@@ -9,7 +9,7 @@ import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../documentdb/Views';
-import { MongoClustersExperience } from '../../../DocumentDBExperiences';
+import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
@@ -106,7 +106,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             vmSize: vm.hardwareProfile?.vmSize,
                             publicIpAddress: publicIpAddress,
                             fqdn: fqdn,
-                            dbExperience: MongoClustersExperience,
+                            dbExperience: DocumentDBExperience,
                         };
                         vmItems.push(new AzureVMResourceItem(this.subscription.subscription, vmInfo));
                     }

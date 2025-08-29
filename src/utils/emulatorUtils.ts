@@ -31,7 +31,7 @@ export function getEmulatorItemLabelForApi(api: API, port: string | number | und
     const experience = getExperienceFromApi(api);
     let label = l10n.t('{experienceName} Emulator', { experienceName: experience.shortName });
 
-    if (experience.api === API.MongoDB || experience.api === API.MongoClusters) {
+    if (experience.api === API.CosmosDBMongoRU || experience.api === API.DocumentDB) {
         label = l10n.t('MongoDB Emulator');
     }
 

@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 
 import path from 'path';
 import { getResourcesPath, type IThemedIconPath } from '../../../constants';
-import { MongoClustersExperience } from '../../../DocumentDBExperiences';
+import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import {
     ConnectionStorageService,
     ConnectionType,
@@ -23,7 +23,7 @@ import { NewEmulatorConnectionItemCV } from './NewEmulatorConnectionItemCV';
 
 export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public contextValue: string = 'treeItem.LocalEmulators';
+    public contextValue: string = 'treeItem_LocalEmulators';
 
     constructor(public readonly parentId: string) {
         this.id = `${parentId}/localEmulators`;
@@ -43,7 +43,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                     id: `${this.id}/${connection.id}`,
                     storageId: connection.id,
                     name: connection.name,
-                    dbExperience: MongoClustersExperience,
+                    dbExperience: DocumentDBExperience,
                     connectionString: connection?.secrets?.connectionString,
                     emulatorConfiguration: emulatorConfiguration,
                 };

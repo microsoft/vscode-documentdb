@@ -22,10 +22,10 @@ export class CollectionViewController extends WebviewController<CollectionViewWe
 
         const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
 
-        super(ext.context, API.MongoClusters, title, 'mongoClustersCollectionView', initialData);
+        super(ext.context, API.DocumentDB, title, 'mongoClustersCollectionView', initialData);
 
         const trpcContext: RouterContext = {
-            dbExperience: API.MongoClusters,
+            dbExperience: API.DocumentDB,
             webviewName: 'collectionView',
             sessionId: initialData.sessionId,
             clusterId: initialData.clusterId,

@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { MongoClustersExperience } from '../../DocumentDBExperiences';
+import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ExecuteStep } from './ExecuteStep';
 import { ConnectionMode, type NewConnectionWizardContext } from './NewConnectionWizardContext';
 import { PromptAuthMethodStep } from './PromptAuthMethodStep';
@@ -40,7 +40,7 @@ export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectio
 
         switch (selectedItem.id) {
             case 'connectionString':
-                context.experience = MongoClustersExperience;
+                context.experience = DocumentDBExperience;
                 context.connectionMode = ConnectionMode.ConnectionString;
                 break;
             case 'serviceDiscovery':

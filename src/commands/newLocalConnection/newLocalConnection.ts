@@ -44,7 +44,7 @@ export async function newLocalConnection(
     if (node instanceof NewEmulatorConnectionItem || node instanceof NewEmulatorConnectionItemCV) {
         title = l10n.t('New Local Connection');
 
-        const api = node instanceof NewEmulatorConnectionItemCV ? API.DocumentDB : API.MongoDB;
+        const api = node instanceof NewEmulatorConnectionItemCV ? API.DocumentDB : API.CosmosDBMongoRU;
 
         steps.push(
             new PromptConnectionTypeStep(api),

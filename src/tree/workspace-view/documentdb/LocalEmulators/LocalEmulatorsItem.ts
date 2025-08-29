@@ -6,7 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { getThemeAgnosticIconPath } from '../../../../constants';
-import { MongoClustersExperience } from '../../../../DocumentDBExperiences';
+import { DocumentDBExperience } from '../../../../DocumentDBExperiences';
 import { StorageNames, StorageService } from '../../../../services/storageService';
 import { type EmulatorConfiguration } from '../../../../utils/emulatorConfiguration';
 import { type AttachedClusterModel } from '../../../documentdb/ClusterModel';
@@ -18,7 +18,7 @@ import { NewEmulatorConnectionItem } from './NewEmulatorConnectionItem';
 
 export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public readonly contextValue: string = 'treeItem.newConnection';
+    public readonly contextValue: string = 'treeItem_newConnection';
 
     constructor(public readonly parentId: string) {
         this.id = `${parentId}/localEmulators`;
@@ -43,7 +43,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                             id: `${this.id}/${id}`, // To enable TreeView.reveal, we need to have a unique nested id
                             storageId: id,
                             name,
-                            dbExperience: MongoClustersExperience,
+                            dbExperience: DocumentDBExperience,
                             connectionString: secrets?.[0],
                             emulatorConfiguration: emulatorConfiguration,
                         };

@@ -17,7 +17,7 @@ import { CollectionItem } from './CollectionItem';
 export class DatabaseItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
     public readonly id: string;
     public readonly experience: Experience;
-    public contextValue: string = 'treeItem.database';
+    public contextValue: string = 'treeItem_database';
 
     private readonly experienceContextValue: string = '';
 
@@ -27,7 +27,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     ) {
         this.id = `${cluster.id}/${databaseInfo.name}`;
         this.experience = cluster.dbExperience;
-        this.experienceContextValue = `experience.${this.experience?.api}`;
+        this.experienceContextValue = `experience_${this.experience?.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 
@@ -39,7 +39,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
             // no databases in there:
             return [
                 createGenericElement({
-                    contextValue: createContextValue(['treeItem.no-collections', this.experienceContextValue]),
+                    contextValue: createContextValue(['treeItem_no-collections', this.experienceContextValue]),
                     id: `${this.id}/no-collections`,
                     label: l10n.t('Create Collection…'),
                     iconPath: new vscode.ThemeIcon('plus'),
