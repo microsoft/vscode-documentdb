@@ -189,7 +189,7 @@ export class RUBranchDataProvider
             return children?.map((child) => {
                 if (child.id) {
                     if (isTreeElementWithContextValue(child)) {
-                        this.appendContextValues(child, Views.AzureResourcesView, 'ruBranch');
+                        this.appendContextValues(child, 'ruBranch');
                     }
 
                     // Register parent-child relationship in the cache
@@ -317,7 +317,7 @@ export class RUBranchDataProvider
             const clusterItem = new RUResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
             if (isTreeElementWithContextValue(clusterItem)) {
-                this.appendContextValues(clusterItem, Views.AzureResourcesView, 'ruBranch');
+                this.appendContextValues(clusterItem, 'ruBranch');
             }
 
             if (cachedMetadata?.serverVersion) {

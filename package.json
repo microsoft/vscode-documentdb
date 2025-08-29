@@ -572,13 +572,13 @@
         {
           "//": "Create database",
           "command": "vscode-documentdb.command.createDatabase",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_(documentdbcluster|account)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "1@1"
         },
         {
           "//": "Copy connection string",
           "command": "vscode-documentdb.command.copyConnectionString",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView|Workspace)/ && viewItem =~ /\\btreeitem_(documentdbcluster|account)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView|Workspace)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@1"
         },
         {
