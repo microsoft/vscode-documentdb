@@ -163,9 +163,9 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             //
             // This prevents repeated attempts to fetch children for nodes that have previously failed
             // (e.g., due to invalid credentials or connection issues).
-            if (element.id && this.errorNodeCache.has(element.id)) {
+            if (element.id && this.failedChildrenCache.has(element.id)) {
                 context.telemetry.properties.usedCachedErrorNode = 'true';
-                return this.errorNodeCache.get(element.id);
+                return this.failedChildrenCache.get(element.id);
             }
 
             // Start fetching children
@@ -182,7 +182,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
                 // This means the operation failed (eg. authentication)
                 if (isTreeElementWithRetryChildren(element) && element.hasRetryNode(children)) {
                     // Store the error node(s) in our cache for future refreshes
-                    this.errorNodeCache.set(element.id, children ?? []);
+                    this.failedChildrenCache.set(element.id, children ?? []);
                     context.telemetry.properties.cachedErrorNode = 'true';
                 }
 

@@ -3,12 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 import { dispose } from '../utils/vscodeUtils';
 import { appendContextValues as appendContextValuesUtil } from './api/appendContextValues';
 import { type ExtendedTreeDataProvider } from './ExtendedTreeDataProvider';
 import { type TreeElement } from './TreeElement';
-import { type TreeElementWithContextValue } from './TreeElementWithContextValue';
+import { isTreeElementWithContextValue, type TreeElementWithContextValue } from './TreeElementWithContextValue';
+import { isTreeElementWithRetryChildren } from './TreeElementWithRetryChildren';
 import { TreeParentCache } from './TreeParentCache';
 
 /**
@@ -49,7 +52,7 @@ import { TreeParentCache } from './TreeParentCache';
  * When extending this class, implementers should:
  * - Override getChildren() to provide the actual tree structure
  * - Call super.refresh() when tree structure changes need to propagate
- * - Use the errorNodeCache for handling failed node states in getChildren implementation
+ * - Use the failedChildrenCache for handling failed node states in getChildren implementation
  * - Register parent-child relationships using parentCache.registerRelationship()
  * - Use appendContextValues() helper for consistent context value management
  *
@@ -70,16 +73,16 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
     protected readonly parentCache = new TreeParentCache<T>();
 
     /**
-     * Caches nodes whose getChildren() call has failed.
+     * Caches the full set of children for nodes that failed to load properly.
      *
      * This cache prevents repeated attempts to fetch children for nodes that have previously failed,
-     * such as when a user enters invalid credentials. By storing the failed nodes, we avoid unnecessary
+     * such as when a user enters invalid credentials. By storing the failed children, we avoid unnecessary
      * repeated calls until the error state is explicitly cleared.
      *
      * Key: Node ID (parent)
-     * Value: Array of TreeElement representing the failed children (usually an error node)
+     * Value: Array of TreeElement representing the failed children (usually includes an error node)
      */
-    protected readonly errorNodeCache = new Map<string, T[]>();
+    protected readonly failedChildrenCache = new Map<string, T[]>();
 
     /**
      * Event emitter for notifying VS Code when tree data changes.
@@ -132,14 +135,14 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
     }
 
     /**
-     * Removes a node's error state from the failed node cache.
+     * Removes a node's error state from the failed children cache.
      * This allows the node to be refreshed and its children to be re-fetched on the next refresh call.
      * If not reset, the cached error children will always be returned for this node.
      *
-     * @param nodeId The ID of the node to clear from the failed node cache.
+     * @param nodeId The ID of the node to clear from the failed children cache.
      */
     resetNodeErrorState(nodeId: string): void {
-        this.errorNodeCache.delete(nodeId);
+        this.failedChildrenCache.delete(nodeId);
     }
 
     /**
@@ -241,6 +244,150 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      */
     protected appendContextValues(treeItem: TreeElementWithContextValue, ...contextValuesToAppend: string[]): void {
         appendContextValuesUtil(treeItem, ...contextValuesToAppend);
+    }
+
+    /**
+     * Wraps element's getChildren call with error caching, child processing, and state handling.
+     *
+     * This method provides a complete workflow for fetching and processing tree children:
+     * 1. Error state caching to prevent repeated failures
+     * 2. Child fetching with proper error detection
+     * 3. Helper node creation for error recovery
+     * 4. Context value appending for UI features
+     * 5. Parent-child relationship registration for navigation
+     * 6. State handling wrapping for proper updates
+     *
+     * @param element The tree element to get children for
+     * @param context The action context for telemetry
+     * @param childrenFetchFunc Function to call to fetch children
+     * @param options Configuration options for error handling and child processing
+     * @returns Processed children array, or null/undefined if none
+     *
+     * @example
+     * // Basic usage with full child processing:
+     * const children = await this.wrapGetChildrenWithErrorAndStateHandling(
+     *   element,
+     *   context,
+     *   async () => element.getChildren?.(),
+     *   { contextValue: Views.ConnectionsView }
+     * );
+     * return children; // Already fully processed
+     *
+     * @example
+     * // With helper nodes (Connections provider):
+     * const children = await this.wrapGetChildrenWithErrorAndStateHandling(
+     *   element,
+     *   context,
+     *   async () => element.getChildren?.(),
+     *   {
+     *     contextValue: Views.ConnectionsView,
+     *     createHelperNodes: (el) => [
+     *       createGenericElementWithContext({
+     *         contextValue: 'error',
+     *         id: `${el.id}/updateCredentials`,
+     *         label: vscode.l10n.t('Click here to update credentials'),
+     *         iconPath: new vscode.ThemeIcon('key'),
+     *         commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
+     *         commandArgs: [el],
+     *       }) as TreeElement,
+     *     ]
+     *   }
+     * );
+     * return children; // Already fully processed
+     */
+    protected async wrapGetChildrenWithErrorAndStateHandling(
+        element: T,
+        context: IActionContext,
+        childrenFetchFunc: () => Promise<T[] | null | undefined>,
+        options: {
+            detectErrorState?: (element: T, children: T[] | null | undefined) => boolean;
+            createHelperNodes?: (element: T) => T[];
+            contextValue?: string; // For automatic context value appending
+        } = {},
+    ): Promise<T[] | null | undefined> {
+        // 1. Check if we have cached error children for this element
+        //
+        // This prevents repeated attempts to fetch children for nodes that have previously failed
+        // (e.g., due to invalid credentials or connection issues).
+        if (element.id && this.failedChildrenCache.has(element.id)) {
+            context.telemetry.properties.usedCachedErrorNode = 'true';
+            return this.failedChildrenCache.get(element.id);
+        }
+
+        // 2. Fetch the children of the current element
+        const children = await childrenFetchFunc();
+        context.telemetry.measurements.childrenCount = children?.length ?? 0;
+
+        // 3. Check if the returned children contain an error node
+        // This means the operation failed (e.g., authentication)
+        const hasError = options.detectErrorState
+            ? options.detectErrorState(element, children)
+            : isTreeElementWithRetryChildren(element) && element.hasRetryNode(children);
+
+        if (hasError && element.id) {
+            // 4. Optionally create helper nodes to provide user-friendly error recovery actions
+            if (options.createHelperNodes) {
+                const helperNodes = options.createHelperNodes(element);
+                children?.push(...helperNodes);
+            }
+
+            // 5. Store the complete error state (error nodes + helper nodes) in our cache for future refreshes
+            this.failedChildrenCache.set(element.id, children ?? []);
+            context.telemetry.properties.cachedErrorNode = 'true';
+        }
+
+        // 6. Process children when contextValue is provided (automatic child processing)
+        if (options.contextValue && children) {
+            return children.map((child) => {
+                if (child.id) {
+                    if (isTreeElementWithContextValue(child)) {
+                        this.appendContextValues(child, options.contextValue!);
+                    }
+
+                    // Register parent-child relationship in the cache
+                    if (element.id && child.id) {
+                        this.parentCache.registerRelationship(element, child);
+                    }
+
+                    return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as T;
+                }
+                return child;
+            });
+        }
+
+        return children;
+    }
+
+    /**
+     * Wraps element's getChildren call with error caching to prevent repeated failures.
+     *
+     * This method standardizes the error handling pattern used across all tree data providers,
+     * implementing a consistent approach to:
+     *
+     * 1. **Error State Caching**: Checks for cached error states to prevent repeated failed attempts
+     * 2. **Children Fetching**: Calls the provided function to fetch children from the element
+     * 3. **Error Detection**: Uses configurable logic to detect when children contain error states
+     * 4. **Helper Node Creation**: Optionally creates helper action nodes for user-friendly error recovery
+     * 5. **Telemetry Tracking**: Sets telemetry properties to track caching behavior and error states
+     *
+     * @deprecated Use wrapGetChildrenWithErrorAndStateHandling instead for enhanced functionality
+     * @param element The tree element to get children for
+     * @param context The action context for telemetry
+     * @param childrenFetchFunc Function to call to fetch children - typically () => element.getChildren?.()
+     * @param options Configuration options for error detection and helper nodes
+     * @returns Promise resolving to the children array, including any error nodes and helper nodes
+     */
+    protected async wrapGetChildrenWithErrorHandling(
+        element: T,
+        context: IActionContext,
+        childrenFetchFunc: () => Promise<T[] | null | undefined>,
+        options: {
+            detectErrorState?: (element: T, children: T[] | null | undefined) => boolean;
+            createHelperNodes?: (element: T) => T[];
+        } = {},
+    ): Promise<T[] | null | undefined> {
+        // Delegate to the enhanced method without child processing
+        return this.wrapGetChildrenWithErrorAndStateHandling(element, context, childrenFetchFunc, options);
     }
 
     /**

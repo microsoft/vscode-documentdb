@@ -16,7 +16,6 @@ import { nonNullProp } from '../../../utils/nonNull';
 import { BaseExtendedTreeDataProvider } from '../../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../../TreeElement';
 import { isTreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { isTreeElementWithRetryChildren } from '../../TreeElementWithRetryChildren';
 import { type ClusterModel } from '../../documentdb/ClusterModel';
 import { RUResourceItem } from './RUCoreResourceItem';
 
@@ -99,57 +98,20 @@ export class RUBranchDataProvider
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'ru';
 
-            // 1. Check if we have a cached error for this element
-            //
-            // This prevents repeated attempts to fetch children for nodes that have previously failed
-            // (e.g., due to invalid credentials or connection issues).
-            if (element.id && this.errorNodeCache.has(element.id)) {
-                context.telemetry.properties.usedCachedErrorNode = 'true';
-                return this.errorNodeCache.get(element.id);
-            }
-
             context.telemetry.properties.parentNodeContext = (await element.getTreeItem()).contextValue;
 
-            // 2. Fetch the children of the current element
-            const children = await element.getChildren?.();
-            context.telemetry.measurements.childrenCount = children?.length ?? 0;
+            // Use the enhanced method with the contextValue parameter
+            const children = await this.wrapGetChildrenWithErrorAndStateHandling(
+                element,
+                context,
+                async () => element.getChildren?.(),
+                {
+                    contextValue: 'ruBranch', // This enables automatic child processing
+                },
+            );
 
-            // 3. Check if the returned children contain an error node
-            // This means the operation failed (eg. authentication)
-            if (isTreeElementWithRetryChildren(element) && element.hasRetryNode(children)) {
-                // Optional: append helpful nodes to the error node
-                // Here is an example:
-                // children?.push(
-                //     createGenericElementWithContext({
-                //         contextValue: 'error',
-                //         id: `${element.id}/updateCredentials`,
-                //         label: vscode.l10n.t('Click here to update credentials'),
-                //         iconPath: new vscode.ThemeIcon('key'),
-                //           commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
-                //         commandArgs: [element],
-                //     }),
-                // );
-
-                // Store the error node(s) in our cache for future refreshes
-                this.errorNodeCache.set(element.id, children ?? []);
-                context.telemetry.properties.cachedErrorNode = 'true';
-            }
-
-            return children?.map((child) => {
-                if (child.id) {
-                    if (isTreeElementWithContextValue(child)) {
-                        this.appendContextValues(child, 'ruBranch');
-                    }
-
-                    // Register parent-child relationship in the cache
-                    if (element.id && child.id) {
-                        this.parentCache.registerRelationship(element, child);
-                    }
-
-                    return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as TreeElement;
-                }
-                return child;
-            });
+            // Return the processed children directly - no additional processing needed
+            return children;
         });
     }
 
