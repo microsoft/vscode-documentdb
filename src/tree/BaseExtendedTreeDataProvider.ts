@@ -55,7 +55,7 @@ import { TreeParentCache } from './TreeParentCache';
  *                element,
  *                context,
  *                async () => element.getChildren?.(),
- *                { contextValue: 'yourViewName' }
+ *                { contextValue: 'yourViewName' }  // Single string or string[] supported
  *            );
  *        });
  *    }
@@ -345,7 +345,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * @returns Processed children array, or null/undefined if none
      *
      * @example
-     * // Basic usage with full child processing:
+     * // Basic usage with single context value:
      * const children = await this.wrapGetChildrenWithErrorAndStateHandling(
      *   element,
      *   context,
@@ -355,13 +355,23 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * return children; // Already fully processed
      *
      * @example
+     * // Using an array of context values:
+     * const children = await this.wrapGetChildrenWithErrorAndStateHandling(
+     *   element,
+     *   context,
+     *   async () => element.getChildren?.(),
+     *   { contextValue: [Views.AzureResourcesView, 'vCoreBranch'] }
+     * );
+     * return children; // Already fully processed with multiple context values
+     *
+     * @example
      * // With helper nodes (Connections provider):
      * const children = await this.wrapGetChildrenWithErrorAndStateHandling(
      *   element,
      *   context,
      *   async () => element.getChildren?.(),
      *   {
-     *     contextValue: Views.ConnectionsView,
+     *     contextValue: [Views.ConnectionsView, 'anotherValue'],
      *     createHelperNodes: (el) => [
      *       createGenericElementWithContext({
      *         contextValue: 'error',
@@ -383,7 +393,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         options: {
             detectErrorState?: (element: T, children: T[] | null | undefined) => boolean;
             createHelperNodes?: (element: T) => T[];
-            contextValue?: string; // For automatic context value appending
+            contextValue?: string | string[]; // For automatic context value appending - single or multiple values
         } = {},
     ): Promise<T[] | null | undefined> {
         // 1. Check if we have cached error children for this element
@@ -422,7 +432,12 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             return children.map((child) => {
                 if (child.id) {
                     if (isTreeElementWithContextValue(child)) {
-                        this.appendContextValues(child, options.contextValue!);
+                        const contextValues = Array.isArray(options.contextValue)
+                            ? options.contextValue
+                            : options.contextValue !== undefined
+                              ? [options.contextValue]
+                              : [];
+                        this.appendContextValues(child, ...contextValues);
                     }
 
                     // Register parent-child relationship in the cache
