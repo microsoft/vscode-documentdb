@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
 import { dispose } from '../utils/vscodeUtils';
-import { appendContextValues as appendContextValuesUtil } from './api/appendContextValues';
 import { type ExtendedTreeDataProvider } from './ExtendedTreeDataProvider';
 import { type TreeElement } from './TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from './TreeElementWithContextValue';
@@ -318,7 +317,14 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * @param contextValuesToAppend The context values to append
      */
     protected appendContextValues(treeItem: TreeElementWithContextValue, ...contextValuesToAppend: string[]): void {
-        appendContextValuesUtil(treeItem, ...contextValuesToAppend);
+        const contextValues: string[] = contextValuesToAppend;
+
+        // Keep original contextValues if any
+        if (treeItem.contextValue) {
+            contextValues.push(treeItem.contextValue);
+        }
+
+        treeItem.contextValue = createContextValue(contextValues);
     }
 
     /**
