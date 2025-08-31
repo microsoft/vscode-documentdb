@@ -16,45 +16,82 @@ import { TreeParentCache } from './TreeParentCache';
 
 /**
  * Base implementation of the ExtendedTreeDataProvider interface that provides
- * parent-child relationship caching and error node handling.
+ * parent-child relationship caching, error handling, and state management.
  *
- * ## Caching Mechanism
+ * ## Key Features
  *
- * This class implements caching at two levels:
- * 1. **Parent-child relationship caching via TreeParentCache** for efficient tree navigation:
- *    - Enables getParent method required for TreeView.reveal() functionality
- *    - Provides findNodeById for programmatic tree navigation and selection
- *    - Tracks hierarchical relationships for fast parent lookups
+ * 1. **Tree Navigation**
+ *    - Efficient parent-child relationship tracking for TreeView.reveal() functionality
+ *    - Node lookup by ID for programmatic navigation
+ *    - Refresh handling that maintains proper object identity
  *
- * 2. **Error node caching** to prevent repeated attempts to fetch children that previously failed:
- *    - Stores failed nodes (e.g., due to invalid credentials or connection issues)
- *    - Returns cached error children on subsequent calls until explicitly cleared
- *    - Improves user experience by avoiding repeated failed network requests
+ * 2. **Error Management**
+ *    - Automatic caching of failed operations to prevent repeated connection attempts
+ *    - Recovery mechanisms with helper action nodes
+ *    - Granular error state reset capabilities
  *
- * ## Error Handling
+ * 3. **State Processing**
+ *    - Automatic context value propagation for UI integration
+ *    - Consistent state handling wrapper application
+ *    - Parent-child relationship registration
  *
- * The error node handling system ensures that:
- * - Failed nodes don't trigger repeated connection attempts
- * - Users can explicitly retry by using the resetNodeErrorState method or refresh commands
- * - Error state is tracked per node ID for granular control
- * - Cached error nodes are returned immediately without new network calls
- *
- * ## Refresh Logic
- *
- * The refresh mechanism handles both current and stale element references:
- * - VS Code's TreeView API relies on object identity (reference equality), not just ID equality
- * - findAndRefreshCurrentElement method finds current instance by ID before refreshing
- * - Cache is selectively cleared to remove stale references while preserving other nodes
- * - Fallback handling ensures refresh attempts even if current instance lookup fails
- *
- * ## Implementation Notes
+ * ## Implementation Guide
  *
  * When extending this class, implementers should:
- * - Override getChildren() to provide the actual tree structure
- * - Call super.refresh() when tree structure changes need to propagate
- * - Use the failedChildrenCache for handling failed node states in getChildren implementation
- * - Register parent-child relationships using parentCache.registerRelationship()
- * - Use appendContextValues() helper for consistent context value management
+ *
+ * 1. **Implement getChildren()**
+ *    ```typescript
+ *    async getChildren(element?: TreeElement): Promise<TreeElement[] | null | undefined> {
+ *        return callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
+ *            // Handle root elements specially
+ *            if (!element) {
+ *                // Clear the parent cache when refreshing at root level
+ *                this.clearParentCache();
+ *                // Initialize root items
+ *                return rootItems;
+ *            }
+ *
+ *            // For child elements, use the helper method
+ *            return this.wrapGetChildrenWithErrorAndStateHandling(
+ *                element,
+ *                context,
+ *                async () => element.getChildren?.(),
+ *                { contextValue: 'yourViewName' }
+ *            );
+ *        });
+ *    }
+ *    ```
+ *
+ * 2. **Use refresh() for tree updates**
+ *    ```typescript
+ *    // Refresh a specific node
+ *    this.refresh(element);
+ *
+ *    // Refresh the entire tree
+ *    this.refresh();
+ *    ```
+ *
+ * 3. **Reset error states when needed**
+ *    ```typescript
+ *    // Clear error state for a specific node
+ *    this.resetNodeErrorState(nodeId);
+ *    ```
+ *
+ * 4. **Use cache management helpers**
+ *    ```typescript
+ *    // Clear the parent cache (typically at root level)
+ *    this.clearParentCache();
+ *
+ *    // Register a node in the cache
+ *    this.registerNodeInCache(node);
+ *
+ *    // Register a parent-child relationship
+ *    this.registerRelationshipInCache(parentNode, childNode);
+ *    ```
+ *
+ * The primary pattern is to use `wrapGetChildrenWithErrorAndStateHandling()` which provides
+ * a complete workflow for fetching and processing tree children, including error handling,
+ * parent-child relationship registration, and state management.
  *
  * @template T The tree element type that extends TreeElement
  */
@@ -69,8 +106,13 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * - Efficient implementation of tree.reveal() functionality to navigate to specific nodes
      * - Finding nodes by ID without traversing the entire tree each time
      * - Proper cleanup when refreshing parts of the tree
+     *
+     * Note: Do not access this cache directly. Use the provided helper methods:
+     * - clearParentCache(): Clear the entire cache
+     * - registerNodeInCache(): Register a node in the cache
+     * - registerRelationshipInCache(): Register a parent-child relationship
      */
-    protected readonly parentCache = new TreeParentCache<T>();
+    private readonly parentCache = new TreeParentCache<T>();
 
     /**
      * Caches the full set of children for nodes that failed to load properly.
@@ -109,6 +151,39 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
 
     constructor() {
         super(() => this.dispose());
+    }
+
+    /**
+     * Clears the parent-child relationship cache.
+     *
+     * This should be called when refreshing at the root level to ensure clean state
+     * and prevent stale relationships from affecting tree navigation.
+     */
+    protected clearParentCache(): void {
+        this.parentCache.clear();
+    }
+
+    /**
+     * Registers a node in the parent cache.
+     *
+     * @param node The node to register
+     */
+    protected registerNodeInCache(node: T): void {
+        if (node.id) {
+            this.parentCache.registerNode(node);
+        }
+    }
+
+    /**
+     * Registers a parent-child relationship in the cache.
+     *
+     * @param parent The parent node
+     * @param child The child node
+     */
+    protected registerRelationshipInCache(parent: T, child: T): void {
+        if (parent.id && child.id) {
+            this.parentCache.registerRelationship(parent, child);
+        }
     }
 
     /**
@@ -191,7 +266,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             void this.findAndRefreshCurrentElement(element);
         } else {
             // No element or no ID, refresh the entire tree
-            this.parentCache.clear();
+            this.clearParentCache();
             this.onDidChangeTreeDataEmitter.fire(element);
         }
     }
@@ -213,7 +288,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             this.parentCache.clear(element.id!);
             // 2. Re-register the node (but not its children)
             if (currentElement?.id) {
-                this.parentCache.registerNode(currentElement);
+                this.registerNodeInCache(currentElement);
             }
 
             if (currentElement) {
@@ -346,7 +421,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
 
                     // Register parent-child relationship in the cache
                     if (element.id && child.id) {
-                        this.parentCache.registerRelationship(element, child);
+                        this.registerRelationshipInCache(element, child);
                     }
 
                     return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as T;

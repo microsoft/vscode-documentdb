@@ -50,7 +50,7 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                 context.telemetry.properties.parentNodeContext = 'root';
 
                 // For root-level items, we should clear any existing cache first
-                this.parentCache.clear();
+                this.clearParentCache();
 
                 const rootItems = await this.getRootItems(Views.ConnectionsView);
                 if (!rootItems) {
@@ -66,9 +66,7 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                     }
 
                     // Add root items to the cache
-                    if (item.id) {
-                        this.parentCache.registerNode(item);
-                    }
+                    this.registerNodeInCache(item);
                 }
 
                 return rootItems;

@@ -92,7 +92,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         this.currentRootItems = new WeakSet<TreeElement>();
 
         // Clear the parent cache when retrieving root items
-        this.parentCache.clear();
+        this.clearParentCache();
 
         // Get the list of active discovery provider IDs from global state
         const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
@@ -130,7 +130,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
 
             // Register root item in the parent cache
             if (wrappedInStateHandling.id) {
-                this.parentCache.registerNode(wrappedInStateHandling);
+                this.registerNodeInCache(wrappedInStateHandling);
             }
 
             rootItems.push(wrappedInStateHandling);
@@ -200,7 +200,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
                     // Note: The check for `typeof wrappedChild.id === 'string'` is necessary because `wrapItemInStateHandling`
                     // can process temporary nodes that don't have an `id` property, which would otherwise cause a runtime error.
                     if (element.id && typeof wrappedChild.id === 'string') {
-                        this.parentCache.registerRelationship(element, wrappedChild);
+                        this.registerRelationshipInCache(element, wrappedChild);
                     }
 
                     return wrappedChild;
