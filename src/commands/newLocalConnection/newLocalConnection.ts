@@ -14,7 +14,6 @@ import * as vscode from 'vscode';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { NewEmulatorConnectionItemCV } from '../../tree/connections-view/LocalEmulators/NewEmulatorConnectionItemCV';
-import { NewEmulatorConnectionItem } from '../../tree/workspace-view/documentdb/LocalEmulators/NewEmulatorConnectionItem';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptMongoRUEmulatorConnectionStringStep } from './mongo-ru/PromptMongoRUEmulatorConnectionStringStep';
 import { PromptMongoRUEmulatorSecurityStep } from './mongo-ru/PromptMongoRUEmulatorSecurityStep';
@@ -24,10 +23,7 @@ import { PromptPasswordStep } from './PromptPasswordStep';
 import { PromptPortStep } from './PromptPortStep';
 import { PromptUsernameStep } from './PromptUsernameStep';
 
-export async function newLocalConnection(
-    context: IActionContext,
-    node: NewEmulatorConnectionItem | NewEmulatorConnectionItemCV,
-) {
+export async function newLocalConnection(context: IActionContext, node: NewEmulatorConnectionItemCV) {
     const portString = vscode.workspace.getConfiguration().get(ext.settingsKeys.localPort);
     const portNumber = Number(portString);
 
@@ -41,13 +37,11 @@ export async function newLocalConnection(
     const steps: AzureWizardPromptStep<NewLocalConnectionWizardContext>[] = [];
     const executeSteps: AzureWizardExecuteStep<NewLocalConnectionWizardContext>[] = [];
 
-    if (node instanceof NewEmulatorConnectionItem || node instanceof NewEmulatorConnectionItemCV) {
+    if (node instanceof NewEmulatorConnectionItemCV) {
         title = l10n.t('New Local Connection');
 
-        const api = node instanceof NewEmulatorConnectionItemCV ? API.DocumentDB : API.CosmosDBMongoRU;
-
         steps.push(
-            new PromptConnectionTypeStep(api),
+            new PromptConnectionTypeStep(API.DocumentDB),
             new PromptMongoRUEmulatorConnectionStringStep(),
             new PromptPortStep(),
             new PromptUsernameStep(),

@@ -42,6 +42,7 @@ import { removeConnection } from '../commands/removeConnection/removeConnection'
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { renameConnection } from '../commands/renameConnection/renameConnection';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
+import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { ext } from '../extensionVariables';
@@ -50,6 +51,8 @@ import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryP
 import { DiscoveryService } from '../services/discoveryServices';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
+import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
+import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import {
@@ -127,17 +130,14 @@ export class ClustersExtension implements vscode.Disposable {
             ext.azureResourcesRUBranchDataProvider,
         );
 
-        // // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
-        // if (false && enableWorkspaceSupport()) {
-        //     // on purpose, transition is still in progress
-        //     activateContext.telemetry.properties.enabledWorkspace = 'true';
+        ext.azureResourcesWorkspaceResourceProvider = new DocumentDbWorkspaceResourceProvider();
+        ext.rgApiV2.resources.registerWorkspaceResourceProvider(ext.azureResourcesWorkspaceResourceProvider);
 
-        //     ext.mongoClustersWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
-        //     ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
-        //         WorkspaceResourceType.MongoClusters,
-        //         ext.mongoClustersWorkspaceBranchDataProvider,
-        //     );
-        // }
+        ext.azureResourcesWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
+        ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
+            'vscode.documentdb.workspace.documentdb-accounts-resourceType',
+            ext.azureResourcesWorkspaceBranchDataProvider,
+        );
     }
 
     async activateClustersSupport(): Promise<void> {
@@ -256,6 +256,7 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand('vscode-documentdb.command.internal.documentView.open', openDocumentView);
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.internal.retry', retryAuthentication);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.internal.revealView', revealView);
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.launchShell', launchShell);
 
