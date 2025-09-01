@@ -342,6 +342,13 @@
         "icon": "$(info)"
       },
       {
+        "//": "[ResourcesView] Save To DocumentDB Connections",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
+        "title": "Add To Connections In The \"DocumentDB View\"",
+        "icon": "$(save)"
+      },
+      {
         "//": "Refresh a Tree Item",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.refresh",
@@ -570,6 +577,11 @@
           "group": "inline"
         },
         {
+          "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
+          "when": "view =~ /azureResourceGroups|azureFocusView/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "group": "inline"
+        },
+        {
           "//": "Create database",
           "command": "vscode-documentdb.command.createDatabase",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
@@ -714,6 +726,10 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
           "when": "never"
         },
         {

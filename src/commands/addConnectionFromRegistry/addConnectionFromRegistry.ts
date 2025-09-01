@@ -10,20 +10,43 @@ import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBCon
 import { Views } from '../../documentdb/Views';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { type DocumentDBResourceItem } from '../../plugins/service-azure/discovery-tree/documentdb/DocumentDBResourceItem';
 import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,
     waitForConnectionsViewReady,
 } from '../../tree/connections-view/connectionsViewHelpers';
+import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 
-export async function addConnectionFromRegistry(context: IActionContext, node: DocumentDBResourceItem): Promise<void> {
+export async function addConnectionFromRegistry(context: IActionContext, node: ClusterItemBase): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
+    }
+
+    // FYI: As of Sept 2025 this command is used in two views: the discovery view and the azure resources view
+    const sourceViewId =
+        node.contextValue.includes('documentDbBranch') || node.contextValue.includes('ruBranch')
+            ? Views.AzureResourcesView
+            : Views.DiscoveryView;
+
+    if (sourceViewId === Views.AzureResourcesView) {
+        // Show a modal dialog informing the user that the details will be saved for future use
+        const continueButton = l10n.t('Yes, continue');
+        const message = l10n.t(
+            'This connection will be added to the "Connections View" in the "DocumentDB for VS Code" extension.\n' +
+                'The "Connections View" will be opened once the import completes.\n' +
+                '\n' +
+                'Do you want to continue?',
+        );
+
+        const result = await vscode.window.showInformationMessage(message, { modal: true }, continueButton);
+
+        if (result !== continueButton) {
+            return; // User cancelled
+        }
     }
 
     return vscode.window.withProgress(
@@ -59,6 +82,10 @@ export async function addConnectionFromRegistry(context: IActionContext, node: D
 
             if (existingDuplicateConnection) {
                 // Reveal the existing duplicate connection
+                await vscode.commands.executeCommand(`connectionsView.focus`);
+                ext.connectionsBranchDataProvider.refresh();
+                await waitForConnectionsViewReady(context);
+
                 const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
                 await revealConnectionsViewElement(context, connectionPath, {
                     select: true,

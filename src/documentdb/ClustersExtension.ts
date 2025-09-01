@@ -215,6 +215,11 @@ export class ClustersExtension implements vscode.Disposable {
                     addConnectionFromRegistry,
                 );
 
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
+                    'vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView',
+                    addConnectionFromRegistry,
+                );
+
                 registerCommand('vscode-documentdb.command.discoveryView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.DiscoveryView);
                 });
