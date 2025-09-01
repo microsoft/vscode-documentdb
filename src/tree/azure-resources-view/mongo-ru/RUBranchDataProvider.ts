@@ -80,9 +80,6 @@ export class RUBranchDataProvider
         updateItem: (item, metadata) => {
             if (metadata) {
                 item.cluster = { ...item.cluster, ...metadata };
-                if (item.cluster.serverVersion) {
-                    item.descriptionOverride = `v${item.cluster.serverVersion}`;
-                }
             }
         },
         refreshCallback: (item) => this.refresh(item),
@@ -142,10 +139,6 @@ export class RUBranchDataProvider
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
             if (isTreeElementWithContextValue(clusterItem)) {
                 this.appendContextValues(clusterItem, 'ruBranch');
-            }
-
-            if (cachedMetadata?.serverVersion) {
-                clusterItem.descriptionOverride = `v${cachedMetadata.serverVersion}`;
             }
 
             // Register item for refresh when cache loading completes

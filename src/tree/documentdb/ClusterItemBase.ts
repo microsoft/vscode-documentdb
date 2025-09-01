@@ -183,7 +183,13 @@ export abstract class ClusterItemBase
             id: this.id,
             contextValue: this.contextValue,
             label: this.cluster.name,
-            description: this.contextValue,
+            description: this.descriptionOverride
+                ? this.descriptionOverride
+                : this.cluster.sku !== undefined
+                  ? `(${this.cluster.sku})`
+                  : this.cluster.serverVersion !== undefined
+                    ? `v${this.cluster.serverVersion}`
+                    : false,
             iconPath: this.iconPath ?? undefined,
             tooltip: this.tooltipOverride
                 ? this.tooltipOverride
