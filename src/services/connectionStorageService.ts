@@ -3,9 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
+import { ext } from '../extensionVariables';
 import { StorageNames, StorageService, type Storage, type StorageItem } from './storageService';
 
 export enum ConnectionType {
@@ -81,6 +84,8 @@ export class ConnectionStorageService {
     private static get storageService(): Storage {
         if (!this._storageService) {
             this._storageService = StorageService.get(StorageNames.Connections);
+            // Trigger migration on first access
+            void this.migrateFromAzureDatabases();
         }
         return this._storageService;
     }
@@ -185,5 +190,125 @@ export class ConnectionStorageService {
                 password: password,
             },
         };
+    }
+
+    /**
+     * Migrates connections from Azure Databases extension storage to DocumentDB extension storage.
+     * This function is called automatically on first storage access to ensure one-time migration.
+     *
+     * TODO: remove this once the measured 'migratedCount' remains 0 for "a longer period of time"
+     *
+     * @returns Promise resolving to migration statistics
+     */
+    private static async migrateFromAzureDatabases(): Promise<{ migrated: number; skipped: number }> {
+        const result = await callWithTelemetryAndErrorHandling(
+            'migrateFromAzureDatabases',
+            async (context: IActionContext) => {
+                const MIGRATION_PREFIX = 'migrated-to-documentdb-';
+                let migratedCount = 0;
+                let skippedCount = 0;
+                const startTime = Date.now();
+
+                try {
+                    // Access the old Azure Databases storage
+                    const oldStorage = StorageService.get('workspace');
+                    const allItems = await oldStorage.getItems('vscode.cosmosdb.workspace.mongoclusters-resourceType');
+
+                    // Set telemetry properties
+                    context.telemetry.properties.migrationAttempted = 'true';
+                    context.telemetry.properties.hasOldStorage = allItems.length > 0 ? 'true' : 'false';
+
+                    context.telemetry.measurements.itemsRead = allItems.length;
+
+                    // Format current date (inline helper)
+                    const currentDate = new Date().toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                    });
+
+                    for (const item of allItems) {
+                        // Check if already migrated (inline helper)
+                        const isAlreadyMigrated = item.id.startsWith(MIGRATION_PREFIX);
+
+                        if (isAlreadyMigrated) {
+                            skippedCount++;
+                            continue;
+                        }
+
+                        try {
+                            // Migrate the item using existing migrateToV2 logic
+                            const migratedItem = this.migrateToV2(item);
+
+                            // Create imported name (inline helper)
+                            const importedName = `Imported: ${migratedItem.name} (${currentDate})`;
+                            migratedItem.name = importedName;
+
+                            // Determine connection type based on emulator flag
+                            const connectionType = item.properties?.isEmulator
+                                ? ConnectionType.Emulators
+                                : ConnectionType.Clusters;
+
+                            // Save to new storage
+                            await this.save(connectionType, migratedItem, false);
+
+                            // Mark as migrated in old storage by updating the ID
+                            const updatedItem = { ...item, id: `${MIGRATION_PREFIX}${item.id}` };
+                            await oldStorage.push(
+                                'vscode.cosmosdb.workspace.mongoclusters-resourceType',
+                                updatedItem,
+                                true,
+                            );
+
+                            migratedCount++;
+                        } catch (error) {
+                            // Log individual item migration errors but continue with others
+                            ext.outputChannel.appendLog(
+                                `Failed to migrate from Azure Databases VS Code Extension: connection item ${item.id}: ${error instanceof Error ? error.message : String(error)}`,
+                            );
+                            skippedCount++;
+                        }
+                    }
+
+                    // Set success telemetry
+                    context.telemetry.properties.migrationSuccessful = 'true';
+                    context.telemetry.measurements.migrationDurationMs = Date.now() - startTime;
+                    context.telemetry.measurements.itemsMigrated = migratedCount;
+                    context.telemetry.measurements.itemsSkipped = skippedCount;
+
+                    if (migratedCount > 0) {
+                        ext.outputChannel.appendLog(
+                            l10n.t(
+                                'Migration of connections from the Azure Databases VS Code Extension to the DocumentDB for VS Code Extension completed: {migratedCount} connections migrated.',
+                                {
+                                    migratedCount,
+                                },
+                            ),
+                        );
+                    }
+                } catch (error) {
+                    // Set failure telemetry
+                    context.telemetry.properties.migrationSuccessful = 'false';
+                    context.telemetry.properties.errorType =
+                        error instanceof Error ? error.constructor.name : 'UnknownError';
+                    context.telemetry.measurements.migrationDurationMs = Date.now() - startTime;
+                    context.telemetry.measurements.itemsMigrated = migratedCount;
+                    context.telemetry.measurements.itemsSkipped = skippedCount;
+
+                    // Log storage access errors but don't throw to avoid breaking extension initialization
+                    ext.outputChannel.appendLog(
+                        l10n.t('Failed to access Azure Databases VS Code Extension storage for migration: {error}', {
+                            error: error instanceof Error ? error.message : String(error),
+                        }),
+                    );
+
+                    // Don't rethrow the error - we want storage initialization to continue
+                }
+
+                return { migrated: migratedCount, skipped: skippedCount };
+            },
+        );
+
+        return result ?? { migrated: 0, skipped: 0 };
     }
 }
