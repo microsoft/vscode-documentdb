@@ -45,6 +45,7 @@ import { retryAuthentication } from '../commands/retryAuthentication/retryAuthen
 import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
+import { isVCoreAndRUEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
@@ -101,15 +102,8 @@ export class ClustersExtension implements vscode.Disposable {
         // Dynamic registration so this file compiles when the enum members aren't present
         // This is how we detect whether the update to Azure Resources has been deployed
 
-        const ruResourceType = (AzExtResourceType as unknown as Record<string, unknown>)['AzureCosmosDbForMongoDbRu'];
-        const documentDbResourceType = (AzExtResourceType as unknown as Record<string, unknown>)['MongoClusters'];
-
-        if (!ruResourceType || !documentDbResourceType) {
+        if (!isVCoreAndRUEnabled()) {
             activateContext.telemetry.properties.skippedAzureResourcesActivation = 'true';
-            console.log(
-                'Azure resource types not available in this environment; skipping Azure Resources provider registration.',
-            );
-
             return;
         }
 
@@ -118,12 +112,14 @@ export class ClustersExtension implements vscode.Disposable {
             '2.0.0',
         )) as AzureResourcesExtensionApiWithActivity;
 
+        const documentDbResourceType = (AzExtResourceType as unknown as Record<string, unknown>)['AzureDocumentDb'];
         ext.azureResourcesVCoreBranchDataProvider = new VCoreBranchDataProvider();
         ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
             documentDbResourceType as unknown as AzExtResourceType,
             ext.azureResourcesVCoreBranchDataProvider,
         );
 
+        const ruResourceType = (AzExtResourceType as unknown as Record<string, unknown>)['AzureCosmosDbForMongoDbRu'];
         ext.azureResourcesRUBranchDataProvider = new RUBranchDataProvider();
         ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
             ruResourceType as unknown as AzExtResourceType,

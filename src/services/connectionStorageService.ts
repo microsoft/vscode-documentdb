@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
+import { isVCoreAndRUEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { StorageNames, StorageService, type Storage, type StorageItem } from './storageService';
 
@@ -98,11 +99,22 @@ export class ConnectionStorageService {
     private static get storageService(): Storage {
         if (!this._storageService) {
             this._storageService = StorageService.get(StorageNames.Connections);
-            // Trigger migration on first access, but only if we haven't reached the attempt limit
-            const migrationAttempts = ext.context.globalState.get<number>('azureDatabasesMigrationAttempts', 0);
-            if (migrationAttempts < 20) {
-                // this is a good number as any, just keep trying for a while to account for failures
-                void this.migrateFromAzureDatabases();
+
+            if (isVCoreAndRUEnabled()) {
+                try {
+                    // Trigger migration on first access, but only if we haven't reached the attempt limit
+                    const migrationAttempts = ext.context.globalState.get<number>('azureDatabasesMigrationAttempts', 0);
+                    if (migrationAttempts < 20) {
+                        // this is a good number as any, just keep trying for a while to account for failures
+                        void this.migrateFromAzureDatabases();
+                    }
+                } catch (error) {
+                    // Migration is optional - output error for debugging but don't break storage service initialization
+                    console.debug(
+                        'Optional migration check failed:',
+                        error instanceof Error ? error.message : String(error),
+                    );
+                }
             }
         }
         return this._storageService;

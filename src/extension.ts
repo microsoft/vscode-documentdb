@@ -23,6 +23,7 @@ import { ClustersExtension } from './documentdb/ClustersExtension';
 import { ext } from './extensionVariables';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
+import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi } from '../api/src';
 import { MigrationService } from './services/migrationServices';
 
@@ -105,4 +106,26 @@ export async function activateInternal(
 // this method is called when your extension is deactivated
 export function deactivateInternal(_context: vscode.ExtensionContext): void {
     // NOOP
+}
+
+/**
+ * Checks if vCore and RU support is to be activated in this extension.
+ * This introduces changes to the behavior of the extension.
+ *
+ * This function is used to determine whether the vCore and RU features should be enabled in this extension.
+ *
+ * The result of this function depends on the version of the Azure Resources extension.
+ * When a new version of the Azure Resources extension is released with the `AzureCosmosDbForMongoDbRu` and `MongoClusters`
+ * resource types, this function will return true.
+ *
+ * @returns True if vCore and RU features are enabled, false otherwise.
+ */
+export function isVCoreAndRUEnabled(): boolean {
+    const isEnabled = 'AzureCosmosDbForMongoDbRu' in AzExtResourceType && 'AzureDocumentDb' in AzExtResourceType;
+
+    if (!isEnabled) {
+        console.log('Azure resource types not available in this environment; VCore and RU support remains inactive.');
+    }
+
+    return isEnabled;
 }
