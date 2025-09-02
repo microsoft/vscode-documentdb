@@ -211,14 +211,14 @@ export class ConnectionStorageService {
 
                 try {
                     // Access the old Azure Databases storage
-                    const oldStorage = StorageService.get('workspace');
-                    const allItems = await oldStorage.getItems('vscode.cosmosdb.workspace.mongoclusters-resourceType');
+                    const legacyAzureDatabasesStorage = StorageService.get('workspace');
+                    const allLegacyItems = await legacyAzureDatabasesStorage.getItems('vscode.cosmosdb.workspace.mongoclusters-resourceType');
 
                     // Set telemetry properties
                     context.telemetry.properties.migrationAttempted = 'true';
-                    context.telemetry.properties.hasOldStorage = allItems.length > 0 ? 'true' : 'false';
+                    context.telemetry.properties.hasOldStorage = allLegacyItems.length > 0 ? 'true' : 'false';
 
-                    context.telemetry.measurements.itemsRead = allItems.length;
+                    context.telemetry.measurements.itemsReadFromLegacyStorage = allLegacyItems.length;
 
                     // Format current date (inline helper)
                     const currentDate = new Date().toLocaleDateString('en-US', {
@@ -227,9 +227,9 @@ export class ConnectionStorageService {
                         day: 'numeric',
                     });
 
-                    for (const item of allItems) {
+                    for (const legacyItem of allLegacyItems) {
                         // Check if already migrated (inline helper)
-                        const isAlreadyMigrated = item.id.startsWith(MIGRATION_PREFIX);
+                        const isAlreadyMigrated = legacyItem.id.startsWith(MIGRATION_PREFIX);
 
                         if (isAlreadyMigrated) {
                             skippedCount++;
@@ -238,33 +238,39 @@ export class ConnectionStorageService {
 
                         try {
                             // Migrate the item using existing migrateToV2 logic
-                            const migratedItem = this.migrateToV2(item);
+                            const migratedItem = this.migrateToV2(legacyItem);
 
                             // Create imported name (inline helper)
-                            const importedName = `Imported: ${migratedItem.name} (${currentDate})`;
+                            const importedName = l10n.t('Imported: {name} (imported on {date})', {
+                                name: migratedItem.name,
+                                date: currentDate,
+                            });
                             migratedItem.name = importedName;
 
                             // Determine connection type based on emulator flag
-                            const connectionType = item.properties?.isEmulator
+                            const connectionType = legacyItem.properties?.isEmulator
                                 ? ConnectionType.Emulators
                                 : ConnectionType.Clusters;
 
                             // Save to new storage
-                            await this.save(connectionType, migratedItem, false);
+                            await this.save(connectionType, migratedItem, true);
 
                             // Mark as migrated in old storage by updating the ID
-                            const updatedItem = { ...item, id: `${MIGRATION_PREFIX}${item.id}` };
-                            await oldStorage.push(
+                            const updatedLegacyItem = { ...legacyItem, id: `${MIGRATION_PREFIX}${legacyItem.id}` };
+
+                            await legacyAzureDatabasesStorage.push(
                                 'vscode.cosmosdb.workspace.mongoclusters-resourceType',
-                                updatedItem,
+                                updatedLegacyItem,
                                 true,
                             );
+
+                            await legacyAzureDatabasesStorage.delete('vscode.cosmosdb.workspace.mongoclusters-resourceType', legacyItem.id);
 
                             migratedCount++;
                         } catch (error) {
                             // Log individual item migration errors but continue with others
                             ext.outputChannel.appendLog(
-                                `Failed to migrate from Azure Databases VS Code Extension: connection item ${item.id}: ${error instanceof Error ? error.message : String(error)}`,
+                                `Failed to migrate from Azure Databases VS Code Extension: connection item ${legacyItem.id}: ${error instanceof Error ? error.message : String(error)}`,
                             );
                             skippedCount++;
                         }
