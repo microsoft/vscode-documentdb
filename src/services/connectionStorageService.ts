@@ -96,7 +96,7 @@ export class ConnectionStorageService {
     // is activated. Create the Storage on first access instead.
     private static _storageService: Storage | undefined;
 
-    private static get storageService(): Storage {
+    private static async getStorageService(): Promise<Storage> {
         if (!this._storageService) {
             this._storageService = StorageService.get(StorageNames.Connections);
 
@@ -106,7 +106,7 @@ export class ConnectionStorageService {
                     const migrationAttempts = ext.context.globalState.get<number>('azureDatabasesMigrationAttempts', 0);
                     if (migrationAttempts < 20) {
                         // this is a good number as any, just keep trying for a while to account for failures
-                        void this.migrateFromAzureDatabases();
+                        await this.migrateFromAzureDatabases();
                     }
                 } catch (error) {
                     // Migration is optional - output error for debugging but don't break storage service initialization
@@ -121,7 +121,8 @@ export class ConnectionStorageService {
     }
 
     public static async getAll(connectionType: ConnectionType): Promise<ConnectionItem[]> {
-        const items = await this.storageService.getItems<ConnectionProperties>(connectionType);
+        const storageService = await this.getStorageService();
+        const items = await storageService.getItems<ConnectionProperties>(connectionType);
         return items.map((item) => this.fromStorageItem(item));
     }
 
@@ -129,16 +130,19 @@ export class ConnectionStorageService {
      * Returns a single connection by id, or undefined if not found.
      */
     public static async get(connectionId: string, connectionType: ConnectionType): Promise<ConnectionItem | undefined> {
-        const storageItem = await this.storageService.getItem<ConnectionProperties>(connectionType, connectionId);
+        const storageService = await this.getStorageService();
+        const storageItem = await storageService.getItem<ConnectionProperties>(connectionType, connectionId);
         return storageItem ? this.fromStorageItem(storageItem) : undefined;
     }
 
     public static async save(connectionType: ConnectionType, item: ConnectionItem, overwrite?: boolean): Promise<void> {
-        await this.storageService.push(connectionType, this.toStorageItem(item), overwrite);
+        const storageService = await this.getStorageService();
+        await storageService.push(connectionType, this.toStorageItem(item), overwrite);
     }
 
     public static async delete(connectionType: ConnectionType, itemId: string): Promise<void> {
-        await this.storageService.delete(connectionType, itemId);
+        const storageService = await this.getStorageService();
+        await storageService.delete(connectionType, itemId);
     }
 
     private static toStorageItem(item: ConnectionItem): StorageItem<ConnectionProperties> {
