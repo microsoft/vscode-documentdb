@@ -230,6 +230,7 @@
   "Import From JSON…": "Import From JSON…",
   "Import successful.": "Import successful.",
   "IMPORTANT: Please be sure to remove any private information before submitting.": "IMPORTANT: Please be sure to remove any private information before submitting.",
+  "Imported: {name} (imported on {date})": "Imported: {name} (imported on {date})",
   "Importing document {num} of {countDocuments}": "Importing document {num} of {countDocuments}",
   "Importing documents…": "Importing documents…",
   "Importing…": "Importing…",
