@@ -120,8 +120,8 @@ export function deactivateInternal(_context: vscode.ExtensionContext): void {
  *
  * @returns True if vCore and RU features are enabled, false | undefined otherwise.
  */
-export async function isVCoreAndRUEnabled(): Promise<boolean | undefined> {
-    return callWithTelemetryAndErrorHandling('isVCoreAndRUEnabled', async (context: IActionContext) => {
+export async function isVCoreAndRURolloutEnabled(): Promise<boolean | undefined> {
+    return callWithTelemetryAndErrorHandling('isVCoreAndRURolloutEnabled', async (context: IActionContext) => {
         // Suppress error display and don't rethrow - this is feature detection that should fail gracefully
         context.errorHandling.suppressDisplay = true;
         context.errorHandling.rethrow = false;
@@ -133,13 +133,13 @@ export async function isVCoreAndRUEnabled(): Promise<boolean | undefined> {
         // Check if the feature is enabled via the API function
         if (typeof azureResourcesExtensionApi.isDocumentDbExtensionSupportEnabled === 'function') {
             const isEnabled = azureResourcesExtensionApi.isDocumentDbExtensionSupportEnabled();
-            context.telemetry.properties.vCoreAndRUEnabled = String(isEnabled);
+            context.telemetry.properties.vCoreAndRURolloutEnabled = String(isEnabled);
             context.telemetry.properties.apiMethodAvailable = 'true';
             return isEnabled;
         }
 
         // If the function doesn't exist, assume DISABLED
-        context.telemetry.properties.vCoreAndRUEnabled = 'false';
+        context.telemetry.properties.vCoreAndRURolloutEnabled = 'false';
         context.telemetry.properties.apiMethodAvailable = 'false';
         ext.outputChannel.appendLog(
             'Expected Azure Resources API v3.0.0 is not available; VCore and RU support remains inactive.',

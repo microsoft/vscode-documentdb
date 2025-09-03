@@ -45,7 +45,7 @@ import { retryAuthentication } from '../commands/retryAuthentication/retryAuthen
 import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
-import { isVCoreAndRUEnabled } from '../extension';
+import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
@@ -102,8 +102,10 @@ export class ClustersExtension implements vscode.Disposable {
         // Dynamic registration so this file compiles when the enum members aren't present
         // This is how we detect whether the update to Azure Resources has been deployed
 
-        if (!(await isVCoreAndRUEnabled())) {
-            activateContext.telemetry.properties.skippedAzureResourcesActivation = 'true';
+        const isRolloutEnabled = await isVCoreAndRURolloutEnabled();
+        activateContext.telemetry.properties.activatingAzureResourcesIntegration = isRolloutEnabled ? 'true' : 'false';
+
+        if (!isRolloutEnabled) {
             return;
         }
 

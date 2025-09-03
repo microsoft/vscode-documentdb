@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
-import { isVCoreAndRUEnabled } from '../extension';
+import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { StorageNames, StorageService, type Storage, type StorageItem } from './storageService';
 
@@ -103,7 +103,7 @@ export class ConnectionStorageService {
         if (!this._storageService) {
             this._storageService = StorageService.get(StorageNames.Connections);
 
-            if (await isVCoreAndRUEnabled()) {
+            if (await isVCoreAndRURolloutEnabled()) {
                 try {
                     // Trigger migration on first access, but only if we haven't reached the attempt limit
                     const migrationAttempts = ext.context.globalState.get<number>(
