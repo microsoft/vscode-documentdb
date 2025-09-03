@@ -91,6 +91,9 @@ const enum SecretIndex {
  * underlying storage and migration complexity.
  */
 export class ConnectionStorageService {
+    private static readonly MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY =
+        'ConnectionStorageService.migrationAttemptsFromAzureDatabases';
+
     // Lazily-initialized underlying storage instance. We must not call StorageService.get
     // at module-load time because `ext.context` may not be available until the extension
     // is activated. Create the Storage on first access instead.
@@ -100,10 +103,14 @@ export class ConnectionStorageService {
         if (!this._storageService) {
             this._storageService = StorageService.get(StorageNames.Connections);
 
-            if (isVCoreAndRUEnabled()) {
+            if (await isVCoreAndRUEnabled()) {
                 try {
                     // Trigger migration on first access, but only if we haven't reached the attempt limit
-                    const migrationAttempts = ext.context.globalState.get<number>('azureDatabasesMigrationAttempts', 0);
+                    const migrationAttempts = ext.context.globalState.get<number>(
+                        this.MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY,
+                        0,
+                    );
+
                     if (migrationAttempts < 20) {
                         // this is a good number as any, just keep trying for a while to account for failures
                         await this.migrateFromAzureDatabases();
@@ -272,8 +279,14 @@ export class ConnectionStorageService {
             'migrateFromAzureDatabases',
             async (context: IActionContext) => {
                 // Increment migration attempt counter at the start of each attempt
-                const currentAttempts = ext.context.globalState.get<number>('azureDatabasesMigrationAttempts', 0);
-                await ext.context.globalState.update('azureDatabasesMigrationAttempts', currentAttempts + 1);
+                const currentAttempts = ext.context.globalState.get<number>(
+                    this.MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY,
+                    0,
+                );
+                await ext.context.globalState.update(
+                    this.MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY,
+                    currentAttempts + 1,
+                );
                 context.telemetry.measurements.migrationAttemptNumber = currentAttempts + 1;
 
                 const MIGRATION_PREFIX = 'migrated-to-vscode-documentdb-';

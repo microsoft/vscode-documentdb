@@ -16,7 +16,7 @@ import {
     registerCommandWithTreeNodeUnwrapping,
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
-import { AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
+import { type AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
@@ -102,7 +102,7 @@ export class ClustersExtension implements vscode.Disposable {
         // Dynamic registration so this file compiles when the enum members aren't present
         // This is how we detect whether the update to Azure Resources has been deployed
 
-        if (!isVCoreAndRUEnabled()) {
+        if (!(await isVCoreAndRUEnabled())) {
             activateContext.telemetry.properties.skippedAzureResourcesActivation = 'true';
             return;
         }
@@ -112,17 +112,17 @@ export class ClustersExtension implements vscode.Disposable {
             '2.0.0',
         )) as AzureResourcesExtensionApiWithActivity;
 
-        const documentDbResourceType = (AzExtResourceType as unknown as Record<string, unknown>)['AzureDocumentDb'];
+        const documentDbResourceType = 'AzureDocumentDb' as unknown as AzExtResourceType;
         ext.azureResourcesVCoreBranchDataProvider = new VCoreBranchDataProvider();
         ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
-            documentDbResourceType as unknown as AzExtResourceType,
+            documentDbResourceType,
             ext.azureResourcesVCoreBranchDataProvider,
         );
 
-        const ruResourceType = (AzExtResourceType as unknown as Record<string, unknown>)['AzureCosmosDbForMongoDbRu'];
+        const ruResourceType = 'AzureCosmosDbForMongoDbRu' as unknown as AzExtResourceType;
         ext.azureResourcesRUBranchDataProvider = new RUBranchDataProvider();
         ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
-            ruResourceType as unknown as AzExtResourceType,
+            ruResourceType,
             ext.azureResourcesRUBranchDataProvider,
         );
 
