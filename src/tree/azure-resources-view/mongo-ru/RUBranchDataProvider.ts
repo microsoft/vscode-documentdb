@@ -103,7 +103,7 @@ export class RUBranchDataProvider
                 context,
                 async () => element.getChildren?.(),
                 {
-                    contextValue: 'ruBranch', // This enables automatic child processing
+                    contextValue: ['ruBranch', Views.AzureResourcesView], // This enables automatic child processing
                 },
             );
 
@@ -138,7 +138,7 @@ export class RUBranchDataProvider
             const clusterItem = new RUResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
             if (isTreeElementWithContextValue(clusterItem)) {
-                this.appendContextValues(clusterItem, 'ruBranch');
+                this.appendContextValues(clusterItem, 'ruBranch', Views.AzureResourcesView);
             }
 
             // Register item for refresh when cache loading completes

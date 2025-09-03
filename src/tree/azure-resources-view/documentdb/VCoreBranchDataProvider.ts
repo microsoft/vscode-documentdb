@@ -94,7 +94,7 @@ export class VCoreBranchDataProvider
                 context,
                 async () => element.getChildren?.(),
                 {
-                    contextValue: 'documentDbBranch', // This enables automatic child processing
+                    contextValue: ['documentDbBranch', Views.AzureResourcesView], // This enables automatic child processing
                 },
             );
 
@@ -130,7 +130,7 @@ export class VCoreBranchDataProvider
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
 
             if (isTreeElementWithContextValue(clusterItem)) {
-                this.appendContextValues(clusterItem, 'documentDbBranch');
+                this.appendContextValues(clusterItem, 'documentDbBranch', Views.AzureResourcesView);
             }
 
             // Register item for refresh when cache loading completes
