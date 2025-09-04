@@ -8,18 +8,11 @@ import * as l10n from '@vscode/l10n';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
-import { StorageNames, StorageService } from '../../services/storageService';
-import { DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
-import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
-import { WorkspaceResourceType } from '../../tree/workspace-api/SharedWorkspaceResourceProvider';
-import { type ClusterItem } from '../../tree/workspace-view/documentdb/ClusterItem';
+import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
-export async function removeAzureConnection(
-    context: IActionContext,
-    node: ClusterItem | DocumentDBClusterItem,
-): Promise<void> {
+export async function removeAzureConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
@@ -27,10 +20,7 @@ export async function removeAzureConnection(
     await removeConnection(context, node);
 }
 
-export async function removeConnection(
-    context: IActionContext,
-    node: ClusterItem | DocumentDBClusterItem,
-): Promise<void> {
+export async function removeConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
     const confirmed = await getConfirmationAsInSettings(
         l10n.t('Are you sure?'),
@@ -46,29 +36,18 @@ export async function removeConnection(
 
     // continue with deletion
 
-    if (node instanceof DocumentDBClusterItem) {
-        await ext.state.showDeleting(node.id, async () => {
-            if ((node as DocumentDBClusterItem).cluster.emulatorConfiguration?.isEmulator) {
-                await ConnectionStorageService.delete(ConnectionType.Emulators, node.storageId);
-            } else {
-                await ConnectionStorageService.delete(ConnectionType.Clusters, node.storageId);
-            }
-        });
+    await ext.state.showDeleting(node.id, async () => {
+        if ((node as DocumentDBClusterItem).cluster.emulatorConfiguration?.isEmulator) {
+            await ConnectionStorageService.delete(ConnectionType.Emulators, node.storageId);
+        } else {
+            await ConnectionStorageService.delete(ConnectionType.Clusters, node.storageId);
+        }
+    });
 
-        // delete cached credentials from memory
-        CredentialCache.deleteCredentials(node.id);
+    // delete cached credentials from memory
+    CredentialCache.deleteCredentials(node.id);
 
-        ext.connectionsBranchDataProvider.refresh();
-    } else if (node instanceof ClusterItemBase) {
-        await ext.state.showDeleting(node.id, async () => {
-            await StorageService.get(StorageNames.Workspace).delete(
-                WorkspaceResourceType.MongoClusters,
-                node.storageId,
-            );
-        });
-
-        ext.mongoClustersWorkspaceBranchDataProvider.refresh();
-    }
+    ext.connectionsBranchDataProvider.refresh();
 
     showConfirmationAsInSettings(l10n.t('The selected connection has been removed.'));
 }

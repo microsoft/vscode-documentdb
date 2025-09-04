@@ -120,8 +120,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
             // Now, we're safe to create a new connection with the new unique label
 
             switch (experience.api) {
-                case API.MongoDB:
-                case API.MongoClusters:
+                case API.CosmosDBMongoRU:
                 case API.DocumentDB:
                     {
                         const mongoConfig = context.mongoEmulatorConfiguration as EmulatorConfiguration;
@@ -142,7 +141,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 id: generateDocumentDBStorageId(connectionString),
                 name: newConnectionLabel,
                 properties: {
-                    api: experience.api === API.DocumentDB ? API.MongoClusters : experience.api,
+                    api: experience.api === API.DocumentDB ? API.DocumentDB : experience.api,
                     emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
                     availableAuthMethods: [],
                 },
