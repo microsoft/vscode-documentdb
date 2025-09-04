@@ -44,8 +44,9 @@ export class RUBranchDataProvider
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
             const managementClient = await createCosmosDBManagementClient(context, subscription as any);
-            let ruAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
-            ruAccounts = ruAccounts.filter((account) => account.kind === 'MongoDB'); // ignore non-ru accounts
+            const ruAccounts = (await uiUtils.listAllIterator(managementClient.databaseAccounts.list())).filter(
+                (account) => account.kind === 'MongoDB',
+            ); // ignore non-ru accounts
 
             console.debug(
                 'Loaded metadata for %s/%s: %d entries',

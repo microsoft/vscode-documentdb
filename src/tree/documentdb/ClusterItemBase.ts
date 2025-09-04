@@ -48,7 +48,7 @@ export abstract class ClusterItemBase
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_documentdbcluster';
 
-    public descriptionOverride?: string;
+    protected descriptionOverride?: string;
     protected tooltipOverride?: string | vscode.MarkdownString;
 
     protected iconPath?:
