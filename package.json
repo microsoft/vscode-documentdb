@@ -678,9 +678,9 @@
           "group": "1@1"
         },
         {
-          "//": "[TreeItem] Refresh Item (cluster, database, collection, documents, indexes)",
+          "//": "[TreeItem] Refresh Item (cluster, database, collection, documents, indexes) -> but not in azure(ResourceGroups|FocusView) as it's done there by the Azure Resources host extension.",
           "command": "vscode-documentdb.command.refresh",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection|documents|indexes|index)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection|documents|indexes|index)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "zheLastGroup@1"
         },
         {
