@@ -96,6 +96,7 @@
   "Connection String": "Connection String",
   "Connection string is not set": "Connection string is not set",
   "Connection updated successfully.": "Connection updated successfully.",
+  "Connection: \"{selectedConnectionName}\"\n\nThe connection will be added to the \"Connections View\" in the \"DocumentDB for VS Code\" extension. The \"Connections View\" will be opened once this process completes.\n\nDo you want to continue?": "Connection: \"{selectedConnectionName}\"\n\nThe connection will be added to the \"Connections View\" in the \"DocumentDB for VS Code\" extension. The \"Connections View\" will be opened once this process completes.\n\nDo you want to continue?",
   "Connections have moved": "Connections have moved",
   "Could not find {0}": "Could not find {0}",
   "Could not find the Azure Resource Groups extension": "Could not find the Azure Resource Groups extension",
