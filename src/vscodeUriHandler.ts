@@ -171,7 +171,7 @@ async function handleConnectionStringRequest(
             name: newConnectionLabel,
             // Connection strings handled by this handler are MongoDB-style, so mark the API accordingly.
             properties: {
-                api: API.CosmosDBMongoRU,
+                api: API.DocumentDB,
                 emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
                 availableAuthMethods: [],
             },
