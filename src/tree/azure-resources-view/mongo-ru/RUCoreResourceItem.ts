@@ -83,7 +83,7 @@ export class RUResourceItem extends ClusterItemBase {
             CredentialCache.setAuthCredentials(
                 this.id,
                 credentials.selectedAuthMethod!,
-                nonNullValue(credentials.connectionString, 'credentials.connectionString', 'VCoreResourceItem.ts'),
+                nonNullValue(credentials.connectionString, 'credentials.connectionString', 'RUCoreResourceItem.ts'),
                 credentials.connectionUser,
                 credentials.connectionPassword,
             );
