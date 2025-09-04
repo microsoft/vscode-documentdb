@@ -462,13 +462,11 @@
         {
           "//": "[Database] Scrapbook: New Scrapbook",
           "command": "vscode-documentdb.command.scrapbook.new",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@1"
         },
         {
           "//": "[Database] Scrapbook: Connect",
           "command": "vscode-documentdb.command.scrapbook.connect",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@2"
         }
       ],
@@ -476,13 +474,11 @@
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook New",
           "command": "vscode-documentdb.command.scrapbook.new",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@1"
         },
         {
           "//": "[Collection] Scrapbook / Connect",
           "command": "vscode-documentdb.command.scrapbook.connect",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@2"
         }
       ],
