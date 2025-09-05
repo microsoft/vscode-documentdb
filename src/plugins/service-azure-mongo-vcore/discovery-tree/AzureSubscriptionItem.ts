@@ -7,14 +7,14 @@ import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureut
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
-import { DocumentDBExperience } from '../../../../DocumentDBExperiences';
-import { ext } from '../../../../extensionVariables';
-import { type TreeElement } from '../../../../tree/TreeElement';
-import { type TreeElementWithContextValue } from '../../../../tree/TreeElementWithContextValue';
-import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
-import { createResourceManagementClient } from '../../../../utils/azureClients';
-import { nonNullProp } from '../../../../utils/nonNull';
-import { DocumentDBResourceItem } from '../../../service-azure-mongo-vcore/discovery-tree/documentdb/DocumentDBResourceItem';
+import { DocumentDBExperience } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
+import { type TreeElement } from '../../../tree/TreeElement';
+import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
+import { type ClusterModel } from '../../../tree/documentdb/ClusterModel';
+import { createResourceManagementClient } from '../../../utils/azureClients';
+import { nonNullProp } from '../../../utils/nonNull';
+import { DocumentDBResourceItem } from './documentdb/DocumentDBResourceItem';
 
 export interface AzureSubscriptionModel {
     subscriptionName: string;
