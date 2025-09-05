@@ -86,13 +86,15 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
      * Helper to get root items for the tree.
      * Root items here are all the regiestered and enabled discovery providers.
      */
-    // eslint-disable-next-line @typescript-eslint/require-await
+
     private async getRootItems(): Promise<TreeElement[] | null | undefined> {
         // Reset the set of root items
         this.currentRootItems = new WeakSet<TreeElement>();
 
         // Clear the parent cache when retrieving root items
         this.clearParentCache();
+
+        await this.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
 
         // Get the list of active discovery provider IDs from global state
         const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
@@ -221,5 +223,55 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
 
         // If the element does not have children, return null
         return null;
+    }
+
+    private async addDiscoveryProviderPromotionIfNeeded(providerId: string): Promise<void> {
+        const promotionFlagKey = `discoveryProviderPromotionProcessed:${providerId}`;
+        const promotionAlreadyShown = ext.context.globalState.get<boolean>(promotionFlagKey, false);
+
+        if (promotionAlreadyShown) {
+            // Already shown/processed previously — do nothing.
+            return;
+        }
+
+        // If there are no registered discovery providers at all, mark the promotion as shown
+        // and return early. The goal is to only show the promotion to users who have some
+        // discovery providers active/installed.
+        const registeredProviders = DiscoveryService.listProviders();
+        if (!registeredProviders || registeredProviders.length === 0) {
+            try {
+                await ext.context.globalState.update(promotionFlagKey, true);
+            } catch {
+                // ignore storage errors for this best-effort write
+            }
+            return;
+        }
+
+        // Only proceed if the provider is actually available
+        const provider = DiscoveryService.getProvider(providerId);
+        if (!provider) {
+            // Provider not registered with DiscoveryService; skip for now.
+            return;
+        }
+
+        // Read current active provider IDs
+        const activeProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
+
+        // If not present, register it
+        if (!activeProviderIds.includes(providerId)) {
+            const updated = [...activeProviderIds, providerId];
+            try {
+                await ext.context.globalState.update('activeDiscoveryProviderIds', updated);
+            } catch (error) {
+                console.error(`Failed to update activeDiscoveryProviderIds: ${(error as Error).message}`);
+            }
+        }
+
+        // Mark that we've added/shown the promotion for this provider so we don't repeat it
+        try {
+            await ext.context.globalState.update(promotionFlagKey, true);
+        } catch {
+            // ignore
+        }
     }
 }
