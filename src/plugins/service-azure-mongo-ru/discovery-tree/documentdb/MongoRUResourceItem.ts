@@ -32,7 +32,6 @@ export class MongoRUResourceItem extends ClusterItemBase {
         cluster: ClusterModel,
     ) {
         super(cluster);
-        this.contextValue = 'mongoRUResource';
     }
 
     public async getCredentials(): Promise<ClusterCredentials | undefined> {
