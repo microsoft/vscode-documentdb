@@ -13,7 +13,7 @@ import { Views } from '../../../../documentdb/Views';
 import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
-import { extractCredentialsFromRUAccount, getRUClusterInformationFromAzure } from '../../utils/ruClusterHelpers';
+import { extractCredentialsFromRUAccount } from '../../utils/ruClusterHelpers';
 
 export class MongoRUResourceItem extends ClusterItemBase {
     iconPath = vscode.Uri.joinPath(
@@ -40,15 +40,14 @@ export class MongoRUResourceItem extends ClusterItemBase {
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';
 
-            // Retrieve and validate cluster information (throws if invalid)
-            const accountInformation = await getRUClusterInformationFromAzure(
+            const credentials = await extractCredentialsFromRUAccount(
                 context,
                 this.subscription,
                 this.cluster.resourceGroup!,
                 this.cluster.name,
             );
 
-            return extractCredentialsFromRUAccount(context, accountInformation);
+            return credentials;
         });
     }
 
@@ -71,9 +70,11 @@ export class MongoRUResourceItem extends ClusterItemBase {
                 // Get credentials for this cluster
                 const credentials = await this.getCredentials();
                 if (!credentials) {
-                    throw new Error(l10n.t('Unable to retrieve credentials for cluster "{cluster}".', {
-                        cluster: this.cluster.name,
-                    }));
+                    throw new Error(
+                        l10n.t('Unable to retrieve credentials for cluster "{cluster}".', {
+                            cluster: this.cluster.name,
+                        }),
+                    );
                 }
 
                 // Cache the credentials for this cluster

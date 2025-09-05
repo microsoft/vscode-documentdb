@@ -15,48 +15,19 @@ import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 /**
  * Retrieves cluster information from Azure for RU accounts.
  */
-export async function getRUClusterInformationFromAzure(
+export async function extractCredentialsFromRUAccount(
     context: IActionContext,
     subscription: AzureSubscription,
     resourceGroup: string,
     accountName: string,
-): Promise<unknown> {
-    // subscription comes from different azure packages in callers; cast here intentionally
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-    const managementClient = await createCosmosDBManagementClient(context, subscription as any);
-
-    const account = await managementClient.databaseAccounts.get(resourceGroup, accountName);
-
-    // Validate that this is a MongoDB RU account
-    if ((account as { kind?: string }).kind !== 'MongoDB') {
-        context.telemetry.properties.error = 'invalid-account-kind';
-        throw new Error(
-            l10n.t('Account "{account}" is not a MongoDB account.', {
-                account: accountName,
-            }),
-        );
-    }
-
-    return account;
-}
-
-/**
- * Extracts credentials from RU account information.
- */
-export async function extractCredentialsFromRUAccount(
-    context: IActionContext,
-    account: unknown,
 ): Promise<ClusterCredentials> {
-    // subscription comes from different azure packages in callers; cast here intentionally
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-    const managementClient = await createCosmosDBManagementClient(context, account as any);
-
-    const resourceGroup = (account as { id?: string }).id?.split('/')[4];
-    const accountName = (account as { name?: string }).name;
-
     if (!resourceGroup || !accountName) {
         throw new Error(l10n.t('Account information is incomplete.'));
     }
+
+    // subscription comes from different azure packages in callers; cast here intentionally
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    const managementClient = await createCosmosDBManagementClient(context, subscription as any);
 
     const connectionStringsList = await managementClient.databaseAccounts.listConnectionStrings(
         resourceGroup,

@@ -10,7 +10,7 @@ import { type NewConnectionWizardContext } from '../../../commands/newConnection
 import { type GenericResource } from '@azure/arm-resources';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
-import { extractCredentialsFromRUAccount, getRUClusterInformationFromAzure } from '../utils/ruClusterHelpers';
+import { extractCredentialsFromRUAccount } from '../utils/ruClusterHelpers';
 
 export class AzureMongoRUExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
     public priority: number = -1;
@@ -33,14 +33,7 @@ export class AzureMongoRUExecuteStep extends AzureWizardExecuteStep<NewConnectio
 
         const resourceGroup = getResourceGroupFromId(cluster.id!);
 
-        const accountInformation = await getRUClusterInformationFromAzure(
-            context,
-            subscription,
-            resourceGroup,
-            cluster.name!,
-        );
-
-        const credentials = await extractCredentialsFromRUAccount(context, accountInformation);
+        const credentials = await extractCredentialsFromRUAccount(context, subscription, resourceGroup, cluster.name!);
 
         context.connectionString = credentials.connectionString;
         context.username = credentials.connectionUser;
