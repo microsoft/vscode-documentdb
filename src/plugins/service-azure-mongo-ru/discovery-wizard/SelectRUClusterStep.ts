@@ -39,9 +39,10 @@ export class SelectRUClusterStep extends AzureWizardPromptStep<NewConnectionWiza
         const accounts = allAccounts.filter((account) => account.kind === 'MongoDB');
 
         const promptItems: (QuickPickItem & { id: string })[] = accounts
+            .filter((account) => account.name) // Filter out accounts without a name
             .map((account) => ({
                 id: account.id!,
-                label: account.name!,
+                label: account.name,
                 description: account.id,
                 iconPath: this.iconPath,
 
