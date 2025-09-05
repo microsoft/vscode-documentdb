@@ -14,7 +14,7 @@ import { type TreeElementWithContextValue } from '../../../../tree/TreeElementWi
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { createResourceManagementClient } from '../../../../utils/azureClients';
 import { nonNullProp } from '../../../../utils/nonNull';
-import { DocumentDBResourceItem } from '../../../service-azure/discovery-tree/documentdb/DocumentDBResourceItem';
+import { DocumentDBResourceItem } from '../../../service-azure-mongo-vcore/discovery-tree/documentdb/DocumentDBResourceItem';
 
 export interface AzureSubscriptionModel {
     subscriptionName: string;

@@ -94,6 +94,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         // Clear the parent cache when retrieving root items
         this.clearParentCache();
 
+        await this.renameLegacyProviders();
         await this.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
 
         // Get the list of active discovery provider IDs from global state
@@ -272,6 +273,23 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             await ext.context.globalState.update(promotionFlagKey, true);
         } catch {
             // ignore
+        }
+    }
+
+    private async renameLegacyProviders(): Promise<void> {
+        try {
+            const activeProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
+            if (activeProviderIds.includes('azure-discovery')) {
+                {
+                    const updated = ext.context.globalState
+                        .get<string[]>('activeDiscoveryProviderIds', [])
+                        .filter((id) => id !== 'azure-discovery');
+                    updated.push('azure-mongo-vcore-discovery');
+                    await ext.context.globalState.update('activeDiscoveryProviderIds', updated);
+                }
+            }
+        } catch {
+            // ignore storage errors for this best-effort write
         }
     }
 }

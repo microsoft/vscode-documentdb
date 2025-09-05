@@ -25,7 +25,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         private readonly azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
         public readonly parentId: string,
     ) {
-        this.id = `${parentId}/azure-discovery`;
+        this.id = `${parentId}/azure-mongo-vcore-discovery`;
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
