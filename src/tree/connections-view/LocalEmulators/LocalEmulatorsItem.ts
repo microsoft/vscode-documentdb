@@ -55,8 +55,8 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
     }
 
     private iconPath: IThemedIconPath = {
-        light: path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-blue.svg'),
-        dark: path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon.svg'),
+        light: path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-light-themes.svg'),
+        dark: path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-dark-themes.svg'),
     };
 
     public getTreeItem(): vscode.TreeItem {
