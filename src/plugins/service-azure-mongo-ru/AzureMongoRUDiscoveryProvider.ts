@@ -11,28 +11,22 @@ import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering';
-import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
-import { AzureExecuteStep } from './discovery-wizard/AzureExecuteStep';
-import { SelectClusterStep } from './discovery-wizard/SelectClusterStep';
-import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep';
+import { AzureContextProperties } from '../api-shared/azure/wizard/AzureContextProperties';
+import { SelectSubscriptionStep } from '../service-azure-vm/discovery-wizard/SelectSubscriptionStep';
+import { AzureMongoRUServiceRootItem } from './discovery-tree/AzureMongoRUServiceRootItem';
+import { AzureMongoRUExecuteStep } from './discovery-wizard/AzureMongoRUExecuteStep';
+import { SelectRUClusterStep } from './discovery-wizard/SelectRUClusterStep';
 
-export enum AzureContextProperties {
-    AzureSubscriptionProvider = 'azureSubscriptionProvider',
-    SelectedSubscription = 'selectedSubscription',
-    SelectedCluster = 'selectedCluster',
-}
-
-export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvider {
-    id = 'azure-discovery';
-    label = l10n.t('Azure Cosmos DB for MongoDB (vCore)');
-    description = l10n.t('Azure Service Discovery');
+export class AzureMongoRUDiscoveryProvider extends Disposable implements DiscoveryProvider {
+    id = 'azure-mongo-ru-discovery';
+    label = l10n.t('Azure Cosmos DB for MongoDB (RU)');
+    description = l10n.t('Azure Service Discovery for MongoDB RU');
     iconPath = new ThemeIcon('azure');
 
     azureSubscriptionProvider: AzureSubscriptionProviderWithFilters;
 
     constructor() {
         super(() => {
-            //this.onDidChangeTreeDataEmitter.dispose();
             this.azureSubscriptionProvider.dispose();
         });
 
@@ -40,31 +34,26 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
     }
 
     getDiscoveryTreeRootItem(parentId: string): TreeElement {
-        return new AzureServiceRootItem(this.azureSubscriptionProvider, parentId);
+        return new AzureMongoRUServiceRootItem(this.azureSubscriptionProvider, parentId);
     }
 
     getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext> {
-        /**
-         * 1. List subscriptions (apply a filter), add an option to configure the filter
-         * 2. List clusters in the selected subscription
-         */
-
         context.properties[AzureContextProperties.AzureSubscriptionProvider] = this.azureSubscriptionProvider;
 
         return {
             title: l10n.t('Azure Service Discovery'),
-            promptSteps: [new SelectSubscriptionStep(), new SelectClusterStep()],
-            executeSteps: [new AzureExecuteStep()],
+            promptSteps: [new SelectSubscriptionStep(), new SelectRUClusterStep()],
+            executeSteps: [new AzureMongoRUExecuteStep()],
             showLoadingPrompt: true,
         };
     }
 
     getLearnMoreUrl(): string | undefined {
-        return 'https://aka.ms/vscode-documentdb-discovery-providers-azure-vcore';
+        return 'https://aka.ms/vscode-documentdb-discovery-providers-azure-ru';
     }
 
     async configureTreeItemFilter(context: IActionContext, node: TreeElement): Promise<void> {
-        if (node instanceof AzureServiceRootItem) {
+        if (node instanceof AzureMongoRUServiceRootItem) {
             await configureAzureSubscriptionFilter(context, this.azureSubscriptionProvider);
             ext.discoveryBranchDataProvider.refresh(node);
         }

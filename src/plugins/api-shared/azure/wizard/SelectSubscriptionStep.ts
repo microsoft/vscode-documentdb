@@ -7,9 +7,9 @@ import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureau
 import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { Uri, window, type MessageItem, type QuickPickItem } from 'vscode';
-import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
-import { ext } from '../../../extensionVariables';
-import { AzureContextProperties } from '../AzureDiscoveryProvider';
+import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
+import { ext } from '../../../../extensionVariables';
+import { AzureContextProperties } from './AzureContextProperties';
 
 export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     iconPath = Uri.joinPath(

@@ -49,7 +49,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
     public async getCredentials(): Promise<ClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-discovery';
+            context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
 
             // Retrieve and validate cluster information (throws if invalid)
             const clusterInformation = await getClusterInformationFromAzure(
@@ -83,7 +83,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-discovery';
+            context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -189,7 +189,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         // Prompt the user for credentials
         await callWithTelemetryAndErrorHandling('connect.promptForCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-discovery';
+            context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
 
             context.errorHandling.rethrow = true;
             context.errorHandling.suppressDisplay = false;

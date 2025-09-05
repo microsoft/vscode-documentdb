@@ -25,7 +25,7 @@ import { ext } from '../../../extensionVariables';
 import {
     extractCredentialsFromCluster,
     getClusterInformationFromAzure,
-} from '../../../plugins/service-azure/utils/clusterHelpers';
+} from '../../../plugins/service-azure-mongo-vcore/utils/clusterHelpers';
 import { nonNullValue } from '../../../utils/nonNull';
 import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../documentdb/ClusterModel';
