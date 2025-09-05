@@ -43,6 +43,7 @@ export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizard
         );
 
         const promptItems: (QuickPickItem & { id: string })[] = accounts
+            .filter((account) => account.name) // Filter out accounts without a name
             .map((account) => ({
                 id: account.id!,
                 label: account.name!,

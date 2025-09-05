@@ -42,7 +42,7 @@ export class SelectRUClusterStep extends AzureWizardPromptStep<NewConnectionWiza
             .filter((account) => account.name) // Filter out accounts without a name
             .map((account) => ({
                 id: account.id!,
-                label: account.name,
+                label: account.name!,
                 description: account.id,
                 iconPath: this.iconPath,
 
