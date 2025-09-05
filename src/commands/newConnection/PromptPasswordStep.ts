@@ -41,6 +41,7 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewConnectionWizar
 
         try {
             const parsedConnectionString = new DocumentDBConnectionString(context.connectionString!);
+            parsedConnectionString.username = context.username ?? '';
             parsedConnectionString.password = password;
 
             const connectionString = parsedConnectionString.toString();
