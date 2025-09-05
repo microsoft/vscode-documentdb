@@ -11,7 +11,7 @@ import { Uri, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../extensionVariables';
 import { createResourceManagementClient } from '../../../utils/azureClients';
-import { AzureContextProperties } from '../AzureDiscoveryProvider';
+import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
 
 export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     iconPath = Uri.joinPath(
