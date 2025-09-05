@@ -11,7 +11,7 @@ import { Uri, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../extensionVariables';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
-import { AzureContextProperties } from '../../service-azure/AzureDiscoveryProvider';
+import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
 
 export class SelectRUClusterStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     iconPath = Uri.joinPath(
@@ -26,9 +26,7 @@ export class SelectRUClusterStep extends AzureWizardPromptStep<NewConnectionWiza
     );
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        if (
-            context.properties[AzureContextProperties.SelectedSubscription] === undefined
-        ) {
+        if (context.properties[AzureContextProperties.SelectedSubscription] === undefined) {
             throw new Error('SelectedSubscription is not set.');
         }
 

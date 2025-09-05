@@ -9,7 +9,7 @@ import { type NewConnectionWizardContext } from '../../../commands/newConnection
 
 import { type GenericResource } from '@azure/arm-resources';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { AzureContextProperties } from '../../service-azure/AzureDiscoveryProvider';
+import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
 import { extractCredentialsFromRUAccount, getRUClusterInformationFromAzure } from '../utils/ruClusterHelpers';
 
 export class AzureMongoRUExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
@@ -32,7 +32,7 @@ export class AzureMongoRUExecuteStep extends AzureWizardExecuteStep<NewConnectio
         const cluster = context.properties[AzureContextProperties.SelectedCluster] as unknown as GenericResource;
 
         const resourceGroup = getResourceGroupFromId(cluster.id!);
-        
+
         const accountInformation = await getRUClusterInformationFromAzure(
             context,
             subscription,

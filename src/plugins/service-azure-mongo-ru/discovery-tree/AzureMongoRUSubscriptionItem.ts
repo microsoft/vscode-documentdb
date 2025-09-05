@@ -7,6 +7,7 @@ import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureut
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
+import { CosmosDBMongoRUExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
@@ -37,7 +38,7 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
             'azure-mongo-ru-discovery.getChildren',
             async (context: IActionContext) => {
                 context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';
-                
+
                 const managementClient = await createCosmosDBManagementClient(context, this.subscription.subscription);
                 const allAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
                 const accounts = allAccounts.filter((account) => account.kind === 'MongoDB');
@@ -50,6 +51,7 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                         const clusterInfo: ClusterModel = {
                             ...account,
                             resourceGroup: getResourceGroupFromId(resourceId),
+                            dbExperience: CosmosDBMongoRUExperience,
                         } as ClusterModel;
 
                         return new MongoRUResourceItem(this.subscription.subscription, clusterInfo);

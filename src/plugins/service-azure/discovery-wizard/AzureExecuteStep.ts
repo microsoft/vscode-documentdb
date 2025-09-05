@@ -9,7 +9,7 @@ import { type NewConnectionWizardContext } from '../../../commands/newConnection
 import { type GenericResource } from '@azure/arm-resources';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { getResourceGroupFromId } from '@microsoft/vscode-azext-azureutils';
-import { AzureContextProperties } from '../AzureDiscoveryProvider';
+import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
 import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../utils/clusterHelpers';
 
 export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
