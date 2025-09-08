@@ -14,18 +14,19 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
-import { AzureSubscriptionItem } from './AzureSubscriptionItem';
+import { AzureMongoRUSubscriptionItem } from './AzureMongoRUSubscriptionItem';
 
-export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
+export class AzureMongoRUServiceRootItem
+    implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren
+{
     public readonly id: string;
-    public contextValue: string =
-        'enableRefreshCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAzureServiceRootItem';
+    public contextValue: string = 'enableRefreshCommand;enableFilterCommand;enableLearnMoreCommand;azureMongoRUService';
 
     constructor(
         private readonly azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
         public readonly parentId: string,
     ) {
-        this.id = `${parentId}/azure-discovery`;
+        this.id = `${parentId}/azure-mongo-ru-discovery`;
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
@@ -64,9 +65,9 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
             subscriptions
                 // sort by name
                 .sort((a, b) => a.name.localeCompare(b.name))
-                // map to AzureSubscriptionItem
+                // map to AzureMongoRUSubscriptionItem
                 .map((sub) => {
-                    return new AzureSubscriptionItem(this.id, {
+                    return new AzureMongoRUSubscriptionItem(this.id, {
                         subscription: sub,
                         subscriptionName: sub.name,
                         subscriptionId: sub.subscriptionId,
@@ -85,7 +86,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: l10n.t('Azure Cosmos DB for MongoDB (vCore)'),
+            label: l10n.t('Azure Cosmos DB for MongoDB (RU)'),
             iconPath: new vscode.ThemeIcon('azure'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };

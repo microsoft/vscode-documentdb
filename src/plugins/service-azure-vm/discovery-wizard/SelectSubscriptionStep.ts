@@ -9,7 +9,7 @@ import * as l10n from '@vscode/l10n';
 import { Uri, window, type MessageItem, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../extensionVariables';
-import { AzureContextProperties } from '../../service-azure/AzureDiscoveryProvider';
+import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
 
 export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     iconPath = Uri.joinPath(

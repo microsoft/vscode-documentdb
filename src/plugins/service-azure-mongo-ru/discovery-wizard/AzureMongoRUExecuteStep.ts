@@ -3,16 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { getResourceGroupFromId } from '@microsoft/vscode-azext-azureutils';
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 
 import { type GenericResource } from '@azure/arm-resources';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
-import { getResourceGroupFromId } from '@microsoft/vscode-azext-azureutils';
-import { AzureContextProperties } from '../AzureDiscoveryProvider';
-import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../utils/clusterHelpers';
+import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
+import { extractCredentialsFromRUAccount } from '../utils/ruClusterHelpers';
 
-export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
+export class AzureMongoRUExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
     public priority: number = -1;
 
     public async execute(context: NewConnectionWizardContext): Promise<void> {
@@ -23,20 +23,17 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
             throw new Error('SelectedCluster is not set.');
         }
 
+        context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';
+
         const subscription = context.properties[
             AzureContextProperties.SelectedSubscription
         ] as unknown as AzureSubscription;
 
         const cluster = context.properties[AzureContextProperties.SelectedCluster] as unknown as GenericResource;
 
-        const clusterInformation = await getClusterInformationFromAzure(
-            context,
-            subscription,
-            getResourceGroupFromId(cluster.id!),
-            cluster.name!,
-        );
+        const resourceGroup = getResourceGroupFromId(cluster.id!);
 
-        const credentials = extractCredentialsFromCluster(context, clusterInformation);
+        const credentials = await extractCredentialsFromRUAccount(context, subscription, resourceGroup, cluster.name!);
 
         context.connectionString = credentials.connectionString;
         context.username = credentials.connectionUser;
@@ -48,14 +45,6 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         context.properties[AzureContextProperties.SelectedCluster] = undefined;
         context.properties[AzureContextProperties.AzureSubscriptionProvider] = undefined;
     }
-
-    /**
-     * Extracts and processes credentials from cluster information.
-     * @param context The action context for telemetry and masking.
-     * @param clusterInformation The MongoCluster object containing cluster details.
-     * @returns A ClusterCredentials object.
-     */
-    // getClusterInformation and extractCredentials moved to shared helpers
 
     public shouldExecute(): boolean {
         return true;

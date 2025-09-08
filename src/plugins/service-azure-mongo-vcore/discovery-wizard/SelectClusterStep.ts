@@ -11,7 +11,7 @@ import { Uri, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../extensionVariables';
 import { createResourceManagementClient } from '../../../utils/azureClients';
-import { AzureContextProperties } from '../AzureDiscoveryProvider';
+import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
 
 export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     iconPath = Uri.joinPath(
@@ -43,6 +43,7 @@ export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizard
         );
 
         const promptItems: (QuickPickItem & { id: string })[] = accounts
+            .filter((account) => account.name) // Filter out accounts without a name
             .map((account) => ({
                 id: account.id!,
                 label: account.name!,
@@ -56,7 +57,7 @@ export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizard
         const selectedItem = await context.ui.showQuickPick([...promptItems], {
             stepName: 'selectCluster',
             placeHolder: l10n.t('Choose a cluster…'),
-            loadingPlaceHolder: l10n.t('Loading subscriptions…'),
+            loadingPlaceHolder: l10n.t('Loading clusters…'),
             enableGrouping: true,
             matchOnDescription: true,
             suppressPersistence: true,
