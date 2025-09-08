@@ -73,10 +73,32 @@ npm start
 
 The server can be configured using environment variables:
 
-- `TRANSPORT` - Transport mode (currently only "stdio" is supported)
+- `TRANSPORT` - Transport mode: "stdio" (default) or "streamable-http"
 - `DOCUMENTDB_URI` - MongoDB/DocumentDB connection string
-- `HOST` - Server host (for future HTTP transport support)
-- `PORT` - Server port (for future HTTP transport support)
+- `HOST` - Server host (default: "localhost", used for HTTP transport)
+- `PORT` - Server port (default: 8070, used for HTTP transport)
+
+### Transport Modes
+
+#### stdio (Default)
+The server communicates over standard input/output streams. This is the recommended mode for MCP client integration.
+
+```env
+TRANSPORT=stdio
+```
+
+#### streamable-http
+The server runs as an HTTP server implementing the MCP Streamable HTTP transport specification. This enables browser-based clients and HTTP-based integrations.
+
+```env
+TRANSPORT=streamable-http
+HOST=localhost
+PORT=8070
+```
+
+When running in HTTP mode, the server will be available at:
+- **Endpoint**: `http://localhost:8070/mcp`
+- **Methods**: GET (SSE streams), POST (requests), DELETE (session termination)
 
 ## MCP Integration
 
@@ -131,6 +153,8 @@ All tools implement comprehensive error handling and return structured error res
 - `@modelcontextprotocol/sdk` - MCP SDK for TypeScript
 - `mongodb` - Official MongoDB Node.js driver
 - `dotenv` - Environment variable management
+- `express` - Web framework for HTTP transport (when using streamable-http)
+- `cors` - CORS middleware for HTTP transport
 
 ## License
 
