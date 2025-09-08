@@ -885,7 +885,7 @@
         "description": "Connect to any DocumentDB or MongoDB database and start managing data directly inside VS Code.",
         "steps": [
           {
-            "id": "open-extension",
+            "id": "open-extension-v0.4.0",
             "title": "1. Open the DocumentDB Extension",
             "description": "Click the DocumentDB icon in the sidebar to get started. This opens the database explorer panel.",
             "media": {
@@ -894,7 +894,7 @@
             }
           },
           {
-            "id": "connect-database",
+            "id": "connect-database-v0.4.0",
             "title": "2. Connect to a Database",
             "description": "Use a connection string or sign in with your cloud provider to connect to **DocumentDB** or **MongoDB**",
             "media": {
@@ -903,7 +903,7 @@
             }
           },
           {
-            "id": "browse-collections",
+            "id": "browse-collections-v0.4.0",
             "title": "3. Browse Collections",
             "description": "Explore your collections using Table, Tree, or JSON views. You can view documents with pagination support for large datasets.",
             "media": {
@@ -912,7 +912,7 @@
             }
           },
           {
-            "id": "run-queries",
+            "id": "run-queries-v0.4.0",
             "title": "4. Run Queries with Autocomplete",
             "description": "Use the built-in editor to run find queries. Get syntax highlighting and field name suggestions while you type.",
             "media": {
@@ -921,7 +921,7 @@
             }
           },
           {
-            "id": "azure-resources-integration",
+            "id": "azure-resources-integration-v0.4.0",
             "title": "5. Use Azure Resources (optional)",
             "description": "**If you use the Azure Resources extension**, you can access Azure Cosmos DB for MongoDB (RU) and Azure Cosmos DB for MongoDB (vCore) clusters from the Azure Resource View. This **optional integration** helps you work from the Azure environment you already use. [Read more...](https://github.com/microsoft/vscode-documentdb/discussions/251)",
             "media": {
