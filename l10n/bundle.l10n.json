@@ -465,6 +465,7 @@
   "Use anyway": "Use anyway",
   "User is not signed in to Azure.": "User is not signed in to Azure.",
   "Username and Password": "Username and Password",
+  "Username cannot be empty": "Username cannot be empty",
   "Username for {resource}": "Username for {resource}",
   "Using existing resource group \"{0}\".": "Using existing resource group \"{0}\".",
   "Using the table navigation, you can explore deeper levels or move back and forth between them.": "Using the table navigation, you can explore deeper levels or move back and forth between them.",

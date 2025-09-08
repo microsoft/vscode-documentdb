@@ -4,6 +4,7 @@
 
 [![Version](https://img.shields.io/visual-studio-marketplace/v/ms-azuretools.vscode-documentdb.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
 
+<img src="resources/readme/documentdb-logo.png" alt="DocumentDB Logo" style="width:40%; min-width:180px; max-width:320px; height:auto;" />
 <!-- endregion exclude-from-marketplace -->
 
 **A powerful, open-source DocumentDB and MongoDB GUI for everyone.**

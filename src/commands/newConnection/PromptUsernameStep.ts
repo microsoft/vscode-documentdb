@@ -20,6 +20,13 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
             ignoreFocusOut: true,
             value: context.username,
             validateInput: (username?: string) => this.validateInput(context, username),
+            // eslint-disable-next-line @typescript-eslint/require-await
+            asyncValidationTask: async (username?: string) => {
+                if (!username || username.trim().length === 0) {
+                    return l10n.t('Username cannot be empty');
+                }
+                return undefined;
+            },
         });
 
         context.valuesToMask.push(username);
