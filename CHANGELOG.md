@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.4.1
+
+### Improvement
+
+- **Walkthrough Welcome Screen & Sidebar Icon Discovery**: The walkthrough welcome screen behavior has been updated to help users notice the updated extension icon in the VS Code sidebar. This change highlights the new branding so users can find the extension more easily from the environment they already use. [#253](https://github.com/microsoft/vscode-documentdb/pull/253)
+
 ## 0.4.0
 
 ### New Features & Improvements
