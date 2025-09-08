@@ -62,7 +62,8 @@ This section contains detailed documentation for specific features and concepts 
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
-- [0.3](./release-notes/0.3.md)
+- [0.4](./release-notes/0.4.md)
+- [0.3, 0.3.1](./release-notes/0.3.md)
 - [0.2.4](./release-notes/0.2.4.md)
 - [0.2.3](./release-notes/0.2.3.md)
 - [0.2.2](./release-notes/0.2.2.md)
