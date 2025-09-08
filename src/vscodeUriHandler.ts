@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
@@ -16,6 +16,7 @@ import {
     revealInConnectionsView,
     waitForConnectionsViewReady,
 } from './tree/connections-view/connectionsViewHelpers';
+import { nonNullValue } from './utils/nonNull';
 import { generateDocumentDBStorageId } from './utils/storageUtils';
 
 // #region Type Definitions
@@ -170,7 +171,7 @@ async function handleConnectionStringRequest(
             name: newConnectionLabel,
             // Connection strings handled by this handler are MongoDB-style, so mark the API accordingly.
             properties: {
-                api: API.MongoDB,
+                api: API.DocumentDB,
                 emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
                 availableAuthMethods: [],
             },
@@ -450,7 +451,7 @@ async function openDedicatedView(
 
     return openCollectionViewInternal(context, {
         clusterId: clusterId,
-        databaseName: nonNullValue(database, 'database'),
-        collectionName: nonNullValue(collection, 'collection'),
+        databaseName: nonNullValue(database, 'database', 'vscodeUriHandler.ts'),
+        collectionName: nonNullValue(collection, 'collection', 'vscodeUriHandler.ts'),
     });
 }

@@ -107,7 +107,7 @@ class FindMongoCommandsVisitor extends MongoVisitor<MongoCommand[]> {
 
     public visitCommand(ctx: mongoParser.CommandContext): MongoCommand[] {
         const funcCallCount: number = filterType(ctx.children, mongoParser.FunctionCallContext).length;
-        const stop = nonNullProp(ctx, 'stop');
+        const stop = nonNullProp(ctx, 'stop', 'ctx.stop', 'ScrapbookHelpers.ts');
         this.commands.push({
             range: new vscode.Range(
                 ctx.start.line - 1,
@@ -146,7 +146,7 @@ class FindMongoCommandsVisitor extends MongoVisitor<MongoCommand[]> {
                     const argAsObject = this.contextToObject(ctx);
 
                     const argText = EJSON.stringify(argAsObject);
-                    nonNullProp(lastCommand, 'arguments').push(argText);
+                    nonNullProp(lastCommand, 'arguments', 'lastCommand.arguments', 'ScrapbookHelpers.ts').push(argText);
                     const escapeHandled = this.deduplicateEscapesForRegex(argText);
                     let ejsonParsed = {};
                     try {
@@ -157,7 +157,12 @@ class FindMongoCommandsVisitor extends MongoVisitor<MongoCommand[]> {
                         const parsedError: IParsedError = parseError(error);
                         this.addErrorToCommand(parsedError.message, ctx);
                     }
-                    nonNullProp(lastCommand, 'argumentObjects').push(ejsonParsed);
+                    nonNullProp(
+                        lastCommand,
+                        'argumentObjects',
+                        'lastCommand.argumentObjects',
+                        'ScrapbookHelpers.ts',
+                    ).push(ejsonParsed);
                 }
             }
         } catch (error) {
@@ -178,7 +183,7 @@ class FindMongoCommandsVisitor extends MongoVisitor<MongoCommand[]> {
             return {};
         }
         // In a well formed expression, Argument and propertyValue tokens should have exactly one child, from their definitions in mongo.g4
-        const child: ParseTree = nonNullProp(ctx, 'children')[0];
+        const child: ParseTree = nonNullProp(ctx, 'children', 'ctx.children', 'ScrapbookHelpers.ts')[0];
         if (child instanceof mongoParser.LiteralContext) {
             return this.literalContextToObject(child, ctx);
         } else if (child instanceof mongoParser.ObjectLiteralContext) {
@@ -235,7 +240,12 @@ class FindMongoCommandsVisitor extends MongoVisitor<MongoCommand[]> {
                 mongoParser.PropertyAssignmentContext,
             );
             for (const propertyAssignment of propertyAssignments) {
-                const propertyAssignmentChildren = nonNullProp(propertyAssignment, 'children');
+                const propertyAssignmentChildren = nonNullProp(
+                    propertyAssignment,
+                    'children',
+                    'propertyAssignment.children',
+                    'ScrapbookHelpers.ts',
+                );
                 const propertyName = <mongoParser.PropertyNameContext>propertyAssignmentChildren[0];
                 const propertyValue = <mongoParser.PropertyValueContext>propertyAssignmentChildren[2];
                 parsedObject[stripQuotes(propertyName.text)] = this.contextToObject(propertyValue);
@@ -261,10 +271,15 @@ class FindMongoCommandsVisitor extends MongoVisitor<MongoCommand[]> {
         // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types
     ): Object {
         const functionTokens = child.children;
-        const constructorCall: TerminalNode = nonNullValue(findType(functionTokens, TerminalNode), 'constructorCall');
+        const constructorCall: TerminalNode = nonNullValue(
+            findType(functionTokens, TerminalNode),
+            'constructorCall',
+            'ScrapbookHelpers.ts',
+        );
         const argumentsToken: mongoParser.ArgumentsContext = nonNullValue(
             findType(functionTokens, mongoParser.ArgumentsContext),
             'argumentsToken',
+            'ScrapbookHelpers.ts',
         );
         if (!(argumentsToken._CLOSED_PARENTHESIS && argumentsToken._OPEN_PARENTHESIS)) {
             //argumentsToken does not have '(' or ')'
@@ -418,7 +433,7 @@ class FindMongoCommandsVisitor extends MongoVisitor<MongoCommand[]> {
     ): void {
         const command = this.commands[this.commands.length - 1];
         command.errors = command.errors || [];
-        const stop = nonNullProp(ctx, 'stop');
+        const stop = nonNullProp(ctx, 'stop', 'ctx.stop', 'ScrapbookHelpers.ts');
         const currentErrorDesc: ErrorDescription = {
             message: errorMessage,
             range: new vscode.Range(

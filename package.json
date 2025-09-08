@@ -1,6 +1,6 @@
 {
   "name": "vscode-documentdb",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "aiKey": "0c6ae279ed8443289764825290e4f9e2-1a736e7c-1324-4338-be46-fc2a58ae4d14-7255",
   "publisher": "ms-azuretools",
   "displayName": "DocumentDB for VS Code",
@@ -145,7 +145,7 @@
   },
   "dependencies": {
     "@azure/arm-compute": "^22.4.0",
-    "@azure/arm-cosmosdb": "16.0.0-beta.7",
+    "@azure/arm-cosmosdb": "16.3.0",
     "@azure/arm-mongocluster": "1.1.0-beta.1",
     "@azure/arm-network": "^33.5.0",
     "@azure/arm-resources": "~6.1.0",
@@ -342,6 +342,13 @@
         "icon": "$(info)"
       },
       {
+        "//": "[ResourcesView] Save To DocumentDB Connections",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
+        "title": "Add To Connections In The \"DocumentDB View\"",
+        "icon": "$(save)"
+      },
+      {
         "//": "Refresh a Tree Item",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.refresh",
@@ -455,13 +462,11 @@
         {
           "//": "[Database] Scrapbook: New Scrapbook",
           "command": "vscode-documentdb.command.scrapbook.new",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         },
         {
           "//": "[Database] Scrapbook: Connect",
           "command": "vscode-documentdb.command.scrapbook.connect",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@2"
         }
       ],
@@ -469,13 +474,11 @@
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook New",
           "command": "vscode-documentdb.command.scrapbook.new",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@1"
         },
         {
           "//": "[Collection] Scrapbook / Connect",
           "command": "vscode-documentdb.command.scrapbook.connect",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
           "group": "1@2"
         }
       ],
@@ -515,23 +518,23 @@
       "view/item/context": [
         {
           "command": "vscode-documentdb.command.connectionsView.updateConnectionString",
-          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@2"
         },
         {
           "command": "vscode-documentdb.command.connectionsView.updateCredentials",
-          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@3"
         },
         {
           "command": "vscode-documentdb.command.connectionsView.renameConnection",
-          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@4"
         },
         {
           "//": "Remove Connection...",
           "command": "vscode-documentdb.command.connectionsView.removeConnection",
-          "when": "view == connectionsView && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@5"
         },
         {
@@ -541,12 +544,12 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
+          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /treeItem.*mongoCluster/i",
+          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "inline"
         },
         {
@@ -570,105 +573,110 @@
           "group": "inline"
         },
         {
+          "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
+          "when": "view =~ /azureResourceGroups|azureFocusView/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "group": "inline"
+        },
+        {
           "//": "Create database",
           "command": "vscode-documentdb.command.createDatabase",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "1@1"
         },
         {
           "//": "Copy connection string",
           "command": "vscode-documentdb.command.copyConnectionString",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.](mongoCluster|account)(?![a-z.\\/])/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@1"
         },
         {
           "//": "[Account] Mongo DB|Cluster Launch Shell",
           "command": "vscode-documentdb.command.launchShell",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "2@2"
         },
         {
           "//": "[Database] Create collection",
           "command": "vscode-documentdb.command.createCollection",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@1"
         },
         {
           "//": "[Database] Delete database",
           "command": "vscode-documentdb.command.dropDatabase",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@2"
         },
         {
           "//": "[Database] Mongo DB|Cluster Launch Shell",
           "command": "vscode-documentdb.command.launchShell",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "2@1"
         },
         {
           "//": "[Database] Mongo DB|Cluster Scrapbook Submenu",
           "submenu": "documentDB.submenus.mongo.database.scrapbook",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]database(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "2@2"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@1"
         },
         {
           "//": "[Collection] Create document",
           "command": "vscode-documentdb.command.createDocument",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@2"
         },
         {
           "//": "[Collection] Import Documents",
           "command": "vscode-documentdb.command.importDocuments",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "2@1"
         },
         {
           "//": "[Collection] Export documents",
           "command": "vscode-documentdb.command.exportDocuments",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "2@2"
         },
         {
           "//": "[Collection] Data Migration",
           "command": "vscode-documentdb.command.chooseDataMigrationExtension",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]mongoCluster(?![a-z.\\/])/i && migrationProvidersAvailable",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && migrationProvidersAvailable",
           "group": "1@2"
         },
         {
           "//": "[Collection] Drop collection",
           "command": "vscode-documentdb.command.dropCollection",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "3@1"
         },
         {
           "//": "[Collection] Launch shell",
           "command": "vscode-documentdb.command.launchShell",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "4@1"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Scrapbook Submenu",
           "submenu": "documentDB.submenus.mongo.collection.scrapbook",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]collection(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "4@2"
         },
         {
           "//": "[Collection/Documents] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /treeitem[.]documents(?![a-z.\\/])/i && viewItem =~ /experience[.](mongocluster|mongodb)/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documents\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@1"
         },
         {
-          "//": "[TreeItem] Refresh Item (cluster, database, collection, documents, indexes)",
+          "//": "[TreeItem] Refresh Item (cluster, database, collection, documents, indexes) -> but not in azure(ResourceGroups|FocusView) as it's done there by the Azure Resources host extension.",
           "command": "vscode-documentdb.command.refresh",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem[.](mongoCluster|database|collection|documents|indexes|index)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection|documents|indexes|index)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "zheLastGroup@1"
         },
         {
@@ -714,6 +722,10 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
           "when": "never"
         },
         {
@@ -906,6 +918,15 @@
             "media": {
               "image": "resources/walkthroughs/query.png",
               "altText": "Query editor with autocomplete"
+            }
+          },
+          {
+            "id": "azure-resources-integration",
+            "title": "5. Use Azure Resources (optional)",
+            "description": "**If you use the Azure Resources extension**, you can access Azure Cosmos DB for MongoDB (RU) and Azure Cosmos DB for MongoDB (vCore) clusters from the Azure Resource View. This **optional integration** helps you work from the Azure environment you already use. [Read more...](https://github.com/microsoft/vscode-documentdb/discussions/251)",
+            "media": {
+              "image": "resources/walkthroughs/azure-resources.png",
+              "altText": "Azure Resources integration"
             }
           }
         ]

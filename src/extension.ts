@@ -7,13 +7,13 @@
 
 import { registerAzureUtilsExtensionVariables } from '@microsoft/vscode-azext-azureutils';
 import {
+    apiUtils,
     callWithTelemetryAndErrorHandling,
     createApiProvider,
     createAzExtLogOutputChannel,
     registerErrorHandler,
     registerUIExtensionVariables,
     TreeElementStateManager,
-    type apiUtils,
     type AzureExtensionApi,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
@@ -23,6 +23,7 @@ import { ClustersExtension } from './documentdb/ClustersExtension';
 import { ext } from './extensionVariables';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
+import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi } from '../api/src';
 import { MigrationService } from './services/migrationServices';
 
@@ -105,4 +106,44 @@ export async function activateInternal(
 // this method is called when your extension is deactivated
 export function deactivateInternal(_context: vscode.ExtensionContext): void {
     // NOOP
+}
+
+/**
+ * Checks if vCore and RU support is to be activated in this extension.
+ * This introduces changes to the behavior of the extension.
+ *
+ * This function is used to determine whether the vCore and RU features should be enabled in this extension.
+ *
+ * The result of this function depends on the version of the Azure Resources extension.
+ * When a new version of the Azure Resources extension is released with the `AzureCosmosDbForMongoDbRu` and `MongoClusters`
+ * resource types, this function will return true.
+ *
+ * @returns True if vCore and RU features are enabled, false | undefined otherwise.
+ */
+export async function isVCoreAndRURolloutEnabled(): Promise<boolean | undefined> {
+    return callWithTelemetryAndErrorHandling('isVCoreAndRURolloutEnabled', async (context: IActionContext) => {
+        // Suppress error display and don't rethrow - this is feature detection that should fail gracefully
+        context.errorHandling.suppressDisplay = true;
+        context.errorHandling.rethrow = false;
+
+        const azureResourcesExtensionApi = await apiUtils.getAzureExtensionApi<
+            AzureResourcesExtensionApi & { isDocumentDbExtensionSupportEnabled: () => boolean }
+        >(ext.context, 'ms-azuretools.vscode-azureresourcegroups', '3.0.0');
+
+        // Check if the feature is enabled via the API function
+        if (typeof azureResourcesExtensionApi.isDocumentDbExtensionSupportEnabled === 'function') {
+            const isEnabled = azureResourcesExtensionApi.isDocumentDbExtensionSupportEnabled();
+            context.telemetry.properties.vCoreAndRURolloutEnabled = String(isEnabled);
+            context.telemetry.properties.apiMethodAvailable = 'true';
+            return isEnabled;
+        }
+
+        // If the function doesn't exist, assume DISABLED
+        context.telemetry.properties.vCoreAndRURolloutEnabled = 'false';
+        context.telemetry.properties.apiMethodAvailable = 'false';
+        ext.outputChannel.appendLog(
+            'Expected Azure Resources API v3.0.0 is not available; VCore and RU support remains inactive.',
+        );
+        return false;
+    });
 }

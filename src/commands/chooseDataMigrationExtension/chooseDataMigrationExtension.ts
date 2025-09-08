@@ -3,13 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { QuickPickItemKind, type QuickPickItem } from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { MigrationService } from '../../services/migrationServices';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { nonNullValue } from '../../utils/nonNull';
 import { openUrl } from '../../utils/openUrl';
 
 export async function chooseDataMigrationExtension(context: IActionContext, node: ClusterItemBase) {
@@ -72,7 +73,9 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
     // }
 
     if (migrationProviders.some((provider) => provider.id === selectedItem.id)) {
-        const selectedProvider = MigrationService.getProvider(nonNullValue(selectedItem.id, 'selectedItem.id'));
+        const selectedProvider = MigrationService.getProvider(
+            nonNullValue(selectedItem.id, 'selectedItem.id', 'chooseDataMigrationExtension.ts'),
+        );
 
         if (selectedProvider) {
             context.telemetry.properties.migrationProvider = selectedProvider.id;

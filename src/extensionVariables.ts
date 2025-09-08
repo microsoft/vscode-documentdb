@@ -8,12 +8,13 @@ import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-a
 import type * as vscode from 'vscode';
 import { type DatabasesFileSystem } from './DatabasesFileSystem';
 import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClient';
-import { type MongoVCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
+import { type VCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
+import { type RUBranchDataProvider } from './tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
+import { type ClustersWorkspaceBranchDataProvider } from './tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
+import { type DocumentDbWorkspaceResourceProvider } from './tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
 import { type TreeElement } from './tree/TreeElement';
-import { type AccountsItem } from './tree/workspace-view/documentdb/AccountsItem';
-import { type ClustersWorkspaceBranchDataProvider } from './tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 
 /**
  * Namespace for common variables used throughout the extension. They must be initialized in the activate() method of extension.ts
@@ -33,11 +34,14 @@ export namespace ext {
 
     export let state: TreeElementStateManager;
 
-    // used for the resources tree
-    export let mongoVCoreBranchDataProvider: MongoVCoreBranchDataProvider;
-    // used for the workspace: these are the dedicated providers
-    export let mongoClustersWorkspaceBranchDataProvider: ClustersWorkspaceBranchDataProvider;
-    export let mongoClusterWorkspaceBranchDataResource: AccountsItem;
+    // Azure Resources Extension integration
+    //  > Azure Resources Extension: "Resources View"
+    export let azureResourcesVCoreBranchDataProvider: VCoreBranchDataProvider;
+    export let azureResourcesRUBranchDataProvider: RUBranchDataProvider;
+
+    //  > Azure Resources Extension: "Workspace View"
+    export let azureResourcesWorkspaceResourceProvider: DocumentDbWorkspaceResourceProvider;
+    export let azureResourcesWorkspaceBranchDataProvider: ClustersWorkspaceBranchDataProvider;
 
     /**
      * This is the access point for the connections tree branch data provider.

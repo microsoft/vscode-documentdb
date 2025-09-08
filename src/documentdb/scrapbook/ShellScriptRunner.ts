@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { nonNullValue, parseError, UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { parseError, UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as fs from 'node:fs/promises';
 import * as os from 'os';
@@ -14,6 +14,7 @@ import * as cpUtils from '../../utils/cp';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { pathExists } from '../../utils/fs/pathExists';
 import { InteractiveChildProcess } from '../../utils/InteractiveChildProcess';
+import { nonNullValue } from '../../utils/nonNull';
 import { randomUtils } from '../../utils/randomUtils';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { wrapError } from '../../utils/wrapError';
@@ -147,7 +148,13 @@ export class ShellScriptRunner extends vscode.Disposable {
         }
         ShellScriptRunner._cachedShellPathOrCmd = shellPath;
 
-        const timeout = 1000 * nonNullValue(config.get<number>(ext.settingsKeys.shellTimeout), 'mongoShellTimeout');
+        const timeout =
+            1000 *
+            nonNullValue(
+                config.get<number>(ext.settingsKeys.shellTimeout),
+                'config.get<number>(ext.settingsKeys.shellTimeout)',
+                'ShellScriptRunner.ts',
+            );
         return ShellScriptRunner.createShellProcessHelper(
             shellPath,
             shellArgs,
@@ -347,7 +354,6 @@ export class ShellScriptRunner extends vscode.Disposable {
                     openFile,
                 );
                 if (response === openFile) {
-                    // eslint-disable-next-line no-constant-condition
                     while (true) {
                         const newPath: vscode.Uri[] = await context.ui.showOpenDialog({
                             filters: { 'Executable Files': [process.platform === 'win32' ? 'exe' : ''] },

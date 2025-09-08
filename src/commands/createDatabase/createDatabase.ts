@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizard, type IActionContext, nonNullValue } from '@microsoft/vscode-azext-utils';
+import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { nonNullValue } from '../../utils/nonNull';
 import { type CreateDatabaseWizardContext } from './CreateDatabaseWizardContext';
 import { DatabaseNameStep } from './DatabaseNameStep';
 import { ExecuteStep } from './ExecuteStep';
@@ -53,6 +54,6 @@ async function createMongoDatabase(context: IActionContext, node: ClusterItemBas
     await wizard.prompt();
     await wizard.execute();
 
-    const newDatabaseName = nonNullValue(wizardContext.databaseName);
+    const newDatabaseName = nonNullValue(wizardContext.databaseName, 'wizardContext.databaseName', 'createDatabase.ts');
     showConfirmationAsInSettings(l10n.t('The "{name}" database has been created.', { name: newDatabaseName }));
 }

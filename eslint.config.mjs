@@ -52,7 +52,20 @@ export default ts.config(
             'no-case-declarations': 'error',
             'no-constant-condition': 'error',
             'no-inner-declarations': 'error',
-            'no-restricted-imports': ['error', { patterns: ['**/*/extension.bundle'] }],
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [
+                        {
+                            name: '@microsoft/vscode-azext-utils',
+                            importNames: ['nonNullValue', 'nonNullProp', 'nonNullOrEmptyValue'],
+                            message:
+                                "Do not import nonNull helpers from '@microsoft/vscode-azext-utils'. Use the local 'src/utils/nonNull' instead.",
+                        },
+                    ],
+                    patterns: ['**/*/extension.bundle'],
+                },
+            ],
             'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
             'no-useless-escape': 'error',
             'license-header/header': [
