@@ -9,15 +9,9 @@ import { EJSON, type Document } from 'bson';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
-import {
-    AzureDomains,
-    getHostsFromConnectionString,
-    hasDomainSuffix,
-} from '../../documentdb/utils/connectionStringHelpers';
 import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { BufferErrorCode, createMongoDbBuffer, type DocumentBuffer } from '../../utils/documentBuffer';
-import { nonNullProp } from '../../utils/nonNull';
 import { getRootPath } from '../../utils/workspacUtils';
 
 export async function importDocuments(
@@ -115,24 +109,7 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             let count = 0;
             let buffer: DocumentBuffer<unknown> | undefined;
             if (selectedItem instanceof CollectionItem) {
-                const hosts = getHostsFromConnectionString(
-                    nonNullProp(
-                        selectedItem.cluster,
-                        'connectionString',
-                        'selectedItem.cluster.connectionString',
-                        'importDocuments.ts',
-                    ),
-                );
-                const isRuResource = hasDomainSuffix(AzureDomains.RU, ...hosts);
-
-                if (isRuResource) {
-                    // For Azure MongoDB RU, we use a buffer with maxDocumentCount = 1
-                    buffer = createMongoDbBuffer<unknown>({
-                        maxDocumentCount: 1,
-                    });
-                } else {
-                    buffer = createMongoDbBuffer<unknown>();
-                }
+                buffer = createMongoDbBuffer<unknown>();
             }
 
             for (let i = 0; i < countDocuments; i++) {
@@ -293,7 +270,14 @@ async function insertDocumentWithBufferIntoCluster(
     // Documents to process could be the current document (if too large)
     // or the contents of the buffer (if it was full)
     const client = await ClustersClient.getClient(node.cluster.id);
-    const insertResult = await client.insertDocuments(databaseName, collectionName, documentsToProcess as Document[]);
+    // we retry 3 times on throttled writes
+    const insertResult = await client.insertDocuments(
+        databaseName,
+        collectionName,
+        documentsToProcess as Document[],
+        buffer,
+        3,
+    );
 
     return {
         count: insertResult.insertedCount,

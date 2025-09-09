@@ -342,6 +342,7 @@
   "Rename Connection": "Rename Connection",
   "Report an issue": "Report an issue",
   "Resource group \"{0}\" already exists in subscription \"{1}\".": "Resource group \"{0}\" already exists in subscription \"{1}\".",
+  "Retryable write errors detected. Will retry {0} doc(s) after {1}s. Remaining retries: {2}.": "Retryable write errors detected. Will retry {0} doc(s) after {1}s. Remaining retries: {2}.",
   "Reusing active connection for \"{cluster}\".": "Reusing active connection for \"{cluster}\".",
   "Revisit connection details and try again.": "Revisit connection details and try again.",
   "Role assignment \"{0}\" created for the {2} resource \"{1}\".": "Role assignment \"{0}\" created for the {2} resource \"{1}\".",
