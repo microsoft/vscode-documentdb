@@ -58,6 +58,87 @@ export interface IndexItemModel {
     version?: number;
 }
 
+/**
+ * Defines error codes that are considered retryable during database operations
+ */
+export class RetryableErrors {
+    // Specifically for throttled writes, help us recognize it in retry logic
+    private static readonly THROTTLED_ERROR_CODE: number = 16500;
+
+    /**
+     * MongoDB error codes that should trigger a retry mechanism
+     */
+    private static readonly RETRYABLE_ERROR_CODES = new Set<number>([
+        // Throttled writes - Request rate is large
+        // This is for Azure Cosmos DB for MongoDB
+        this.THROTTLED_ERROR_CODE,
+        // Add more retryable error codes here as needed
+    ]);
+
+    /**
+     * Check if an error code is retryable
+     * @param errorCode The MongoDB error code to check
+     * @returns true if the error code is retryable, false otherwise
+     */
+    public static isRetryable(errorCode: number): boolean {
+        return this.RETRYABLE_ERROR_CODES.has(errorCode);
+    }
+
+    /**
+     * Check if the error code indicates a throttled writes error
+     * @param errorCode The MongoDB error code to check
+     * @returns true if the error code is specifically for throttled writes, false otherwise
+     * */
+    public static isThrottledError(errorCode: number): boolean {
+        return errorCode === this.THROTTLED_ERROR_CODE;
+    }
+
+    /**
+     * Check if a bulk write error contains any retryable errors
+     * @param writeErrors Array of write errors from MongoBulkWriteError
+     * @param bulkErrorCode The main error code from the bulk operation
+     * @returns true if any of the errors are retryable
+     */
+    public static hasRetryableErrors(writeErrors: Array<{ code?: number }>, bulkErrorCode?: number): boolean {
+        // Check if the main bulk error code is retryable
+        if (bulkErrorCode && this.isRetryable(bulkErrorCode)) {
+            return true;
+        }
+
+        // Check if any individual write error is retryable
+        return writeErrors.some((writeError) => {
+            const code = writeError.code;
+            return code !== undefined && this.isRetryable(code);
+        });
+    }
+
+    /**
+     * Filter write errors to get only the retryable ones
+     * @param writeErrors Array of write errors with index information
+     * @param bulkErrorCode The main error code from the bulk operation
+     * @returns Set of indexes that had retryable errors
+     */
+    public static getRetryableErrorIndexes(
+        writeErrors: Array<{ code?: number; index: number }>,
+        bulkErrorCode?: number,
+    ): Set<number> {
+        const retryableIndexes = new Set<number>();
+
+        // If the bulk error code is retryable, all documents might need retry
+        const isBulkErrorRetryable = bulkErrorCode && this.isRetryable(bulkErrorCode);
+
+        writeErrors.forEach((writeError) => {
+            const isWriteErrorRetryable = writeError.code !== undefined && this.isRetryable(writeError.code);
+
+            if (isWriteErrorRetryable || isBulkErrorRetryable) {
+                retryableIndexes.add(writeError.index);
+            }
+        });
+
+        return retryableIndexes;
+    }
+}
+
 // Currently we only return insertedCount, but we can add more fields in the future if needed
 // Keep the type definition here for future extensibility
 export type InsertDocumentsResult = {
@@ -458,8 +539,8 @@ export class ClustersClient {
         collectionName: string,
         documents: Document[],
         buffer: DocumentBuffer<unknown>,
-        retryCount: number = 3,
-        waitTime: number = 3,
+        retryCount: number = 3, // Number of retries for this batch of documents, default is 3
+        waitTime: number = 3, // Initial wait time in seconds before retrying, default is 3s, will increase exponentially
     ): Promise<InsertDocumentsResult> {
         if (documents.length === 0) {
             return { insertedCount: 0 };
@@ -469,6 +550,9 @@ export class ClustersClient {
         try {
             const insertManyResults = await collection.insertMany(documents, {
                 forceServerObjectId: true,
+
+                // Setting `ordered` to be false allows MongoDB to continue inserting remaining documents even if previous fails.
+                // More details: https://www.mongodb.com/docs/manual/reference/method/db.collection.insertMany/#syntax
                 ordered: false,
             });
             return { insertedCount: insertManyResults.insertedCount };
@@ -478,17 +562,19 @@ export class ClustersClient {
                     ? (error.writeErrors as WriteError[])
                     : [error.writeErrors as WriteError];
 
-                // Throttled writes retry (code 16500)
-                if (error.errorResponse.code === 16500 && retryCount > 0) {
-                    const throttledErrorIndexes = new Set<number>(
-                        writeErrors
-                            .filter(
-                                (we) => (we as { code?: number }).code === 16500 || error.errorResponse.code === 16500,
-                            )
-                            .map((we) => we.index),
+                // Check if there are any retryable errors
+                if (
+                    RetryableErrors.hasRetryableErrors(
+                        writeErrors,
+                        typeof error.errorResponse?.code === 'number' ? error.errorResponse.code : undefined,
+                    )
+                ) {
+                    const retryableErrorIndexes = RetryableErrors.getRetryableErrorIndexes(
+                        writeErrors.map((we) => ({ code: (we as { code?: number }).code, index: we.index })),
+                        typeof error.errorResponse?.code === 'number' ? error.errorResponse.code : undefined,
                     );
 
-                    const retryDocuments: Document[] = documents.filter((_, idx) => throttledErrorIndexes.has(idx));
+                    const retryDocuments: Document[] = documents.filter((_, idx) => retryableErrorIndexes.has(idx));
                     const successfulInThisAttempt = documents.length - retryDocuments.length;
 
                     const nextRetryCount = retryCount - 1;
@@ -496,7 +582,7 @@ export class ClustersClient {
 
                     ext.outputChannel.appendLog(
                         l10n.t(
-                            'Throttled writes (code 16500). Will retry {0} doc(s) after {1}s. Remaining retries: {2}.',
+                            'Retryable write errors detected. Will retry {0} doc(s) after {1}s. Remaining retries: {2}.',
                             retryDocuments.length.toString(),
                             waitTime.toString(),
                             nextRetryCount.toString(),
@@ -514,7 +600,13 @@ export class ClustersClient {
                         nextWaitTime,
                     );
 
-                    buffer.reduceBatchSize();
+                    // Reduce buffer size if it was a throttling error
+                    if (
+                        typeof error.errorResponse?.code === 'number' &&
+                        RetryableErrors.isThrottledError(error.errorResponse.code)
+                    ) {
+                        buffer.reduceBatchSize();
+                    }
                     return { insertedCount: successfulInThisAttempt + retriedInserted.insertedCount };
                 }
 
