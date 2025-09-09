@@ -50,6 +50,7 @@ import { ext } from '../extensionVariables';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
+import { MongoDBAtlasDiscoveryProvider } from '../plugins/mongodb-atlas/MongoDBAtlasDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
@@ -73,6 +74,7 @@ export class ClustersExtension implements vscode.Disposable {
         DiscoveryService.registerProvider(new AzureDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureMongoRUDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
+        DiscoveryService.registerProvider(new MongoDBAtlasDiscoveryProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
