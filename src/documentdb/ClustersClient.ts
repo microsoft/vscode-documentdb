@@ -371,7 +371,21 @@ export class ClustersClient {
     async estimateDocumentCount(databaseName: string, collectionName: string): Promise<number> {
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
-        return await collection.estimatedDocumentCount();
+        try {
+            return await collection.estimatedDocumentCount();
+        } catch (error) {
+            // Fall back to countDocuments if estimatedDocumentCount is not supported
+            // This can happen with certain MongoDB configurations or versions
+            if (
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                error.code === 115 /* CommandNotSupported */ ||
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                error.code === 235 /* InternalErrorNotSupported */
+            ) {
+                return await this.countDocuments(databaseName, collectionName);
+            }
+            throw error;
+        }
     }
 
     async *streamDocuments(
