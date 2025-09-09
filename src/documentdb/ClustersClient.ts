@@ -368,6 +368,12 @@ export class ClustersClient {
         return count;
     }
 
+    async estimateDocumentCount(databaseName: string, collectionName: string): Promise<number> {
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+
+        return await collection.estimatedDocumentCount();
+    }
+
     async *streamDocuments(
         databaseName: string,
         collectionName: string,
