@@ -130,8 +130,7 @@ describe('TokenCache', () => {
             };
 
             // Manually set the token to bypass the calculation
-            const cache = tokenCache as any;
-            cache.cache.set(testKey, {
+            tokenCache.setTokenDirect(testKey, {
                 ...tokenWithoutExpiry,
                 expires_at: 0, // Keep it as 0 to test the logic
             });

@@ -44,8 +44,9 @@ export class AuthProviderFactory {
      * @returns OAuth authentication provider instance
      */
     static createOAuthProvider(credentials: OAuthCredentials): AuthProvider {
-        // Import here to avoid circular dependencies
-        const { OAuthAuthProvider } = require('./OAuthAuthProvider');
+        // Dynamic import to avoid circular dependencies
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { OAuthAuthProvider } = require('./OAuthAuthProvider') as { OAuthAuthProvider: new (creds: OAuthCredentials) => AuthProvider };
         return new OAuthAuthProvider(credentials);
     }
 
@@ -56,8 +57,9 @@ export class AuthProviderFactory {
      * @returns Digest authentication provider instance
      */
     static createDigestProvider(credentials: DigestCredentials): AuthProvider {
-        // Import here to avoid circular dependencies
-        const { DigestAuthProvider } = require('./DigestAuthProvider');
+        // Dynamic import to avoid circular dependencies
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { DigestAuthProvider } = require('./DigestAuthProvider') as { DigestAuthProvider: new (creds: DigestCredentials) => AuthProvider };
         return new DigestAuthProvider(credentials);
     }
 }

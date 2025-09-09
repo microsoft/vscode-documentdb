@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { getSecretStorageKey } from '../../../utils/getSecretStorageKey';
 import { type DigestCredentials, type OAuthCredentials } from '../auth/types';
 
@@ -88,7 +88,7 @@ export class CredentialStorage {
         }
 
         try {
-            const storedCredential: StoredCredential = JSON.parse(stored);
+            const storedCredential: StoredCredential = JSON.parse(stored) as StoredCredential;
             
             if (storedCredential.type !== CredentialType.OAuth) {
                 console.warn(`Credential type mismatch for ${credentialId}: expected OAuth, got ${storedCredential.type}`);
@@ -120,7 +120,7 @@ export class CredentialStorage {
         }
 
         try {
-            const storedCredential: StoredCredential = JSON.parse(stored);
+            const storedCredential: StoredCredential = JSON.parse(stored) as StoredCredential;
             
             if (storedCredential.type !== CredentialType.Digest) {
                 console.warn(`Credential type mismatch for ${credentialId}: expected Digest, got ${storedCredential.type}`);
@@ -191,7 +191,7 @@ export class CredentialStorage {
         }
 
         try {
-            const storedCredential: StoredCredential = JSON.parse(stored);
+            const storedCredential: StoredCredential = JSON.parse(stored) as StoredCredential;
             storedCredential.lastUsed = Date.now();
             await this.secretStorage.store(key, JSON.stringify(storedCredential));
         } catch (error) {
@@ -213,13 +213,15 @@ export class CredentialStorage {
         }
 
         switch (type) {
-            case CredentialType.OAuth:
+            case CredentialType.OAuth: {
                 const oauth = credentials as OAuthCredentials;
                 return !!(oauth.clientId && oauth.clientSecret && oauth.tokenEndpoint);
+            }
 
-            case CredentialType.Digest:
+            case CredentialType.Digest: {
                 const digest = credentials as DigestCredentials;
                 return !!(digest.publicKey && digest.privateKey && digest.baseUrl);
+            }
 
             default:
                 return false;

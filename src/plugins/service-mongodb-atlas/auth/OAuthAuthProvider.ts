@@ -147,7 +147,7 @@ export class OAuthAuthProvider extends AuthProvider {
         let errorDetails: string;
         
         try {
-            const errorBody = await response.json();
+            const errorBody: { error?: string; error_description?: string } = await response.json() as { error?: string; error_description?: string };
             
             // Handle OAuth 2.0 error response format
             if (errorBody.error) {

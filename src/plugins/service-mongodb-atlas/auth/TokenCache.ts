@@ -111,4 +111,15 @@ export class TokenCache {
     getKeys(): string[] {
         return Array.from(this.cache.keys());
     }
+
+    /**
+     * Sets a token directly in the cache without any processing (for testing).
+     * 
+     * @param key Unique identifier for the token
+     * @param token The access token to store directly
+     * @internal
+     */
+    setTokenDirect(key: string, token: AccessToken): void {
+        this.cache.set(key, { ...token });
+    }
 }
