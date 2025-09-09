@@ -5,20 +5,34 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
+import { type AuthMethodId } from '../../auth/AuthMethod';
+
 export interface AuthenticateWizardContext extends IActionContext {
     /** These values have to be provided for the wizard to function correctly. */
     adminUserName: string | undefined;
     resourceName: string;
 
+    /**
+     * Available authentication methods.
+     * These are raw strings that may include unknown methods not yet in our AuthMethodId enum.
+     */
+    availableAuthMethods?: string[];
+
     /** These values will be populated by the wizard. */
-    selectedUserName?: string;
 
     /** States whether the username was set during the wizard flow. */
     isUserNameUpdated?: boolean;
-    password?: string;
+    selectedUserName?: string;
 
     /** States whether the password was set during the wizard flow. */
     isPasswordUpdated?: boolean;
+    password?: string;
+
+    isAuthMethodUpdated?: boolean;
+    /**
+     * The selected authentication method.
+     */
+    selectedAuthMethod?: AuthMethodId;
 
     aborted?: boolean;
 

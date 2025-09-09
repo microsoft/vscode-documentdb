@@ -17,7 +17,7 @@ import { IndexesItem } from './IndexesItem';
 export class CollectionItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
     public readonly id: string;
     public readonly experience: Experience;
-    public contextValue: string = 'treeItem.collection';
+    public contextValue: string = 'treeItem_collection';
 
     private readonly experienceContextValue: string = '';
 
@@ -28,7 +28,7 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     ) {
         this.id = `${cluster.id}/${databaseInfo.name}/${collectionInfo.name}`;
         this.experience = cluster.dbExperience;
-        this.experienceContextValue = `experience.${this.experience.api}`;
+        this.experienceContextValue = `experience_${this.experience.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 

@@ -12,12 +12,12 @@ export class ConnectionStringStep extends AzureWizardPromptStep<UpdateCSWizardCo
     public async prompt(context: UpdateCSWizardContext): Promise<void> {
         const newConnectionString = await context.ui.showInputBox({
             prompt: l10n.t('Please edit the connection string.'),
-            value: context.originalCS_NoCredentials,
+            value: context.originalConnectionString,
             ignoreFocusOut: true,
             asyncValidationTask: (name: string) => this.validateConnectionString(name),
         });
 
-        context.newCS_NoCredentials = newConnectionString.trim();
+        context.newConnectionString = newConnectionString.trim();
     }
 
     public shouldPrompt(): boolean {

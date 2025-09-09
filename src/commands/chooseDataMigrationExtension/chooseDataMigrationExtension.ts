@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { QuickPickItemKind, type QuickPickItem } from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { MigrationService } from '../../services/migrationServices';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { nonNullValue } from '../../utils/nonNull';
 import { openUrl } from '../../utils/openUrl';
 
 export async function chooseDataMigrationExtension(context: IActionContext, node: ClusterItemBase) {
@@ -71,7 +73,9 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
     // }
 
     if (migrationProviders.some((provider) => provider.id === selectedItem.id)) {
-        const selectedProvider = MigrationService.getProvider(nonNullValue(selectedItem.id, 'selectedItem.id'));
+        const selectedProvider = MigrationService.getProvider(
+            nonNullValue(selectedItem.id, 'selectedItem.id', 'chooseDataMigrationExtension.ts'),
+        );
 
         if (selectedProvider) {
             context.telemetry.properties.migrationProvider = selectedProvider.id;
@@ -95,8 +99,17 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
 
             try {
                 // Construct the options object with available context
+                const credentials = await node.getCredentials();
+                if (!credentials) {
+                    throw new Error(l10n.t('No credentials found for the selected cluster.'));
+                }
+
+                const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
+                parsedCS.username = credentials?.connectionUser ?? '';
+                parsedCS.password = credentials?.connectionPassword ?? '';
+
                 const options = {
-                    connectionString: await node.getConnectionString(),
+                    connectionString: parsedCS.toString(),
                     extendedProperties: {
                         clusterId: node.cluster.id,
                     },

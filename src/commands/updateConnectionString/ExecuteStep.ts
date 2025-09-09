@@ -5,7 +5,7 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
-import { StorageNames, StorageService } from '../../services/storageService';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { nonNullValue } from '../../utils/nonNull';
 import { type UpdateCSWizardContext } from './UpdateCSWizardContext';
@@ -14,34 +14,30 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
     public priority: number = 100;
 
     public async execute(context: UpdateCSWizardContext): Promise<void> {
-        const resourceType = context.isEmulator ? 'emulators' : 'clusters';
-        const storage = StorageService.get(StorageNames.Connections);
-        const item = await storage.getItem(resourceType, context.storageId);
+        const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
+        const connection = await ConnectionStorageService.get(context.storageId, resourceType);
 
-        if (item) {
-            if (!item.secrets) {
-                item.secrets = [];
-            }
+        if (!connection || !connection.secrets?.connectionString) {
+            console.error(
+                `Connection with ID "${context.storageId}" not found in storage or missing connection string.`,
+            );
+            void window.showErrorMessage(l10n.t('Failed to update the connection.'));
+            return;
+        }
 
-            // now, copy the credentials from the original connection string,
-            // take it directly from the storage item
-            // and update the new connection string with the credentials
-            const originalCS_WithCredentials = new URL(item.secrets[0] || '');
-            const newCS = new URL(context.newCS_NoCredentials || '');
+        try {
+            connection.secrets = {
+                ...connection.secrets,
+                connectionString: nonNullValue(
+                    context.newConnectionString?.toString(),
+                    'context.newConnectionString',
+                    'ExecuteStep.ts',
+                ),
+            };
 
-            newCS.username = originalCS_WithCredentials.username;
-            newCS.password = originalCS_WithCredentials.password;
-
-            item.secrets[0] = nonNullValue(newCS.toString());
-
-            try {
-                await storage.push(resourceType, item, true);
-            } catch (pushError) {
-                console.error(`Failed to update the item "${context.storageId}":`, pushError);
-                void window.showErrorMessage(l10n.t('Failed to update the connection.'));
-            }
-        } else {
-            console.error(`Item with ID "${context.storageId}" not found in storage.`);
+            await ConnectionStorageService.save(resourceType, connection, true);
+        } catch (pushError) {
+            console.error(`Failed to update the connection "${context.storageId}":`, pushError);
             void window.showErrorMessage(l10n.t('Failed to update the connection.'));
         }
 
@@ -49,6 +45,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
     }
 
     public shouldExecute(context: UpdateCSWizardContext): boolean {
-        return !!context.newCS_NoCredentials && context.newCS_NoCredentials !== context.originalCS_NoCredentials;
+        return !!context.newConnectionString && context.newConnectionString !== context.originalConnectionString;
     }
 }

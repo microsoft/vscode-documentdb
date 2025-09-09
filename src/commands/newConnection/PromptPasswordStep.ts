@@ -5,6 +5,7 @@
 
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
@@ -22,17 +23,12 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewConnectionWizar
             validateInput: (password?: string) => this.validateInput(context, password),
         });
 
-        const parsedConnectionString = new DocumentDBConnectionString(context.connectionString!);
-        parsedConnectionString.password = password;
-
-        context.connectionString = parsedConnectionString.toString();
-        context.password = password;
-
         context.valuesToMask.push(password);
+        context.password = password;
     }
 
-    public shouldPrompt(): boolean {
-        return true;
+    public shouldPrompt(context: NewConnectionWizardContext): boolean {
+        return context.selectedAuthenticationMethod === AuthMethodId.NativeAuth;
     }
 
     public validateInput(context: NewConnectionWizardContext, password: string | undefined): string | undefined {
@@ -45,6 +41,7 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewConnectionWizar
 
         try {
             const parsedConnectionString = new DocumentDBConnectionString(context.connectionString!);
+            parsedConnectionString.username = context.username ?? '';
             parsedConnectionString.password = password;
 
             const connectionString = parsedConnectionString.toString();

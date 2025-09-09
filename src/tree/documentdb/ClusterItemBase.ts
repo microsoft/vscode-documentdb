@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ext } from '../../extensionVariables';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { type TreeElement } from '../TreeElement';
@@ -19,13 +20,33 @@ import { createGenericElementWithContext } from '../api/createGenericElementWith
 import { type ClusterModel } from './ClusterModel';
 import { DatabaseItem } from './DatabaseItem';
 
+/**
+ * Full connection details for a DocumentDB cluster used at runtime.
+ *
+ * This type intentionally contains concrete credentials
+ * because some service-discovery flows provide ephemeral credentials from an
+ * external service rather than from stored connections.
+ *
+ * TODO: Maintainer notes:
+ * - This type is a temporary bridge for service-discovery scenarios. The preferred
+ *   long-term approach is an optional discovery API that returns connection info
+ *   on demand so we avoid keeping credentials in memory longer than necessary.
+ */
+export type ClusterCredentials = {
+    connectionString: string;
+    connectionUser?: string;
+    connectionPassword?: string;
+    availableAuthMethods: AuthMethodId[];
+    selectedAuthMethod?: AuthMethodId; // some providers can pre-select a method
+};
+
 // This info will be available at every level in the tree for immediate access
 export abstract class ClusterItemBase
     implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue, TreeElementWithRetryChildren
 {
     public readonly id: string;
     public readonly experience: Experience;
-    public contextValue: string = 'treeItem.mongoCluster';
+    public contextValue: string = 'treeItem_documentdbcluster';
 
     protected descriptionOverride?: string;
     protected tooltipOverride?: string | vscode.MarkdownString;
@@ -50,7 +71,7 @@ export abstract class ClusterItemBase
     protected constructor(public cluster: ClusterModel) {
         this.id = cluster.id ?? '';
         this.experience = cluster.dbExperience;
-        this.experienceContextValue = `experience.${this.experience.api}`;
+        this.experienceContextValue = `experience_${this.experience.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 
@@ -64,12 +85,13 @@ export abstract class ClusterItemBase
     protected abstract authenticateAndConnect(): Promise<ClustersClient | null>;
 
     /**
-     * Abstract method to get the connection string for the MongoDB cluster.
+     * Abstract method to get the credentials for the MongoDB cluster.
      * Must be implemented by subclasses.
+     * This is relevant for service discovery scenarios
      *
-     * @returns A promise that resolves to the connection string if successful; otherwise, undefined.
+     * @returns A promise that resolves to the credentials if successful; otherwise, undefined.
      */
-    public abstract getConnectionString(): Promise<string | undefined>;
+    public abstract getCredentials(): Promise<ClusterCredentials | undefined>;
 
     /**
      * Authenticates and connects to the cluster to list all available databases.
@@ -122,7 +144,7 @@ export abstract class ClusterItemBase
             if (databases.length === 0) {
                 return [
                     createGenericElement({
-                        contextValue: createContextValue(['treeItem.no-databases', this.experienceContextValue]),
+                        contextValue: createContextValue(['treeItem_no-databases', this.experienceContextValue]),
                         id: `${this.id}/no-databases`,
                         label: l10n.t('Create Database…'),
                         iconPath: new vscode.ThemeIcon('plus'),
@@ -143,7 +165,13 @@ export abstract class ClusterItemBase
      * @returns True if any child in the array is an error node, false otherwise.
      */
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        return !!(children && children.length > 0 && children.some((child) => child.id.endsWith('/reconnect')));
+        // Note: The check for `typeof child.id === 'string'` is necessary because `showCreatingChild`
+        // can add temporary nodes that don't have an `id` property, which would otherwise cause a runtime error.
+        return !!(
+            children &&
+            children.length > 0 &&
+            children.some((child) => typeof child.id === 'string' && child.id.endsWith('/reconnect'))
+        );
     }
 
     /**
@@ -159,7 +187,9 @@ export abstract class ClusterItemBase
                 ? this.descriptionOverride
                 : this.cluster.sku !== undefined
                   ? `(${this.cluster.sku})`
-                  : false,
+                  : this.cluster.serverVersion !== undefined
+                    ? `v${this.cluster.serverVersion}`
+                    : false,
             iconPath: this.iconPath ?? undefined,
             tooltip: this.tooltipOverride
                 ? this.tooltipOverride
@@ -176,6 +206,7 @@ export abstract class ClusterItemBase
                               : '') +
                           (this.cluster.nodeCount ? `- Node Count: **${this.cluster.nodeCount}**\n\n` : '') +
                           (this.cluster.serverVersion ? `- Server Version: **${this.cluster.serverVersion}**\n` : '') +
+                          (this.cluster.capabilities ? `- Capabilities: **${this.cluster.capabilities}**\n` : '') +
                           (this.cluster.systemData?.createdAt
                               ? `---\n- Created Date: **${this.cluster.systemData.createdAt.toLocaleString()}**\n`
                               : ''),

@@ -28,7 +28,8 @@ export function getDatabaseNameFromConnectionString(connectionString: string): s
     try {
         const [, , databaseName] = nonNullValue(
             connectionString.match(mongoConnectionStringRegExp),
-            'databaseNameMatch',
+            'connectionString.match(mongoConnectionStringRegExp)',
+            'mongoConnectionStrings.ts',
         );
         return databaseName;
     } catch {
