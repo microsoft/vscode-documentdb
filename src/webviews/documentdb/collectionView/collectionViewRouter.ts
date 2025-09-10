@@ -13,7 +13,7 @@ import { publicProcedure, router, trpcToTelemetry } from '../../api/extension-se
 
 import * as l10n from '@vscode/l10n';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
-// eslint-disable-next-line import/no-internal-modules
+ 
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
@@ -125,7 +125,7 @@ export const collectionsViewRouter = router({
             if (autoCompletionData.length > 0) {
                 querySchema = generateMongoFindJsonSchema(autoCompletionData);
             } else {
-                // eslint-disable-next-line
+                 
                 querySchema = basicFindQuerySchema;
             }
 

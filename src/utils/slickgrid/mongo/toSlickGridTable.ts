@@ -74,7 +74,7 @@ export function getDataAtPath(documents: WithId<Document>[], path: string[]): Ta
                     const value: unknown = subdocument[key];
                     const type: MongoBSONTypes = MongoBSONTypes.inferType(value);
 
-                    // eslint-disable-next-line
+                     
                     if (value instanceof Array) {
                         row[key] = {
                             value: `array[${value.length}]`,

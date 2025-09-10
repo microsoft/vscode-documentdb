@@ -209,7 +209,7 @@ export function generateMongoFindJsonSchema(fieldEntries: FieldEntry[]) {
     // Process each fieldEntry
     for (const fieldEntry of fieldEntries) {
         const pathComponents = fieldEntry.path.split('.');
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+         
         createNestedProperty(schema['properties'], pathComponents, fieldEntry.type);
     }
 
@@ -229,7 +229,7 @@ export function generateMongoFindJsonSchema(fieldEntries: FieldEntry[]) {
         const examples = generateExamples(type);
         const operatorExamples = generateOperatorExamples(type);
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+         
         schema['properties'][fullPath] = {
             oneOf: [
                 {
@@ -250,13 +250,13 @@ export function generateMongoFindJsonSchema(fieldEntries: FieldEntry[]) {
     const logicalOperators = ['$or', '$and', '$not', '$nor'];
     for (const operator of logicalOperators) {
         if (operator === '$not') {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+             
             schema['properties'][operator] = {
                 oneOf: [{ $ref: '#' }],
                 description: `Inverts the effect of a query expression.`,
             };
         } else {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+             
             schema['properties'][operator] = {
                 type: 'array',
                 items: { $ref: '#' },
@@ -265,6 +265,6 @@ export function generateMongoFindJsonSchema(fieldEntries: FieldEntry[]) {
         }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+     
     return schema;
 }

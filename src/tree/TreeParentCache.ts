@@ -220,7 +220,7 @@ export class TreeParentCache<T extends TreeElement> {
         }
 
         let node = element;
-        // eslint-disable-next-line no-constant-condition
+         
         outerLoop: while (true) {
             const children = await getChildrenFunc(node);
 

@@ -48,7 +48,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 const vmItems: AzureVMResourceItem[] = [];
 
                 for (const vm of vms) {
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                     
                     if (vm.tags && vm.tags[tagName] !== undefined && vm.id && vm.name) {
                         let publicIpAddress: string | undefined;
                         let fqdn: string | undefined;
