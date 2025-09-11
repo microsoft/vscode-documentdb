@@ -162,9 +162,10 @@ export class CredentialCache {
         const existingCredentials = CredentialCache._store.get(mongoClusterId);
         
         const credentials: ClustersCredentials = {
+            ...existingCredentials,
             mongoClusterId: mongoClusterId,
-            connectionString: '', // Not used for Atlas discovery
-            connectionUser: '',
+            connectionString: existingCredentials?.connectionString || '', // Not used for Atlas discovery
+            connectionUser: existingCredentials?.connectionUser || '',
             authMechanism: AuthMethodId.AtlasOAuth,
             atlasCredentials: {
                 authType: 'oauth',
@@ -173,7 +174,6 @@ export class CredentialCache {
                     clientSecret,
                 },
             },
-            ...existingCredentials,
         };
 
         CredentialCache._store.set(mongoClusterId, credentials);
@@ -194,9 +194,10 @@ export class CredentialCache {
         const existingCredentials = CredentialCache._store.get(mongoClusterId);
         
         const credentials: ClustersCredentials = {
+            ...existingCredentials,
             mongoClusterId: mongoClusterId,
-            connectionString: '', // Not used for Atlas discovery
-            connectionUser: '',
+            connectionString: existingCredentials?.connectionString || '', // Not used for Atlas discovery
+            connectionUser: existingCredentials?.connectionUser || '',
             authMechanism: AuthMethodId.AtlasDigest,
             atlasCredentials: {
                 authType: 'digest',
@@ -205,7 +206,6 @@ export class CredentialCache {
                     privateKey,
                 },
             },
-            ...existingCredentials,
         };
 
         CredentialCache._store.set(mongoClusterId, credentials);
