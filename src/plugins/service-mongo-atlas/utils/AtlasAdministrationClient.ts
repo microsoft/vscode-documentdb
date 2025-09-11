@@ -9,7 +9,7 @@ import { AtlasHttpClient } from './AtlasHttpClient';
 /**
  * Atlas project (group) information
  */
-export interface AtlasProject {
+export type AtlasProject = {
     id?: string;
     name: string;
     orgId: string;
@@ -25,12 +25,12 @@ export interface AtlasProject {
         value: string;
     }>;
     withDefaultAlertsSettings?: boolean;
-}
+};
 
 /**
  * Atlas cluster information
  */
-export interface AtlasCluster {
+export type AtlasCluster = {
     id?: string;
     name?: string;
     groupId?: string;
@@ -176,12 +176,12 @@ export interface AtlasCluster {
         terminationProtectionEnabled?: boolean;
         versionReleaseSystem?: 'LTS' | 'CONTINUOUS';
     }>;
-}
+};
 
 /**
  * Atlas database user information
  */
-export interface AtlasDatabaseUser {
+export type AtlasDatabaseUser = {
     username: string; // Max length is 1024
     databaseName: 'admin' | '$external';
     groupId: string;
@@ -208,12 +208,12 @@ export interface AtlasDatabaseUser {
     deleteAfterDate?: string; // DATE-TIME
     description?: string; // Max 100 chars
     oidcAuthType?: 'NONE' | 'USER' | 'IDP_GROUP';
-}
+};
 
 /**
  * Atlas IP access list entry
  */
-export interface AtlasAccessListEntry {
+export type AtlasAccessListEntry = {
     groupId: string;
     ipAddress?: string;
     cidrBlock?: string;
@@ -224,30 +224,30 @@ export interface AtlasAccessListEntry {
         href: string;
         rel: string;
     }>;
-}
+};
 
 /**
  * Response wrapper for paginated Atlas API responses
  */
-export interface AtlasApiResponse<T> {
+export type AtlasApiResponse<T> = {
     results: T[];
     totalCount: number;
     links?: Array<{
         href: string;
         rel: string;
     }>;
-}
+};
 
 /**
  * Parameters for creating IP access list entries
  */
-export interface CreateAccessListEntryParams {
+export type CreateAccessListEntryParams = {
     ipAddress?: string;
     cidrBlock?: string;
     awsSecurityGroup?: string;
     comment?: string;
     deleteAfterDate?: string;
-}
+};
 
 /**
  * MongoDB Atlas Administration Client for managing Atlas resources

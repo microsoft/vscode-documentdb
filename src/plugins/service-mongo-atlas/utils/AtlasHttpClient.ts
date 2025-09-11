@@ -8,7 +8,7 @@ import DigestClient from 'digest-fetch';
 import { AtlasAuthManager } from './AtlasAuthManager';
 import { type AtlasCredentials, AtlasCredentialCache } from './AtlasCredentialCache';
 
-// Type definitions for digest-fetch since the library has incomplete types
+// Type definitions for digest-fetch client
 interface DigestFetchClient {
     fetch(url: string, options?: RequestInit): Promise<Response>;
 }
@@ -18,6 +18,7 @@ interface DigestFetchClient {
  */
 export class AtlasHttpClient {
     private static readonly ATLAS_API_BASE_URL = 'https://cloud.mongodb.com/api/atlas/v2';
+    private static readonly ATLAS_DIGEST_API_VERSION = 'application/vnd.atlas.2025-03-12+json';
 
     /**
      * Makes an authenticated GET request to the Atlas API
@@ -91,7 +92,7 @@ export class AtlasHttpClient {
         const headers: Record<string, string> = {
             Authorization: authHeader,
             'Content-Type': 'application/json',
-            Accept: 'application/vnd.atlas.2023-02-01+json',
+            Accept: this.ATLAS_DIGEST_API_VERSION,
         };
 
         const requestInit: RequestInit = {
@@ -121,14 +122,14 @@ export class AtlasHttpClient {
         }
 
         const { publicKey, privateKey } = credentials.digest;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+
         const client = new DigestClient(publicKey, privateKey) as DigestFetchClient;
 
         const requestInit: RequestInit = {
             method,
             headers: {
                 'Content-Type': 'application/json',
-                Accept: 'application/vnd.atlas.2024-08-05+json',
+                Accept: this.ATLAS_DIGEST_API_VERSION,
             },
         };
 

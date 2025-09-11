@@ -39,8 +39,6 @@ export class AtlasAuthManager {
             case 'oauth':
                 return await this.getOAuthAuthorizationHeader(orgId, credentials);
             // Don't need to set the digest header here as it is handled by the HTTP client directly
-            // case 'digest':
-            //     return this.getDigestAuthorizationHeader(credentials);
             default:
                 throw new Error(l10n.t('Unsupported Atlas authentication type: {0}', credentials.authType));
         }
@@ -125,20 +123,4 @@ export class AtlasAuthManager {
 
         return `Bearer ${tokenResponse.access_token}`;
     }
-
-    // /**
-    //  * Gets HTTP Digest authorization information.
-    //  * Note: Actual digest authentication requires the server challenge,
-    //  * so this returns the credentials for the HTTP client to use.
-    //  */
-    // private static getDigestAuthorizationHeader(credentials: AtlasCredentials): string {
-    //     if (!credentials.digest) {
-    //         throw new Error(l10n.t('Digest credentials not found'));
-    //     }
-
-    //     // For digest auth, we return the credentials in a format that can be used
-    //     // by the HTTP client library to generate the proper digest header
-    //     const { publicKey, privateKey } = credentials.digest;
-    //     return `Digest:${publicKey}:${privateKey}`;
-    // }
 }

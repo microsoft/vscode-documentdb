@@ -45,17 +45,13 @@ export class AtlasCredentialCache {
      * @param clientSecret - OAuth client secret
      */
     public static setAtlasOAuthCredentials(orgId: string, clientId: string, clientSecret: string): void {
-        const existingCredentials = AtlasCredentialCache._store.get(orgId);
-
         const credentials: AtlasCredentials = {
-            ...existingCredentials,
             orgId,
             authType: 'oauth',
             oauth: {
                 clientId,
                 clientSecret,
             },
-            digest: undefined, // Clear any existing digest credentials
         };
 
         AtlasCredentialCache._store.set(orgId, credentials);
@@ -69,17 +65,13 @@ export class AtlasCredentialCache {
      * @param privateKey - Atlas API private key
      */
     public static setAtlasDigestCredentials(orgId: string, publicKey: string, privateKey: string): void {
-        const existingCredentials = AtlasCredentialCache._store.get(orgId);
-
         const credentials: AtlasCredentials = {
-            ...existingCredentials,
             orgId,
             authType: 'digest',
             digest: {
                 publicKey,
                 privateKey,
             },
-            oauth: undefined, // Clear any existing OAuth credentials
         };
 
         AtlasCredentialCache._store.set(orgId, credentials);
