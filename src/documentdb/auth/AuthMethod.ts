@@ -14,6 +14,10 @@ export enum AuthMethodId {
     NativeAuth = 'NativeAuth',
     /** Microsoft Entra ID (Azure AD) authentication. */
     MicrosoftEntraID = 'MicrosoftEntraID',
+    /** MongoDB Atlas OAuth 2.0 authentication using client credentials. */
+    AtlasOAuth = 'AtlasOAuth',
+    /** MongoDB Atlas HTTP Digest authentication using API keys. */
+    AtlasDigest = 'AtlasDigest',
 }
 
 /**
@@ -44,8 +48,25 @@ export const MicrosoftEntraIDAuthMethod: AuthMethodInfo = {
     // iconName: 'Microsoft-Entra-ID-BW-icon.svg',
 } as const;
 
+export const AtlasOAuthAuthMethod: AuthMethodInfo = {
+    id: AuthMethodId.AtlasOAuth,
+    label: vscode.l10n.t('MongoDB Atlas OAuth 2.0'),
+    detail: vscode.l10n.t('Authenticate using MongoDB Atlas OAuth 2.0 with client credentials'),
+} as const;
+
+export const AtlasDigestAuthMethod: AuthMethodInfo = {
+    id: AuthMethodId.AtlasDigest,
+    label: vscode.l10n.t('MongoDB Atlas API Keys'),
+    detail: vscode.l10n.t('Authenticate using MongoDB Atlas HTTP Digest with API keys'),
+} as const;
+
 // Arrays for different contexts
-const authMethodsArray: AuthMethodInfo[] = [NativeAuthMethod, MicrosoftEntraIDAuthMethod];
+const authMethodsArray: AuthMethodInfo[] = [
+    NativeAuthMethod, 
+    MicrosoftEntraIDAuthMethod,
+    AtlasOAuthAuthMethod,
+    AtlasDigestAuthMethod,
+];
 
 // Map for efficient lookup
 const authMethodsMap = new Map<AuthMethodId, AuthMethodInfo>(

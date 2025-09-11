@@ -5,7 +5,7 @@
 
 import { CaseInsensitiveMap } from '../utils/CaseInsensitiveMap';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
-import { type AuthMethodId } from './auth/AuthMethod';
+import { AuthMethodId } from './auth/AuthMethod';
 import { addAuthenticationDataToConnectionString } from './utils/connectionStringHelpers';
 
 export interface ClustersCredentials {
@@ -16,8 +16,31 @@ export interface ClustersCredentials {
     connectionPassword?: string;
 
     authMechanism?: AuthMethodId;
-    // Optional, as it's only relevant for local workspace connetions
+    // Optional, as it's only relevant for local workspace connections
     emulatorConfiguration?: EmulatorConfiguration;
+    
+    // Atlas-specific credentials
+    atlasCredentials?: AtlasCredentials;
+}
+
+export interface AtlasCredentials {
+    /** Authentication type for Atlas */
+    authType: 'oauth' | 'digest';
+    
+    /** OAuth 2.0 credentials */
+    oauth?: {
+        clientId: string;
+        clientSecret: string;
+        // Token cache
+        accessToken?: string;
+        tokenExpiry?: number; // Unix timestamp
+    };
+    
+    /** HTTP Digest credentials */
+    digest?: {
+        publicKey: string;
+        privateKey: string;
+    };
 }
 
 export class CredentialCache {
@@ -122,5 +145,139 @@ export class CredentialCache {
         };
 
         CredentialCache._store.set(mongoClusterId, credentials);
+    }
+
+    /**
+     * Sets MongoDB Atlas OAuth 2.0 credentials for service discovery.
+     * 
+     * @param mongoClusterId - The credential id for the Atlas instance
+     * @param clientId - OAuth client ID
+     * @param clientSecret - OAuth client secret (stored securely)
+     */
+    public static setAtlasOAuthCredentials(
+        mongoClusterId: string,
+        clientId: string,
+        clientSecret: string,
+    ): void {
+        const existingCredentials = CredentialCache._store.get(mongoClusterId);
+        
+        const credentials: ClustersCredentials = {
+            mongoClusterId: mongoClusterId,
+            connectionString: '', // Not used for Atlas discovery
+            connectionUser: '',
+            authMechanism: AuthMethodId.AtlasOAuth,
+            atlasCredentials: {
+                authType: 'oauth',
+                oauth: {
+                    clientId,
+                    clientSecret,
+                },
+            },
+            ...existingCredentials,
+        };
+
+        CredentialCache._store.set(mongoClusterId, credentials);
+    }
+
+    /**
+     * Sets MongoDB Atlas HTTP Digest credentials for service discovery.
+     * 
+     * @param mongoClusterId - The credential id for the Atlas instance
+     * @param publicKey - Atlas API public key
+     * @param privateKey - Atlas API private key (stored securely)
+     */
+    public static setAtlasDigestCredentials(
+        mongoClusterId: string,
+        publicKey: string,
+        privateKey: string,
+    ): void {
+        const existingCredentials = CredentialCache._store.get(mongoClusterId);
+        
+        const credentials: ClustersCredentials = {
+            mongoClusterId: mongoClusterId,
+            connectionString: '', // Not used for Atlas discovery
+            connectionUser: '',
+            authMechanism: AuthMethodId.AtlasDigest,
+            atlasCredentials: {
+                authType: 'digest',
+                digest: {
+                    publicKey,
+                    privateKey,
+                },
+            },
+            ...existingCredentials,
+        };
+
+        CredentialCache._store.set(mongoClusterId, credentials);
+    }
+
+    /**
+     * Updates the OAuth access token cache for Atlas credentials.
+     * 
+     * @param mongoClusterId - The credential id for the Atlas instance
+     * @param accessToken - The access token received from OAuth
+     * @param expiresInSeconds - Token lifetime in seconds (typically 3600)
+     */
+    public static updateAtlasOAuthToken(
+        mongoClusterId: string,
+        accessToken: string,
+        expiresInSeconds: number,
+    ): void {
+        const credentials = CredentialCache._store.get(mongoClusterId);
+        if (!credentials?.atlasCredentials?.oauth) {
+            throw new Error(`No Atlas OAuth credentials found for id ${mongoClusterId}`);
+        }
+
+        const tokenExpiry = Date.now() + (expiresInSeconds * 1000);
+        
+        credentials.atlasCredentials.oauth.accessToken = accessToken;
+        credentials.atlasCredentials.oauth.tokenExpiry = tokenExpiry;
+
+        CredentialCache._store.set(mongoClusterId, credentials);
+    }
+
+    /**
+     * Gets Atlas credentials for a given cluster ID.
+     * 
+     * @param mongoClusterId - The credential id for the Atlas instance
+     * @returns Atlas credentials or undefined if not found
+     */
+    public static getAtlasCredentials(mongoClusterId: string): AtlasCredentials | undefined {
+        return CredentialCache._store.get(mongoClusterId)?.atlasCredentials;
+    }
+
+    /**
+     * Checks if the OAuth token is still valid (not expired).
+     * 
+     * @param mongoClusterId - The credential id for the Atlas instance
+     * @returns True if token exists and is valid, false otherwise
+     */
+    public static isAtlasOAuthTokenValid(mongoClusterId: string): boolean {
+        const credentials = CredentialCache._store.get(mongoClusterId);
+        const oauth = credentials?.atlasCredentials?.oauth;
+        
+        if (!oauth?.accessToken || !oauth.tokenExpiry) {
+            return false;
+        }
+
+        // Add 60 second buffer to avoid edge cases
+        return Date.now() < (oauth.tokenExpiry - 60000);
+    }
+
+    /**
+     * Clears Atlas authentication state and removes credentials.
+     * 
+     * @param mongoClusterId - The credential id for the Atlas instance
+     */
+    public static clearAtlasCredentials(mongoClusterId: string): void {
+        const credentials = CredentialCache._store.get(mongoClusterId);
+        if (credentials) {
+            credentials.atlasCredentials = undefined;
+            if (credentials.authMechanism === AuthMethodId.AtlasOAuth || 
+                credentials.authMechanism === AuthMethodId.AtlasDigest) {
+                credentials.authMechanism = undefined;
+            }
+            CredentialCache._store.set(mongoClusterId, credentials);
+        }
     }
 }
