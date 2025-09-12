@@ -15,7 +15,8 @@ import {
     registerCommand,
     registerCommandWithTreeNodeUnwrapping,
 } from '@microsoft/vscode-azext-utils';
-import { AzExtResourceType } from '@microsoft/vscode-azureresources-api';
+import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
+import { type AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
@@ -43,25 +44,29 @@ import { removeConnection } from '../commands/removeConnection/removeConnection'
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { renameConnection } from '../commands/renameConnection/renameConnection';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
+import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
+import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
+import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
+import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
-import { AzureDiscoveryProvider } from '../plugins/service-azure/AzureDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
+import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
+import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
+import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
+import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { TaskReportingService } from '../services/taskReportingService';
 import { DemoTask } from '../services/tasks/DemoTask';
 import { TaskService } from '../services/taskService';
 import { MongoVCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/mongo-vcore/MongoVCoreBranchDataProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
-import { WorkspaceResourceType } from '../tree/workspace-api/SharedWorkspaceResourceProvider';
-import { ClustersWorkspaceBranchDataProvider } from '../tree/workspace-view/documentdb/ClustersWorkbenchBranchDataProvider';
 import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
-import { enableMongoVCoreSupport, enableWorkspaceSupport } from './activationConditions';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
 import { Views } from './Views';
 
@@ -72,6 +77,7 @@ export class ClustersExtension implements vscode.Disposable {
 
     registerDiscoveryServices(_activateContext: IActionContext) {
         DiscoveryService.registerProvider(new AzureDiscoveryProvider());
+        DiscoveryService.registerProvider(new AzureMongoRUDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
     }
 
@@ -100,39 +106,53 @@ export class ClustersExtension implements vscode.Disposable {
         ext.context.subscriptions.push(treeView);
     }
 
+    async registerAzureResourcesIntegration(activateContext: IActionContext): Promise<void> {
+        // Dynamic registration so this file compiles when the enum members aren't present
+        // This is how we detect whether the update to Azure Resources has been deployed
+
+        const isRolloutEnabled = await isVCoreAndRURolloutEnabled();
+        activateContext.telemetry.properties.activatingAzureResourcesIntegration = isRolloutEnabled ? 'true' : 'false';
+
+        if (!isRolloutEnabled) {
+            return;
+        }
+
+        ext.rgApiV2 = (await getAzureResourcesExtensionApi(
+            ext.context,
+            '2.0.0',
+        )) as AzureResourcesExtensionApiWithActivity;
+
+        const documentDbResourceType = 'AzureDocumentDb' as unknown as AzExtResourceType;
+        ext.azureResourcesVCoreBranchDataProvider = new VCoreBranchDataProvider();
+        ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
+            documentDbResourceType,
+            ext.azureResourcesVCoreBranchDataProvider,
+        );
+
+        const ruResourceType = 'AzureCosmosDbForMongoDbRu' as unknown as AzExtResourceType;
+        ext.azureResourcesRUBranchDataProvider = new RUBranchDataProvider();
+        ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
+            ruResourceType,
+            ext.azureResourcesRUBranchDataProvider,
+        );
+
+        ext.azureResourcesWorkspaceResourceProvider = new DocumentDbWorkspaceResourceProvider();
+        ext.rgApiV2.resources.registerWorkspaceResourceProvider(ext.azureResourcesWorkspaceResourceProvider);
+
+        ext.azureResourcesWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
+        ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
+            'vscode.documentdb.workspace.documentdb-accounts-resourceType',
+            ext.azureResourcesWorkspaceBranchDataProvider,
+        );
+    }
+
     async activateClustersSupport(): Promise<void> {
         await callWithTelemetryAndErrorHandling(
             'clustersExtension.activate',
             async (activateContext: IActionContext) => {
                 activateContext.telemetry.properties.isActivationEvent = 'true';
 
-                // TODO: Implement https://github.com/microsoft/vscode-documentdb/issues/30
-                // for staged hand-over from Azure Databases to this DocumentDB extension
-
-                // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
-                if (false && enableMongoVCoreSupport()) {
-                    // on purpose, transition is still in progress
-                    activateContext.telemetry.properties.enabledVCore = 'true';
-
-                    ext.mongoVCoreBranchDataProvider = new MongoVCoreBranchDataProvider();
-                    ext.rgApiV2.resources.registerAzureResourceBranchDataProvider(
-                        AzExtResourceType.MongoClusters,
-                        ext.mongoVCoreBranchDataProvider,
-                    );
-                }
-
-                // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
-                if (false && enableWorkspaceSupport()) {
-                    // on purpose, transition is still in progress
-                    activateContext.telemetry.properties.enabledWorkspace = 'true';
-
-                    ext.mongoClustersWorkspaceBranchDataProvider = new ClustersWorkspaceBranchDataProvider();
-                    ext.rgApiV2.resources.registerWorkspaceResourceBranchDataProvider(
-                        WorkspaceResourceType.MongoClusters,
-                        ext.mongoClustersWorkspaceBranchDataProvider,
-                    );
-                }
-
+                await this.registerAzureResourcesIntegration(activateContext);
                 this.registerDiscoveryServices(activateContext);
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
@@ -204,6 +224,11 @@ export class ClustersExtension implements vscode.Disposable {
                     addConnectionFromRegistry,
                 );
 
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
+                    'vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView',
+                    addConnectionFromRegistry,
+                );
+
                 registerCommand('vscode-documentdb.command.discoveryView.refresh', (context: IActionContext) => {
                     return refreshView(context, Views.DiscoveryView);
                 });
@@ -243,6 +268,7 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand('vscode-documentdb.command.internal.documentView.open', openDocumentView);
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.internal.retry', retryAuthentication);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.internal.revealView', revealView);
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.launchShell', launchShell);
 
@@ -306,10 +332,10 @@ export class ClustersExtension implements vscode.Disposable {
                 // but we should log the error for diagnostics
                 try {
                     // Show welcome screen if it hasn't been shown before
-                    const welcomeScreenShown = ext.context.globalState.get<boolean>('welcomeScreenShown_v0_2_0', false);
+                    const welcomeScreenShown = ext.context.globalState.get<boolean>('welcomeScreenShown_v0_4_0', false);
                     if (!welcomeScreenShown) {
                         // Update the flag first
-                        await ext.context.globalState.update('welcomeScreenShown_v0_2_0', true);
+                        await ext.context.globalState.update('welcomeScreenShown_v0_4_0', true);
                         ext.outputChannel.appendLog('Showing welcome screen...');
 
                         // Schedule the walkthrough to open after activation completes

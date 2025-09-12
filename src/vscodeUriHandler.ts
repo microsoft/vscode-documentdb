@@ -3,18 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
+import { API } from './DocumentDBExperiences';
 import { ext } from './extensionVariables';
-import { StorageNames, StorageService, type StorageItem } from './services/storageService';
+import { ConnectionStorageService, ConnectionType, type ConnectionItem } from './services/connectionStorageService';
 import {
     buildConnectionsViewTreePath,
     revealInConnectionsView,
     waitForConnectionsViewReady,
 } from './tree/connections-view/connectionsViewHelpers';
+import { nonNullValue } from './utils/nonNull';
 import { generateDocumentDBStorageId } from './utils/storageUtils';
 
 // #region Type Definitions
@@ -115,7 +117,9 @@ async function handleConnectionStringRequest(
     let newConnectionLabel = createConnectionLabel(parsedCS, joinedHosts);
 
     // Check for existing connections with the same parameters
-    const existingConnections = await getExistingConnections(isEmulator);
+    const existingConnections = await ConnectionStorageService.getAll(
+        isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters,
+    );
     const existingDuplicateConnection = findDuplicateConnection(existingConnections, parsedCS, joinedHosts);
 
     // Check if URL handling confirmations are enabled
@@ -154,23 +158,28 @@ async function handleConnectionStringRequest(
 
         storageId = generateDocumentDBStorageId(parsedCS.toString()); // FYI: working with the parsedConnection string to guarantee a consistent storageId in this file.
 
-        let existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+        let existingDuplicateLabel = existingConnections.find((connection) => connection.name === newConnectionLabel);
         // If a connection with the same label exists, append a number to the label
         while (existingDuplicateLabel) {
             newConnectionLabel = generateUniqueLabel(newConnectionLabel);
-            existingDuplicateLabel = existingConnections.find((item) => item.name === newConnectionLabel);
+            existingDuplicateLabel = existingConnections.find((connection) => connection.name === newConnectionLabel);
         }
 
         // Create the the storageItem
-        const storageItem: StorageItem = {
+        const storageItem: ConnectionItem = {
             id: storageId,
             name: newConnectionLabel,
-            properties: { isEmulator: isEmulator, disableEmulatorSecurity: disableEmulatorSecurity },
-            secrets: [parsedCS.toString()],
+            // Connection strings handled by this handler are MongoDB-style, so mark the API accordingly.
+            properties: {
+                api: API.DocumentDB,
+                emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
+                availableAuthMethods: [],
+            },
+            secrets: { connectionString: parsedCS.toString() },
         };
 
-        await StorageService.get(StorageNames.Connections).push(
-            isEmulator ? 'emulators' : 'clusters',
+        await ConnectionStorageService.save(
+            isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters,
             storageItem,
             true,
         );
@@ -305,22 +314,15 @@ function createConnectionLabel(parsedCS: DocumentDBConnectionString, joinedHosts
 }
 
 /**
- * Retrieves existing connections of the specified type
- */
-async function getExistingConnections(isEmulator: boolean): Promise<StorageItem[]> {
-    return await StorageService.get(StorageNames.Connections).getItems(isEmulator ? 'emulators' : 'clusters');
-}
-
-/**
  * Finds a duplicate connection in the existing connections list
  */
 function findDuplicateConnection(
-    existingConnections: StorageItem[],
+    existingConnections: ConnectionItem[],
     parsedCS: DocumentDBConnectionString,
     joinedHosts: string,
-): StorageItem | undefined {
-    return existingConnections.find((item) => {
-        const secret = item.secrets?.[0];
+): ConnectionItem | undefined {
+    return existingConnections.find((connection) => {
+        const secret = connection.secrets?.connectionString;
         if (!secret) {
             return false; // Skip if no secret string is found
         }
@@ -449,7 +451,7 @@ async function openDedicatedView(
 
     return openCollectionViewInternal(context, {
         clusterId: clusterId,
-        databaseName: nonNullValue(database, 'database'),
-        collectionName: nonNullValue(collection, 'collection'),
+        databaseName: nonNullValue(database, 'database', 'vscodeUriHandler.ts'),
+        collectionName: nonNullValue(collection, 'collection', 'vscodeUriHandler.ts'),
     });
 }

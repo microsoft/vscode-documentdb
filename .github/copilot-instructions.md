@@ -68,6 +68,7 @@ This document provides comprehensive guidelines and context for GitHub Copilot t
 - Use l10n for any user-facing strings with `vscode.l10n.t()`.
 - Use `npm run prettier-fix` to format your code before committing.
 - Use `npm run lint` to check for linting errors.
+- Use `npm run build` to ensure the project builds successfully (do not use `npm run compile`).
 - Use `npm run l10n` to update localization files in case you change any user-facing strings.
 - Ensure TypeScript compilation passes without errors.
 
@@ -422,3 +423,69 @@ const message = vscode.l10n.t(
 - Ensure compatibility with Node.js version specified in `.nvmrc`.
 - Follow the project's ESLint configuration for consistent code style.
 - Use webpack for bundling and ensure proper tree-shaking.
+
+---
+
+## Null Safety with nonNull Helpers
+
+**Always use the nonNull utility functions** from `src/utils/nonNull.ts` instead of manual null checks for better error reporting and debugging.
+
+#### Available Functions
+
+- **`nonNullProp()`**: Extract and validate object properties
+- **`nonNullValue()`**: Validate any value is not null/undefined
+- **`nonNullOrEmptyValue()`**: Validate strings are not null/undefined/empty
+
+#### Parameter Guidelines
+
+Both `message` and `details` parameters are **required** for all nonNull functions:
+
+- **`message`**: Use the actual member access or assignment LHS from your code. Since this is open source, use real variable names:
+  - Member access: `'selectedItem.cluster.connectionString'`
+  - Wizard context: `'wizardContext.password'`
+  - Local variables: `'connectionString.match(...)'`
+
+- **`details`**: Use the actual file base name where the code is located:
+  - Examples: `'ExecuteStep.ts'`, `'ConnectionItem.ts'`, `'DatabaseTreeItem.ts'`
+  - Keep it short, use the actual file name, don't create constants
+
+#### Usage Examples
+
+```typescript
+// ✅ Good - Property extraction with validation
+const connectionString = nonNullProp(
+  selectedItem.cluster,
+  'connectionString',
+  'selectedItem.cluster.connectionString',
+  'ExecuteStep.ts',
+);
+
+// ✅ Good - Value validation
+const validatedConnection = nonNullValue(await getConnection(id), 'getConnection(id)', 'ConnectionManager.ts');
+
+// ✅ Good - String validation (not empty)
+const databaseName = nonNullOrEmptyValue(
+  wizardContext.databaseName,
+  'wizardContext.databaseName',
+  'CreateDatabaseStep.ts',
+);
+
+// ✅ Good - Manual null check for user-facing validation
+if (!userInput.connectionString) {
+  void vscode.window.showErrorMessage(vscode.l10n.t('Connection string is required'));
+  return;
+}
+
+// ❌ Bad - Manual null checks for internal validation (use nonNull helpers instead)
+if (!selectedItem.cluster.connectionString) {
+  throw new Error('Connection string is required'); // This should use nonNullProp
+}
+
+// ❌ Bad - Generic parameter values
+const value = nonNullValue(data, 'some value', 'file.ts');
+```
+
+**When to use each approach:**
+
+- **Use nonNull helpers**: For internal validation where you expect the value to exist (programming errors)
+- **Use manual checks**: For user-facing validation with localized error messages shown to users

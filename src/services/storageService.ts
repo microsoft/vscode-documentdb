@@ -8,11 +8,13 @@ import * as l10n from '@vscode/l10n';
 import { ext } from '../extensionVariables';
 
 /**
- * Represents an item stored in the storage.
- * Each item has a unique `id`, a `name`, optional `properties`, and optional `secrets`.
+ * Represents a generic item stored in the storage.
+ * Each item has a unique `id`, a `name`, an optional `version`, optional `properties`, and optional `secrets`.
  * The `id` of the item is used as the key in storage and must be unique per storage location.
+ *
+ * @template T The type of the `properties` object. Defaults to a flexible record.
  */
-export type StorageItem = {
+export type StorageItem<T extends Record<string, unknown> = Record<string, unknown>> = {
     /**
      * Unique identifier for the item.
      */
@@ -24,9 +26,14 @@ export type StorageItem = {
     name: string;
 
     /**
-     * Optional properties associated with the item.
+     * Optional version string for the item's schema.
      */
-    properties?: Record<string, string[] | string | boolean>;
+    version?: string;
+
+    /**
+     * Optional properties associated with the item, conforming to the generic type `T`.
+     */
+    properties?: T;
 
     /**
      * Optional array of secrets associated with the item.
@@ -38,28 +45,34 @@ export type StorageItem = {
 /**
  * Storage is organized by workspace (acting as a "directory") and items are identified by their unique IDs.
  * Each item can have properties and optional secrets that are stored securely.
+ * This interface is generic to support type-safe storage of different item structures.
  */
 export interface Storage {
     /**
      * Retrieves all items from the storage along with their secrets for a specific workspace.
      * Items are stored using their `id` as a key within the workspace.
      *
+     * @template T The expected type of the `properties` object for the items.
      * @param workspace - The workspace identifier acting as a directory for the items.
      *                    Can be a WorkspaceResourceType or any string value.
      * @returns A promise resolving to an array of storage items with their secrets loaded.
      */
-    getItems(workspace: WorkspaceResourceType): Promise<StorageItem[]>;
+    getItems<T extends Record<string, unknown>>(workspace: WorkspaceResourceType): Promise<StorageItem<T>[]>;
 
     /**
      * Retrieves a specific item from the storage along with its secrets for a given workspace.
      * The item is identified by its unique `id` within the workspace.
      *
+     * @template T The expected type of the `properties` object for the item.
      * @param workspace - The workspace identifier acting as a directory for the items.
      *                    Can be a WorkspaceResourceType or any string value.
      * @param storageId - The unique `id` of the item to retrieve.
      * @returns A promise resolving to the storage item with its secrets loaded, or `undefined` if not found.
      */
-    getItem(workspace: WorkspaceResourceType, storageId: string): Promise<StorageItem | undefined>;
+    getItem<T extends Record<string, unknown>>(
+        workspace: WorkspaceResourceType,
+        storageId: string,
+    ): Promise<StorageItem<T> | undefined>;
 
     /**
      * Stores an item and its secrets into storage for a specific workspace.
@@ -67,6 +80,7 @@ export interface Storage {
      * Item properties are stored in globalState while secrets are stored securely
      * using VSCode's SecretStorage API.
      *
+     * @template T The type of the `properties` object for the item.
      * @param workspace - The workspace identifier acting as a directory for the items.
      *                    Can be a WorkspaceResourceType or any string value.
      * @param item - The item to store, containing id, name, and optional properties and secrets.
@@ -75,7 +89,11 @@ export interface Storage {
      * @returns A promise that resolves when the item has been stored.
      * @throws Error if `overwrite` is `false` and an item with the same `id` exists.
      */
-    push(workspace: WorkspaceResourceType, item: StorageItem, overwrite?: boolean): Promise<void>;
+    push<T extends Record<string, unknown>>(
+        workspace: WorkspaceResourceType,
+        item: StorageItem<T>,
+        overwrite?: boolean,
+    ): Promise<void>;
 
     /**
      * Deletes an item and its associated secrets from storage for a specific workspace.
@@ -118,13 +136,13 @@ class StorageImpl implements Storage {
     /**
      * Implementation of Storage.getItems that retrieves all items along with their secrets.
      */
-    public async getItems(workspace: string): Promise<StorageItem[]> {
+    public async getItems<T extends Record<string, unknown>>(workspace: string): Promise<StorageItem<T>[]> {
         const storageKeyPrefix = `${this.storageName}/${workspace}/`;
         const keys = ext.context.globalState.keys().filter((key) => key.startsWith(storageKeyPrefix));
-        const items: StorageItem[] = [];
+        const items: StorageItem<T>[] = [];
 
         for (const key of keys) {
-            const item = ext.context.globalState.get<StorageItem>(key);
+            const item = ext.context.globalState.get<StorageItem<T>>(key);
             if (item) {
                 // ensure that the real id is used, same as the one used in the storage
                 item.id = key.substring(storageKeyPrefix.length);
@@ -154,9 +172,12 @@ class StorageImpl implements Storage {
     /**
      * Implementation of Storage.getItem that retrieves a specific item along with its secrets.
      */
-    public async getItem(workspace: string, storageId: string): Promise<StorageItem | undefined> {
+    public async getItem<T extends Record<string, unknown>>(
+        workspace: string,
+        storageId: string,
+    ): Promise<StorageItem<T> | undefined> {
         const storageKey = `${this.storageName}/${workspace}/${storageId}`;
-        const item = ext.context.globalState.get<StorageItem>(storageKey);
+        const item = ext.context.globalState.get<StorageItem<T>>(storageKey);
 
         if (!item) {
             return undefined; // Item not found
@@ -183,11 +204,15 @@ class StorageImpl implements Storage {
     /**
      * Implementation of Storage.push that stores an item and its secrets.
      */
-    public async push(workspace: string, item: StorageItem, overwrite: boolean = true): Promise<void> {
+    public async push<T extends Record<string, unknown>>(
+        workspace: string,
+        item: StorageItem<T>,
+        overwrite: boolean = true,
+    ): Promise<void> {
         const storageKey = `${this.storageName}/${workspace}/${item.id}`;
 
         // Check for existing item
-        const existingItem = ext.context.globalState.get<StorageItem>(storageKey);
+        const existingItem = ext.context.globalState.get<StorageItem<T>>(storageKey);
         if (existingItem && !overwrite) {
             throw new Error(l10n.t('An item with id "{0}" already exists for workspace "{1}".', item.id, workspace));
         }

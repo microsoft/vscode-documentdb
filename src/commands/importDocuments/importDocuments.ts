@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { nonNullProp, parseError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { parseError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fs from 'node:fs/promises';
@@ -17,6 +17,7 @@ import {
 import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { BufferErrorCode, createMongoDbBuffer, type DocumentBuffer } from '../../utils/documentBuffer';
+import { nonNullProp } from '../../utils/nonNull';
 import { getRootPath } from '../../utils/workspacUtils';
 
 export async function importDocuments(
@@ -114,7 +115,14 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             let count = 0;
             let buffer: DocumentBuffer<unknown> | undefined;
             if (selectedItem instanceof CollectionItem) {
-                const hosts = getHostsFromConnectionString(nonNullProp(selectedItem.cluster, 'connectionString'));
+                const hosts = getHostsFromConnectionString(
+                    nonNullProp(
+                        selectedItem.cluster,
+                        'connectionString',
+                        'selectedItem.cluster.connectionString',
+                        'importDocuments.ts',
+                    ),
+                );
                 const isRuResource = hasDomainSuffix(AzureDomains.RU, ...hosts);
 
                 if (isRuResource) {

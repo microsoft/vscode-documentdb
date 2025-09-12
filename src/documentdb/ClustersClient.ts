@@ -30,7 +30,11 @@ import {
 } from 'mongodb';
 import { Links } from '../constants';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
-import { CredentialCache } from './CredentialCache';
+import { type AuthHandler } from './auth/AuthHandler';
+import { AuthMethodId } from './auth/AuthMethod';
+import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
+import { NativeAuthHandler } from './auth/NativeAuthHandler';
+import { CredentialCache, type ClustersCredentials } from './CredentialCache';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -66,7 +70,6 @@ export class ClustersClient {
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
-    private emulatorConfiguration?: EmulatorConfiguration;
 
     /**
      * Use getClient instead of a constructor. Connections/Client are being cached and reused.
@@ -103,46 +106,67 @@ export class ClustersClient {
     // }
 
     private async initClient(): Promise<void> {
-        // TODO: why is this a separate function? move its contents to the constructor.
-
-        if (!CredentialCache.hasCredentials(this.credentialId)) {
+        const credentials = CredentialCache.getCredentials(this.credentialId);
+        if (!credentials) {
             throw new Error(l10n.t('No credentials found for id {credentialId}', { credentialId: this.credentialId }));
         }
 
-        const cString = CredentialCache.getCredentials(this.credentialId)?.connectionString as string;
-        const hosts = getHostsFromConnectionString(cString);
-        const userAgentString = hasAzureDomain(...hosts) ? appendExtensionUserAgent() : undefined;
+        // default to NativeAuth if nothing is configured
+        const authMethod = credentials?.authMechanism ?? AuthMethodId.NativeAuth;
 
-        const cStringPassword = CredentialCache.getConnectionStringWithPassword(this.credentialId);
-        this.emulatorConfiguration = CredentialCache.getEmulatorConfiguration(this.credentialId);
-
-        // Prepare the options object and prepare the appName
-        // appname appears to be the correct equivalent to user-agent for mongo
-        const mongoClientOptions = <MongoClientOptions>{
-            // appName should be wrapped in '@'s when trying to connect to a Mongo account, this doesn't effect the appendUserAgent string
-            appName: userAgentString,
-        };
-
-        if (this.emulatorConfiguration?.isEmulator) {
-            mongoClientOptions.serverSelectionTimeoutMS = 4000;
-
-            if (this.emulatorConfiguration?.disableEmulatorSecurity) {
-                // Prevents self signed certificate error for emulator https://github.com/microsoft/vscode-cosmosdb/issues/1241#issuecomment-614446198
-                mongoClientOptions.tlsAllowInvalidCertificates = true;
-            }
+        // TODO: add a proper factory pattern here when more methods are added
+        let authHandler: AuthHandler;
+        switch (authMethod) {
+            case AuthMethodId.NativeAuth:
+                authHandler = new NativeAuthHandler(credentials);
+                break;
+            case AuthMethodId.MicrosoftEntraID:
+                authHandler = new MicrosoftEntraIDAuthHandler(credentials);
+                break;
+            default:
+                throw new Error(l10n.t('Unsupported authentication method: {0}', authMethod));
         }
 
+        // Configure auth and get connection options
+        const { connectionString, options } = await authHandler.configureAuth();
+
+        const hosts = getHostsFromConnectionString(connectionString);
+        const userAgentString = hasAzureDomain(...hosts) ? appendExtensionUserAgent() : undefined;
+        if (userAgentString) {
+            options.appName = userAgentString;
+        }
+
+        // Connect with the configured options
+        await this.connect(connectionString, options, credentials.emulatorConfiguration);
+
+        // Collect telemetry (non-blocking)
+        void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
+            const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
+
+            context.telemetry.properties = {
+                authmethod: authMethod,
+                ...context.telemetry.properties,
+                ...metadata,
+            };
+        });
+    }
+
+    private async connect(
+        connectionString: string,
+        options: MongoClientOptions,
+        emulatorConfiguration?: EmulatorConfiguration,
+    ): Promise<void> {
         try {
-            this._mongoClient = await MongoClient.connect(cStringPassword as string, mongoClientOptions);
+            this._mongoClient = await MongoClient.connect(connectionString, options);
         } catch (error) {
             const message = parseError(error).message;
-            if (this.emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
+            if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.',
                     { link: Links.LocalConnectionDebuggingTips },
                 );
-            } else if (this.emulatorConfiguration?.isEmulator && message.includes('self-signed certificate')) {
+            } else if (emulatorConfiguration?.isEmulator && message.includes('self-signed certificate')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'The local instance is using a self-signed certificate. To connect, you must import the appropriate TLS/SSL certificate. See {link} for tips.',
@@ -151,15 +175,6 @@ export class ClustersClient {
             }
             throw error;
         }
-
-        void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
-            const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
-
-            context.telemetry.properties = {
-                ...context.telemetry.properties,
-                ...metadata,
-            };
-        });
     }
 
     /**
@@ -184,6 +199,13 @@ export class ClustersClient {
         }
 
         return client;
+    }
+
+    /**
+     * Determines whether a client for the given credential identifier is present in the internal cache.
+     */
+    public static exists(credentialId: string): boolean {
+        return ClustersClient._clients.has(credentialId);
     }
 
     public static async deleteClient(credentialId: string): Promise<void> {
@@ -253,14 +275,25 @@ export class ClustersClient {
     getUserName() {
         return CredentialCache.getCredentials(this.credentialId)?.connectionUser;
     }
-    getConnectionString() {
-        return CredentialCache.getCredentials(this.credentialId)?.connectionString;
+
+    /**
+     * @deprecated Use getCredentials() which returns a ClusterCredentials object instead.
+     */
+    getConnectionString(): string | undefined {
+        return this.getCredentials()?.connectionString;
     }
 
-    getConnectionStringWithPassword() {
+    /**
+     * @deprecated Use getCredentials() which returns a ClusterCredentials object instead.
+     */
+    getConnectionStringWithPassword(): string | undefined {
         return CredentialCache.getConnectionStringWithPassword(this.credentialId);
     }
 
+    public getCredentials(): ClustersCredentials | undefined {
+        return CredentialCache.getCredentials(this.credentialId) as ClustersCredentials | undefined;
+    }
+        
     getCollection(databaseName: string, collectionName: string): Collection<Document> {
         try {
             return this._mongoClient.db(databaseName).collection(collectionName);

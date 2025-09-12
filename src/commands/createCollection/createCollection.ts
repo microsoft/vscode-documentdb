@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizard, nonNullValue, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { nonNullValue } from '../../utils/nonNull';
 import { CollectionNameStep } from './CollectionNameStep';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 import { ExecuteStep } from './ExecuteStep';
@@ -35,7 +36,11 @@ export async function createCollection(context: IActionContext, node: DatabaseIt
     await wizard.prompt();
     await wizard.execute();
 
-    const newCollectionName = nonNullValue(wizardContext.newCollectionName);
+    const newCollectionName = nonNullValue(
+        wizardContext.newCollectionName,
+        'wizardContext.newCollectionName',
+        'createCollection.ts',
+    );
     showConfirmationAsInSettings(
         l10n.t('The "{newCollectionName}" collection has been created.', { newCollectionName }),
     );

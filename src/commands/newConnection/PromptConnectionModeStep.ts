@@ -5,9 +5,10 @@
 
 import { AzureWizardPromptStep, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { MongoClustersExperience } from '../../DocumentDBExperiences';
+import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ExecuteStep } from './ExecuteStep';
 import { ConnectionMode, type NewConnectionWizardContext } from './NewConnectionWizardContext';
+import { PromptAuthMethodStep } from './PromptAuthMethodStep';
 import { PromptConnectionStringStep } from './PromptConnectionStringStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
 import { PromptServiceDiscoveryStep } from './PromptServiceDiscoveryStep';
@@ -39,7 +40,7 @@ export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectio
 
         switch (selectedItem.id) {
             case 'connectionString':
-                context.experience = MongoClustersExperience;
+                context.experience = DocumentDBExperience;
                 context.connectionMode = ConnectionMode.ConnectionString;
                 break;
             case 'serviceDiscovery':
@@ -60,7 +61,12 @@ export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectio
             case ConnectionMode.ConnectionString:
                 return {
                     title: l10n.t('Connection String'),
-                    promptSteps: [new PromptConnectionStringStep(), new PromptUsernameStep(), new PromptPasswordStep()],
+                    promptSteps: [
+                        new PromptConnectionStringStep(),
+                        new PromptAuthMethodStep(),
+                        new PromptUsernameStep(),
+                        new PromptPasswordStep(),
+                    ],
                     executeSteps: [new ExecuteStep()],
                 };
             case ConnectionMode.ServiceDiscovery:
