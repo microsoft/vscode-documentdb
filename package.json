@@ -308,6 +308,12 @@
         "icon": "$(refresh)"
       },
       {
+        "//": "[Testing] Start Demo Task",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.testing.startDemoTask",
+        "title": "Start Demo Task"
+      },
+      {
         "//": "[DiscoveryView] Enable Registry",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.addRegistry",
@@ -445,6 +451,18 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open",
         "title": "Open Collection"
+      },
+      {
+        "//": "Copy Collection",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.copyCollection",
+        "title": "Copy Collection…"
+      },
+      {
+        "//": "Paste Collection",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.pasteCollection",
+        "title": "Paste Collection…"
       }
     ],
     "submenus": [
@@ -684,6 +702,18 @@
           "command": "vscode-documentdb.command.refresh",
           "when": "view =~ /discoveryView/ && viewItem =~ /\\benableRefreshCommand\\b/i",
           "group": "zheLastGroup@1"
+        },
+        {
+          "//": "[Collection] Copy Collection",
+          "command": "vscode-documentdb.command.copyCollection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "A@2"
+        },
+        {
+          "//": "[Collection] Paste Collection",
+          "command": "vscode-documentdb.command.pasteCollection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "A@2"
         }
       ],
       "explorer/context": [],
