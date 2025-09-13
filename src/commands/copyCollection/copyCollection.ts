@@ -4,13 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import * as vscode from 'vscode';
+import { l10n, window } from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 
 export async function copyCollection(_context: IActionContext, node: CollectionItem): Promise<void> {
     if (!node) {
-        throw new Error(vscode.l10n.t('No node selected.'));
+        throw new Error(l10n.t('No node selected.'));
     }
     // Store the node in extension variables
     ext.copiedCollectionNode = node;
@@ -19,7 +19,20 @@ export async function copyCollection(_context: IActionContext, node: CollectionI
     const collectionName = node.collectionInfo.name;
     const databaseName = node.databaseInfo.name;
 
-    void vscode.window.showInformationMessage(
-        vscode.l10n.t('Collection "{0}" from database "{1}" has been marked for copy.', collectionName, databaseName),
+    const undoCommand = l10n.t('Undo');
+
+    const selectedCommand = await window.showInformationMessage(
+        l10n.t(
+            'Collection "{0}" from database "{1}" has been marked for copy. You can now paste this collection into any database or existing collection using the "Paste Collection..." option in the context menu.',
+            collectionName,
+            databaseName,
+        ),
+        l10n.t('OK'),
+        undoCommand,
     );
+
+    if (selectedCommand === undoCommand) {
+        ext.copiedCollectionNode = undefined;
+        void window.showInformationMessage(l10n.t('Copy operation cancelled.'));
+    }
 }
