@@ -620,10 +620,16 @@
           "group": "1@1"
         },
         {
+          "//": "[Database] Paste Collection",
+          "command": "vscode-documentdb.command.pasteCollection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "1@2"
+        },
+        {
           "//": "[Database] Delete database",
           "command": "vscode-documentdb.command.dropDatabase",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "1@2"
+          "group": "1@3"
         },
         {
           "//": "[Database] Mongo DB|Cluster Launch Shell",
