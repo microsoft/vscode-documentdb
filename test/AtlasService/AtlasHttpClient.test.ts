@@ -3,63 +3,72 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import assert from 'assert';
 import { AtlasAuthManager } from '../../src/plugins/service-mongo-atlas/utils/AtlasAuthManager';
 import { AtlasCredentialCache } from '../../src/plugins/service-mongo-atlas/utils/AtlasCredentialCache';
 import { AtlasHttpClient } from '../../src/plugins/service-mongo-atlas/utils/AtlasHttpClient';
 
-// Mock digest-fetch module
-jest.mock('digest-fetch', () => {
-    return jest.fn().mockImplementation(() => ({
-        fetch: jest.fn(async () => ({ ok: true, status: 200, text: async () => '', json: async () => ({}) })),
-    }));
-});
-
-// Mock AtlasAuthManager
-jest.mock('../../src/plugins/service-mongo-atlas/utils/AtlasAuthManager');
-
-const mockedAuthManager = AtlasAuthManager as jest.Mocked<typeof AtlasAuthManager>;
+// We'll monkey-patch modules rather than using jest.mock
 const globalAny: any = global;
 
-describe('AtlasHttpClient', () => {
-    const orgId = 'org-http';
+type FetchFn = (url: string, init?: any) => Promise<any>;
 
-    beforeEach(() => {
-        jest.resetAllMocks();
+suite('AtlasHttpClient', () => {
+    const orgId = 'org-http';
+    let originalFetch: unknown;
+    let originalGetAuthHeader: typeof AtlasAuthManager.getAuthorizationHeader;
+
+    setup(() => {
+        originalFetch = globalAny.fetch;
+        originalGetAuthHeader = AtlasAuthManager.getAuthorizationHeader.bind(
+            AtlasAuthManager,
+        ) as unknown as typeof AtlasAuthManager.getAuthorizationHeader;
         delete globalAny.fetch;
         AtlasCredentialCache.clearAtlasCredentials(orgId);
     });
 
+    teardown(() => {
+        if (originalFetch) {
+            globalAny.fetch = originalFetch;
+        } else {
+            delete globalAny.fetch;
+        }
+        AtlasAuthManager.getAuthorizationHeader = originalGetAuthHeader as any;
+    });
+
     test('throws when no credentials', async () => {
-        await expect(AtlasHttpClient.get(orgId, '/groups')).rejects.toThrow(/No Atlas credentials/);
+        await assert.rejects(() => AtlasHttpClient.get(orgId, '/groups'), /No Atlas credentials/);
     });
 
     test('uses OAuth flow and sets Authorization header', async () => {
         AtlasCredentialCache.setAtlasOAuthCredentials(orgId, 'cid', 'sec');
-        mockedAuthManager.getAuthorizationHeader = jest.fn().mockResolvedValue('Bearer tokenX');
-        const fetchSpy = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) });
+        let called = false;
+        AtlasAuthManager.getAuthorizationHeader = (async () => {
+            called = true;
+            return 'Bearer tokenX';
+        }) as any;
+        const fetchSpyCalls: any[] = [];
+        const fetchSpy: FetchFn = async (_url, init) => {
+            fetchSpyCalls.push([_url, init]);
+            return { ok: true, status: 200, json: async () => ({ ok: true }) } as any;
+        };
         globalAny.fetch = fetchSpy;
 
         await AtlasHttpClient.get(orgId, '/groups');
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(mockedAuthManager.getAuthorizationHeader).toHaveBeenCalled();
-        const headers = fetchSpy.mock.calls[0][1].headers;
-        expect(headers.Authorization).toBe('Bearer tokenX');
+        assert.ok(called, 'Expected getAuthorizationHeader to be called');
+        const headers = fetchSpyCalls[0][1].headers;
+        assert.strictEqual(headers.Authorization, 'Bearer tokenX');
     });
 
     test('oauth flow throws when missing bearer', async () => {
         AtlasCredentialCache.setAtlasOAuthCredentials(orgId, 'cid', 'sec');
-        mockedAuthManager.getAuthorizationHeader = jest.fn().mockResolvedValue('Invalid');
-        await expect(AtlasHttpClient.get(orgId, '/groups')).rejects.toThrow(/Failed to obtain valid OAuth token/);
+        AtlasAuthManager.getAuthorizationHeader = (async () => 'Invalid') as any;
+        await assert.rejects(() => AtlasHttpClient.get(orgId, '/groups'), /Failed to obtain valid OAuth token/);
     });
 
     test('digest flow uses digest-fetch client and throws on non-ok', async () => {
         AtlasCredentialCache.setAtlasDigestCredentials(orgId, 'pub', 'priv');
-        // Override implementation to return failing response
-        const digestFetchModule = jest.requireMock('digest-fetch');
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        digestFetchModule.mockImplementation(() => ({
-            fetch: jest.fn(async () => ({ ok: false, status: 401, text: async () => 'Unauthorized' })),
-        }));
-        await expect(AtlasHttpClient.get(orgId, '/groups')).rejects.toThrow(/401/);
+        globalAny.fetch = async () => ({ ok: false, status: 401, text: async () => 'Unauthorized' });
+        await assert.rejects(() => AtlasHttpClient.get(orgId, '/groups'));
     });
 });

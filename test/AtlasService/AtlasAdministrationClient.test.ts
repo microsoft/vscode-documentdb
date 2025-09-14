@@ -3,30 +3,43 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import assert from 'assert';
 import { type AtlasApiResponse } from '../../src/plugins/service-mongo-atlas/utils/AtlasAdminApiTypes';
 import { AtlasAdministrationClient } from '../../src/plugins/service-mongo-atlas/utils/AtlasAdministrationClient';
 import { AtlasHttpClient } from '../../src/plugins/service-mongo-atlas/utils/AtlasHttpClient';
 
-// Prevent ESM parsing issue from transitively importing digest-fetch by mocking it early.
-jest.mock('digest-fetch', () => ({ default: jest.fn() }));
-jest.mock('../../src/plugins/service-mongo-atlas/utils/AtlasHttpClient');
+// We'll manually stub AtlasHttpClient methods
 
-const mockedHttp = AtlasHttpClient as jest.Mocked<typeof AtlasHttpClient>;
-
-function mockJson<T>(data: T) {
+function mockJson<T>(data: T): Response {
     return { ok: true, status: 200, json: async () => data } as any as Response;
 }
 
-function mockFail(status: number, text: string) {
+function mockFail(status: number, text: string): Response {
     return { ok: false, status, text: async () => text } as any as Response;
 }
 
-describe('AtlasAdministrationClient', () => {
+suite('AtlasAdministrationClient', () => {
     const orgId = 'org';
     const projectId = 'proj';
 
-    beforeEach(() => {
-        jest.resetAllMocks();
+    let originalGet: typeof AtlasHttpClient.get;
+    let originalPost: typeof AtlasHttpClient.post;
+    let originalDelete: typeof AtlasHttpClient.delete;
+
+    function resetStubs() {
+        AtlasHttpClient.get = originalGet;
+        AtlasHttpClient.post = originalPost;
+        AtlasHttpClient.delete = originalDelete;
+    }
+
+    setup(() => {
+        originalGet = AtlasHttpClient.get.bind(AtlasHttpClient);
+        originalPost = AtlasHttpClient.post.bind(AtlasHttpClient);
+        originalDelete = AtlasHttpClient.delete.bind(AtlasHttpClient);
+    });
+
+    teardown(() => {
+        resetStubs();
     });
 
     test('listProjects success builds query params', async () => {
@@ -34,19 +47,23 @@ describe('AtlasAdministrationClient', () => {
             results: [{ name: 'p', orgId: orgId, created: '', clusterCount: 0 }],
             totalCount: 1,
         };
-        mockedHttp.get.mockResolvedValue(mockJson(data));
+        let calledEndpoint = '';
+        AtlasHttpClient.get = (async (_org, endpoint) => {
+            calledEndpoint = endpoint;
+            return mockJson(data);
+        }) as any;
         const resp = await AtlasAdministrationClient.listProjects(orgId, {
             pageNum: 1,
             itemsPerPage: 5,
             includeCount: true,
         });
-        expect(resp.totalCount).toBe(1);
-        expect(mockedHttp.get.mock.calls[0][1]).toMatch(/pageNum=1/);
+        assert.strictEqual(resp.totalCount, 1);
+        assert.ok(/pageNum=1/.test(calledEndpoint), 'Expected pageNum query param');
     });
 
     test('listProjects failure throws', async () => {
-        mockedHttp.get.mockResolvedValue(mockFail(500, 'err'));
-        await expect(AtlasAdministrationClient.listProjects(orgId)).rejects.toThrow(/Failed to list Atlas projects/);
+        AtlasHttpClient.get = (async () => mockFail(500, 'err')) as any;
+        await assert.rejects(() => AtlasAdministrationClient.listProjects(orgId), /Failed to list Atlas projects/);
     });
 
     test('listClusters success', async () => {
@@ -60,42 +77,47 @@ describe('AtlasAdministrationClient', () => {
             ],
             totalCount: 1,
         };
-        mockedHttp.get.mockResolvedValue(mockJson(data));
+        AtlasHttpClient.get = (async () => mockJson(data)) as any;
         const resp = await AtlasAdministrationClient.listClusters(orgId, projectId);
-        expect(resp.results.length).toBe(1);
+        assert.strictEqual(resp.results.length, 1);
     });
 
     test('getCluster failure throws', async () => {
-        mockedHttp.get.mockResolvedValue(mockFail(404, 'missing'));
-        await expect(AtlasAdministrationClient.getCluster(orgId, projectId, 'cl')).rejects.toThrow(
+        AtlasHttpClient.get = (async () => mockFail(404, 'missing')) as any;
+        await assert.rejects(
+            () => AtlasAdministrationClient.getCluster(orgId, projectId, 'cl'),
             /Failed to get cluster/,
         );
     });
 
     test('listDatabaseUsers failure throws', async () => {
-        mockedHttp.get.mockResolvedValue(mockFail(400, 'bad'));
-        await expect(AtlasAdministrationClient.listDatabaseUsers(orgId, projectId)).rejects.toThrow(
+        AtlasHttpClient.get = (async () => mockFail(400, 'bad')) as any;
+        await assert.rejects(
+            () => AtlasAdministrationClient.listDatabaseUsers(orgId, projectId),
             /Failed to list database users/,
         );
     });
 
     test('getAccessList failure throws', async () => {
-        mockedHttp.get.mockResolvedValue(mockFail(401, 'unauth'));
-        await expect(AtlasAdministrationClient.getAccessList(orgId, projectId)).rejects.toThrow(
+        AtlasHttpClient.get = (async () => mockFail(401, 'unauth')) as any;
+        await assert.rejects(
+            () => AtlasAdministrationClient.getAccessList(orgId, projectId),
             /Failed to get access list/,
         );
     });
 
     test('createAccessListEntries failure throws', async () => {
-        mockedHttp.post.mockResolvedValue(mockFail(500, 'boom'));
-        await expect(AtlasAdministrationClient.createAccessListEntries(orgId, projectId, [])).rejects.toThrow(
+        AtlasHttpClient.post = (async () => mockFail(500, 'boom')) as any;
+        await assert.rejects(
+            () => AtlasAdministrationClient.createAccessListEntries(orgId, projectId, []),
             /Failed to create access list entries/,
         );
     });
 
     test('deleteAccessListEntry failure throws', async () => {
-        mockedHttp.delete.mockResolvedValue(mockFail(403, 'deny'));
-        await expect(AtlasAdministrationClient.deleteAccessListEntry(orgId, projectId, '1.1.1.1')).rejects.toThrow(
+        AtlasHttpClient.delete = (async () => mockFail(403, 'deny')) as any;
+        await assert.rejects(
+            () => AtlasAdministrationClient.deleteAccessListEntry(orgId, projectId, '1.1.1.1'),
             /Failed to delete access list entry/,
         );
     });
