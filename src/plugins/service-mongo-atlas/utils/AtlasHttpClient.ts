@@ -142,7 +142,9 @@ export class AtlasHttpClient {
 
         if (!response.ok) {
             const errorText: string = await response.text();
-            throw new Error(`Request failed with status ${response.status}: ${errorText}`);
+            throw new Error(
+                l10n.t('Request failed with status {status}: {errorText}', { status: response.status, errorText }),
+            );
         }
 
         return response;

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
 import { CaseInsensitiveMap } from '../../../utils/CaseInsensitiveMap';
 
 export interface AtlasCredentials {
@@ -82,15 +83,17 @@ export class AtlasCredentialCache {
      *
      * @param orgId - The organization id for the Atlas credential instance
      * @param accessToken - The access token received from OAuth
-     * @param expiresInSeconds - Token lifetime in seconds
+     * @param expiresInSeconds - Token lifetime in seconds, maximum value is 3600
      */
     public static updateAtlasOAuthToken(orgId: string, accessToken: string, expiresInSeconds: number = 3600): void {
         const credentials = AtlasCredentialCache._store.get(orgId);
         if (!credentials?.oauth) {
-            throw new Error(`No Atlas OAuth credentials found for organization ${orgId}`);
+            throw new Error(l10n.t('No Atlas OAuth credentials found for organization {0}', orgId));
         }
 
-        const tokenExpiry = Date.now() + expiresInSeconds * 1000;
+        // expiresInSeconds should never exceeds 3600 as the lifecycle of token for Atlas administration API is
+        // 1 hour(3600 seconds): https://www.mongodb.com/docs/atlas/configure-api-access/#request-an-access-token.
+        const tokenExpiry = Date.now() + (expiresInSeconds > 3600 ? 3600 : expiresInSeconds) * 1000;
         credentials.oauth.accessToken = accessToken;
         credentials.oauth.tokenExpiry = tokenExpiry;
 
