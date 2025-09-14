@@ -11,7 +11,7 @@ import {
     type AtlasDatabaseUser,
     type AtlasProject,
     type CreateAccessListEntryParams,
-} from '../types/AtlasAdminApiTypes';
+} from '../utils/AtlasAdminApiTypes';
 import { AtlasHttpClient } from './AtlasHttpClient';
 
 /**

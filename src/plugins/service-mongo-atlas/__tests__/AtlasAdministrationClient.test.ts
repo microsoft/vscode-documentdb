@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AtlasApiResponse } from '../types/AtlasAdminApiTypes';
+import { type AtlasApiResponse } from '../utils/AtlasAdminApiTypes';
 import { AtlasAdministrationClient } from '../utils/AtlasAdministrationClient';
 import { AtlasHttpClient } from '../utils/AtlasHttpClient';
 
