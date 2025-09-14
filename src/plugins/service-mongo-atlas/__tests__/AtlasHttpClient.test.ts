@@ -3,40 +3,37 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import assert from 'assert';
-import { AtlasAuthManager } from '../../src/plugins/service-mongo-atlas/utils/AtlasAuthManager';
-import { AtlasCredentialCache } from '../../src/plugins/service-mongo-atlas/utils/AtlasCredentialCache';
-import { AtlasHttpClient } from '../../src/plugins/service-mongo-atlas/utils/AtlasHttpClient';
-
-const globalAny: any = global;
+import { AtlasAuthManager } from '../utils/AtlasAuthManager';
+import { AtlasCredentialCache } from '../utils/AtlasCredentialCache';
+import { AtlasHttpClient } from '../utils/AtlasHttpClient';
 
 type FetchFn = (url: string, init?: any) => Promise<any>;
 
-suite('AtlasHttpClient', () => {
+describe('AtlasHttpClient (Jest)', () => {
     const orgId = 'org-http';
-    let originalFetch: unknown;
+    let originalFetch: any;
     let originalGetAuthHeader: typeof AtlasAuthManager.getAuthorizationHeader;
 
-    setup(() => {
-        originalFetch = globalAny.fetch;
-        originalGetAuthHeader = AtlasAuthManager.getAuthorizationHeader.bind(
-            AtlasAuthManager,
-        ) as unknown as typeof AtlasAuthManager.getAuthorizationHeader;
-        delete globalAny.fetch;
+    beforeEach(() => {
+        originalFetch = global.fetch;
+        originalGetAuthHeader = AtlasAuthManager.getAuthorizationHeader.bind(AtlasAuthManager);
+        // @ts-expect-error override
+        delete global.fetch;
         AtlasCredentialCache.clearAtlasCredentials(orgId);
     });
 
-    teardown(() => {
+    afterEach(() => {
         if (originalFetch) {
-            globalAny.fetch = originalFetch;
+            global.fetch = originalFetch;
         } else {
-            delete globalAny.fetch;
+            // @ts-expect-error restore
+            delete global.fetch;
         }
         AtlasAuthManager.getAuthorizationHeader = originalGetAuthHeader as any;
     });
 
     test('throws when no credentials', async () => {
-        await assert.rejects(() => AtlasHttpClient.get(orgId, '/groups'), /No Atlas credentials/);
+        await expect(AtlasHttpClient.get(orgId, '/groups')).rejects.toThrow(/No Atlas credentials/);
     });
 
     test('uses OAuth flow and sets Authorization header', async () => {
@@ -51,23 +48,23 @@ suite('AtlasHttpClient', () => {
             fetchSpyCalls.push([_url, init]);
             return { ok: true, status: 200, json: async () => ({ ok: true }) } as any;
         };
-        globalAny.fetch = fetchSpy;
+        global.fetch = fetchSpy as any;
 
         await AtlasHttpClient.get(orgId, '/groups');
-        assert.ok(called, 'Expected getAuthorizationHeader to be called');
+        expect(called).toBe(true);
         const headers = fetchSpyCalls[0][1].headers;
-        assert.strictEqual(headers.Authorization, 'Bearer tokenX');
+        expect(headers.Authorization).toBe('Bearer tokenX');
     });
 
     test('oauth flow throws when missing bearer', async () => {
         AtlasCredentialCache.setAtlasOAuthCredentials(orgId, 'cid', 'sec');
         AtlasAuthManager.getAuthorizationHeader = (async () => 'Invalid') as any;
-        await assert.rejects(() => AtlasHttpClient.get(orgId, '/groups'), /Failed to obtain valid OAuth token/);
+        await expect(AtlasHttpClient.get(orgId, '/groups')).rejects.toThrow(/Failed to obtain valid OAuth token/);
     });
 
     test('digest flow uses digest-fetch client and throws on non-ok', async () => {
         AtlasCredentialCache.setAtlasDigestCredentials(orgId, 'pub', 'priv');
-        globalAny.fetch = async () => ({ ok: false, status: 401, text: async () => 'Unauthorized' });
-        await assert.rejects(() => AtlasHttpClient.get(orgId, '/groups'));
+        global.fetch = (async () => ({ ok: false, status: 401, text: async () => 'Unauthorized' })) as any;
+        await expect(AtlasHttpClient.get(orgId, '/groups')).rejects.toThrow();
     });
 });

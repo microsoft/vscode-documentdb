@@ -3,62 +3,55 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import assert from 'assert';
-import { AtlasCredentialCache } from '../../src/plugins/service-mongo-atlas/utils/AtlasCredentialCache';
+import { AtlasCredentialCache } from '../utils/AtlasCredentialCache';
 
-// Helper to access private store for cleanup without exposing implementation
-function clear(orgId: string) {
-    AtlasCredentialCache.clearAtlasCredentials(orgId);
-}
-
-suite('AtlasCredentialCache', () => {
+describe('AtlasCredentialCache (Jest)', () => {
     const orgId = 'OrgOne';
     const orgIdDifferentCase = 'orgone';
 
-    teardown(() => {
-        clear(orgId);
+    afterEach(() => {
+        AtlasCredentialCache.clearAtlasCredentials(orgId);
     });
 
     test('set and get OAuth credentials (case insensitive key)', () => {
         AtlasCredentialCache.setAtlasOAuthCredentials(orgId, 'clientId', 'clientSecret');
         const creds = AtlasCredentialCache.getAtlasCredentials(orgIdDifferentCase);
-        assert.ok(creds, 'creds should be defined');
-        assert.strictEqual(creds?.authType, 'oauth');
-        assert.strictEqual(creds?.oauth?.clientId, 'clientId');
+        expect(creds).toBeDefined();
+        expect(creds?.authType).toBe('oauth');
+        expect(creds?.oauth?.clientId).toBe('clientId');
     });
 
     test('set and get Digest credentials', () => {
         AtlasCredentialCache.setAtlasDigestCredentials(orgId, 'public', 'private');
         const creds = AtlasCredentialCache.getAtlasCredentials(orgId);
-        assert.strictEqual(creds?.authType, 'digest');
-        assert.strictEqual(creds?.digest?.publicKey, 'public');
+        expect(creds?.authType).toBe('digest');
+        expect(creds?.digest?.publicKey).toBe('public');
     });
 
     test('update token caches expiry and value', () => {
         AtlasCredentialCache.setAtlasOAuthCredentials(orgId, 'client', 'secret');
-        // use a larger expiry to pass buffer check ( >60s )
         AtlasCredentialCache.updateAtlasOAuthToken(orgId, 'token123', 120);
         const creds = AtlasCredentialCache.getAtlasCredentials(orgId)!;
-        assert.strictEqual(creds.oauth?.accessToken, 'token123');
-        assert.ok((creds.oauth?.tokenExpiry ?? 0) > Date.now());
-        assert.ok(AtlasCredentialCache.isAtlasOAuthTokenValid(orgId));
+        expect(creds.oauth?.accessToken).toBe('token123');
+        expect((creds.oauth?.tokenExpiry ?? 0) > Date.now()).toBe(true);
+        expect(AtlasCredentialCache.isAtlasOAuthTokenValid(orgId)).toBe(true);
     });
 
     test('token validity false when missing token or expired', () => {
         AtlasCredentialCache.setAtlasOAuthCredentials(orgId, 'client', 'secret');
-        assert.ok(!AtlasCredentialCache.isAtlasOAuthTokenValid(orgId));
-        AtlasCredentialCache.updateAtlasOAuthToken(orgId, 'token123', -1); // expired
-        assert.ok(!AtlasCredentialCache.isAtlasOAuthTokenValid(orgId));
+        expect(AtlasCredentialCache.isAtlasOAuthTokenValid(orgId)).toBe(false);
+        AtlasCredentialCache.updateAtlasOAuthToken(orgId, 'token123', -1);
+        expect(AtlasCredentialCache.isAtlasOAuthTokenValid(orgId)).toBe(false);
     });
 
     test('clear credentials removes entry', () => {
         AtlasCredentialCache.setAtlasOAuthCredentials(orgId, 'client', 'secret');
-        assert.ok(AtlasCredentialCache.getAtlasCredentials(orgId));
+        expect(AtlasCredentialCache.getAtlasCredentials(orgId)).toBeDefined();
         AtlasCredentialCache.clearAtlasCredentials(orgId);
-        assert.strictEqual(AtlasCredentialCache.getAtlasCredentials(orgId), undefined);
+        expect(AtlasCredentialCache.getAtlasCredentials(orgId)).toBeUndefined();
     });
 
     test('updateAtlasOAuthToken throws if oauth creds missing', () => {
-        assert.throws(() => AtlasCredentialCache.updateAtlasOAuthToken(orgId, 'tkn'), /No Atlas OAuth credentials/);
+        expect(() => AtlasCredentialCache.updateAtlasOAuthToken(orgId, 'tkn')).toThrow(/No Atlas OAuth credentials/);
     });
 });
