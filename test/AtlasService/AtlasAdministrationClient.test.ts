@@ -3,10 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    AtlasAdministrationClient,
-    type AtlasApiResponse,
-} from '../../src/plugins/service-mongo-atlas/utils/AtlasAdministrationClient';
+import { type AtlasApiResponse } from '../../src/plugins/service-mongo-atlas/utils/AtlasAdminApiTypes';
+import { AtlasAdministrationClient } from '../../src/plugins/service-mongo-atlas/utils/AtlasAdministrationClient';
 import { AtlasHttpClient } from '../../src/plugins/service-mongo-atlas/utils/AtlasHttpClient';
 
 // Prevent ESM parsing issue from transitively importing digest-fetch by mocking it early.
