@@ -8,7 +8,6 @@ import { AtlasAuthManager } from '../../src/plugins/service-mongo-atlas/utils/At
 import { AtlasCredentialCache } from '../../src/plugins/service-mongo-atlas/utils/AtlasCredentialCache';
 import { AtlasHttpClient } from '../../src/plugins/service-mongo-atlas/utils/AtlasHttpClient';
 
-// We'll monkey-patch modules rather than using jest.mock
 const globalAny: any = global;
 
 type FetchFn = (url: string, init?: any) => Promise<any>;

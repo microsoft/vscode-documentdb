@@ -8,8 +8,6 @@ import { type AtlasApiResponse } from '../../src/plugins/service-mongo-atlas/uti
 import { AtlasAdministrationClient } from '../../src/plugins/service-mongo-atlas/utils/AtlasAdministrationClient';
 import { AtlasHttpClient } from '../../src/plugins/service-mongo-atlas/utils/AtlasHttpClient';
 
-// We'll manually stub AtlasHttpClient methods
-
 function mockJson<T>(data: T): Response {
     return { ok: true, status: 200, json: async () => data } as any as Response;
 }
