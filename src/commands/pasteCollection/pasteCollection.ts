@@ -99,6 +99,22 @@ export async function pasteCollection(
         isTargetExistingCollection,
     };
 
+    // Check for circular dependency when pasting into the same collection
+    if (
+        isTargetExistingCollection &&
+        wizardContext.sourceConnectionId === wizardContext.targetConnectionId &&
+        wizardContext.sourceDatabaseName === wizardContext.targetDatabaseName &&
+        wizardContext.sourceCollectionName === wizardContext.targetCollectionName
+    ) {
+        const errorTitle = l10n.t('Cannot copy collection to itself');
+        const errorDetail = l10n.t(
+            'This operation is not supported as it would create a circular dependency and never terminate. Please select a different target collection or database.',
+        );
+        void vscode.window.showErrorMessage(errorTitle, { modal: true, detail: errorDetail });
+        context.telemetry.properties.sameCollectionTarget = 'true';
+        return;
+    }
+
     // Create wizard with appropriate steps
     const promptSteps: AzureWizardPromptStep<PasteCollectionWizardContext>[] = [];
 
