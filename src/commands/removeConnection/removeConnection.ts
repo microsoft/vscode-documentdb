@@ -8,10 +8,10 @@ import * as l10n from '@vscode/l10n';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { checkResourceUsageBeforeOperation } from '../../utils/resourceUsageHelper';
 
 export async function removeAzureConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
@@ -25,7 +25,7 @@ export async function removeConnection(context: IActionContext, node: DocumentDB
     context.telemetry.properties.experience = node.experience.api;
 
     // Check if any running tasks are using this connection
-    const canProceed = await checkResourceUsageBeforeOperation(
+    const canProceed = await checkCanProceedAndInformUser(
         {
             connectionId: node.cluster.id,
         },

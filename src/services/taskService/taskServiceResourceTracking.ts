@@ -5,7 +5,7 @@
 
 /**
  * Represents a resource that can be used by tasks.
- * Resources are hierarchical (connection > database > collection > document)
+ * Resources are hierarchical (connection > database > collection)
  * and all fields are optional to support partial matching.
  */
 export interface ResourceDefinition {
@@ -23,16 +23,6 @@ export interface ResourceDefinition {
      * The collection name within the database
      */
     collectionName?: string;
-
-    /**
-     * Optional document identifier within the collection
-     */
-    documentId?: string;
-
-    /**
-     * Optional file name for file-based operations
-     */
-    fileName?: string;
 
     // Future extensibility: add more resource types as needed
 }
@@ -54,7 +44,7 @@ export interface ResourceTrackingTask {
 /**
  * Information about a task that is using a resource
  */
-export interface TaskResourceInfo {
+export interface TaskInfo {
     /**
      * Unique identifier of the task
      */
@@ -72,36 +62,6 @@ export interface TaskResourceInfo {
 }
 
 /**
- * Result of checking resource usage
- */
-export interface ResourceUsageResult {
-    /**
-     * Whether there are any conflicts with the requested resource
-     */
-    hasConflicts: boolean;
-
-    /**
-     * List of tasks that are conflicting with the requested resource
-     */
-    conflictingTasks: TaskResourceInfo[];
-}
-
-/**
- * Information about all resources used by a specific task
- */
-export interface TaskResourceUsage {
-    /**
-     * Task information
-     */
-    task: TaskResourceInfo;
-
-    /**
-     * Resources being used by this task
-     */
-    resources: ResourceDefinition[];
-}
-
-/**
  * Checks if a requested resource conflicts with a resource in use.
  * Returns true if there's a conflict (operation should be blocked).
  *
@@ -115,7 +75,7 @@ export interface TaskResourceUsage {
  * @returns true if there's a conflict, false otherwise
  */
 export function hasResourceConflict(requestedResource: ResourceDefinition, usedResource: ResourceDefinition): boolean {
-    // If no connection ID specified in either, no conflict can be determined
+    // Must have connection IDs to compare
     if (!requestedResource.connectionId || !usedResource.connectionId) {
         return false;
     }
@@ -125,38 +85,48 @@ export function hasResourceConflict(requestedResource: ResourceDefinition, usedR
         return false;
     }
 
-    // If requesting to delete/modify a connection (no database specified),
-    // check if any task uses that connection
+    // Same connection - now check hierarchical conflicts
+    return isHierarchicalConflict(requestedResource, usedResource);
+}
+
+/**
+ * Checks for hierarchical conflicts between two resources in the same connection.
+ * The hierarchy is: connection > database > collection
+ */
+function isHierarchicalConflict(requestedResource: ResourceDefinition, usedResource: ResourceDefinition): boolean {
+    // If requesting connection-level operation (no database specified)
     if (!requestedResource.databaseName) {
-        return true; // Any use of this connection is a conflict
+        return true; // Affects everything in this connection
     }
 
-    // If used resource doesn't specify a database, no conflict
+    // If used resource has no database, it can't conflict with database/collection operations
     if (!usedResource.databaseName) {
         return false;
     }
 
-    // Different databases in same connection don't conflict
+    // Different databases don't conflict
     if (requestedResource.databaseName !== usedResource.databaseName) {
         return false;
     }
 
-    // If requesting to delete/modify a database (no collection specified),
-    // check if any task uses that database
+    // Same database - check collection level
+    return isCollectionLevelConflict(requestedResource, usedResource);
+}
+
+/**
+ * Checks for collection-level conflicts between two resources in the same database.
+ */
+function isCollectionLevelConflict(requestedResource: ResourceDefinition, usedResource: ResourceDefinition): boolean {
+    // If requesting database-level operation (no collection specified)
     if (!requestedResource.collectionName) {
-        return true; // Any use of this database is a conflict
+        return true; // Affects everything in this database
     }
 
-    // If used resource doesn't specify a collection, no conflict
+    // If used resource has no collection, it can't conflict with collection operations
     if (!usedResource.collectionName) {
         return false;
     }
 
-    // Check for exact collection match
-    if (requestedResource.collectionName !== usedResource.collectionName) {
-        return false;
-    }
-
-    // Same connection, database, and collection - this is a conflict
-    return true;
+    // Both specify collections - conflict only if they're the same
+    return requestedResource.collectionName === usedResource.collectionName;
 }

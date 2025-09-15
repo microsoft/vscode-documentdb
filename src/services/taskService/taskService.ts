@@ -4,15 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ext } from '../extensionVariables';
+import { ext } from '../../extensionVariables';
 import {
     type ResourceDefinition,
     type ResourceTrackingTask,
-    type ResourceUsageResult,
-    type TaskResourceInfo,
-    type TaskResourceUsage,
+    type TaskInfo,
     hasResourceConflict,
-} from './resourceTracking';
+} from './taskServiceResourceTracking';
 
 /**
  * Enumeration of possible states a task can be in.
@@ -447,13 +445,13 @@ export interface TaskService {
     readonly onDidChangeTaskState: vscode.Event<TaskStateChangeEvent>;
 
     /**
-     * Checks if any running tasks are using the specified resource.
+     * Gets all tasks that are currently using resources that conflict with the specified resource.
      * Only checks tasks that are currently in non-final states (Pending, Initializing, Running, Stopping).
      *
-     * @param resource The resource to check for usage
-     * @returns Object with conflict information including task details
+     * @param resource The resource to check for usage conflicts
+     * @returns Array of conflicting task information
      */
-    checkResourceUsage(resource: ResourceDefinition): ResourceUsageResult;
+    getConflictingTasks(resource: ResourceDefinition): TaskInfo[];
 
     /**
      * Gets all resources currently in use by all active tasks.
@@ -462,7 +460,7 @@ export interface TaskService {
      *
      * @returns Array of task resource usage information
      */
-    getAllUsedResources(): TaskResourceUsage[];
+    getAllUsedResources(): Array<{ task: TaskInfo; resources: ResourceDefinition[] }>;
 }
 
 /**
@@ -534,8 +532,8 @@ class TaskServiceImpl implements TaskService {
         this._onDidDeleteTask.fire(id);
     }
 
-    public checkResourceUsage(resource: ResourceDefinition): ResourceUsageResult {
-        const conflictingTasks: TaskResourceInfo[] = [];
+    public getConflictingTasks(resource: ResourceDefinition): TaskInfo[] {
+        const conflictingTasks: TaskInfo[] = [];
 
         // Only check tasks that are not in final states
         const activeTasks = Array.from(this.tasks.values()).filter((task) => {
@@ -561,14 +559,11 @@ class TaskServiceImpl implements TaskService {
             }
         }
 
-        return {
-            hasConflicts: conflictingTasks.length > 0,
-            conflictingTasks,
-        };
+        return conflictingTasks;
     }
 
-    public getAllUsedResources(): TaskResourceUsage[] {
-        const result: TaskResourceUsage[] = [];
+    public getAllUsedResources(): Array<{ task: TaskInfo; resources: ResourceDefinition[] }> {
+        const result: Array<{ task: TaskInfo; resources: ResourceDefinition[] }> = [];
 
         // Only include tasks that are not in final states
         const activeTasks = Array.from(this.tasks.values()).filter((task) => {

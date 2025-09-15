@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { TaskState, type Task, type TaskService } from './taskService';
+import { TaskState, type Task, type TaskService } from './taskService/taskService';
 
 /**
  * Interface for managing progress reporting of tasks.

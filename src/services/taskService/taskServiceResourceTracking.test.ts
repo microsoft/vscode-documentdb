@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from '@jest/globals';
-import { type ResourceDefinition, hasResourceConflict } from '../../src/services/resourceTracking';
+import { type ResourceDefinition, hasResourceConflict } from './taskServiceResourceTracking';
 
 describe('ResourceTracking', () => {
     describe('hasResourceConflict', () => {

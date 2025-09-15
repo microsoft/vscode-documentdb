@@ -7,10 +7,10 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
+import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { checkResourceUsageBeforeOperation } from '../../utils/resourceUsageHelper';
 
 export async function deleteCollection(context: IActionContext, node: CollectionItem): Promise<void> {
     if (!node) {
@@ -20,7 +20,7 @@ export async function deleteCollection(context: IActionContext, node: Collection
     context.telemetry.properties.experience = node.experience.api;
 
     // Check if any running tasks are using this collection
-    const canProceed = await checkResourceUsageBeforeOperation(
+    const canProceed = await checkCanProceedAndInformUser(
         {
             connectionId: node.cluster.id,
             databaseName: node.databaseInfo.name,

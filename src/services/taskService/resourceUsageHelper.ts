@@ -4,38 +4,39 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { type ResourceDefinition } from '../services/resourceTracking';
-import { TaskService } from '../services/taskService';
+import { TaskService } from './taskService';
+import { type ResourceDefinition } from './taskServiceResourceTracking';
 
 /**
  * Helper function to check if any running tasks are using a resource before allowing
- * a destructive operation (like deletion) to proceed.
+ * a destructive operation (like deletion) to proceed. Shows a modal warning to the user
+ * if conflicts are found.
  *
  * @param resource The resource to check for usage
  * @param operationName The name of the operation (e.g., "delete collection")
  * @returns Promise<boolean> - true if operation can proceed, false if blocked
  */
-export async function checkResourceUsageBeforeOperation(
+export async function checkCanProceedAndInformUser(
     resource: ResourceDefinition,
     operationName: string,
 ): Promise<boolean> {
-    const usage = TaskService.checkResourceUsage(resource);
+    const conflictingTasks = TaskService.getConflictingTasks(resource);
 
-    if (usage.hasConflicts) {
-        const taskList = usage.conflictingTasks.map((task) => `• ${task.taskName} (${task.taskType})`).join('\n');
+    if (conflictingTasks.length > 0) {
+        const taskList = conflictingTasks.map((task) => `• ${task.taskName} (${task.taskType})`).join('\n');
 
         const resourceDescription = getResourceDescription(resource);
 
-        const message = vscode.l10n.t(
-            'Cannot {operationName} because the following tasks are currently using {resourceDescription}:\n\n{taskList}\n\nPlease stop these tasks first before proceeding.',
+        const title = vscode.l10n.t('Cannot {0}', operationName);
+        const detail = vscode.l10n.t(
+            'The following tasks are currently using {resourceDescription}:\n\n{taskList}\n\nPlease stop these tasks first before proceeding.',
             {
-                operationName,
                 resourceDescription,
                 taskList,
             },
         );
 
-        await vscode.window.showWarningMessage(message);
+        await vscode.window.showErrorMessage(title, { detail, modal: true });
         return false;
     }
 

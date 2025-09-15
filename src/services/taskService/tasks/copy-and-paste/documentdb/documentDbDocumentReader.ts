@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Document, type WithId } from 'mongodb';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { ClustersClient } from '../../../../../documentdb/ClustersClient';
 import { type DocumentDetails, type DocumentReader } from '../documentInterfaces';
 
 /**

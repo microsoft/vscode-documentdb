@@ -7,10 +7,10 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
+import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { checkResourceUsageBeforeOperation } from '../../utils/resourceUsageHelper';
 
 export async function deleteAzureDatabase(context: IActionContext, node: DatabaseItem): Promise<void> {
     if (!node) {
@@ -24,7 +24,7 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
     context.telemetry.properties.experience = node.experience.api;
 
     // Check if any running tasks are using this database
-    const canProceed = await checkResourceUsageBeforeOperation(
+    const canProceed = await checkCanProceedAndInformUser(
         {
             connectionId: node.cluster.id,
             databaseName: node.databaseInfo.name,

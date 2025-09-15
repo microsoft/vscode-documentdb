@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ext } from '../../../extensionVariables';
-import { type ResourceDefinition, type ResourceTrackingTask } from '../../resourceTracking';
+import { ext } from '../../../../extensionVariables';
 import { Task } from '../../taskService';
+import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 import { ConflictResolutionStrategy, type CopyPasteConfig } from './copyPasteConfig';
 import { type DocumentDetails, type DocumentReader, type DocumentWriter } from './documentInterfaces';
 

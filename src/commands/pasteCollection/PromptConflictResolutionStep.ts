@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ConflictResolutionStrategy } from '../../services/tasks/copy-and-paste/copyPasteConfig';
+import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
 export class PromptConflictResolutionStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {

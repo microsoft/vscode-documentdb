@@ -6,7 +6,7 @@
 import { parseError } from '@microsoft/vscode-azext-utils';
 import { type Document, type ObjectId, type WithId, type WriteError } from 'mongodb';
 import { l10n } from 'vscode';
-import { ClustersClient, isBulkWriteError } from '../../../../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError } from '../../../../../documentdb/ClustersClient';
 import { ConflictResolutionStrategy, type CopyPasteConfig } from '../copyPasteConfig';
 import {
     type BulkWriteResult,
