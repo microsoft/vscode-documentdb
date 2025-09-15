@@ -39,7 +39,7 @@ export class PromptConflictResolutionStep extends AzureWizardPromptStep<PasteCol
                 id: 'generateNewIds',
                 label: l10n.t('Generate new _id values'),
                 detail: l10n.t(
-                    'Create new unique _id values for all documents to avoid conflicts. Original _id values are preserved in a separate field.',
+                    'Create new unique _id values for all documents to avoid conflicts. Original _id values are preserved in _original_id field (or _original_id_1, _original_id_2, etc. if conflicts occur).',
                 ),
                 alwaysShow: true,
             },
@@ -63,9 +63,7 @@ export class PromptConflictResolutionStep extends AzureWizardPromptStep<PasteCol
                 context.conflictResolutionStrategy = ConflictResolutionStrategy.Overwrite;
                 break;
             case 'generateNewIds':
-                // Note: This option is scaffolded but not yet supported by the backend
-                // When implemented, this should be a separate enum value
-                context.conflictResolutionStrategy = ConflictResolutionStrategy.Overwrite; // Fallback for now
+                context.conflictResolutionStrategy = ConflictResolutionStrategy.GenerateNewIds;
                 break;
             default:
                 throw new Error(l10n.t('Invalid conflict resolution strategy selected.'));

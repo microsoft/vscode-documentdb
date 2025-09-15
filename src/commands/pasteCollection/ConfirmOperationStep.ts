@@ -93,6 +93,8 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
                 return l10n.t('Skip and Log (continue)');
             case ConflictResolutionStrategy.Overwrite:
                 return l10n.t('Overwrite existing documents');
+            case ConflictResolutionStrategy.GenerateNewIds:
+                return l10n.t('Generate new _id values');
             default:
                 return l10n.t('Unknown strategy');
         }
