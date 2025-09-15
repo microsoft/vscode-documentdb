@@ -139,6 +139,7 @@
   "Copy operation completed successfully": "Copy operation completed successfully",
   "Copy-and-Merge": "Copy-and-Merge",
   "Copy-and-Paste": "Copy-and-Paste",
+  "Could not check existing collections for default name generation: {0}": "Could not check existing collections for default name generation: {0}",
   "Could not find {0}": "Could not find {0}",
   "Could not find the Azure Resource Groups extension": "Could not find the Azure Resource Groups extension",
   "Could not find unique name for new file.": "Could not find unique name for new file.",

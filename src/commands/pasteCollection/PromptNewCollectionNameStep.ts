@@ -51,7 +51,6 @@ export class PromptNewCollectionNameStep extends AzureWizardPromptStep<PasteColl
                     context.telemetry.measurements.nameEditDistance = editOperations;
                 }
             } catch (error) {
-                console.error('Failed to record name edit distance telemetry:', error);
                 context.telemetry.properties.nameEditDistanceTelemetryError = 'true';
                 context.telemetry.properties.nameEditDistanceTelemetryErrorType =
                     error instanceof Error ? error.name : 'unknown';
