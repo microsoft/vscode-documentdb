@@ -4,11 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
-import { TaskService } from '../../services/taskService';
+import { ext } from '../../extensionVariables';
+import { TaskService, TaskState } from '../../services/taskService';
 import { CopyPasteCollectionTask } from '../../services/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/tasks/copy-and-paste/copyPasteConfig';
 import { DocumentDbDocumentReader } from '../../services/tasks/copy-and-paste/documentdb/documentDbDocumentReader';
 import { DocumentDbDocumentWriter } from '../../services/tasks/copy-and-paste/documentdb/documentDbDocumentWriter';
+import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
@@ -58,6 +60,22 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
 
         // Register task with the task service
         TaskService.registerTask(task);
+
+        // If the target is a database node, we need to refresh it once the task is working
+        // so the new collection appears in the tree view
+        if (context.targetNode instanceof DatabaseItem) {
+            // Subscribe to task status updates to know when to refresh the tree
+            const subscription = task.onDidChangeState(async (stateChange) => {
+                // Once the task completes the Initializing state, refresh the database node
+                if (stateChange.previousState === TaskState.Initializing) {
+                    await new Promise<void>((resolve) => setTimeout(() => resolve(), 1000));
+                    // Refresh the database node to show the new collection
+                    ext.state.notifyChildrenChanged(context.targetNode.id);
+                    // Unsubscribe since we only need to refresh once
+                    subscription.dispose();
+                }
+            });
+        }
 
         // Start the copy-paste task
         await task.start();
