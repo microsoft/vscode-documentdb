@@ -23,13 +23,13 @@ export async function checkCanProceedAndInformUser(
     const conflictingTasks = TaskService.getConflictingTasks(resource);
 
     if (conflictingTasks.length > 0) {
-        const taskList = conflictingTasks.map((task) => `• ${task.taskName} (${task.taskType})`).join('\n');
+        const taskList = conflictingTasks.map((task) => ` • ${task.taskName} (${task.taskType})`).join('\n');
 
         const resourceDescription = getResourceDescription(resource);
 
         const title = vscode.l10n.t('Cannot {0}', operationName);
         const detail = vscode.l10n.t(
-            'The following tasks are currently using {resourceDescription}:\n\n{taskList}\n\nPlease stop these tasks first before proceeding.',
+            'The following tasks are currently using {resourceDescription}:\n{taskList}\n\nPlease stop these tasks first before proceeding.',
             {
                 resourceDescription,
                 taskList,
@@ -47,8 +47,8 @@ export async function checkCanProceedAndInformUser(
  * Generates a human-readable description of a resource for use in user messages
  */
 function getResourceDescription(resource: ResourceDefinition): string {
-    if (resource.collectionName && resource.databaseName) {
-        return vscode.l10n.t('collection "{0}" in database "{1}"', resource.collectionName, resource.databaseName);
+    if (resource.collectionName) {
+        return vscode.l10n.t('collection "{0}"', resource.collectionName);
     }
 
     if (resource.databaseName) {

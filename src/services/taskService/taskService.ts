@@ -178,7 +178,7 @@ export abstract class Task {
             if (state === TaskState.Completed) {
                 const msg = this._status.message ?? '';
                 ext.outputChannel.appendLine(
-                    vscode.l10n.t("✅ Task '{taskName}' completed successfully. {message}", {
+                    vscode.l10n.t("✓ Task '{taskName}' completed successfully. {message}", {
                         taskName: this.name,
                         message: msg,
                     }),
@@ -186,7 +186,7 @@ export abstract class Task {
             } else if (state === TaskState.Stopped) {
                 const msg = this._status.message ?? '';
                 ext.outputChannel.appendLine(
-                    vscode.l10n.t("⏹️ Task '{taskName}' was stopped. {message}", {
+                    vscode.l10n.t("■ Task '{taskName}' was stopped. {message}", {
                         taskName: this.name,
                         message: msg,
                     }),
@@ -197,7 +197,7 @@ export abstract class Task {
                 // Include error details if available
                 const detail = err ? ` ${vscode.l10n.t('Error: {0}', err)}` : '';
                 ext.outputChannel.appendLine(
-                    vscode.l10n.t("⚠️ Task '{taskName}' failed. {message}", {
+                    vscode.l10n.t("! Task '{taskName}' failed. {message}", {
                         taskName: this.name,
                         message: `${msg}${detail}`.trim(),
                     }),
@@ -235,7 +235,7 @@ export abstract class Task {
             throw new Error(vscode.l10n.t('Cannot start task in state: {0}', this._status.state));
         }
 
-        ext.outputChannel.appendLine(vscode.l10n.t("🟡 Task '{taskName}' initializing...", { taskName: this.name }));
+        ext.outputChannel.appendLine(vscode.l10n.t("○ Task '{taskName}' initializing...", { taskName: this.name }));
 
         this.updateStatus(TaskState.Initializing, vscode.l10n.t('Initializing task...'), 0);
 
@@ -254,7 +254,7 @@ export abstract class Task {
             }
 
             this.updateStatus(TaskState.Running, vscode.l10n.t('Task is running'), 0);
-            ext.outputChannel.appendLine(vscode.l10n.t("▶️ Task '{taskName}' starting...", { taskName: this.name }));
+            ext.outputChannel.appendLine(vscode.l10n.t("► Task '{taskName}' starting...", { taskName: this.name }));
 
             // Start the actual work asynchronously
             void this.runWork().catch((error) => {
