@@ -10,6 +10,7 @@ import { ext } from '../../extensionVariables';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { checkResourceUsageBeforeOperation } from '../../utils/resourceUsageHelper';
 
 export async function deleteCollection(context: IActionContext, node: CollectionItem): Promise<void> {
     if (!node) {
@@ -17,6 +18,20 @@ export async function deleteCollection(context: IActionContext, node: Collection
     }
 
     context.telemetry.properties.experience = node.experience.api;
+
+    // Check if any running tasks are using this collection
+    const canProceed = await checkResourceUsageBeforeOperation(
+        {
+            connectionId: node.cluster.id,
+            databaseName: node.databaseInfo.name,
+            collectionName: node.collectionInfo.name,
+        },
+        l10n.t('delete this collection'),
+    );
+
+    if (!canProceed) {
+        return;
+    }
 
     const message = l10n.t('Delete collection "{collectionId}" and its contents?', {
         collectionId: node.collectionInfo.name,

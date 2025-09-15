@@ -11,6 +11,7 @@ import { ConnectionStorageService, ConnectionType } from '../../services/connect
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { checkResourceUsageBeforeOperation } from '../../utils/resourceUsageHelper';
 
 export async function removeAzureConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
@@ -22,6 +23,19 @@ export async function removeAzureConnection(context: IActionContext, node: Docum
 
 export async function removeConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
+
+    // Check if any running tasks are using this connection
+    const canProceed = await checkResourceUsageBeforeOperation(
+        {
+            connectionId: node.cluster.id,
+        },
+        l10n.t('remove this connection'),
+    );
+
+    if (!canProceed) {
+        throw new UserCancelledError();
+    }
+
     const confirmed = await getConfirmationAsInSettings(
         l10n.t('Are you sure?'),
         l10n.t('Delete "{connectionName}"?', { connectionName: node.cluster.name }) +

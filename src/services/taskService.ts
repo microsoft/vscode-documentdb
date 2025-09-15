@@ -5,6 +5,14 @@
 
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
+import {
+    type ResourceDefinition,
+    type ResourceTrackingTask,
+    type ResourceUsageResult,
+    type TaskResourceInfo,
+    type TaskResourceUsage,
+    hasResourceConflict,
+} from './resourceTracking';
 
 /**
  * Enumeration of possible states a task can be in.
@@ -437,6 +445,24 @@ export interface TaskService {
      * This provides detailed information about the state transition.
      */
     readonly onDidChangeTaskState: vscode.Event<TaskStateChangeEvent>;
+
+    /**
+     * Checks if any running tasks are using the specified resource.
+     * Only checks tasks that are currently in non-final states (Pending, Initializing, Running, Stopping).
+     *
+     * @param resource The resource to check for usage
+     * @returns Object with conflict information including task details
+     */
+    checkResourceUsage(resource: ResourceDefinition): ResourceUsageResult;
+
+    /**
+     * Gets all resources currently in use by all active tasks.
+     * Useful for debugging or advanced UI features.
+     * Only includes tasks that are currently in non-final states.
+     *
+     * @returns Array of task resource usage information
+     */
+    getAllUsedResources(): TaskResourceUsage[];
 }
 
 /**
@@ -506,6 +532,69 @@ class TaskServiceImpl implements TaskService {
         await task.delete();
         this.tasks.delete(id); // Notify listeners
         this._onDidDeleteTask.fire(id);
+    }
+
+    public checkResourceUsage(resource: ResourceDefinition): ResourceUsageResult {
+        const conflictingTasks: TaskResourceInfo[] = [];
+
+        // Only check tasks that are not in final states
+        const activeTasks = Array.from(this.tasks.values()).filter((task) => {
+            const status = task.getStatus();
+            return ![TaskState.Completed, TaskState.Failed, TaskState.Stopped].includes(status.state);
+        });
+
+        for (const task of activeTasks) {
+            // Check if task implements resource tracking
+            if ('getUsedResources' in task && typeof (task as ResourceTrackingTask).getUsedResources === 'function') {
+                const usedResources = (task as ResourceTrackingTask).getUsedResources();
+
+                // Check if any of the task's resources conflict with the requested resource
+                const hasConflict = usedResources.some((usedResource) => hasResourceConflict(resource, usedResource));
+
+                if (hasConflict) {
+                    conflictingTasks.push({
+                        taskId: task.id,
+                        taskName: task.name,
+                        taskType: task.type,
+                    });
+                }
+            }
+        }
+
+        return {
+            hasConflicts: conflictingTasks.length > 0,
+            conflictingTasks,
+        };
+    }
+
+    public getAllUsedResources(): TaskResourceUsage[] {
+        const result: TaskResourceUsage[] = [];
+
+        // Only include tasks that are not in final states
+        const activeTasks = Array.from(this.tasks.values()).filter((task) => {
+            const status = task.getStatus();
+            return ![TaskState.Completed, TaskState.Failed, TaskState.Stopped].includes(status.state);
+        });
+
+        for (const task of activeTasks) {
+            // Check if task implements resource tracking
+            if ('getUsedResources' in task && typeof (task as ResourceTrackingTask).getUsedResources === 'function') {
+                const resources = (task as ResourceTrackingTask).getUsedResources();
+
+                if (resources.length > 0) {
+                    result.push({
+                        task: {
+                            taskId: task.id,
+                            taskName: task.name,
+                            taskType: task.type,
+                        },
+                        resources,
+                    });
+                }
+            }
+        }
+
+        return result;
     }
 }
 
