@@ -202,6 +202,18 @@ export class CopyPasteCollectionTask extends Task {
                     );
                 }
                 ext.outputChannel.show();
+            } else if (this.config.onConflict === ConflictResolutionStrategy.GenerateNewIds) {
+                // GenerateNewIds strategy: this should not have conflicts since we remove _id
+                // If errors occur, they're likely other issues, so log them
+                for (const error of result.errors) {
+                    ext.outputChannel.appendLog(
+                        vscode.l10n.t(
+                            'Error inserting document (GenerateNewIds): {0}',
+                            error.error?.message ?? 'Unknown error',
+                        ),
+                    );
+                }
+                ext.outputChannel.show();
             } else {
                 // Overwrite or other strategies: treat errors as fatal for now.
                 // This can be expanded if other strategies need more nuanced error handling.

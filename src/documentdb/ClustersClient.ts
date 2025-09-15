@@ -293,7 +293,7 @@ export class ClustersClient {
     public getCredentials(): ClustersCredentials | undefined {
         return CredentialCache.getCredentials(this.credentialId) as ClustersCredentials | undefined;
     }
-        
+
     getCollection(databaseName: string, collectionName: string): Collection<Document> {
         try {
             return this._mongoClient.db(databaseName).collection(collectionName);

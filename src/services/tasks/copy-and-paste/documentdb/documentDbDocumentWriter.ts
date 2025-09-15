@@ -49,6 +49,49 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
         // Convert DocumentDetails to DocumentDB documents
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
 
+        // For GenerateNewIds strategy, transform documents before insertion
+        if (config.onConflict === ConflictResolutionStrategy.GenerateNewIds) {
+            const transformedDocuments = rawDocuments.map((doc) => {
+                // Create a new document without _id to let MongoDB generate a new one
+                const { _id, ...docWithoutId } = doc;
+
+                // Find an available field name for storing the original _id
+                const originalIdFieldName = this.findAvailableOriginalIdFieldName(docWithoutId);
+
+                return {
+                    ...docWithoutId,
+                    [originalIdFieldName]: _id, // Store original _id in a field that doesn't conflict
+                } as Document; // Cast to Document since we're removing _id
+            });
+
+            // Use the transformed documents for insertion
+            try {
+                const insertResult = await client.insertDocuments(
+                    databaseName,
+                    collectionName,
+                    transformedDocuments,
+                    false, // Always use unordered for GenerateNewIds since conflicts shouldn't occur
+                );
+
+                return {
+                    insertedCount: insertResult.insertedCount,
+                    errors: null,
+                };
+            } catch (error: unknown) {
+                if (error instanceof Error) {
+                    return {
+                        insertedCount: 0,
+                        errors: [{ documentId: undefined, error }],
+                    };
+                } else {
+                    return {
+                        insertedCount: 0,
+                        errors: [{ documentId: undefined, error: new Error(String(error)) }],
+                    };
+                }
+            }
+        }
+
         try {
             const insertResult = await client.insertDocuments(
                 databaseName,
@@ -138,5 +181,32 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
             // Create the collection by running createCollection
             await client.createCollection(databaseName, collectionName);
         }
+    }
+
+    /**
+     * Finds an available field name for storing the original _id value.
+     * Uses _original_id if available, otherwise _original_id_1, _original_id_2, etc.
+     *
+     * @param doc The document to check for field name conflicts
+     * @returns An available field name for storing the original _id
+     */
+    private findAvailableOriginalIdFieldName(doc: Partial<Document>): string {
+        const baseFieldName = '_original_id';
+
+        // Check if the base field name is available
+        if (!(baseFieldName in doc)) {
+            return baseFieldName;
+        }
+
+        // If _original_id exists, try _original_id_1, _original_id_2, etc.
+        let counter = 1;
+        let candidateFieldName = `${baseFieldName}_${counter}`;
+
+        while (candidateFieldName in doc) {
+            counter++;
+            candidateFieldName = `${baseFieldName}_${counter}`;
+        }
+
+        return candidateFieldName;
     }
 }

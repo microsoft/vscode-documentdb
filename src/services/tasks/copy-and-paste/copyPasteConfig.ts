@@ -21,6 +21,12 @@ export enum ConflictResolutionStrategy {
      * Overwrite the existing document in the target collection with the source document
      */
     Overwrite = 'overwrite',
+
+    /**
+     * Generate new _id values for all documents to avoid conflicts.
+     * Original _id values are preserved in a separate field.
+     */
+    GenerateNewIds = 'generateNewIds',
 }
 
 /**
