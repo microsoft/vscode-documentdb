@@ -20,6 +20,9 @@ export async function pasteCollection(
     context: IActionContext,
     targetNode: CollectionItem | DatabaseItem,
 ): Promise<void> {
+    // Record telemetry for wizard start
+    context.telemetry.properties.wizardStarted = 'true';
+
     if (!targetNode) {
         throw new Error(l10n.t('No target node selected.'));
     }
@@ -28,6 +31,8 @@ export async function pasteCollection(
     const sourceNode = ext.copiedCollectionNode;
     if (!sourceNode) {
         context.telemetry.properties.noSourceCollection = 'true';
+        context.telemetry.properties.wizardCompletedSuccessfully = 'false';
+        context.telemetry.properties.wizardFailureReason = 'noSourceCollection';
         void vscode.window.showWarningMessage(
             l10n.t(
                 'No collection has been marked for copy. Please use "Copy Collection..." first to select a source collection.',
@@ -43,6 +48,8 @@ export async function pasteCollection(
         // Add telemetry for debugging invalid source node type
         context.telemetry.properties.invalidSourceNodeType = (sourceNode as unknown)?.constructor?.name ?? 'undefined';
         context.telemetry.properties.sourceNodeExists = String(!!sourceNode);
+        context.telemetry.properties.wizardCompletedSuccessfully = 'false';
+        context.telemetry.properties.wizardFailureReason = 'invalidSourceNodeType';
         if (sourceNode) {
             context.telemetry.properties.sourceNodeProperties = Object.getOwnPropertyNames(sourceNode).join(',');
             context.telemetry.properties.sourceNodeHasCluster = String('cluster' in sourceNode);
@@ -56,6 +63,8 @@ export async function pasteCollection(
         // Add telemetry for debugging invalid target node type
         context.telemetry.properties.invalidTargetNodeType = (targetNode as unknown)?.constructor?.name ?? 'undefined';
         context.telemetry.properties.targetNodeExists = String(!!targetNode);
+        context.telemetry.properties.wizardCompletedSuccessfully = 'false';
+        context.telemetry.properties.wizardFailureReason = 'invalidTargetNodeType';
         if (targetNode) {
             context.telemetry.properties.targetNodeProperties = Object.getOwnPropertyNames(targetNode).join(',');
             context.telemetry.properties.targetNodeHasCluster = String('cluster' in targetNode);
@@ -68,6 +77,12 @@ export async function pasteCollection(
 
     // Determine target details based on node type
     const isTargetExistingCollection = targetNode instanceof CollectionItem;
+
+    // Record telemetry for operation type and scope
+    context.telemetry.properties.operationType = isTargetExistingCollection
+        ? 'copyToExistingCollection'
+        : 'copyToDatabase';
+    context.telemetry.properties.targetNodeType = targetNode instanceof CollectionItem ? 'collection' : 'database';
 
     const targetCollectionName = isTargetExistingCollection
         ? (targetNode as CollectionItem).collectionInfo.name
@@ -112,6 +127,8 @@ export async function pasteCollection(
         );
         void vscode.window.showErrorMessage(errorTitle, { modal: true, detail: errorDetail });
         context.telemetry.properties.sameCollectionTarget = 'true';
+        context.telemetry.properties.wizardCompletedSuccessfully = 'false';
+        context.telemetry.properties.wizardFailureReason = 'circularDependency';
         return;
     }
 
@@ -132,6 +149,9 @@ export async function pasteCollection(
 
     promptSteps.push(new ConfirmOperationStep());
 
+    // Record telemetry for wizard configuration
+    context.telemetry.measurements.totalPromptSteps = promptSteps.length;
+
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Paste Collection'),
         promptSteps,
@@ -139,13 +159,34 @@ export async function pasteCollection(
     });
 
     try {
+        // Record prompt phase timing
+        const promptStartTime = Date.now();
+        context.telemetry.measurements.promptPhaseStartTime = promptStartTime;
+
         await wizard.prompt();
+
+        const promptEndTime = Date.now();
+        context.telemetry.measurements.promptPhaseEndTime = promptEndTime;
+        context.telemetry.measurements.promptPhaseDuration = promptEndTime - promptStartTime;
+        context.telemetry.properties.promptPhaseCompleted = 'true';
+
         await wizard.execute();
+
+        context.telemetry.properties.executePhaseCompleted = 'true';
+        context.telemetry.properties.wizardCompletedSuccessfully = 'true';
     } catch (error) {
+        // Record failure telemetry
+        context.telemetry.properties.wizardCompletedSuccessfully = 'false';
+
         if (error instanceof Error && error.message.includes('cancelled')) {
             // User cancelled the wizard, don't show error
+            context.telemetry.properties.wizardFailureReason = 'userCancelled';
+            context.telemetry.properties.wizardCancelledByUser = 'true';
             return;
         }
+
+        context.telemetry.properties.wizardFailureReason = 'executionError';
+        context.telemetry.properties.wizardErrorMessage = error instanceof Error ? error.message : String(error);
 
         const errorMessage = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(l10n.t('Failed to paste collection: {0}', errorMessage));

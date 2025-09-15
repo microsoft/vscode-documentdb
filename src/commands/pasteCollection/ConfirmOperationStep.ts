@@ -76,7 +76,19 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
                   actionButton,
               );
 
+        // Record telemetry for confirmation behavior
+        context.telemetry.properties.operationConfirmed = confirmation === actionButton ? 'true' : 'false';
+        context.telemetry.properties.operationType = context.isTargetExistingCollection ? 'merge' : 'paste';
+        context.telemetry.properties.conflictResolutionStrategy = context.conflictResolutionStrategy;
+        context.telemetry.properties.copyIndexesEnabled = context.copyIndexes ? 'true' : 'false';
+
+        // Record measurements for operation scope
+        if (context.sourceCollectionSize) {
+            context.telemetry.measurements.sourceCollectionSize = context.sourceCollectionSize;
+        }
+
         if (confirmation !== actionButton) {
+            // User cancelled - this will be logged in telemetry automatically due to thrown error
             throw new Error('Operation cancelled by user.');
         }
     }

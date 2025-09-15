@@ -18,6 +18,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
     public priority: number = 100;
 
     public async execute(context: PasteCollectionWizardContext): Promise<void> {
+        // Record initial telemetry for execution attempt
+        context.telemetry.properties.executionStarted = 'true';
+
         // Extract all required values from the wizard context
         const sourceConnectionId = context.sourceConnectionId;
         const sourceDatabaseName = context.sourceDatabaseName;
@@ -32,9 +35,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
 
         const conflictResolutionStrategy = nonNullValue(
             context.conflictResolutionStrategy,
+            'conflictResolutionStrategy',
             'context.conflictResolutionStrategy',
-            'ExecuteStep.ts',
         );
+
+        // Record telemetry for task configuration
+        context.telemetry.properties.isCrossConnection = sourceConnectionId !== targetConnectionId ? 'true' : 'false';
+        context.telemetry.properties.isCrossDatabase = sourceDatabaseName !== targetDatabaseName ? 'true' : 'false';
+        context.telemetry.properties.sameCollectionName =
+            sourceCollectionName === finalTargetCollectionName ? 'true' : 'false';
 
         // Build the configuration for the copy-paste task
         const config: CopyPasteConfig = {

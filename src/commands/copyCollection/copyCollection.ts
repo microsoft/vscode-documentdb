@@ -8,7 +8,7 @@ import { l10n, window } from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 
-export async function copyCollection(_context: IActionContext, node: CollectionItem): Promise<void> {
+export async function copyCollection(context: IActionContext, node: CollectionItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
@@ -33,6 +33,7 @@ export async function copyCollection(_context: IActionContext, node: CollectionI
 
     if (selectedCommand === undoCommand) {
         ext.copiedCollectionNode = undefined;
+        context.telemetry.properties.copiedCollectionUndone = 'true';
         void window.showInformationMessage(l10n.t('Copy operation cancelled.'));
     }
 }

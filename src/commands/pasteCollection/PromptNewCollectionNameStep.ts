@@ -13,6 +13,13 @@ export class PromptNewCollectionNameStep extends AzureWizardPromptStep<PasteColl
         // Generate default name with suffix if needed
         const defaultName = await this.generateDefaultCollectionName(context);
 
+        // Record telemetry for default name generation
+        context.telemetry.properties.defaultNameGenerated = 'true';
+        context.telemetry.properties.defaultNameSameAsSource =
+            defaultName === context.sourceCollectionName ? 'true' : 'false';
+        context.telemetry.properties.defaultNameHasSuffix =
+            defaultName !== context.sourceCollectionName ? 'true' : 'false';
+
         const newCollectionName = await context.ui.showInputBox({
             prompt: l10n.t('Please enter the name for the new collection'),
             value: defaultName,
@@ -21,7 +28,38 @@ export class PromptNewCollectionNameStep extends AzureWizardPromptStep<PasteColl
             asyncValidationTask: (name: string) => this.validateNameAvailable(context, name),
         });
 
-        context.newCollectionName = newCollectionName.trim();
+        const finalName = newCollectionName.trim();
+
+        // Record telemetry for user naming behavior
+        context.telemetry.properties.userAcceptedDefaultName = finalName === defaultName ? 'true' : 'false';
+        context.telemetry.properties.userModifiedDefaultName = finalName !== defaultName ? 'true' : 'false';
+        context.telemetry.properties.finalNameSameAsSource =
+            finalName === context.sourceCollectionName ? 'true' : 'false';
+
+        // Record length statistics for analytics
+        context.telemetry.measurements.sourceCollectionNameLength = context.sourceCollectionName.length;
+        context.telemetry.measurements.defaultNameLength = defaultName.length;
+        context.telemetry.measurements.finalNameLength = finalName.length;
+
+        // Record name similarity metrics
+        if (finalName !== defaultName) {
+            try {
+                // User modified the suggested name - track edit distance or other metrics
+                const editOperations = this.calculateSimpleEditDistance(defaultName, finalName);
+                if (typeof editOperations === 'number' && Number.isFinite(editOperations)) {
+                    context.telemetry.measurements.nameEditDistance = editOperations;
+                }
+            } catch (error) {
+                console.error('Failed to record name edit distance telemetry:', error);
+                context.telemetry.properties.nameEditDistanceTelemetryError = 'true';
+                context.telemetry.properties.nameEditDistanceTelemetryErrorType =
+                    error instanceof Error ? error.name : 'unknown';
+                context.telemetry.properties.nameEditDistanceTelemetryErrorMessage =
+                    error instanceof Error ? error.message : String(error);
+            }
+        }
+
+        context.newCollectionName = finalName;
     }
 
     public shouldPrompt(context: PasteCollectionWizardContext): boolean {
@@ -131,5 +169,40 @@ export class PromptNewCollectionNameStep extends AzureWizardPromptStep<PasteColl
         }
 
         return undefined;
+    }
+
+    /**
+     * Calculate a simple edit distance (Levenshtein distance) between two strings.
+     * This helps track how much users modify the suggested name.
+     */
+    private calculateSimpleEditDistance(str1: string, str2: string): number {
+        const matrix: number[][] = [];
+        const len1 = str1.length;
+        const len2 = str2.length;
+
+        // Initialize matrix
+        for (let i = 0; i <= len1; i++) {
+            matrix[i] = [i];
+        }
+        for (let j = 0; j <= len2; j++) {
+            matrix[0][j] = j;
+        }
+
+        // Fill matrix
+        for (let i = 1; i <= len1; i++) {
+            for (let j = 1; j <= len2; j++) {
+                if (str1[i - 1] === str2[j - 1]) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j] + 1, // deletion
+                        matrix[i][j - 1] + 1, // insertion
+                        matrix[i - 1][j - 1] + 1, // substitution
+                    );
+                }
+            }
+        }
+
+        return matrix[len1][len2];
     }
 }
