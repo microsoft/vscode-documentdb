@@ -111,6 +111,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                         const baseName = match[1];
                         const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
                         newConnectionLabel = `${baseName} (${count})`;
+                    } else {
+                        // Fallback to prevent endless loop if regex fails - use timestamp for guaranteed uniqueness
+                        newConnectionLabel = `${newConnectionLabel} (${Date.now()})`;
                     }
                     existingDuplicateLabel = existingConnections.find(
                         (connection) => connection.name === newConnectionLabel,

@@ -32,17 +32,36 @@ export class PromptNewCollectionNameStep extends AzureWizardPromptStep<PasteColl
     private async generateDefaultCollectionName(context: PasteCollectionWizardContext): Promise<string> {
         const baseName = context.sourceCollectionName;
         let candidateName = baseName;
-        let counter = 1;
 
         try {
             const client = await ClustersClient.getClient(context.targetConnectionId);
             const existingCollections = await client.listCollections(context.targetDatabaseName);
             const existingNames = new Set(existingCollections.map((c) => c.name));
 
-            // Find available name with suffix if needed
+            // Find available name with intelligent suffix incrementing
             while (existingNames.has(candidateName)) {
-                candidateName = `${baseName} (${counter})`;
-                counter++;
+                /**
+                 * Matches and captures parts of a collection name string.
+                 *
+                 * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the collection name into two groups:
+                 * - The first capturing group `(.*?)` matches the main part of the name (non-greedy match of any characters).
+                 * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
+                 *   which may be preceded by whitespace. For example, " (123)".
+                 *
+                 * Examples:
+                 * - Input: "target (1)" -> Match: ["target (1)", "target", " (1)"] -> Result: "target (2)"
+                 * - Input: "target" -> Match: ["target", "target", undefined] -> Result: "target (1)"
+                 * - Input: "my-collection (42)" -> Match: ["my-collection (42)", "my-collection", " (42)"] -> Result: "my-collection (43)"
+                 */
+                const match = candidateName.match(/^(.*?)(\s*\(\d+\))?$/);
+                if (match) {
+                    const nameBase = match[1];
+                    const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
+                    candidateName = `${nameBase} (${count})`;
+                } else {
+                    // Fallback if regex fails for some reason
+                    candidateName = `${candidateName} (1)`;
+                }
             }
         } catch (error) {
             // If we can't check existing collections, just use the base name
