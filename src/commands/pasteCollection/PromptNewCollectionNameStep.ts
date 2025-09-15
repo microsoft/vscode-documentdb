@@ -104,7 +104,10 @@ export class PromptNewCollectionNameStep extends AzureWizardPromptStep<PasteColl
             }
         } catch (error) {
             // If we can't check existing collections, just use the base name
-            console.warn('Could not check existing collections for default name generation:', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.warn(
+                l10n.t('Could not check existing collections for default name generation: {0}', errorMessage),
+            );
 
             // Add telemetry for error investigation
             context.telemetry.properties.defaultNameGenerationError = 'true';
