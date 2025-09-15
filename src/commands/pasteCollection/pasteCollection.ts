@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
+import { ConflictResolutionStrategy } from '../../services/tasks/copy-and-paste/copyPasteConfig';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
@@ -140,8 +141,12 @@ export async function pasteCollection(
         promptSteps.push(new PromptNewCollectionNameStep());
     }
 
-    // Always prompt for conflict resolution and index configuration
-    promptSteps.push(new PromptConflictResolutionStep());
+    // Only prompt for conflict resolution when pasting into an existing collection
+    if (isTargetExistingCollection) {
+        promptSteps.push(new PromptConflictResolutionStep());
+    } else {
+        wizardContext.conflictResolutionStrategy = ConflictResolutionStrategy.Abort;
+    }
 
     // TODO: We don't support copying indexes yet, so skip this step for now,
     // but keep this here to speed up development once we get to that point
