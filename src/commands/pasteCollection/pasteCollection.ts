@@ -11,6 +11,7 @@ import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
+import { ExecuteStep } from './ExecuteStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { PromptConflictResolutionStep } from './PromptConflictResolutionStep';
 import { PromptNewCollectionNameStep } from './PromptNewCollectionNameStep';
@@ -118,38 +119,12 @@ export async function pasteCollection(
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Paste Collection'),
         promptSteps,
-        executeSteps: [], // No execute steps since we're only scaffolding the UX
+        executeSteps: [new ExecuteStep()],
     });
 
     try {
         await wizard.prompt();
-
-        // NOTE: This is where the actual task execution would be called
-        // For now, we're only scaffolding the UX, so we just show a message
-        void vscode.window.showInformationMessage(
-            l10n.t('Wizard completed successfully! (Task execution not implemented yet)'),
-        );
-
-        // TODO: Remove this scaffolding code and implement actual task execution:
-        // const config: CopyPasteConfig = {
-        //     source: {
-        //         connectionId: wizardContext.sourceConnectionId,
-        //         databaseName: wizardContext.sourceDatabaseName,
-        //         collectionName: wizardContext.sourceCollectionName,
-        //     },
-        //     target: {
-        //         connectionId: wizardContext.targetConnectionId,
-        //         databaseName: wizardContext.targetDatabaseName,
-        //         collectionName: wizardContext.finalTargetCollectionName!,
-        //     },
-        //     onConflict: wizardContext.conflictResolutionStrategy!,
-        // };
-
-        // const reader = new DocumentDbDocumentReader();
-        // const writer = new DocumentDbDocumentWriter();
-        // const task = new CopyPasteCollectionTask(config, reader, writer);
-        // TaskService.registerTask(task);
-        // await task.start();
+        await wizard.execute();
     } catch (error) {
         if (error instanceof Error && error.message.includes('cancelled')) {
             // User cancelled the wizard, don't show error
