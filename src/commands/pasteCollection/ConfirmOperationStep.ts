@@ -31,7 +31,11 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
         // Combine all parts
         const confirmationMessage = [
             l10n.t('Source:'),
-            ' • ' + l10n.t('Collection: "{0}"', context.sourceCollectionName),
+            ' • ' +
+                l10n.t('Collection: "{0}"', context.sourceCollectionName) +
+                (context.sourceCollectionSize
+                    ? '\n   • ' + l10n.t('Approx. Size: {0} documents', context.sourceCollectionSize.toLocaleString())
+                    : ''),
             ' • ' + l10n.t('Database: "{0}"', context.sourceDatabaseName),
             ' • ' + l10n.t('Connection: {0}', context.sourceConnectionName),
             '',

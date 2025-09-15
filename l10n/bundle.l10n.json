@@ -61,6 +61,7 @@
   "An unknown error occurred while inserting documents.": "An unknown error occurred while inserting documents.",
   "API version \"{0}\" for extension id \"{1}\" is no longer supported. Minimum version is \"{2}\".": "API version \"{0}\" for extension id \"{1}\" is no longer supported. Minimum version is \"{2}\".",
   "API: Registered new migration provider: \"{providerId}\" - \"{providerLabel}\"": "API: Registered new migration provider: \"{providerId}\" - \"{providerLabel}\"",
+  "Approx. Size: {0} documents": "Approx. Size: {0} documents",
   "Are you sure?": "Are you sure?",
   "Attempting to authenticate with \"{cluster}\"…": "Attempting to authenticate with \"{cluster}\"…",
   "Authenticate to connect with your DocumentDB cluster": "Authenticate to connect with your DocumentDB cluster",

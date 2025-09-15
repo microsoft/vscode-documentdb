@@ -6,6 +6,7 @@
 import { AzureWizard, type AzureWizardPromptStep, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -72,6 +73,16 @@ export async function pasteCollection(
         ? (targetNode as CollectionItem).collectionInfo.name
         : undefined;
 
+    let sourceCollectionSize: number | undefined = undefined;
+    try {
+        sourceCollectionSize = await (
+            await ClustersClient.getClient(sourceNode.cluster.id)
+        ).estimateDocumentCount(sourceNode.databaseInfo.name, sourceNode.collectionInfo.name);
+        context.telemetry.measurements.sourceCollectionSize = sourceCollectionSize;
+    } catch (error) {
+        context.telemetry.properties.sourceCollectionSizeError = String(error);
+    }
+
     // Create wizard context
     const wizardContext: PasteCollectionWizardContext = {
         ...context,
@@ -79,6 +90,7 @@ export async function pasteCollection(
         sourceDatabaseName: sourceNode.databaseInfo.name,
         sourceConnectionId: sourceNode.cluster.id,
         sourceConnectionName: sourceNode.cluster.name,
+        sourceCollectionSize,
         targetNode,
         targetConnectionId: targetNode.cluster.id,
         targetConnectionName: targetNode.cluster.name,

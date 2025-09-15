@@ -14,6 +14,7 @@ export interface PasteCollectionWizardContext extends IActionContext {
     sourceDatabaseName: string;
     sourceConnectionId: string;
     sourceConnectionName: string;
+    sourceCollectionSize?: number;
 
     // Target details
     targetNode: CollectionItem | DatabaseItem;
