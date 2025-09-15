@@ -6,6 +6,7 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ext } from '../../extensionVariables';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 
 export class CollectionNameStep extends AzureWizardPromptStep<CreateCollectionWizardContext> {
@@ -75,7 +76,8 @@ export class CollectionNameStep extends AzureWizardPromptStep<CreateCollectionWi
                 return l10n.t('The collection "{0}" already exists in the database "{1}".', name, context.databaseId);
             }
         } catch (error) {
-            console.error('Error validating collection name availability:', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(l10n.t('Error validating collection name availability: {0}', errorMessage));
             return undefined; // we don't want to block the user from continuing if we can't validate the name
         }
 

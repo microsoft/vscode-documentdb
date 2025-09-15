@@ -6,6 +6,7 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ext } from '../../extensionVariables';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
 export class PromptNewCollectionNameStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
@@ -163,7 +164,8 @@ export class PromptNewCollectionNameStep extends AzureWizardPromptStep<PasteColl
                 return l10n.t('A collection with the name "{0}" already exists', name);
             }
         } catch (error) {
-            console.error('Error validating collection name availability:', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(l10n.t('Error validating collection name availability: {0}', errorMessage));
             // Don't block the user if we can't validate
             return undefined;
         }

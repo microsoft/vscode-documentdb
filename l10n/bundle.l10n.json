@@ -213,6 +213,7 @@
   "Error opening the document view": "Error opening the document view",
   "Error running process: ": "Error running process: ",
   "Error saving the document": "Error saving the document",
+  "Error validating collection name availability: {0}": "Error validating collection name availability: {0}",
   "Error while loading the autocompletion data": "Error while loading the autocompletion data",
   "Error while loading the data": "Error while loading the data",
   "Error while loading the document": "Error while loading the document",
