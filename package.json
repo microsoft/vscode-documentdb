@@ -620,16 +620,16 @@
           "group": "1@1"
         },
         {
-          "//": "[Database] Paste Collection",
-          "command": "vscode-documentdb.command.pasteCollection",
+          "//": "[Database] Delete database",
+          "command": "vscode-documentdb.command.dropDatabase",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "1@2"
         },
         {
-          "//": "[Database] Delete database",
-          "command": "vscode-documentdb.command.dropDatabase",
+          "//": "[Database] Paste Collection",
+          "command": "vscode-documentdb.command.pasteCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "1@3"
+          "group": "1.5@1"
         },
         {
           "//": "[Database] Mongo DB|Cluster Launch Shell",
@@ -713,13 +713,13 @@
           "//": "[Collection] Copy Collection",
           "command": "vscode-documentdb.command.copyCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "A@2"
+          "group": "1.5@2"
         },
         {
           "//": "[Collection] Paste Collection",
           "command": "vscode-documentdb.command.pasteCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "A@2"
+          "group": "1.5@2"
         }
       ],
       "explorer/context": [],
