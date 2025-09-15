@@ -4,7 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ext } from '../extensionVariables';
+import { ext } from '../../extensionVariables';
+import {
+    type ResourceDefinition,
+    type ResourceTrackingTask,
+    type TaskInfo,
+    hasResourceConflict,
+} from './taskServiceResourceTracking';
 
 /**
  * Enumeration of possible states a task can be in.
@@ -172,7 +178,7 @@ export abstract class Task {
             if (state === TaskState.Completed) {
                 const msg = this._status.message ?? '';
                 ext.outputChannel.appendLine(
-                    vscode.l10n.t("✅ Task '{taskName}' completed successfully. {message}", {
+                    vscode.l10n.t("✓ Task '{taskName}' completed successfully. {message}", {
                         taskName: this.name,
                         message: msg,
                     }),
@@ -180,7 +186,7 @@ export abstract class Task {
             } else if (state === TaskState.Stopped) {
                 const msg = this._status.message ?? '';
                 ext.outputChannel.appendLine(
-                    vscode.l10n.t("⏹️ Task '{taskName}' was stopped. {message}", {
+                    vscode.l10n.t("■ Task '{taskName}' was stopped. {message}", {
                         taskName: this.name,
                         message: msg,
                     }),
@@ -191,7 +197,7 @@ export abstract class Task {
                 // Include error details if available
                 const detail = err ? ` ${vscode.l10n.t('Error: {0}', err)}` : '';
                 ext.outputChannel.appendLine(
-                    vscode.l10n.t("⚠️ Task '{taskName}' failed. {message}", {
+                    vscode.l10n.t("! Task '{taskName}' failed. {message}", {
                         taskName: this.name,
                         message: `${msg}${detail}`.trim(),
                     }),
@@ -229,7 +235,7 @@ export abstract class Task {
             throw new Error(vscode.l10n.t('Cannot start task in state: {0}', this._status.state));
         }
 
-        ext.outputChannel.appendLine(vscode.l10n.t("🟡 Task '{taskName}' initializing...", { taskName: this.name }));
+        ext.outputChannel.appendLine(vscode.l10n.t("○ Task '{taskName}' initializing...", { taskName: this.name }));
 
         this.updateStatus(TaskState.Initializing, vscode.l10n.t('Initializing task...'), 0);
 
@@ -248,7 +254,7 @@ export abstract class Task {
             }
 
             this.updateStatus(TaskState.Running, vscode.l10n.t('Task is running'), 0);
-            ext.outputChannel.appendLine(vscode.l10n.t("▶️ Task '{taskName}' starting...", { taskName: this.name }));
+            ext.outputChannel.appendLine(vscode.l10n.t("► Task '{taskName}' starting...", { taskName: this.name }));
 
             // Start the actual work asynchronously
             void this.runWork().catch((error) => {
@@ -437,6 +443,24 @@ export interface TaskService {
      * This provides detailed information about the state transition.
      */
     readonly onDidChangeTaskState: vscode.Event<TaskStateChangeEvent>;
+
+    /**
+     * Gets all tasks that are currently using resources that conflict with the specified resource.
+     * Only checks tasks that are currently in non-final states (Pending, Initializing, Running, Stopping).
+     *
+     * @param resource The resource to check for usage conflicts
+     * @returns Array of conflicting task information
+     */
+    getConflictingTasks(resource: ResourceDefinition): TaskInfo[];
+
+    /**
+     * Gets all resources currently in use by all active tasks.
+     * Useful for debugging or advanced UI features.
+     * Only includes tasks that are currently in non-final states.
+     *
+     * @returns Array of task resource usage information
+     */
+    getAllUsedResources(): Array<{ task: TaskInfo; resources: ResourceDefinition[] }>;
 }
 
 /**
@@ -506,6 +530,66 @@ class TaskServiceImpl implements TaskService {
         await task.delete();
         this.tasks.delete(id); // Notify listeners
         this._onDidDeleteTask.fire(id);
+    }
+
+    public getConflictingTasks(resource: ResourceDefinition): TaskInfo[] {
+        const conflictingTasks: TaskInfo[] = [];
+
+        // Only check tasks that are not in final states
+        const activeTasks = Array.from(this.tasks.values()).filter((task) => {
+            const status = task.getStatus();
+            return ![TaskState.Completed, TaskState.Failed, TaskState.Stopped].includes(status.state);
+        });
+
+        for (const task of activeTasks) {
+            // Check if task implements resource tracking
+            if ('getUsedResources' in task && typeof (task as ResourceTrackingTask).getUsedResources === 'function') {
+                const usedResources = (task as ResourceTrackingTask).getUsedResources();
+
+                // Check if any of the task's resources conflict with the requested resource
+                const hasConflict = usedResources.some((usedResource) => hasResourceConflict(resource, usedResource));
+
+                if (hasConflict) {
+                    conflictingTasks.push({
+                        taskId: task.id,
+                        taskName: task.name,
+                        taskType: task.type,
+                    });
+                }
+            }
+        }
+
+        return conflictingTasks;
+    }
+
+    public getAllUsedResources(): Array<{ task: TaskInfo; resources: ResourceDefinition[] }> {
+        const result: Array<{ task: TaskInfo; resources: ResourceDefinition[] }> = [];
+
+        // Only include tasks that are not in final states
+        const activeTasks = Array.from(this.tasks.values()).filter((task) => {
+            const status = task.getStatus();
+            return ![TaskState.Completed, TaskState.Failed, TaskState.Stopped].includes(status.state);
+        });
+
+        for (const task of activeTasks) {
+            // Check if task implements resource tracking
+            if ('getUsedResources' in task && typeof (task as ResourceTrackingTask).getUsedResources === 'function') {
+                const resources = (task as ResourceTrackingTask).getUsedResources();
+
+                if (resources.length > 0) {
+                    result.push({
+                        task: {
+                            taskId: task.id,
+                            taskName: task.name,
+                            taskType: task.type,
+                        },
+                        resources,
+                    });
+                }
+            }
+        }
+
+        return result;
     }
 }
 

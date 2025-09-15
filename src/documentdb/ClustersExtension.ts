@@ -54,8 +54,8 @@ import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/Azu
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
 import { TaskReportingService } from '../services/taskReportingService';
-import { DemoTask } from '../services/tasks/DemoTask';
-import { TaskService } from '../services/taskService';
+import { DemoTask } from '../services/taskService/tasks/DemoTask';
+import { TaskService } from '../services/taskService/taskService';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';

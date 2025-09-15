@@ -5,11 +5,11 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../extensionVariables';
-import { TaskService, TaskState } from '../../services/taskService';
-import { CopyPasteCollectionTask } from '../../services/tasks/copy-and-paste/CopyPasteCollectionTask';
-import { type CopyPasteConfig } from '../../services/tasks/copy-and-paste/copyPasteConfig';
-import { DocumentDbDocumentReader } from '../../services/tasks/copy-and-paste/documentdb/documentDbDocumentReader';
-import { DocumentDbDocumentWriter } from '../../services/tasks/copy-and-paste/documentdb/documentDbDocumentWriter';
+import { TaskService, TaskState } from '../../services/taskService/taskService';
+import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
+import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
+import { DocumentDbDocumentReader } from '../../services/taskService/tasks/copy-and-paste/documentdb/documentDbDocumentReader';
+import { DocumentDbDocumentWriter } from '../../services/taskService/tasks/copy-and-paste/documentdb/documentDbDocumentWriter';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';

@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
-import { ConflictResolutionStrategy } from '../../services/tasks/copy-and-paste/copyPasteConfig';
+import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { ConfirmOperationStep } from './ConfirmOperationStep';

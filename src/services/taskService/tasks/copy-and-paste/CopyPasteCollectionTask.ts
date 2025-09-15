@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ext } from '../../../extensionVariables';
+import { ext } from '../../../../extensionVariables';
 import { Task } from '../../taskService';
+import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 import { ConflictResolutionStrategy, type CopyPasteConfig } from './copyPasteConfig';
 import { type DocumentDetails, type DocumentReader, type DocumentWriter } from './documentInterfaces';
 
@@ -16,7 +17,7 @@ import { type DocumentDetails, type DocumentReader, type DocumentWriter } from '
  * interfaces. It streams documents from the source and writes them in batches to the
  * target, managing memory usage with a configurable buffer.
  */
-export class CopyPasteCollectionTask extends Task {
+export class CopyPasteCollectionTask extends Task implements ResourceTrackingTask {
     public readonly type: string = 'copy-paste-collection';
     public readonly name: string;
 
@@ -53,6 +54,27 @@ export class CopyPasteCollectionTask extends Task {
                 targetCollection: config.target.collectionName,
             },
         );
+    }
+
+    /**
+     * Returns all resources currently being used by this task.
+     * This includes both the source and target collections.
+     */
+    public getUsedResources(): ResourceDefinition[] {
+        return [
+            // Source resource
+            {
+                connectionId: this.config.source.connectionId,
+                databaseName: this.config.source.databaseName,
+                collectionName: this.config.source.collectionName,
+            },
+            // Target resource
+            {
+                connectionId: this.config.target.connectionId,
+                databaseName: this.config.target.databaseName,
+                collectionName: this.config.target.collectionName,
+            },
+        ];
     }
 
     /**
