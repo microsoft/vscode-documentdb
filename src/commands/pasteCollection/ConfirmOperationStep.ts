@@ -17,6 +17,8 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             ? context.targetCollectionName
             : context.newCollectionName;
 
+        const targetCollectionAnnotation = context.isTargetExistingCollection ? l10n.t('⚠️ existing collection') : '';
+
         const conflictStrategy = this.formatConflictStrategy(context.conflictResolutionStrategy!);
         const indexesSetting = context.copyIndexes ? l10n.t('Yes') : l10n.t('No');
 
@@ -32,21 +34,28 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
         const confirmationMessage = [
             l10n.t('Source:'),
             ' • ' +
-                l10n.t('Collection: "{0}"', context.sourceCollectionName) +
+                l10n.t('Collection: "{collectionName}"', { collectionName: context.sourceCollectionName }) +
                 (context.sourceCollectionSize
-                    ? '\n   • ' + l10n.t('Approx. Size: {0} documents', context.sourceCollectionSize.toLocaleString())
+                    ? '\n   • ' +
+                      l10n.t('Approx. Size: {count} documents', {
+                          count: context.sourceCollectionSize.toLocaleString(),
+                      })
                     : ''),
-            ' • ' + l10n.t('Database: "{0}"', context.sourceDatabaseName),
-            ' • ' + l10n.t('Connection: {0}', context.sourceConnectionName),
+            ' • ' + l10n.t('Database: "{databaseName}"', { databaseName: context.sourceDatabaseName }),
+            ' • ' + l10n.t('Connection: {connectionName}', { connectionName: context.sourceConnectionName }),
             '',
             l10n.t('Target:'),
-            ' • ' + l10n.t('Collection: "{0}"', targetCollection!),
-            ' • ' + l10n.t('Database: "{0}"', context.targetDatabaseName),
-            ' • ' + l10n.t('Connection: {0}', context.targetConnectionName),
+            ' • ' +
+                l10n.t('Collection: "{targetCollectionName}" {annotation}', {
+                    targetCollectionName: targetCollection!,
+                    annotation: targetCollectionAnnotation,
+                }),
+            ' • ' + l10n.t('Database: "{databaseName}"', { databaseName: context.targetDatabaseName }),
+            ' • ' + l10n.t('Connection: {connectionName}', { connectionName: context.targetConnectionName }),
             '',
             l10n.t('Settings:'),
-            ' • ' + l10n.t('Conflict Resolution: {0}', conflictStrategy),
-            ' • ' + l10n.t('Copy Indexes: {0}', indexesSetting),
+            ' • ' + l10n.t('Conflict Resolution: {strategyName}', { strategyName: conflictStrategy }),
+            ' • ' + l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting }),
             '',
             warningText,
         ].join('\n');
@@ -55,11 +64,17 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             ? l10n.t('Start Copy-and-Merge')
             : l10n.t('Start Copy-and-Paste');
 
-        const confirmation = await vscode.window.showInformationMessage(
-            operationTitle,
-            { modal: true, detail: confirmationMessage },
-            actionButton,
-        );
+        const confirmation = context.isTargetExistingCollection
+            ? await vscode.window.showWarningMessage(
+                  operationTitle,
+                  { modal: true, detail: confirmationMessage },
+                  actionButton,
+              )
+            : await vscode.window.showInformationMessage(
+                  operationTitle,
+                  { modal: true, detail: confirmationMessage },
+                  actionButton,
+              );
 
         if (confirmation !== actionButton) {
             throw new Error('Operation cancelled by user.');

@@ -13,7 +13,6 @@ import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { PromptConflictResolutionStep } from './PromptConflictResolutionStep';
-import { PromptIndexConfigurationStep } from './PromptIndexConfigurationStep';
 import { PromptNewCollectionNameStep } from './PromptNewCollectionNameStep';
 
 export async function pasteCollection(
@@ -109,7 +108,11 @@ export async function pasteCollection(
 
     // Always prompt for conflict resolution and index configuration
     promptSteps.push(new PromptConflictResolutionStep());
-    promptSteps.push(new PromptIndexConfigurationStep());
+
+    // TODO: We don't support copying indexes yet, so skip this step for now,
+    // but keep this here to speed up development once we get to that point
+    // --> promptSteps.push(new PromptIndexConfigurationStep());
+
     promptSteps.push(new ConfirmOperationStep());
 
     const wizard = new AzureWizard(wizardContext, {
