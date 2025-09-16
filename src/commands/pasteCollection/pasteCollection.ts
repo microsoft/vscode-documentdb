@@ -13,6 +13,7 @@ import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
 import { ExecuteStep } from './ExecuteStep';
+import { LargeCollectionWarningStep } from './LargeCollectionWarningStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { PromptConflictResolutionStep } from './PromptConflictResolutionStep';
 import { PromptNewCollectionNameStep } from './PromptNewCollectionNameStep';
@@ -135,6 +136,28 @@ export async function pasteCollection(
 
     // Create wizard with appropriate steps
     const promptSteps: AzureWizardPromptStep<PasteCollectionWizardContext>[] = [];
+
+    // Read large collection warning settings
+    const showLargeCollectionWarning = vscode.workspace
+        .getConfiguration()
+        .get<boolean>(ext.settingsKeys.showLargeCollectionWarning, true);
+
+    // Add warning step for large collections as the first step
+    if (showLargeCollectionWarning) {
+        const largeCollectionThreshold = vscode.workspace
+            .getConfiguration()
+            .get<number>(ext.settingsKeys.largeCollectionWarningThreshold, 100000);
+
+        if (sourceCollectionSize !== undefined && sourceCollectionSize > largeCollectionThreshold) {
+            promptSteps.push(new LargeCollectionWarningStep());
+
+            context.telemetry.properties.largeCollectionWarningShown = 'true';
+            context.telemetry.measurements.sourceCollectionSizeForWarning = sourceCollectionSize;
+            context.telemetry.measurements.largeCollectionThresholdUsed = largeCollectionThreshold;
+        }
+    } else {
+        context.telemetry.properties.largeCollectionWarningDisabled = 'true';
+    }
 
     // Only prompt for new collection name if pasting into a database (creating new collection)
     if (!isTargetExistingCollection) {

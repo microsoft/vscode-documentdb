@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type IActionContext, openUrl } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
@@ -20,6 +20,7 @@ export async function copyCollection(context: IActionContext, node: CollectionIt
     const databaseName = node.databaseInfo.name;
 
     const undoCommand = l10n.t('Undo');
+    const learnMoreCommand = l10n.t('Learn more');
 
     const selectedCommand = await window.showInformationMessage(
         l10n.t(
@@ -29,11 +30,15 @@ export async function copyCollection(context: IActionContext, node: CollectionIt
         ),
         l10n.t('OK'),
         undoCommand,
+        learnMoreCommand,
     );
 
     if (selectedCommand === undoCommand) {
         ext.copiedCollectionNode = undefined;
         context.telemetry.properties.copiedCollectionUndone = 'true';
         void window.showInformationMessage(l10n.t('Copy operation cancelled.'));
+    } else if (selectedCommand === learnMoreCommand) {
+        await openUrl('https://aka.ms/vscode-documentdb-copy-and-paste');
+        context.telemetry.properties.learnMoreClicked = 'true';
     }
 }

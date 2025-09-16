@@ -66,6 +66,8 @@ export namespace ext {
         export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
         export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
+        export const showLargeCollectionWarning = 'documentDB.copyPaste.showLargeCollectionWarning';
+        export const largeCollectionWarningThreshold = 'documentDB.copyPaste.largeCollectionWarningThreshold';
         export const localPort = 'documentDB.local.port';
 
         export namespace vsCode {
