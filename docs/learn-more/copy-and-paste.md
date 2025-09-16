@@ -165,7 +165,7 @@ You will be prompted to choose one of four strategies:
   Source has a document:
 
   ```json
-  { "\_id": 1, "data": "new" }
+  { "_id": 1, "data": "new" }
   ```
 
 - **Result**: A new document is inserted into the target with a brand new `_id`. The inserted document will look like:
