@@ -132,6 +132,7 @@
   "Connection: \"{selectedConnectionName}\"\n\nThe connection will be added to the \"Connections View\" in the \"DocumentDB for VS Code\" extension. The \"Connections View\" will be opened once this process completes.\n\nDo you want to continue?": "Connection: \"{selectedConnectionName}\"\n\nThe connection will be added to the \"Connections View\" in the \"DocumentDB for VS Code\" extension. The \"Connections View\" will be opened once this process completes.\n\nDo you want to continue?",
   "Connection: {connectionName}": "Connection: {connectionName}",
   "Connections have moved": "Connections have moved",
+  "Continue": "Continue",
   "Copied {0} of {1} documents": "Copied {0} of {1} documents",
   "Copy \"{sourceCollection}\" from \"{sourceDatabase}\" to \"{targetDatabase}/{targetCollection}\"": "Copy \"{sourceCollection}\" from \"{sourceDatabase}\" to \"{targetDatabase}/{targetCollection}\"",
   "Copy index definitions from source collection?": "Copy index definitions from source collection?",
@@ -327,6 +328,7 @@
   "Invalid document ID: {0}": "Invalid document ID: {0}",
   "Invalid semver \"{0}\".": "Invalid semver \"{0}\".",
   "JSON View": "JSON View",
+  "Large Collection Copy Operation": "Large Collection Copy Operation",
   "Learn more": "Learn more",
   "Learn more about {0}.": "Learn more about {0}.",
   "Learn more about DocumentDB and MongoDB migrations.": "Learn more about DocumentDB and MongoDB migrations.",
@@ -492,6 +494,7 @@
   "Task will fail at a random step for testing": "Task will fail at a random step for testing",
   "Task with ID {0} already exists": "Task with ID {0} already exists",
   "Task with ID {0} not found": "Task with ID {0} not found",
+  "Tell me more": "Tell me more",
   "The \"{databaseId}\" database has been deleted.": "The \"{databaseId}\" database has been deleted.",
   "The \"{name}\" database has been created.": "The \"{name}\" database has been created.",
   "The \"{newCollectionName}\" collection has been created.": "The \"{newCollectionName}\" collection has been created.",
@@ -604,6 +607,7 @@
   "You might be asked for credentials to establish the connection.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the extension settings.": "You might be asked for credentials to establish the connection.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the extension settings.",
   "You must open a *.vscode-documentdb-scrapbook file to run commands.": "You must open a *.vscode-documentdb-scrapbook file to run commands.",
   "You need to provide the password for \"{username}\" in order to continue. Your password will not be stored.": "You need to provide the password for \"{username}\" in order to continue. Your password will not be stored.",
+  "You're attempting to copy a large number of documents. This process can be slow because it downloads all documents from the source to your computer and then uploads them to the destination, which can take a significant amount of time and bandwidth.\n\nFor larger data migrations, we recommend using a dedicated migration tool for a faster experience.\n\nNote: You can disable this warning or adjust the document count threshold in the extension settings.": "You're attempting to copy a large number of documents. This process can be slow because it downloads all documents from the source to your computer and then uploads them to the destination, which can take a significant amount of time and bandwidth.\n\nFor larger data migrations, we recommend using a dedicated migration tool for a faster experience.\n\nNote: You can disable this warning or adjust the document count threshold in the extension settings.",
   "Your database stores documents with embedded fields, allowing for hierarchical data organization.": "Your database stores documents with embedded fields, allowing for hierarchical data organization.",
   "Your VS Code window must be reloaded to perform this action.": "Your VS Code window must be reloaded to perform this action."
 }

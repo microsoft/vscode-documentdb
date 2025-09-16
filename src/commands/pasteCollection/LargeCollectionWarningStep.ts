@@ -12,7 +12,7 @@ export class LargeCollectionWarningStep extends AzureWizardPromptStep<PasteColle
     public async prompt(context: PasteCollectionWizardContext): Promise<void> {
         const title = l10n.t('Large Collection Copy Operation');
         const detail = l10n.t(
-            'This copy and paste operation can be slow because the data is being read and written by the extension. For larger migrations, a dedicated migration approach can be better.\n\nNote: You can configure the threshold for this warning in the extension settings (documentDB.copyPaste.largeCollectionWarningThreshold).',
+            "You're attempting to copy a large number of documents. This process can be slow because it downloads all documents from the source to your computer and then uploads them to the destination, which can take a significant amount of time and bandwidth.\n\nFor larger data migrations, we recommend using a dedicated migration tool for a faster experience.\n\nNote: You can disable this warning or adjust the document count threshold in the extension settings.",
         );
 
         const tellMeMoreButton = l10n.t('Tell me more');
@@ -25,8 +25,8 @@ export class LargeCollectionWarningStep extends AzureWizardPromptStep<PasteColle
                 modal: true,
                 detail: detail,
             },
-            { title: tellMeMoreButton },
             { title: continueButton },
+            { title: tellMeMoreButton },
         );
 
         if (!response) {
@@ -35,11 +35,11 @@ export class LargeCollectionWarningStep extends AzureWizardPromptStep<PasteColle
             throw new UserCancelledError();
         }
 
+        context.telemetry.properties.largeCollectionWarningResult = response.title;
+
         if (response.title === tellMeMoreButton) {
             // User chose to see documentation - abort the wizard flow
-            context.telemetry.properties.largeCollectionWarningResult = 'tellMeMore';
 
-            // Open documentation (placeholder URL as requested)
             const migrationUrl = 'https://github.com/microsoft/vscode-cosmosdb/';
 
             try {
@@ -57,14 +57,9 @@ export class LargeCollectionWarningStep extends AzureWizardPromptStep<PasteColle
             // Abort the wizard flow after opening documentation
             throw new UserCancelledError();
         }
-
-        // User chose to continue
-        context.telemetry.properties.largeCollectionWarningResult = 'continue';
     }
 
     public shouldPrompt(): boolean {
-        // The conditional logic is handled in the main wizard file
-        // This step is only added to the wizard when needed
         return true;
     }
 }
