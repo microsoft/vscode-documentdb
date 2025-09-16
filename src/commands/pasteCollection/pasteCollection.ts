@@ -13,6 +13,7 @@ import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
 import { ExecuteStep } from './ExecuteStep';
+import { LargeCollectionWarningStep } from './LargeCollectionWarningStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { PromptConflictResolutionStep } from './PromptConflictResolutionStep';
 import { PromptNewCollectionNameStep } from './PromptNewCollectionNameStep';
@@ -135,6 +136,13 @@ export async function pasteCollection(
 
     // Create wizard with appropriate steps
     const promptSteps: AzureWizardPromptStep<PasteCollectionWizardContext>[] = [];
+
+    // Add warning step for large collections as the first step (> 50,000 documents)
+    if (sourceCollectionSize !== undefined && sourceCollectionSize > 50000) {
+        context.telemetry.properties.largeCollectionWarningShown = 'true';
+        context.telemetry.measurements.sourceCollectionSizeForWarning = sourceCollectionSize;
+        promptSteps.push(new LargeCollectionWarningStep());
+    }
 
     // Only prompt for new collection name if pasting into a database (creating new collection)
     if (!isTargetExistingCollection) {
