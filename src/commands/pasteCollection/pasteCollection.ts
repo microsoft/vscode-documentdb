@@ -137,11 +137,19 @@ export async function pasteCollection(
     // Create wizard with appropriate steps
     const promptSteps: AzureWizardPromptStep<PasteCollectionWizardContext>[] = [];
 
-    // Add warning step for large collections as the first step (> 50,000 documents)
-    if (sourceCollectionSize !== undefined && sourceCollectionSize > 50000) {
+    // Read the large collection warning threshold from settings
+    const largeCollectionThreshold = vscode.workspace
+        .getConfiguration()
+        .get<number>(ext.settingsKeys.largeCollectionWarningThreshold, 50000);
+
+    // Add warning step for large collections as the first step
+    if (sourceCollectionSize !== undefined && sourceCollectionSize > largeCollectionThreshold) {
         context.telemetry.properties.largeCollectionWarningShown = 'true';
         context.telemetry.measurements.sourceCollectionSizeForWarning = sourceCollectionSize;
+        context.telemetry.measurements.largeCollectionThresholdUsed = largeCollectionThreshold;
         promptSteps.push(new LargeCollectionWarningStep());
+    } else {
+        context.telemetry.properties.largeCollectionWarningShown = 'false';
     }
 
     // Only prompt for new collection name if pasting into a database (creating new collection)

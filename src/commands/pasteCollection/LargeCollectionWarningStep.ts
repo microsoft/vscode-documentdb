@@ -12,7 +12,7 @@ export class LargeCollectionWarningStep extends AzureWizardPromptStep<PasteColle
     public async prompt(context: PasteCollectionWizardContext): Promise<void> {
         const title = l10n.t('Large Collection Copy Operation');
         const detail = l10n.t(
-            'This copy and paste operation can be slow because the data is being read and written by your system. For larger migrations, a dedicated migration approach can be better.',
+            'This copy and paste operation can be slow because the data is being read and written by the extension. For larger migrations, a dedicated migration approach can be better.\n\nNote: You can configure the threshold for this warning in the extension settings (documentDB.copyPaste.largeCollectionWarningThreshold).',
         );
 
         const tellMeMoreButton = l10n.t('Tell me more');

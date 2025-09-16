@@ -877,6 +877,13 @@
             "default": true,
             "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events."
           },
+          "documentDB.copyPaste.largeCollectionWarningThreshold": {
+            "order": 12,
+            "type": "number",
+            "default": 50000,
+            "minimum": 1,
+            "description": "The number of documents in a source collection that triggers a warning about potentially slow copy and paste operations. Set to a higher value to reduce warnings, or a lower value to see warnings for smaller collections."
+          },
           "documentDB.local.port": {
             "order": 20,
             "type": "integer",
