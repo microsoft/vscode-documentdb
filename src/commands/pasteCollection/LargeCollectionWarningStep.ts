@@ -38,23 +38,7 @@ export class LargeCollectionWarningStep extends AzureWizardPromptStep<PasteColle
         context.telemetry.properties.largeCollectionWarningResult = response.title;
 
         if (response.title === tellMeMoreButton) {
-            // User chose to see documentation - abort the wizard flow
-
-            const migrationUrl = 'https://github.com/microsoft/vscode-cosmosdb/';
-
-            try {
-                // Try to open with Simple Browser first (extension may not be available)
-                await vscode.commands.executeCommand('simpleBrowser.api.open', migrationUrl, {
-                    viewColumn: vscode.ViewColumn.Beside,
-                    preserveFocus: false,
-                });
-                context.telemetry.properties.documentationOpenMethod = 'simpleBrowser';
-            } catch {
-                await openUrl(migrationUrl);
-                context.telemetry.properties.documentationOpenMethod = 'openUrl';
-            }
-
-            // Abort the wizard flow after opening documentation
+            await openUrl('https://aka.ms/vscode-documentdb-copy-and-paste-or-migration');
             throw new UserCancelledError();
         }
     }

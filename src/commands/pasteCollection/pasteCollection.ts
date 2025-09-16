@@ -150,6 +150,7 @@ export async function pasteCollection(
 
         if (sourceCollectionSize !== undefined && sourceCollectionSize > largeCollectionThreshold) {
             promptSteps.push(new LargeCollectionWarningStep());
+
             context.telemetry.properties.largeCollectionWarningShown = 'true';
             context.telemetry.measurements.sourceCollectionSizeForWarning = sourceCollectionSize;
             context.telemetry.measurements.largeCollectionThresholdUsed = largeCollectionThreshold;
