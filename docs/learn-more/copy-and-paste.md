@@ -169,7 +169,7 @@ You will be prompted to choose one of four strategies:
   ```
 
 - **Result**: A new document is inserted into the target with a brand new `_id`. The inserted document will look like:
-  ```json
+  ```js
   { "_id": ObjectId("..."), "_original_id": 1, "data": "new" }
   ```
   The original document in the target remains untouched.
