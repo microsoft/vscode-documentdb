@@ -250,6 +250,14 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
         for await (const document of documentStream) {
             if (signal.aborted) {
+                // Add telemetry for aborted operation during document processing
+                this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
+                    abortedDuringProcessing: true,
+                    completionPercentage:
+                        this.processedDocuments > 0
+                            ? Math.round((this.processedDocuments / (this.sourceDocumentCount + 1)) * 100)
+                            : 0,
+                });
                 // Buffer is a local variable, no need to clear, just exit.
                 return;
             }
@@ -272,6 +280,15 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
 
         if (signal.aborted) {
+            // Add telemetry for aborted operation after stream completion
+            this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
+                abortedAfterProcessing: true,
+                remainingBufferedDocuments: buffer.length,
+                completionPercentage:
+                    this.processedDocuments > 0
+                        ? Math.round((this.processedDocuments / (this.sourceDocumentCount + 1)) * 100)
+                        : 0,
+            });
             return;
         }
 
@@ -282,28 +299,10 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
 
         // Add final telemetry measurements
-        if (context) {
-            context.telemetry.measurements.processedDocuments = this.processedDocuments;
-            context.telemetry.measurements.bufferFlushCount = bufferFlushCount;
-
-            // Add document size statistics from running data
-            const docSizeStats = this.getStatsFromRunningData(this.documentSizeStats);
-            context.telemetry.measurements.documentSizeMinBytes = docSizeStats.min;
-            context.telemetry.measurements.documentSizeMaxBytes = docSizeStats.max;
-            context.telemetry.measurements.documentSizeAvgBytes = docSizeStats.average;
-            context.telemetry.measurements.documentSizeMedianBytes = docSizeStats.median;
-
-            // Add buffer flush duration statistics from running data
-            const flushDurationStats = this.getStatsFromRunningData(this.flushDurationStats);
-            context.telemetry.measurements.flushDurationMinMs = flushDurationStats.min;
-            context.telemetry.measurements.flushDurationMaxMs = flushDurationStats.max;
-            context.telemetry.measurements.flushDurationAvgMs = flushDurationStats.average;
-            context.telemetry.measurements.flushDurationMedianMs = flushDurationStats.median;
-
-            // Add conflict resolution statistics
-            context.telemetry.measurements.conflictSkippedCount = this.conflictStats.skippedCount;
-            context.telemetry.measurements.conflictErrorCount = this.conflictStats.errorCount;
-        }
+        this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
+            abortedAfterProcessing: false,
+            completionPercentage: 100,
+        });
 
         // Ensure we report 100% completion
         this.updateProgress(100, vscode.l10n.t('Copy operation completed successfully'));
@@ -473,6 +472,58 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             const randomIndex = Math.floor(Math.random() * stats.count);
             if (randomIndex < stats.reservoirSize) {
                 stats.reservoir[randomIndex] = value;
+            }
+        }
+    }
+
+    /**
+     * Adds performance statistics to telemetry context.
+     *
+     * @param context Telemetry context to add measurements to
+     * @param bufferFlushCount Number of buffer flushes performed
+     * @param additionalProperties Optional additional properties to add
+     */
+    private addPerformanceStatsToTelemetry(
+        context: IActionContext | undefined,
+        bufferFlushCount: number,
+        additionalProperties?: Record<string, string | number | boolean>,
+    ): void {
+        if (!context) {
+            return;
+        }
+
+        // Basic performance metrics
+        context.telemetry.measurements.processedDocuments = this.processedDocuments;
+        context.telemetry.measurements.bufferFlushCount = bufferFlushCount;
+
+        // Add document size statistics from running data
+        const docSizeStats = this.getStatsFromRunningData(this.documentSizeStats);
+        context.telemetry.measurements.documentSizeMinBytes = docSizeStats.min;
+        context.telemetry.measurements.documentSizeMaxBytes = docSizeStats.max;
+        context.telemetry.measurements.documentSizeAvgBytes = docSizeStats.average;
+        context.telemetry.measurements.documentSizeMedianBytes = docSizeStats.median;
+
+        // Add buffer flush duration statistics from running data
+        const flushDurationStats = this.getStatsFromRunningData(this.flushDurationStats);
+        context.telemetry.measurements.flushDurationMinMs = flushDurationStats.min;
+        context.telemetry.measurements.flushDurationMaxMs = flushDurationStats.max;
+        context.telemetry.measurements.flushDurationAvgMs = flushDurationStats.average;
+        context.telemetry.measurements.flushDurationMedianMs = flushDurationStats.median;
+
+        // Add conflict resolution statistics
+        context.telemetry.measurements.conflictSkippedCount = this.conflictStats.skippedCount;
+        context.telemetry.measurements.conflictErrorCount = this.conflictStats.errorCount;
+
+        // Add any additional properties
+        if (additionalProperties) {
+            for (const [key, value] of Object.entries(additionalProperties)) {
+                if (typeof value === 'string') {
+                    context.telemetry.properties[key] = value;
+                } else if (typeof value === 'boolean') {
+                    context.telemetry.properties[key] = value.toString();
+                } else {
+                    context.telemetry.measurements[key] = value;
+                }
             }
         }
     }
