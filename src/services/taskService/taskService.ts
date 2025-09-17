@@ -3,13 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import {
+    hasResourceConflict,
     type ResourceDefinition,
     type ResourceTrackingTask,
     type TaskInfo,
-    hasResourceConflict,
 } from './taskServiceResourceTracking';
 
 /**
@@ -99,6 +100,27 @@ export interface TaskStateChangeEvent {
  *
  * Subclasses only need to implement the doWork() method with their
  * specific task logic.
+ *
+ * ## Telemetry Integration
+ *
+ * This class provides automatic telemetry collection for task lifecycle and performance.
+ * Two telemetry events are generated per task:
+ * - `taskService.taskInitialization` - covers the initialization phase
+ * - `taskService.taskExecution` - covers the main work execution phase
+ *
+ * ### Telemetry Naming Convention
+ *
+ * **Base Class Properties (Task framework):**
+ * - Use `task_` prefix for all base class properties and measurements
+ * - Examples: `task_id`, `task_type`, `task_state`, `task_duration`
+ * - These are automatically added by the base class
+ *
+ * **Implementation Properties (Domain-specific):**
+ * - Use natural domain names without prefixes
+ * - Examples: `sourceCollectionSize`, `conflictResolution`, `documentsProcessed`
+ * - Add these in your `doWork()` and `onInitialize()` implementations using the context parameter
+ *
+ * This ensures no naming conflicts while keeping implementation telemetry clean and query-friendly.
  */
 export abstract class Task {
     public readonly id: string;
@@ -240,8 +262,19 @@ export abstract class Task {
         this.updateStatus(TaskState.Initializing, vscode.l10n.t('Initializing task...'), 0);
 
         try {
-            // Allow subclasses to perform initialization
-            await this.onInitialize?.(this.abortController.signal);
+            // Allow subclasses to perform initialization with telemetry
+            await callWithTelemetryAndErrorHandling('taskService.taskInitialization', async (context) => {
+                // Add base task properties with task_ prefix
+                context.telemetry.properties.task_id = this.id;
+                context.telemetry.properties.task_type = this.type;
+                context.telemetry.properties.task_name = this.name;
+                context.telemetry.properties.task_phase = 'initialization';
+
+                await this.onInitialize?.(this.abortController.signal, context);
+
+                // Record initialization completion
+                context.telemetry.properties.task_initializationCompleted = 'true';
+            });
 
             // Check if abort was requested during initialization
             if (this.abortController.signal.aborted) {
@@ -264,29 +297,49 @@ export abstract class Task {
             this.updateStatus(TaskState.Failed, vscode.l10n.t('Failed to initialize task'), 0, error);
             throw error;
         }
-    } /**
+    }
+
+    /**
      * Executes the main task work with proper error handling and state management.
      * This method is private to ensure proper lifecycle management.
      */
     private async runWork(): Promise<void> {
-        try {
-            await this.doWork(this.abortController.signal);
+        await callWithTelemetryAndErrorHandling('taskService.taskExecution', async (context: IActionContext) => {
+            // Add base task properties with task_ prefix
+            context.telemetry.properties.task_id = this.id;
+            context.telemetry.properties.task_type = this.constructor.name;
+            context.telemetry.properties.task_name = this.name;
+            context.telemetry.properties.task_phase = 'execution';
 
-            // Determine final state based on abort status
-            if (this.abortController.signal.aborted) {
-                this.updateStatus(TaskState.Stopped, vscode.l10n.t('Task stopped'));
-            } else {
-                this.updateStatus(TaskState.Completed, vscode.l10n.t('Task completed successfully'), 100);
+            try {
+                await this.doWork(this.abortController.signal, context);
+
+                // Determine final state based on abort status
+                if (this.abortController.signal.aborted) {
+                    context.telemetry.properties.task_final_state = 'stopped';
+                    this.updateStatus(TaskState.Stopped, vscode.l10n.t('Task stopped'));
+                } else {
+                    context.telemetry.properties.task_final_state = 'completed';
+                    this.updateStatus(TaskState.Completed, vscode.l10n.t('Task completed successfully'), 100);
+                }
+            } catch (error) {
+                // Add error information to telemetry
+                context.telemetry.properties.task_error = error instanceof Error ? error.message : 'Unknown error';
+
+                // Determine final state based on abort status
+                if (this.abortController.signal.aborted) {
+                    context.telemetry.properties.task_final_state = 'stopped';
+                    this.updateStatus(TaskState.Stopped, vscode.l10n.t('Task stopped'));
+                } else {
+                    context.telemetry.properties.task_final_state = 'failed';
+                    this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
+                }
+                throw error;
             }
-        } catch (error) {
-            // Determine final state based on abort status
-            if (this.abortController.signal.aborted) {
-                this.updateStatus(TaskState.Stopped, vscode.l10n.t('Task stopped'));
-            } else {
-                this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
-            }
-        }
-    } /**
+        });
+    }
+
+    /**
      * Requests a graceful stop of the task.
      * This method signals the task to stop via AbortSignal and updates the state accordingly.
      * The final state transition to Stopped will be handled by runWork() when it detects the abort signal.
@@ -337,17 +390,27 @@ export abstract class Task {
     /**
      * Implements the actual task logic.
      * Subclasses must implement this method with their specific functionality.
-     *     * The implementation should:
+     *
+     * The implementation should:
      * - Check the abort signal periodically for long-running operations
      * - Call updateProgress() to report progress updates (safe to call anytime)
      * - Throw errors for failure conditions
      * - Handle cleanup when signal.aborted becomes true
+     * - Use the optional context parameter to add task-specific telemetry properties and measurements
      *
      * @param signal AbortSignal that will be triggered when stop() is called.
      *               Check signal.aborted to exit gracefully and perform cleanup.
+     * @param context Optional telemetry context for adding task-specific properties and measurements.
+     *                Use natural domain names (no prefixes) for implementation-specific data.
      *
      * @example
-     * protected async doWork(signal: AbortSignal): Promise<void> {
+     * protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
+     *     // Add task-specific telemetry
+     *     if (context) {
+     *         context.telemetry.properties.sourceCollectionSize = this.sourceSize.toString();
+     *         context.telemetry.measurements.documentsProcessed = 0;
+     *     }
+     *
      *     const items = await this.loadItems();
      *
      *     for (let i = 0; i < items.length; i++) {
@@ -359,17 +422,26 @@ export abstract class Task {
      *
      *         await this.processItem(items[i]);
      *         this.updateProgress((i + 1) / items.length * 100, `Processing item ${i + 1}`);
+     *
+     *         // Update telemetry measurements
+     *         if (context) {
+     *             context.telemetry.measurements.documentsProcessed = i + 1;
+     *         }
      *     }
      * }
      */
-    protected abstract doWork(signal: AbortSignal): Promise<void>; /**
+    protected abstract doWork(signal: AbortSignal, context?: IActionContext): Promise<void>;
+
+    /**
      * Optional hook called during task initialization.
      * Override this to perform setup operations before the main work begins.
      *
      * @param signal AbortSignal that will be triggered when stop() is called.
      *               Check signal.aborted to exit initialization early if needed.
+     * @param context Optional telemetry context for adding initialization-specific properties and measurements.
+     *                Use natural domain names (no prefixes) for implementation-specific data.
      */
-    protected onInitialize?(signal: AbortSignal): Promise<void>;
+    protected onInitialize?(signal: AbortSignal, context?: IActionContext): Promise<void>;
 
     /**
      * Optional hook called when the task is being deleted.
