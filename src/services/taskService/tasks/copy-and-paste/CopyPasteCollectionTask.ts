@@ -358,7 +358,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 // Skip strategy: log each error and continue.
                 this.conflictStats.skippedCount += result.errors.length;
                 for (const error of result.errors) {
-                    ext.outputChannel.appendLine(
+                    ext.outputChannel.appendLog(
                         vscode.l10n.t(
                             'Skipped document with _id: {0} due to error: {1}',
                             String(error.documentId ?? 'unknown'),
