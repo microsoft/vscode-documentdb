@@ -21,6 +21,8 @@ The **Copy and Paste** feature in DocumentDB for VS Code provides a convenient w
 
 The copy-and-paste process is designed to be efficient for smaller collections by streaming data through your local machine. Here’s a step-by-step breakdown of the process:
 
+<p align="center"><img src="images/copy-and-paste-via-local-system.png" alt="Copy-and-Paste process that uses a local sistem" style="width:80%; min-width:240px; max-width:520px; height:auto;" /></p>
+
 1.  **Data Streaming**: The extension initiates a stream from the source collection, reading documents one by one.
 2.  **In-Memory Buffering**: Documents are collected into a buffer in your computer's memory.
 3.  **Bulk Write Operation**: Once the buffer is full, the extension performs a bulk write operation to the target collection. This is more efficient than writing documents one at a time.
@@ -183,6 +185,8 @@ A final summary is displayed, showing the source, the target, and the chosen con
 ## For True Data Migrations
 
 The copy-and-paste feature is a developer convenience, not a dedicated migration tool. For production-level data migrations, especially those involving large datasets, complex transformations, or the need for data verification, a specialized migration service is strongly recommended.
+
+<p align="center"><img src="images/copy-and-paste-no-local-system.png" alt="Copy-and-Paste process that uses a local sistem" style="width:80%; min-width:240px; max-width:520px; height:auto;" /></p>
 
 Dedicated migration tools offer significant advantages:
 
