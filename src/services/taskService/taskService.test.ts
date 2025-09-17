@@ -10,8 +10,25 @@ jest.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
             appendLine: jest.fn(), // Mock appendLine as a no-op function
+            error: jest.fn(),
         },
     },
+}));
+
+// Mock @microsoft/vscode-azext-utils module
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: jest.fn(
+        async (_eventName: string, callback: (context: any) => Promise<void>) => {
+            // Mock telemetry context
+            const mockContext = {
+                telemetry: {
+                    properties: {},
+                    measurements: {},
+                },
+            };
+            return await callback(mockContext);
+        },
+    ),
 }));
 
 // Mock vscode module
@@ -21,6 +38,9 @@ jest.mock('vscode', () => ({
             return args.length > 0 ? `${key} ${args.join(' ')}` : key;
         },
     },
+    ThemeIcon: jest.fn().mockImplementation((id: string) => ({
+        id,
+    })),
     EventEmitter: jest.fn().mockImplementation(() => {
         const listeners: Array<(...args: any[]) => void> = [];
         return {

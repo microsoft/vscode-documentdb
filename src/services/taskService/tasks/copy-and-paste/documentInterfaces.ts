@@ -73,6 +73,16 @@ export interface BulkWriteResult {
 }
 
 /**
+ * Result of ensuring a collection exists.
+ */
+export interface EnsureCollectionExistsResult {
+    /**
+     * Whether the collection had to be created (true) or already existed (false).
+     */
+    collectionWasCreated: boolean;
+}
+
+/**
  * Interface for writing documents to a target collection.
  */
 export interface DocumentWriter {
@@ -102,7 +112,11 @@ export interface DocumentWriter {
      * @param connectionId Connection identifier for the target
      * @param databaseName Name of the target database
      * @param collectionName Name of the target collection
-     * @returns Promise that resolves when the collection is ready
+     * @returns Promise resolving to information about whether the collection was created
      */
-    ensureCollectionExists(connectionId: string, databaseName: string, collectionName: string): Promise<void>;
+    ensureCollectionExists(
+        connectionId: string,
+        databaseName: string,
+        collectionName: string,
+    ): Promise<EnsureCollectionExistsResult>;
 }

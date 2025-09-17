@@ -13,6 +13,7 @@ import {
     type DocumentDetails,
     type DocumentWriter,
     type DocumentWriterOptions,
+    type EnsureCollectionExistsResult,
 } from '../documentInterfaces';
 
 /**
@@ -164,9 +165,13 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
      * @param connectionId Connection identifier to get the DocumentDB client
      * @param databaseName Name of the target database
      * @param collectionName Name of the target collection
-     * @returns Promise that resolves when the collection is ready
+     * @returns Promise resolving to information about whether the collection was created
      */
-    async ensureCollectionExists(connectionId: string, databaseName: string, collectionName: string): Promise<void> {
+    async ensureCollectionExists(
+        connectionId: string,
+        databaseName: string,
+        collectionName: string,
+    ): Promise<EnsureCollectionExistsResult> {
         const client = await ClustersClient.getClient(connectionId);
 
         // Check if collection exists by trying to list collections
@@ -180,7 +185,10 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
         if (!collectionExists) {
             // Create the collection by running createCollection
             await client.createCollection(databaseName, collectionName);
+            return { collectionWasCreated: true };
         }
+
+        return { collectionWasCreated: false };
     }
 
     /**
