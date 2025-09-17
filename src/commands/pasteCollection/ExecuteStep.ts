@@ -87,7 +87,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         }
 
         // Start the copy-paste task
-        await task.start();
+        void task.start();
     }
 
     public shouldExecute(context: PasteCollectionWizardContext): boolean {

@@ -189,12 +189,10 @@ export async function pasteCollection(
     try {
         // Record prompt phase timing
         const promptStartTime = Date.now();
-        context.telemetry.measurements.promptPhaseStartTime = promptStartTime;
 
         await wizard.prompt();
 
         const promptEndTime = Date.now();
-        context.telemetry.measurements.promptPhaseEndTime = promptEndTime;
         context.telemetry.measurements.promptPhaseDuration = promptEndTime - promptStartTime;
         context.telemetry.properties.promptPhaseCompleted = 'true';
 
