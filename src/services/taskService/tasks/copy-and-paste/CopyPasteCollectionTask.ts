@@ -40,6 +40,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     private readonly documentWriter: DocumentWriter;
     private sourceDocumentCount: number = 0;
     private processedDocuments: number = 0;
+    private copiedDocuments: number = 0;
 
     // Buffer configuration for memory management
     private readonly bufferSize: number = 100; // Number of documents to buffer
@@ -233,6 +234,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             this.updateProgress(100, vscode.l10n.t('Source collection is empty.'));
             if (context) {
                 context.telemetry.measurements.processedDocuments = 0;
+                context.telemetry.measurements.copiedDocuments = 0;
                 context.telemetry.measurements.bufferFlushCount = 0;
             }
             return;
@@ -254,8 +256,8 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
                     abortedDuringProcessing: true,
                     completionPercentage:
-                        this.processedDocuments > 0
-                            ? Math.round((this.processedDocuments / (this.sourceDocumentCount + 1)) * 100)
+                        this.sourceDocumentCount > 0
+                            ? Math.round((this.processedDocuments / this.sourceDocumentCount) * 100)
                             : 0,
                 });
                 // Buffer is a local variable, no need to clear, just exit.
@@ -272,8 +274,21 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
             // Check if we need to flush the buffer
             if (this.shouldFlushBuffer(buffer.length, bufferMemoryEstimate)) {
-                await this.flushBuffer(buffer, signal);
-                bufferFlushCount++;
+                try {
+                    await this.flushBuffer(buffer, signal);
+                    bufferFlushCount++;
+                } catch (error) {
+                    // Add telemetry before re-throwing error to capture performance data
+                    this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
+                        errorDuringFlush: true,
+                        errorStrategy: this.config.onConflict,
+                        completionPercentage:
+                            this.sourceDocumentCount > 0
+                                ? Math.round((this.processedDocuments / this.sourceDocumentCount) * 100)
+                                : 0,
+                    });
+                    throw error;
+                }
                 buffer.length = 0; // Clear buffer
                 bufferMemoryEstimate = 0;
             }
@@ -285,17 +300,31 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 abortedAfterProcessing: true,
                 remainingBufferedDocuments: buffer.length,
                 completionPercentage:
-                    this.processedDocuments > 0
-                        ? Math.round((this.processedDocuments / (this.sourceDocumentCount + 1)) * 100)
-                        : 0,
+                    this.sourceDocumentCount > 0
+                        ? Math.round(((this.processedDocuments + buffer.length) / this.sourceDocumentCount) * 100)
+                        : 100, // Stream completed means 100% if no source documents
             });
             return;
         }
 
         // Flush any remaining documents in the buffer
         if (buffer.length > 0) {
-            await this.flushBuffer(buffer, signal);
-            bufferFlushCount++;
+            try {
+                await this.flushBuffer(buffer, signal);
+                bufferFlushCount++;
+            } catch (error) {
+                // Add telemetry before re-throwing error to capture performance data
+                this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
+                    errorDuringFinalFlush: true,
+                    errorStrategy: this.config.onConflict,
+                    remainingBufferedDocuments: buffer.length,
+                    completionPercentage:
+                        this.sourceDocumentCount > 0
+                            ? Math.round(((this.processedDocuments + buffer.length) / this.sourceDocumentCount) * 100)
+                            : 100,
+                });
+                throw error;
+            }
         }
 
         // Add final telemetry measurements
@@ -335,8 +364,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         const flushDuration = Date.now() - startTime;
         this.updateRunningStats(this.flushDurationStats, flushDuration);
 
-        // Update processed count
-        this.processedDocuments += result.insertedCount;
+        // Update counters - all documents in the buffer were processed (attempted)
+        this.processedDocuments += buffer.length;
+        this.copiedDocuments += result.insertedCount;
 
         // Check for errors in the write result and track conflict statistics
         if (result.errors && result.errors.length > 0) {
@@ -346,12 +376,19 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             // Handle errors based on the configured conflict resolution strategy.
             if (this.config.onConflict === ConflictResolutionStrategy.Abort) {
                 // Abort strategy: fail the entire task on the first error.
+                for (const error of result.errors) {
+                    ext.outputChannel.error(
+                        vscode.l10n.t('Error inserting document (Abort): {0}', error.error?.message ?? 'Unknown error'),
+                    );
+                }
+                ext.outputChannel.show();
+
                 const firstError = result.errors[0] as { error: Error };
                 throw new Error(
                     vscode.l10n.t(
                         'Task aborted due to an error: {0}. {1} document(s) were inserted in total.',
                         firstError.error?.message ?? 'Unknown error',
-                        this.processedDocuments.toString(),
+                        this.copiedDocuments.toString(),
                     ),
                 );
             } else if (this.config.onConflict === ConflictResolutionStrategy.Skip) {
@@ -390,6 +427,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                     );
                     ext.outputChannel.show();
                 }
+
                 // This can be expanded if other strategies need more nuanced error handling.
                 const firstError = result.errors[0] as { error: Error };
                 throw new Error(
@@ -404,10 +442,28 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
         // Update progress
         const progress = Math.min(100, (this.processedDocuments / this.sourceDocumentCount) * 100);
-        this.updateProgress(
-            progress,
-            vscode.l10n.t('Copied {0} of {1} documents', this.processedDocuments, this.sourceDocumentCount),
-        );
+        this.updateProgress(progress, this.getProgressMessage());
+    }
+
+    /**
+     * Generates an appropriate progress message based on the conflict resolution strategy.
+     *
+     * @returns Localized progress message
+     */
+    private getProgressMessage(): string {
+        if (this.config.onConflict === ConflictResolutionStrategy.Skip && this.conflictStats.skippedCount > 0) {
+            // Verbose message showing processed, copied, and skipped counts
+            return vscode.l10n.t(
+                'Processed {0} of {1} documents ({2} copied, {3} skipped)',
+                this.processedDocuments,
+                this.sourceDocumentCount,
+                this.copiedDocuments,
+                this.conflictStats.skippedCount,
+            );
+        } else {
+            // Simple message for other strategies
+            return vscode.l10n.t('Processed {0} of {1} documents', this.processedDocuments, this.sourceDocumentCount);
+        }
     }
 
     /**
@@ -494,6 +550,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
         // Basic performance metrics
         context.telemetry.measurements.processedDocuments = this.processedDocuments;
+        context.telemetry.measurements.copiedDocuments = this.copiedDocuments;
         context.telemetry.measurements.bufferFlushCount = bufferFlushCount;
 
         // Add document size statistics from running data

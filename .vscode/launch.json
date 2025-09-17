@@ -27,7 +27,7 @@
         "./*": "${workspaceFolder}/*"
       },
       "env": {
-        "DEBUGTELEMETRY": "true", // set this to "verbose" to see telemetry events in debug console
+        "DEBUGTELEMETRY": "verbose", // set this to "verbose" to see telemetry events in debug console
         "NODE_DEBUG": "",
         "DEBUG_WEBPACK": "",
         "DEVSERVER": "true",
@@ -68,7 +68,7 @@
         "DEBUG_WEBPACK": "",
         "DEVSERVER": "true",
         "STOP_ON_ENTRY": "false" // stop on entry is not allowed for "type": "extensionHost", therefore, it's emulated here (review main.ts)
-      },
+      }
     },
     {
       "name": "Launch Extension + Host",
