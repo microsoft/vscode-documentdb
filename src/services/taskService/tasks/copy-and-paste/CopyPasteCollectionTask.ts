@@ -161,11 +161,16 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 this.config.source.connectionId !== this.config.target.connectionId
             ).toString();
 
-            // Collect cluster metadata for source and target connections (non-blocking)
-            void this.collectClusterMetadata(this.config.source.connectionId, 'source', context);
+            // Collect cluster metadata for source and target connections and await their completion (non-blocking for errors)
+            const metadataPromises = [
+                this.collectClusterMetadata(this.config.source.connectionId, 'source', context)
+            ];
             if (this.config.source.connectionId !== this.config.target.connectionId) {
-                void this.collectClusterMetadata(this.config.target.connectionId, 'target', context);
+                metadataPromises.push(
+                    this.collectClusterMetadata(this.config.target.connectionId, 'target', context)
+                );
             }
+            await Promise.allSettled(metadataPromises);
         }
 
         // Count total documents for progress calculation
