@@ -294,6 +294,28 @@ export class ClustersClient {
         return CredentialCache.getCredentials(this.credentialId) as ClustersCredentials | undefined;
     }
 
+    /**
+     * Gets cluster metadata for telemetry purposes.
+     *
+     * @returns Promise resolving to cluster metadata object
+     */
+    public async getClusterMetadata(): Promise<ClusterMetadata> {
+        try {
+            const credentials = this.getCredentials();
+            if (!credentials?.connectionString) {
+                return {};
+            }
+
+            const hosts = getHostsFromConnectionString(credentials.connectionString);
+            return await getClusterMetadata(this._mongoClient, hosts);
+        } catch (error) {
+            // Return empty metadata if collection fails
+            return {
+                metadata_error: error instanceof Error ? error.message : 'Unknown error',
+            };
+        }
+    }
+
     getCollection(databaseName: string, collectionName: string): Collection<Document> {
         try {
             return this._mongoClient.db(databaseName).collection(collectionName);
