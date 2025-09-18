@@ -360,8 +360,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             { batchSize: buffer.length },
         );
 
-        // Record flush duration
-        const flushDuration = Date.now() - startTime;
+        // Record flush duration with safety check to prevent negative values
+        // (can occur due to system clock adjustments or timing anomalies)
+        const flushDuration = Math.max(0, Date.now() - startTime);
         this.updateRunningStats(this.flushDurationStats, flushDuration);
 
         // Update counters - all documents in the buffer were processed (attempted)
