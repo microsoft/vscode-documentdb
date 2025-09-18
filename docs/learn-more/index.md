@@ -16,4 +16,5 @@ This section contains additional documentation for features and concepts in Docu
 - [Local Connection](./local-connection.md)
   - [Local Connection: Azure CosmosDB for MongoDB (RU) Emulator](./local-connection-mongodb-ru.md)
   - [Local Connection: DocumentDB Local](./local-connection-documentdb-local.md)
+- [Copy and Paste Collections](./copy-and-paste.md)
 - [Data Migrations](./data-migrations.md) ⚠️ _Experimental_
