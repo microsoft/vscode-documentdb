@@ -40,12 +40,6 @@ export type EphemeralClusterCredentials = {
     // Authentication method specific configurations
     nativeAuthConfig?: NativeAuthConfig;
     entraIdConfig?: EntraIdAuthConfig;
-
-    // Legacy fields for backward compatibility - will be deprecated
-    /** @deprecated Use nativeAuthConfig.connectionUser instead */
-    connectionUser?: string;
-    /** @deprecated Use nativeAuthConfig.connectionPassword instead */
-    connectionPassword?: string;
 };
 
 /**

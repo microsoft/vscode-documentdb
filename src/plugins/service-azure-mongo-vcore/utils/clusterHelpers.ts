@@ -88,8 +88,6 @@ export function extractCredentialsFromCluster(
     const credentials: EphemeralClusterCredentials = {
         connectionString: parsedCS.toString(),
         availableAuthMethods: [],
-        // Legacy field for backward compatibility
-        connectionUser: clusterInformation.properties?.administrator?.userName,
         // Auth configs - populate native auth if we have username
         nativeAuthConfig: clusterInformation.properties?.administrator?.userName
             ? {

@@ -69,13 +69,9 @@ export async function launchShell(
 
                 if (selectedAuthMethod === AuthMethodId.NativeAuth || (nativeAuthIsAvailable && !selectedAuthMethod)) {
                     connectionString = discoveredClusterCredentials.connectionString;
-                    // Prefer auth config, fallback to legacy fields for backward compatibility
-                    username =
-                        discoveredClusterCredentials.nativeAuthConfig?.connectionUser ??
-                        discoveredClusterCredentials.connectionUser;
-                    password =
-                        discoveredClusterCredentials.nativeAuthConfig?.connectionPassword ??
-                        discoveredClusterCredentials.connectionPassword;
+                    // Use nativeAuthConfig for credential access
+                    username = discoveredClusterCredentials.nativeAuthConfig?.connectionUser;
+                    password = discoveredClusterCredentials.nativeAuthConfig?.connectionPassword;
                     authMechanism = AuthMethodId.NativeAuth;
                 } else {
                     // Only SCRAM-SHA-256 (username/password) authentication is supported here.

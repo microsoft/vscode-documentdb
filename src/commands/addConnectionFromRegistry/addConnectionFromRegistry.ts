@@ -66,8 +66,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
             }
 
             const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
-            const username =
-                (credentials.nativeAuthConfig?.connectionUser ?? credentials.connectionUser) || parsedCS.username;
+            const username = credentials.nativeAuthConfig?.connectionUser || parsedCS.username;
             parsedCS.username = '';
 
             const joinedHosts = [...parsedCS.hosts].sort().join(',');
@@ -146,8 +145,8 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
                 properties: { api: API.DocumentDB, availableAuthMethods: credentials.availableAuthMethods },
                 secrets: {
                     connectionString: parsedCS.toString(),
-                    userName: credentials.nativeAuthConfig?.connectionUser ?? credentials.connectionUser,
-                    password: credentials.nativeAuthConfig?.connectionPassword ?? credentials.connectionPassword,
+                    userName: credentials.nativeAuthConfig?.connectionUser,
+                    password: credentials.nativeAuthConfig?.connectionPassword,
                 },
             };
 

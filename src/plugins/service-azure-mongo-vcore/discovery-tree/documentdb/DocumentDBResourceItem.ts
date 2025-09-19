@@ -98,7 +98,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
-                adminUserName: credentials.nativeAuthConfig?.connectionUser ?? credentials.connectionUser,
+                adminUserName: credentials.nativeAuthConfig?.connectionUser,
                 resourceName: this.cluster.name,
                 availableAuthMethods: credentials.availableAuthMethods,
             };

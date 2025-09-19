@@ -87,9 +87,6 @@ export async function extractCredentialsFromRUAccount(
         connectionString: parsedCS.toString(),
         availableAuthMethods: [AuthMethodId.NativeAuth],
         selectedAuthMethod: AuthMethodId.NativeAuth,
-        // Legacy fields for backward compatibility
-        connectionUser: username,
-        connectionPassword: password,
         // Auth configs
         nativeAuthConfig: {
             connectionUser: username,

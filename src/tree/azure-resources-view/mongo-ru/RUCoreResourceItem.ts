@@ -84,13 +84,13 @@ export class RUResourceItem extends ClusterItemBase {
                 this.id,
                 credentials.selectedAuthMethod!,
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'RUCoreResourceItem.ts'),
-                credentials.nativeAuthConfig?.connectionUser ?? credentials.connectionUser,
-                credentials.nativeAuthConfig?.connectionPassword ?? credentials.connectionPassword,
+                credentials.nativeAuthConfig?.connectionUser ?? '',
+                credentials.nativeAuthConfig?.connectionPassword ?? '',
             );
 
             ext.outputChannel.append(
                 l10n.t('Connecting to the cluster as "{username}"…', {
-                    username: credentials.nativeAuthConfig?.connectionUser ?? credentials.connectionUser ?? '',
+                    username: credentials.nativeAuthConfig?.connectionUser ?? '',
                 }),
             );
 
@@ -201,9 +201,6 @@ export class RUResourceItem extends ClusterItemBase {
             connectionString: parsedCS.toString(),
             availableAuthMethods: [AuthMethodId.NativeAuth],
             selectedAuthMethod: AuthMethodId.NativeAuth,
-            // Legacy fields for backward compatibility
-            connectionUser: username,
-            connectionPassword: password,
             // Auth configs
             nativeAuthConfig: {
                 connectionUser: username,

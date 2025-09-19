@@ -57,12 +57,6 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
             selectedAuthMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
 
-            // Legacy fields for backward compatibility
-            connectionUser:
-                connectionCredentials.secrets.nativeAuth?.connectionUser ?? connectionCredentials.secrets.userName,
-            connectionPassword:
-                connectionCredentials.secrets.nativeAuth?.connectionPassword ?? connectionCredentials.secrets.password,
-
             // Structured auth configs
             nativeAuthConfig: connectionCredentials.secrets.nativeAuth,
             entraIdConfig: connectionCredentials.secrets.entraIdAuth

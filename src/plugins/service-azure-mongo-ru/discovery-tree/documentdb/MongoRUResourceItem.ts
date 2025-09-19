@@ -81,8 +81,8 @@ export class MongoRUResourceItem extends ClusterItemBase {
                     this.id,
                     credentials.selectedAuthMethod ?? credentials.availableAuthMethods[0],
                     credentials.connectionString,
-                    credentials.nativeAuthConfig?.connectionUser ?? credentials.connectionUser,
-                    credentials.nativeAuthConfig?.connectionPassword ?? credentials.connectionPassword,
+                    credentials.nativeAuthConfig?.connectionUser ?? '',
+                    credentials.nativeAuthConfig?.connectionPassword ?? '',
                 );
 
                 // Connect using the cached credentials
