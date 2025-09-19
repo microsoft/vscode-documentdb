@@ -27,7 +27,7 @@ import {
     getClusterInformationFromAzure,
 } from '../../../plugins/service-azure-mongo-vcore/utils/clusterHelpers';
 import { nonNullValue } from '../../../utils/nonNull';
-import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../documentdb/ClusterModel';
 
 export class VCoreResourceItem extends ClusterItemBase {
@@ -49,7 +49,7 @@ export class VCoreResourceItem extends ClusterItemBase {
         super(cluster);
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'documentdb';

@@ -53,7 +53,7 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
      * Extracts and processes credentials from cluster information.
      * @param context The action context for telemetry and masking.
      * @param clusterInformation The MongoCluster object containing cluster details.
-     * @returns A ClusterCredentials object.
+     * @returns An EphemeralClusterCredentials object for service discovery scenarios.
      */
     // getClusterInformation and extractCredentials moved to shared helpers
 

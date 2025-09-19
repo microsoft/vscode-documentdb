@@ -6,25 +6,9 @@
 import { type ConnectionItem } from '../services/connectionStorageService';
 import { CaseInsensitiveMap } from '../utils/CaseInsensitiveMap';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
+import { type EntraIdAuthConfig, type NativeAuthConfig } from './auth/AuthConfig';
 import { AuthMethodId, type AuthMethodId as AuthMethodIdType } from './auth/AuthMethod';
 import { addAuthenticationDataToConnectionString } from './utils/connectionStringHelpers';
-
-/**
- * Configuration for Microsoft Entra ID authentication.
- */
-export interface EntraIdAuthConfig {
-    tenantId: string;
-    accountId?: string;
-    subscriptionId?: string;
-}
-
-/**
- * Configuration for native authentication (username/password based authentication).
- */
-export interface NativeAuthConfig {
-    connectionUser: string;
-    connectionPassword?: string;
-}
 
 export interface CachedClusterCredentials {
     mongoClusterId: string;

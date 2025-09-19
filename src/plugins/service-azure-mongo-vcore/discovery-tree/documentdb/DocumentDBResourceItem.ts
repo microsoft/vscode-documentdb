@@ -22,7 +22,7 @@ import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticat
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
-import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { nonNullValue } from '../../../../utils/nonNull';
 import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../../utils/clusterHelpers';
@@ -46,7 +46,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         super(cluster);
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';

@@ -22,7 +22,7 @@ import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/a
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
-import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
 
@@ -65,7 +65,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
         this.tooltipOverride = new vscode.MarkdownString(tooltipParts.join('\n\n'));
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.discoveryProvider = 'azure-vm-discovery';
             context.telemetry.properties.view = Views.DiscoveryView;

@@ -8,7 +8,8 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
-import { CredentialCache, type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/CredentialCache';
+import { CredentialCache } from '../../documentdb/CredentialCache';
+import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ext } from '../../extensionVariables';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
@@ -101,9 +102,9 @@ export abstract class ClusterItemBase
      * Must be implemented by subclasses.
      * This is relevant for service discovery scenarios
      *
-     * @returns A promise that resolves to the credentials if successful; otherwise, undefined.
+     * @returns A promise that resolves to the EphemeralClusterCredentials if successful; otherwise, undefined.
      */
-    public abstract getCredentials(): Promise<ClusterCredentials | undefined>;
+    public abstract getCredentials(): Promise<EphemeralClusterCredentials | undefined>;
 
     /**
      * Authenticates and connects to the cluster to list all available databases.

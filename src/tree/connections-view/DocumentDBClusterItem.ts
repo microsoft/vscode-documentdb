@@ -13,9 +13,10 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { nonNullProp } from '../../utils/nonNull';
 
+import { type EntraIdAuthConfig } from '../../documentdb/auth/AuthConfig';
 import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
-import { CredentialCache, type EntraIdAuthConfig } from '../../documentdb/CredentialCache';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../documentdb/wizards/authenticate/AuthenticateWizardContext';
@@ -25,7 +26,7 @@ import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/Provi
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
-import { ClusterItemBase, type ClusterCredentials } from '../documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 
@@ -41,7 +42,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
         return this.cluster.storageId;
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         const connectionType = this.cluster.emulatorConfiguration?.isEmulator
             ? ConnectionType.Emulators
             : ConnectionType.Clusters;

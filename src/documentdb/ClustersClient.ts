@@ -34,7 +34,7 @@ import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
-import { CredentialCache, type ClustersCredentials } from './CredentialCache';
+import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -224,21 +224,21 @@ export class ClustersClient {
     }
 
     /**
-     * @deprecated Use getCredentials() which returns a ClusterCredentials object instead.
+     * @deprecated Use getCredentials() which returns a CachedClusterCredentials object instead.
      */
     getConnectionString(): string | undefined {
         return this.getCredentials()?.connectionString;
     }
 
     /**
-     * @deprecated Use getCredentials() which returns a ClusterCredentials object instead.
+     * @deprecated Use getCredentials() which returns a CachedClusterCredentials object instead.
      */
     getConnectionStringWithPassword(): string | undefined {
         return CredentialCache.getConnectionStringWithPassword(this.credentialId);
     }
 
-    public getCredentials(): ClustersCredentials | undefined {
-        return CredentialCache.getCredentials(this.credentialId) as ClustersCredentials | undefined;
+    public getCredentials(): CachedClusterCredentials | undefined {
+        return CredentialCache.getCredentials(this.credentialId) as CachedClusterCredentials | undefined;
     }
 
     async listDatabases(): Promise<DatabaseItemModel[]> {

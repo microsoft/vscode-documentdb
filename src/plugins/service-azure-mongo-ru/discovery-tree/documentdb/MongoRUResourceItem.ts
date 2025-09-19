@@ -11,7 +11,7 @@ import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { Views } from '../../../../documentdb/Views';
 import { ext } from '../../../../extensionVariables';
-import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { extractCredentialsFromRUAccount } from '../../utils/ruClusterHelpers';
 
@@ -34,7 +34,7 @@ export class MongoRUResourceItem extends ClusterItemBase {
         super(cluster);
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';

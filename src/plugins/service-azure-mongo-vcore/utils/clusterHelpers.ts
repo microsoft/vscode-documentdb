@@ -9,7 +9,7 @@ import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import { l10n } from 'vscode';
 import { isSupportedAuthMethod } from '../../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
-import { type ClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
+import { type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { createMongoClustersManagementClient } from '../../../utils/azureClients';
 
 /**
@@ -70,7 +70,7 @@ export async function getClusterInformationFromAzure(
 export function extractCredentialsFromCluster(
     context: IActionContext,
     clusterInformation: MongoCluster,
-): ClusterCredentials {
+): EphemeralClusterCredentials {
     // Ensure connection string and admin username are masked
     if (clusterInformation.properties?.connectionString) {
         context.valuesToMask.push(clusterInformation.properties.connectionString);
@@ -85,7 +85,7 @@ export function extractCredentialsFromCluster(
     parsedCS.password = '';
 
     // Prepare credentials object.
-    const credentials: ClusterCredentials = {
+    const credentials: EphemeralClusterCredentials = {
         connectionString: parsedCS.toString(),
         availableAuthMethods: [],
         // Legacy field for backward compatibility
@@ -94,6 +94,7 @@ export function extractCredentialsFromCluster(
         nativeAuthConfig: clusterInformation.properties?.administrator?.userName
             ? {
                   connectionUser: clusterInformation.properties.administrator.userName,
+                  connectionPassword: '', // Password will be collected during authentication
               }
             : undefined,
     };

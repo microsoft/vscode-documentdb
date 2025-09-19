@@ -16,7 +16,7 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullValue } from '../../../utils/nonNull';
-import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../documentdb/ClusterModel';
 
 export class RUResourceItem extends ClusterItemBase {
@@ -38,7 +38,7 @@ export class RUResourceItem extends ClusterItemBase {
         super(cluster);
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'ru';
@@ -134,7 +134,7 @@ export class RUResourceItem extends ClusterItemBase {
         subscription: AzureSubscription,
         resourceGroup: string,
         clusterName: string,
-    ): Promise<ClusterCredentials> {
+    ): Promise<EphemeralClusterCredentials> {
         // subscription comes from different azure packages in callers; cast here intentionally
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
         const managementClient = await createCosmosDBManagementClient(context, subscription as any);
@@ -197,7 +197,7 @@ export class RUResourceItem extends ClusterItemBase {
         // it here anyway.
         parsedCS.searchParams.delete('appName');
 
-        const clusterCredentials: ClusterCredentials = {
+        const clusterCredentials: EphemeralClusterCredentials = {
             connectionString: parsedCS.toString(),
             availableAuthMethods: [AuthMethodId.NativeAuth],
             selectedAuthMethod: AuthMethodId.NativeAuth,
