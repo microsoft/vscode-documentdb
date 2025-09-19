@@ -83,13 +83,11 @@ export interface ConnectionItem {
  */
 const enum SecretIndex {
     ConnectionString = 0,
-    UserName = 1,
-    Password = 2,
-    // Native auth config fields
-    NativeAuthConnectionUser = 3,
-    NativeAuthConnectionPassword = 4,
+    // Native auth config fields (consolidated from legacy UserName/Password)
+    NativeAuthConnectionUser = 1,
+    NativeAuthConnectionPassword = 2,
     // Entra ID auth config fields
-    EntraIdTenantId = 5,
+    EntraIdTenantId = 3,
 }
 
 /**
@@ -171,18 +169,21 @@ export class ConnectionStorageService {
         const secretsArray: string[] = [];
         if (item.secrets) {
             secretsArray[SecretIndex.ConnectionString] = item.secrets.connectionString;
-            if (item.secrets.userName) {
-                secretsArray[SecretIndex.UserName] = item.secrets.userName;
-            }
-            if (item.secrets.password) {
-                secretsArray[SecretIndex.Password] = item.secrets.password;
-            }
 
             // Store native auth config fields individually
+            // Legacy userName/password fields map to the same storage indexes as nativeAuth
             if (item.secrets.nativeAuth) {
                 secretsArray[SecretIndex.NativeAuthConnectionUser] = item.secrets.nativeAuth.connectionUser;
                 if (item.secrets.nativeAuth.connectionPassword) {
                     secretsArray[SecretIndex.NativeAuthConnectionPassword] = item.secrets.nativeAuth.connectionPassword;
+                }
+            } else if (item.secrets.userName || item.secrets.password) {
+                // Fallback: if only legacy fields are provided, store them in nativeAuth indexes
+                if (item.secrets.userName) {
+                    secretsArray[SecretIndex.NativeAuthConnectionUser] = item.secrets.userName;
+                }
+                if (item.secrets.password) {
+                    secretsArray[SecretIndex.NativeAuthConnectionPassword] = item.secrets.password;
                 }
             }
 
@@ -232,8 +233,9 @@ export class ConnectionStorageService {
 
         const secrets = {
             connectionString: secretsArray[SecretIndex.ConnectionString] ?? '',
-            password: secretsArray[SecretIndex.Password],
-            userName: secretsArray[SecretIndex.UserName],
+            // Legacy fields populated from nativeAuth data for backward compatibility
+            password: nativeAuthPassword,
+            userName: nativeAuthUser,
             nativeAuth,
             entraIdAuth,
         };
@@ -280,8 +282,16 @@ export class ConnectionStorageService {
             },
             secrets: {
                 connectionString: parsedCS.toString(),
+                // Legacy fields for backward compatibility
                 userName: username,
                 password: password,
+                // Structured auth config populated from the same data
+                nativeAuth: username
+                    ? {
+                          connectionUser: username,
+                          connectionPassword: password,
+                      }
+                    : undefined,
             },
         };
     }
