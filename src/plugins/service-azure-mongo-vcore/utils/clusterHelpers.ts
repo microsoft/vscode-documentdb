@@ -7,7 +7,7 @@ import { type MongoCluster } from '@azure/arm-mongocluster';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import { l10n } from 'vscode';
-import { isSupportedAuthMethod } from '../../../documentdb/auth/AuthMethod';
+import { AuthMethodId, isSupportedAuthMethod } from '../../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { createMongoClustersManagementClient } from '../../../utils/azureClients';
@@ -70,6 +70,7 @@ export async function getClusterInformationFromAzure(
 export function extractCredentialsFromCluster(
     context: IActionContext,
     clusterInformation: MongoCluster,
+    subscription: AzureSubscription,
 ): EphemeralClusterCredentials {
     // Ensure connection string and admin username are masked
     if (clusterInformation.properties?.connectionString) {
@@ -105,6 +106,13 @@ export function extractCredentialsFromCluster(
 
     const unknownMethodIds = allowedModes.filter((methodId) => !isSupportedAuthMethod(methodId));
     context.telemetry.properties.unknownAuthMethods = unknownMethodIds.join(',');
+
+    if (credentials.availableAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
+        credentials.entraIdConfig = {
+            tenantId: subscription.tenantId,
+            subscriptionId: subscription.subscriptionId,
+        };
+    }
 
     return credentials;
 }

@@ -59,7 +59,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 this.cluster.name,
             );
 
-            return extractCredentialsFromCluster(context, clusterInformation);
+            return extractCredentialsFromCluster(context, clusterInformation, this.subscription);
         });
     }
 
@@ -93,7 +93,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
 
             // Get and validate cluster information
             const clusterInformation = await this.getClusterInformation(context);
-            const credentials = extractCredentialsFromCluster(context, clusterInformation);
+            const credentials = extractCredentialsFromCluster(context, clusterInformation, this.subscription);
 
             // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {

@@ -28,6 +28,7 @@ export interface EntraIdAuthConfig {
      * This flexibility supports both single-tenant and multi-tenant scenarios.
      */
     readonly tenantId?: string;
+    readonly subscriptionId?: string;
 
     /**
      * Additional Entra ID specific configuration can be added here as needed.
