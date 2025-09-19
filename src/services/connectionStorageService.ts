@@ -64,10 +64,6 @@ export interface ConnectionItem {
         /** assume that the connection string doesn't contain the username and password */
         connectionString: string;
 
-        // Legacy fields for backward compatibility
-        userName?: string;
-        password?: string;
-
         // Structured auth configurations
         nativeAuth?: NativeAuthConfig;
         entraIdAuth?: EntraIdAuthConfig;
@@ -170,20 +166,11 @@ export class ConnectionStorageService {
         if (item.secrets) {
             secretsArray[SecretIndex.ConnectionString] = item.secrets.connectionString;
 
-            // Store native auth config fields individually
-            // Legacy userName/password fields map to the same storage indexes as nativeAuth
+            // Store nativeAuth config fields individually
             if (item.secrets.nativeAuth) {
                 secretsArray[SecretIndex.NativeAuthConnectionUser] = item.secrets.nativeAuth.connectionUser;
                 if (item.secrets.nativeAuth.connectionPassword) {
                     secretsArray[SecretIndex.NativeAuthConnectionPassword] = item.secrets.nativeAuth.connectionPassword;
-                }
-            } else if (item.secrets.userName || item.secrets.password) {
-                // Fallback: if only legacy fields are provided, store them in nativeAuth indexes
-                if (item.secrets.userName) {
-                    secretsArray[SecretIndex.NativeAuthConnectionUser] = item.secrets.userName;
-                }
-                if (item.secrets.password) {
-                    secretsArray[SecretIndex.NativeAuthConnectionPassword] = item.secrets.password;
                 }
             }
 
@@ -282,9 +269,6 @@ export class ConnectionStorageService {
             },
             secrets: {
                 connectionString: parsedCS.toString(),
-                // Legacy fields for backward compatibility
-                userName: username,
-                password: password,
                 // Structured auth config populated from the same data
                 nativeAuth: username
                     ? {

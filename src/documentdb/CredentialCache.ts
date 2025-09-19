@@ -195,7 +195,7 @@ export class CredentialCache {
         if (!selectedAuthMethod) {
             if (secrets.entraIdAuth) {
                 selectedAuthMethod = AuthMethodId.MicrosoftEntraID;
-            } else if (secrets.nativeAuth || secrets.userName || secrets.password) {
+            } else if (secrets.nativeAuth) {
                 selectedAuthMethod = AuthMethodId.NativeAuth;
             } else {
                 // Use the selected method from properties or first available method
@@ -214,9 +214,9 @@ export class CredentialCache {
             };
         }
 
-        // Use structured configs first, fall back to legacy fields
-        const username = secrets.nativeAuth?.connectionUser ?? secrets.userName ?? '';
-        const password = secrets.nativeAuth?.connectionPassword ?? secrets.password ?? '';
+        // Use structured configs
+        const username = secrets.nativeAuth?.connectionUser ?? '';
+        const password = secrets.nativeAuth?.connectionPassword ?? '';
 
         // Use the existing setAuthCredentials method to ensure consistent behavior
         CredentialCache.setAuthCredentials(

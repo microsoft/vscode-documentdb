@@ -95,8 +95,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
-            let username: string | undefined = connectionCredentials.secrets.userName;
-            let password: string | undefined = connectionCredentials.secrets.password;
+            // Use nativeAuth for credentials
+            let username: string | undefined = connectionCredentials.secrets.nativeAuth?.connectionUser;
+            let password: string | undefined = connectionCredentials.secrets.nativeAuth?.connectionPassword;
             let authMethod: AuthMethodId | undefined = authMethodFromString(
                 connectionCredentials.properties.selectedAuthMethod,
             );
@@ -161,8 +162,14 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         connection.properties.selectedAuthMethod = authMethod;
                         connection.secrets = {
                             connectionString: connectionString.toString(),
-                            userName: username,
-                            password: password,
+                            // Populate nativeAuth configuration
+                            nativeAuth:
+                                authMethod === AuthMethodId.NativeAuth && (username || password)
+                                    ? {
+                                          connectionUser: username ?? '',
+                                          connectionPassword: password ?? '',
+                                      }
+                                    : undefined,
                         };
                         try {
                             await ConnectionStorageService.save(connectionType, connection, true);

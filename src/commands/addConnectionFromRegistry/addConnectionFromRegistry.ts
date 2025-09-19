@@ -77,7 +77,9 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
             const existingDuplicateConnection = existingConnections.find((existingConnection) => {
                 const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
                 const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-                return existingConnection.secrets.userName === username && existingHostsJoined === joinedHosts;
+                // Use nativeAuth for comparison
+                const existingUsername = existingConnection.secrets.nativeAuth?.connectionUser;
+                return existingUsername === username && existingHostsJoined === joinedHosts;
             });
 
             if (existingDuplicateConnection) {
@@ -145,8 +147,8 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
                 properties: { api: API.DocumentDB, availableAuthMethods: credentials.availableAuthMethods },
                 secrets: {
                     connectionString: parsedCS.toString(),
-                    userName: credentials.nativeAuthConfig?.connectionUser,
-                    password: credentials.nativeAuthConfig?.connectionPassword,
+                    // Populate nativeAuth configuration
+                    nativeAuth: credentials.nativeAuthConfig,
                 },
             };
 

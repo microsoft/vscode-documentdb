@@ -49,15 +49,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
                     connectionUser: context.username ?? '',
                     connectionPassword: context.password ?? '',
                 };
-
-                // Also update legacy fields for backward compatibility
-                connectionCredentials.secrets.userName = context.username;
-                connectionCredentials.secrets.password = context.password;
             } else if (authMethod === AuthMethodId.MicrosoftEntraID) {
                 // For Entra ID, clear any native auth configs
                 connectionCredentials.secrets.nativeAuth = undefined;
-                connectionCredentials.secrets.userName = undefined;
-                connectionCredentials.secrets.password = undefined;
 
                 // Entra ID config will be set up during authentication flow
                 // No need to store it here as it's retrieved from Azure context
