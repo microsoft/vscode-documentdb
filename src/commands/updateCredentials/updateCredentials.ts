@@ -52,8 +52,8 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
 
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
-        username: connectionCredentials?.secrets.userName,
-        password: connectionCredentials?.secrets.password,
+        username: connectionCredentials?.secrets.nativeAuth?.connectionUser,
+        password: connectionCredentials?.secrets.nativeAuth?.connectionPassword,
         availableAuthenticationMethods: authMethodsFromString(supportedAuthMethods),
         selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),

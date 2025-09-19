@@ -27,7 +27,7 @@ import {
     getClusterInformationFromAzure,
 } from '../../../plugins/service-azure-mongo-vcore/utils/clusterHelpers';
 import { nonNullValue } from '../../../utils/nonNull';
-import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../documentdb/ClusterModel';
 
 export class VCoreResourceItem extends ClusterItemBase {
@@ -49,7 +49,7 @@ export class VCoreResourceItem extends ClusterItemBase {
         super(cluster);
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'documentdb';
@@ -62,7 +62,7 @@ export class VCoreResourceItem extends ClusterItemBase {
                 this.cluster.name,
             );
 
-            return extractCredentialsFromCluster(context, clusterInformation);
+            return extractCredentialsFromCluster(context, clusterInformation, this.subscription);
         });
     }
 
@@ -96,12 +96,12 @@ export class VCoreResourceItem extends ClusterItemBase {
 
             // Get and validate cluster information
             const clusterInformation = await this.getClusterInformation(context);
-            const credentials = extractCredentialsFromCluster(context, clusterInformation);
+            const credentials = extractCredentialsFromCluster(context, clusterInformation, this.subscription);
 
             // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
-                adminUserName: credentials.connectionUser,
+                adminUserName: credentials.nativeAuthConfig?.connectionUser,
                 resourceName: this.cluster.name,
                 availableAuthMethods: credentials.availableAuthMethods,
             };

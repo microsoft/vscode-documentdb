@@ -105,8 +105,8 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                 }
 
                 const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
-                parsedCS.username = credentials?.connectionUser ?? '';
-                parsedCS.password = credentials?.connectionPassword ?? '';
+                parsedCS.username = CredentialCache.getConnectionUser(node.cluster.id) ?? '';
+                parsedCS.password = CredentialCache.getConnectionPassword(node.cluster.id) ?? '';
 
                 const options = {
                     connectionString: parsedCS.toString(),

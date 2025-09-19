@@ -5,14 +5,14 @@
 
 import { type MongoClientOptions } from 'mongodb';
 import { nonNullValue } from '../../utils/nonNull';
-import { type ClustersCredentials } from '../CredentialCache';
+import { type CachedClusterCredentials } from '../CredentialCache';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 
 /**
  * Handler for native MongoDB authentication using username and password
  */
 export class NativeAuthHandler implements AuthHandler {
-    constructor(private readonly clusterCredentials: ClustersCredentials) {}
+    constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
 
     public configureAuth(): Promise<AuthHandlerResponse> {
         const options: MongoClientOptions = {};

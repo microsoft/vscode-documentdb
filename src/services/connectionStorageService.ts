@@ -6,6 +6,7 @@
 import { apiUtils, callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { type EntraIdAuthConfig, type NativeAuthConfig } from '../documentdb/auth/AuthConfig';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
@@ -62,19 +63,27 @@ export interface ConnectionItem {
     secrets: {
         /** assume that the connection string doesn't contain the username and password */
         connectionString: string;
-        userName?: string;
-        password?: string;
+
+        // Structured auth configurations
+        nativeAuth?: NativeAuthConfig;
+        entraIdAuth?: EntraIdAuthConfig;
     };
 }
 
 /**
  * StorageService offers secrets storage as a string[] so we need to ensure
  * we keep using correct indexes when accessing secrets.
+ *
+ * Auth config fields are stored individually as flat string values to avoid
+ * nested object serialization issues with VS Code SecretStorage.
  */
 const enum SecretIndex {
     ConnectionString = 0,
-    UserName = 1,
-    Password = 2,
+    // Native auth config fields (consolidated from legacy UserName/Password)
+    NativeAuthConnectionUser = 1,
+    NativeAuthConnectionPassword = 2,
+    // Entra ID auth config fields
+    EntraIdTenantId = 3,
 }
 
 /**
@@ -156,11 +165,18 @@ export class ConnectionStorageService {
         const secretsArray: string[] = [];
         if (item.secrets) {
             secretsArray[SecretIndex.ConnectionString] = item.secrets.connectionString;
-            if (item.secrets.userName) {
-                secretsArray[SecretIndex.UserName] = item.secrets.userName;
+
+            // Store nativeAuth config fields individually
+            if (item.secrets.nativeAuth) {
+                secretsArray[SecretIndex.NativeAuthConnectionUser] = item.secrets.nativeAuth.connectionUser;
+                if (item.secrets.nativeAuth.connectionPassword) {
+                    secretsArray[SecretIndex.NativeAuthConnectionPassword] = item.secrets.nativeAuth.connectionPassword;
+                }
             }
-            if (item.secrets.password) {
-                secretsArray[SecretIndex.Password] = item.secrets.password;
+
+            // Store Entra ID auth config fields individually
+            if (item.secrets.entraIdAuth && item.secrets.entraIdAuth.tenantId) {
+                secretsArray[SecretIndex.EntraIdTenantId] = item.secrets.entraIdAuth.tenantId;
             }
         }
 
@@ -179,10 +195,36 @@ export class ConnectionStorageService {
         }
 
         const secretsArray = item.secrets ?? [];
+
+        // Reconstruct native auth config from individual fields
+        let nativeAuth: NativeAuthConfig | undefined;
+        const nativeAuthUser = secretsArray[SecretIndex.NativeAuthConnectionUser];
+        const nativeAuthPassword = secretsArray[SecretIndex.NativeAuthConnectionPassword];
+
+        if (nativeAuthUser) {
+            nativeAuth = {
+                connectionUser: nativeAuthUser,
+                connectionPassword: nativeAuthPassword,
+            };
+        }
+
+        // Reconstruct Entra ID auth config from individual fields
+        let entraIdAuth: EntraIdAuthConfig | undefined;
+        const entraIdTenantId = secretsArray[SecretIndex.EntraIdTenantId];
+
+        if (entraIdTenantId) {
+            entraIdAuth = {
+                tenantId: entraIdTenantId,
+            };
+        }
+
         const secrets = {
             connectionString: secretsArray[SecretIndex.ConnectionString] ?? '',
-            password: secretsArray[SecretIndex.Password],
-            userName: secretsArray[SecretIndex.UserName],
+            // Legacy fields populated from nativeAuth data for backward compatibility
+            password: nativeAuthPassword,
+            userName: nativeAuthUser,
+            nativeAuth,
+            entraIdAuth,
         };
 
         return {
@@ -227,8 +269,13 @@ export class ConnectionStorageService {
             },
             secrets: {
                 connectionString: parsedCS.toString(),
-                userName: username,
-                password: password,
+                // Structured auth config populated from the same data
+                nativeAuth: username
+                    ? {
+                          connectionUser: username,
+                          connectionPassword: password,
+                      }
+                    : undefined,
             },
         };
     }

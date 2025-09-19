@@ -30,7 +30,7 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
         }
 
         const parsedConnectionString = new DocumentDBConnectionString(credentials.connectionString);
-        parsedConnectionString.username = credentials.connectionUser ?? '';
+        parsedConnectionString.username = credentials.nativeAuthConfig?.connectionUser ?? '';
 
         if (credentials.selectedAuthMethod === AuthMethodId.MicrosoftEntraID) {
             parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');

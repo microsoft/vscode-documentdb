@@ -13,6 +13,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { nonNullProp } from '../../utils/nonNull';
 
+import { type EntraIdAuthConfig } from '../../documentdb/auth/AuthConfig';
 import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -25,7 +26,7 @@ import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/Provi
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
-import { ClusterItemBase, type ClusterCredentials } from '../documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 
@@ -41,7 +42,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
         return this.cluster.storageId;
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         const connectionType = this.cluster.emulatorConfiguration?.isEmulator
             ? ConnectionType.Emulators
             : ConnectionType.Clusters;
@@ -53,10 +54,17 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
-            connectionUser: connectionCredentials.secrets.userName,
-            connectionPassword: connectionCredentials.secrets.password,
             availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
             selectedAuthMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
+
+            // Structured auth configs
+            nativeAuthConfig: connectionCredentials.secrets.nativeAuth,
+            entraIdConfig: connectionCredentials.secrets.entraIdAuth
+                ? ({
+                      tenantId: connectionCredentials.secrets.entraIdAuth.tenantId ?? '',
+                      // Convert other central auth config fields to local cache format as needed
+                  } as EntraIdAuthConfig)
+                : undefined,
         };
     }
 
@@ -87,8 +95,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
-            let username: string | undefined = connectionCredentials.secrets.userName;
-            let password: string | undefined = connectionCredentials.secrets.password;
+            // Use nativeAuth for credentials
+            let username: string | undefined = connectionCredentials.secrets.nativeAuth?.connectionUser;
+            let password: string | undefined = connectionCredentials.secrets.nativeAuth?.connectionPassword;
             let authMethod: AuthMethodId | undefined = authMethodFromString(
                 connectionCredentials.properties.selectedAuthMethod,
             );
@@ -153,8 +162,14 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         connection.properties.selectedAuthMethod = authMethod;
                         connection.secrets = {
                             connectionString: connectionString.toString(),
-                            userName: username,
-                            password: password,
+                            // Populate nativeAuth configuration
+                            nativeAuth:
+                                authMethod === AuthMethodId.NativeAuth && (username || password)
+                                    ? {
+                                          connectionUser: username ?? '',
+                                          connectionPassword: password ?? '',
+                                      }
+                                    : undefined,
                         };
                         try {
                             await ConnectionStorageService.save(connectionType, connection, true);
