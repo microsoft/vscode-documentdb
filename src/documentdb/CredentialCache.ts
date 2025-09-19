@@ -5,25 +5,49 @@
 
 import { CaseInsensitiveMap } from '../utils/CaseInsensitiveMap';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
-import { type AuthMethodId } from './auth/AuthMethod';
+import { AuthMethodId, type AuthMethodId as AuthMethodIdType } from './auth/AuthMethod';
 import { addAuthenticationDataToConnectionString } from './utils/connectionStringHelpers';
 
-export interface ClustersCredentials {
+/**
+ * Configuration for Microsoft Entra ID authentication.
+ */
+export interface EntraIdAuthConfig {
+    tenantId: string;
+    accountId?: string;
+    subscriptionId?: string;
+}
+
+/**
+ * Configuration for native authentication (username/password based authentication).
+ */
+export interface NativeAuthConfig {
+    connectionUser: string;
+    connectionPassword?: string;
+}
+
+export interface StoredClusterCredentials {
     mongoClusterId: string;
     connectionStringWithPassword?: string;
     connectionString: string;
-    connectionUser: string;
-    connectionPassword?: string;
 
-    authMechanism?: AuthMethodId;
+    authMechanism?: AuthMethodIdType;
     // Optional, as it's only relevant for local workspace connetions
     emulatorConfiguration?: EmulatorConfiguration;
+
+    // Authentication method specific configurations
+    nativeAuthConfig?: NativeAuthConfig;
+    entraIdConfig?: EntraIdAuthConfig;
 }
+
+/**
+ * @deprecated Use StoredClusterCredentials instead. This alias is provided for backward compatibility.
+ */
+export type ClustersCredentials = StoredClusterCredentials;
 
 export class CredentialCache {
     // the id of the cluster === the tree item id -> cluster credentials
     // Some SDKs for azure differ the case on some resources ("DocumentDb" vs "DocumentDB")
-    private static _store: CaseInsensitiveMap<ClustersCredentials> = new CaseInsensitiveMap();
+    private static _store: CaseInsensitiveMap<StoredClusterCredentials> = new CaseInsensitiveMap();
 
     public static getConnectionStringWithPassword(mongoClusterId: string): string {
         return CredentialCache._store.get(mongoClusterId)?.connectionStringWithPassword as string;
@@ -37,7 +61,31 @@ export class CredentialCache {
         return CredentialCache._store.get(mongoClusterId)?.emulatorConfiguration;
     }
 
-    public static getCredentials(mongoClusterId: string): ClustersCredentials | undefined {
+    public static getEntraIdConfig(mongoClusterId: string): EntraIdAuthConfig | undefined {
+        return CredentialCache._store.get(mongoClusterId)?.entraIdConfig;
+    }
+
+    public static getNativeAuthConfig(mongoClusterId: string): NativeAuthConfig | undefined {
+        return CredentialCache._store.get(mongoClusterId)?.nativeAuthConfig;
+    }
+
+    /**
+     * Gets the connection user for native authentication.
+     * Returns undefined for non-native authentication methods like Entra ID.
+     */
+    public static getConnectionUser(mongoClusterId: string): string | undefined {
+        return CredentialCache._store.get(mongoClusterId)?.nativeAuthConfig?.connectionUser;
+    }
+
+    /**
+     * Gets the connection password for native authentication.
+     * Returns undefined for non-native authentication methods like Entra ID.
+     */
+    public static getConnectionPassword(mongoClusterId: string): string | undefined {
+        return CredentialCache._store.get(mongoClusterId)?.nativeAuthConfig?.connectionPassword;
+    }
+
+    public static getCredentials(mongoClusterId: string): StoredClusterCredentials | undefined {
         return CredentialCache._store.get(mongoClusterId);
     }
 
@@ -73,11 +121,14 @@ export class CredentialCache {
             password,
         );
 
-        const credentials: ClustersCredentials = {
+        const credentials: StoredClusterCredentials = {
             mongoClusterId: mongoClusterId,
             connectionStringWithPassword: connectionStringWithPassword,
             connectionString: connectionString,
-            connectionUser: username,
+            nativeAuthConfig: {
+                connectionUser: username,
+                connectionPassword: password,
+            },
             emulatorConfiguration: emulatorConfiguration,
         };
 
@@ -97,14 +148,16 @@ export class CredentialCache {
      * @param username - The username to be used for authentication (optional for some auth methods).
      * @param password - The password to be used for authentication (optional for some auth methods).
      * @param emulatorConfiguration - The emulator configuration object (optional, only relevant for local workspace connections).
+     * @param entraIdConfig - The Entra ID configuration object (optional, only relevant for Microsoft Entra ID authentication).
      */
     public static setAuthCredentials(
         mongoClusterId: string,
-        authMethod: AuthMethodId,
+        authMethod: AuthMethodIdType,
         connectionString: string,
         username: string = '',
         password: string = '',
         emulatorConfiguration?: EmulatorConfiguration,
+        entraIdConfig?: EntraIdAuthConfig,
     ): void {
         const connectionStringWithPassword = addAuthenticationDataToConnectionString(
             connectionString,
@@ -112,14 +165,22 @@ export class CredentialCache {
             password,
         );
 
-        const credentials: ClustersCredentials = {
+        const credentials: StoredClusterCredentials = {
             mongoClusterId: mongoClusterId,
             connectionStringWithPassword: connectionStringWithPassword,
             connectionString: connectionString,
-            connectionUser: username,
             emulatorConfiguration: emulatorConfiguration,
             authMechanism: authMethod,
+            entraIdConfig: entraIdConfig,
         };
+
+        // Add native auth config only for non-Entra ID authentication methods
+        if (authMethod !== AuthMethodId.MicrosoftEntraID && (username || password)) {
+            credentials.nativeAuthConfig = {
+                connectionUser: username,
+                connectionPassword: password,
+            };
+        }
 
         CredentialCache._store.set(mongoClusterId, credentials);
     }

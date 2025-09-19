@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
-import { CredentialCache } from '../../documentdb/CredentialCache';
+import { CredentialCache, type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/CredentialCache';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ext } from '../../extensionVariables';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
@@ -21,24 +21,36 @@ import { type ClusterModel } from './ClusterModel';
 import { DatabaseItem } from './DatabaseItem';
 
 /**
- * Full connection details for a DocumentDB cluster used at runtime.
+ * Full connection details for a DocumentDB cluster used at runtime during service discovery.
  *
- * This type intentionally contains concrete credentials
- * because some service-discovery flows provide ephemeral credentials from an
- * external service rather than from stored connections.
+ * This type intentionally contains concrete credentials because some service-discovery
+ * flows provide ephemeral credentials from an external service rather than from stored connections.
  *
  * TODO: Maintainer notes:
  * - This type is a temporary bridge for service-discovery scenarios. The preferred
  *   long-term approach is an optional discovery API that returns connection info
  *   on demand so we avoid keeping credentials in memory longer than necessary.
  */
-export type ClusterCredentials = {
+export type EphemeralClusterCredentials = {
     connectionString: string;
-    connectionUser?: string;
-    connectionPassword?: string;
     availableAuthMethods: AuthMethodId[];
     selectedAuthMethod?: AuthMethodId; // some providers can pre-select a method
+
+    // Authentication method specific configurations
+    nativeAuthConfig?: NativeAuthConfig;
+    entraIdConfig?: EntraIdAuthConfig;
+
+    // Legacy fields for backward compatibility - will be deprecated
+    /** @deprecated Use nativeAuthConfig.connectionUser instead */
+    connectionUser?: string;
+    /** @deprecated Use nativeAuthConfig.connectionPassword instead */
+    connectionPassword?: string;
 };
+
+/**
+ * @deprecated Use EphemeralClusterCredentials instead. This alias is provided for backward compatibility.
+ */
+export type ClusterCredentials = EphemeralClusterCredentials;
 
 // This info will be available at every level in the tree for immediate access
 export abstract class ClusterItemBase

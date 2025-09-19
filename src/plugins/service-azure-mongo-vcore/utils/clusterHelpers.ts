@@ -87,8 +87,15 @@ export function extractCredentialsFromCluster(
     // Prepare credentials object.
     const credentials: ClusterCredentials = {
         connectionString: parsedCS.toString(),
-        connectionUser: clusterInformation.properties?.administrator?.userName,
         availableAuthMethods: [],
+        // Legacy field for backward compatibility
+        connectionUser: clusterInformation.properties?.administrator?.userName,
+        // Auth configs - populate native auth if we have username
+        nativeAuthConfig: clusterInformation.properties?.administrator?.userName
+            ? {
+                  connectionUser: clusterInformation.properties.administrator.userName,
+              }
+            : undefined,
     };
 
     const allowedModes = clusterInformation.properties?.authConfig?.allowedModes ?? [];

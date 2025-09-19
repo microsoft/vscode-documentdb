@@ -220,7 +220,7 @@ export class ClustersClient {
     }
 
     getUserName() {
-        return CredentialCache.getCredentials(this.credentialId)?.connectionUser;
+        return CredentialCache.getConnectionUser(this.credentialId);
     }
 
     /**

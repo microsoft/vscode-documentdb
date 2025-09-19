@@ -85,10 +85,16 @@ export async function extractCredentialsFromRUAccount(
 
     const clusterCredentials: ClusterCredentials = {
         connectionString: parsedCS.toString(),
-        connectionUser: username,
-        connectionPassword: password,
         availableAuthMethods: [AuthMethodId.NativeAuth],
         selectedAuthMethod: AuthMethodId.NativeAuth,
+        // Legacy fields for backward compatibility
+        connectionUser: username,
+        connectionPassword: password,
+        // Auth configs
+        nativeAuthConfig: {
+            connectionUser: username,
+            connectionPassword: password,
+        },
     };
 
     return clusterCredentials;
