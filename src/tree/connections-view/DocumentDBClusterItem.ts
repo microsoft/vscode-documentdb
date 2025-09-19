@@ -15,7 +15,7 @@ import { nonNullProp } from '../../utils/nonNull';
 
 import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
-import { CredentialCache } from '../../documentdb/CredentialCache';
+import { CredentialCache, type EntraIdAuthConfig } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../documentdb/wizards/authenticate/AuthenticateWizardContext';
@@ -53,10 +53,23 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
-            connectionUser: connectionCredentials.secrets.userName,
-            connectionPassword: connectionCredentials.secrets.password,
             availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
             selectedAuthMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
+
+            // Legacy fields for backward compatibility
+            connectionUser:
+                connectionCredentials.secrets.nativeAuth?.connectionUser ?? connectionCredentials.secrets.userName,
+            connectionPassword:
+                connectionCredentials.secrets.nativeAuth?.connectionPassword ?? connectionCredentials.secrets.password,
+
+            // Structured auth configs
+            nativeAuthConfig: connectionCredentials.secrets.nativeAuth,
+            entraIdConfig: connectionCredentials.secrets.entraIdAuth
+                ? ({
+                      tenantId: connectionCredentials.secrets.entraIdAuth.tenantId ?? '',
+                      // Convert other central auth config fields to local cache format as needed
+                  } as EntraIdAuthConfig)
+                : undefined,
         };
     }
 

@@ -5,6 +5,7 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -33,13 +34,34 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
             parsedConnectionString.password = '';
 
             // Update the item in storage
+            const authMethod = context.selectedAuthenticationMethod;
 
+            // Update connection string (remove embedded credentials)
             connectionCredentials.secrets = {
                 ...connectionCredentials.secrets,
                 connectionString: parsedConnectionString.toString(),
-                ...(context.username ? { userName: context.username } : {}),
-                ...(context.password ? { password: context.password } : {}),
             };
+
+            // Update auth method specific configurations
+            if (authMethod === AuthMethodId.NativeAuth && (context.username || context.password)) {
+                // Update native auth config
+                connectionCredentials.secrets.nativeAuth = {
+                    connectionUser: context.username ?? '',
+                    connectionPassword: context.password ?? '',
+                };
+
+                // Also update legacy fields for backward compatibility
+                connectionCredentials.secrets.userName = context.username;
+                connectionCredentials.secrets.password = context.password;
+            } else if (authMethod === AuthMethodId.MicrosoftEntraID) {
+                // For Entra ID, clear any native auth configs
+                connectionCredentials.secrets.nativeAuth = undefined;
+                connectionCredentials.secrets.userName = undefined;
+                connectionCredentials.secrets.password = undefined;
+
+                // Entra ID config will be set up during authentication flow
+                // No need to store it here as it's retrieved from Azure context
+            }
 
             connectionCredentials.properties.selectedAuthMethod = context.selectedAuthenticationMethod?.toString();
 

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type ConnectionItem } from '../services/connectionStorageService';
 import { CaseInsensitiveMap } from '../utils/CaseInsensitiveMap';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { AuthMethodId, type AuthMethodId as AuthMethodIdType } from './auth/AuthMethod';
@@ -25,7 +26,7 @@ export interface NativeAuthConfig {
     connectionPassword?: string;
 }
 
-export interface StoredClusterCredentials {
+export interface CachedClusterCredentials {
     mongoClusterId: string;
     connectionStringWithPassword?: string;
     connectionString: string;
@@ -40,14 +41,14 @@ export interface StoredClusterCredentials {
 }
 
 /**
- * @deprecated Use StoredClusterCredentials instead. This alias is provided for backward compatibility.
+ * @deprecated Use CachedClusterCredentials instead. This alias is provided for backward compatibility.
  */
-export type ClustersCredentials = StoredClusterCredentials;
+export type ClustersCredentials = CachedClusterCredentials;
 
 export class CredentialCache {
     // the id of the cluster === the tree item id -> cluster credentials
     // Some SDKs for azure differ the case on some resources ("DocumentDb" vs "DocumentDB")
-    private static _store: CaseInsensitiveMap<StoredClusterCredentials> = new CaseInsensitiveMap();
+    private static _store: CaseInsensitiveMap<CachedClusterCredentials> = new CaseInsensitiveMap();
 
     public static getConnectionStringWithPassword(mongoClusterId: string): string {
         return CredentialCache._store.get(mongoClusterId)?.connectionStringWithPassword as string;
@@ -85,7 +86,7 @@ export class CredentialCache {
         return CredentialCache._store.get(mongoClusterId)?.nativeAuthConfig?.connectionPassword;
     }
 
-    public static getCredentials(mongoClusterId: string): StoredClusterCredentials | undefined {
+    public static getCredentials(mongoClusterId: string): CachedClusterCredentials | undefined {
         return CredentialCache._store.get(mongoClusterId);
     }
 
@@ -121,7 +122,7 @@ export class CredentialCache {
             password,
         );
 
-        const credentials: StoredClusterCredentials = {
+        const credentials: CachedClusterCredentials = {
             mongoClusterId: mongoClusterId,
             connectionStringWithPassword: connectionStringWithPassword,
             connectionString: connectionString,
@@ -165,7 +166,7 @@ export class CredentialCache {
             password,
         );
 
-        const credentials: StoredClusterCredentials = {
+        const credentials: CachedClusterCredentials = {
             mongoClusterId: mongoClusterId,
             connectionStringWithPassword: connectionStringWithPassword,
             connectionString: connectionString,
@@ -183,5 +184,65 @@ export class CredentialCache {
         }
 
         CredentialCache._store.set(mongoClusterId, credentials);
+    }
+
+    /**
+     * Bridge method to convert ConnectionItem's structured auth secrets into the runtime cache format.
+     * This method handles the conversion between persistent storage (ConnectionItem) and memory cache (CachedClusterCredentials).
+     *
+     * The conversion handles:
+     * - Determining auth method from available configurations
+     * - Converting central auth configs to local cache format
+     * - Maintaining backward compatibility with legacy username/password
+     *
+     * @param connectionItem - The persistent connection item with structured auth secrets
+     * @param authMethod - Optional explicit auth method; if not provided, will be inferred from available configs
+     * @param emulatorConfiguration - Optional emulator configuration for local connections
+     */
+    public static setFromConnectionItem(
+        connectionItem: ConnectionItem,
+        authMethod?: AuthMethodIdType,
+        emulatorConfiguration?: EmulatorConfiguration,
+    ): void {
+        const { secrets } = connectionItem;
+
+        // Determine auth method if not explicitly provided
+        let selectedAuthMethod = authMethod;
+        if (!selectedAuthMethod) {
+            if (secrets.entraIdAuth) {
+                selectedAuthMethod = AuthMethodId.MicrosoftEntraID;
+            } else if (secrets.nativeAuth || secrets.userName || secrets.password) {
+                selectedAuthMethod = AuthMethodId.NativeAuth;
+            } else {
+                // Use the selected method from properties or first available method
+                selectedAuthMethod =
+                    (connectionItem.properties.selectedAuthMethod as AuthMethodIdType) ??
+                    (connectionItem.properties.availableAuthMethods[0] as AuthMethodIdType) ??
+                    AuthMethodId.NativeAuth;
+            }
+        }
+
+        // Convert central auth configs to local cache format
+        let cacheEntraIdConfig: EntraIdAuthConfig | undefined;
+        if (secrets.entraIdAuth) {
+            cacheEntraIdConfig = {
+                tenantId: secrets.entraIdAuth.tenantId ?? '', // Convert optional to required for backward compatibility
+            };
+        }
+
+        // Use structured configs first, fall back to legacy fields
+        const username = secrets.nativeAuth?.connectionUser ?? secrets.userName ?? '';
+        const password = secrets.nativeAuth?.connectionPassword ?? secrets.password ?? '';
+
+        // Use the existing setAuthCredentials method to ensure consistent behavior
+        CredentialCache.setAuthCredentials(
+            connectionItem.id,
+            selectedAuthMethod,
+            secrets.connectionString,
+            username,
+            password,
+            emulatorConfiguration,
+            cacheEntraIdConfig,
+        );
     }
 }
