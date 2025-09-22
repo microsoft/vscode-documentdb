@@ -207,9 +207,14 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                 this.id,
                 authMethod,
                 connectionString.toString(),
-                username,
-                password,
+                username || password
+                    ? {
+                          connectionUser: username ?? '',
+                          connectionPassword: password,
+                      }
+                    : undefined,
                 this.cluster.emulatorConfiguration, // workspace items can potentially be connecting to an emulator, so we always pass it
+                connectionCredentials.secrets.entraIdAuth,
             );
 
             let clustersClient: ClustersClient;

@@ -122,8 +122,14 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                     'DocumentDBResourceItem.ts',
                 ),
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'DocumentDBResourceItem.ts'),
-                wizardContext.selectedUserName,
-                wizardContext.password,
+                wizardContext.selectedUserName || wizardContext.password
+                    ? {
+                          connectionUser: wizardContext.selectedUserName ?? '',
+                          connectionPassword: wizardContext.password,
+                      }
+                    : undefined,
+                undefined,
+                credentials.entraIdConfig,
             );
 
             switch (wizardContext.selectedAuthMethod) {

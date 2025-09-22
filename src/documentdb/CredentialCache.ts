@@ -130,8 +130,7 @@ export class CredentialCache {
      * @param mongoClusterId - The credential id. It's supposed to be the same as the tree item id of the mongo cluster item to simplify the lookup.
      * @param authMethod - The authentication method/mechanism to be used (e.g. SCRAM, X509, Azure/Entra flows).
      * @param connectionString - The connection string to which optional credentials will be added.
-     * @param username - The username to be used for authentication (optional for some auth methods).
-     * @param password - The password to be used for authentication (optional for some auth methods).
+     * @param nativeAuthConfig - The native authentication configuration (optional, for username/password auth).
      * @param emulatorConfiguration - The emulator configuration object (optional, only relevant for local workspace connections).
      * @param entraIdConfig - The Entra ID configuration object (optional, only relevant for Microsoft Entra ID authentication).
      */
@@ -139,11 +138,13 @@ export class CredentialCache {
         mongoClusterId: string,
         authMethod: AuthMethodIdType,
         connectionString: string,
-        username: string = '',
-        password: string = '',
+        nativeAuthConfig?: NativeAuthConfig,
         emulatorConfiguration?: EmulatorConfiguration,
         entraIdConfig?: EntraIdAuthConfig,
     ): void {
+        const username = nativeAuthConfig?.connectionUser ?? '';
+        const password = nativeAuthConfig?.connectionPassword ?? '';
+
         const connectionStringWithPassword = addAuthenticationDataToConnectionString(
             connectionString,
             username,
@@ -157,15 +158,8 @@ export class CredentialCache {
             emulatorConfiguration: emulatorConfiguration,
             authMechanism: authMethod,
             entraIdConfig: entraIdConfig,
+            nativeAuthConfig: nativeAuthConfig,
         };
-
-        // Add native auth config only for non-Entra ID authentication methods
-        if (authMethod !== AuthMethodId.MicrosoftEntraID && (username || password)) {
-            credentials.nativeAuthConfig = {
-                connectionUser: username,
-                connectionPassword: password,
-            };
-        }
 
         CredentialCache._store.set(mongoClusterId, credentials);
     }
@@ -223,8 +217,7 @@ export class CredentialCache {
             connectionItem.id,
             selectedAuthMethod,
             secrets.connectionString,
-            username,
-            password,
+            username || password ? { connectionUser: username, connectionPassword: password } : undefined,
             emulatorConfiguration,
             cacheEntraIdConfig,
         );

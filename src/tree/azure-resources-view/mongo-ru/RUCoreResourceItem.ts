@@ -84,8 +84,7 @@ export class RUResourceItem extends ClusterItemBase {
                 this.id,
                 credentials.selectedAuthMethod!,
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'RUCoreResourceItem.ts'),
-                credentials.nativeAuthConfig?.connectionUser ?? '',
-                credentials.nativeAuthConfig?.connectionPassword ?? '',
+                credentials.nativeAuthConfig,
             );
 
             ext.outputChannel.append(
