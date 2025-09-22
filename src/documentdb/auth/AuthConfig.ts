@@ -13,7 +13,7 @@ export interface NativeAuthConfig {
     readonly connectionUser: string;
 
     /** The password for database authentication */
-    readonly connectionPassword: string;
+    readonly connectionPassword?: string;
 }
 
 /**
