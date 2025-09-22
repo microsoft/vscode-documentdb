@@ -220,9 +220,6 @@ export class ConnectionStorageService {
 
         const secrets = {
             connectionString: secretsArray[SecretIndex.ConnectionString] ?? '',
-            // Legacy fields populated from nativeAuth data for backward compatibility
-            password: nativeAuthPassword,
-            userName: nativeAuthUser,
             nativeAuth,
             entraIdAuth,
         };

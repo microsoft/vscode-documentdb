@@ -13,7 +13,6 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { nonNullProp } from '../../utils/nonNull';
 
-import { type EntraIdAuthConfig } from '../../documentdb/auth/AuthConfig';
 import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -60,10 +59,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             // Structured auth configs
             nativeAuthConfig: connectionCredentials.secrets.nativeAuth,
             entraIdConfig: connectionCredentials.secrets.entraIdAuth
-                ? ({
-                      tenantId: connectionCredentials.secrets.entraIdAuth.tenantId ?? '',
-                      // Convert other central auth config fields to local cache format as needed
-                  } as EntraIdAuthConfig)
+                ? {
+                      tenantId: connectionCredentials.secrets.entraIdAuth.tenantId,
+                  }
                 : undefined,
         };
     }

@@ -42,21 +42,3 @@ export interface EntraIdAuthConfig {
  * (e.g., certificate-based auth, OAuth, etc.) without breaking existing code.
  */
 export type AuthConfig = NativeAuthConfig | EntraIdAuthConfig;
-
-/**
- * Type guard to check if a configuration is for native authentication.
- * @param config The authentication configuration to check
- * @returns true if the config is for native auth, false otherwise
- */
-export function isNativeAuthConfig(config: AuthConfig): config is NativeAuthConfig {
-    return 'connectionUser' in config && 'connectionPassword' in config;
-}
-
-/**
- * Type guard to check if a configuration is for Entra ID authentication.
- * @param config The authentication configuration to check
- * @returns true if the config is for Entra ID auth, false otherwise
- */
-export function isEntraIdAuthConfig(config: AuthConfig): config is EntraIdAuthConfig {
-    return 'tenantId' in config || (!('connectionUser' in config) && !('connectionPassword' in config));
-}
