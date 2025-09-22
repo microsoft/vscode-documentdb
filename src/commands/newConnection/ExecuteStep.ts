@@ -37,8 +37,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 const parentId = context.parentId;
 
                 const newConnectionString = context.connectionString!;
-                const newPassword = context.password;
-                const newUsername = context.username;
+
+                const newPassword = context.nativeAuth?.connectionPassword;
+                const newUsername = context.nativeAuth?.connectionUser;
+
                 const newAuthenticationMethod = context.selectedAuthenticationMethod;
                 const newAvailableAuthenticationMethods =
                     context.availableAuthenticationMethods ??
@@ -132,14 +134,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     },
                     secrets: {
                         connectionString: newParsedCS.toString(),
-                        // Populate nativeAuth configuration
                         nativeAuth:
-                            newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
+                            context.nativeAuth ??
+                            (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
                                 ? {
                                       connectionUser: newUsername ?? '',
-                                      connectionPassword: newPassword ?? '',
+                                      connectionPassword: newPassword,
                                   }
-                                : undefined,
+                                : undefined),
+                        entraIdAuth: context.entraIdAuth,
                     },
                 };
 

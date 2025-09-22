@@ -117,6 +117,16 @@ export class VCoreResourceItem extends ClusterItemBase {
             }
 
             // Cache credentials and attempt connection
+            const nativeAuthConfig =
+                wizardContext.selectedUserName || wizardContext.password
+                    ? {
+                          connectionUser:
+                              wizardContext.nativeAuth?.connectionUser ?? wizardContext.selectedUserName ?? '',
+                          connectionPassword:
+                              wizardContext.nativeAuth?.connectionPassword ?? wizardContext.password ?? '',
+                      }
+                    : wizardContext.nativeAuth;
+
             CredentialCache.setAuthCredentials(
                 this.id,
                 nonNullValue(
@@ -125,12 +135,7 @@ export class VCoreResourceItem extends ClusterItemBase {
                     'VCoreResourceItem.ts',
                 ),
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'VCoreResourceItem.ts'),
-                wizardContext.selectedUserName || wizardContext.password
-                    ? {
-                          connectionUser: wizardContext.selectedUserName ?? '',
-                          connectionPassword: wizardContext.password,
-                      }
-                    : undefined,
+                nativeAuthConfig,
                 undefined,
                 credentials.entraIdConfig,
             );

@@ -27,8 +27,16 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
 
         // 1. Parse the connection string and extract credentials
         const parsedConnectionString = new DocumentDBConnectionString(newConnectionString);
-        context.username = parsedConnectionString.username;
-        context.password = parsedConnectionString.password;
+
+        // Extract credentials to structured nativeAuth config
+        if (parsedConnectionString.username || parsedConnectionString.password) {
+            context.nativeAuth = {
+                connectionUser: parsedConnectionString.username || '',
+                connectionPassword: parsedConnectionString.password || '',
+            };
+        }
+
+        // Remove credentials from connection string
         parsedConnectionString.username = '';
         parsedConnectionString.password = '';
 

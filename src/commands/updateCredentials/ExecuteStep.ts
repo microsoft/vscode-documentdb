@@ -43,11 +43,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
             };
 
             // Update auth method specific configurations
-            if (authMethod === AuthMethodId.NativeAuth && (context.username || context.password)) {
-                // Update native auth config
+            if (
+                authMethod === AuthMethodId.NativeAuth &&
+                (context.nativeAuth || context.username || context.password)
+            ) {
+                // Update native auth config - prefer structured config over legacy fields
+                const username = context.nativeAuth?.connectionUser ?? context.username ?? '';
+                const password = context.nativeAuth?.connectionPassword ?? context.password ?? '';
+
                 connectionCredentials.secrets.nativeAuth = {
-                    connectionUser: context.username ?? '',
-                    connectionPassword: context.password ?? '',
+                    connectionUser: username,
+                    connectionPassword: password,
                 };
             } else if (authMethod === AuthMethodId.MicrosoftEntraID) {
                 // For Entra ID, clear any native auth configs

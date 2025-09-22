@@ -13,12 +13,19 @@ export class PromptUserNameStep extends AzureWizardPromptStep<UpdateCredentialsW
     public async prompt(context: UpdateCredentialsWizardContext): Promise<void> {
         const username = await context.ui.showInputBox({
             prompt: l10n.t('Please enter the username'),
-            value: context.username,
+            value: context.nativeAuth?.connectionUser ?? context.username,
             ignoreFocusOut: true,
         });
 
-        context.username = username.trim();
-        context.valuesToMask.push(context.username, username);
+        const trimmedUsername = username.trim();
+
+        // Update both structured config and legacy field
+        context.nativeAuth = {
+            connectionUser: trimmedUsername,
+            connectionPassword: context.nativeAuth?.connectionPassword ?? context.password ?? '',
+        };
+        context.username = trimmedUsername;
+        context.valuesToMask.push(trimmedUsername, username);
     }
 
     public shouldPrompt(context: UpdateCredentialsWizardContext): boolean {

@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
+import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../auth/AuthConfig';
 import { type AuthMethodId } from '../../auth/AuthMethod';
 
 export interface AuthenticateWizardContext extends IActionContext {
@@ -19,6 +20,10 @@ export interface AuthenticateWizardContext extends IActionContext {
     availableAuthMethods?: string[];
 
     /** These values will be populated by the wizard. */
+
+    // structured authentication configs
+    nativeAuth?: NativeAuthConfig;
+    entraIdAuth?: EntraIdAuthConfig;
 
     /** States whether the username was set during the wizard flow. */
     isUserNameUpdated?: boolean;

@@ -93,7 +93,7 @@ export function extractCredentialsFromCluster(
         nativeAuthConfig: clusterInformation.properties?.administrator?.userName
             ? {
                   connectionUser: clusterInformation.properties.administrator.userName,
-                  connectionPassword: '', // Password will be collected during authentication
+                  connectionPassword: undefined, // Password will be collected during authentication
               }
             : undefined,
     };

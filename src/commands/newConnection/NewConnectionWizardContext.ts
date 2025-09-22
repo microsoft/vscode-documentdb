@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { type DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type Experience } from '../../DocumentDBExperiences';
@@ -22,8 +23,10 @@ export interface NewConnectionWizardContext extends IActionContext {
 
     availableAuthenticationMethods?: AuthMethodId[];
     selectedAuthenticationMethod?: AuthMethodId;
-    username?: string;
-    password?: string;
+
+    // Authentication configurations - provided by user input or service discovery
+    nativeAuth?: NativeAuthConfig;
+    entraIdAuth?: EntraIdAuthConfig;
 
     // The following properties are used in the "DocumentDB Connections" experience
     connectionMode?: ConnectionMode;

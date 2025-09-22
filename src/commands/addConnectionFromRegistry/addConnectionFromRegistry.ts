@@ -147,8 +147,8 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
                 properties: { api: API.DocumentDB, availableAuthMethods: credentials.availableAuthMethods },
                 secrets: {
                     connectionString: parsedCS.toString(),
-                    // Populate nativeAuth configuration
                     nativeAuth: credentials.nativeAuthConfig,
+                    entraIdAuth: credentials.entraIdConfig,
                 },
             };
 
