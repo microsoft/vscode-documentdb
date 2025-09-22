@@ -21,7 +21,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         // Get Microsoft Entra ID token
         const session = await getSessionFromVSCode(
             ['https://ossrdbms-aad.database.windows.net/.default'],
-            undefined, // currently, we don't see any requirements for support of scoping by tenantIds
+            this.clusterCredentials.entraIdConfig?.tenantId,
             {
                 createIfNone: true,
             },
