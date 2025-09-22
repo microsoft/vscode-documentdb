@@ -114,5 +114,8 @@ export function extractCredentialsFromCluster(
         };
     }
 
+    // Add telemetry properties from subscription
+    context.telemetry.properties.isCustomCloud = subscription.isCustomCloud.toString();
+
     return credentials;
 }

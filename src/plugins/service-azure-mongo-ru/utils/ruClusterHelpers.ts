@@ -94,5 +94,8 @@ export async function extractCredentialsFromRUAccount(
         },
     };
 
+    // Add telemetry properties from subscription
+    context.telemetry.properties.isCustomCloud = subscription.isCustomCloud.toString();
+
     return clusterCredentials;
 }
