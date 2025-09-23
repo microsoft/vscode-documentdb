@@ -18,8 +18,5 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
     nativeAuth?: NativeAuthConfig;
     entraIdAuth?: EntraIdAuthConfig;
 
-    // legacy fields for backward compatibility (deprecated)
-    username?: string;
-    password?: string;
     selectedAuthenticationMethod?: AuthMethodId;
 }
