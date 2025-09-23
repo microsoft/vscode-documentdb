@@ -61,6 +61,13 @@ export class AzureMongoRUServiceRootItem
             return [];
         }
 
+        // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
+        // Note to future maintainers: we used to run getSubscriptions and getTenants "in parallel", however
+        // this lead to incorrect responses from getSubscriptions. We didn't investigate
+        const tenantPromise = this.azureSubscriptionProvider.getTenants().catch(() => undefined);
+        const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
+        const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
+
         return (
             subscriptions
                 // sort by name
@@ -71,6 +78,7 @@ export class AzureMongoRUServiceRootItem
                         subscription: sub,
                         subscriptionName: sub.name,
                         subscriptionId: sub.subscriptionId,
+                        tenant: knownTenants?.find((tenant) => tenant.tenantId === sub.tenantId),
                     });
                 })
         );

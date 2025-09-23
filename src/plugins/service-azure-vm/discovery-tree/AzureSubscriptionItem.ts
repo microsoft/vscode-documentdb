@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
@@ -20,6 +21,7 @@ export interface AzureSubscriptionModel {
     subscriptionName: string;
     subscription: AzureSubscription;
     subscriptionId: string;
+    tenant?: AzureTenant;
 }
 
 export class AzureSubscriptionItem implements TreeElement, TreeElementWithContextValue {
@@ -48,7 +50,6 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 const vmItems: AzureVMResourceItem[] = [];
 
                 for (const vm of vms) {
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                     if (vm.tags && vm.tags[tagName] !== undefined && vm.id && vm.name) {
                         let publicIpAddress: string | undefined;
                         let fqdn: string | undefined;
@@ -118,11 +119,25 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
     }
 
     public getTreeItem(): vscode.TreeItem {
+        const tooltipParts: string[] = [vscode.l10n.t('Subscription ID: {0}', this.subscription.subscriptionId), ''];
+
+        const tenantName = this.subscription.tenant?.displayName;
+        if (tenantName) {
+            tooltipParts.push(vscode.l10n.t('Tenant Name: {0}', tenantName));
+        }
+
+        const tenantId = this.subscription.subscription.tenantId;
+        if (tenantId) {
+            tooltipParts.push(vscode.l10n.t('Tenant ID: {0}', tenantId));
+        }
+
+        const tooltip: string = tooltipParts.join('\n');
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.subscription.subscriptionName,
-            tooltip: `Subscription ID: ${this.subscription.subscriptionId}`,
+            tooltip,
             iconPath: vscode.Uri.joinPath(
                 ext.context.extensionUri,
                 'resources',
