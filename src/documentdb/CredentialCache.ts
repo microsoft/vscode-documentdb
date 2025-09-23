@@ -204,7 +204,7 @@ export class CredentialCache {
         let cacheEntraIdConfig: EntraIdAuthConfig | undefined;
         if (secrets.entraIdAuthConfig) {
             cacheEntraIdConfig = {
-                tenantId: secrets.entraIdAuthConfig.tenantId ?? '', // Convert optional to required for backward compatibility
+                tenantId: secrets.entraIdAuthConfig.tenantId, // Preserve optional nature for backward compatibility
             };
         }
 
