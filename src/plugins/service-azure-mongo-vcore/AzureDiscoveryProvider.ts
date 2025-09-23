@@ -12,7 +12,7 @@ import { type TreeElement } from '../../tree/TreeElement';
 import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering';
 import { AzureContextProperties } from '../api-shared/azure/wizard/AzureContextProperties';
-import { SelectSubscriptionStep } from '../service-azure-vm/discovery-wizard/SelectSubscriptionStep';
+import { SelectSubscriptionStep } from '../api-shared/azure/wizard/SelectSubscriptionStep';
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
 import { AzureExecuteStep } from './discovery-wizard/AzureExecuteStep';
 import { SelectClusterStep } from './discovery-wizard/SelectClusterStep';

@@ -12,7 +12,7 @@ import { type TreeElement } from '../../tree/TreeElement';
 import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering';
 import { AzureContextProperties } from '../api-shared/azure/wizard/AzureContextProperties';
-import { SelectSubscriptionStep } from '../service-azure-vm/discovery-wizard/SelectSubscriptionStep';
+import { SelectSubscriptionStep } from '../api-shared/azure/wizard/SelectSubscriptionStep';
 import { AzureMongoRUServiceRootItem } from './discovery-tree/AzureMongoRUServiceRootItem';
 import { AzureMongoRUExecuteStep } from './discovery-wizard/AzureMongoRUExecuteStep';
 import { SelectRUClusterStep } from './discovery-wizard/SelectRUClusterStep';

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
@@ -67,6 +67,16 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
         const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
 
+        // Build tenant lookup for better performance
+        const tenantMap = new Map<string, AzureTenant>();
+        if (knownTenants) {
+            for (const tenant of knownTenants) {
+                if (tenant.tenantId) {
+                    tenantMap.set(tenant.tenantId, tenant);
+                }
+            }
+        }
+
         return (
             subscriptions
                 // sort by name
@@ -77,7 +87,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
                         subscription: sub,
                         subscriptionName: sub.name,
                         subscriptionId: sub.subscriptionId,
-                        tenant: knownTenants?.find((tenant) => tenant.tenantId === sub.tenantId),
+                        tenant: tenantMap.get(sub.tenantId),
                     });
                 })
         );

@@ -55,23 +55,46 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
         const subscriptions = await subscriptionProvider.getSubscriptions(false);
 
-        const promptItems: (QuickPickItem & { id: string })[] = subscriptions
-            .map((subscription) => ({
-                id: subscription.subscriptionId,
-                label: subscription.name,
-                description: subscription.subscriptionId,
-                iconPath: this.iconPath,
+        // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
+        // Note to future maintainers: we used to run getSubscriptions and getTenants "in parallel", however
+        // this lead to incorrect responses from getSubscriptions. We didn't investigate
+        const tenantPromise = subscriptionProvider.getTenants().catch(() => undefined);
+        const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
+        const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
 
-                alwaysShow: true,
-            }))
-            // Sort alphabetically
+        // Build tenant display name lookup for better UX
+        const tenantDisplayNames = new Map<string, string>();
+
+        if (knownTenants) {
+            for (const tenant of knownTenants) {
+                if (tenant.tenantId && tenant.displayName) {
+                    tenantDisplayNames.set(tenant.tenantId, tenant.displayName);
+                }
+            }
+        }
+
+        const promptItems: (QuickPickItem & { id: string })[] = subscriptions
+            .map((subscription) => {
+                const tenantName = tenantDisplayNames.get(subscription.tenantId);
+                const description = tenantName
+                    ? `${subscription.subscriptionId} (${tenantName})`
+                    : subscription.subscriptionId;
+
+                return {
+                    id: subscription.subscriptionId,
+                    label: subscription.name,
+                    description,
+                    iconPath: this.iconPath,
+                    alwaysShow: true,
+                };
+            })
             .sort((a, b) => a.label.localeCompare(b.label));
 
         const selectedItem = await context.ui.showQuickPick([...promptItems], {
             stepName: 'selectSubscription',
             placeHolder: l10n.t('Choose a subscription…'),
             loadingPlaceHolder: l10n.t('Loading subscriptions…'),
-            enableGrouping: true,
+            enableGrouping: false,
             matchOnDescription: true,
             suppressPersistence: true,
         });

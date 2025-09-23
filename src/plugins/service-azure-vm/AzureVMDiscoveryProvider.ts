@@ -10,11 +10,11 @@ import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
+import { SelectSubscriptionStep } from '../api-shared/azure/wizard/SelectSubscriptionStep';
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
 import { configureVmFilter } from './discovery-tree/configureVmFilterWizard';
 import { AzureVMExecuteStep } from './discovery-wizard/AzureVMExecuteStep';
 import { SelectPortStep } from './discovery-wizard/SelectPortStep';
-import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep';
 import { SelectTagStep } from './discovery-wizard/SelectTagStep';
 import { SelectVMStep } from './discovery-wizard/SelectVMStep';
 
