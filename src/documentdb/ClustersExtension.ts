@@ -27,6 +27,7 @@ import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
+import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
 import { filterProviderContent } from '../commands/filterProviderContent/filterProviderContent';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
@@ -203,6 +204,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.filterProviderContent',
                     filterProviderContent,
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.manageCredentials',
+                    manageCredentials,
                 );
 
                 registerCommandWithTreeNodeUnwrapping(

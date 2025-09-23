@@ -55,6 +55,8 @@ export interface DiscoveryProvider extends ProviderDescription {
     getLearnMoreUrl?(): string | undefined;
 
     configureTreeItemFilter?(context: IActionContext, node: TreeElement): Promise<void>;
+
+    configureCredentials?(context: IActionContext, node: TreeElement): Promise<void>;
 }
 
 /**

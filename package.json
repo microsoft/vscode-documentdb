@@ -328,6 +328,13 @@
         "icon": "$(save)"
       },
       {
+        "//": "[DiscoveryView] Content Provider: Manage Credentials",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.manageCredentials",
+        "title": "Manage Credentials…",
+        "icon": "$(organization)"
+      },
+      {
         "//": "[DiscoveryView] Filter Provider Content",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
@@ -538,6 +545,11 @@
           "group": "0@5"
         },
         {
+          "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
+          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "group": "0@1"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.removeRegistry",
           "when": "view == discoveryView && viewItem =~ /\\brootItem\\b/i",
           "group": "1@1"
@@ -548,29 +560,39 @@
           "group": "0@1"
         },
         {
+          "command": "vscode-documentdb.command.discoveryView.manageCredentials",
+          "when": "view == discoveryView && viewItem =~ /\\benableManageCredentialsCommand\\b/i",
+          "group": "inline@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.manageCredentials",
+          "when": "view == discoveryView && viewItem =~ /\\benableManageCredentialsCommand\\b/i",
+          "group": "1@2"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
           "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "inline"
         },
         {
-          "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
-          "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
+          "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
+          "when": "view == discoveryView && viewItem =~ /\\benableFilterCommand\\b/i",
           "group": "1@3"
         },
         {
+          "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
+          "when": "view == discoveryView && viewItem =~ /\\benableFilterCommand\\b/i",
+          "group": "inline@2"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
           "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
-          "group": "inline"
+          "group": "1@4"
         },
         {
-          "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
-          "when": "view == discoveryView && viewItem =~ /\\benableFilterCommand\\b/i",
-          "group": "1@2"
-        },
-        {
-          "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
-          "when": "view == discoveryView && viewItem =~ /\\benableFilterCommand\\b/i",
-          "group": "inline"
+          "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
+          "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
+          "group": "inline@3"
         },
         {
           "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
@@ -714,6 +736,10 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.manageCredentials",
           "when": "never"
         },
         {
