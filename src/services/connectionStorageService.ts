@@ -84,6 +84,7 @@ const enum SecretIndex {
     NativeAuthConnectionPassword = 2,
     // Entra ID auth config fields
     EntraIdTenantId = 3,
+    EntraIdSubscriptionId = 4,
 }
 
 /**
@@ -176,8 +177,13 @@ export class ConnectionStorageService {
             }
 
             // Store Entra ID auth config fields individually
-            if (item.secrets.entraIdAuthConfig && item.secrets.entraIdAuthConfig.tenantId) {
-                secretsArray[SecretIndex.EntraIdTenantId] = item.secrets.entraIdAuthConfig.tenantId;
+            if (item.secrets.entraIdAuthConfig) {
+                if (item.secrets.entraIdAuthConfig.tenantId) {
+                    secretsArray[SecretIndex.EntraIdTenantId] = item.secrets.entraIdAuthConfig.tenantId;
+                }
+                if (item.secrets.entraIdAuthConfig.subscriptionId) {
+                    secretsArray[SecretIndex.EntraIdSubscriptionId] = item.secrets.entraIdAuthConfig.subscriptionId;
+                }
             }
         }
 
@@ -198,31 +204,33 @@ export class ConnectionStorageService {
         const secretsArray = item.secrets ?? [];
 
         // Reconstruct native auth config from individual fields
-        let nativeAuth: NativeAuthConfig | undefined;
+        let nativeAuthConfig: NativeAuthConfig | undefined;
         const nativeAuthUser = secretsArray[SecretIndex.NativeAuthConnectionUser];
         const nativeAuthPassword = secretsArray[SecretIndex.NativeAuthConnectionPassword];
 
         if (nativeAuthUser) {
-            nativeAuth = {
+            nativeAuthConfig = {
                 connectionUser: nativeAuthUser,
                 connectionPassword: nativeAuthPassword,
             };
         }
 
         // Reconstruct Entra ID auth config from individual fields
-        let entraIdAuth: EntraIdAuthConfig | undefined;
+        let entraIdAuthConfig: EntraIdAuthConfig | undefined;
         const entraIdTenantId = secretsArray[SecretIndex.EntraIdTenantId];
+        const entraIdSubscriptionId = secretsArray[SecretIndex.EntraIdSubscriptionId];
 
-        if (entraIdTenantId) {
-            entraIdAuth = {
+        if (entraIdTenantId || entraIdSubscriptionId) {
+            entraIdAuthConfig = {
                 tenantId: entraIdTenantId,
+                subscriptionId: entraIdSubscriptionId,
             };
         }
 
         const secrets = {
             connectionString: secretsArray[SecretIndex.ConnectionString] ?? '',
-            nativeAuth,
-            entraIdAuth,
+            nativeAuthConfig: nativeAuthConfig,
+            entraIdAuthConfig: entraIdAuthConfig,
         };
 
         return {
