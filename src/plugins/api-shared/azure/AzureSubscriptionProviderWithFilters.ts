@@ -15,7 +15,7 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
         super(logger);
     }
 
-    private async getTenantAndSubscriptionFilters(): Promise<string[]> {
+    private getTenantAndSubscriptionFilters(): string[] {
         // Try the Azure Resource Groups config first
         const config = vscode.workspace.getConfiguration('azureResourceGroups');
         let fullSubscriptionIds = config.get<string[]>('selectedSubscriptions', []);
@@ -32,12 +32,24 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
 
     /**
      * Override the getTenantFilters method to provide custom tenant filtering
-     * Uses the same logic as in the original implementation but with fallback storage support
+     * Uses both subscription-based filtering and explicit tenant filtering
      */
     protected override async getTenantFilters(): Promise<TenantId[]> {
-        const fullSubscriptionIds = await this.getTenantAndSubscriptionFilters();
-        // Extract the tenant IDs from the full IDs (tenantId/subscriptionId)
-        return fullSubscriptionIds.map((id) => id.split('/')[0]);
+        // Get tenant filters from subscription selections
+        const fullSubscriptionIds = this.getTenantAndSubscriptionFilters();
+        const subscriptionBasedTenants = fullSubscriptionIds.map((id) => id.split('/')[0]);
+
+        // Get explicit tenant filters
+        const { getSelectedTenantIds } = await import('./subscriptionFiltering');
+        const selectedTenantIds = getSelectedTenantIds();
+        const explicitTenants = selectedTenantIds.map((id) => id.split('/')[0]);
+
+        // Combine both sources, with explicit tenant filtering taking precedence
+        if (explicitTenants.length > 0) {
+            return [...new Set(explicitTenants)]; // Remove duplicates
+        }
+
+        return [...new Set(subscriptionBasedTenants)]; // Fallback to subscription-based filtering
     }
 
     /**
@@ -45,7 +57,7 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
      * Uses the same logic as in the original implementation but with fallback storage support
      */
     protected override async getSubscriptionFilters(): Promise<SubscriptionId[]> {
-        const fullSubscriptionIds = await this.getTenantAndSubscriptionFilters();
+        const fullSubscriptionIds = this.getTenantAndSubscriptionFilters();
         // Extract the subscription IDs from the full IDs (tenantId/subscriptionId)
         return fullSubscriptionIds.map((id) => id.split('/')[1]);
     }

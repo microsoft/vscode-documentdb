@@ -64,4 +64,13 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
             ext.discoveryBranchDataProvider.refresh(node);
         }
     }
+
+    async configureCredentials(context: IActionContext, node: TreeElement): Promise<void> {
+        if (node instanceof AzureServiceRootItem) {
+            // Use the new Azure credentials configuration wizard
+            const { configureAzureCredentials } = await import('../api-shared/azure/credentialsManagement');
+            await configureAzureCredentials(context, this.azureSubscriptionProvider);
+            ext.discoveryBranchDataProvider.refresh(node);
+        }
+    }
 }

@@ -75,6 +75,27 @@ export async function setSelectedSubscriptionIds(subscriptionIds: string[]): Pro
 }
 
 /**
+ * Returns the currently selected tenant IDs from the stored configuration.
+ * The IDs are stored in the format 'tenantId/accountId'.
+ * For example: 'tenantId1/accountId1', 'tenantId2/accountId2'.
+ * The function returns an array of tenant/account ID combinations.
+ *
+ * @returns An array of selected tenant IDs with account information.
+ */
+export function getSelectedTenantIds(): string[] {
+    return ext.context.globalState.get<string[]>('azure-discovery.selectedTenants', []);
+}
+
+/**
+ * Updates the selected tenant IDs in the stored configuration.
+ * These have to contain the full tenant/account ID combination.
+ * For example: 'tenantId1/accountId1', 'tenantId2/accountId2'.
+ */
+export async function setSelectedTenantIds(tenantIds: string[]): Promise<void> {
+    await ext.context.globalState.update('azure-discovery.selectedTenants', tenantIds);
+}
+
+/**
  * Identifies subscriptions with duplicate names.
  */
 export function getDuplicateSubscriptions(subscriptions: AzureSubscription[]): AzureSubscription[] {
@@ -102,6 +123,7 @@ export async function configureAzureSubscriptionFilter(
     /**
      * Ensure the user is signed in to Azure
      */
+
     if (!(await azureSubscriptionProvider.isSignedIn())) {
         const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
         void vscode.window
