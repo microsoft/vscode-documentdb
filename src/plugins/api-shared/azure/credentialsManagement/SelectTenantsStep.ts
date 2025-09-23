@@ -35,6 +35,9 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
         );
         context.availableTenants.set(selectedAccount.id, tenants);
 
+        // Store all tenants for the selected account in context for ExecuteStep
+        context.allTenants = tenants;
+
         if (tenants.length === 0) {
             void vscode.window.showWarningMessage(
                 l10n.t(
@@ -46,7 +49,8 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
 
         // Get currently selected tenant IDs from storage
         const { getSelectedTenantIds } = await import('../subscriptionFiltering');
-        const currentlySelectedTenants = getSelectedTenantIds();
+        const allTenantKeys = tenants.map((tenant) => `${tenant.tenantId}/${selectedAccount.id}`);
+        const currentlySelectedTenants = getSelectedTenantIds(allTenantKeys);
         const currentlySelectedTenantIds = new Set(currentlySelectedTenants.map((id) => id.split('/')[0]));
 
         // Create quick pick items with checkboxes

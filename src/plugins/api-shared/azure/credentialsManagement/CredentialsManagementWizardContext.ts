@@ -19,6 +19,7 @@ export interface CredentialsManagementWizardContext extends IActionContext {
     // Available options
     availableAccounts?: vscode.AuthenticationSessionAccountInformation[];
     availableTenants?: Map<string, AzureTenant[]>; // accountId -> tenants
+    allTenants?: AzureTenant[]; // All available tenants for the selected account
 
     // State tracking
     shouldRestartWizard?: boolean;

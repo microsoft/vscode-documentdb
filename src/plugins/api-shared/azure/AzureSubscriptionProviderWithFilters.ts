@@ -39,10 +39,14 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
         const fullSubscriptionIds = this.getTenantAndSubscriptionFilters();
         const subscriptionBasedTenants = fullSubscriptionIds.map((id) => id.split('/')[0]);
 
-        // Get explicit tenant filters
+        // Get all available tenants to pass to getSelectedTenantIds
+        const allTenants = await this.getTenants();
+        const allTenantKeys = allTenants.map((tenant) => `${tenant.tenantId}/${tenant.account.id}`);
+
+        // Get explicit tenant filters using the new signature
         const { getSelectedTenantIds } = await import('./subscriptionFiltering');
-        const selectedTenantIds = getSelectedTenantIds();
-        const explicitTenants = selectedTenantIds.map((id) => id.split('/')[0]);
+        const selectedTenantKeys = getSelectedTenantIds(allTenantKeys);
+        const explicitTenants = selectedTenantKeys.map((id) => id.split('/')[0]);
 
         // Combine both sources, with explicit tenant filtering taking precedence
         if (explicitTenants.length > 0) {

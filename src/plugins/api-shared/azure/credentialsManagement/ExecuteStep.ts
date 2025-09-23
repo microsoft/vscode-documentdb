@@ -24,9 +24,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<CredentialsManagementWiz
         // Create tenant/account selection identifiers in the format: "tenantId/accountId"
         const tenantAccountIds = selectedTenants.map((tenant) => `${tenant.tenantId || ''}/${selectedAccount.id}`);
 
-        // Save the selections to global state
+        // Get all available tenants for this account to calculate the full set
+        const allTenantsForAccount = nonNullValue(context.allTenants, 'context.allTenants', 'ExecuteStep.ts');
+        const allTenantKeys = allTenantsForAccount.map((tenant) => `${tenant.tenantId}/${selectedAccount.id}`);
+
+        // Save the selections to global state using the new signature
         const { setSelectedTenantIds } = await import('../subscriptionFiltering');
-        await setSelectedTenantIds(tenantAccountIds);
+        await setSelectedTenantIds(tenantAccountIds, allTenantKeys);
 
         ext.outputChannel.appendLine(
             l10n.t(

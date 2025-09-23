@@ -7,7 +7,7 @@ import { AzureWizard, UserCancelledError, type IActionContext } from '@microsoft
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
-import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
+import { AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
 import { AzureContextProperties } from '../wizard/AzureContextProperties';
 import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
 import { ExecuteStep } from './ExecuteStep';
@@ -98,8 +98,15 @@ export async function configureAzureCredentials(
  */
 export async function showAzureCredentialsStatus(_context: IActionContext): Promise<void> {
     try {
+        // For status display, we need to get all available tenants to use the filtering function
+        const azureSubscriptionProvider = new AzureSubscriptionProviderWithFilters();
+        const allTenants = await azureSubscriptionProvider.getTenants();
+        const allTenantKeys = allTenants.map((tenant) => `${tenant.tenantId}/${tenant.account.id}`);
+
         const { getSelectedTenantIds } = await import('../subscriptionFiltering');
-        const selectedTenantIds = getSelectedTenantIds();
+        const selectedTenantIds = getSelectedTenantIds(allTenantKeys);
+
+        azureSubscriptionProvider.dispose(); // Clean up
 
         if (selectedTenantIds.length === 0) {
             void vscode.window.showInformationMessage(
@@ -152,7 +159,8 @@ export async function clearAzureCredentialsConfiguration(_context: IActionContex
 
         if (confirmResult) {
             const { setSelectedTenantIds } = await import('../subscriptionFiltering');
-            await setSelectedTenantIds([]);
+            // For clearing, we pass an empty array for both selected and all tenants
+            await setSelectedTenantIds([], []);
 
             ext.outputChannel.appendLine(l10n.t('Azure credentials configuration cleared.'));
             ext.discoveryBranchDataProvider.refresh();
