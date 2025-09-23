@@ -207,9 +207,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                 this.id,
                 authMethod,
                 connectionString.toString(),
-                username || password
+                username && password
                     ? {
-                          connectionUser: username ?? '',
+                          connectionUser: username,
                           connectionPassword: password,
                       }
                     : undefined,
