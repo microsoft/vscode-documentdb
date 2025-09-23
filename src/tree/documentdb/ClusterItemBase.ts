@@ -39,7 +39,7 @@ export type EphemeralClusterCredentials = {
 
     // Authentication method specific configurations
     nativeAuthConfig?: NativeAuthConfig;
-    entraIdConfig?: EntraIdAuthConfig;
+    entraIdAuthConfig?: EntraIdAuthConfig;
 };
 
 /**

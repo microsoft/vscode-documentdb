@@ -56,11 +56,11 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
             selectedAuthMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
 
-            // Structured auth configs
-            nativeAuthConfig: connectionCredentials.secrets.nativeAuth,
-            entraIdConfig: connectionCredentials.secrets.entraIdAuth
+            // Structured auth configurations
+            nativeAuthConfig: connectionCredentials.secrets.nativeAuthConfig,
+            entraIdAuthConfig: connectionCredentials.secrets.entraIdAuthConfig
                 ? {
-                      tenantId: connectionCredentials.secrets.entraIdAuth.tenantId,
+                      tenantId: connectionCredentials.secrets.entraIdAuthConfig.tenantId,
                   }
                 : undefined,
         };
@@ -93,9 +93,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
-            // Use nativeAuth for credentials
-            let username: string | undefined = connectionCredentials.secrets.nativeAuth?.connectionUser;
-            let password: string | undefined = connectionCredentials.secrets.nativeAuth?.connectionPassword;
+            // Use nativeAuthConfig for credentials
+            let username: string | undefined = connectionCredentials.secrets.nativeAuthConfig?.connectionUser;
+            let password: string | undefined = connectionCredentials.secrets.nativeAuthConfig?.connectionPassword;
             let authMethod: AuthMethodId | undefined = authMethodFromString(
                 connectionCredentials.properties.selectedAuthMethod,
             );
@@ -160,8 +160,8 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         connection.properties.selectedAuthMethod = authMethod;
                         connection.secrets = {
                             connectionString: connectionString.toString(),
-                            // Populate nativeAuth configuration
-                            nativeAuth:
+                            // Populate nativeAuthConfig configuration
+                            nativeAuthConfig:
                                 authMethod === AuthMethodId.NativeAuth && (username || password)
                                     ? {
                                           connectionUser: username ?? '',
@@ -214,7 +214,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                       }
                     : undefined,
                 this.cluster.emulatorConfiguration, // workspace items can potentially be connecting to an emulator, so we always pass it
-                connectionCredentials.secrets.entraIdAuth,
+                connectionCredentials.secrets.entraIdAuthConfig,
             );
 
             let clustersClient: ClustersClient;

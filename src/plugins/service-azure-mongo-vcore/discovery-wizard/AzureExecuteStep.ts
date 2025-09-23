@@ -39,8 +39,8 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         const credentials = extractCredentialsFromCluster(context, clusterInformation, subscription);
 
         context.connectionString = credentials.connectionString;
-        context.nativeAuth = credentials.nativeAuthConfig;
-        context.entraIdAuth = credentials.entraIdConfig;
+        context.nativeAuthConfig = credentials.nativeAuthConfig;
+        context.entraIdAuthConfig = credentials.entraIdAuthConfig;
         context.availableAuthenticationMethods = credentials.availableAuthMethods;
 
         // clean-up

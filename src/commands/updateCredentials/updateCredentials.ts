@@ -52,7 +52,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
 
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
-        nativeAuth: connectionCredentials?.secrets.nativeAuth,
+        nativeAuthConfig: connectionCredentials?.secrets.nativeAuthConfig,
         availableAuthenticationMethods: authMethodsFromString(supportedAuthMethods),
         selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),

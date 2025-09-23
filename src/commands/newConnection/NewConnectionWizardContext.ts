@@ -25,8 +25,8 @@ export interface NewConnectionWizardContext extends IActionContext {
     selectedAuthenticationMethod?: AuthMethodId;
 
     // Authentication configurations - provided by user input or service discovery
-    nativeAuth?: NativeAuthConfig;
-    entraIdAuth?: EntraIdAuthConfig;
+    nativeAuthConfig?: NativeAuthConfig;
+    entraIdAuthConfig?: EntraIdAuthConfig;
 
     // The following properties are used in the "DocumentDB Connections" experience
     connectionMode?: ConnectionMode;

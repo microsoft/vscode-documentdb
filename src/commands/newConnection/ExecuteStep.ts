@@ -38,8 +38,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
                 const newConnectionString = context.connectionString!;
 
-                const newPassword = context.nativeAuth?.connectionPassword;
-                const newUsername = context.nativeAuth?.connectionUser;
+                const newPassword = context.nativeAuthConfig?.connectionPassword;
+                const newUsername = context.nativeAuthConfig?.connectionUser;
 
                 const newAuthenticationMethod = context.selectedAuthenticationMethod;
                 const newAvailableAuthenticationMethods =
@@ -55,8 +55,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 const existingDuplicateConnection = existingConnections.find((existingConnection) => {
                     const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
                     const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-                    // Use nativeAuth for comparison
-                    const existingUsername = existingConnection.secrets.nativeAuth?.connectionUser;
+                    // Use nativeAuthConfig for comparison
+                    const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
 
                     return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
                 });
@@ -134,15 +134,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     },
                     secrets: {
                         connectionString: newParsedCS.toString(),
-                        nativeAuth:
-                            context.nativeAuth ??
+                        nativeAuthConfig:
+                            context.nativeAuthConfig ??
                             (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
                                 ? {
                                       connectionUser: newUsername ?? '',
                                       connectionPassword: newPassword,
                                   }
                                 : undefined),
-                        entraIdAuth: context.entraIdAuth,
+                        entraIdAuthConfig: context.entraIdAuthConfig,
                     },
                 };
 

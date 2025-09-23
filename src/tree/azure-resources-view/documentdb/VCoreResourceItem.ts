@@ -121,11 +121,11 @@ export class VCoreResourceItem extends ClusterItemBase {
                 wizardContext.selectedUserName || wizardContext.password
                     ? {
                           connectionUser:
-                              wizardContext.nativeAuth?.connectionUser ?? wizardContext.selectedUserName ?? '',
+                              wizardContext.nativeAuthConfig?.connectionUser ?? wizardContext.selectedUserName ?? '',
                           connectionPassword:
-                              wizardContext.nativeAuth?.connectionPassword ?? wizardContext.password ?? '',
+                              wizardContext.nativeAuthConfig?.connectionPassword ?? wizardContext.password ?? '',
                       }
-                    : wizardContext.nativeAuth;
+                    : wizardContext.nativeAuthConfig;
 
             CredentialCache.setAuthCredentials(
                 this.id,
@@ -137,7 +137,7 @@ export class VCoreResourceItem extends ClusterItemBase {
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'VCoreResourceItem.ts'),
                 nativeAuthConfig,
                 undefined,
-                credentials.entraIdConfig,
+                credentials.entraIdAuthConfig,
             );
 
             switch (wizardContext.selectedAuthMethod) {

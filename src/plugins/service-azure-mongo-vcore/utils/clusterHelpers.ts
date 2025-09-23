@@ -108,7 +108,7 @@ export function extractCredentialsFromCluster(
     context.telemetry.properties.unknownAuthMethods = unknownMethodIds.join(',');
 
     if (credentials.availableAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
-        credentials.entraIdConfig = {
+        credentials.entraIdAuthConfig = {
             tenantId: subscription.tenantId,
             subscriptionId: subscription.subscriptionId,
         };

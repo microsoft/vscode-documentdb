@@ -21,9 +21,9 @@ export interface AuthenticateWizardContext extends IActionContext {
 
     /** These values will be populated by the wizard. */
 
-    // structured authentication configs
-    nativeAuth?: NativeAuthConfig;
-    entraIdAuth?: EntraIdAuthConfig;
+    // structured authentication configurations
+    nativeAuthConfig?: NativeAuthConfig;
+    entraIdAuthConfig?: EntraIdAuthConfig;
 
     /** States whether the username was set during the wizard flow. */
     isUserNameUpdated?: boolean;

@@ -12,9 +12,9 @@ export class PromptPasswordStep extends AzureWizardPromptStep<UpdateCredentialsW
     public async prompt(context: UpdateCredentialsWizardContext): Promise<void> {
         const passwordTemp = await context.ui.showInputBox({
             prompt: l10n.t('Please enter the password for the user "{username}"', {
-                username: context.nativeAuth?.connectionUser ?? '',
+                username: context.nativeAuthConfig?.connectionUser ?? '',
             }),
-            value: context.nativeAuth?.connectionPassword,
+            value: context.nativeAuthConfig?.connectionPassword,
             password: true,
             ignoreFocusOut: true,
         });
@@ -22,8 +22,8 @@ export class PromptPasswordStep extends AzureWizardPromptStep<UpdateCredentialsW
         const trimmedPassword = passwordTemp.trim();
 
         // Update structured config
-        context.nativeAuth = {
-            connectionUser: context.nativeAuth?.connectionUser ?? '',
+        context.nativeAuthConfig = {
+            connectionUser: context.nativeAuthConfig?.connectionUser ?? '',
             connectionPassword: trimmedPassword,
         };
         context.valuesToMask.push(trimmedPassword);

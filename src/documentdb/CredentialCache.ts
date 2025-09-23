@@ -187,9 +187,9 @@ export class CredentialCache {
         // Determine auth method if not explicitly provided
         let selectedAuthMethod = authMethod;
         if (!selectedAuthMethod) {
-            if (secrets.entraIdAuth) {
+            if (secrets.entraIdAuthConfig) {
                 selectedAuthMethod = AuthMethodId.MicrosoftEntraID;
-            } else if (secrets.nativeAuth) {
+            } else if (secrets.nativeAuthConfig) {
                 selectedAuthMethod = AuthMethodId.NativeAuth;
             } else {
                 // Use the selected method from properties or first available method
@@ -202,15 +202,15 @@ export class CredentialCache {
 
         // Convert central auth configs to local cache format
         let cacheEntraIdConfig: EntraIdAuthConfig | undefined;
-        if (secrets.entraIdAuth) {
+        if (secrets.entraIdAuthConfig) {
             cacheEntraIdConfig = {
-                tenantId: secrets.entraIdAuth.tenantId ?? '', // Convert optional to required for backward compatibility
+                tenantId: secrets.entraIdAuthConfig.tenantId ?? '', // Convert optional to required for backward compatibility
             };
         }
 
-        // Use structured configs
-        const username = secrets.nativeAuth?.connectionUser ?? '';
-        const password = secrets.nativeAuth?.connectionPassword ?? '';
+        // Use structured configurations
+        const username = secrets.nativeAuthConfig?.connectionUser ?? '';
+        const password = secrets.nativeAuthConfig?.connectionPassword ?? '';
 
         // Use the existing setAuthCredentials method to ensure consistent behavior
         CredentialCache.setAuthCredentials(

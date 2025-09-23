@@ -129,7 +129,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                       }
                     : undefined,
                 undefined,
-                credentials.entraIdConfig,
+                credentials.entraIdAuthConfig,
             );
 
             switch (wizardContext.selectedAuthMethod) {

@@ -64,9 +64,9 @@ export interface ConnectionItem {
         /** assume that the connection string doesn't contain the username and password */
         connectionString: string;
 
-        // Structured auth configurations
-        nativeAuth?: NativeAuthConfig;
-        entraIdAuth?: EntraIdAuthConfig;
+        // Structured authentication configurations
+        nativeAuthConfig?: NativeAuthConfig;
+        entraIdAuthConfig?: EntraIdAuthConfig;
     };
 }
 
@@ -166,17 +166,18 @@ export class ConnectionStorageService {
         if (item.secrets) {
             secretsArray[SecretIndex.ConnectionString] = item.secrets.connectionString;
 
-            // Store nativeAuth config fields individually
-            if (item.secrets.nativeAuth) {
-                secretsArray[SecretIndex.NativeAuthConnectionUser] = item.secrets.nativeAuth.connectionUser;
-                if (item.secrets.nativeAuth.connectionPassword) {
-                    secretsArray[SecretIndex.NativeAuthConnectionPassword] = item.secrets.nativeAuth.connectionPassword;
+            // Store nativeAuthConfig fields individually
+            if (item.secrets.nativeAuthConfig) {
+                secretsArray[SecretIndex.NativeAuthConnectionUser] = item.secrets.nativeAuthConfig.connectionUser;
+                if (item.secrets.nativeAuthConfig.connectionPassword) {
+                    secretsArray[SecretIndex.NativeAuthConnectionPassword] =
+                        item.secrets.nativeAuthConfig.connectionPassword;
                 }
             }
 
             // Store Entra ID auth config fields individually
-            if (item.secrets.entraIdAuth && item.secrets.entraIdAuth.tenantId) {
-                secretsArray[SecretIndex.EntraIdTenantId] = item.secrets.entraIdAuth.tenantId;
+            if (item.secrets.entraIdAuthConfig && item.secrets.entraIdAuthConfig.tenantId) {
+                secretsArray[SecretIndex.EntraIdTenantId] = item.secrets.entraIdAuthConfig.tenantId;
             }
         }
 
@@ -266,8 +267,8 @@ export class ConnectionStorageService {
             },
             secrets: {
                 connectionString: parsedCS.toString(),
-                // Structured auth config populated from the same data
-                nativeAuth: username
+                // Structured auth configuration populated from the same data
+                nativeAuthConfig: username
                     ? {
                           connectionUser: username,
                           connectionPassword: password,

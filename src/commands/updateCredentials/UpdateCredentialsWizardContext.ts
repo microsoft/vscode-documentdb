@@ -14,9 +14,9 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
 
     availableAuthenticationMethods: AuthMethodId[];
 
-    // structured authentication configs
-    nativeAuth?: NativeAuthConfig;
-    entraIdAuth?: EntraIdAuthConfig;
+    // structured authentication configurations
+    nativeAuthConfig?: NativeAuthConfig;
+    entraIdAuthConfig?: EntraIdAuthConfig;
 
     selectedAuthenticationMethod?: AuthMethodId;
 }

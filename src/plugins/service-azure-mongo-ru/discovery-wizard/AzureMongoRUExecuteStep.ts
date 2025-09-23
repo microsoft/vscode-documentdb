@@ -36,7 +36,7 @@ export class AzureMongoRUExecuteStep extends AzureWizardExecuteStep<NewConnectio
         const credentials = await extractCredentialsFromRUAccount(context, subscription, resourceGroup, cluster.name!);
 
         context.connectionString = credentials.connectionString;
-        context.nativeAuth = credentials.nativeAuthConfig;
+        context.nativeAuthConfig = credentials.nativeAuthConfig;
         context.availableAuthenticationMethods = credentials.availableAuthMethods;
 
         // clean-up
