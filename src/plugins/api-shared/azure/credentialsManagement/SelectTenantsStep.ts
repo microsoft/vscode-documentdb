@@ -24,8 +24,10 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
             'SelectTenantsStep.ts',
         );
 
-        // Create a promise that will resolve to the quick pick items
-        const quickPickItemsPromise = this.getAvailableTenantsForAccount(context).then((tenants) => {
+        // Create async function to provide better loading UX and debugging experience
+        const getTenantQuickPickItems = async (): Promise<TenantQuickPickItem[]> => {
+            const tenants = await this.getAvailableTenantsForAccount(context);
+
             // Initialize availableTenants map if not exists
             if (!context.availableTenants) {
                 context.availableTenants = new Map();
@@ -61,9 +63,9 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
             });
 
             return tenantItems;
-        });
+        };
 
-        const selectedItems = await context.ui.showQuickPick(quickPickItemsPromise, {
+        const selectedItems = await context.ui.showQuickPick(getTenantQuickPickItems(), {
             stepName: 'selectTenants',
             placeHolder: l10n.t('Select tenants to use'),
             canPickMany: true,

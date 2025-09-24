@@ -47,90 +47,94 @@ export class SelectVMStep extends AzureWizardPromptStep<NewConnectionWizardConte
             throw new Error(l10n.t('Failed to initialize Azure management clients'));
         }
 
-        // Using ComputeManagementClient to list VMs
-        const allVms = await uiUtils.listAllIterator(computeClient.virtualMachines.listAll());
+        // Create async function to provide better loading UX and debugging experience
+        const getVMQuickPickItems = async (): Promise<
+            IAzureQuickPickItem<VirtualMachine & { publicIpAddress?: string; fqdn?: string }>[]
+        > => {
+            // Using ComputeManagementClient to list VMs
+            const allVms = await uiUtils.listAllIterator(computeClient.virtualMachines.listAll());
 
-        const taggedVms: IAzureQuickPickItem<VirtualMachine & { publicIpAddress?: string; fqdn?: string }>[] = [];
+            const taggedVms: IAzureQuickPickItem<VirtualMachine & { publicIpAddress?: string; fqdn?: string }>[] = [];
 
-        for (const vm of allVms) {
-            if (vm.tags && vm.tags[tagName] !== undefined) {
-                let publicIpAddress: string | undefined;
-                let fqdn: string | undefined;
+            for (const vm of allVms) {
+                if (vm.tags && vm.tags[tagName] !== undefined) {
+                    let publicIpAddress: string | undefined;
+                    let fqdn: string | undefined;
 
-                if (vm.networkProfile?.networkInterfaces) {
-                    for (const nicRef of vm.networkProfile.networkInterfaces) {
-                        if (nicRef.id) {
-                            const nicName = nicRef.id.substring(nicRef.id.lastIndexOf('/') + 1);
-                            const rgName = getResourceGroupFromId(nicRef.id);
-                            const nic = await networkClient.networkInterfaces.get(rgName, nicName);
-                            if (nic.ipConfigurations) {
-                                for (const ipConfig of nic.ipConfigurations) {
-                                    if (ipConfig.publicIPAddress?.id) {
-                                        const pipName = ipConfig.publicIPAddress.id.substring(
-                                            ipConfig.publicIPAddress.id.lastIndexOf('/') + 1,
-                                        );
-                                        const pipRg = getResourceGroupFromId(ipConfig.publicIPAddress.id);
-                                        const publicIp = await networkClient.publicIPAddresses.get(pipRg, pipName);
-                                        if (publicIp.ipAddress) {
-                                            publicIpAddress = publicIp.ipAddress;
+                    if (vm.networkProfile?.networkInterfaces) {
+                        for (const nicRef of vm.networkProfile.networkInterfaces) {
+                            if (nicRef.id) {
+                                const nicName = nicRef.id.substring(nicRef.id.lastIndexOf('/') + 1);
+                                const rgName = getResourceGroupFromId(nicRef.id);
+                                const nic = await networkClient.networkInterfaces.get(rgName, nicName);
+                                if (nic.ipConfigurations) {
+                                    for (const ipConfig of nic.ipConfigurations) {
+                                        if (ipConfig.publicIPAddress?.id) {
+                                            const pipName = ipConfig.publicIPAddress.id.substring(
+                                                ipConfig.publicIPAddress.id.lastIndexOf('/') + 1,
+                                            );
+                                            const pipRg = getResourceGroupFromId(ipConfig.publicIPAddress.id);
+                                            const publicIp = await networkClient.publicIPAddresses.get(pipRg, pipName);
+                                            if (publicIp.ipAddress) {
+                                                publicIpAddress = publicIp.ipAddress;
+                                            }
+                                            if (publicIp.dnsSettings?.fqdn) {
+                                                fqdn = publicIp.dnsSettings.fqdn;
+                                            }
+                                            // Stop if we found a public IP for this VM
+                                            if (publicIpAddress) break;
                                         }
-                                        if (publicIp.dnsSettings?.fqdn) {
-                                            fqdn = publicIp.dnsSettings.fqdn;
-                                        }
-                                        // Stop if we found a public IP for this VM
-                                        if (publicIpAddress) break;
                                     }
                                 }
                             }
+                            if (publicIpAddress) break; // Stop checking NICs if IP found
                         }
-                        if (publicIpAddress) break; // Stop checking NICs if IP found
                     }
+
+                    const label = vm.name!;
+                    let description = '';
+                    let detail = `VM Size: ${vm.hardwareProfile?.vmSize}`; // Add VM Size to detail
+
+                    if (publicIpAddress || fqdn) {
+                        description = fqdn ? fqdn : publicIpAddress!;
+                        detail += fqdn ? ` (IP: ${publicIpAddress || 'N/A'})` : '';
+                    } else {
+                        description = l10n.t('No public connectivity');
+                        detail += l10n.t(', No public IP or FQDN found.');
+                    }
+
+                    taggedVms.push({
+                        label,
+                        description,
+                        detail,
+                        data: { ...vm, publicIpAddress, fqdn },
+                        iconPath: this.iconPath,
+                        alwaysShow: true,
+                    });
                 }
-
-                const label = vm.name!;
-                let description = '';
-                let detail = `VM Size: ${vm.hardwareProfile?.vmSize}`; // Add VM Size to detail
-
-                if (publicIpAddress || fqdn) {
-                    description = fqdn ? fqdn : publicIpAddress!;
-                    detail += fqdn ? ` (IP: ${publicIpAddress || 'N/A'})` : '';
-                } else {
-                    description = l10n.t('No public connectivity');
-                    detail += l10n.t(', No public IP or FQDN found.');
-                }
-
-                taggedVms.push({
-                    label,
-                    description,
-                    detail,
-                    data: { ...vm, publicIpAddress, fqdn },
-                    iconPath: this.iconPath,
-                    alwaysShow: true,
-                });
             }
-        }
 
-        if (taggedVms.length === 0) {
-            context.errorHandling.suppressReportIssue = true; // No need to report an issue if no VMs are found
-            throw new Error(
-                l10n.t(`No Azure VMs found with tag "{tagName}" in subscription "{subscriptionName}".`, {
-                    tagName,
-                    subscriptionName: subscription.name,
-                }),
-            );
-        }
+            if (taggedVms.length === 0) {
+                context.errorHandling.suppressReportIssue = true; // No need to report an issue if no VMs are found
+                throw new Error(
+                    l10n.t(`No Azure VMs found with tag "{tagName}" in subscription "{subscriptionName}".`, {
+                        tagName,
+                        subscriptionName: subscription.name,
+                    }),
+                );
+            }
 
-        const selectedVMItem = await context.ui.showQuickPick(
-            taggedVms.sort((a, b) => a.label.localeCompare(b.label)),
-            {
-                stepName: 'selectVM',
-                placeHolder: l10n.t('Choose a Virtual Machine…'),
-                loadingPlaceHolder: l10n.t('Loading Virtual Machines…'),
-                enableGrouping: true,
-                matchOnDescription: true,
-                suppressPersistence: true,
-            },
-        );
+            return taggedVms.sort((a, b) => a.label.localeCompare(b.label));
+        };
+
+        const selectedVMItem = await context.ui.showQuickPick(getVMQuickPickItems(), {
+            stepName: 'selectVM',
+            placeHolder: l10n.t('Choose a Virtual Machine…'),
+            loadingPlaceHolder: l10n.t('Loading Virtual Machines…'),
+            enableGrouping: true,
+            matchOnDescription: true,
+            suppressPersistence: true,
+        });
 
         context.properties[AzureVMContextProperties.SelectedVM] = selectedVMItem.data;
     }

@@ -18,8 +18,9 @@ interface AccountQuickPickItem extends vscode.QuickPickItem {
 
 export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManagementWizardContext> {
     public async prompt(context: CredentialsManagementWizardContext): Promise<void> {
-        // Create a promise that will resolve to the quick pick items
-        const quickPickItemsPromise = this.getAvailableAccounts(context).then((accounts) => {
+        // Create async function to provide better loading UX and debugging experience
+        const getAccountQuickPickItems = async (): Promise<AccountQuickPickItem[]> => {
+            const accounts = await this.getAvailableAccounts(context);
             context.availableAccounts = accounts;
 
             const accountItems: AccountQuickPickItem[] = accounts.map((account) => ({
@@ -51,9 +52,9 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                     isSignInOption: true,
                 },
             ];
-        });
+        };
 
-        const selectedItem = await context.ui.showQuickPick(quickPickItemsPromise, {
+        const selectedItem = await context.ui.showQuickPick(getAccountQuickPickItems(), {
             stepName: 'selectAccount',
             placeHolder: l10n.t('Select an Azure account to choose which tenants to use'),
             matchOnDescription: true,
