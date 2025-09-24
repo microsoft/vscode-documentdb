@@ -11,6 +11,7 @@ import {
 } from '@microsoft/vscode-azext-azureauth';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
+import { getTenantFilteredSubscriptions } from './subscriptionFiltering';
 
 /**
  * Extends VSCodeAzureSubscriptionProvider to customize tenant and subscription filters
@@ -37,24 +38,17 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
 
     /**
      * Gets subscriptions from the Azure subscription provider and applies tenant filtering.
-     * When getSubscriptions(true) is called, all filtering is handled by the base provider.
-     * When getSubscriptions(false) is called, we manually apply tenant filtering client-side.
+     * Tenant filtering is always applied regardless of the subscription filter parameter.
      *
      * @param filter Whether to apply subscription filtering or a custom filter
-     * @returns Filtered list of subscriptions
+     * @returns Filtered list of subscriptions with tenant filtering applied
      */
     public override async getSubscriptions(filter?: boolean | GetSubscriptionsFilter): Promise<AzureSubscription[]> {
         // Get subscriptions from the base provider with the original filter parameter
         const subscriptions = await super.getSubscriptions(filter);
 
-        // If filter is explicitly false, apply tenant filtering manually
-        // When filter is true/undefined, the base provider already handles all filtering
-        if (filter === false) {
-            const { getTenantFilteredSubscriptions } = await import('./subscriptionFiltering');
-            return getTenantFilteredSubscriptions(subscriptions);
-        }
-
-        return subscriptions;
+        // Always apply tenant filtering regardless of the filter parameter
+        return getTenantFilteredSubscriptions(subscriptions);
     }
 
     /**
