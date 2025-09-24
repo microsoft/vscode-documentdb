@@ -19,7 +19,7 @@ import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
     public contextValue: string =
-        'enableRefreshCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAzureVMRootItem';
+        'enableRefreshCommand;enableManageCredentialsCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAzureVMRootItem';
 
     constructor(
         private readonly azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,

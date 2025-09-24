@@ -20,7 +20,8 @@ export class AzureMongoRUServiceRootItem
     implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren
 {
     public readonly id: string;
-    public contextValue: string = 'enableRefreshCommand;enableFilterCommand;enableLearnMoreCommand;azureMongoRUService';
+    public contextValue: string =
+        'enableRefreshCommand;enableManageCredentialsCommand;enableFilterCommand;enableLearnMoreCommand;azureMongoRUService';
 
     constructor(
         private readonly azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
