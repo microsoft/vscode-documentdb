@@ -13,92 +13,81 @@ import { type CredentialsManagementWizardContext } from './CredentialsManagement
 
 interface TenantQuickPickItem extends vscode.QuickPickItem {
     tenant?: AzureTenant;
-    isSelectAllOption?: boolean;
-    isClearAllOption?: boolean;
 }
 
 export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManagementWizardContext> {
     public async prompt(context: CredentialsManagementWizardContext): Promise<void> {
-        // Get available tenants for the selected account
-        const tenants = await this.getAvailableTenantsForAccount(context);
-
-        // Initialize availableTenants map if not exists
-        if (!context.availableTenants) {
-            context.availableTenants = new Map();
-        }
-
-        // Store tenants for this account
         const selectedAccount = nonNullValue(
             context.selectedAccount,
             'context.selectedAccount',
             'SelectTenantsStep.ts',
         );
-        context.availableTenants.set(selectedAccount.id, tenants);
 
-        // Store all tenants for the selected account in context for ExecuteStep
-        context.allTenants = tenants;
-
-        if (tenants.length === 0) {
-            void vscode.window.showWarningMessage(
-                l10n.t(
-                    'No tenants found for the selected account. Please try signing in again or selecting a different account.',
-                ),
-            );
-            return;
-        }
-
-        // Get currently selected tenant IDs from storage
+        // Get the filtering function
         const { isTenantFilteredOut } = await import('../subscriptionFiltering');
-        const currentlySelectedTenantIds = new Set<string>();
 
-        // Check which tenants are currently selected (not filtered out)
-        for (const tenant of tenants) {
-            if (tenant.tenantId && !isTenantFilteredOut(tenant.tenantId, selectedAccount.id)) {
-                currentlySelectedTenantIds.add(tenant.tenantId);
+        // Create a promise that will resolve to the quick pick items
+        const quickPickItemsPromise = this.getAvailableTenantsForAccount(context).then((tenants) => {
+            // Initialize availableTenants map if not exists
+            if (!context.availableTenants) {
+                context.availableTenants = new Map();
             }
-        }
 
-        // Create quick pick items with checkboxes
-        const tenantItems: TenantQuickPickItem[] = this.createTenantPickItems(tenants, currentlySelectedTenantIds);
+            // Store tenants for this account
+            context.availableTenants.set(selectedAccount.id, tenants);
 
-        // Add control options
-        const controlItems: TenantQuickPickItem[] = [
-            { label: '', kind: vscode.QuickPickItemKind.Separator },
-            {
-                label: l10n.t('$(check-all) Select All'),
-                detail: l10n.t('Select all tenants for this account'),
-                isSelectAllOption: true,
-            },
-            {
-                label: l10n.t('$(clear-all) Clear All'),
-                detail: l10n.t('Clear all selected tenants for this account'),
-                isClearAllOption: true,
-            },
-        ];
+            // Store all tenants for the selected account in context for ExecuteStep
+            context.allTenants = tenants;
 
-        const allItems = [...tenantItems, ...controlItems];
+            if (tenants.length === 0) {
+                void vscode.window.showWarningMessage(
+                    l10n.t(
+                        'No tenants found for the selected account. Please try signing in again or selecting a different account.',
+                    ),
+                );
+                return [];
+            }
 
-        const selectedItems = await context.ui.showQuickPick(allItems, {
+            // Create quick pick items
+            const tenantItems: TenantQuickPickItem[] = tenants.map((tenant) => {
+                const tenantId = tenant.tenantId || '';
+                const displayName = tenant.displayName || tenantId;
+
+                return {
+                    label: displayName,
+                    detail: tenantId,
+                    description: tenant.defaultDomain ?? undefined,
+                    iconPath: new vscode.ThemeIcon('organization'),
+                    tenant,
+                };
+            });
+
+            return tenantItems;
+        });
+
+        const selectedItems = await context.ui.showQuickPick(quickPickItemsPromise, {
             stepName: 'selectTenants',
-            placeHolder: l10n.t('Select tenants to include in discovery (multiple selection)'),
+            placeHolder: l10n.t('Select tenants to use (multiple selection)'),
             canPickMany: true,
             matchOnDescription: true,
             suppressPersistence: true,
-            loadingPlaceHolder: 'Loading...',
+            loadingPlaceHolder: l10n.t('Loading tenants…'),
+            isPickSelected: (pick) => {
+                const tenantPick = pick as TenantQuickPickItem;
+
+                // Check if this tenant is currently selected (not filtered out)
+                if (tenantPick.tenant?.tenantId) {
+                    return !isTenantFilteredOut(tenantPick.tenant.tenantId, selectedAccount.id);
+                }
+
+                return false;
+            },
         });
 
-        // Handle control options
-        if (selectedItems.some((item) => item.isSelectAllOption)) {
-            context.selectedTenants = tenants;
-        } else if (selectedItems.some((item) => item.isClearAllOption)) {
-            context.selectedTenants = [];
-        } else {
-            // Filter out control items and extract tenants
-            const tenantSelections = selectedItems.filter((item) => item.tenant);
-            context.selectedTenants = tenantSelections.map((item) =>
-                nonNullValue(item.tenant, 'item.tenant', 'SelectTenantsStep.ts'),
-            );
-        }
+        // Extract selected tenants
+        context.selectedTenants = selectedItems.map((item) =>
+            nonNullValue(item.tenant, 'item.tenant', 'SelectTenantsStep.ts'),
+        );
     }
 
     public shouldPrompt(context: CredentialsManagementWizardContext): boolean {
@@ -131,25 +120,5 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
             );
             return [];
         }
-    }
-
-    private createTenantPickItems(
-        tenants: AzureTenant[],
-        currentlySelectedTenantIds: Set<string>,
-    ): TenantQuickPickItem[] {
-        return tenants.map((tenant) => {
-            const tenantId = tenant.tenantId || '';
-            const displayName = tenant.displayName || tenantId;
-            const isSelected = currentlySelectedTenantIds.has(tenantId);
-
-            return {
-                label: displayName,
-                description: tenantId,
-                detail: tenant.domains?.[0] || undefined, // Show primary domain if available
-                iconPath: new vscode.ThemeIcon('organization'),
-                picked: isSelected,
-                tenant,
-            };
-        });
     }
 }
