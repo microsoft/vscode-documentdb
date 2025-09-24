@@ -48,10 +48,15 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
         }
 
         // Get currently selected tenant IDs from storage
-        const { getSelectedTenantIds } = await import('../subscriptionFiltering');
-        const allTenantKeys = tenants.map((tenant) => `${tenant.tenantId}/${selectedAccount.id}`);
-        const currentlySelectedTenants = getSelectedTenantIds(allTenantKeys);
-        const currentlySelectedTenantIds = new Set(currentlySelectedTenants.map((id) => id.split('/')[0]));
+        const { isTenantFilteredOut } = await import('../subscriptionFiltering');
+        const currentlySelectedTenantIds = new Set<string>();
+
+        // Check which tenants are currently selected (not filtered out)
+        for (const tenant of tenants) {
+            if (tenant.tenantId && !isTenantFilteredOut(tenant.tenantId, selectedAccount.id)) {
+                currentlySelectedTenantIds.add(tenant.tenantId);
+            }
+        }
 
         // Create quick pick items with checkboxes
         const tenantItems: TenantQuickPickItem[] = this.createTenantPickItems(tenants, currentlySelectedTenantIds);

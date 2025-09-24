@@ -101,14 +101,20 @@ export async function showAzureCredentialsStatus(_context: IActionContext): Prom
         // For status display, we need to get all available tenants to use the filtering function
         const azureSubscriptionProvider = new AzureSubscriptionProviderWithFilters();
         const allTenants = await azureSubscriptionProvider.getTenants();
-        const allTenantKeys = allTenants.map((tenant) => `${tenant.tenantId}/${tenant.account.id}`);
 
-        const { getSelectedTenantIds } = await import('../subscriptionFiltering');
-        const selectedTenantIds = getSelectedTenantIds(allTenantKeys);
+        const { isTenantFilteredOut } = await import('../subscriptionFiltering');
 
         azureSubscriptionProvider.dispose(); // Clean up
 
-        if (selectedTenantIds.length === 0) {
+        // Check which tenants are currently selected (not filtered out)
+        const selectedTenantKeys: string[] = [];
+        for (const tenant of allTenants) {
+            if (tenant.tenantId && !isTenantFilteredOut(tenant.tenantId, tenant.account.id)) {
+                selectedTenantKeys.push(`${tenant.tenantId}/${tenant.account.id}`);
+            }
+        }
+
+        if (selectedTenantKeys.length === 0) {
             void vscode.window.showInformationMessage(
                 l10n.t('No Azure tenant filters are currently configured. All tenants will be included in discovery.'),
             );
@@ -117,7 +123,7 @@ export async function showAzureCredentialsStatus(_context: IActionContext): Prom
 
         // Group by account
         const accountTenantMap = new Map<string, string[]>();
-        for (const tenantAccountId of selectedTenantIds) {
+        for (const tenantAccountId of selectedTenantKeys) {
             const [tenantId, accountId] = tenantAccountId.split('/');
             if (!accountTenantMap.has(accountId)) {
                 accountTenantMap.set(accountId, []);
@@ -158,9 +164,19 @@ export async function clearAzureCredentialsConfiguration(_context: IActionContex
         );
 
         if (confirmResult) {
-            const { setSelectedTenantIds } = await import('../subscriptionFiltering');
-            // For clearing, we pass an empty array for both selected and all tenants
-            await setSelectedTenantIds([], []);
+            // Clear tenant filtering by setting empty unselected tenants array
+            try {
+                const config = vscode.workspace.getConfiguration('azureResourceGroups');
+                await config.update('unselectedTenants', [], vscode.ConfigurationTarget.Global);
+            } catch (error) {
+                console.error(
+                    'Unable to update Azure Resource Groups tenant configuration, using fallback storage.',
+                    error,
+                );
+            } finally {
+                // Always update our fallback storage regardless of primary storage success
+                await ext.context.globalState.update('azure-discovery.unselectedTenants', []);
+            }
 
             ext.outputChannel.appendLine(l10n.t('Azure credentials configuration cleared.'));
             ext.discoveryBranchDataProvider.refresh();

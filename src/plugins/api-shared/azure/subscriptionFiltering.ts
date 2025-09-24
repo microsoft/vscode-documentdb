@@ -12,7 +12,7 @@ import { ext } from '../../../extensionVariables';
 /**
  * Subscription filtering functionality is provided by the `VSCodeAzureSubscriptionProvider`
  * from the `vscode-azuretools` library:
- * https://github.com/tnaum-ms/vscode-azuretools/blob/main/auth/src/VSCodeAzureSubscriptionProvider.ts
+ * https://github.com/microsoft/vscode-azuretools/blob/main/auth/src/VSCodeAzureSubscriptionProvider.ts
  *
  * Although the provider supports filtering subscriptions internally, it does not include built-in
  * UI or configuration logic to manage these filters directly.
@@ -75,17 +75,13 @@ export async function setSelectedSubscriptionIds(subscriptionIds: string[]): Pro
 }
 
 /**
- * Returns the currently selected tenant IDs from the stored configuration.
- * This function syncs with the Azure Resource Groups extension which stores
- * unselected tenants in workspace configuration.
+ * Checks if a tenant is filtered out based on stored tenant filters.
  *
- * The Azure Resource Groups extension uses inverse logic - it stores tenants that
- * are NOT selected, so we need to return all tenants EXCEPT the unselected ones.
- *
- * @param allTenants All available tenant/account combinations in 'tenantId/accountId' format
- * @returns An array of selected tenant IDs with account information in 'tenantId/accountId' format
+ * @param tenantId The tenant ID to check
+ * @param accountId The account ID associated with the tenant
+ * @returns True if the tenant is filtered out (unchecked), false otherwise
  */
-export function getSelectedTenantIds(allTenants: string[]): string[] {
+export function isTenantFilteredOut(tenantId: string, accountId: string): boolean {
     // Try the Azure Resource Groups config first
     const config = vscode.workspace.getConfiguration('azureResourceGroups');
     const unselectedTenants = config.get<string[]>('unselectedTenants', []);
@@ -93,37 +89,26 @@ export function getSelectedTenantIds(allTenants: string[]): string[] {
     // If nothing found there, try our fallback storage
     if (unselectedTenants.length === 0) {
         const fallbackUnselected = ext.context.globalState.get<string[]>('azure-discovery.unselectedTenants', []);
-        return allTenants.filter((tenant) => !fallbackUnselected.includes(tenant));
+        return fallbackUnselected.includes(`${tenantId}/${accountId}`);
     }
 
-    // Sync to our fallback storage if primary storage had data
-    void ext.context.globalState.update('azure-discovery.unselectedTenants', unselectedTenants);
-
-    // Return all tenants except the unselected ones
-    return allTenants.filter((tenant) => !unselectedTenants.includes(tenant));
+    return unselectedTenants.includes(`${tenantId}/${accountId}`);
 }
 
 /**
- * Updates the selected tenant IDs by updating the unselected tenants list.
- * This syncs with the Azure Resource Groups extension which stores unselected tenants.
+ * Filters subscriptions based on tenant selection settings.
+ * Returns only subscriptions from selected tenants.
  *
- * @param selectedTenantIds Array of selected tenant IDs in 'tenantId/accountId' format
- * @param allTenants All available tenant/account combinations in 'tenantId/accountId' format
+ * @param subscriptions All subscriptions returned from the API
+ * @returns Filtered subscriptions from selected tenants only
  */
-export async function setSelectedTenantIds(selectedTenantIds: string[], allTenants: string[]): Promise<void> {
-    // Calculate unselected tenants (inverse logic to match Azure Resource Groups)
-    const unselectedTenants = allTenants.filter((tenant) => !selectedTenantIds.includes(tenant));
+export function getTenantFilteredSubscriptions(subscriptions: AzureSubscription[]): AzureSubscription[] {
+    const filteredSubscriptions = subscriptions.filter(
+        (subscription) => !isTenantFilteredOut(subscription.tenantId, subscription.account.id),
+    );
 
-    try {
-        const config = vscode.workspace.getConfiguration('azureResourceGroups');
-        await config.update('unselectedTenants', unselectedTenants, vscode.ConfigurationTarget.Global);
-    } catch (error) {
-        // Log the error if the Azure Resource Groups config update fails
-        console.error('Unable to update Azure Resource Groups tenant configuration, using fallback storage.', error);
-    } finally {
-        // Always update our fallback storage regardless of primary storage success
-        await ext.context.globalState.update('azure-discovery.unselectedTenants', unselectedTenants);
-    }
+    // If filtering would result in an empty list, return all subscriptions as a fallback
+    return filteredSubscriptions.length > 0 ? filteredSubscriptions : subscriptions;
 }
 
 /**

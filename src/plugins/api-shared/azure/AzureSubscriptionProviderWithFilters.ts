@@ -3,7 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VSCodeAzureSubscriptionProvider, type SubscriptionId, type TenantId } from '@microsoft/vscode-azext-azureauth';
+import {
+    VSCodeAzureSubscriptionProvider,
+    type AzureSubscription,
+    type GetSubscriptionsFilter,
+    type SubscriptionId,
+} from '@microsoft/vscode-azext-azureauth';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 
@@ -31,29 +36,25 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
     }
 
     /**
-     * Override the getTenantFilters method to provide custom tenant filtering
-     * Uses both subscription-based filtering and explicit tenant filtering
+     * Gets subscriptions from the Azure subscription provider and applies tenant filtering.
+     * When getSubscriptions(true) is called, all filtering is handled by the base provider.
+     * When getSubscriptions(false) is called, we manually apply tenant filtering client-side.
+     *
+     * @param filter Whether to apply subscription filtering or a custom filter
+     * @returns Filtered list of subscriptions
      */
-    protected override async getTenantFilters(): Promise<TenantId[]> {
-        // Get tenant filters from subscription selections
-        const fullSubscriptionIds = this.getTenantAndSubscriptionFilters();
-        const subscriptionBasedTenants = fullSubscriptionIds.map((id) => id.split('/')[0]);
+    public override async getSubscriptions(filter?: boolean | GetSubscriptionsFilter): Promise<AzureSubscription[]> {
+        // Get subscriptions from the base provider with the original filter parameter
+        const subscriptions = await super.getSubscriptions(filter);
 
-        // Get all available tenants to pass to getSelectedTenantIds
-        const allTenants = await this.getTenants();
-        const allTenantKeys = allTenants.map((tenant) => `${tenant.tenantId}/${tenant.account.id}`);
-
-        // Get explicit tenant filters using the new signature
-        const { getSelectedTenantIds } = await import('./subscriptionFiltering');
-        const selectedTenantKeys = getSelectedTenantIds(allTenantKeys);
-        const explicitTenants = selectedTenantKeys.map((id) => id.split('/')[0]);
-
-        // Combine both sources, with explicit tenant filtering taking precedence
-        if (explicitTenants.length > 0) {
-            return [...new Set(explicitTenants)]; // Remove duplicates
+        // If filter is explicitly false, apply tenant filtering manually
+        // When filter is true/undefined, the base provider already handles all filtering
+        if (filter === false) {
+            const { getTenantFilteredSubscriptions } = await import('./subscriptionFiltering');
+            return getTenantFilteredSubscriptions(subscriptions);
         }
 
-        return [...new Set(subscriptionBasedTenants)]; // Fallback to subscription-based filtering
+        return subscriptions;
     }
 
     /**
@@ -63,6 +64,6 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
     protected override async getSubscriptionFilters(): Promise<SubscriptionId[]> {
         const fullSubscriptionIds = this.getTenantAndSubscriptionFilters();
         // Extract the subscription IDs from the full IDs (tenantId/subscriptionId)
-        return fullSubscriptionIds.map((id) => id.split('/')[1]);
+        return Promise.resolve(fullSubscriptionIds.map((id) => id.split('/')[1]));
     }
 }
