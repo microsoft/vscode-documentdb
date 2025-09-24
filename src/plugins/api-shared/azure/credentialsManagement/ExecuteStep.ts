@@ -21,16 +21,24 @@ export class ExecuteStep extends AzureWizardExecuteStep<CredentialsManagementWiz
             l10n.t('Saving Azure credentials configuration for account: {0}', selectedAccount.label),
         );
 
-        // Create tenant/account selection identifiers in the format: "tenantId/accountId"
-        const tenantAccountIds = selectedTenants.map((tenant) => `${tenant.tenantId || ''}/${selectedAccount.id}`);
-
-        // Get all available tenants for this account to calculate the full set
+        // Get all available tenants for this account
         const allTenantsForAccount = nonNullValue(context.allTenants, 'context.allTenants', 'ExecuteStep.ts');
-        const allTenantKeys = allTenantsForAccount.map((tenant) => `${tenant.tenantId}/${selectedAccount.id}`);
+        const selectedTenantIds = new Set(selectedTenants.map((tenant) => tenant.tenantId || ''));
 
-        // Save the tenant selections using the centralized function
-        const { setSelectedTenantIds } = await import('../subscriptionFiltering');
-        await setSelectedTenantIds(tenantAccountIds, allTenantKeys);
+        // Use the individual add/remove functions to update tenant selections
+        const { addUnselectedTenant, removeUnselectedTenant } = await import('../subscriptionFiltering');
+
+        // Process each tenant - add to unselected if not selected, remove from unselected if selected
+        for (const tenant of allTenantsForAccount) {
+            const tenantId = tenant.tenantId || '';
+            if (selectedTenantIds.has(tenantId)) {
+                // Tenant is selected, so remove it from unselected list (make it available)
+                await removeUnselectedTenant(tenantId, selectedAccount.id);
+            } else {
+                // Tenant is not selected, so add it to unselected list (filter it out)
+                await addUnselectedTenant(tenantId, selectedAccount.id);
+            }
+        }
 
         ext.outputChannel.appendLine(
             l10n.t(

@@ -198,32 +198,6 @@ export async function removeUnselectedTenant(tenantId: string, accountId: string
 }
 
 /**
- * Updates the unselected tenants list based on selected tenant IDs.
- * This syncs with the Azure Resource Groups extension which stores unselected tenants.
- *
- * @param selectedTenantKeys Array of selected tenant IDs in 'tenantId/accountId' format
- * @param allTenantKeys All available tenant/account combinations in 'tenantId/accountId' format
- */
-export async function setSelectedTenantIds(selectedTenantKeys: string[], allTenantKeys: string[]): Promise<void> {
-    // Calculate unselected tenants (inverse logic to match Azure Resource Groups)
-    const unselectedTenants = allTenantKeys.filter((tenant) => !selectedTenantKeys.includes(tenant));
-
-    try {
-        const azureResourcesConfig = vscode.workspace.getConfiguration('azureResourceGroups');
-        await azureResourcesConfig.update('unselectedTenants', unselectedTenants, vscode.ConfigurationTarget.Global);
-    } catch (error) {
-        // Log the error if the primary storage (Azure Resource Groups config) update fails
-        console.error(
-            'Unable to update primary storage (Azure Resource Groups tenant configuration), using fallback storage.',
-            error,
-        );
-    } finally {
-        // Always update our fallback storage regardless of primary storage success
-        await ext.context.globalState.update('azure-discovery.unselectedTenants', unselectedTenants);
-    }
-}
-
-/**
  * Clears all tenant filtering configuration.
  * This will make all tenants available for discovery.
  */
