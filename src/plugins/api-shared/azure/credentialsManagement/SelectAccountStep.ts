@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
@@ -18,54 +18,58 @@ interface AccountQuickPickItem extends vscode.QuickPickItem {
 
 export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManagementWizardContext> {
     public async prompt(context: CredentialsManagementWizardContext): Promise<void> {
-        // Get all authenticated accounts
-        const accounts = await this.getAvailableAccounts(context);
-        context.availableAccounts = accounts;
+        // Create a promise that will resolve to the quick pick items
+        const quickPickItemsPromise = this.getAvailableAccounts(context).then((accounts) => {
+            context.availableAccounts = accounts;
 
-        // Create quick pick items
-        const accountItems: AccountQuickPickItem[] = this.createAccountPickItems(accounts);
+            const accountItems: AccountQuickPickItem[] = accounts.map((account) => ({
+                label: account.label,
+                detail: account.id,
+                iconPath: new vscode.ThemeIcon('account'),
+                account,
+            }));
 
-        // Add separator and additional options
-        const separatorItems: AccountQuickPickItem[] = [
-            { label: '', kind: vscode.QuickPickItemKind.Separator },
-            {
-                label: l10n.t('$(plus) Sign in with a different account'),
-                detail: l10n.t('Add a new Azure account to VS Code'),
-                isSignInOption: true,
-            },
-            {
-                label: l10n.t('$(question) Learn More'),
-                detail: l10n.t('Learn more about Azure authentication in VS Code'),
-                isLearnMoreOption: true,
-            },
-        ];
+            // Handle empty accounts case
+            if (accountItems.length === 0) {
+                return [
+                    {
+                        label: l10n.t('Sign in to Azure to continue…'),
+                        detail: l10n.t('DocumentDB for VS Code is not signed in to Azure'),
+                        iconPath: new vscode.ThemeIcon('sign-in'),
+                        isSignInOption: true,
+                    },
+                ];
+            }
 
-        const allItems = [...accountItems, ...separatorItems];
+            // Only show "sign in with different account" when there are existing accounts
+            return [
+                ...accountItems,
+                { label: '', kind: vscode.QuickPickItemKind.Separator },
+                {
+                    label: l10n.t('Sign in with a different account…'),
+                    iconPath: new vscode.ThemeIcon('sign-in'),
+                    isSignInOption: true,
+                },
+            ];
+        });
 
-        const selectedItem = await context.ui.showQuickPick(allItems, {
+        const selectedItem = await context.ui.showQuickPick(quickPickItemsPromise, {
             stepName: 'selectAccount',
-            placeHolder: l10n.t('Select an Azure account'),
+            placeHolder: l10n.t('Select an Azure account to choose which tenants to use'),
             matchOnDescription: true,
             suppressPersistence: true,
-            loadingPlaceHolder: 'Loading...',
+            loadingPlaceHolder: l10n.t('Initializing Credentials Management…'),
         });
 
         if (selectedItem.isSignInOption) {
             await this.handleSignIn(context);
+
             // Set flag to restart wizard after sign-in
             context.shouldRestartWizard = true;
-            context.newAccountSignedIn = true;
-            throw new UserCancelledError(l10n.t('Restarting wizard after sign-in'));
-        } else if (selectedItem.isLearnMoreOption) {
-            await this.handleLearnMore();
-            throw new UserCancelledError(l10n.t('User selected learn more'));
-        } else {
-            context.selectedAccount = nonNullValue(
-                selectedItem.account,
-                'selectedItem.account',
-                'SelectAccountStep.ts',
-            );
+            return; // Exit this step, other steps won't run due to shouldPrompt() checks
         }
+
+        context.selectedAccount = nonNullValue(selectedItem.account, 'selectedItem.account', 'SelectAccountStep.ts');
     }
 
     public shouldPrompt(context: CredentialsManagementWizardContext): boolean {
@@ -97,26 +101,6 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
         }
     }
 
-    private createAccountPickItems(accounts: vscode.AuthenticationSessionAccountInformation[]): AccountQuickPickItem[] {
-        if (accounts.length === 0) {
-            return [
-                {
-                    label: l10n.t('No Azure accounts found'),
-                    detail: l10n.t('Sign in to Azure to continue'),
-                    picked: true,
-                    isSignInOption: true,
-                },
-            ];
-        }
-
-        return accounts.map((account) => ({
-            label: account.label,
-            description: account.id,
-            iconPath: new vscode.ThemeIcon('account'),
-            account,
-        }));
-    }
-
     private async handleSignIn(context: CredentialsManagementWizardContext): Promise<void> {
         try {
             ext.outputChannel.appendLine(l10n.t('Starting Azure sign-in process...'));
@@ -124,8 +108,6 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
 
             if (success) {
                 ext.outputChannel.appendLine(l10n.t('Azure sign-in completed successfully'));
-                // Refresh discovery tree to reflect new authentication
-                ext.discoveryBranchDataProvider.refresh();
             } else {
                 ext.outputChannel.appendLine(l10n.t('Azure sign-in was cancelled or failed'));
             }
@@ -135,11 +117,5 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
             void vscode.window.showErrorMessage(l10n.t('Failed to sign in to Azure: {0}', errorMessage));
             throw error;
         }
-    }
-
-    private async handleLearnMore(): Promise<void> {
-        const learnMoreUrl =
-            'https://docs.microsoft.com/en-us/azure/developer/javascript/tutorial-vscode-azure-cli-node-01';
-        await vscode.env.openExternal(vscode.Uri.parse(learnMoreUrl));
     }
 }

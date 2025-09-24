@@ -16,7 +16,7 @@ import { SelectTenantsStep } from './SelectTenantsStep';
 
 /**
  * Configures Azure credentials by allowing the user to select accounts and tenants
- * for filtering Azure discovery results. This replaces the TODO in AzureDiscoveryProvider.
+ * for filtering Azure discovery results.
  *
  * @param context - The action context
  * @param azureSubscriptionProvider - The Azure subscription provider with filtering capabilities
@@ -42,7 +42,6 @@ export async function configureAzureCredentials(
                 [AzureContextProperties.SelectedTenants]: undefined,
                 azureSubscriptionProvider,
                 shouldRestartWizard: false,
-                newAccountSignedIn: false,
             };
 
             // Create and configure the wizard
@@ -55,6 +54,12 @@ export async function configureAzureCredentials(
             // Execute the wizard
             await wizard.prompt();
             await wizard.execute();
+
+            // Check if we need to restart the wizard (e.g., after sign-in)
+            if (wizardContext.shouldRestartWizard) {
+                ext.outputChannel.appendLine(l10n.t('Restarting wizard after account sign-in...'));
+                continue;
+            }
 
             // Success - exit the retry loop
             ext.outputChannel.appendLine(l10n.t('Azure credentials configuration completed successfully.'));

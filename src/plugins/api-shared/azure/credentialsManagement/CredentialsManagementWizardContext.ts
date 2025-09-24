@@ -23,5 +23,4 @@ export interface CredentialsManagementWizardContext extends IActionContext {
 
     // State tracking
     shouldRestartWizard?: boolean;
-    newAccountSignedIn?: boolean;
 }
