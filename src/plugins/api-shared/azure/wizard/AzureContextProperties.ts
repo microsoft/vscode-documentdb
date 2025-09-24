@@ -7,6 +7,4 @@ export enum AzureContextProperties {
     AzureSubscriptionProvider = 'azureSubscriptionProvider',
     SelectedSubscription = 'selectedSubscription',
     SelectedCluster = 'selectedCluster',
-    SelectedAccount = 'selectedAccount',
-    SelectedTenants = 'selectedTenants',
 }

@@ -8,7 +8,6 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
-import { AzureContextProperties } from '../wizard/AzureContextProperties';
 import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 import { SelectAccountStep } from './SelectAccountStep';
@@ -34,8 +33,8 @@ export async function configureAzureCredentials(
             // Create wizard context
             wizardContext = {
                 ...context,
-                [AzureContextProperties.SelectedAccount]: undefined,
-                [AzureContextProperties.SelectedTenants]: undefined,
+                selectedAccount: undefined,
+                selectedTenants: undefined,
                 azureSubscriptionProvider,
                 shouldRestartWizard: false,
             };
@@ -53,8 +52,6 @@ export async function configureAzureCredentials(
 
             if (wizardContext.shouldRestartWizard) {
                 ext.outputChannel.appendLine(l10n.t('Restarting wizard after account sign-in...'));
-            } else {
-                ext.outputChannel.appendLine(l10n.t('Azure credentials configuration completed successfully.'));
             }
         } catch (error) {
             if (error instanceof UserCancelledError) {
