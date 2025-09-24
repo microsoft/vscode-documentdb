@@ -9,6 +9,7 @@ import * as l10n from '@vscode/l10n';
 import { Uri, window, type MessageItem, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
+import { getDuplicateSubscriptions } from '../subscriptionFiltering';
 import { AzureContextProperties } from './AzureContextProperties';
 
 export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
@@ -53,44 +54,60 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             throw new UserCancelledError(l10n.t('User is not signed in to Azure.'));
         }
 
-        const subscriptions = await subscriptionProvider.getSubscriptions(false);
+        // Store subscriptions outside the async function so we can access them later
+        let subscriptions!: Awaited<ReturnType<typeof subscriptionProvider.getSubscriptions>>;
 
-        // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
-        // Note to future maintainers: we used to run getSubscriptions and getTenants "in parallel", however
-        // this lead to incorrect responses from getSubscriptions. We didn't investigate
-        const tenantPromise = subscriptionProvider.getTenants().catch(() => undefined);
-        const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
-        const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
+        // Create async function to provide better loading UX and debugging experience
+        const getSubscriptionQuickPickItems = async (): Promise<(QuickPickItem & { id: string })[]> => {
+            subscriptions = await subscriptionProvider.getSubscriptions(false);
 
-        // Build tenant display name lookup for better UX
-        const tenantDisplayNames = new Map<string, string>();
+            // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
+            // Note to future maintainers: we used to run getSubscriptions and getTenants "in parallel", however
+            // this lead to incorrect responses from getSubscriptions. We didn't investigate
+            const tenantPromise = subscriptionProvider.getTenants().catch(() => undefined);
+            const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
+            const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
 
-        if (knownTenants) {
-            for (const tenant of knownTenants) {
-                if (tenant.tenantId && tenant.displayName) {
-                    tenantDisplayNames.set(tenant.tenantId, tenant.displayName);
+            // Build tenant display name lookup for better UX
+            const tenantDisplayNames = new Map<string, string>();
+
+            if (knownTenants) {
+                for (const tenant of knownTenants) {
+                    if (tenant.tenantId && tenant.displayName) {
+                        tenantDisplayNames.set(tenant.tenantId, tenant.displayName);
+                    }
                 }
             }
-        }
 
-        const promptItems: (QuickPickItem & { id: string })[] = subscriptions
-            .map((subscription) => {
-                const tenantName = tenantDisplayNames.get(subscription.tenantId);
-                const description = tenantName
-                    ? `${subscription.subscriptionId} (${tenantName})`
-                    : subscription.subscriptionId;
+            // Use duplicate detection logic from subscriptionFiltering
+            const duplicates = getDuplicateSubscriptions(subscriptions);
 
-                return {
-                    id: subscription.subscriptionId,
-                    label: subscription.name,
-                    description,
-                    iconPath: this.iconPath,
-                    alwaysShow: true,
-                };
-            })
-            .sort((a, b) => a.label.localeCompare(b.label));
+            return subscriptions
+                .map((subscription) => {
+                    const tenantName = tenantDisplayNames.get(subscription.tenantId);
 
-        const selectedItem = await context.ui.showQuickPick([...promptItems], {
+                    // Handle duplicate subscription names by adding account label
+                    const label = duplicates.includes(subscription)
+                        ? `${subscription.name} (${subscription.account?.label})`
+                        : subscription.name;
+
+                    // Build description with tenant information
+                    const description = tenantName
+                        ? `${subscription.subscriptionId} (${tenantName})`
+                        : subscription.subscriptionId;
+
+                    return {
+                        id: subscription.subscriptionId,
+                        label,
+                        description,
+                        iconPath: this.iconPath,
+                        alwaysShow: true,
+                    };
+                })
+                .sort((a, b) => a.label.localeCompare(b.label));
+        };
+
+        const selectedItem = await context.ui.showQuickPick(getSubscriptionQuickPickItems(), {
             stepName: 'selectSubscription',
             placeHolder: l10n.t('Choose a subscription…'),
             loadingPlaceHolder: l10n.t('Loading subscriptions…'),
@@ -99,6 +116,7 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             suppressPersistence: true,
         });
 
+        // Use the subscriptions we already loaded (no second API call needed)
         context.properties[AzureContextProperties.SelectedSubscription] = subscriptions.find(
             (subscription) => subscription.subscriptionId === selectedItem.id,
         );

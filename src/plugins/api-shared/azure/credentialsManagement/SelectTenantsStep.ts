@@ -9,6 +9,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { nonNullValue } from '../../../../utils/nonNull';
+import { isTenantFilteredOut } from '../subscriptionFiltering';
 import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
 
 interface TenantQuickPickItem extends vscode.QuickPickItem {
@@ -22,9 +23,6 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
             'context.selectedAccount',
             'SelectTenantsStep.ts',
         );
-
-        // Get the filtering function
-        const { isTenantFilteredOut } = await import('../subscriptionFiltering');
 
         // Create a promise that will resolve to the quick pick items
         const quickPickItemsPromise = this.getAvailableTenantsForAccount(context).then((tenants) => {
@@ -67,7 +65,7 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
 
         const selectedItems = await context.ui.showQuickPick(quickPickItemsPromise, {
             stepName: 'selectTenants',
-            placeHolder: l10n.t('Select tenants to use (multiple selection)'),
+            placeHolder: l10n.t('Select tenants to use'),
             canPickMany: true,
             matchOnDescription: true,
             suppressPersistence: true,

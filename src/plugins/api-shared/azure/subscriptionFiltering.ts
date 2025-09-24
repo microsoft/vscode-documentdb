@@ -216,27 +216,48 @@ export async function configureAzureSubscriptionFilter(
         const allSubscriptions = await azureSubscriptionProvider.getSubscriptions(false); // Get all unfiltered subscriptions
         const duplicates = getDuplicateSubscriptions(allSubscriptions);
 
+        // Get tenant information for better UX (similar to SelectSubscriptionStep)
+        const tenantPromise = azureSubscriptionProvider.getTenants().catch(() => undefined);
+        const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
+        const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
+
+        // Build tenant display name lookup for better UX
+        const tenantDisplayNames = new Map<string, string>();
+        if (knownTenants) {
+            for (const tenant of knownTenants) {
+                if (tenant.tenantId && tenant.displayName) {
+                    tenantDisplayNames.set(tenant.tenantId, tenant.displayName);
+                }
+            }
+        }
+
         return allSubscriptions
-            .map(
-                (subscription) =>
-                    <IAzureQuickPickItem<AzureSubscription>>{
-                        label: duplicates.includes(subscription)
-                            ? subscription.name + ` (${subscription.account?.label})`
-                            : subscription.name,
-                        description: subscription.subscriptionId,
-                        data: subscription,
-                        group: subscription.account.label,
-                        iconPath: vscode.Uri.joinPath(
-                            ext.context.extensionUri,
-                            'resources',
-                            'from_node_modules',
-                            '@microsoft',
-                            'vscode-azext-azureutils',
-                            'resources',
-                            'azureSubscription.svg',
-                        ),
-                    },
-            )
+            .map((subscription) => {
+                const tenantName = tenantDisplayNames.get(subscription.tenantId);
+
+                // Build description with tenant information
+                const description = tenantName
+                    ? `${subscription.subscriptionId} (${tenantName})`
+                    : subscription.subscriptionId;
+
+                return <IAzureQuickPickItem<AzureSubscription>>{
+                    label: duplicates.includes(subscription)
+                        ? subscription.name + ` (${subscription.account?.label})`
+                        : subscription.name,
+                    description,
+                    data: subscription,
+                    group: subscription.account.label,
+                    iconPath: vscode.Uri.joinPath(
+                        ext.context.extensionUri,
+                        'resources',
+                        'from_node_modules',
+                        '@microsoft',
+                        'vscode-azext-azureutils',
+                        'resources',
+                        'azureSubscription.svg',
+                    ),
+                };
+            })
             .sort((a, b) => a.label.localeCompare(b.label));
     };
 
