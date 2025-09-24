@@ -140,8 +140,7 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
     }
 
     private async showEmptyStateModal(): Promise<'configure' | 'cancel'> {
-        const configure = l10n.t('Configure');
-        const cancel = l10n.t('Cancel');
+        const configure = l10n.t('Yes, Manage Credentials');
 
         const result = await window.showInformationMessage(
             l10n.t('No Azure Subscriptions Found'),
@@ -153,7 +152,6 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
                 ),
             },
             { title: configure, isCloseAffordance: false },
-            { title: cancel, isCloseAffordance: true }, // Default button
         );
 
         return result?.title === configure ? 'configure' : 'cancel';
@@ -171,11 +169,11 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
     private async showRetryInstructions(): Promise<void> {
         await window.showInformationMessage(
-            l10n.t('Azure credentials configured successfully'),
+            l10n.t('Credential Management Finished'),
             {
                 modal: true,
                 detail: l10n.t(
-                    'Your Azure credentials have been updated. Please try the service discovery again to see your available subscriptions.',
+                    'The credential management flow has completed. Please try Service Discovery again to see your available subscriptions.',
                 ),
             },
             l10n.t('OK'),
