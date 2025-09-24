@@ -62,10 +62,11 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
         });
 
         if (selectedItem.isSignInOption) {
-            await this.handleSignIn(context);
-
             // Set flag to restart wizard after sign-in
             context.shouldRestartWizard = true;
+
+            await this.handleSignIn(context);
+
             return; // Exit this step, other steps won't run due to shouldPrompt() checks
         }
 

@@ -3,11 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export {
-    clearAzureCredentialsConfiguration,
-    configureAzureCredentials,
-    showAzureCredentialsStatus,
-} from './configureAzureCredentials';
+export { configureAzureCredentials } from './configureAzureCredentials';
 export type { CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
 export { ExecuteStep } from './ExecuteStep';
 export { SelectAccountStep } from './SelectAccountStep';
