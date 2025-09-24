@@ -9,6 +9,7 @@ import * as l10n from '@vscode/l10n';
 import { Uri, window, type MessageItem, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
+import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
 import { getDuplicateSubscriptions } from '../subscriptionFiltering';
 import { AzureContextProperties } from './AzureContextProperties';
 
@@ -79,6 +80,18 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
                 }
             }
 
+            // Check for empty state first
+            if (subscriptions.length === 0) {
+                // Show modal dialog for empty state
+                const configureResult = await this.showEmptyStateModal();
+                if (configureResult === 'configure') {
+                    await this.configureCredentialsFromWizard(context, subscriptionProvider);
+                    await this.showRetryInstructions();
+                }
+                // Both paths abort the wizard
+                throw new UserCancelledError('No subscriptions available');
+            }
+
             // Use duplicate detection logic from subscriptionFiltering
             const duplicates = getDuplicateSubscriptions(subscriptions);
 
@@ -124,5 +137,48 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
     public shouldPrompt(): boolean {
         return true;
+    }
+
+    private async showEmptyStateModal(): Promise<'configure' | 'cancel'> {
+        const configure = l10n.t('Configure');
+        const cancel = l10n.t('Cancel');
+
+        const result = await window.showInformationMessage(
+            l10n.t('No Azure Subscriptions Found'),
+            {
+                modal: true,
+                detail: l10n.t(
+                    'To connect to Azure resources, you need to configure your Azure credentials and tenant access.\n\n' +
+                        'Would you like to configure your Azure credentials now?',
+                ),
+            },
+            { title: configure, isCloseAffordance: false },
+            { title: cancel, isCloseAffordance: true }, // Default button
+        );
+
+        return result?.title === configure ? 'configure' : 'cancel';
+    }
+
+    private async configureCredentialsFromWizard(
+        context: NewConnectionWizardContext,
+        subscriptionProvider: VSCodeAzureSubscriptionProvider,
+    ): Promise<void> {
+        // Call the credentials management function directly using the subscription provider from context
+        // The subscription provider in the wizard context is actually AzureSubscriptionProviderWithFilters
+        const { configureAzureCredentials } = await import('../credentialsManagement');
+        await configureAzureCredentials(context, subscriptionProvider as AzureSubscriptionProviderWithFilters);
+    }
+
+    private async showRetryInstructions(): Promise<void> {
+        await window.showInformationMessage(
+            l10n.t('Azure credentials configured successfully'),
+            {
+                modal: true,
+                detail: l10n.t(
+                    'Your Azure credentials have been updated. Please try the service discovery again to see your available subscriptions.',
+                ),
+            },
+            l10n.t('OK'),
+        );
     }
 }

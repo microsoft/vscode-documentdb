@@ -70,4 +70,20 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
             ext.discoveryBranchDataProvider.refresh(node);
         }
     }
+
+    async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {
+        if (!node || node instanceof AzureServiceRootItem) {
+            // Use the new Azure credentials configuration wizard
+            const { configureAzureCredentials } = await import('../api-shared/azure/credentialsManagement');
+            await configureAzureCredentials(context, this.azureSubscriptionProvider);
+
+            if (node) {
+                // Tree context: refresh specific node
+                ext.discoveryBranchDataProvider.refresh(node);
+            } else {
+                // Wizard context: refresh entire discovery tree
+                ext.discoveryBranchDataProvider.refresh();
+            }
+        }
+    }
 }
