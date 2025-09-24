@@ -5,7 +5,6 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { nonNullValue } from '../../../../utils/nonNull';
 import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
@@ -29,22 +28,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<CredentialsManagementWiz
         const allTenantsForAccount = nonNullValue(context.allTenants, 'context.allTenants', 'ExecuteStep.ts');
         const allTenantKeys = allTenantsForAccount.map((tenant) => `${tenant.tenantId}/${selectedAccount.id}`);
 
-        // Calculate unselected tenants (inverse logic to match Azure Resource Groups)
-        const unselectedTenants = allTenantKeys.filter((tenant) => !tenantAccountIds.includes(tenant));
-
-        // Save unselected tenants to workspace configuration (with fallback to globalState)
-        try {
-            const config = vscode.workspace.getConfiguration('azureResourceGroups');
-            await config.update('unselectedTenants', unselectedTenants, vscode.ConfigurationTarget.Global);
-        } catch (error) {
-            console.error(
-                'Unable to update Azure Resource Groups tenant configuration, using fallback storage.',
-                error,
-            );
-        } finally {
-            // Always update our fallback storage regardless of primary storage success
-            await ext.context.globalState.update('azure-discovery.unselectedTenants', unselectedTenants);
-        }
+        // Save the tenant selections using the centralized function
+        const { setSelectedTenantIds } = await import('../subscriptionFiltering');
+        await setSelectedTenantIds(tenantAccountIds, allTenantKeys);
 
         ext.outputChannel.appendLine(
             l10n.t(
