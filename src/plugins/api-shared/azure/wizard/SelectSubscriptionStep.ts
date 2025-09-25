@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import { VSCodeAzureSubscriptionProvider, type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { QuickPickItemKind, ThemeIcon, Uri, window, type MessageItem, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
-import { getDuplicateSubscriptions, getTenantFilteredSubscriptions } from '../subscriptionFiltering';
+import { getDuplicateSubscriptions } from '../subscriptionFiltering';
 import { AzureContextProperties } from './AzureContextProperties';
 
 export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
@@ -56,12 +56,12 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
         }
 
         // Store subscriptions outside the async function so we can access them later
-        let subscriptions!: Awaited<ReturnType<typeof subscriptionProvider.getSubscriptions>>;
+        let subscriptions!: Awaited<AzureSubscription[]>;
 
         // Create async function to provide better loading UX and debugging experience
         const getSubscriptionQuickPickItems = async (): Promise<(QuickPickItem & { id: string })[]> => {
-            const allSubscriptions = await subscriptionProvider.getSubscriptions(false);
-            subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
+            // Note: No tenant filtering here, because this flow should allow the user to access everything with no filtering.
+            subscriptions = await subscriptionProvider.getSubscriptions(false);
 
             // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
             // Note to future maintainers: we used to run getSubscriptions and getTenants "in parallel", however
