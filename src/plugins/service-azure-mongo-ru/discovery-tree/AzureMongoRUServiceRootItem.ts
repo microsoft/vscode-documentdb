@@ -14,6 +14,7 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { getTenantFilteredSubscriptions } from '../../api-shared/azure/subscriptionFiltering';
 import { AzureMongoRUSubscriptionItem } from './AzureMongoRUSubscriptionItem';
 
 export class AzureMongoRUServiceRootItem
@@ -57,7 +58,8 @@ export class AzureMongoRUServiceRootItem
             ];
         }
 
-        const subscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
+        const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
+        const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
         if (!subscriptions || subscriptions.length === 0) {
             return [];
         }

@@ -14,6 +14,7 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { getTenantFilteredSubscriptions } from '../../api-shared/azure/subscriptionFiltering';
 import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
 export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
@@ -55,7 +56,8 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
             ];
         }
 
-        const subscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
+        const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
+        const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
         if (!subscriptions || subscriptions.length === 0) {
             return [];
         }

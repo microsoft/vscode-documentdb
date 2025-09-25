@@ -220,10 +220,11 @@ export async function configureAzureSubscriptionFilter(
     const subscriptionQuickPickItems: () => Promise<IAzureQuickPickItem<AzureSubscription>[]> = async () => {
         const subscriptionLoadStartTime = Date.now();
         const allSubscriptions = await azureSubscriptionProvider.getSubscriptions(false); // Get all unfiltered subscriptions
-        const duplicates = getDuplicateSubscriptions(allSubscriptions);
+        const subscriptions = getTenantFilteredSubscriptions(allSubscriptions); // Apply tenant filtering
+        const duplicates = getDuplicateSubscriptions(subscriptions);
 
         // Add telemetry for subscription loading
-        context.telemetry.measurements.totalSubscriptionsAvailable = allSubscriptions.length;
+        context.telemetry.measurements.totalSubscriptionsAvailable = subscriptions.length;
         context.telemetry.measurements.duplicateSubscriptionsCount = duplicates.length;
         context.telemetry.measurements.subscriptionLoadingTimeMs = Date.now() - subscriptionLoadStartTime;
 
@@ -245,7 +246,7 @@ export async function configureAzureSubscriptionFilter(
         // Add telemetry for tenant information
         context.telemetry.measurements.tenantsWithSubscriptionsCount = tenantDisplayNames.size;
 
-        return allSubscriptions
+        return subscriptions
             .map((subscription) => {
                 const tenantName = tenantDisplayNames.get(subscription.tenantId);
 

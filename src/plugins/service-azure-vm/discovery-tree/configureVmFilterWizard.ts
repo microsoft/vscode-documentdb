@@ -17,6 +17,7 @@ import { ext } from '../../../extensionVariables';
 import {
     getDuplicateSubscriptions,
     getSelectedSubscriptionIds,
+    getTenantFilteredSubscriptions,
     setSelectedSubscriptionIds,
 } from '../../api-shared/azure/subscriptionFiltering';
 
@@ -48,9 +49,10 @@ class SubscriptionFilterStep extends AzureWizardPromptStep<ConfigureVmFilterWiza
             IAzureQuickPickItem<AzureSubscription>[]
         > = async () => {
             const allSubscriptions = await azureSubscriptionProvider.getSubscriptions(false); // Get all unfiltered subscriptions
-            const duplicates = getDuplicateSubscriptions(allSubscriptions);
+            const subscriptions = getTenantFilteredSubscriptions(allSubscriptions); // Apply tenant filtering
+            const duplicates = getDuplicateSubscriptions(subscriptions);
 
-            return allSubscriptions
+            return subscriptions
                 .map(
                     (subscription) =>
                         <IAzureQuickPickItem<AzureSubscription>>{

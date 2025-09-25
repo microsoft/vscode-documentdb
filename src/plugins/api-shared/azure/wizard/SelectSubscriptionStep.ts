@@ -10,7 +10,7 @@ import { QuickPickItemKind, ThemeIcon, Uri, window, type MessageItem, type Quick
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
-import { getDuplicateSubscriptions } from '../subscriptionFiltering';
+import { getDuplicateSubscriptions, getTenantFilteredSubscriptions } from '../subscriptionFiltering';
 import { AzureContextProperties } from './AzureContextProperties';
 
 export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
@@ -60,7 +60,8 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
         // Create async function to provide better loading UX and debugging experience
         const getSubscriptionQuickPickItems = async (): Promise<(QuickPickItem & { id: string })[]> => {
-            subscriptions = await subscriptionProvider.getSubscriptions(false);
+            const allSubscriptions = await subscriptionProvider.getSubscriptions(false);
+            subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
 
             // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
             // Note to future maintainers: we used to run getSubscriptions and getTenants "in parallel", however
