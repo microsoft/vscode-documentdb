@@ -71,7 +71,7 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
             canPickMany: true,
             matchOnDescription: true,
             suppressPersistence: true,
-            loadingPlaceHolder: l10n.t('Loading tenants…'),
+            loadingPlaceHolder: l10n.t('Loading Tenants…'),
             isPickSelected: (pick) => {
                 const tenantPick = pick as TenantQuickPickItem;
 

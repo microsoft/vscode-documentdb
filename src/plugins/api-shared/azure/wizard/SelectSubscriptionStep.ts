@@ -6,7 +6,7 @@
 import { VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { Uri, window, type MessageItem, type QuickPickItem } from 'vscode';
+import { QuickPickItemKind, ThemeIcon, Uri, window, type MessageItem, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
@@ -83,7 +83,7 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             // Check for empty state first
             if (subscriptions.length === 0) {
                 // Show modal dialog for empty state
-                const configureResult = await this.showEmptyStateModal();
+                const configureResult = await this.askToConfigureCredentials();
                 if (configureResult === 'configure') {
                     await this.configureCredentialsFromWizard(context, subscriptionProvider);
                     await this.showRetryInstructions();
@@ -95,7 +95,7 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             // Use duplicate detection logic from subscriptionFiltering
             const duplicates = getDuplicateSubscriptions(subscriptions);
 
-            return subscriptions
+            const subscriptionItems = subscriptions
                 .map((subscription) => {
                     const tenantName = tenantDisplayNames.get(subscription.tenantId);
 
@@ -118,16 +118,37 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
                     };
                 })
                 .sort((a, b) => a.label.localeCompare(b.label));
+
+            // Add edit entry at the top
+            return [
+                {
+                    id: 'editAccountsAndTenants',
+                    label: l10n.t('Edit account and tenant filters…'),
+                    iconPath: new ThemeIcon('settings-gear'),
+                    alwaysShow: true,
+                },
+                { id: 'separator', label: '', kind: QuickPickItemKind.Separator },
+                ...subscriptionItems,
+            ];
         };
 
         const selectedItem = await context.ui.showQuickPick(getSubscriptionQuickPickItems(), {
             stepName: 'selectSubscription',
-            placeHolder: l10n.t('Choose a subscription…'),
-            loadingPlaceHolder: l10n.t('Loading subscriptions…'),
+            placeHolder: l10n.t('Choose a Subscription…'),
+            loadingPlaceHolder: l10n.t('Loading Subscriptions…'),
             enableGrouping: false,
             matchOnDescription: true,
             suppressPersistence: true,
         });
+
+        // Handle edit accounts and tenants selection
+        if (selectedItem.id === 'editAccountsAndTenants') {
+            await this.configureCredentialsFromWizard(context, subscriptionProvider);
+            await this.showRetryInstructions();
+
+            // Exit wizard - user needs to restart service discovery
+            throw new UserCancelledError('Account and tenant filters updated');
+        }
 
         // Use the subscriptions we already loaded (no second API call needed)
         context.properties[AzureContextProperties.SelectedSubscription] = subscriptions.find(
@@ -139,8 +160,8 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
         return true;
     }
 
-    private async showEmptyStateModal(): Promise<'configure' | 'cancel'> {
-        const configure = l10n.t('Yes, Manage Credentials');
+    private async askToConfigureCredentials(): Promise<'configure' | 'cancel'> {
+        const configure = l10n.t('Yes, Configure Credentials');
 
         const result = await window.showInformationMessage(
             l10n.t('No Azure Subscriptions Found'),
@@ -151,7 +172,7 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
                         'Would you like to configure your Azure credentials now?',
                 ),
             },
-            { title: configure, isCloseAffordance: false },
+            { title: configure },
         );
 
         return result?.title === configure ? 'configure' : 'cancel';
@@ -169,11 +190,11 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
     private async showRetryInstructions(): Promise<void> {
         await window.showInformationMessage(
-            l10n.t('Credential Management Finished'),
+            l10n.t('Credential Management Completed'),
             {
                 modal: true,
                 detail: l10n.t(
-                    'The credential management flow has completed. Please try Service Discovery again to see your available subscriptions.',
+                    'The credential management flow has completed.\n\nPlease try Service Discovery again to see your available subscriptions.',
                 ),
             },
             l10n.t('OK'),
