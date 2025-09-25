@@ -76,7 +76,7 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
                 const tenantPick = pick as TenantQuickPickItem;
 
                 // Check if this tenant is currently selected (not filtered out)
-                if (tenantPick.tenant?.tenantId) {
+                if (tenantPick.tenant?.tenantId && selectedAccount?.id) {
                     return !isTenantFilteredOut(tenantPick.tenant.tenantId, selectedAccount.id);
                 }
 
