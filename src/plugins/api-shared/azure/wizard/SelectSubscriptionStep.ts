@@ -123,8 +123,8 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             return [
                 {
                     id: 'editAccountsAndTenants',
-                    label: l10n.t('Edit account and tenant filters…'),
-                    iconPath: new ThemeIcon('settings-gear'),
+                    label: l10n.t('Sign in to other Azure accounts or tenants to access more subscriptions'),
+                    iconPath: new ThemeIcon('key'),
                     alwaysShow: true,
                 },
                 { id: 'separator', label: '', kind: QuickPickItemKind.Separator },

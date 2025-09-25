@@ -332,7 +332,7 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.manageCredentials",
         "title": "Manage Credentials…",
-        "icon": "$(organization)"
+        "icon": "$(key)"
       },
       {
         "//": "[DiscoveryView] Filter Provider Content",
