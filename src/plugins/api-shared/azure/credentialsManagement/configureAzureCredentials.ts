@@ -114,6 +114,12 @@ export async function configureAzureCredentials(
             }
 
             await configureAzureCredentialsInternal(telemetryContext, azureSubscriptionProvider);
+
+            // Copy the credentials management result to the outer context so providers can access it
+            if (telemetryContext.telemetry.properties.credentialsManagementResult) {
+                context.telemetry.properties.credentialsManagementResult =
+                    telemetryContext.telemetry.properties.credentialsManagementResult;
+            }
         },
     );
 }

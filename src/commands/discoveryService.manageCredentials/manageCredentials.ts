@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { l10n } from 'vscode';
+import { commands, l10n, window } from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
@@ -53,6 +53,36 @@ export async function manageCredentials(context: IActionContext, node: TreeEleme
         ext.discoveryBranchDataProvider.refresh(node as TreeElement);
 
         context.telemetry.properties.result = 'Succeeded';
+
+        // Only show notification if credentials were actually managed successfully (user didn't cancel)
+        // TODO: this is not the best way to do this, but this feature has to ship. Refactor to expose results as a result object
+        if (context.telemetry.properties.credentialsManagementResult === 'Succeeded') {
+            // Show informational message about potential entry filtering conflicts
+            // This is only shown when credentials are managed from explicit commands, not from wizards,
+            // because that's where users interact with settings explicitly and the message makes sense.
+            // Adding it to every call to the management wizard might put too high mental load on the user.
+            if (provider?.configureTreeItemFilter) {
+                const filterAction = l10n.t('Filter Entries Now');
+                const cancelAction = l10n.t('Cancel');
+                const selectedAction = await window.showInformationMessage(
+                    l10n.t(
+                        'Credential update completed. If you don\'t see expected entries, use the optional "Filter Entries…" option to adjust your filters.',
+                    ),
+                    filterAction,
+                    cancelAction,
+                );
+
+                if (selectedAction === filterAction) {
+                    await commands.executeCommand(
+                        'vscode-documentdb.command.discoveryView.filterProviderContent',
+                        node,
+                    );
+                }
+                // If selectedAction === cancelAction or undefined (ESC pressed), we do nothing
+            } else {
+                void window.showInformationMessage(l10n.t('Credential update completed.'));
+            }
+        }
     } catch (error) {
         context.telemetry.properties.result = 'Failed';
         context.telemetry.properties.errorReason = 'configureCredentialsThrew';
