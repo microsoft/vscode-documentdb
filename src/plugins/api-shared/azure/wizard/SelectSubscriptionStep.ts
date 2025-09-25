@@ -182,10 +182,18 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
         context: NewConnectionWizardContext,
         subscriptionProvider: VSCodeAzureSubscriptionProvider,
     ): Promise<void> {
+        // Add telemetry for credential configuration activation
+        context.telemetry.properties.credentialConfigActivated = 'true';
+        context.telemetry.properties.nodeProvided = 'false';
+
         // Call the credentials management function directly using the subscription provider from context
         // The subscription provider in the wizard context is actually AzureSubscriptionProviderWithFilters
         const { configureAzureCredentials } = await import('../credentialsManagement');
-        await configureAzureCredentials(context, subscriptionProvider as AzureSubscriptionProviderWithFilters);
+        await configureAzureCredentials(
+            context,
+            subscriptionProvider as AzureSubscriptionProviderWithFilters,
+            undefined,
+        );
     }
 
     private async showRetryInstructions(): Promise<void> {

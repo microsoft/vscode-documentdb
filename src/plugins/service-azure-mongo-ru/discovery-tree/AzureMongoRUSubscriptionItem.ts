@@ -39,11 +39,16 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
         return await callWithTelemetryAndErrorHandling(
             'azure-mongo-ru-discovery.getChildren',
             async (context: IActionContext) => {
+                const startTime = Date.now();
                 context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';
 
                 const managementClient = await createCosmosDBManagementClient(context, this.subscription.subscription);
                 const allAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
                 const accounts = allAccounts.filter((account) => account.kind === 'MongoDB');
+
+                // Add enhanced telemetry for discovery
+                context.telemetry.measurements.discoveryResourcesCount = accounts.length;
+                context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
 
                 return accounts
                     .sort((a, b) => (a.name || '').localeCompare(b.name || ''))

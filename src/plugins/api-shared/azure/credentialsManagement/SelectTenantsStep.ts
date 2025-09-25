@@ -26,7 +26,12 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
 
         // Create async function to provide better loading UX and debugging experience
         const getTenantQuickPickItems = async (): Promise<TenantQuickPickItem[]> => {
+            const loadStartTime = Date.now();
             const tenants = await this.getAvailableTenantsForAccount(context);
+
+            // Add telemetry for tenant loading
+            context.telemetry.measurements.availableTenantsCount = tenants.length;
+            context.telemetry.measurements.tenantLoadingTimeMs = Date.now() - loadStartTime;
 
             // Initialize availableTenants map if not exists
             if (!context.availableTenants) {
@@ -88,6 +93,13 @@ export class SelectTenantsStep extends AzureWizardPromptStep<CredentialsManageme
         context.selectedTenants = selectedItems.map((item) =>
             nonNullValue(item.tenant, 'item.tenant', 'SelectTenantsStep.ts'),
         );
+
+        // Add telemetry for tenant selection
+        const totalTenants = context.allTenants?.length ?? 0;
+        context.telemetry.measurements.selectedTenantsCount = selectedItems.length;
+        context.telemetry.measurements.unselectedTenantsCount = totalTenants - selectedItems.length;
+        context.telemetry.properties.allTenantsSelected = (selectedItems.length === totalTenants).toString();
+        context.telemetry.properties.noTenantsSelected = (selectedItems.length === 0).toString();
     }
 
     public shouldPrompt(context: CredentialsManagementWizardContext): boolean {

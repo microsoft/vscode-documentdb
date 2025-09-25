@@ -66,10 +66,15 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
     }
 
     async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {
+        // Add telemetry for credential configuration activation
+        context.telemetry.properties.credentialConfigActivated = 'true';
+        context.telemetry.properties.discoveryProviderId = this.id;
+        context.telemetry.properties.nodeProvided = node ? 'true' : 'false';
+
         if (!node || node instanceof AzureServiceRootItem) {
             // Use the new Azure credentials configuration wizard
             const { configureAzureCredentials } = await import('../api-shared/azure/credentialsManagement');
-            await configureAzureCredentials(context, this.azureSubscriptionProvider);
+            await configureAzureCredentials(context, this.azureSubscriptionProvider, node);
 
             if (node) {
                 // Tree context: refresh specific node

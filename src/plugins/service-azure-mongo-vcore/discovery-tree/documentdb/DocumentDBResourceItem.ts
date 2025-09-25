@@ -50,6 +50,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
+            context.telemetry.properties.resourceType = 'mongoVCore';
 
             // Retrieve and validate cluster information (throws if invalid)
             const clusterInformation = await getClusterInformationFromAzure(
@@ -82,8 +83,11 @@ export class DocumentDBResourceItem extends ClusterItemBase {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            const connectionStartTime = Date.now();
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
+            context.telemetry.properties.connectionInitiatedFrom = 'discoveryView';
+            context.telemetry.properties.resourceType = 'mongoVCore';
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -153,8 +157,17 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                     }),
                 );
 
+                // Add success telemetry
+                context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                context.telemetry.properties.connectionResult = 'success';
+
                 return clustersClient;
             } catch (error) {
+                // Add error telemetry
+                context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                context.telemetry.properties.connectionResult = 'failed';
+                context.telemetry.properties.connectionErrorType = error instanceof Error ? error.name : 'UnknownError';
+
                 ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
 
                 void vscode.window.showErrorMessage(
@@ -196,6 +209,8 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         await callWithTelemetryAndErrorHandling('connect.promptForCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
+            context.telemetry.properties.credentialsRequired = 'true';
+            context.telemetry.properties.credentialPromptReason = 'firstTime';
 
             context.errorHandling.rethrow = true;
             context.errorHandling.suppressDisplay = false;

@@ -13,6 +13,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<CredentialsManagementWiz
     public priority: number = 100;
 
     public async execute(context: CredentialsManagementWizardContext): Promise<void> {
+        const executeStartTime = Date.now();
         const selectedAccount = nonNullValue(context.selectedAccount, 'context.selectedAccount', 'ExecuteStep.ts');
 
         const selectedTenants = context.selectedTenants || [];
@@ -24,6 +25,11 @@ export class ExecuteStep extends AzureWizardExecuteStep<CredentialsManagementWiz
         // Get all available tenants for this account
         const allTenantsForAccount = nonNullValue(context.allTenants, 'context.allTenants', 'ExecuteStep.ts');
         const selectedTenantIds = new Set(selectedTenants.map((tenant) => tenant.tenantId || ''));
+
+        // Add telemetry for execution
+        context.telemetry.measurements.tenantFilteringCount = allTenantsForAccount.length;
+        context.telemetry.measurements.selectedFinalTenantsCount = selectedTenants.length;
+        context.telemetry.properties.filteringActionType = 'tenantFiltering';
 
         // Use the individual add/remove functions to update tenant selections
         const { addUnselectedTenant, removeUnselectedTenant } = await import('../subscriptionFiltering');
@@ -66,6 +72,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<CredentialsManagementWiz
         ext.discoveryBranchDataProvider.refresh();
 
         ext.outputChannel.appendLine(l10n.t('Azure credentials configuration completed successfully.'));
+
+        // Add completion telemetry
+        context.telemetry.measurements.executionTimeMs = Date.now() - executeStartTime;
     }
 
     public shouldExecute(context: CredentialsManagementWizardContext): boolean {

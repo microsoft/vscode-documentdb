@@ -190,11 +190,16 @@ export async function configureAzureSubscriptionFilter(
     context: IActionContext,
     azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
 ): Promise<void> {
+    const startTime = Date.now();
+    context.telemetry.properties.subscriptionFilteringAction = 'configure';
+
     /**
      * Ensure the user is signed in to Azure
      */
 
     if (!(await azureSubscriptionProvider.isSignedIn())) {
+        context.telemetry.properties.subscriptionFilteringResult = 'Failed';
+        context.telemetry.properties.subscriptionFilteringError = 'NotSignedIn';
         const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
         void vscode.window
             .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in and retry.'), signIn)
@@ -213,8 +218,14 @@ export async function configureAzureSubscriptionFilter(
 
     // it's an async function so that the wizard when shown can show the 'loading' state
     const subscriptionQuickPickItems: () => Promise<IAzureQuickPickItem<AzureSubscription>[]> = async () => {
+        const subscriptionLoadStartTime = Date.now();
         const allSubscriptions = await azureSubscriptionProvider.getSubscriptions(false); // Get all unfiltered subscriptions
         const duplicates = getDuplicateSubscriptions(allSubscriptions);
+
+        // Add telemetry for subscription loading
+        context.telemetry.measurements.totalSubscriptionsAvailable = allSubscriptions.length;
+        context.telemetry.measurements.duplicateSubscriptionsCount = duplicates.length;
+        context.telemetry.measurements.subscriptionLoadingTimeMs = Date.now() - subscriptionLoadStartTime;
 
         // Get tenant information for better UX (similar to SelectSubscriptionStep)
         const tenantPromise = azureSubscriptionProvider.getTenants().catch(() => undefined);
@@ -230,6 +241,9 @@ export async function configureAzureSubscriptionFilter(
                 }
             }
         }
+
+        // Add telemetry for tenant information
+        context.telemetry.measurements.tenantsWithSubscriptionsCount = tenantDisplayNames.size;
 
         return allSubscriptions
             .map((subscription) => {
@@ -276,5 +290,17 @@ export async function configureAzureSubscriptionFilter(
         // Update the setting with the new selection
         const newSelectedIds = picks.map((pick) => `${pick.data.tenantId}/${pick.data.subscriptionId}`);
         await setSelectedSubscriptionIds(newSelectedIds);
+
+        // Add telemetry for subscription selection
+        const totalAvailable = context.telemetry.measurements.totalSubscriptionsAvailable || 0;
+        context.telemetry.measurements.subscriptionsSelected = picks.length;
+        context.telemetry.measurements.subscriptionsFiltered = totalAvailable - picks.length;
+        context.telemetry.properties.allSubscriptionsSelected = (picks.length === totalAvailable).toString();
+        context.telemetry.properties.subscriptionFilteringResult = 'Succeeded';
+    } else {
+        context.telemetry.properties.subscriptionFilteringResult = 'Canceled';
     }
+
+    // Add completion timing
+    context.telemetry.measurements.subscriptionFilteringDurationMs = Date.now() - startTime;
 }

@@ -20,8 +20,14 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
     public async prompt(context: CredentialsManagementWizardContext): Promise<void> {
         // Create async function to provide better loading UX and debugging experience
         const getAccountQuickPickItems = async (): Promise<AccountQuickPickItem[]> => {
+            const loadStartTime = Date.now();
+
             const accounts = await this.getAvailableAccounts(context);
             context.availableAccounts = accounts;
+
+            // Add telemetry for account availability
+            context.telemetry.measurements.availableAccountsCount = accounts.length;
+            context.telemetry.measurements.accountsLoadingTimeMs = Date.now() - loadStartTime;
 
             const accountItems: AccountQuickPickItem[] = accounts.map((account) => ({
                 label: account.label,
@@ -32,6 +38,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
 
             // Handle empty accounts case
             if (accountItems.length === 0) {
+                context.telemetry.properties.noAccountsAvailable = 'true';
                 return [
                     {
                         label: l10n.t('Sign in to Azure to continue…'),
@@ -62,13 +69,18 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
             loadingPlaceHolder: l10n.t('Initializing Credentials Management…'),
         });
 
+        // Add telemetry for account selection method
         if (selectedItem.isSignInOption) {
+            context.telemetry.properties.accountSelectionMethod = 'signIn';
+
             // Set flag to restart wizard after sign-in
             context.shouldRestartWizard = true;
 
             await this.handleSignIn(context);
 
             return; // Exit this step, other steps won't run due to shouldPrompt() checks
+        } else {
+            context.telemetry.properties.accountSelectionMethod = 'existingAccount';
         }
 
         context.selectedAccount = nonNullValue(selectedItem.account, 'selectedItem.account', 'SelectAccountStep.ts');
