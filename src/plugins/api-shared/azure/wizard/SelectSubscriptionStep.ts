@@ -124,7 +124,7 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             return [
                 {
                     id: 'editAccountsAndTenants',
-                    label: l10n.t('Sign in to other Azure accounts or tenants to access more subscriptions'),
+                    label: l10n.t('Sign in to other Azure accounts to access more subscriptions'),
                     iconPath: new ThemeIcon('key'),
                     alwaysShow: true,
                 },
@@ -142,13 +142,13 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             suppressPersistence: true,
         });
 
-        // Handle edit accounts and tenants selection
+        // Handle edit accounts selection
         if (selectedItem.id === 'editAccountsAndTenants') {
             await this.configureCredentialsFromWizard(context, subscriptionProvider);
             await this.showRetryInstructions();
 
             // Exit wizard - user needs to restart service discovery
-            throw new UserCancelledError('Account and tenant filters updated');
+            throw new UserCancelledError('Account management completed');
         }
 
         // Use the subscriptions we already loaded (no second API call needed)
@@ -162,15 +162,15 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
     }
 
     private async askToConfigureCredentials(): Promise<'configure' | 'cancel'> {
-        const configure = l10n.t('Yes, Configure Credentials');
+        const configure = l10n.t('Yes, Manage Accounts');
 
         const result = await window.showInformationMessage(
             l10n.t('No Azure Subscriptions Found'),
             {
                 modal: true,
                 detail: l10n.t(
-                    'To connect to Azure resources, you need to configure your Azure credentials and tenant access.\n\n' +
-                        'Would you like to configure your Azure credentials now?',
+                    'To connect to Azure resources, you need to sign in to Azure accounts.\n\n' +
+                        'Would you like to manage your Azure accounts now?',
                 ),
             },
             { title: configure },
@@ -199,11 +199,11 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
     private async showRetryInstructions(): Promise<void> {
         await window.showInformationMessage(
-            l10n.t('Credential Management Completed'),
+            l10n.t('Account Management Completed'),
             {
                 modal: true,
                 detail: l10n.t(
-                    'The credential management flow has completed.\n\nPlease try Service Discovery again to see your available subscriptions.',
+                    'The account management flow has completed.\n\nPlease try Service Discovery again to see your available subscriptions.',
                 ),
             },
             l10n.t('OK'),
