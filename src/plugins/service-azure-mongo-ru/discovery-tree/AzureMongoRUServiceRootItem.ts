@@ -14,7 +14,7 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
-import { getTenantFilteredSubscriptions } from '../../api-shared/azure/subscriptionFiltering';
+import { getTenantFilteredSubscriptions } from '../../api-shared/azure/subscriptionFiltering/subscriptionFiltering';
 import { AzureMongoRUSubscriptionItem } from './AzureMongoRUSubscriptionItem';
 
 export class AzureMongoRUServiceRootItem
