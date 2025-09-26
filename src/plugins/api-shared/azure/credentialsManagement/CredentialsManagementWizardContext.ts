@@ -16,7 +16,4 @@ export interface CredentialsManagementWizardContext extends IActionContext {
 
     // Available options
     availableAccounts?: vscode.AuthenticationSessionAccountInformation[];
-
-    // State tracking
-    shouldRestartWizard?: boolean;
 }

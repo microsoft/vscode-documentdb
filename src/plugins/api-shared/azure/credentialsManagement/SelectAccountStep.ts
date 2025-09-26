@@ -85,12 +85,11 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
         if (selectedItem.isSignInOption) {
             context.telemetry.properties.accountSelectionMethod = 'signIn';
 
-            // Set flag to restart wizard after sign-in
-            context.shouldRestartWizard = true;
-
             await this.handleSignIn(context);
 
-            return; // Exit this step, other steps won't run due to shouldPrompt() checks
+            // After successful sign-in, exit the wizard gracefully
+            // No need to restart - the account has been added successfully
+            throw new UserCancelledError('accountAddedSuccessfully');
         } else if (selectedItem.isExitOption) {
             context.telemetry.properties.accountSelectionMethod = 'exit';
 
@@ -104,7 +103,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
     }
 
     public shouldPrompt(context: CredentialsManagementWizardContext): boolean {
-        return !context.selectedAccount && !context.shouldRestartWizard;
+        return !context.selectedAccount;
     }
 
     private async getAvailableAccounts(

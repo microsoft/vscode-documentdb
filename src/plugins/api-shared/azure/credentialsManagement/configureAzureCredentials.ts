@@ -29,59 +29,56 @@ async function configureAzureCredentialsInternal(
     const startTime = Date.now();
     context.telemetry.properties.credentialsManagementAction = 'configure';
 
-    let wizardContext: CredentialsManagementWizardContext;
+    try {
+        ext.outputChannel.appendLine(l10n.t('Starting Azure account management wizard'));
 
-    do {
-        try {
-            ext.outputChannel.appendLine(l10n.t('Starting Azure account management wizard'));
+        // Create wizard context
+        const wizardContext: CredentialsManagementWizardContext = {
+            ...context,
+            selectedAccount: undefined,
+            azureSubscriptionProvider,
+        };
 
-            // Create wizard context
-            wizardContext = {
-                ...context,
-                selectedAccount: undefined,
-                azureSubscriptionProvider,
-                shouldRestartWizard: false,
-            };
+        // Create and configure the wizard
+        const wizard = new AzureWizard(wizardContext, {
+            title: l10n.t('Manage Azure Accounts'),
+            promptSteps: [new SelectAccountStep(), new AccountActionsStep()],
+            executeSteps: [new ExecuteStep()],
+        });
 
-            // Create and configure the wizard
-            const wizard = new AzureWizard(wizardContext, {
-                title: l10n.t('Manage Azure Accounts'),
-                promptSteps: [new SelectAccountStep(), new AccountActionsStep()],
-                executeSteps: [new ExecuteStep()],
-            });
+        // Execute the wizard
+        await wizard.prompt();
+        await wizard.execute();
 
-            // Execute the wizard
-            await wizard.prompt();
-            await wizard.execute();
+        // Success telemetry
+        context.telemetry.measurements.credentialsManagementDurationMs = Date.now() - startTime;
+        context.telemetry.properties.credentialsManagementResult = 'Succeeded';
+    } catch (error) {
+        context.telemetry.measurements.credentialsManagementDurationMs = Date.now() - startTime;
 
-            if (wizardContext.shouldRestartWizard) {
-                context.telemetry.properties.wizardRestarted = 'true';
-                ext.outputChannel.appendLine(l10n.t('Restarting wizard after account sign-in…'));
-            }
-        } catch (error) {
-            context.telemetry.measurements.credentialsManagementDurationMs = Date.now() - startTime;
-
-            if (error instanceof UserCancelledError) {
+        if (error instanceof UserCancelledError) {
+            if (error.message === 'accountAddedSuccessfully') {
+                // Account was successfully added
+                context.telemetry.properties.credentialsManagementResult = 'Succeeded';
+                context.telemetry.properties.accountAdded = 'true';
+                ext.outputChannel.appendLine(l10n.t('Azure account added successfully.'));
+                return;
+            } else {
                 // User cancelled
                 context.telemetry.properties.credentialsManagementResult = 'Canceled';
                 ext.outputChannel.appendLine(l10n.t('Azure account management was cancelled by user.'));
                 return;
             }
-
-            // Any other error - don't retry, just throw
-            context.telemetry.properties.credentialsManagementResult = 'Failed';
-            context.telemetry.properties.credentialsManagementError =
-                error instanceof Error ? error.name : 'UnknownError';
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            ext.outputChannel.appendLine(l10n.t('Azure account management failed: {0}', errorMessage));
-            void vscode.window.showErrorMessage(l10n.t('Failed to configure Azure credentials: {0}', errorMessage));
-            throw error;
         }
-    } while (wizardContext.shouldRestartWizard);
 
-    // Success telemetry
-    context.telemetry.measurements.credentialsManagementDurationMs = Date.now() - startTime;
-    context.telemetry.properties.credentialsManagementResult = 'Succeeded';
+        // Any other error - don't retry, just throw
+        context.telemetry.properties.credentialsManagementResult = 'Failed';
+        context.telemetry.properties.credentialsManagementError = error instanceof Error ? error.name : 'UnknownError';
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.appendLine(l10n.t('Azure account management failed: {0}', errorMessage));
+        void vscode.window.showErrorMessage(l10n.t('Failed to configure Azure credentials: {0}', errorMessage));
+        throw error;
+    }
 }
 
 /**

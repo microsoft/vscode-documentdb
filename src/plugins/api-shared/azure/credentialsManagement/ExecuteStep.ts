@@ -29,6 +29,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<CredentialsManagementWiz
     }
 
     public shouldExecute(context: CredentialsManagementWizardContext): boolean {
-        return !!context.selectedAccount && !context.shouldRestartWizard;
+        return !!context.selectedAccount;
     }
 }
