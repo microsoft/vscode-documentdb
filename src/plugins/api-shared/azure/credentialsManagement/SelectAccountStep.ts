@@ -32,7 +32,6 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
 
             const accountItems: AccountQuickPickItem[] = accounts.map((account) => ({
                 label: account.label,
-                detail: account.id,
                 iconPath: new vscode.ThemeIcon('account'),
                 account,
             }));
@@ -75,7 +74,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
 
         const selectedItem = await context.ui.showQuickPick(getAccountQuickPickItems(), {
             stepName: 'selectAccount',
-            placeHolder: l10n.t('Azure accounts used for service discovery:'),
+            placeHolder: l10n.t('Azure accounts used for service discovery'),
             matchOnDescription: true,
             suppressPersistence: true,
             loadingPlaceHolder: l10n.t('Loading Azure Accounts Used for Service Discovery…'),
