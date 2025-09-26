@@ -18,10 +18,9 @@ import { AccountActionsStep } from './AccountActionsStep';
 import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 import { SelectAccountStep } from './SelectAccountStep';
-import { SelectTenantsStep } from './SelectTenantsStep';
 
 /**
- * Internal implementation of Azure credentials configuration.
+ * Internal implementation of Azure account management.
  */
 async function configureAzureCredentialsInternal(
     context: IActionContext,
@@ -34,21 +33,20 @@ async function configureAzureCredentialsInternal(
 
     do {
         try {
-            ext.outputChannel.appendLine(l10n.t('Starting Azure credentials configuration wizard'));
+            ext.outputChannel.appendLine(l10n.t('Starting Azure account management wizard'));
 
             // Create wizard context
             wizardContext = {
                 ...context,
                 selectedAccount: undefined,
-                selectedTenants: undefined,
                 azureSubscriptionProvider,
                 shouldRestartWizard: false,
             };
 
             // Create and configure the wizard
             const wizard = new AzureWizard(wizardContext, {
-                title: l10n.t('Manage Azure Credentials'),
-                promptSteps: [new SelectAccountStep(), new AccountActionsStep(), new SelectTenantsStep()],
+                title: l10n.t('Manage Azure Accounts'),
+                promptSteps: [new SelectAccountStep(), new AccountActionsStep()],
                 executeSteps: [new ExecuteStep()],
             });
 
@@ -66,7 +64,7 @@ async function configureAzureCredentialsInternal(
             if (error instanceof UserCancelledError) {
                 // User cancelled
                 context.telemetry.properties.credentialsManagementResult = 'Canceled';
-                ext.outputChannel.appendLine(l10n.t('Azure credentials configuration was cancelled by user.'));
+                ext.outputChannel.appendLine(l10n.t('Azure account management was cancelled by user.'));
                 return;
             }
 
@@ -75,7 +73,7 @@ async function configureAzureCredentialsInternal(
             context.telemetry.properties.credentialsManagementError =
                 error instanceof Error ? error.name : 'UnknownError';
             const errorMessage = error instanceof Error ? error.message : String(error);
-            ext.outputChannel.appendLine(l10n.t('Azure credentials configuration failed: {0}', errorMessage));
+            ext.outputChannel.appendLine(l10n.t('Azure account management failed: {0}', errorMessage));
             void vscode.window.showErrorMessage(l10n.t('Failed to configure Azure credentials: {0}', errorMessage));
             throw error;
         }
@@ -92,7 +90,7 @@ async function configureAzureCredentialsInternal(
  *
  * @param context - The action context
  * @param azureSubscriptionProvider - The Azure subscription provider with filtering capabilities
- * @param node - Optional tree node from which the configuration was initiated
+ * @param node - Optional tree node from which the account management was initiated
  */
 export async function configureAzureCredentials(
     context: IActionContext,

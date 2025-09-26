@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import type * as vscode from 'vscode';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
@@ -14,12 +13,9 @@ export interface CredentialsManagementWizardContext extends IActionContext {
 
     // Selected account information
     selectedAccount?: vscode.AuthenticationSessionAccountInformation;
-    selectedTenants?: AzureTenant[];
 
     // Available options
     availableAccounts?: vscode.AuthenticationSessionAccountInformation[];
-    availableTenants?: Map<string, AzureTenant[]>; // accountId -> tenants
-    allTenants?: AzureTenant[]; // All available tenants for the selected account
 
     // State tracking
     shouldRestartWizard?: boolean;

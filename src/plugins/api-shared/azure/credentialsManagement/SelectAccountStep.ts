@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
@@ -14,6 +14,7 @@ interface AccountQuickPickItem extends vscode.QuickPickItem {
     account?: vscode.AuthenticationSessionAccountInformation;
     isSignInOption?: boolean;
     isLearnMoreOption?: boolean;
+    isExitOption?: boolean;
 }
 
 export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManagementWizardContext> {
@@ -46,6 +47,12 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                         iconPath: new vscode.ThemeIcon('sign-in'),
                         isSignInOption: true,
                     },
+                    { label: '', kind: vscode.QuickPickItemKind.Separator },
+                    {
+                        label: l10n.t('Exit without making changes'),
+                        iconPath: new vscode.ThemeIcon('close'),
+                        isExitOption: true,
+                    },
                 ];
             }
 
@@ -58,15 +65,20 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                     iconPath: new vscode.ThemeIcon('sign-in'),
                     isSignInOption: true,
                 },
+                {
+                    label: l10n.t('Exit without making changes'),
+                    iconPath: new vscode.ThemeIcon('close'),
+                    isExitOption: true,
+                },
             ];
         };
 
         const selectedItem = await context.ui.showQuickPick(getAccountQuickPickItems(), {
             stepName: 'selectAccount',
-            placeHolder: l10n.t('Select an Azure account to manage'),
+            placeHolder: l10n.t('Azure accounts used for service discovery:'),
             matchOnDescription: true,
             suppressPersistence: true,
-            loadingPlaceHolder: l10n.t('Loading Azure accounts…'),
+            loadingPlaceHolder: l10n.t('Loading Azure accounts used for service discovery…'),
         });
 
         // Add telemetry for account selection method
@@ -79,6 +91,11 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
             await this.handleSignIn(context);
 
             return; // Exit this step, other steps won't run due to shouldPrompt() checks
+        } else if (selectedItem.isExitOption) {
+            context.telemetry.properties.accountSelectionMethod = 'exit';
+
+            // User chose to exit - throw UserCancelledError to gracefully exit wizard
+            throw new UserCancelledError('exitAccountManagement');
         } else {
             context.telemetry.properties.accountSelectionMethod = 'existingAccount';
         }
@@ -119,7 +136,6 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
         try {
             ext.outputChannel.appendLine(l10n.t('Starting Azure sign-in process...'));
             const success = await context.azureSubscriptionProvider.signIn();
-
             if (success) {
                 ext.outputChannel.appendLine(l10n.t('Azure sign-in completed successfully'));
             } else {
