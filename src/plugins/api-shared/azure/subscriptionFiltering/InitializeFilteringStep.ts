@@ -54,6 +54,13 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
 
         const tenantLoadStartTime = Date.now();
         context.availableTenants = await azureSubscriptionProvider.getTenants();
+        context.availableTenants = context.availableTenants.sort((a, b) => {
+            // Sort by display name if available, otherwise by tenant ID
+            const aName = a.displayName || a.tenantId || '';
+            const bName = b.displayName || b.tenantId || '';
+            return aName.localeCompare(bName);
+        });
+
         context.telemetry.measurements.tenantLoadTimeMs = Date.now() - tenantLoadStartTime;
         context.telemetry.measurements.tenantsCount = context.availableTenants.length;
 
