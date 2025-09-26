@@ -78,7 +78,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
             placeHolder: l10n.t('Azure accounts used for service discovery:'),
             matchOnDescription: true,
             suppressPersistence: true,
-            loadingPlaceHolder: l10n.t('Loading Azure accounts used for service discovery…'),
+            loadingPlaceHolder: l10n.t('Loading Azure Accounts Used for Service Discovery…'),
         });
 
         // Add telemetry for account selection method
@@ -134,7 +134,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
 
     private async handleSignIn(context: CredentialsManagementWizardContext): Promise<void> {
         try {
-            ext.outputChannel.appendLine(l10n.t('Starting Azure sign-in process...'));
+            ext.outputChannel.appendLine(l10n.t('Starting Azure sign-in process…'));
             const success = await context.azureSubscriptionProvider.signIn();
             if (success) {
                 ext.outputChannel.appendLine(l10n.t('Azure sign-in completed successfully'));

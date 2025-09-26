@@ -58,7 +58,7 @@ export class SelectRUClusterStep extends AzureWizardPromptStep<NewConnectionWiza
         const selectedItem = await context.ui.showQuickPick(getRUClusterQuickPickItems(), {
             stepName: 'selectRUCluster',
             placeHolder: l10n.t('Choose a RU cluster…'),
-            loadingPlaceHolder: l10n.t('Loading RU clusters…'),
+            loadingPlaceHolder: l10n.t('Loading Clusters…'),
             enableGrouping: true,
             matchOnDescription: true,
             suppressPersistence: true,

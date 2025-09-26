@@ -255,7 +255,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [new ProvideUserNameStep(), new ProvidePasswordStep()],
-            title: l10n.t('Authenticate to connect with your MongoDB cluster'),
+            title: l10n.t('Authenticate to Connect with Your DocumentDB Cluster'),
             showLoadingPrompt: true,
         });
 

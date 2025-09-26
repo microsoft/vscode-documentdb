@@ -46,8 +46,8 @@ export class SelectTenantAndSubscriptionStep extends AzureWizardPromptStep<NewCo
         try {
             // Use QuickPick with loading state for unified UX demonstration
             await context.ui.showQuickPick(this.mockInitializeFilteringData(context), {
-                placeHolder: l10n.t('Initializing filtering options...'),
-                loadingPlaceHolder: l10n.t('Loading tenants and subscription data...'),
+                placeHolder: l10n.t('Initializing filtering options…'),
+                loadingPlaceHolder: l10n.t('Loading Tenants and Subscription Data…'),
                 suppressPersistence: true,
             });
         } catch (error) {

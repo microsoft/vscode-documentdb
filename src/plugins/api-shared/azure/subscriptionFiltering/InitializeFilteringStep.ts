@@ -31,7 +31,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         try {
             // Use QuickPick with loading state for unified UX
             await context.ui.showQuickPick(this.initializeFilteringData(context), {
-                loadingPlaceHolder: l10n.t('Loading tenants and subscription data...'),
+                loadingPlaceHolder: l10n.t('Loading Tenants and Subscription Data…'),
                 suppressPersistence: true,
             });
         } catch (error) {

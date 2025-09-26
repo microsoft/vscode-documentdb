@@ -62,7 +62,7 @@ export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizard
         const selectedItem = await context.ui.showQuickPick(getClusterQuickPickItems(), {
             stepName: 'selectCluster',
             placeHolder: l10n.t('Choose a cluster…'),
-            loadingPlaceHolder: l10n.t('Loading clusters…'),
+            loadingPlaceHolder: l10n.t('Loading Clusters…'),
             enableGrouping: true,
             matchOnDescription: true,
             suppressPersistence: true,

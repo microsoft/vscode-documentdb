@@ -201,7 +201,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
-            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
+            title: l10n.t('Authenticate to Connect with Your DocumentDB Cluster'),
             showLoadingPrompt: true,
         });
 

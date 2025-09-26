@@ -19,7 +19,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<FilteringWizardContext> 
     public async execute(context: FilteringWizardContext): Promise<void> {
         const executeStartTime = Date.now();
 
-        ext.outputChannel.appendLine(l10n.t('Applying Azure discovery filters...'));
+        ext.outputChannel.appendLine(l10n.t('Applying Azure discovery filters…'));
 
         // Apply tenant filtering if tenants were selected
         if (context.selectedTenants && context.availableTenants && context.availableTenants.length > 0) {
@@ -31,7 +31,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<FilteringWizardContext> 
             await this.applySubscriptionFiltering(context);
         }
 
-        ext.outputChannel.appendLine(l10n.t('Refreshing Azure discovery tree...'));
+        ext.outputChannel.appendLine(l10n.t('Refreshing Azure discovery tree…'));
         ext.discoveryBranchDataProvider.refresh();
 
         ext.outputChannel.appendLine(l10n.t('Azure discovery filters applied successfully.'));
@@ -45,7 +45,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<FilteringWizardContext> 
         const selectedTenants = context.selectedTenants || [];
         const allTenants = context.availableTenants || [];
 
-        ext.outputChannel.appendLine(l10n.t('Configuring tenant filtering...'));
+        ext.outputChannel.appendLine(l10n.t('Configuring tenant filtering…'));
 
         // Get all unique account IDs from subscriptions to apply tenant filtering per account
         const accountIds = new Set<string>();
@@ -98,7 +98,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<FilteringWizardContext> 
     private async applySubscriptionFiltering(context: FilteringWizardContext): Promise<void> {
         const selectedSubscriptions = context.selectedSubscriptions || [];
 
-        ext.outputChannel.appendLine(l10n.t('Configuring subscription filtering...'));
+        ext.outputChannel.appendLine(l10n.t('Configuring subscription filtering…'));
 
         // Convert subscriptions to the format expected by setSelectedSubscriptionIds
         const selectedIds = selectedSubscriptions.map(

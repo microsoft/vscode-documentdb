@@ -56,7 +56,7 @@ async function configureAzureCredentialsInternal(
 
             if (wizardContext.shouldRestartWizard) {
                 context.telemetry.properties.wizardRestarted = 'true';
-                ext.outputChannel.appendLine(l10n.t('Restarting wizard after account sign-in...'));
+                ext.outputChannel.appendLine(l10n.t('Restarting wizard after account sign-in…'));
             }
         } catch (error) {
             context.telemetry.measurements.credentialsManagementDurationMs = Date.now() - startTime;
