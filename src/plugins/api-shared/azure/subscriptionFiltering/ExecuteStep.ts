@@ -26,10 +26,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<FilteringWizardContext> 
             await this.applyTenantFiltering(context);
         }
 
-        // Apply subscription filtering if subscriptions were selected
-        if (context.selectedSubscriptions && context.selectedSubscriptions.length > 0) {
-            await this.applySubscriptionFiltering(context);
-        }
+        await this.applySubscriptionFiltering(context);
 
         ext.outputChannel.appendLine(l10n.t('Refreshing Azure discovery tree…'));
         ext.discoveryBranchDataProvider.refresh();
