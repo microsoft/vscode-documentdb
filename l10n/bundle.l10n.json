@@ -63,7 +63,7 @@
   "Azure account management failed: {0}": "Azure account management failed: {0}",
   "Azure account management was cancelled by user.": "Azure account management was cancelled by user.",
   "Azure account management wizard completed.": "Azure account management wizard completed.",
-  "Azure accounts used for service discovery:": "Azure accounts used for service discovery:",
+  "Azure accounts used for service discovery": "Azure accounts used for service discovery",
   "Azure Activity": "Azure Activity",
   "Azure Cosmos DB for MongoDB (RU)": "Azure Cosmos DB for MongoDB (RU)",
   "Azure Cosmos DB for MongoDB (RU) Emulator": "Azure Cosmos DB for MongoDB (RU) Emulator",
