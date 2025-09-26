@@ -39,10 +39,10 @@ import { ext } from '../../../../extensionVariables';
 export function getSelectedSubscriptionIds(): string[] {
     // Try the Azure Resource Groups config first (primary storage)
     const azureResourcesConfig = vscode.workspace.getConfiguration('azureResourceGroups');
-    const primarySubscriptionIds = azureResourcesConfig.get<string[]>('selectedSubscriptions', []);
+    const primarySubscriptionIds = azureResourcesConfig.get<string[]>('selectedSubscriptions');
 
-    // If nothing found in primary storage, try our fallback storage
-    if (primarySubscriptionIds.length === 0) {
+    // If no configuration found (undefined), try our fallback storage
+    if (primarySubscriptionIds === undefined) {
         const fallbackSubscriptionIds = ext.context.globalState.get<string[]>(
             'azure-discovery.selectedSubscriptions',
             [],
@@ -50,8 +50,8 @@ export function getSelectedSubscriptionIds(): string[] {
         return fallbackSubscriptionIds.map((id) => id.split('/')[1]);
     }
 
-    // Sync to our fallback storage if primary storage had data
-    // This ensures we maintain a copy if Azure Resources extension is later removed
+    // Sync from primary storage to fallback storage (even if empty array)
+    // This ensures we maintain a backup copy in case the Azure Resources extension goes down later
     void ext.context.globalState.update('azure-discovery.selectedSubscriptions', primarySubscriptionIds);
 
     return primarySubscriptionIds.map((id) => id.split('/')[1]);

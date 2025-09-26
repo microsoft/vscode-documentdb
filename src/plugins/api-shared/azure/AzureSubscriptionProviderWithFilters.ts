@@ -23,13 +23,13 @@ export class AzureSubscriptionProviderWithFilters extends VSCodeAzureSubscriptio
     private getTenantAndSubscriptionFilters(): string[] {
         // Try the Azure Resource Groups config first
         const config = vscode.workspace.getConfiguration('azureResourceGroups');
-        let fullSubscriptionIds = config.get<string[]>('selectedSubscriptions', []);
+        let fullSubscriptionIds = config.get<string[]>('selectedSubscriptions');
 
-        // If nothing found there, try our fallback storage
-        if (fullSubscriptionIds.length === 0) {
+        // If no configuration found (undefined), try our fallback storage
+        if (fullSubscriptionIds === undefined) {
             fullSubscriptionIds = ext.context.globalState.get<string[]>('azure-discovery.selectedSubscriptions', []);
         } else {
-            // Sync to our fallback storage if primary storage had data
+            // Sync to our fallback storage if primary storage had data (even if empty array)
             void ext.context.globalState.update('azure-discovery.selectedSubscriptions', fullSubscriptionIds);
         }
         return fullSubscriptionIds;
