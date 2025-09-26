@@ -10,7 +10,6 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { isTreeElementWithContextValue } from '../../../../tree/TreeElementWithContextValue';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
@@ -76,7 +75,6 @@ async function configureAzureCredentialsInternal(
         context.telemetry.properties.credentialsManagementError = error instanceof Error ? error.name : 'UnknownError';
         const errorMessage = error instanceof Error ? error.message : String(error);
         ext.outputChannel.appendLine(l10n.t('Azure account management failed: {0}', errorMessage));
-        void vscode.window.showErrorMessage(l10n.t('Failed to configure Azure credentials: {0}', errorMessage));
         throw error;
     }
 }

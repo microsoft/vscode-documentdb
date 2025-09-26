@@ -142,7 +142,6 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             ext.outputChannel.appendLine(l10n.t('Azure sign-in failed: {0}', errorMessage));
-            void vscode.window.showErrorMessage(l10n.t('Failed to sign in to Azure: {0}', errorMessage));
             throw error;
         }
     }
