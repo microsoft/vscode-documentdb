@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AzureSubscription, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 
@@ -180,17 +179,4 @@ export function getDuplicateSubscriptions(subscriptions: AzureSubscription[]): A
     }
 
     return subscriptions.filter((s) => names.get(s.name)! > 1);
-}
-
-/**
- * Configures the Azure subscription filter using the new wizard pattern.
- * This is a wrapper function that maintains backward compatibility.
- */
-export async function configureAzureSubscriptionFilter(
-    context: IActionContext,
-    azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
-): Promise<void> {
-    // Import the wizard function to avoid circular dependencies
-    const { configureAzureSubscriptionFilterWizard } = await import('./configureAzureSubscriptionFilterWizard');
-    await configureAzureSubscriptionFilterWizard(context, azureSubscriptionProvider);
 }

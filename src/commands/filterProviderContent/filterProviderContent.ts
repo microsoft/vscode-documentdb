@@ -33,6 +33,7 @@ export async function filterProviderContent(context: IActionContext, node: TreeE
     }
 
     const providerId = idSections[1];
+    context.telemetry.properties.discoveryProviderId = providerId;
     const provider = DiscoveryService.getProvider(providerId);
 
     if (!provider?.configureTreeItemFilter) {

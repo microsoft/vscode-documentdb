@@ -8,19 +8,18 @@ import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils'
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
-import { FilteringExecuteStep } from './FilteringExecuteStep';
+import { ExecuteStep } from './ExecuteStep';
 import { type FilteringWizardContext } from './FilteringWizardContext';
 import { InitializeFilteringStep } from './InitializeFilteringStep';
 
 /**
  * Configures the Azure subscription filter using the wizard pattern.
  */
-export async function configureAzureSubscriptionFilterWizard(
+export async function configureAzureSubscriptionFilter(
     context: IActionContext,
     azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
 ): Promise<void> {
-    const startTime = Date.now();
-    context.telemetry.properties.subscriptionFilteringAction = 'configureWizard';
+    context.telemetry.properties.subscriptionFiltering = 'configureAzureSubscriptionFilter';
 
     /**
      * Ensure the user is signed in to Azure
@@ -52,19 +51,17 @@ export async function configureAzureSubscriptionFilterWizard(
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Configure Azure Discovery Filters'),
         promptSteps: [new InitializeFilteringStep()],
-        executeSteps: [new FilteringExecuteStep()],
+        executeSteps: [new ExecuteStep()],
     });
 
     try {
         await wizard.prompt();
+        await wizard.execute();
         context.telemetry.properties.subscriptionFilteringResult = 'Succeeded';
     } catch (error) {
         context.telemetry.properties.subscriptionFilteringResult = 'Failed';
         context.telemetry.properties.subscriptionFilteringError =
             error instanceof Error ? error.message : String(error);
         throw error;
-    } finally {
-        // Add completion timing
-        context.telemetry.measurements.subscriptionFilteringDurationMs = Date.now() - startTime;
     }
 }

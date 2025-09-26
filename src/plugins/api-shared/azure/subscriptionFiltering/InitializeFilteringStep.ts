@@ -11,7 +11,7 @@ import { type QuickPickItem } from 'vscode';
 import { type FilteringWizardContext } from './FilteringWizardContext';
 import { FilterSubscriptionSubStep } from './FilterSubscriptionSubStep';
 import { FilterTenantSubStep } from './FilterTenantSubStep';
-import { isTenantFilteredOut } from './subscriptionFiltering';
+import { isTenantFilteredOut } from './subscriptionFilteringHelpers';
 
 /**
  * Custom error to signal that initialization has completed and wizard should proceed to subwizard

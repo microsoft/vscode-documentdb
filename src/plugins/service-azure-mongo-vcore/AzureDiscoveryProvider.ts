@@ -10,7 +10,7 @@ import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
-import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering';
+import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering/configureAzureSubscriptionFilter';
 import { AzureContextProperties } from '../api-shared/azure/wizard/AzureContextProperties';
 import { SelectSubscriptionStep } from '../api-shared/azure/wizard/SelectSubscriptionStep';
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';

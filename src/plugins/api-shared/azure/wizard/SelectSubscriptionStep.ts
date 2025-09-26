@@ -10,7 +10,7 @@ import { QuickPickItemKind, ThemeIcon, Uri, window, type MessageItem, type Quick
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
-import { getDuplicateSubscriptions } from '../subscriptionFiltering/subscriptionFiltering';
+import { getDuplicateSubscriptions } from '../subscriptionFiltering/subscriptionFilteringHelpers';
 import { AzureContextProperties } from './AzureContextProperties';
 
 export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionWizardContext> {

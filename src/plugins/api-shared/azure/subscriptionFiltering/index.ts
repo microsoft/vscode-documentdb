@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { configureAzureSubscriptionFilterWizard } from './configureAzureSubscriptionFilterWizard';
-export * from './FilteringExecuteStep';
+export { configureAzureSubscriptionFilter } from './configureAzureSubscriptionFilter';
+export * from './ExecuteStep';
 export * from './FilteringWizardContext';
 export * from './FilterSubscriptionSubStep';
 export * from './FilterTenantSubStep';
 export * from './InitializeFilteringStep';
-export * from './subscriptionFiltering';
+export * from './subscriptionFilteringHelpers';

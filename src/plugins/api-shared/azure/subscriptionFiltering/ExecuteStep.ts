@@ -7,9 +7,13 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../../../extensionVariables';
 import { type FilteringWizardContext } from './FilteringWizardContext';
-import { addUnselectedTenant, removeUnselectedTenant, setSelectedSubscriptionIds } from './subscriptionFiltering';
+import {
+    addUnselectedTenant,
+    removeUnselectedTenant,
+    setSelectedSubscriptionIds,
+} from './subscriptionFilteringHelpers';
 
-export class FilteringExecuteStep extends AzureWizardExecuteStep<FilteringWizardContext> {
+export class ExecuteStep extends AzureWizardExecuteStep<FilteringWizardContext> {
     public priority: number = 100;
 
     public async execute(context: FilteringWizardContext): Promise<void> {

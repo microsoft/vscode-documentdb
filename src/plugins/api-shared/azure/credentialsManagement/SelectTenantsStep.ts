@@ -9,7 +9,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { nonNullValue } from '../../../../utils/nonNull';
-import { isTenantFilteredOut } from '../subscriptionFiltering/subscriptionFiltering';
+import { isTenantFilteredOut } from '../subscriptionFiltering/subscriptionFilteringHelpers';
 import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
 
 interface TenantQuickPickItem extends vscode.QuickPickItem {

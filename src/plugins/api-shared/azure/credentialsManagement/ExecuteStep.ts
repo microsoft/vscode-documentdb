@@ -32,7 +32,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<CredentialsManagementWiz
         context.telemetry.properties.filteringActionType = 'tenantFiltering';
 
         // Use the individual add/remove functions to update tenant selections
-        const { addUnselectedTenant, removeUnselectedTenant } = await import('../subscriptionFiltering');
+        const { addUnselectedTenant, removeUnselectedTenant } = await import(
+            '../subscriptionFiltering/subscriptionFilteringHelpers'
+        );
 
         // Process each tenant - add to unselected if not selected, remove from unselected if selected
         for (const tenant of allTenantsForAccount) {
