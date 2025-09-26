@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { isTreeElementWithContextValue } from '../../../../tree/TreeElementWithContextValue';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
+import { AccountActionsStep } from './AccountActionsStep';
 import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 import { SelectAccountStep } from './SelectAccountStep';
@@ -47,7 +48,7 @@ async function configureAzureCredentialsInternal(
             // Create and configure the wizard
             const wizard = new AzureWizard(wizardContext, {
                 title: l10n.t('Manage Azure Credentials'),
-                promptSteps: [new SelectAccountStep(), new SelectTenantsStep()],
+                promptSteps: [new SelectAccountStep(), new AccountActionsStep(), new SelectTenantsStep()],
                 executeSteps: [new ExecuteStep()],
             });
 

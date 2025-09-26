@@ -49,7 +49,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                 ];
             }
 
-            // Only show "sign in with different account" when there are existing accounts
+            // Show signed-in accounts + option to add more
             return [
                 ...accountItems,
                 { label: '', kind: vscode.QuickPickItemKind.Separator },
@@ -63,10 +63,10 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
 
         const selectedItem = await context.ui.showQuickPick(getAccountQuickPickItems(), {
             stepName: 'selectAccount',
-            placeHolder: l10n.t('Select an Azure account to choose which tenants to use'),
+            placeHolder: l10n.t('Select an Azure account to manage'),
             matchOnDescription: true,
             suppressPersistence: true,
-            loadingPlaceHolder: l10n.t('Initializing Credentials Management…'),
+            loadingPlaceHolder: l10n.t('Loading Azure accounts…'),
         });
 
         // Add telemetry for account selection method
