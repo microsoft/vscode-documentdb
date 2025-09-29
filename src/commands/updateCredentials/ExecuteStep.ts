@@ -49,12 +49,21 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
                     connectionUser: context.nativeAuthConfig.connectionUser,
                     connectionPassword: context.nativeAuthConfig.connectionPassword,
                 };
-            } else if (authMethod === AuthMethodId.MicrosoftEntraID) {
+            } else if (authMethod === AuthMethodId.MicrosoftEntraID && context.entraIdAuthConfig) {
                 // For Entra ID, clear any native auth configs
                 connectionCredentials.secrets.nativeAuthConfig = undefined;
 
-                // Entra ID config will be set up during authentication flow
-                // No need to store it here as it's retrieved from Azure context
+                // Update Entra ID auth config from structured config
+                connectionCredentials.secrets.entraIdAuthConfig = {
+                    tenantId: context.entraIdAuthConfig.tenantId,
+                    subscriptionId: context.entraIdAuthConfig.subscriptionId,
+                };
+            } else if (authMethod === AuthMethodId.MicrosoftEntraID) {
+                // For Entra ID without config, clear any native auth configs
+                connectionCredentials.secrets.nativeAuthConfig = undefined;
+
+                // Clear any existing Entra ID config if no new config provided
+                connectionCredentials.secrets.entraIdAuthConfig = undefined;
             }
 
             connectionCredentials.properties.selectedAuthMethod = context.selectedAuthenticationMethod?.toString();
