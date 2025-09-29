@@ -203,10 +203,10 @@ export class CredentialCache {
         // Convert central auth configs to local cache format
         let cacheEntraIdConfig: EntraIdAuthConfig | undefined;
         if (secrets.entraIdAuthConfig) {
-            cacheEntraIdConfig = {
-                tenantId: secrets.entraIdAuthConfig.tenantId, // Preserve optional nature for backward compatibility
-            };
+            // Preserve all optional fields for backward compatibility
+            cacheEntraIdConfig = { ...secrets.entraIdAuthConfig };
         }
+        
 
         // Use structured configurations
         const username = secrets.nativeAuthConfig?.connectionUser ?? '';
