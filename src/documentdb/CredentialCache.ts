@@ -206,7 +206,6 @@ export class CredentialCache {
             // Preserve all optional fields for backward compatibility
             cacheEntraIdConfig = { ...secrets.entraIdAuthConfig };
         }
-        
 
         // Use structured configurations
         const username = secrets.nativeAuthConfig?.connectionUser ?? '';
