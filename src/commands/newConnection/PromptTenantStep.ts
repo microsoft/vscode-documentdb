@@ -29,7 +29,7 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
             // Create quick pick items
             const tenantItems: TenantQuickPickItem[] = [
                 {
-                    label: l10n.t('Manually enter a custom tenant ID (GUID)'),
+                    label: l10n.t('Manually enter a custom tenant ID'),
                     iconPath: new vscode.ThemeIcon('edit'),
                     isCustomOption: true,
                     alwaysShow: true,
