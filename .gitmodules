@@ -1,0 +1,3 @@
+[submodule "documentdb-mcp"]
+	path = documentdb-mcp
+	url = https://github.com/microsoft/documentdb-mcp.git
