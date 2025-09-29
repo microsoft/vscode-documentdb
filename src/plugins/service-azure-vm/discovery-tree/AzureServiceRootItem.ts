@@ -6,7 +6,6 @@
 import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import {
@@ -14,6 +13,7 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { askToConfigureCredentials } from '../../api-shared/azure/askToConfigureCredentials';
 import { getTenantFilteredSubscriptions } from '../../api-shared/azure/subscriptionFiltering/subscriptionFilteringHelpers';
 import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
@@ -30,19 +30,17 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        /**
-         * This is an important step to ensure that the user is signed in to Azure before listing subscriptions.
-         */
-        if (!(await this.azureSubscriptionProvider.isSignedIn())) {
-            const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
-            void vscode.window
-                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in and retry.'), signIn)
-                .then(async (input) => {
-                    if (input === signIn) {
-                        await this.azureSubscriptionProvider.signIn();
-                        ext.discoveryBranchDataProvider.refresh();
-                    }
-                });
+        const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
+        const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
+
+        if (!subscriptions || subscriptions.length === 0) {
+            // Show modal dialog for empty state
+            const configureResult = await askToConfigureCredentials();
+            if (configureResult === 'configure') {
+                // Note to future maintainers: 'void' is important here so that the return below returns the error node.
+                // Otherwise, the /retry node might be duplicated as we're inside of tree node with a loading state (the node items are being swapped etc.)
+                void vscode.commands.executeCommand('vscode-documentdb.command.discoveryView.manageCredentials', this);
+            }
 
             return [
                 createGenericElementWithContext({
@@ -54,12 +52,6 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
                     commandArgs: [this],
                 }),
             ];
-        }
-
-        const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
-        const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
-        if (!subscriptions || subscriptions.length === 0) {
-            return [];
         }
 
         // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'

@@ -3,15 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AzureTenant } from '@microsoft/vscode-azext-azureauth';
-import { AzureWizardPromptStep, type IWizardOptions } from '@microsoft/vscode-azext-utils';
+import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import {
+    AzureWizardPromptStep,
+    type IActionContext,
+    type IWizardOptions,
+    UserCancelledError,
+} from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import { type QuickPickItem } from 'vscode';
+import { askToConfigureCredentials } from '../askToConfigureCredentials';
+import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
 import { type FilteringWizardContext } from './FilteringWizardContext';
 import { FilterSubscriptionSubStep } from './FilterSubscriptionSubStep';
 import { FilterTenantSubStep } from './FilterTenantSubStep';
-import { isTenantFilteredOut } from './subscriptionFilteringHelpers';
+import { getTenantFilteredSubscriptions, isTenantFilteredOut } from './subscriptionFilteringHelpers';
 
 /**
  * Custom error to signal that initialization has completed and wizard should proceed to subwizard
@@ -68,6 +75,20 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         context.allSubscriptions = await azureSubscriptionProvider.getSubscriptions(false);
         context.telemetry.measurements.subscriptionLoadTimeMs = Date.now() - subscriptionLoadStartTime;
         context.telemetry.measurements.allSubscriptionsCount = context.allSubscriptions.length;
+
+        // Check if there are any tenant-filtered subscriptions available
+        const filteredSubscriptions = getTenantFilteredSubscriptions(context.allSubscriptions);
+        if (!filteredSubscriptions || filteredSubscriptions.length === 0) {
+            // Show modal dialog for empty state
+            const configureResult = await askToConfigureCredentials();
+            if (configureResult === 'configure') {
+                await this.configureCredentialsFromWizard(context, azureSubscriptionProvider);
+
+                throw new UserCancelledError('User chose to configure Azure credentials');
+            }
+            // User chose not to configure - also cancel the wizard since there's nothing to filter
+            throw new UserCancelledError('No subscriptions available for filtering');
+        }
 
         // Initialize selectedTenants based on current filtering state (only if not already set from going back)
         if (!context.selectedTenants) {
@@ -127,6 +148,24 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
                 promptSteps: [new FilterSubscriptionSubStep()],
             };
         }
+    }
+
+    private async configureCredentialsFromWizard(
+        context: IActionContext,
+        subscriptionProvider: VSCodeAzureSubscriptionProvider,
+    ): Promise<void> {
+        // Add telemetry for credential configuration activation
+        context.telemetry.properties.credentialConfigActivated = 'true';
+        context.telemetry.properties.nodeProvided = 'false';
+
+        // Call the credentials management function directly using the subscription provider from context
+        // The subscription provider in the wizard context is actually AzureSubscriptionProviderWithFilters
+        const { configureAzureCredentials } = await import('../credentialsManagement');
+        await configureAzureCredentials(
+            context,
+            subscriptionProvider as AzureSubscriptionProviderWithFilters,
+            undefined,
+        );
     }
 
     public shouldPrompt(): boolean {

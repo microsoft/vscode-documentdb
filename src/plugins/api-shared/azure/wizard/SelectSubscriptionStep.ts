@@ -6,9 +6,10 @@
 import { VSCodeAzureSubscriptionProvider, type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { QuickPickItemKind, ThemeIcon, Uri, window, type MessageItem, type QuickPickItem } from 'vscode';
+import { QuickPickItemKind, ThemeIcon, Uri, window, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
+import { askToConfigureCredentials } from '../askToConfigureCredentials';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
 import { getDuplicateSubscriptions } from '../subscriptionFiltering/subscriptionFilteringHelpers';
 import { AzureContextProperties } from './AzureContextProperties';
@@ -39,22 +40,6 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             AzureContextProperties.AzureSubscriptionProvider
         ] as VSCodeAzureSubscriptionProvider;
 
-        /**
-         * This is an important step to ensure that the user is signed in to Azure before listing subscriptions.
-         */
-        if (!(await subscriptionProvider.isSignedIn())) {
-            const signIn: MessageItem = { title: l10n.t('Sign In') };
-            void window
-                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in and retry.'), signIn)
-                .then((input) => {
-                    if (input === signIn) {
-                        void subscriptionProvider.signIn();
-                    }
-                });
-
-            throw new UserCancelledError(l10n.t('User is not signed in to Azure.'));
-        }
-
         // Store subscriptions outside the async function so we can access them later
         let subscriptions!: Awaited<AzureSubscription[]>;
 
@@ -84,7 +69,7 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             // Check for empty state first
             if (subscriptions.length === 0) {
                 // Show modal dialog for empty state
-                const configureResult = await this.askToConfigureCredentials();
+                const configureResult = await askToConfigureCredentials();
                 if (configureResult === 'configure') {
                     await this.configureCredentialsFromWizard(context, subscriptionProvider);
                     await this.showRetryInstructions();
@@ -159,24 +144,6 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
     public shouldPrompt(): boolean {
         return true;
-    }
-
-    private async askToConfigureCredentials(): Promise<'configure' | 'cancel'> {
-        const configure = l10n.t('Yes, Manage Accounts');
-
-        const result = await window.showInformationMessage(
-            l10n.t('No Azure Subscriptions Found'),
-            {
-                modal: true,
-                detail: l10n.t(
-                    'To connect to Azure resources, you need to sign in to Azure accounts.\n\n' +
-                        'Would you like to manage your Azure accounts now?',
-                ),
-            },
-            { title: configure },
-        );
-
-        return result?.title === configure ? 'configure' : 'cancel';
     }
 
     private async configureCredentialsFromWizard(
