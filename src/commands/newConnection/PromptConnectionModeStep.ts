@@ -12,6 +12,7 @@ import { PromptAuthMethodStep } from './PromptAuthMethodStep';
 import { PromptConnectionStringStep } from './PromptConnectionStringStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
 import { PromptServiceDiscoveryStep } from './PromptServiceDiscoveryStep';
+import { PromptTenantStep } from './PromptTenantStep';
 import { PromptUsernameStep } from './PromptUsernameStep';
 
 export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
@@ -64,6 +65,7 @@ export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectio
                     promptSteps: [
                         new PromptConnectionStringStep(),
                         new PromptAuthMethodStep(),
+                        new PromptTenantStep(),
                         new PromptUsernameStep(),
                         new PromptPasswordStep(),
                     ],
