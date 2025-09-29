@@ -10,7 +10,9 @@ import { type JSONSchema } from '../utils/json/JSONSchema';
 import { getPropertyNamesAtLevel, updateSchemaWithDocument } from '../utils/json/mongo/SchemaAnalyzer';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
+import { McpService } from '../services/McpService';
 import { ClustersClient } from './ClustersClient';
+import { CredentialCache } from './CredentialCache';
 
 export type TableDataEntry = {
     /**
@@ -180,6 +182,18 @@ export class ClusterSession {
         const session = new ClusterSession(client);
 
         ClusterSession._sessions.set(sessionId, session);
+
+        // Sync with MCP service when a new session is created (non-blocking)
+        try {
+            const mcpService = McpService.getInstance();
+            const connectionString = CredentialCache.getConnectionStringWithPassword(credentialId);
+            if (connectionString && mcpService.isServerRunning) {
+                await mcpService.syncConnection(connectionString);
+            }
+        } catch (mcpError) {
+            // MCP sync is optional - log but don't fail the session creation
+            console.warn('MCP sync failed during session creation:', mcpError);
+        }
 
         return sessionId;
     }

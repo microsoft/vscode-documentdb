@@ -26,6 +26,7 @@ import { globalUriHandler } from './vscodeUriHandler';
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi } from '../api/src';
 import { MigrationService } from './services/migrationServices';
+import { McpService } from './services/McpService';
 
 export async function activateInternal(
     context: vscode.ExtensionContext,
@@ -60,6 +61,11 @@ export async function activateInternal(
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
         await clustersSupport.activateClustersSupport();
+
+        // Initialize and register the MCP Service
+        const mcpService = McpService.getInstance();
+        context.subscriptions.push(mcpService);
+        await mcpService.initialize();
 
         context.subscriptions.push(
             vscode.window.registerUriHandler({

@@ -12,6 +12,7 @@ import { ext } from '../../extensionVariables';
 
 import { Views } from '../../documentdb/Views';
 import { type ConnectionItem, ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { McpService } from '../../services/McpService';
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,
@@ -133,6 +134,24 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 };
 
                 await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
+
+                // Sync the new connection with MCP service (non-blocking)
+                try {
+                    const mcpService = McpService.getInstance();
+                    const fullConnectionString = newParsedCS.toString();
+                    // Reconstruct connection string with credentials for MCP if available
+                    if (newUsername || newPassword) {
+                        const mcpConnectionString = new DocumentDBConnectionString(fullConnectionString);
+                        if (newUsername) mcpConnectionString.username = newUsername;
+                        if (newPassword) mcpConnectionString.password = newPassword;
+                        await mcpService.syncConnection(mcpConnectionString.toString());
+                    } else {
+                        await mcpService.syncConnection(fullConnectionString);
+                    }
+                } catch (mcpError) {
+                    // MCP sync is optional - log but don't fail the connection creation
+                    ext.outputChannel.appendLog(`MCP sync failed: ${mcpError instanceof Error ? mcpError.message : String(mcpError)}`);
+                }
 
                 // Refresh the connections tree when adding a new root-level connection
                 if (parentId === undefined || parentId === '') {
