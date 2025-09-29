@@ -445,6 +445,12 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open",
         "title": "Open Collection"
+      },
+      {
+        "//": "Check MCP Server Status",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.checkMcpStatus",
+        "title": "Check MCP Server Status"
       }
     ],
     "submenus": [

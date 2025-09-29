@@ -20,6 +20,7 @@ import { type AzExtResourceType, getAzureResourcesExtensionApi } from '@microsof
 import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
+import { checkMcpStatus } from '../commands/checkMcpStatus/checkMcpStatus';
 import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
@@ -270,6 +271,9 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.importDocuments', importDocuments);
 
                 registerScrapbookCommands();
+
+                // Register MCP status command
+                registerCommand('vscode-documentdb.command.checkMcpStatus', checkMcpStatus);
 
                 /**
                  * Here, exporting documents is done in two ways: one is accessible from the tree view
