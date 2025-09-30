@@ -6,6 +6,7 @@
 import { type Document, type WithId, type WriteError } from 'mongodb';
 import { l10n } from 'vscode';
 import { ClustersClient, isBulkWriteError } from '../../../../../documentdb/ClustersClient';
+import { ext } from '../../../../../extensionVariables';
 import { ConflictResolutionStrategy, type CopyPasteConfig } from '../copyPasteConfig';
 import {
     type BulkWriteResult,
@@ -140,6 +141,7 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
      * @param batch Documents to write
      * @param config Copy-paste configuration
      * @param ordered Whether to use ordered inserts
+     * @param options Write options including progress callback
      * @returns Promise with batch write result
      */
     private async writeBatchWithRetry(
@@ -149,11 +151,13 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
         batch: DocumentDetails[],
         config: CopyPasteConfig,
         ordered: boolean,
+        options?: DocumentWriterOptions,
     ): Promise<BatchWriteResult> {
         let currentBatch = batch;
         const maxAttempts = 10;
         let attempt = 0;
         let wasThrottled = false;
+        let totalInserted = 0; // Track total documents inserted across retries
 
         while (attempt < maxAttempts) {
             try {
@@ -180,9 +184,16 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
                         bypassDocumentValidation: true, // Only if safe
                     });
 
+                    const documentsWritten = result.insertedCount + result.upsertedCount;
+
+                    // Report progress for successful write
+                    if (documentsWritten > 0) {
+                        options?.progressCallback?.(documentsWritten);
+                    }
+
                     return {
-                        insertedCount: result.insertedCount + result.upsertedCount,
-                        processedCount: currentBatch.length,
+                        insertedCount: totalInserted + documentsWritten,
+                        processedCount: batch.length,
                         wasThrottled,
                     };
                 }
@@ -190,9 +201,14 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
                 // For other strategies, use insertDocuments
                 const insertResult = await client.insertDocuments(databaseName, collectionName, rawDocuments, ordered);
 
+                // Report progress for successful write
+                if (insertResult.insertedCount > 0) {
+                    options?.progressCallback?.(insertResult.insertedCount);
+                }
+
                 return {
-                    insertedCount: insertResult.insertedCount,
-                    processedCount: currentBatch.length,
+                    insertedCount: totalInserted + insertResult.insertedCount,
+                    processedCount: batch.length,
                     wasThrottled,
                 };
             } catch (error: unknown) {
@@ -201,10 +217,65 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
                 if (errorType === 'throttle') {
                     wasThrottled = true;
 
-                    // Split batch immediately if we have more than one document
-                    if (currentBatch.length > 1) {
+                    // Check if some documents were successfully inserted before throttling
+                    let documentsInserted = 0;
+                    if (isBulkWriteError(error) && error.result?.insertedCount) {
+                        documentsInserted = error.result.insertedCount;
+
+                        // Validation: cross-check with insertedIds if available
+                        if (error.insertedIds) {
+                            const insertedIdsCount = Object.keys(error.insertedIds).length;
+                            if (insertedIdsCount !== documentsInserted) {
+                                ext.outputChannel.debug(
+                                    l10n.t(
+                                        'Throttle error: insertedCount ({0}) does not match insertedIds count ({1})',
+                                        documentsInserted.toString(),
+                                        insertedIdsCount.toString(),
+                                    ),
+                                );
+                            }
+                        }
+
+                        ext.outputChannel.debug(
+                            l10n.t(
+                                'Throttle error: {0} documents were successfully inserted before throttling occurred',
+                                documentsInserted.toString(),
+                            ),
+                        );
+                    }
+
+                    // Remove successfully inserted documents from the batch
+                    if (documentsInserted > 0) {
+                        // Track total inserted and report progress
+                        totalInserted += documentsInserted;
+                        options?.progressCallback?.(documentsInserted);
+
+                        // With ordered inserts, documents are inserted sequentially
+                        // We can simply slice off the successfully inserted documents
+                        currentBatch = currentBatch.slice(documentsInserted);
+
+                        // Use the successful insert count as the new batch size - this is the proven capacity!
+                        // This is more accurate than halving because we know exactly what the database can handle
+                        this.currentBatchSize = Math.max(this.minBatchSize, documentsInserted);
+
+                        ext.outputChannel.debug(
+                            l10n.t(
+                                'Adjusted batch size to {0} based on successful inserts before throttle',
+                                this.currentBatchSize.toString(),
+                            ),
+                        );
+
+                        // CRITICAL: Reset attempt counter when making progress
+                        // We only fail after 10 attempts WITHOUT progress, not 10 total attempts
+                        attempt = 0;
+                    } else if (currentBatch.length > 1) {
+                        // No documents inserted - split batch in half as fallback
                         const halfSize = Math.floor(currentBatch.length / 2);
                         currentBatch = currentBatch.slice(0, halfSize);
+
+                        ext.outputChannel.debug(
+                            l10n.t('Throttle error with no inserts: reducing batch size to {0}', halfSize.toString()),
+                        );
                     }
 
                     // Calculate backoff delay and sleep
@@ -224,9 +295,47 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
                         Array.isArray(error.writeErrors) ? error.writeErrors : [error.writeErrors]
                     ) as Array<WriteError>;
 
+                    // Log detailed information about each conflicting document
+                    writeErrorsArray.forEach((writeError) => {
+                        try {
+                            const operation = writeError.getOperation();
+                            const documentId: unknown = operation?._id;
+                            if (documentId !== undefined) {
+                                // Format the document ID appropriately (could be ObjectId, string, number, etc.)
+                                let formattedId: string;
+                                try {
+                                    formattedId = JSON.stringify(documentId);
+                                } catch {
+                                    // Fallback if JSON.stringify fails
+                                    formattedId = typeof documentId === 'string' ? documentId : '[complex object]';
+                                }
+
+                                ext.outputChannel.error(
+                                    l10n.t(
+                                        'Conflict error for document with _id: {0}. Error: {1}',
+                                        formattedId,
+                                        writeError.errmsg || 'Unknown conflict error',
+                                    ),
+                                );
+                            } else {
+                                ext.outputChannel.error(
+                                    l10n.t(
+                                        'Conflict error for document (no _id available). Error: {0}',
+                                        writeError.errmsg || 'Unknown conflict error',
+                                    ),
+                                );
+                            }
+                        } catch (logError) {
+                            // Fail silently if we can't extract document info
+                            ext.outputChannel.warn(
+                                l10n.t('Failed to extract conflict document information: {0}', String(logError)),
+                            );
+                        }
+                    });
+
                     return {
-                        insertedCount: error.result.insertedCount,
-                        processedCount: currentBatch.length,
+                        insertedCount: totalInserted + error.result.insertedCount,
+                        processedCount: batch.length,
                         wasThrottled,
                         errors: writeErrorsArray.map((writeError) => ({
                             documentId: (writeError.getOperation()._id as string) || undefined,
@@ -240,11 +349,12 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
             }
         }
 
-        // Max attempts reached
+        // Max attempts reached without progress
         throw new Error(
             l10n.t(
-                'Failed to write batch after {0} attempts. Last batch size: {1}',
+                'Failed to write batch after {0} attempts without progress. Total inserted: {1}, remaining: {2}',
                 maxAttempts.toString(),
+                totalInserted.toString(),
                 currentBatch.length.toString(),
             ),
         );
@@ -288,16 +398,22 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
                     batch,
                     config,
                     ordered,
+                    options, // Pass options to enable progress reporting during retries
                 );
 
                 totalInserted += result.insertedCount;
                 pendingDocs = pendingDocs.slice(result.processedCount);
 
                 // Adjust batch size for next iteration
-                if (result.wasThrottled) {
-                    this.currentBatchSize = Math.max(this.minBatchSize, Math.floor(this.currentBatchSize * 0.5));
-                } else if (this.currentBatchSize < this.maxBatchSize) {
-                    this.currentBatchSize = Math.min(this.maxBatchSize, this.currentBatchSize + 10);
+                // Note: If throttling occurred, writeBatchWithRetry already set currentBatchSize
+                // based on the actual number of successful inserts (more accurate than percentage growth)
+                if (!result.wasThrottled && this.currentBatchSize < this.maxBatchSize) {
+                    // Grow batch size by 10% on success without throttling
+                    const growthFactor = 1.1; // 10% increase
+                    this.currentBatchSize = Math.min(
+                        this.maxBatchSize,
+                        Math.floor(this.currentBatchSize * growthFactor),
+                    );
                 }
 
                 // Collect errors if any
@@ -310,8 +426,8 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
                     }
                 }
 
-                // Report progress (just the count written in this batch)
-                options?.progressCallback?.(result.insertedCount);
+                // Progress is now reported inside writeBatchWithRetry for all cases
+                // No need to report here - it's already been reported
             } catch (error) {
                 // This is a fatal error - return what we have so far
                 const errorObj = error instanceof Error ? error : new Error(String(error));
@@ -386,14 +502,31 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
             );
         }
 
-        // For other strategies: Use batching with appropriate ordered flag
+        // For other strategies: Use ordered inserts for predictable throttle handling
+        // IMPORTANT DESIGN DECISION: ordered: true (DO NOT CHANGE)
+        //
+        // Rationale for ordered inserts:
+        // 1. Simplicity: Simple slice-based retry logic when throttled (no ID filtering needed)
+        // 2. Predictability: Documents inserted sequentially, insertedCount tells exact progress
+        // 3. Reliability: No issues with complex _id types (objects, arrays)
+        // 4. Accurate batch learning: insertedCount directly indicates proven database capacity
+        // 5. Abort strategy: Ensures we stop immediately on first conflict
+        //
+        // Performance consideration:
+        // - Ordered inserts are ~10-30% slower than unordered in optimal conditions
+        // - However, they provide significantly simpler and more reliable throttle handling
+        // - For RU-limited environments (Azure Cosmos DB), reliability > raw speed
+        //
+        // Future optimization:
+        // - A dedicated writer for unthrottled environments can use ordered: false
+        // - This writer prioritizes correctness and ease of maintenance
         return this.writeDocumentsInBatches(
             client,
             databaseName,
             collectionName,
             documents,
             config,
-            config.onConflict === ConflictResolutionStrategy.Abort,
+            true, // Ordered for reliability and simplicity - see comment above
             options,
         );
     }
