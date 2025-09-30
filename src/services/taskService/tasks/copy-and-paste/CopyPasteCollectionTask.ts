@@ -351,13 +351,41 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         // Track flush duration for performance telemetry
         const startTime = Date.now();
 
+        // Track writes within this batch
+        let writtenInCurrentFlush = 0;
+
         const result = await this.documentWriter.writeDocuments(
             this.config.target.connectionId,
             this.config.target.databaseName,
             this.config.target.collectionName,
             this.config,
             buffer,
-            { batchSize: buffer.length },
+            {
+                batchSize: buffer.length,
+                progressCallback: (writtenInBatch) => {
+                    // Accumulate writes in this flush
+                    writtenInCurrentFlush += writtenInBatch;
+
+                    // Update overall progress
+                    this.copiedDocuments += writtenInBatch;
+
+                    // Update UI
+                    const progressPercentage =
+                        this.sourceDocumentCount > 0
+                            ? Math.min(100, Math.round((this.copiedDocuments / this.sourceDocumentCount) * 100))
+                            : 0;
+
+                    this.updateProgress(
+                        progressPercentage,
+                        vscode.l10n.t(
+                            'Copied {0} of {1} documents ({2}%)',
+                            this.copiedDocuments.toString(),
+                            this.sourceDocumentCount.toString(),
+                            progressPercentage.toString(),
+                        ),
+                    );
+                },
+            },
         );
 
         // Record flush duration with safety check to prevent negative values
@@ -367,7 +395,21 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
         // Update counters - all documents in the buffer were processed (attempted)
         this.processedDocuments += buffer.length;
-        this.copiedDocuments += result.insertedCount;
+
+        // Note: copiedDocuments already updated via progressCallback
+        // Just ensure consistency
+        if (writtenInCurrentFlush !== result.insertedCount) {
+            // Log discrepancy for debugging
+            ext.outputChannel.warn(
+                vscode.l10n.t(
+                    'Progress callback reported {0} written, but result shows {1}',
+                    writtenInCurrentFlush.toString(),
+                    result.insertedCount.toString(),
+                ),
+            );
+            // Trust the final result
+            this.copiedDocuments = this.copiedDocuments - writtenInCurrentFlush + result.insertedCount;
+        }
 
         // Check for errors in the write result and track conflict statistics
         if (result.errors && result.errors.length > 0) {

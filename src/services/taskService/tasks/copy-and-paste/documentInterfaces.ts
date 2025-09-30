@@ -55,6 +55,12 @@ export interface DocumentWriterOptions {
      * Batch size for bulk write operations.
      */
     batchSize?: number;
+
+    /**
+     * Callback to report progress during batch processing.
+     * Reports the number of documents written in the current batch.
+     */
+    progressCallback?: (writtenInBatch: number) => void;
 }
 
 /**
@@ -104,6 +110,14 @@ export interface DocumentWriter {
         documents: DocumentDetails[],
         options?: DocumentWriterOptions,
     ): Promise<BulkWriteResult>;
+
+    /**
+     * Gets the current adaptive batch size.
+     * The task can use this to optimize its read buffer size.
+     *
+     * @returns Current batch size
+     */
+    getCurrentBatchSize(): number;
 
     /**
      * Ensures the target collection exists before writing.
