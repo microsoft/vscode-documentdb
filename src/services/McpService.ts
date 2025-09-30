@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { MongoClient } from 'mongodb';
 import type * as vscode from 'vscode';
 import {
     type connectToDocumentDB as connectToDocumentDBType,
@@ -73,13 +74,15 @@ class McpServiceImpl implements vscode.Disposable {
      * Connect to DocumentDB with the specified connection string.
      * This establishes an active connection that the MCP server can use.
      *
-     * @param connectionString - The MongoDB connection string
+     * @param connection - The MongoDB connection string or mongo client
      * @param testConnection - Whether to test the connection (default: true)
      */
-    public async connect(connectionString: string, testConnection: boolean = true): Promise<void> {
+    public async connect(connection: string, testConnection?: boolean): Promise<void>;
+    public async connect(connection: MongoClient, testConnection?: boolean): Promise<void>;
+    public async connect(connection: string | MongoClient, testConnection: boolean = true): Promise<void> {
         try {
             const mcp = await getMcpModule();
-            const result = await mcp.connectToDocumentDB(connectionString, testConnection);
+            const result = await mcp.connectToDocumentDB(connection, testConnection);
             if (result.success) {
                 console.log('[McpService] Successfully connected to DocumentDB:', result.message);
             } else {

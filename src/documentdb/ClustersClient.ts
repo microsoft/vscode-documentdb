@@ -166,7 +166,7 @@ export class ClustersClient {
             // Synchronize connection with MCP server
             if (McpService.isRunning()) {
                 try {
-                    await McpService.connect(connectionString, false);
+                    await McpService.connect(this._mongoClient, false);
                     ext.outputChannel.appendLine('[ClustersClient] MCP server connection synchronized');
                 } catch (mcpError) {
                     // Don't fail the main connection if MCP sync fails
