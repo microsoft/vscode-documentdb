@@ -25,6 +25,7 @@ import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi } from '../api/src';
+import { McpService } from './services/McpService';
 import { MigrationService } from './services/migrationServices';
 
 export async function activateInternal(
@@ -66,6 +67,16 @@ export async function activateInternal(
                 handleUri: globalUriHandler,
             }),
         );
+
+        // Start the MCP server for GitHub Copilot integration
+        try {
+            await McpService.start();
+            context.subscriptions.push(McpService);
+            ext.outputChannel.appendLine('DocumentDB MCP server started successfully');
+        } catch (error) {
+            ext.outputChannel.appendLine(`Failed to start MCP server: ${error}`);
+            // Don't fail extension activation if MCP server fails to start
+        }
 
         // Suppress "Report an Issue" button for all errors in favor of the command
         registerErrorHandler((c) => (c.errorHandling.suppressReportIssue = true));

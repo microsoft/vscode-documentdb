@@ -48,7 +48,7 @@ export default ts.config(
         rules: {
             eqeqeq: ['error', 'always'],
             'import/consistent-type-specifier-style': ['error', 'prefer-inline'],
-            'import/no-internal-modules': ['error', { allow: ['antlr4ts/**', 'yaml/types'] }],
+            'import/no-internal-modules': ['error', { allow: ['antlr4ts/**', 'yaml/types', '**/documentdb-mcp/dist/**'] }],
             'no-case-declarations': 'error',
             'no-constant-condition': 'error',
             'no-inner-declarations': 'error',
