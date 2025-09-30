@@ -29,6 +29,7 @@ import {
 } from 'mongodb';
 import { Links } from '../constants';
 import { ext } from '../extensionVariables';
+import { McpService } from '../services/McpService';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
@@ -161,6 +162,17 @@ export class ClustersClient {
     ): Promise<void> {
         try {
             this._mongoClient = await MongoClient.connect(connectionString, options);
+
+            // Synchronize connection with MCP server
+            if (McpService.isRunning()) {
+                try {
+                    await McpService.connect(connectionString, false);
+                    ext.outputChannel.appendLine('[ClustersClient] MCP server connection synchronized');
+                } catch (mcpError) {
+                    // Don't fail the main connection if MCP sync fails
+                    ext.outputChannel.appendLine(`[ClustersClient] Failed to sync MCP connection: ${mcpError}`);
+                }
+            }
         } catch (error) {
             const message = parseError(error).message;
             if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
