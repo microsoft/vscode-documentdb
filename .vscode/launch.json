@@ -3,36 +3,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch Extension",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
-      "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "${defaultBuildTask}",
-      "env": {
-        "DEBUGTELEMETRY": "true", // set this to "verbose" to see telemetry events in debug console
-        "NODE_DEBUG": ""
-      }
-    },
-    {
-      "name": "Launch Extension + Host",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}",
-        "--extensionDevelopmentPath=${workspaceFolder}/../vscode-azureresourcegroups"
-      ],
-      "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "${defaultBuildTask}",
-      "env": {
-        "DEBUGTELEMETRY": "verbose", // set this to "true" to suppress telemetry events in debug console
-        "NODE_DEBUG": ""
-      }
-    },
-    {
-      "name": "Launch Extension (webpack)",
+      "name": "Defaut: Launch Extension (webpack)",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
@@ -64,7 +35,7 @@
       }
     },
     {
-      "name": "Launch Extension + Host (webpack)",
+      "name": "Launch Extension + AzureResources (webpack)",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
@@ -74,11 +45,23 @@
         "--extensionDevelopmentPath=${workspaceFolder}/../vscode-azureresourcegroups"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js", "${workspaceFolder}/../vscode-azureresourcegroups/out/**/*.js"],
+      "preLaunchTask": "Watch",
+      "autoAttachChildProcesses": true,
+      "debugWebWorkerHost": true,
+      "debugWebviews": false,
+      "trace": true,
+      "sourceMaps": true,
+      "pauseForSourceMap": true,
+      "skipFiles": ["**/node_modules/**"],
+      "smartStep": true,
+      "sourceMapRenames": true,
+      "rendererDebugOptions": {
+        "webRoot": "${workspaceFolder}"
+      },
       "resolveSourceMapLocations": ["${workspaceFolder}/dist/**", "!**/node_modules/**"],
       "sourceMapPathOverrides": {
         "./*": "${workspaceFolder}/*"
       },
-      "preLaunchTask": "Watch",
       "env": {
         "DEBUGTELEMETRY": "verbose", // set this to "true" to suppress telemetry events in debug console
         "NODE_DEBUG": "",
@@ -86,19 +69,22 @@
         "DEVSERVER": "true",
         "STOP_ON_ENTRY": "false" // stop on entry is not allowed for "type": "extensionHost", therefore, it's emulated here (review main.ts)
       },
-      "debugWebWorkerHost": true,
-      "rendererDebugOptions": {
-        "pauseForSourceMap": true,
-        "sourceMapRenames": true,
-        "sourceMaps": true,
-        "webRoot": "${workspaceFolder}/src/webviews/"
-      },
-      "skipFiles": ["**/node_modules/**"],
-      "smartStep": true,
-      "sourceMapRenames": true,
-      "sourceMaps": true,
-      "pauseForSourceMap": true,
-      "trace": true
+    },
+    {
+      "name": "Launch Extension + Host",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--extensionDevelopmentPath=${workspaceFolder}/../vscode-azureresourcegroups"
+      ],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "${defaultBuildTask}",
+      "env": {
+        "DEBUGTELEMETRY": "verbose", // set this to "true" to suppress telemetry events in debug console
+        "NODE_DEBUG": ""
+      }
     },
     {
       "name": "Launch Tests",

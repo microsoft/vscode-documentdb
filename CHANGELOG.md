@@ -1,5 +1,24 @@
 # Change Log
 
+## 0.4.1
+
+### Improvement
+
+- **Walkthrough Welcome Screen & Sidebar Icon Discovery**: The walkthrough welcome screen behavior has been updated to help users notice the updated extension icon in the VS Code sidebar. This change highlights the new branding so users can find the extension more easily from the environment they already use. [#253](https://github.com/microsoft/vscode-documentdb/pull/253)
+
+## 0.4.0
+
+### New Features & Improvements
+
+- **Deep Azure Integration**: Introduces deep integration with the Azure Resources extension, providing a unified experience for discovering and managing Azure Cosmos DB for MongoDB (RU and vCore) resources directly within the Azure view. [#58](https://github.com/microsoft/vscode-documentdb/issues/58)
+- **Service Discovery for MongoDB (RU)**: Adds a new service discovery provider for Azure Cosmos DB for MongoDB (RU) resources, enabling effortless connection and authentication through the Discovery View. [#244](https://github.com/microsoft/vscode-documentdb/issues/244)
+- **Official DocumentDB Logo**: Updated the extension's icon and branding to use the official DocumentDB logo for better brand recognition and consistency. [#246](https://github.com/microsoft/vscode-documentdb/pull/246)
+
+### Fixes
+
+- **Connection String Password Support**: Restored support for passwords when creating new connections using a connection string, fixing a regression that affected certain configurations. [#247](https://github.com/microsoft/vscode-documentdb/pull/247)
+- **Improved Debugging Information**: Enhanced internal error handling for `nonNull` checks to include file context, making it easier to diagnose and triage issues. [#236](https://github.com/microsoft/vscode-documentdb/pull/236)
+
 ## 0.3.1
 
 ### Fixes

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CaseInsensitiveMap } from '../utils/CaseInsensitiveMap';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthMethodId } from './auth/AuthMethod';
 import { addAuthenticationDataToConnectionString } from './utils/connectionStringHelpers';
@@ -21,7 +22,8 @@ export interface ClustersCredentials {
 
 export class CredentialCache {
     // the id of the cluster === the tree item id -> cluster credentials
-    private static _store: Map<string, ClustersCredentials> = new Map();
+    // Some SDKs for azure differ the case on some resources ("DocumentDb" vs "DocumentDB")
+    private static _store: CaseInsensitiveMap<ClustersCredentials> = new CaseInsensitiveMap();
 
     public static getConnectionStringWithPassword(mongoClusterId: string): string {
         return CredentialCache._store.get(mongoClusterId)?.connectionStringWithPassword as string;
