@@ -370,21 +370,13 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                     // Update overall progress
                     this.copiedDocuments += writtenInBatch;
 
-                    // Update UI
+                    // Update UI with percentage
                     const progressPercentage =
                         this.sourceDocumentCount > 0
                             ? Math.min(100, Math.round((this.copiedDocuments / this.sourceDocumentCount) * 100))
                             : 0;
 
-                    this.updateProgress(
-                        progressPercentage,
-                        vscode.l10n.t(
-                            'Copied {0} of {1} documents ({2}%)',
-                            this.copiedDocuments.toString(),
-                            this.sourceDocumentCount.toString(),
-                            progressPercentage.toString(),
-                        ),
-                    );
+                    this.updateProgress(progressPercentage, this.getProgressMessage(progressPercentage));
                 },
             },
         );
@@ -484,29 +476,38 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             }
         }
 
-        // Update progress
-        const progress = Math.min(100, (this.processedDocuments / this.sourceDocumentCount) * 100);
-        this.updateProgress(progress, this.getProgressMessage());
+        // Update progress with percentage
+        const progress = Math.min(100, Math.round((this.processedDocuments / this.sourceDocumentCount) * 100));
+        this.updateProgress(progress, this.getProgressMessage(progress));
     }
 
     /**
      * Generates an appropriate progress message based on the conflict resolution strategy.
      *
+     * @param progressPercentage Optional percentage to include in message
      * @returns Localized progress message
      */
-    private getProgressMessage(): string {
+    private getProgressMessage(progressPercentage?: number): string {
+        const percentageStr = progressPercentage !== undefined ? ` (${progressPercentage}%)` : '';
+
         if (this.config.onConflict === ConflictResolutionStrategy.Skip && this.conflictStats.skippedCount > 0) {
             // Verbose message showing processed, copied, and skipped counts
             return vscode.l10n.t(
-                'Processed {0} of {1} documents ({2} copied, {3} skipped)',
-                this.processedDocuments,
-                this.sourceDocumentCount,
-                this.copiedDocuments,
-                this.conflictStats.skippedCount,
+                'Processed {0} of {1} documents ({2} copied, {3} skipped){4}',
+                this.processedDocuments.toString(),
+                this.sourceDocumentCount.toString(),
+                this.copiedDocuments.toString(),
+                this.conflictStats.skippedCount.toString(),
+                percentageStr,
             );
         } else {
-            // Simple message for other strategies
-            return vscode.l10n.t('Processed {0} of {1} documents', this.processedDocuments, this.sourceDocumentCount);
+            // Simple message for other strategies (shows copied count)
+            return vscode.l10n.t(
+                'Copied {0} of {1} documents{2}',
+                this.copiedDocuments.toString(),
+                this.sourceDocumentCount.toString(),
+                percentageStr,
+            );
         }
     }
 
