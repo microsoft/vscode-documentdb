@@ -45,22 +45,15 @@ jobs:
             - name: ✅ Checkout Repository
               uses: actions/checkout@v4
 
-            - name: 🛠 Setup Node.js Environment
+            - name: 🛠 Setup Node.js Environment (with cache)
               uses: actions/setup-node@v4
               with:
                   node-version-file: .nvmrc
-                  cache: 'npm'
-
-            - name: 💾 Restore npm Cache
-              uses: actions/cache@v3
-              with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-node-
+                  cache: npm
+                  cache-dependency-path: '**/package-lock.json'
 
             - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --verbose
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false --verbose
 
             - name: 🌐 Check Localization Files
               run: npm run l10n:check
@@ -91,22 +84,15 @@ jobs:
             - name: ✅ Checkout Repository
               uses: actions/checkout@v4
 
-            - name: 🛠 Setup Node.js Environment
+            - name: 🛠 Setup Node.js Environment (with cache)
               uses: actions/setup-node@v4
               with:
                   node-version-file: .nvmrc
-                  cache: 'npm'
-
-            - name: 💾 Restore npm Cache
-              uses: actions/cache@v3
-              with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-node-
+                  cache: npm
+                  cache-dependency-path: '**/package-lock.json'
 
             - name: 📦 Install Dependencies (npm ci)
-              run: npm ci
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
 
             - name: 🔄 Run Integration Tests (Headless UI)
               run: xvfb-run -a npm test
@@ -123,7 +109,6 @@ jobs:
               github.base_ref == 'main' ||
               github.base_ref == 'next'
             ))
-
         defaults:
             run:
                 working-directory: '.'
@@ -131,22 +116,15 @@ jobs:
             - name: ✅ Checkout Repository
               uses: actions/checkout@v4
 
-            - name: 🛠 Setup Node.js Environment
+            - name: 🛠 Setup Node.js Environment (with cache)
               uses: actions/setup-node@v4
               with:
                   node-version-file: .nvmrc
-                  cache: 'npm'
-
-            - name: 💾 Restore npm Cache
-              uses: actions/cache@v3
-              with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-node-
+                  cache: npm
+                  cache-dependency-path: '**/package-lock.json'
 
             - name: 📦 Install Dependencies (npm ci)
-              run: npm ci
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
 
             - name: 🏗 Build Project
               run: npm run build
