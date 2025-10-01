@@ -43,7 +43,6 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     private copiedDocuments: number = 0;
 
     // Buffer configuration for memory management
-    private readonly bufferSize: number = 100; // Number of documents to buffer
     private readonly maxBufferMemoryMB: number = 32; // Rough memory limit for buffer
 
     // Performance tracking fields - using running statistics for memory efficiency
@@ -225,7 +224,6 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
         // Add execution-specific telemetry
         if (context) {
-            context.telemetry.properties.bufferSize = this.bufferSize.toString();
             context.telemetry.properties.maxBufferMemoryMB = this.maxBufferMemoryMB.toString();
         }
 
@@ -361,7 +359,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             this.config,
             buffer,
             {
-                batchSize: buffer.length,
+                // Note: batchSize option removed - writer manages batching internally with adaptive sizing
                 abortSignal: signal,
                 progressCallback: (writtenInBatch) => {
                     // Accumulate writes in this flush
@@ -389,8 +387,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         // Update counters - all documents in the buffer were processed (attempted)
         this.processedDocuments += buffer.length;
 
-        // Note: copiedDocuments already updated via progressCallback
-        // Just ensure consistency
+        // Reconcile progress: progressCallback reports real-time progress during retries,
+        // but result.insertedCount is the authoritative final count.
+        // This defensive check catches any discrepancies between the two.
         if (writtenInCurrentFlush !== result.insertedCount) {
             // Log discrepancy for debugging
             ext.outputChannel.warn(
@@ -404,77 +403,8 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             this.copiedDocuments = this.copiedDocuments - writtenInCurrentFlush + result.insertedCount;
         }
 
-        // Check for errors in the write result and track conflict statistics
-        if (result.errors && result.errors.length > 0) {
-            // Update conflict statistics
-            this.conflictStats.errorCount += result.errors.length;
-
-            // Handle errors based on the configured conflict resolution strategy.
-            if (this.config.onConflict === ConflictResolutionStrategy.Abort) {
-                // Abort strategy: fail the entire task on the first error.
-                for (const error of result.errors) {
-                    ext.outputChannel.error(
-                        vscode.l10n.t('Error inserting document (Abort): {0}', error.error?.message ?? 'Unknown error'),
-                    );
-                }
-                ext.outputChannel.show();
-
-                const firstError = result.errors[0] as { error: Error };
-                throw new Error(
-                    vscode.l10n.t(
-                        'Task aborted due to an error: {0}. {1} document(s) were inserted in total.',
-                        firstError.error?.message ?? 'Unknown error',
-                        this.copiedDocuments.toString(),
-                    ),
-                );
-            } else if (this.config.onConflict === ConflictResolutionStrategy.Skip) {
-                // Skip strategy: log each error and continue.
-                this.conflictStats.skippedCount += result.errors.length;
-                for (const error of result.errors) {
-                    ext.outputChannel.appendLog(
-                        vscode.l10n.t(
-                            'Skipped document with _id: {0} due to error: {1}',
-                            String(error.documentId ?? 'unknown'),
-                            error.error?.message ?? 'Unknown error',
-                        ),
-                    );
-                }
-                ext.outputChannel.show();
-            } else if (this.config.onConflict === ConflictResolutionStrategy.GenerateNewIds) {
-                // GenerateNewIds strategy: this should not have conflicts since we remove _id
-                // If errors occur, they're likely other issues, so log them
-                for (const error of result.errors) {
-                    ext.outputChannel.error(
-                        vscode.l10n.t(
-                            'Error inserting document (GenerateNewIds): {0}',
-                            error.error?.message ?? 'Unknown error',
-                        ),
-                    );
-                }
-                ext.outputChannel.show();
-            } else {
-                // Overwrite or other strategies: treat errors as fatal for now.
-                for (const error of result.errors) {
-                    ext.outputChannel.error(
-                        vscode.l10n.t(
-                            'Error inserting document (Overwrite): {0}',
-                            error.error?.message ?? 'Unknown error',
-                        ),
-                    );
-                    ext.outputChannel.show();
-                }
-
-                // This can be expanded if other strategies need more nuanced error handling.
-                const firstError = result.errors[0] as { error: Error };
-                throw new Error(
-                    vscode.l10n.t(
-                        'An error occurred while writing documents. Error Count: {0}, First error details: {1}',
-                        result.errors.length,
-                        firstError.error?.message ?? 'Unknown error',
-                    ),
-                );
-            }
-        }
+        // Handle any write errors based on conflict resolution strategy
+        this.handleWriteErrors(result.errors);
 
         // Update progress with percentage
         const progress = Math.min(100, Math.round((this.processedDocuments / this.sourceDocumentCount) * 100));
@@ -664,5 +594,97 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
 
         return { min, max, average, median };
+    }
+
+    /**
+     * Handles write errors based on the conflict resolution strategy.
+     * Logs errors appropriately and throws for fatal strategies (Abort, Overwrite).
+     *
+     * @param errors Array of errors from the write operation, or null if no errors
+     * @throws Error for Abort and Overwrite strategies when errors are present
+     */
+    private handleWriteErrors(errors: Array<{ documentId?: string; error: Error }> | null): void {
+        if (!errors || errors.length === 0) {
+            return;
+        }
+
+        // Update conflict statistics
+        this.conflictStats.errorCount += errors.length;
+
+        // Handle errors based on the configured conflict resolution strategy
+        switch (this.config.onConflict) {
+            case ConflictResolutionStrategy.Abort: {
+                // Abort strategy: fail the entire task on the first error
+                this.logErrors(errors, 'error', 'Abort');
+                const abortFirstError = errors[0];
+                throw new Error(
+                    vscode.l10n.t(
+                        'Task aborted due to an error: {0}. {1} document(s) were inserted in total.',
+                        abortFirstError.error?.message ?? 'Unknown error',
+                        this.copiedDocuments.toString(),
+                    ),
+                );
+            }
+
+            case ConflictResolutionStrategy.Skip:
+                // Skip strategy: log each error and continue
+                this.conflictStats.skippedCount += errors.length;
+                this.logErrors(errors, 'appendLog', 'Skip');
+                break;
+
+            case ConflictResolutionStrategy.GenerateNewIds:
+                // GenerateNewIds strategy: this should not have conflicts since we remove _id
+                // If errors occur, they're likely other issues, so log them
+                this.logErrors(errors, 'error', 'GenerateNewIds');
+                break;
+
+            case ConflictResolutionStrategy.Overwrite:
+            default: {
+                // Overwrite or other strategies: treat errors as fatal
+                this.logErrors(errors, 'error', 'Overwrite');
+                const overwriteFirstError = errors[0];
+                throw new Error(
+                    vscode.l10n.t(
+                        'An error occurred while writing documents. Error Count: {0}, First error details: {1}',
+                        errors.length.toString(),
+                        overwriteFirstError.error?.message ?? 'Unknown error',
+                    ),
+                );
+            }
+        }
+    }
+
+    /**
+     * Logs errors to the output channel based on the log method and strategy.
+     *
+     * @param errors Array of errors to log
+     * @param logMethod Method to use for logging ('error' for fatal errors, 'appendLog' for informational)
+     * @param strategyName Name of the conflict resolution strategy for context
+     */
+    private logErrors(
+        errors: Array<{ documentId?: string; error: Error }>,
+        logMethod: 'error' | 'appendLog',
+        strategyName: string,
+    ): void {
+        for (const error of errors) {
+            if (logMethod === 'appendLog') {
+                ext.outputChannel.appendLog(
+                    vscode.l10n.t(
+                        'Skipped document with _id: {0} due to error: {1}',
+                        String(error.documentId ?? 'unknown'),
+                        error.error?.message ?? 'Unknown error',
+                    ),
+                );
+            } else {
+                ext.outputChannel.error(
+                    vscode.l10n.t(
+                        'Error inserting document ({0}): {1}',
+                        strategyName,
+                        error.error?.message ?? 'Unknown error',
+                    ),
+                );
+            }
+        }
+        ext.outputChannel.show();
     }
 }
