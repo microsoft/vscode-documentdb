@@ -513,14 +513,16 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
     /**
      * Determines whether the buffer should be flushed based on size and memory constraints.
+     * Uses the writer's optimal buffer size as a hint for batching efficiency.
      *
      * @param bufferCount Number of documents in the buffer
      * @param memoryEstimate Estimated memory usage in bytes
      * @returns True if the buffer should be flushed
      */
     private shouldFlushBuffer(bufferCount: number, memoryEstimate: number): boolean {
-        // Flush if we've reached the document count limit
-        if (bufferCount >= this.bufferSize) {
+        // Flush if we've reached the writer's optimal batch size
+        const optimalSize = this.documentWriter.getOptimalBufferSize();
+        if (bufferCount >= optimalSize) {
             return true;
         }
 

@@ -121,12 +121,12 @@ export interface DocumentWriter {
     ): Promise<BulkWriteResult>;
 
     /**
-     * Gets the current adaptive batch size.
-     * The task can use this to optimize its read buffer size.
+     * Gets the optimal buffer size for reading documents.
+     * The task can use this to optimize its read buffer size to match the writer's current capacity.
      *
-     * @returns Current batch size
+     * @returns Optimal buffer size (matches current write batch capacity)
      */
-    getCurrentBatchSize(): number;
+    getOptimalBufferSize(): number;
 
     /**
      * Ensures the target collection exists before writing.

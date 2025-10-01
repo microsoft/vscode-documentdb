@@ -40,12 +40,12 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
     private readonly maxBatchSize: number = 1000;
 
     /**
-     * Gets the current adaptive batch size.
-     * The task can use this to optimize its read buffer size.
+     * Gets the optimal buffer size for reading documents.
+     * The task can use this to optimize its read buffer size to match the writer's current capacity.
      *
-     * @returns Current batch size
+     * @returns Optimal buffer size (matches current write batch capacity)
      */
-    public getCurrentBatchSize(): number {
+    public getOptimalBufferSize(): number {
         return this.currentBatchSize;
     }
 
@@ -483,87 +483,13 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
     }
 
     /**
-     * Writes documents in adaptive batches with retry logic.
-     *
-     * @param client ClustersClient instance
-     * @param databaseName Target database
-     * @param collectionName Target collection
-     * @param documents Documents to write
-     * @param config Copy-paste configuration
-     * @param options Write options including progress callback
-     * @returns Bulk write result
-     */
-    private async writeDocumentsInBatches(
-        client: ClustersClient,
-        databaseName: string,
-        collectionName: string,
-        documents: DocumentDetails[],
-        config: CopyPasteConfig,
-        options?: DocumentWriterOptions,
-    ): Promise<BulkWriteResult> {
-        let totalInserted = 0;
-        const allErrors: Array<{ documentId?: string; error: Error }> = [];
-        let pendingDocs = [...documents];
-
-        while (pendingDocs.length > 0) {
-            // Check abort signal before processing next batch
-            if (options?.abortSignal?.aborted) {
-                break;
-            }
-
-            // Take a batch with current adaptive size
-            const batch = pendingDocs.slice(0, this.currentBatchSize);
-
-            try {
-                // Write batch with retry
-                const result = await this.writeBatchWithRetry(
-                    client,
-                    databaseName,
-                    collectionName,
-                    batch,
-                    config,
-                    options, // Pass options to enable progress reporting during retries
-                );
-
-                totalInserted += result.insertedCount;
-                pendingDocs = pendingDocs.slice(result.processedCount);
-
-                // Note: Batch size growth is handled inside writeBatchWithRetry
-                // The instance variable this.currentBatchSize is updated there,
-                // so the next iteration of this loop will automatically use the grown size
-
-                // Collect errors if any
-                if (result.errors) {
-                    allErrors.push(...result.errors);
-
-                    // For Abort strategy, stop immediately on first error
-                    if (config.onConflict === ConflictResolutionStrategy.Abort) {
-                        break;
-                    }
-                }
-
-                // Progress is now reported inside writeBatchWithRetry for all cases
-                // No need to report here - it's already been reported
-            } catch (error) {
-                // This is a fatal error - return what we have so far
-                const errorObj = error instanceof Error ? error : new Error(String(error));
-                allErrors.push({ documentId: undefined, error: errorObj });
-                break;
-            }
-        }
-
-        return {
-            insertedCount: totalInserted,
-            errors: allErrors.length > 0 ? allErrors : null,
-        };
-    }
-
-    /**
      * Writes documents to a DocumentDB collection using bulk operations.
+     * Handles document transformation and batching with retry logic.
      *
      * @param connectionId Connection identifier to get the DocumentDB client
      * @param databaseName Name of the target database
      * @param collectionName Name of the target collection
+     * @param config Copy-paste configuration including conflict resolution strategy
      * @param documents Array of documents to write
      * @param options Optional write options
      * @returns Promise resolving to the bulk write result
@@ -585,7 +511,8 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
 
         const client = await ClustersClient.getClient(connectionId);
 
-        // For GenerateNewIds strategy, transform documents before batching
+        // Transform documents if GenerateNewIds strategy is used
+        let documentsToWrite = documents;
         if (config.onConflict === ConflictResolutionStrategy.GenerateNewIds) {
             const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
             const transformedDocuments = rawDocuments.map((doc) => {
@@ -602,40 +529,65 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
             });
 
             // Convert transformed documents back to DocumentDetails format
-            const transformedDocumentDetails = transformedDocuments.map((doc) => ({
+            documentsToWrite = transformedDocuments.map((doc) => ({
                 id: undefined,
                 documentContent: doc,
             }));
-
-            return this.writeDocumentsInBatches(
-                client,
-                databaseName,
-                collectionName,
-                transformedDocumentDetails,
-                config,
-                options,
-            );
         }
 
-        // For other strategies: Use ordered inserts for predictable throttle handling
-        // IMPORTANT DESIGN DECISION: ordered: true (DO NOT CHANGE)
-        //
-        // Rationale for ordered inserts:
-        // 1. Simplicity: Simple slice-based retry logic when throttled (no ID filtering needed)
-        // 2. Predictability: Documents inserted sequentially, insertedCount tells exact progress
-        // 3. Reliability: No issues with complex _id types (objects, arrays)
-        // 4. Accurate batch learning: insertedCount directly indicates proven database capacity
-        // 5. Abort strategy: Ensures we stop immediately on first conflict
-        //
-        // Performance consideration:
-        // - Ordered inserts are ~10-30% slower than unordered in optimal conditions
-        // - However, they provide significantly simpler and more reliable throttle handling
-        // - For RU-limited environments (Azure Cosmos DB), reliability > raw speed
-        //
-        // Future optimization:
-        // - A dedicated writer for unthrottled environments can use ordered: false
-        // - This writer prioritizes correctness and ease of maintenance
-        return this.writeDocumentsInBatches(client, databaseName, collectionName, documents, config, options);
+        // Write documents in batches with retry logic
+        // Loop through all documents, using adaptive batch sizing
+        let totalInserted = 0;
+        const allErrors: Array<{ documentId?: string; error: Error }> = [];
+        let pendingDocs = [...documentsToWrite];
+
+        while (pendingDocs.length > 0) {
+            // Check abort signal before processing next batch
+            if (options?.abortSignal?.aborted) {
+                break;
+            }
+
+            // Take a batch with current adaptive size
+            const batch = pendingDocs.slice(0, this.currentBatchSize);
+
+            try {
+                // Write batch with retry logic
+                // Note: writeBatchWithRetry handles its own batching, throttling, and size adjustment
+                const result = await this.writeBatchWithRetry(
+                    client,
+                    databaseName,
+                    collectionName,
+                    batch,
+                    config,
+                    options,
+                );
+
+                totalInserted += result.insertedCount;
+                pendingDocs = pendingDocs.slice(result.processedCount);
+
+                // Collect errors if any
+                if (result.errors) {
+                    allErrors.push(...result.errors);
+
+                    // For Abort strategy, stop immediately on first error
+                    if (config.onConflict === ConflictResolutionStrategy.Abort) {
+                        break;
+                    }
+                }
+
+                // Progress is reported inside writeBatchWithRetry
+            } catch (error) {
+                // Fatal error - return what we have so far
+                const errorObj = error instanceof Error ? error : new Error(String(error));
+                allErrors.push({ documentId: undefined, error: errorObj });
+                break;
+            }
+        }
+
+        return {
+            insertedCount: totalInserted,
+            errors: allErrors.length > 0 ? allErrors : null,
+        };
     }
 
     /**
