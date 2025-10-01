@@ -362,6 +362,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             buffer,
             {
                 batchSize: buffer.length,
+                abortSignal: signal,
                 progressCallback: (writtenInBatch) => {
                     // Accumulate writes in this flush
                     writtenInCurrentFlush += writtenInBatch;

@@ -135,12 +135,14 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
      * Writes a batch of documents with retry logic for rate limiting and network errors.
      * Implements immediate batch splitting when throttled.
      *
+     * IMPORTANT: This function assumes ordered inserts (ordered: true) for the throttle retry logic.
+     * The slice-based retry logic only works correctly when documents are inserted sequentially.
+     *
      * @param client ClustersClient instance
      * @param databaseName Target database name
      * @param collectionName Target collection name
      * @param batch Documents to write
      * @param config Copy-paste configuration
-     * @param ordered Whether to use ordered inserts
      * @param options Write options including progress callback
      * @returns Promise with batch write result
      */
@@ -150,7 +152,6 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
         collectionName: string,
         batch: DocumentDetails[],
         config: CopyPasteConfig,
-        ordered: boolean,
         options?: DocumentWriterOptions,
     ): Promise<BatchWriteResult> {
         let currentBatch = batch;
@@ -160,9 +161,34 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
         let totalInserted = 0; // Track total documents inserted across retries
 
         while (attempt < maxAttempts) {
+            // Check if operation was cancelled - return early to match task pattern
+            if (options?.abortSignal?.aborted) {
+                return {
+                    insertedCount: totalInserted,
+                    processedCount: batch.length - currentBatch.length,
+                    wasThrottled,
+                };
+            }
+
             try {
+                // Limit retry batch to current capacity (important after throttling)
+                // After throttle with partial success, currentBatch may be larger than currentBatchSize
+                // We need to respect the learned capacity to avoid immediate re-throttling
+                const batchToWrite = currentBatch.slice(0, this.currentBatchSize);
+
+                // Log when we're limiting the batch size (useful for debugging throttle scenarios)
+                if (batchToWrite.length < currentBatch.length) {
+                    ext.outputChannel.debug(
+                        l10n.t(
+                            'Limiting write to {0} documents (capacity) out of {1} remaining',
+                            batchToWrite.length.toString(),
+                            currentBatch.length.toString(),
+                        ),
+                    );
+                }
+
                 // Convert DocumentDetails to raw documents
-                const rawDocuments = currentBatch.map((doc) => doc.documentContent as WithId<Document>);
+                const rawDocuments = batchToWrite.map((doc) => doc.documentContent as WithId<Document>);
 
                 // For Overwrite strategy, use bulkWrite with replaceOne + upsert
                 if (config.onConflict === ConflictResolutionStrategy.Overwrite) {
@@ -178,8 +204,10 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
                         },
                     }));
 
+                    // Note: Using ordered: false for performance since replaceOne + upsert is idempotent
+                    // If throttled and retried, operations will simply overwrite the same documents again
                     const result = await collection.bulkWrite(bulkOps, {
-                        ordered: false, // Parallelize on the server
+                        ordered: false, // Safe to parallelize - replaceOne with upsert is idempotent
                         writeConcern: { w: 1 }, // Can raise to 'majority' if needed
                         bypassDocumentValidation: true, // Only if safe
                     });
@@ -188,29 +216,104 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
 
                     // Report progress for successful write
                     if (documentsWritten > 0) {
+                        totalInserted += documentsWritten;
                         options?.progressCallback?.(documentsWritten);
                     }
 
+                    // Remove successfully written documents from current batch
+                    currentBatch = currentBatch.slice(batchToWrite.length);
+
+                    // Clear throttle flag on successful write (allows growth to resume after recovery)
+                    wasThrottled = false;
+
+                    // Grow batch size after successful write (if not throttled and under max)
+                    if (this.currentBatchSize < this.maxBatchSize) {
+                        const previousSize = this.currentBatchSize;
+                        const growthFactor = 1.1; // 10% increase
+                        const percentageIncrease = Math.floor(this.currentBatchSize * growthFactor);
+                        const minimalIncrease = this.currentBatchSize + 1; // At least +1
+                        this.currentBatchSize = Math.min(
+                            this.maxBatchSize,
+                            Math.max(percentageIncrease, minimalIncrease),
+                        );
+
+                        // Log batch size increase
+                        if (this.currentBatchSize > previousSize) {
+                            ext.outputChannel.debug(
+                                l10n.t(
+                                    'Increased batch size from {0} to {1} after successful write',
+                                    previousSize.toString(),
+                                    this.currentBatchSize.toString(),
+                                ),
+                            );
+                        }
+                    }
+
+                    // If all documents from the original batch are processed, return success
+                    if (currentBatch.length === 0) {
+                        return {
+                            insertedCount: totalInserted,
+                            processedCount: batch.length,
+                            wasThrottled,
+                        };
+                    }
+
+                    // Continue with remaining documents in next iteration
+                    continue;
+                }
+
+                // For other strategies, use insertDocuments with ordered: true
+                // CRITICAL: Throttle retry logic requires ordered inserts for slice-based document skipping
+                const insertResult = await client.insertDocuments(
+                    databaseName,
+                    collectionName,
+                    rawDocuments,
+                    true, // Always ordered - required for throttle retry logic
+                );
+
+                // Report progress for successful write
+                if (insertResult.insertedCount > 0) {
+                    totalInserted += insertResult.insertedCount;
+                    options?.progressCallback?.(insertResult.insertedCount);
+                }
+
+                // Remove successfully written documents from current batch
+                currentBatch = currentBatch.slice(batchToWrite.length);
+
+                // Clear throttle flag on successful write (allows growth to resume after recovery)
+                wasThrottled = false;
+
+                // Grow batch size after successful write (if not throttled and under max)
+                if (this.currentBatchSize < this.maxBatchSize) {
+                    const previousSize = this.currentBatchSize;
+                    const growthFactor = 1.1; // 10% increase
+                    const percentageIncrease = Math.floor(this.currentBatchSize * growthFactor);
+                    const minimalIncrease = this.currentBatchSize + 1; // At least +1
+                    this.currentBatchSize = Math.min(this.maxBatchSize, Math.max(percentageIncrease, minimalIncrease));
+
+                    // Log batch size increase
+                    if (this.currentBatchSize > previousSize) {
+                        ext.outputChannel.debug(
+                            l10n.t(
+                                'Increased batch size from {0} to {1} after successful write',
+                                previousSize.toString(),
+                                this.currentBatchSize.toString(),
+                            ),
+                        );
+                    }
+                }
+
+                // If all documents from the original batch are processed, return success
+                if (currentBatch.length === 0) {
                     return {
-                        insertedCount: totalInserted + documentsWritten,
+                        insertedCount: totalInserted,
                         processedCount: batch.length,
                         wasThrottled,
                     };
                 }
 
-                // For other strategies, use insertDocuments
-                const insertResult = await client.insertDocuments(databaseName, collectionName, rawDocuments, ordered);
-
-                // Report progress for successful write
-                if (insertResult.insertedCount > 0) {
-                    options?.progressCallback?.(insertResult.insertedCount);
-                }
-
-                return {
-                    insertedCount: totalInserted + insertResult.insertedCount,
-                    processedCount: batch.length,
-                    wasThrottled,
-                };
+                // Continue with remaining documents in next iteration
+                continue;
             } catch (error: unknown) {
                 const errorType = this.classifyError(error);
 
@@ -280,11 +383,30 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
 
                     // Calculate backoff delay and sleep
                     const delay = this.calculateRetryDelay(attempt);
+
+                    // Check abort signal before sleeping to avoid unnecessary delays
+                    if (options?.abortSignal?.aborted) {
+                        return {
+                            insertedCount: totalInserted,
+                            processedCount: batch.length - currentBatch.length,
+                            wasThrottled,
+                        };
+                    }
+
                     await this.sleep(delay);
 
                     attempt++;
                     continue;
                 } else if (errorType === 'network') {
+                    // Check abort signal before sleeping
+                    if (options?.abortSignal?.aborted) {
+                        return {
+                            insertedCount: totalInserted,
+                            processedCount: batch.length - currentBatch.length,
+                            wasThrottled,
+                        };
+                    }
+
                     // Fixed delay for network errors, no batch size change
                     await this.sleep(2000);
                     attempt++;
@@ -368,7 +490,6 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
      * @param collectionName Target collection
      * @param documents Documents to write
      * @param config Copy-paste configuration
-     * @param ordered Whether to use ordered inserts
      * @param options Write options including progress callback
      * @returns Bulk write result
      */
@@ -378,7 +499,6 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
         collectionName: string,
         documents: DocumentDetails[],
         config: CopyPasteConfig,
-        ordered: boolean,
         options?: DocumentWriterOptions,
     ): Promise<BulkWriteResult> {
         let totalInserted = 0;
@@ -386,6 +506,11 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
         let pendingDocs = [...documents];
 
         while (pendingDocs.length > 0) {
+            // Check abort signal before processing next batch
+            if (options?.abortSignal?.aborted) {
+                break;
+            }
+
             // Take a batch with current adaptive size
             const batch = pendingDocs.slice(0, this.currentBatchSize);
 
@@ -397,24 +522,15 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
                     collectionName,
                     batch,
                     config,
-                    ordered,
                     options, // Pass options to enable progress reporting during retries
                 );
 
                 totalInserted += result.insertedCount;
                 pendingDocs = pendingDocs.slice(result.processedCount);
 
-                // Adjust batch size for next iteration
-                // Note: If throttling occurred, writeBatchWithRetry already set currentBatchSize
-                // based on the actual number of successful inserts (more accurate than percentage growth)
-                if (!result.wasThrottled && this.currentBatchSize < this.maxBatchSize) {
-                    // Grow batch size by 10% on success without throttling
-                    const growthFactor = 1.1; // 10% increase
-                    this.currentBatchSize = Math.min(
-                        this.maxBatchSize,
-                        Math.floor(this.currentBatchSize * growthFactor),
-                    );
-                }
+                // Note: Batch size growth is handled inside writeBatchWithRetry
+                // The instance variable this.currentBatchSize is updated there,
+                // so the next iteration of this loop will automatically use the grown size
 
                 // Collect errors if any
                 if (result.errors) {
@@ -497,7 +613,6 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
                 collectionName,
                 transformedDocumentDetails,
                 config,
-                false, // Always use unordered for GenerateNewIds since conflicts shouldn't occur
                 options,
             );
         }
@@ -520,15 +635,7 @@ export class DocumentDbDocumentWriter implements DocumentWriter {
         // Future optimization:
         // - A dedicated writer for unthrottled environments can use ordered: false
         // - This writer prioritizes correctness and ease of maintenance
-        return this.writeDocumentsInBatches(
-            client,
-            databaseName,
-            collectionName,
-            documents,
-            config,
-            true, // Ordered for reliability and simplicity - see comment above
-            options,
-        );
+        return this.writeDocumentsInBatches(client, databaseName, collectionName, documents, config, options);
     }
 
     /**

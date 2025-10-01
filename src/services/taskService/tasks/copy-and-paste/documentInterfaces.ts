@@ -48,19 +48,28 @@ export interface DocumentReader {
 }
 
 /**
- * Options for document writing operations.
+ * Options for writing documents.
  */
 export interface DocumentWriterOptions {
     /**
-     * Batch size for bulk write operations.
+     * Optional batch size override for this operation.
+     * If not specified, the writer will use its default adaptive batching.
      */
     batchSize?: number;
 
     /**
-     * Callback to report progress during batch processing.
-     * Reports the number of documents written in the current batch.
+     * Optional progress callback for reporting written documents.
+     * Called after each batch is successfully written.
+     * @param writtenInBatch - Number of documents written in the current batch
      */
     progressCallback?: (writtenInBatch: number) => void;
+
+    /**
+     * Optional abort signal to cancel the write operation.
+     * The writer will check this signal during retry loops and throw
+     * an appropriate error if cancellation is requested.
+     */
+    abortSignal?: AbortSignal;
 }
 
 /**
