@@ -55,6 +55,15 @@ export interface DiscoveryProvider extends ProviderDescription {
     getLearnMoreUrl?(): string | undefined;
 
     configureTreeItemFilter?(context: IActionContext, node: TreeElement): Promise<void>;
+
+    /**
+     * Configures credentials for the discovery provider.
+     *
+     * @param context - The action context
+     * @param node - Optional tree node. When provided, refreshes the specific node.
+     *               When undefined, refreshes the entire discovery tree (wizard context).
+     */
+    configureCredentials?(context: IActionContext, node?: TreeElement): Promise<void>;
 }
 
 /**

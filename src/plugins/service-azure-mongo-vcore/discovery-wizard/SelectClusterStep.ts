@@ -33,35 +33,49 @@ export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizard
             throw new Error('SelectedSubscription is not set.');
         }
 
-        const client = await createResourceManagementClient(
-            context,
-            context.properties[AzureContextProperties.SelectedSubscription] as unknown as AzureSubscription,
-        );
+        // Create async function to provide better loading UX and debugging experience
+        const getClusterQuickPickItems = async (): Promise<(QuickPickItem & { id: string })[]> => {
+            const client = await createResourceManagementClient(
+                context,
+                context.properties[AzureContextProperties.SelectedSubscription] as unknown as AzureSubscription,
+            );
 
-        const accounts = await uiUtils.listAllIterator(
-            client.resources.list({ filter: "resourceType eq 'Microsoft.DocumentDB/mongoClusters'" }),
-        );
+            const accounts = await uiUtils.listAllIterator(
+                client.resources.list({ filter: "resourceType eq 'Microsoft.DocumentDB/mongoClusters'" }),
+            );
 
-        const promptItems: (QuickPickItem & { id: string })[] = accounts
-            .filter((account) => account.name) // Filter out accounts without a name
-            .map((account) => ({
-                id: account.id!,
-                label: account.name!,
-                description: account.id,
-                iconPath: this.iconPath,
+            const promptItems: (QuickPickItem & { id: string })[] = accounts
+                .filter((account) => account.name) // Filter out accounts without a name
+                .map((account) => ({
+                    id: account.id!,
+                    label: account.name!,
+                    description: account.id,
+                    iconPath: this.iconPath,
 
-                alwaysShow: true,
-            }))
-            .sort((a, b) => a.label.localeCompare(b.label));
+                    alwaysShow: true,
+                }))
+                .sort((a, b) => a.label.localeCompare(b.label));
 
-        const selectedItem = await context.ui.showQuickPick([...promptItems], {
+            return promptItems;
+        };
+
+        const selectedItem = await context.ui.showQuickPick(getClusterQuickPickItems(), {
             stepName: 'selectCluster',
             placeHolder: l10n.t('Choose a cluster…'),
-            loadingPlaceHolder: l10n.t('Loading clusters…'),
+            loadingPlaceHolder: l10n.t('Loading Clusters…'),
             enableGrouping: true,
             matchOnDescription: true,
             suppressPersistence: true,
         });
+
+        // Get accounts again to find the selected one (likely cached by Azure SDK)
+        const client = await createResourceManagementClient(
+            context,
+            context.properties[AzureContextProperties.SelectedSubscription] as unknown as AzureSubscription,
+        );
+        const accounts = await uiUtils.listAllIterator(
+            client.resources.list({ filter: "resourceType eq 'Microsoft.DocumentDB/mongoClusters'" }),
+        );
 
         context.properties[AzureContextProperties.SelectedCluster] = accounts.find(
             (account) => account.id === selectedItem.id,

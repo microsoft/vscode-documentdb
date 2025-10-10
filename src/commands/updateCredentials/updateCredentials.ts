@@ -17,6 +17,7 @@ import { refreshView } from '../refreshView/refreshView';
 import { PromptAuthMethodStep } from '../updateCredentials/PromptAuthMethodStep';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
+import { PromptTenantStep } from './PromptTenantStep';
 import { PromptUserNameStep } from './PromptUserNameStep';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
@@ -52,8 +53,8 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
 
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
-        username: connectionCredentials?.secrets.userName,
-        password: connectionCredentials?.secrets.password,
+        nativeAuthConfig: connectionCredentials?.secrets.nativeAuthConfig,
+        entraIdAuthConfig: connectionCredentials?.secrets.entraIdAuthConfig,
         availableAuthenticationMethods: authMethodsFromString(supportedAuthMethods),
         selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
@@ -62,7 +63,12 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Update cluster credentials'),
-        promptSteps: [new PromptAuthMethodStep(), new PromptUserNameStep(), new PromptPasswordStep()],
+        promptSteps: [
+            new PromptAuthMethodStep(),
+            new PromptTenantStep(),
+            new PromptUserNameStep(),
+            new PromptPasswordStep(),
+        ],
         executeSteps: [new ExecuteStep()],
         showLoadingPrompt: true,
     });

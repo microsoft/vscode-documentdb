@@ -5,6 +5,7 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -33,13 +34,37 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
             parsedConnectionString.password = '';
 
             // Update the item in storage
+            const authMethod = context.selectedAuthenticationMethod;
 
+            // Update connection string (remove embedded credentials)
             connectionCredentials.secrets = {
                 ...connectionCredentials.secrets,
                 connectionString: parsedConnectionString.toString(),
-                ...(context.username ? { userName: context.username } : {}),
-                ...(context.password ? { password: context.password } : {}),
             };
+
+            // Update auth method specific configurations
+            if (authMethod === AuthMethodId.NativeAuth && context.nativeAuthConfig) {
+                // Update native auth config from structured config
+                connectionCredentials.secrets.nativeAuthConfig = {
+                    connectionUser: context.nativeAuthConfig.connectionUser,
+                    connectionPassword: context.nativeAuthConfig.connectionPassword,
+                };
+            } else if (authMethod === AuthMethodId.MicrosoftEntraID && context.entraIdAuthConfig) {
+                // For Entra ID, clear any native auth configs
+                connectionCredentials.secrets.nativeAuthConfig = undefined;
+
+                // Update Entra ID auth config from structured config
+                connectionCredentials.secrets.entraIdAuthConfig = {
+                    tenantId: context.entraIdAuthConfig.tenantId,
+                    subscriptionId: context.entraIdAuthConfig.subscriptionId,
+                };
+            } else if (authMethod === AuthMethodId.MicrosoftEntraID) {
+                // For Entra ID without config, clear any native auth configs
+                connectionCredentials.secrets.nativeAuthConfig = undefined;
+
+                // Clear any existing Entra ID config if no new config provided
+                connectionCredentials.secrets.entraIdAuthConfig = undefined;
+            }
 
             connectionCredentials.properties.selectedAuthMethod = context.selectedAuthenticationMethod?.toString();
 

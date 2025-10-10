@@ -7,9 +7,9 @@ import { type MongoCluster } from '@azure/arm-mongocluster';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import { l10n } from 'vscode';
-import { isSupportedAuthMethod } from '../../../documentdb/auth/AuthMethod';
+import { AuthMethodId, isSupportedAuthMethod } from '../../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
-import { type ClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
+import { type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { createMongoClustersManagementClient } from '../../../utils/azureClients';
 
 /**
@@ -70,7 +70,8 @@ export async function getClusterInformationFromAzure(
 export function extractCredentialsFromCluster(
     context: IActionContext,
     clusterInformation: MongoCluster,
-): ClusterCredentials {
+    subscription: AzureSubscription,
+): EphemeralClusterCredentials {
     // Ensure connection string and admin username are masked
     if (clusterInformation.properties?.connectionString) {
         context.valuesToMask.push(clusterInformation.properties.connectionString);
@@ -85,10 +86,16 @@ export function extractCredentialsFromCluster(
     parsedCS.password = '';
 
     // Prepare credentials object.
-    const credentials: ClusterCredentials = {
+    const credentials: EphemeralClusterCredentials = {
         connectionString: parsedCS.toString(),
-        connectionUser: clusterInformation.properties?.administrator?.userName,
         availableAuthMethods: [],
+        // Auth configs - populate native auth if we have username
+        nativeAuthConfig: clusterInformation.properties?.administrator?.userName
+            ? {
+                  connectionUser: clusterInformation.properties.administrator.userName,
+                  connectionPassword: undefined, // Password will be collected during authentication
+              }
+            : undefined,
     };
 
     const allowedModes = clusterInformation.properties?.authConfig?.allowedModes ?? [];
@@ -99,6 +106,16 @@ export function extractCredentialsFromCluster(
 
     const unknownMethodIds = allowedModes.filter((methodId) => !isSupportedAuthMethod(methodId));
     context.telemetry.properties.unknownAuthMethods = unknownMethodIds.join(',');
+
+    if (credentials.availableAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
+        credentials.entraIdAuthConfig = {
+            tenantId: subscription.tenantId,
+            subscriptionId: subscription.subscriptionId,
+        };
+    }
+
+    // Add telemetry properties from subscription
+    context.telemetry.properties.isCustomCloud = subscription.isCustomCloud.toString();
 
     return credentials;
 }

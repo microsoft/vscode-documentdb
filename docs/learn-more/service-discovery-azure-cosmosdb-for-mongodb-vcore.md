@@ -8,6 +8,12 @@
 
 The **Azure CosmosDB for MongoDB (vCore)** plugin is available as part of the [Service Discovery](./service-discovery) feature in DocumentDB for VS Code. This plugin helps you connect to your Azure CosmosDB for MongoDB (vCore) clusters by handling authentication, resource discovery, and connection management within the extension.
 
+> **📘 Managing Azure Resources**: This provider shares common Azure management features with other Azure-based providers. See [Managing Azure Discovery (Accounts, Tenants, and Subscriptions)](./managing-azure-discovery) for detailed information about:
+>
+> - Managing Azure accounts and credentials
+> - Filtering by tenants and subscriptions
+> - Troubleshooting common issues
+
 ## How to Access
 
 You can access this plugin in two ways:
@@ -22,27 +28,32 @@ You can access this plugin in two ways:
 When you use the Azure CosmosDB for MongoDB (vCore) plugin, the following steps are performed:
 
 1. **Authentication:**
-   The plugin authenticates you with Azure using your credentials.
+   The plugin authenticates you with Azure using your credentials. See [Managing Azure Accounts](./managing-azure-discovery#managing-azure-accounts) for details on managing your Azure accounts.
 
-2. **Subscription Discovery:**
-   All available Azure subscriptions are listed.
+2. **Resource Filtering (Service Discovery Panel):**
+   When accessing this plugin from the Service Discovery panel, you can control which resources are displayed by filtering tenants and subscriptions. Click the funnel icon next to the provider name to configure filters. See [Filtering Azure Resources](./managing-azure-discovery#filtering-azure-resources) for more information.
 
-   > **Tip:** You can `filter` which subscriptions are shown in the `Service Discovery` panel. Click the funnel icon next to the service discovery provider name, wait for the list to populate, and select the subscriptions you want to include.
-   >
-   > ![Service Discovery Filter Feature Location](./images/service-discovery-filter-azure-vcore.png)
+3. **Subscription and Cluster Discovery:**
+   - **From Service Discovery Panel**: The plugin lists subscriptions based on your configured filters, allowing you to browse vCore clusters within selected subscriptions.
+   - **From Add New Connection Wizard**: All subscriptions from all tenants are shown without pre-filtering. You select one subscription to view its resources.
 
-3. **Cluster Discovery:**
+4. **Cluster Discovery:**
    The plugin enumerates all Azure CosmosDB for MongoDB (vCore) clusters available in your selected subscriptions.
 
-4. **Connection Options:**
+5. **Connection Options:**
    - You can connect to a cluster by expanding its entry in the tree view.
    - You can save a cluster to your `DocumentDB Connections` list using the context menu or by clicking the save icon next to its name.
    - When connecting or saving, the extension detects the authentication methods supported by the cluster (e.g., **Username/Password** or **Entra ID**). If multiple are available, you will be prompted to choose your preferred method.
 
-## Additional Notes
+## Managing Credentials and Filters
 
-- Subscription filtering helps you focus on relevant resources, especially if you have access to many Azure subscriptions.
-- All authentication and discovery steps are handled within the extension, so you do not need to manually gather connection strings or resource details.
+This provider supports the following management features:
+
+- **Manage Credentials**: View and manage Azure accounts used for service discovery. Right-click the provider or click the gear icon.
+- **Filter Resources**: Control which tenants and subscriptions are displayed. Click the funnel icon next to the provider name.
+- **Refresh**: Reload the resource list after making changes. Click the refresh icon.
+
+For detailed instructions on these features, see [Managing Azure Discovery (Accounts, Tenants, and Subscriptions)](./managing-azure-discovery).
 
 ## Feedback and Contributions
 
