@@ -81,6 +81,15 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 label: vscode.l10n.t("What's New"),
                 iconPath: new vscode.ThemeIcon('megaphone'),
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
+                commandArgs: ['https://github.com/microsoft/vscode-documentdb/discussions/categories/announcements'],
+            }) as TreeElement,
+
+            createGenericElement({
+                contextValue: 'helpItem',
+                id: `${parentId}/changelog`,
+                label: vscode.l10n.t('Comprehensive Changelog'),
+                iconPath: new vscode.ThemeIcon('history'),
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
                 commandArgs: ['https://github.com/microsoft/vscode-documentdb/blob/main/CHANGELOG.md'],
             }) as TreeElement,
 
@@ -90,7 +99,7 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 label: vscode.l10n.t('Extension Documentation'),
                 iconPath: new vscode.ThemeIcon('book'),
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
-                commandArgs: ['https://github.com/microsoft/vscode-documentdb#readme'],
+                commandArgs: ['https://microsoft.github.io/vscode-documentdb/'],
             }) as TreeElement,
 
             createGenericElement({
@@ -99,7 +108,7 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 label: vscode.l10n.t('DocumentDB Documentation'),
                 iconPath: new vscode.ThemeIcon('library'),
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
-                commandArgs: ['https://github.com/microsoft/documentdb'],
+                commandArgs: ['https://documentdb.io'],
             }) as TreeElement,
 
             createGenericElement({
@@ -109,7 +118,7 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 iconPath: new vscode.ThemeIcon('lightbulb'),
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
                 commandArgs: [
-                    'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=feature-request&template=feature_request.md',
+                    'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=user%20feedback',
                 ],
             }) as TreeElement,
 
@@ -120,7 +129,7 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 iconPath: new vscode.ThemeIcon('bug'),
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
                 commandArgs: [
-                    'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=bug&template=bug_report.md',
+                    'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=user%20feedback,bug',
                 ],
             }) as TreeElement,
 
