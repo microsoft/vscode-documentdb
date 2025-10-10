@@ -3,31 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/**
- * Enumeration of conflict resolution strategies for copy-paste operations
- */
-export enum ConflictResolutionStrategy {
-    /**
-     * Abort the operation if any conflict or error occurs
-     */
-    Abort = 'abort',
+import { type ConflictResolutionStrategy } from '../../data-api/types';
 
-    /**
-     * Skip the conflicting document and continue with the operation
-     */
-    Skip = 'skip',
-
-    /**
-     * Overwrite the existing document in the target collection with the source document
-     */
-    Overwrite = 'overwrite',
-
-    /**
-     * Generate new _id values for all documents to avoid conflicts.
-     * Original _id values are preserved in a separate field.
-     */
-    GenerateNewIds = 'generateNewIds',
-}
+// Re-export for backward compatibility
+export { ConflictResolutionStrategy } from '../../data-api/types';
 
 /**
  * Configuration for copy-paste operations

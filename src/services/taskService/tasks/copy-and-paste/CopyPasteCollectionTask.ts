@@ -6,30 +6,18 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { ext } from '../../../../extensionVariables';
+import { type DocumentReader, type DocumentWriter } from '../../data-api/types';
+import { StreamDocumentWriter, StreamWriterError } from '../../data-api/writers/StreamDocumentWriter';
 import { Task } from '../../taskService';
 import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
-import { ConflictResolutionStrategy, type CopyPasteConfig } from './copyPasteConfig';
-import { type DocumentDetails, type DocumentReader, type DocumentWriter } from './documentInterfaces';
-
-/**
- * Interface for running statistics with reservoir sampling for median approximation.
- */
-interface RunningStats {
-    count: number;
-    sum: number;
-    min: number;
-    max: number;
-    reservoir: number[];
-    reservoirSize: number;
-}
+import { type CopyPasteConfig } from './copyPasteConfig';
 
 /**
  * Task for copying documents from a source to a target collection.
  *
  * This task uses a database-agnostic approach with `DocumentReader` and `DocumentWriter`
- * interfaces. It streams documents from the source and writes them in batches to the
- * target, managing memory usage with a configurable buffer.
+ * interfaces. It uses StreamDocumentWriter to stream documents from the source and write
+ * them in batches to the target, managing memory usage with a configurable buffer.
  */
 export class CopyPasteCollectionTask extends Task implements ResourceTrackingTask {
     public readonly type: string = 'copy-paste-collection';
@@ -39,38 +27,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     private readonly documentReader: DocumentReader;
     private readonly documentWriter: DocumentWriter;
     private sourceDocumentCount: number = 0;
-    private processedDocuments: number = 0;
-    private copiedDocuments: number = 0;
-
-    // Buffer configuration for memory management
-    private readonly maxBufferMemoryMB: number = 32; // Rough memory limit for buffer
-
-    // Performance tracking fields - using running statistics for memory efficiency
-    private documentSizeStats: RunningStats = {
-        count: 0,
-        sum: 0,
-        min: Number.MAX_VALUE,
-        max: 0,
-        // Reservoir sampling for approximate median (fixed size sample)
-        reservoir: [],
-        reservoirSize: 1000,
-    };
-
-    private flushDurationStats: RunningStats = {
-        count: 0,
-        sum: 0,
-        min: Number.MAX_VALUE,
-        max: 0,
-        // Reservoir sampling for approximate median
-        reservoir: [],
-        reservoirSize: 100, // Smaller sample since we have fewer flush operations
-    };
-
-    private conflictStats = {
-        skippedCount: 0,
-        overwrittenCount: 0, // Note: may not be directly available depending on strategy
-        errorCount: 0,
-    };
+    private totalProcessedDocuments: number = 0;
 
     /**
      * Creates a new CopyPasteCollectionTask instance.
@@ -193,20 +150,15 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             return;
         }
 
-        // Ensure target collection exists
-        this.updateStatus(this.getStatus().state, vscode.l10n.t('Ensuring target collection exists...'));
+        // Ensure target exists
+        this.updateStatus(this.getStatus().state, vscode.l10n.t('Ensuring target exists...'));
 
         try {
-            const ensureCollectionResult = await this.documentWriter.ensureCollectionExists(
-                this.config.target.connectionId,
-                this.config.target.databaseName,
-                this.config.target.collectionName,
-            );
+            const ensureTargetResult = await this.documentWriter.ensureTargetExists();
 
-            // Add telemetry about whether the collection was created
+            // Add telemetry about whether the target was created
             if (context) {
-                context.telemetry.properties.targetCollectionWasCreated =
-                    ensureCollectionResult.collectionWasCreated.toString();
+                context.telemetry.properties.targetWasCreated = ensureTargetResult.targetWasCreated.toString();
             }
         } catch (error) {
             throw new Error(vscode.l10n.t('Failed to ensure the target collection exists.'), {
@@ -216,199 +168,139 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     }
 
     /**
-     * Performs the main copy-paste operation using buffer-based streaming.
+     * Performs the main copy-paste operation using StreamDocumentWriter.
      *
      * @param signal AbortSignal to check for cancellation
      * @param context Optional telemetry context for tracking task operations
      */
     protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
-        // Add execution-specific telemetry
-        if (context) {
-            context.telemetry.properties.maxBufferMemoryMB = this.maxBufferMemoryMB.toString();
-        }
-
-        // Handle the case where there are no documents to copy
+        // Handle empty source collection
         if (this.sourceDocumentCount === 0) {
             this.updateProgress(100, vscode.l10n.t('Source collection is empty.'));
             if (context) {
-                context.telemetry.measurements.processedDocuments = 0;
-                context.telemetry.measurements.copiedDocuments = 0;
+                context.telemetry.measurements.totalProcessedDocuments = 0;
                 context.telemetry.measurements.bufferFlushCount = 0;
             }
             return;
         }
 
+        // Create document stream
         const documentStream = this.documentReader.streamDocuments(
             this.config.source.connectionId,
             this.config.source.databaseName,
             this.config.source.collectionName,
         );
 
-        const buffer: DocumentDetails[] = [];
-        let bufferMemoryEstimate = 0;
-        let bufferFlushCount = 0;
+        // Create streamer
+        const streamWriter = new StreamDocumentWriter(this.documentWriter);
 
-        for await (const document of documentStream) {
-            if (signal.aborted) {
-                // Add telemetry for aborted operation during document processing
-                this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
-                    abortedDuringProcessing: true,
-                    completionPercentage:
-                        this.sourceDocumentCount > 0
-                            ? Math.round((this.processedDocuments / this.sourceDocumentCount) * 100)
-                            : 0,
-                });
-                // Buffer is a local variable, no need to clear, just exit.
-                return;
+        // Stream documents with progress tracking
+        try {
+            const result = await streamWriter.streamDocuments(
+                { conflictResolutionStrategy: this.config.onConflict },
+                documentStream,
+                {
+                    onProgress: (processedCount, details) => {
+                        // Update task's total
+                        this.totalProcessedDocuments += processedCount;
+
+                        // Calculate and report progress percentage
+                        const progressPercentage = Math.min(
+                            100,
+                            Math.round((this.totalProcessedDocuments / this.sourceDocumentCount) * 100),
+                        );
+
+                        // Build progress message with optional details
+                        let progressMessage = this.getProgressMessage(progressPercentage);
+                        if (details) {
+                            progressMessage += ` - ${details}`;
+                        }
+
+                        this.updateProgress(progressPercentage, progressMessage);
+                    },
+                    abortSignal: signal,
+                    actionContext: context,
+                },
+            );
+
+            // Add streaming statistics to telemetry (includes all counts)
+            if (context) {
+                context.telemetry.measurements.totalProcessedDocuments = result.totalProcessed;
+                context.telemetry.measurements.totalInsertedDocuments = result.insertedCount ?? 0;
+                context.telemetry.measurements.totalSkippedDocuments = result.skippedCount ?? 0;
+                context.telemetry.measurements.totalMatchedDocuments = result.matchedCount ?? 0;
+                context.telemetry.measurements.totalUpsertedDocuments = result.upsertedCount ?? 0;
+                context.telemetry.measurements.bufferFlushCount = result.flushCount;
             }
 
-            // Track document size for statistics
-            const documentSize = this.estimateDocumentMemory(document);
-            this.updateRunningStats(this.documentSizeStats, documentSize);
-
-            // Add document to buffer
-            buffer.push(document);
-            bufferMemoryEstimate += documentSize;
-
-            // Check if we need to flush the buffer
-            if (this.shouldFlushBuffer(buffer.length, bufferMemoryEstimate)) {
-                try {
-                    await this.flushBuffer(buffer, signal);
-                    bufferFlushCount++;
-                } catch (error) {
-                    // Add telemetry before re-throwing error to capture performance data
-                    this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
-                        errorDuringFlush: true,
-                        errorStrategy: this.config.onConflict,
-                        completionPercentage:
-                            this.sourceDocumentCount > 0
-                                ? Math.round((this.processedDocuments / this.sourceDocumentCount) * 100)
-                                : 0,
-                    });
-                    throw error;
+            // Final progress update with summary
+            const summaryMessage = this.buildSummaryMessage(result);
+            this.updateProgress(100, summaryMessage);
+        } catch (error) {
+            // Check if it's a StreamWriterError with partial statistics
+            if (error instanceof StreamWriterError) {
+                // Add partial statistics to telemetry even on error
+                if (context) {
+                    context.telemetry.properties.errorDuringStreaming = 'true';
+                    context.telemetry.measurements.totalProcessedDocuments = error.partialStats.totalProcessed;
+                    context.telemetry.measurements.totalInsertedDocuments = error.partialStats.insertedCount ?? 0;
+                    context.telemetry.measurements.totalSkippedDocuments = error.partialStats.skippedCount ?? 0;
+                    context.telemetry.measurements.totalMatchedDocuments = error.partialStats.matchedCount ?? 0;
+                    context.telemetry.measurements.totalUpsertedDocuments = error.partialStats.upsertedCount ?? 0;
+                    context.telemetry.measurements.bufferFlushCount = error.partialStats.flushCount;
                 }
-                buffer.length = 0; // Clear buffer
-                bufferMemoryEstimate = 0;
+
+                // Build error message with partial stats
+                const partialSummary = this.buildSummaryMessage(error.partialStats);
+                const errorMessage = vscode.l10n.t('Task failed after partial completion: {0}', partialSummary);
+
+                // Update error message to include partial stats
+                throw new Error(`${errorMessage}\n${error.message}`);
             }
-        }
 
-        if (signal.aborted) {
-            // Add telemetry for aborted operation after stream completion
-            this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
-                abortedAfterProcessing: true,
-                remainingBufferedDocuments: buffer.length,
-                completionPercentage:
-                    this.sourceDocumentCount > 0
-                        ? Math.round(((this.processedDocuments + buffer.length) / this.sourceDocumentCount) * 100)
-                        : 100, // Stream completed means 100% if no source documents
-            });
-            return;
-        }
-
-        // Flush any remaining documents in the buffer
-        if (buffer.length > 0) {
-            try {
-                await this.flushBuffer(buffer, signal);
-                bufferFlushCount++;
-            } catch (error) {
-                // Add telemetry before re-throwing error to capture performance data
-                this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
-                    errorDuringFinalFlush: true,
-                    errorStrategy: this.config.onConflict,
-                    remainingBufferedDocuments: buffer.length,
-                    completionPercentage:
-                        this.sourceDocumentCount > 0
-                            ? Math.round(((this.processedDocuments + buffer.length) / this.sourceDocumentCount) * 100)
-                            : 100,
-                });
-                throw error;
+            // Regular error - add basic telemetry
+            if (context) {
+                context.telemetry.properties.errorDuringStreaming = 'true';
+                context.telemetry.measurements.processedBeforeError = this.totalProcessedDocuments;
             }
+            throw error;
         }
-
-        // Add final telemetry measurements
-        this.addPerformanceStatsToTelemetry(context, bufferFlushCount, {
-            abortedAfterProcessing: false,
-            completionPercentage: 100,
-        });
-
-        // Ensure we report 100% completion
-        this.updateProgress(100, vscode.l10n.t('Copy operation completed successfully'));
     }
 
     /**
-     * Flushes the document buffer by writing all documents to the target collection.
+     * Builds a summary message from streaming statistics.
+     * Only shows statistics that are relevant (non-zero) to avoid clutter.
      *
-     * @param buffer Array of documents to write.
-     * @param signal AbortSignal to check for cancellation.
+     * @param stats Streaming statistics to summarize
+     * @returns Formatted summary message
      */
-    private async flushBuffer(buffer: DocumentDetails[], signal: AbortSignal): Promise<void> {
-        if (buffer.length === 0 || signal.aborted) {
-            return;
+    private buildSummaryMessage(stats: {
+        totalProcessed: number;
+        insertedCount?: number;
+        skippedCount?: number;
+        matchedCount?: number;
+        upsertedCount?: number;
+    }): string {
+        const parts: string[] = [];
+
+        // Always show total processed
+        parts.push(vscode.l10n.t('{0} processed', stats.totalProcessed.toLocaleString()));
+
+        // Add strategy-specific breakdown (only non-zero counts)
+        if ((stats.insertedCount ?? 0) > 0) {
+            parts.push(vscode.l10n.t('{0} inserted', (stats.insertedCount ?? 0).toLocaleString()));
+        }
+        if ((stats.skippedCount ?? 0) > 0) {
+            parts.push(vscode.l10n.t('{0} skipped', (stats.skippedCount ?? 0).toLocaleString()));
+        }
+        if ((stats.matchedCount ?? 0) > 0) {
+            parts.push(vscode.l10n.t('{0} matched', (stats.matchedCount ?? 0).toLocaleString()));
+        }
+        if ((stats.upsertedCount ?? 0) > 0) {
+            parts.push(vscode.l10n.t('{0} upserted', (stats.upsertedCount ?? 0).toLocaleString()));
         }
 
-        // Track flush duration for performance telemetry
-        const startTime = Date.now();
-
-        // Track writes within this batch
-        let writtenInCurrentFlush = 0;
-
-        const result = await this.documentWriter.writeDocuments(
-            this.config.target.connectionId,
-            this.config.target.databaseName,
-            this.config.target.collectionName,
-            this.config,
-            buffer,
-            {
-                // Note: batchSize option removed - writer manages batching internally with adaptive sizing
-                abortSignal: signal,
-                progressCallback: (writtenInBatch) => {
-                    // Accumulate writes in this flush
-                    writtenInCurrentFlush += writtenInBatch;
-
-                    // Update overall progress
-                    this.copiedDocuments += writtenInBatch;
-
-                    // Update UI with percentage
-                    const progressPercentage =
-                        this.sourceDocumentCount > 0
-                            ? Math.min(100, Math.round((this.copiedDocuments / this.sourceDocumentCount) * 100))
-                            : 0;
-
-                    this.updateProgress(progressPercentage, this.getProgressMessage(progressPercentage));
-                },
-            },
-        );
-
-        // Record flush duration with safety check to prevent negative values
-        // (can occur due to system clock adjustments or timing anomalies)
-        const flushDuration = Math.max(0, Date.now() - startTime);
-        this.updateRunningStats(this.flushDurationStats, flushDuration);
-
-        // Update counters - all documents in the buffer were processed (attempted)
-        this.processedDocuments += buffer.length;
-
-        // Reconcile progress: progressCallback reports real-time progress during retries,
-        // but result.insertedCount is the authoritative final count.
-        // This defensive check catches any discrepancies between the two.
-        if (writtenInCurrentFlush !== result.insertedCount) {
-            // Log discrepancy for debugging
-            ext.outputChannel.warn(
-                vscode.l10n.t(
-                    'Progress callback reported {0} written, but result shows {1}',
-                    writtenInCurrentFlush.toString(),
-                    result.insertedCount.toString(),
-                ),
-            );
-            // Trust the final result
-            this.copiedDocuments = this.copiedDocuments - writtenInCurrentFlush + result.insertedCount;
-        }
-
-        // Handle any write errors based on conflict resolution strategy
-        this.handleWriteErrors(result.errors);
-
-        // Update progress with percentage
-        const progress = Math.min(100, Math.round((this.processedDocuments / this.sourceDocumentCount) * 100));
-        this.updateProgress(progress, this.getProgressMessage(progress));
+        return parts.join(', ');
     }
 
     /**
@@ -420,271 +312,13 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     private getProgressMessage(progressPercentage?: number): string {
         const percentageStr = progressPercentage !== undefined ? ` (${progressPercentage}%)` : '';
 
-        if (this.config.onConflict === ConflictResolutionStrategy.Skip && this.conflictStats.skippedCount > 0) {
-            // Verbose message showing processed, copied, and skipped counts
-            return vscode.l10n.t(
-                'Processed {0} of {1} documents ({2} copied, {3} skipped){4}',
-                this.processedDocuments.toString(),
-                this.sourceDocumentCount.toString(),
-                this.copiedDocuments.toString(),
-                this.conflictStats.skippedCount.toString(),
-                percentageStr,
-            );
-        } else {
-            // Simple message for other strategies (shows copied count)
-            return vscode.l10n.t(
-                'Copied {0} of {1} documents{2}',
-                this.copiedDocuments.toString(),
-                this.sourceDocumentCount.toString(),
-                percentageStr,
-            );
-        }
-    }
-
-    /**
-     * Determines whether the buffer should be flushed based on size and memory constraints.
-     * Uses the writer's optimal buffer size as a hint for batching efficiency.
-     *
-     * @param bufferCount Number of documents in the buffer
-     * @param memoryEstimate Estimated memory usage in bytes
-     * @returns True if the buffer should be flushed
-     */
-    private shouldFlushBuffer(bufferCount: number, memoryEstimate: number): boolean {
-        // Flush if we've reached the writer's optimal batch size
-        const optimalSize = this.documentWriter.getOptimalBufferSize();
-        if (bufferCount >= optimalSize) {
-            return true;
-        }
-
-        // Flush if we've exceeded the memory limit (converted to bytes)
-        const memoryLimitBytes = this.maxBufferMemoryMB * 1024 * 1024;
-        if (memoryEstimate >= memoryLimitBytes) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Estimates the memory usage of a document in bytes.
-     * This is a rough estimate based on JSON serialization.
-     *
-     * @param document Document to estimate
-     * @returns Estimated memory usage in bytes
-     */
-    private estimateDocumentMemory(document: DocumentDetails): number {
-        try {
-            // A rough estimate based on the length of the JSON string representation.
-            // V8 strings are typically 2 bytes per character (UTF-16).
-            const jsonString = JSON.stringify(document.documentContent);
-            return jsonString.length * 2;
-        } catch {
-            // If serialization fails, return a conservative default.
-            return 1024; // 1KB
-        }
-    }
-
-    /**
-     * Updates running statistics with a new value using reservoir sampling for median approximation.
-     * This generic method works for both document size and flush duration statistics.
-     *
-     * @param stats The statistics object to update
-     * @param value The new value to add to the statistics
-     */
-    private updateRunningStats(stats: RunningStats, value: number): void {
-        stats.count++;
-        stats.sum += value;
-        stats.min = Math.min(stats.min, value);
-        stats.max = Math.max(stats.max, value);
-
-        // Reservoir sampling for median approximation
-        if (stats.reservoir.length < stats.reservoirSize) {
-            stats.reservoir.push(value);
-        } else {
-            // Randomly replace an element in the reservoir
-            const randomIndex = Math.floor(Math.random() * stats.count);
-            if (randomIndex < stats.reservoirSize) {
-                stats.reservoir[randomIndex] = value;
-            }
-        }
-    }
-
-    /**
-     * Adds performance statistics to telemetry context.
-     *
-     * @param context Telemetry context to add measurements to
-     * @param bufferFlushCount Number of buffer flushes performed
-     * @param additionalProperties Optional additional properties to add
-     */
-    private addPerformanceStatsToTelemetry(
-        context: IActionContext | undefined,
-        bufferFlushCount: number,
-        additionalProperties?: Record<string, string | number | boolean>,
-    ): void {
-        if (!context) {
-            return;
-        }
-
-        // Basic performance metrics
-        context.telemetry.measurements.processedDocuments = this.processedDocuments;
-        context.telemetry.measurements.copiedDocuments = this.copiedDocuments;
-        context.telemetry.measurements.bufferFlushCount = bufferFlushCount;
-
-        // Add document size statistics from running data
-        const docSizeStats = this.getStatsFromRunningData(this.documentSizeStats);
-        context.telemetry.measurements.documentSizeMinBytes = docSizeStats.min;
-        context.telemetry.measurements.documentSizeMaxBytes = docSizeStats.max;
-        context.telemetry.measurements.documentSizeAvgBytes = docSizeStats.average;
-        context.telemetry.measurements.documentSizeMedianBytes = docSizeStats.median;
-
-        // Add buffer flush duration statistics from running data
-        const flushDurationStats = this.getStatsFromRunningData(this.flushDurationStats);
-        context.telemetry.measurements.flushDurationMinMs = flushDurationStats.min;
-        context.telemetry.measurements.flushDurationMaxMs = flushDurationStats.max;
-        context.telemetry.measurements.flushDurationAvgMs = flushDurationStats.average;
-        context.telemetry.measurements.flushDurationMedianMs = flushDurationStats.median;
-
-        // Add conflict resolution statistics
-        context.telemetry.measurements.conflictSkippedCount = this.conflictStats.skippedCount;
-        context.telemetry.measurements.conflictErrorCount = this.conflictStats.errorCount;
-
-        // Add any additional properties
-        if (additionalProperties) {
-            for (const [key, value] of Object.entries(additionalProperties)) {
-                if (typeof value === 'string') {
-                    context.telemetry.properties[key] = value;
-                } else if (typeof value === 'boolean') {
-                    context.telemetry.properties[key] = value.toString();
-                } else {
-                    context.telemetry.measurements[key] = value;
-                }
-            }
-        }
-    }
-
-    /**
-     * Gets statistics from running statistics data.
-     *
-     * @param stats Running statistics object
-     * @returns Statistics object with min, max, average, and approximate median
-     */
-    private getStatsFromRunningData(stats: RunningStats): {
-        min: number;
-        max: number;
-        average: number;
-        median: number;
-    } {
-        if (stats.count === 0) {
-            return { min: 0, max: 0, average: 0, median: 0 };
-        }
-
-        const min = stats.min === Number.MAX_VALUE ? 0 : stats.min;
-        const max = stats.max;
-        const average = stats.sum / stats.count;
-
-        let median: number;
-        if (stats.reservoir.length > 0) {
-            // Calculate median from reservoir sample
-            const sorted = [...stats.reservoir].sort((a, b) => a - b);
-            const mid = Math.floor(sorted.length / 2);
-            median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-        } else {
-            // Fallback to simple approximation
-            median = (min + max) / 2;
-        }
-
-        return { min, max, average, median };
-    }
-
-    /**
-     * Handles write errors based on the conflict resolution strategy.
-     * Logs errors appropriately and throws for fatal strategies (Abort, Overwrite).
-     *
-     * @param errors Array of errors from the write operation, or null if no errors
-     * @throws Error for Abort and Overwrite strategies when errors are present
-     */
-    private handleWriteErrors(errors: Array<{ documentId?: string; error: Error }> | null): void {
-        if (!errors || errors.length === 0) {
-            return;
-        }
-
-        // Update conflict statistics
-        this.conflictStats.errorCount += errors.length;
-
-        // Handle errors based on the configured conflict resolution strategy
-        switch (this.config.onConflict) {
-            case ConflictResolutionStrategy.Abort: {
-                // Abort strategy: fail the entire task on the first error
-                this.logErrors(errors, 'error', 'Abort');
-                const abortFirstError = errors[0];
-                throw new Error(
-                    vscode.l10n.t(
-                        'Task aborted due to an error: {0}. {1} document(s) were inserted in total.',
-                        abortFirstError.error?.message ?? 'Unknown error',
-                        this.copiedDocuments.toString(),
-                    ),
-                );
-            }
-
-            case ConflictResolutionStrategy.Skip:
-                // Skip strategy: log each error and continue
-                this.conflictStats.skippedCount += errors.length;
-                this.logErrors(errors, 'appendLog', 'Skip');
-                break;
-
-            case ConflictResolutionStrategy.GenerateNewIds:
-                // GenerateNewIds strategy: this should not have conflicts since we remove _id
-                // If errors occur, they're likely other issues, so log them
-                this.logErrors(errors, 'error', 'GenerateNewIds');
-                break;
-
-            case ConflictResolutionStrategy.Overwrite:
-            default: {
-                // Overwrite or other strategies: treat errors as fatal
-                this.logErrors(errors, 'error', 'Overwrite');
-                const overwriteFirstError = errors[0];
-                throw new Error(
-                    vscode.l10n.t(
-                        'An error occurred while writing documents. Error Count: {0}, First error details: {1}',
-                        errors.length.toString(),
-                        overwriteFirstError.error?.message ?? 'Unknown error',
-                    ),
-                );
-            }
-        }
-    }
-
-    /**
-     * Logs errors to the output channel based on the log method and strategy.
-     *
-     * @param errors Array of errors to log
-     * @param logMethod Method to use for logging ('error' for fatal errors, 'appendLog' for informational)
-     * @param strategyName Name of the conflict resolution strategy for context
-     */
-    private logErrors(
-        errors: Array<{ documentId?: string; error: Error }>,
-        logMethod: 'error' | 'appendLog',
-        strategyName: string,
-    ): void {
-        for (const error of errors) {
-            if (logMethod === 'appendLog') {
-                ext.outputChannel.appendLog(
-                    vscode.l10n.t(
-                        'Skipped document with _id: {0} due to error: {1}',
-                        String(error.documentId ?? 'unknown'),
-                        error.error?.message ?? 'Unknown error',
-                    ),
-                );
-            } else {
-                ext.outputChannel.error(
-                    vscode.l10n.t(
-                        'Error inserting document ({0}): {1}',
-                        strategyName,
-                        error.error?.message ?? 'Unknown error',
-                    ),
-                );
-            }
-        }
-        ext.outputChannel.show();
+        // Progress reporting: Show "processed" count which includes inserted, skipped, and overwritten documents
+        // Detailed breakdown will be provided in summary logs
+        return vscode.l10n.t(
+            'Processed {0} of {1} documents{2}',
+            this.totalProcessedDocuments.toString(),
+            this.sourceDocumentCount.toString(),
+            percentageStr,
+        );
     }
 }

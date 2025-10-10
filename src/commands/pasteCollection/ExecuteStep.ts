@@ -4,12 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
-import { TaskService, TaskState } from '../../services/taskService/taskService';
+import { DocumentDbDocumentReader } from '../../services/taskService/data-api/readers/documentDbDocumentReader';
+import { DocumentDbDocumentWriter } from '../../services/taskService/data-api/writers/DocumentDbDocumentWriter';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
-import { DocumentDbDocumentReader } from '../../services/taskService/tasks/copy-and-paste/documentdb/documentDbDocumentReader';
-import { DocumentDbDocumentWriter } from '../../services/taskService/tasks/copy-and-paste/documentdb/documentDbDocumentWriter';
+import { TaskService, TaskState } from '../../services/taskService/taskService';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
@@ -62,7 +63,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
 
         // Create the document reader and writer instances
         const reader = new DocumentDbDocumentReader();
-        const writer = new DocumentDbDocumentWriter();
+        const targetClient = await ClustersClient.getClient(targetConnectionId);
+        const writer = new DocumentDbDocumentWriter(
+            targetClient,
+            targetDatabaseName,
+            finalTargetCollectionName,
+            config,
+        );
 
         // Create the copy-paste task
         const task = new CopyPasteCollectionTask(config, reader, writer);
