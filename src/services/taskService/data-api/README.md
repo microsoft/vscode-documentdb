@@ -128,7 +128,7 @@ const result = await writer.writeDocuments(documents, {
   abortSignal: abortController.signal,
 });
 
-console.log(`Inserted: ${result.insertedCount}, Skipped: ${result.skippedCount}`);
+console.log(`Inserted: ${result.insertedCount}, Collided: ${result.collidedCount}`);
 ```
 
 ---
@@ -517,10 +517,10 @@ async writeWithSkipStrategy(documents) {
   // Insert non-conflicting documents
   const result = await collection.insertMany(docsToInsert);
 
-  // Return skipped documents in errors array (primary path)
+  // Return collided documents in errors array (primary path)
   return {
     insertedCount: result.insertedCount,
-    skippedCount: conflictIds.length,
+    collidedCount: conflictIds.length,
     processedCount: result.insertedCount + conflictIds.length,
     errors: conflictIds.map(id => ({
       documentId: id,
@@ -742,7 +742,7 @@ Task Level (CopyPasteCollectionTask)
        │     ├─ Maintains running totals:
        │     │  ├─ totalProcessed
        │     │  ├─ totalInserted
-       │     │  ├─ totalSkipped
+       │     │  ├─ totalCollided
        │     │  ├─ totalMatched
        │     │  └─ totalUpserted
        │     │
@@ -806,7 +806,7 @@ updateProgress(percentage: number, message: string): void;
 // StreamDocumentWriter adds to action context
 actionContext.telemetry.measurements.streamTotalProcessed = totalProcessed;
 actionContext.telemetry.measurements.streamTotalInserted = totalInserted;
-actionContext.telemetry.measurements.streamTotalSkipped = totalSkipped;
+actionContext.telemetry.measurements.streamTotalCollided = totalCollided;
 actionContext.telemetry.measurements.streamTotalMatched = totalMatched;
 actionContext.telemetry.measurements.streamTotalUpserted = totalUpserted;
 actionContext.telemetry.measurements.streamFlushCount = flushCount;
