@@ -98,8 +98,8 @@ export class DocumentDbDocumentWriter extends BaseDocumentWriter<string> {
             insertedCount = insertResult.insertedCount ?? 0;
         }
 
-        const skippedCount = conflictIds.length;
-        const processedCount = insertedCount + skippedCount;
+        const collidedCount = conflictIds.length;
+        const processedCount = insertedCount + collidedCount;
 
         const errors = conflictIds.map((id) => ({
             documentId: this.formatDocumentId(id),
@@ -108,7 +108,7 @@ export class DocumentDbDocumentWriter extends BaseDocumentWriter<string> {
 
         return {
             insertedCount,
-            skippedCount,
+            collidedCount,
             processedCount,
             errors: errors.length > 0 ? errors : undefined,
         };
@@ -247,7 +247,7 @@ export class DocumentDbDocumentWriter extends BaseDocumentWriter<string> {
                         matchedCount: details.matchedCount,
                         modifiedCount: details.modifiedCount,
                         upsertedCount: details.upsertedCount,
-                        skippedCount: details.skippedCount,
+                        collidedCount: details.collidedCount,
                         errors: conflictErrors,
                     };
                 }
@@ -311,7 +311,7 @@ export class DocumentDbDocumentWriter extends BaseDocumentWriter<string> {
      * Parses both top-level properties and nested result objects to extract
      * operation statistics like insertedCount, matchedCount, etc.
      *
-     * For BulkWriteError objects, also calculates skippedCount from duplicate
+     * For BulkWriteError objects, also calculates collidedCount from duplicate
      * key errors (code 11000) when using Skip strategy.
      *
      * @param error Error object from DocumentDB operation
@@ -536,7 +536,7 @@ export class DocumentDbDocumentWriter extends BaseDocumentWriter<string> {
      * - Error objects with counts nested in a result property
      *
      * For BulkWriteError objects with code 11000 (duplicate key), calculates
-     * skippedCount from the number of conflict errors.
+     * collidedCount from the number of conflict errors.
      *
      * @param resultOrError Result object or error from DocumentDB operation
      * @returns ProcessedDocumentsDetails with all available counts
@@ -561,16 +561,16 @@ export class DocumentDbDocumentWriter extends BaseDocumentWriter<string> {
         const modifiedCount = topLevel.modifiedCount ?? topLevel.result?.modifiedCount;
         const upsertedCount = topLevel.upsertedCount ?? topLevel.result?.upsertedCount;
 
-        // Calculate skipped count from conflicts if this is a bulk write error
-        let skippedCount: number | undefined;
+        // Calculate collided count from conflicts if this is a bulk write error
+        let collidedCount: number | undefined;
         if (isBulkWriteError(resultOrError)) {
             const writeErrors = this.extractWriteErrors(resultOrError);
-            // In skip strategy, conflicting documents are considered "skipped"
-            skippedCount = writeErrors.filter((writeError) => writeError?.code === 11000).length;
+            // Count duplicate key errors (code 11000) as collisions
+            collidedCount = writeErrors.filter((writeError) => writeError?.code === 11000).length;
         }
 
         // Calculate processedCount from defined values only
-        const processedCount = (insertedCount ?? 0) + (matchedCount ?? 0) + (upsertedCount ?? 0) + (skippedCount ?? 0);
+        const processedCount = (insertedCount ?? 0) + (matchedCount ?? 0) + (upsertedCount ?? 0) + (collidedCount ?? 0);
 
         return {
             processedCount,
@@ -578,7 +578,7 @@ export class DocumentDbDocumentWriter extends BaseDocumentWriter<string> {
             matchedCount,
             modifiedCount,
             upsertedCount,
-            skippedCount,
+            collidedCount,
         };
     }
 

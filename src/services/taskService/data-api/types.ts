@@ -89,8 +89,10 @@ export interface DocumentWriterOptions {
  */
 export interface BulkWriteResult<TDocumentId = unknown> extends DocumentOperationCounts {
     /**
-     * Total number of documents processed from the input batch.
-     * This equals insertedCount + skippedCount + matchedCount + upsertedCount.
+     * Total number of documents processed (attempted).
+     * Equals the sum of insertedCount + collidedCount + matchedCount + upsertedCount.
+     * For strategies that track conflicts (Skip), collidedCount includes conflicting documents.
+     * The errors array provides detailed information about failures but is not added separately to this count.
      */
     processedCount: number;
 

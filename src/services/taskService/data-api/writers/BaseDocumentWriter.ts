@@ -130,7 +130,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      *   progressCallback: (count) => console.log(`Processed ${count} documents`),
      *   abortSignal: abortController.signal,
      * });
-     * console.log(`Inserted: ${result.insertedCount}, Skipped: ${result.skippedCount}`);
+     * console.log(`Inserted: ${result.insertedCount}, Collided: ${result.collidedCount}`);
      */
     public async writeDocuments(
         documents: DocumentDetails[],
@@ -148,7 +148,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
 
         let pendingDocs = [...documents];
         let totalInserted = 0;
-        let totalSkipped = 0;
+        let totalCollided = 0;
         let totalMatched = 0;
         let totalUpserted = 0;
         const allErrors: Array<{ documentId?: TDocumentId; error: Error }> = [];
@@ -166,7 +166,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
             );
 
             totalInserted += writeBatchResult.insertedCount ?? 0;
-            totalSkipped += writeBatchResult.skippedCount ?? 0;
+            totalCollided += writeBatchResult.collidedCount ?? 0;
             totalMatched += writeBatchResult.matchedCount ?? 0;
             totalUpserted += writeBatchResult.upsertedCount ?? 0;
             pendingDocs = pendingDocs.slice(writeBatchResult.processedCount);
@@ -183,10 +183,10 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
 
         return {
             insertedCount: totalInserted,
-            skippedCount: totalSkipped,
+            collidedCount: totalCollided,
             matchedCount: totalMatched,
             upsertedCount: totalUpserted,
-            processedCount: totalInserted + totalSkipped + totalMatched + totalUpserted,
+            processedCount: totalInserted + totalCollided + totalMatched + totalUpserted,
             errors: allErrors.length > 0 ? allErrors : null,
         };
     }
@@ -271,7 +271,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
         let wasThrottled = false;
 
         let insertedCount = 0;
-        let skippedCount = 0;
+        let collidedCount = 0;
         let matchedCount = 0;
         let upsertedCount = 0;
         const batchErrors: Array<{ documentId?: TDocumentId; error: Error }> = [];
@@ -341,7 +341,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                         this.reportProgress(this.extractProgress(result));
 
                         insertedCount += result.insertedCount ?? 0;
-                        skippedCount += result.skippedCount ?? 0;
+                        collidedCount += result.collidedCount ?? 0;
                         matchedCount += result.matchedCount ?? 0;
                         upsertedCount += result.upsertedCount ?? 0;
                         currentBatch = currentBatch.slice(result.processedCount);
@@ -349,10 +349,11 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                         // Stop processing and return
                         return {
                             insertedCount,
-                            skippedCount,
+                            collidedCount,
                             matchedCount,
                             upsertedCount,
-                            processedCount: result.processedCount,
+                            processedCount:
+                                insertedCount + collidedCount + matchedCount + upsertedCount + batchErrors.length,
                             wasThrottled,
                             errors: batchErrors.length > 0 ? batchErrors : undefined,
                         };
@@ -366,7 +367,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                 this.reportProgress(progress);
 
                 insertedCount += progress.insertedCount ?? 0;
-                skippedCount += progress.skippedCount ?? 0;
+                collidedCount += progress.collidedCount ?? 0;
                 matchedCount += progress.matchedCount ?? 0;
                 upsertedCount += progress.upsertedCount ?? 0;
 
@@ -374,7 +375,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
 
                 // Grow batch size only if no conflicts were skipped
                 // (if we're here, the operation succeeded without throttle/network errors)
-                if ((result.skippedCount ?? 0) === 0 && (result.errors?.length ?? 0) === 0) {
+                if ((result.collidedCount ?? 0) === 0 && (result.errors?.length ?? 0) === 0) {
                     this.growBatchSize();
                 }
 
@@ -398,7 +399,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                         );
                         this.reportProgress(details);
                         insertedCount += details.insertedCount ?? 0;
-                        skippedCount += details.skippedCount ?? 0;
+                        collidedCount += details.collidedCount ?? 0;
                         matchedCount += details.matchedCount ?? 0;
                         upsertedCount += details.upsertedCount ?? 0;
                         currentBatch = currentBatch.slice(successfulCount);
@@ -430,9 +431,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                     );
 
                     const conflictErrors = this.extractConflictDetails(error, actionContext);
-                    const details =
-                        this.extractDetailsFromError(error, actionContext) ??
-                        this.createFallbackDetails(conflictErrors.length);
+                    const details = this.extractDetailsFromError(error, actionContext) ?? this.createFallbackDetails(0);
 
                     if (this.conflictResolutionStrategy === ConflictResolutionStrategy.Skip) {
                         ext.outputChannel.trace(
@@ -452,7 +451,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                     this.reportProgress(details);
 
                     insertedCount += details.insertedCount ?? 0;
-                    skippedCount += details.skippedCount ?? 0;
+                    collidedCount += details.collidedCount ?? 0;
                     matchedCount += details.matchedCount ?? 0;
                     upsertedCount += details.upsertedCount ?? 0;
 
@@ -470,10 +469,10 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                     // For Abort strategy, stop processing immediately
                     return {
                         insertedCount,
-                        skippedCount,
+                        collidedCount,
                         matchedCount,
                         upsertedCount,
-                        processedCount: details.processedCount,
+                        processedCount: insertedCount + collidedCount + matchedCount + upsertedCount,
                         wasThrottled,
                         errors: batchErrors.length > 0 ? batchErrors : undefined,
                     };
@@ -485,10 +484,10 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
 
         return {
             insertedCount,
-            skippedCount,
+            collidedCount,
             matchedCount,
             upsertedCount,
-            processedCount: insertedCount + skippedCount + matchedCount + upsertedCount,
+            processedCount: insertedCount + collidedCount + matchedCount + upsertedCount,
             wasThrottled,
             errors: batchErrors.length > 0 ? batchErrors : undefined,
         };
@@ -510,7 +509,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
             matchedCount: result.matchedCount,
             modifiedCount: result.modifiedCount,
             upsertedCount: result.upsertedCount,
-            skippedCount: result.skippedCount,
+            collidedCount: result.collidedCount,
         };
     }
 
@@ -533,15 +532,15 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      * Formats processed document details into a human-readable string based on the conflict resolution strategy.
      */
     protected formatProcessedDocumentsDetails(details: ProcessedDocumentsDetails): string {
-        const { insertedCount, matchedCount, modifiedCount, upsertedCount, skippedCount } = details;
+        const { insertedCount, matchedCount, modifiedCount, upsertedCount, collidedCount } = details;
 
         switch (this.conflictResolutionStrategy) {
             case ConflictResolutionStrategy.Skip:
-                if ((skippedCount ?? 0) > 0) {
+                if ((collidedCount ?? 0) > 0) {
                     return l10n.t(
                         '{0} inserted, {1} skipped',
                         (insertedCount ?? 0).toString(),
-                        (skippedCount ?? 0).toString(),
+                        (collidedCount ?? 0).toString(),
                     );
                 }
                 return l10n.t('{0} inserted', (insertedCount ?? 0).toString());
@@ -558,6 +557,13 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                 return l10n.t('{0} inserted with new IDs', (insertedCount ?? 0).toString());
 
             case ConflictResolutionStrategy.Abort:
+                if ((collidedCount ?? 0) > 0) {
+                    return l10n.t(
+                        '{0} inserted, {1} collided',
+                        (insertedCount ?? 0).toString(),
+                        (collidedCount ?? 0).toString(),
+                    );
+                }
                 return l10n.t('{0} inserted', (insertedCount ?? 0).toString());
 
             default:
@@ -811,7 +817,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      *
      * @param documents Batch of documents to insert
      * @param actionContext Optional context for telemetry
-     * @returns StrategyWriteResult with insertedCount, skippedCount, and errors array
+     * @returns StrategyWriteResult with insertedCount, collidedCount, and errors array
      *
      * @example
      * // Azure Cosmos DB for MongoDB API implementation
@@ -822,10 +828,10 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      *   // Insert non-conflicting documents
      *   const result = await collection.insertMany(docsToInsert);
      *
-     *   // Return skipped documents in errors array
+     *   // Return collided documents in errors array
      *   return {
      *     insertedCount: result.insertedCount,
-     *     skippedCount: conflictIds.length,
+     *     collidedCount: conflictIds.length,
      *     processedCount: result.insertedCount + conflictIds.length,
      *     errors: conflictIds.map(id => ({
      *       documentId: id,
@@ -890,14 +896,16 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      * - Insert documents using insertMany
      * - Stop immediately on first conflict
      * - Return conflict details in the errors array for clean error messages
+     * - Set collidedCount to the number of documents that caused conflicts
      *
      * CONFLICT HANDLING (Primary Path - Recommended):
      * For best user experience, catch expected duplicate key errors and return
      * them in StrategyWriteResult.errors:
      * 1. Catch database-specific duplicate key errors (e.g., BulkWriteError code 11000)
      * 2. Extract document IDs and error messages
-     * 3. Return in errors array with descriptive messages
-     * 4. Include processedCount showing documents inserted before conflict
+     * 3. Set collidedCount to the number of conflicting documents
+     * 4. Return conflicts in errors array with descriptive messages
+     * 5. Include processedCount showing documents inserted + collided (total attempted)
      *
      * FALLBACK PATH:
      * If conflicts are thrown instead of returned, the retry loop will catch them
@@ -909,7 +917,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      *
      * @param documents Batch of documents to insert
      * @param actionContext Optional context for telemetry
-     * @returns StrategyWriteResult with insertedCount and optional errors array
+     * @returns StrategyWriteResult with insertedCount, collidedCount, and optional errors array
      *
      * @example
      * // Azure Cosmos DB for MongoDB API implementation
@@ -923,10 +931,12 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      *   } catch (error) {
      *     // Primary path: handle expected conflicts
      *     if (isBulkWriteError(error) && hasDuplicateKeyError(error)) {
+     *       const conflicts = extractConflictErrors(error);
      *       return {
      *         insertedCount: error.insertedCount ?? 0,
-     *         processedCount: error.insertedCount ?? 0,
-     *         errors: extractConflictErrors(error)  // Detailed conflict info
+     *         collidedCount: conflicts.length,
+     *         processedCount: (error.insertedCount ?? 0) + conflicts.length,
+     *         errors: conflicts  // Detailed conflict info
      *       };
      *     }
      *     // Fallback: throw unexpected errors for retry logic
@@ -986,7 +996,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      * - matchedCount: Documents matched for update operations
      * - modifiedCount: Documents actually modified
      * - upsertedCount: Documents inserted via upsert
-     * - skippedCount: Documents skipped due to conflicts (for Skip strategy)
+     * - collidedCount: Documents that collided with existing documents (for Skip strategy)
      * - processedCount: Total documents processed before error
      *
      * Return undefined if the error doesn't contain any statistics.
@@ -1010,7 +1020,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      *     matchedCount: error.matchedCount,
      *     modifiedCount: error.modifiedCount,
      *     upsertedCount: error.upsertedCount,
-     *     skippedCount: error.writeErrors?.filter(e => e.code === 11000).length
+     *     collidedCount: error.writeErrors?.filter(e => e.code === 11000).length
      *   };
      * }
      */

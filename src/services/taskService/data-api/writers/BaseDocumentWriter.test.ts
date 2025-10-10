@@ -176,7 +176,7 @@ export class MockDocumentWriter extends BaseDocumentWriter<string> {
 
         return {
             insertedCount,
-            skippedCount: skippedIds.length,
+            collidedCount: skippedIds.length,
             processedCount: insertedCount + skippedIds.length,
             errors: errors.length > 0 ? errors : undefined,
         };
@@ -358,7 +358,7 @@ describe('BaseDocumentWriter', () => {
 
             expect(result.processedCount).toBe(10);
             expect(result.insertedCount).toBe(7); // Only 7 new documents inserted
-            expect(result.skippedCount).toBe(3); // 3 were skipped
+            expect(result.collidedCount).toBe(3); // 3 collided with existing documents
             expect(writer.getStorage().size).toBe(10); // Total unique documents
         });
 
@@ -727,7 +727,7 @@ describe('BaseDocumentWriter', () => {
 
             expect(result.processedCount).toBe(10);
             expect(result.insertedCount).toBe(7); // 10 - 3 conflicts
-            expect(result.skippedCount).toBe(3);
+            expect(result.collidedCount).toBe(3); // 3 collided with existing documents
             expect(result.errors).toBeDefined();
             expect(result.errors?.length).toBe(3);
         });

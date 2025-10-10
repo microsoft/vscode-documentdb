@@ -149,7 +149,7 @@ describe('StreamDocumentWriter', () => {
 
             expect(result.totalProcessed).toBe(300);
             expect(result.insertedCount).toBe(200); // 300 - 100 existing
-            expect(result.skippedCount).toBe(100);
+            expect(result.collidedCount).toBe(100); // 100 collided with existing documents
         });
 
         it('should record telemetry when actionContext provided', async () => {
@@ -345,7 +345,7 @@ describe('StreamDocumentWriter', () => {
 
             expect(result.totalProcessed).toBe(100);
             expect(result.insertedCount).toBe(100);
-            expect(result.skippedCount).toBe(0);
+            expect(result.collidedCount).toBe(0);
             expect(writer.getStorage().size).toBe(100);
         });
 
@@ -363,7 +363,7 @@ describe('StreamDocumentWriter', () => {
 
             expect(result.totalProcessed).toBe(50);
             expect(result.insertedCount).toBe(47); // 50 - 3 conflicts
-            expect(result.skippedCount).toBe(3);
+            expect(result.collidedCount).toBe(3); // 3 collided with existing documents
             expect(writer.getStorage().size).toBe(50); // 47 new + 3 existing
         });
     });
@@ -648,7 +648,7 @@ describe('StreamDocumentWriter', () => {
             const error = new StreamWriterError('Test error', {
                 totalProcessed: 100,
                 insertedCount: 100,
-                skippedCount: 0,
+                collidedCount: 0,
                 matchedCount: 0,
                 upsertedCount: 0,
                 flushCount: 2,
@@ -663,7 +663,7 @@ describe('StreamDocumentWriter', () => {
             const error = new StreamWriterError('Test error', {
                 totalProcessed: 100,
                 insertedCount: 80,
-                skippedCount: 20,
+                collidedCount: 20,
                 matchedCount: 0,
                 upsertedCount: 0,
                 flushCount: 2,
@@ -679,7 +679,7 @@ describe('StreamDocumentWriter', () => {
             const error = new StreamWriterError('Test error', {
                 totalProcessed: 100,
                 insertedCount: 0,
-                skippedCount: 0,
+                collidedCount: 0,
                 matchedCount: 60,
                 upsertedCount: 40,
                 flushCount: 2,

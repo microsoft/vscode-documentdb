@@ -17,8 +17,13 @@ export interface DocumentOperationCounts {
     /** Number of documents successfully inserted (new documents) */
     insertedCount?: number;
 
-    /** Number of documents skipped (conflicts, validation errors, pre-filtered) */
-    skippedCount?: number;
+    /**
+     * Number of documents that collided with existing documents (_id conflicts).
+     * For Skip strategy: these documents were not inserted (skipped).
+     * For Abort strategy: these documents caused the operation to stop.
+     * For Overwrite strategy: this should be 0 (conflicts are resolved via upsert/replace).
+     */
+    collidedCount?: number;
 
     /** Number of documents matched (existing documents found during update operations) */
     matchedCount?: number;
@@ -85,7 +90,14 @@ export interface StrategyWriteResult<TDocumentId = unknown> extends DocumentOper
     errors?: Array<{ documentId?: TDocumentId; error: Error }>;
 }
 
+/**
+ * Detailed breakdown of processed documents within a single batch or operation.
+ */
 export interface ProcessedDocumentsDetails extends DocumentOperationCounts {
+    /**
+     * Total number of documents processed (attempted) in this batch.
+     * Equals the sum of insertedCount + collidedCount + matchedCount + upsertedCount.
+     */
     processedCount: number;
 }
 
