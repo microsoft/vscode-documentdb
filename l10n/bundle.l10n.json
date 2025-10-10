@@ -32,6 +32,7 @@
   "{0} failed: {1}": "{0} failed: {1}",
   "{0} inserted": "{0} inserted",
   "{0} inserted with new IDs": "{0} inserted with new IDs",
+  "{0} inserted, {1} collided": "{0} inserted, {1} collided",
   "{0} inserted, {1} skipped": "{0} inserted, {1} skipped",
   "{0} matched": "{0} matched",
   "{0} matched, {1} modified, {2} upserted": "{0} matched, {1} modified, {2} upserted",
