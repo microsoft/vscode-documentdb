@@ -139,7 +139,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
         if (documents.length === 0) {
             return {
                 processedCount: 0,
-                errors: [],
+                errors: null,
             };
         }
 
