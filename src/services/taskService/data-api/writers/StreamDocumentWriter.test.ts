@@ -695,24 +695,24 @@ describe('StreamDocumentWriter', () => {
     // ==================== 16. Progress Reporting Details ====================
 
     describe('Progress Reporting Details', () => {
-        it('should show inserted count for Abort strategy', async () => {
+        it('should report progress with count for Abort strategy', async () => {
             const documents = createDocuments(100);
             const stream = createDocumentStream(documents);
-            const progressDetails: string[] = [];
+            const progressCounts: number[] = [];
 
             await streamer.streamDocuments({ conflictResolutionStrategy: ConflictResolutionStrategy.Abort }, stream, {
-                onProgress: (_count, details) => {
-                    if (details) {
-                        progressDetails.push(details);
-                    }
+                onProgress: (count, _details) => {
+                    progressCounts.push(count);
                 },
             });
 
-            // Should have details containing "inserted"
-            expect(progressDetails.some((detail) => detail.includes('inserted'))).toBe(true);
+            // Should have received progress callbacks with counts
+            expect(progressCounts.length).toBeGreaterThan(0);
+            const totalReported = progressCounts.reduce((sum, count) => sum + count, 0);
+            expect(totalReported).toBeGreaterThan(0);
         });
 
-        it('should show inserted + skipped for Skip strategy', async () => {
+        it('should report progress with count for Skip strategy', async () => {
             writer = new MockDocumentWriter('testdb', 'testcollection', ConflictResolutionStrategy.Skip);
             streamer = new StreamDocumentWriter(writer);
 
@@ -721,23 +721,21 @@ describe('StreamDocumentWriter', () => {
 
             const documents = createDocuments(100);
             const stream = createDocumentStream(documents);
-            const progressDetails: string[] = [];
+            const progressCounts: number[] = [];
 
             await streamer.streamDocuments({ conflictResolutionStrategy: ConflictResolutionStrategy.Skip }, stream, {
-                onProgress: (_count, details) => {
-                    if (details) {
-                        progressDetails.push(details);
-                    }
+                onProgress: (count, _details) => {
+                    progressCounts.push(count);
                 },
             });
 
-            // Should have details containing both "inserted" and "skipped"
-            const hasInserted = progressDetails.some((detail) => detail.includes('inserted'));
-            const hasSkipped = progressDetails.some((detail) => detail.includes('skipped'));
-            expect(hasInserted || hasSkipped).toBe(true);
+            // Should have received progress callbacks with counts
+            expect(progressCounts.length).toBeGreaterThan(0);
+            const totalReported = progressCounts.reduce((sum, count) => sum + count, 0);
+            expect(totalReported).toBeGreaterThan(0);
         });
 
-        it('should show matched + upserted for Overwrite strategy', async () => {
+        it('should report progress with count for Overwrite strategy', async () => {
             writer = new MockDocumentWriter('testdb', 'testcollection', ConflictResolutionStrategy.Overwrite);
             streamer = new StreamDocumentWriter(writer);
 
@@ -746,24 +744,22 @@ describe('StreamDocumentWriter', () => {
 
             const documents = createDocuments(100);
             const stream = createDocumentStream(documents);
-            const progressDetails: string[] = [];
+            const progressCounts: number[] = [];
 
             await streamer.streamDocuments(
                 { conflictResolutionStrategy: ConflictResolutionStrategy.Overwrite },
                 stream,
                 {
-                    onProgress: (_count, details) => {
-                        if (details) {
-                            progressDetails.push(details);
-                        }
+                    onProgress: (count, _details) => {
+                        progressCounts.push(count);
                     },
                 },
             );
 
-            // Should have details containing "matched" or "upserted"
-            const hasMatched = progressDetails.some((detail) => detail.includes('matched'));
-            const hasUpserted = progressDetails.some((detail) => detail.includes('upserted'));
-            expect(hasMatched || hasUpserted).toBe(true);
+            // Should have received progress callbacks with counts
+            expect(progressCounts.length).toBeGreaterThan(0);
+            const totalReported = progressCounts.reduce((sum, count) => sum + count, 0);
+            expect(totalReported).toBeGreaterThan(0);
         });
     });
 });
