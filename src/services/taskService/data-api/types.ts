@@ -34,28 +34,40 @@ export interface DocumentDetails {
 }
 
 /**
- * Interface for reading documents from a source collection
+ * Interface for reading documents from a source collection.
+ *
+ * DocumentReader instances are created for a specific data source (connection, database, and collection).
+ * The source details are provided during construction and used for all subsequent operations.
+ *
+ * Implementations should store the connection details internally and use them when streaming
+ * or counting documents.
+ *
+ * @example
+ * // Create a reader for a specific source
+ * const reader = new DocumentDbDocumentReader(connectionId, databaseName, collectionName);
+ *
+ * // Stream documents from the configured source
+ * for await (const doc of reader.streamDocuments()) {
+ *   console.log(doc);
+ * }
+ *
+ * // Count documents in the configured source
+ * const count = await reader.countDocuments();
  */
 export interface DocumentReader {
     /**
-     * Streams documents from the source collection.
+     * Streams documents from the source collection configured in the constructor.
      *
-     * @param connectionId Connection identifier for the source
-     * @param databaseName Name of the source database
-     * @param collectionName Name of the source collection
      * @returns AsyncIterable of documents
      */
-    streamDocuments(connectionId: string, databaseName: string, collectionName: string): AsyncIterable<DocumentDetails>;
+    streamDocuments(): AsyncIterable<DocumentDetails>;
 
     /**
-     * Counts documents in the source collection for progress calculation.
+     * Counts documents in the source collection configured in the constructor.
      *
-     * @param connectionId Connection identifier for the source
-     * @param databaseName Name of the source database
-     * @param collectionName Name of the source collection
      * @returns Promise resolving to the number of documents
      */
-    countDocuments(connectionId: string, databaseName: string, collectionName: string): Promise<number>;
+    countDocuments(): Promise<number>;
 }
 
 /**

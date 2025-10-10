@@ -130,11 +130,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         this.updateStatus(this.getStatus().state, vscode.l10n.t('Counting documents in the source collection...'));
 
         try {
-            this.sourceDocumentCount = await this.documentReader.countDocuments(
-                this.config.source.connectionId,
-                this.config.source.databaseName,
-                this.config.source.collectionName,
-            );
+            this.sourceDocumentCount = await this.documentReader.countDocuments();
 
             // Add document count to telemetry
             if (context) {
@@ -185,11 +181,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
 
         // Create document stream
-        const documentStream = this.documentReader.streamDocuments(
-            this.config.source.connectionId,
-            this.config.source.databaseName,
-            this.config.source.collectionName,
-        );
+        const documentStream = this.documentReader.streamDocuments();
 
         // Create streamer
         const streamWriter = new StreamDocumentWriter(this.documentWriter);
