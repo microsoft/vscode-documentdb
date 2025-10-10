@@ -87,7 +87,7 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
             createGenericElement({
                 contextValue: 'helpItem',
                 id: `${parentId}/changelog`,
-                label: vscode.l10n.t('Comprehensive Changelog'),
+                label: vscode.l10n.t('Changelog'),
                 iconPath: new vscode.ThemeIcon('history'),
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
                 commandArgs: ['https://github.com/microsoft/vscode-documentdb/blob/main/CHANGELOG.md'],
