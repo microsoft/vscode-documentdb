@@ -211,7 +211,7 @@
           "icon": "$(plug)"
         },
         {
-          "id": "documentDBHelp",
+          "id": "helpAndFeedbackView",
           "name": "Help and Feedback",
           "visibility": "collapsed",
           "icon": "$(question)"
