@@ -65,7 +65,7 @@ export class StreamWriterError extends Error {
      */
     public getStatsString(): string {
         const parts: string[] = [];
-        const { totalProcessed, insertedCount, skippedCount, matchedCount, upsertedCount } = this.partialStats;
+        const { totalProcessed, insertedCount, collidedCount, matchedCount, upsertedCount } = this.partialStats;
 
         // Always show total
         parts.push(`${totalProcessed} total`);
@@ -75,8 +75,8 @@ export class StreamWriterError extends Error {
         if ((insertedCount ?? 0) > 0) {
             breakdown.push(`${insertedCount ?? 0} inserted`);
         }
-        if ((skippedCount ?? 0) > 0) {
-            breakdown.push(`${skippedCount ?? 0} skipped`);
+        if ((collidedCount ?? 0) > 0) {
+            breakdown.push(`${collidedCount ?? 0} skipped`);
         }
         if ((matchedCount ?? 0) > 0) {
             breakdown.push(`${matchedCount ?? 0} matched`);
@@ -294,7 +294,7 @@ export class StreamDocumentWriter {
         return {
             totalProcessed: this.totalProcessed,
             insertedCount: this.totalInserted,
-            skippedCount: this.totalSkipped,
+            collidedCount: this.totalSkipped,
             matchedCount: this.totalMatched,
             upsertedCount: this.totalUpserted,
             flushCount: this.flushCount,
@@ -392,7 +392,7 @@ export class StreamDocumentWriter {
         // This is the authoritative source for statistics (handles retries, pre-filtering, etc.)
         this.totalProcessed += result.processedCount;
         this.totalInserted += result.insertedCount ?? 0;
-        this.totalSkipped += result.skippedCount ?? 0;
+        this.totalSkipped += result.collidedCount ?? 0;
         this.totalMatched += result.matchedCount ?? 0;
         this.totalUpserted += result.upsertedCount ?? 0;
         this.flushCount++;
@@ -475,7 +475,7 @@ export class StreamDocumentWriter {
                 const partialStats: StreamWriteResult = {
                     totalProcessed: this.totalProcessed,
                     insertedCount: this.totalInserted,
-                    skippedCount: this.totalSkipped,
+                    collidedCount: this.totalSkipped,
                     matchedCount: this.totalMatched,
                     upsertedCount: this.totalUpserted,
                     flushCount: this.flushCount,
@@ -546,7 +546,7 @@ export class StreamDocumentWriter {
                 const partialStats: StreamWriteResult = {
                     totalProcessed: this.totalProcessed,
                     insertedCount: this.totalInserted,
-                    skippedCount: this.totalSkipped,
+                    collidedCount: this.totalSkipped,
                     matchedCount: this.totalMatched,
                     upsertedCount: this.totalUpserted,
                     flushCount: this.flushCount,

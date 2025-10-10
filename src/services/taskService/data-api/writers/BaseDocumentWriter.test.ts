@@ -138,6 +138,7 @@ export class MockDocumentWriter extends BaseDocumentWriter<string> {
 
         return {
             insertedCount,
+            collidedCount: conflicts.length,
             processedCount: insertedCount + conflicts.length,
             errors: conflicts.length > 0 ? conflicts : undefined,
         };
@@ -270,6 +271,7 @@ export class MockDocumentWriter extends BaseDocumentWriter<string> {
         _actionContext?: IActionContext,
     ): Array<{ documentId?: string; error: Error }> {
         if (error instanceof Error && error.message.includes('CONFLICT')) {
+            // Return conflict details with a collided count of 1
             return [{ documentId: 'unknown', error }];
         }
         return [];

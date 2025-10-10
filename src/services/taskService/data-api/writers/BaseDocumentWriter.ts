@@ -352,8 +352,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                             collidedCount,
                             matchedCount,
                             upsertedCount,
-                            processedCount:
-                                insertedCount + collidedCount + matchedCount + upsertedCount + batchErrors.length,
+                            processedCount: insertedCount + collidedCount + matchedCount + upsertedCount,
                             wasThrottled,
                             errors: batchErrors.length > 0 ? batchErrors : undefined,
                         };

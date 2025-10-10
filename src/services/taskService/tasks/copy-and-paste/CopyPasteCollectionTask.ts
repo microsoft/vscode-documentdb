@@ -227,7 +227,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             if (context) {
                 context.telemetry.measurements.totalProcessedDocuments = result.totalProcessed;
                 context.telemetry.measurements.totalInsertedDocuments = result.insertedCount ?? 0;
-                context.telemetry.measurements.totalSkippedDocuments = result.skippedCount ?? 0;
+                context.telemetry.measurements.totalCollidedDocuments = result.collidedCount ?? 0;
                 context.telemetry.measurements.totalMatchedDocuments = result.matchedCount ?? 0;
                 context.telemetry.measurements.totalUpsertedDocuments = result.upsertedCount ?? 0;
                 context.telemetry.measurements.bufferFlushCount = result.flushCount;
@@ -244,7 +244,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                     context.telemetry.properties.errorDuringStreaming = 'true';
                     context.telemetry.measurements.totalProcessedDocuments = error.partialStats.totalProcessed;
                     context.telemetry.measurements.totalInsertedDocuments = error.partialStats.insertedCount ?? 0;
-                    context.telemetry.measurements.totalSkippedDocuments = error.partialStats.skippedCount ?? 0;
+                    context.telemetry.measurements.totalCollidedDocuments = error.partialStats.collidedCount ?? 0;
                     context.telemetry.measurements.totalMatchedDocuments = error.partialStats.matchedCount ?? 0;
                     context.telemetry.measurements.totalUpsertedDocuments = error.partialStats.upsertedCount ?? 0;
                     context.telemetry.measurements.bufferFlushCount = error.partialStats.flushCount;
