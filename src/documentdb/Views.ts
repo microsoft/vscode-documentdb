@@ -8,6 +8,7 @@ export enum Views {
     DiscoveryView = 'discoveryView', // do not change this value
     AzureResourcesView = 'azureResourcesView',
     AzureWorkspaceView = 'azureWorkspaceView',
+    HelpAndFeedbackView = 'helpAndFeedbackView', // do not change this value
 
     /**
      * Note to future maintainers: do not modify these string constants.

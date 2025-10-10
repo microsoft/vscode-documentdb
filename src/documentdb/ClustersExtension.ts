@@ -30,6 +30,7 @@ import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
 import { filterProviderContent } from '../commands/discoveryService.filterProviderContent/filterProviderContent';
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
+import { openHelpAndFeedbackUrl } from '../commands/helpAndFeedback.openUrl/openUrl';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
@@ -58,6 +59,7 @@ import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-vie
 import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
+import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
 import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
@@ -96,6 +98,16 @@ export class ClustersExtension implements vscode.Disposable {
         const treeView = vscode.window.createTreeView(Views.DiscoveryView, {
             showCollapseAll: true,
             treeDataProvider: ext.discoveryBranchDataProvider,
+        });
+
+        ext.context.subscriptions.push(treeView);
+    }
+
+    registerHelpAndFeedbackTree(_activateContext: IActionContext): void {
+        ext.helpAndFeedbackBranchDataProvider = new HelpAndFeedbackBranchDataProvider();
+
+        const treeView = vscode.window.createTreeView(Views.HelpAndFeedbackView, {
+            treeDataProvider: ext.helpAndFeedbackBranchDataProvider,
         });
 
         ext.context.subscriptions.push(treeView);
@@ -151,6 +163,7 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerDiscoveryServices(activateContext);
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
+                this.registerHelpAndFeedbackTree(activateContext);
 
                 //// General Commands:
 
@@ -260,6 +273,8 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommand('vscode-documentdb.command.internal.documentView.open', openDocumentView);
+
+                registerCommand('vscode-documentdb.command.internal.helpAndFeedback.openUrl', openHelpAndFeedbackUrl);
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.internal.retry', retryAuthentication);
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.internal.revealView', revealView);
