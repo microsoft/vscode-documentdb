@@ -21,11 +21,13 @@ import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
  * - What's New (changelog)
  * - Extension Documentation
  * - DocumentDB Documentation
- * - Suggest a Feature (HATs survey)
- * - Report a Bug
+ * - Suggest a Feature (GitHub issue template)
+ * - Report a Bug (GitHub issue template)
  * - Create Free Azure DocumentDB Cluster
  *
  * All items are leaf nodes (no children) that open external links when clicked.
+ * The links are opened using the 'vscode-documentdb.command.internal.helpAndFeedback.openUrl' command,
+ * which provides telemetry tracking for each URL opened.
  */
 export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvider<TreeElement> {
     constructor() {
@@ -78,10 +80,8 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 id: `${parentId}/whats-new`,
                 label: vscode.l10n.t("What's New"),
                 iconPath: new vscode.ThemeIcon('megaphone'),
-                commandId: 'vscode.open',
-                commandArgs: [
-                    vscode.Uri.parse('https://github.com/microsoft/vscode-documentdb/blob/main/CHANGELOG.md'),
-                ],
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
+                commandArgs: ['https://github.com/microsoft/vscode-documentdb/blob/main/CHANGELOG.md'],
             }) as TreeElement,
 
             createGenericElement({
@@ -89,8 +89,8 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 id: `${parentId}/extension-docs`,
                 label: vscode.l10n.t('Extension Documentation'),
                 iconPath: new vscode.ThemeIcon('book'),
-                commandId: 'vscode.open',
-                commandArgs: [vscode.Uri.parse('https://github.com/microsoft/vscode-documentdb#readme')],
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
+                commandArgs: ['https://github.com/microsoft/vscode-documentdb#readme'],
             }) as TreeElement,
 
             createGenericElement({
@@ -98,8 +98,8 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 id: `${parentId}/documentdb-docs`,
                 label: vscode.l10n.t('DocumentDB Documentation'),
                 iconPath: new vscode.ThemeIcon('library'),
-                commandId: 'vscode.open',
-                commandArgs: [vscode.Uri.parse('https://github.com/microsoft/documentdb')],
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
+                commandArgs: ['https://github.com/microsoft/documentdb'],
             }) as TreeElement,
 
             createGenericElement({
@@ -107,11 +107,9 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 id: `${parentId}/suggest-feature`,
                 label: vscode.l10n.t('Suggest a Feature'),
                 iconPath: new vscode.ThemeIcon('lightbulb'),
-                commandId: 'vscode.open',
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
                 commandArgs: [
-                    vscode.Uri.parse(
-                        'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=feature-request&template=feature_request.md',
-                    ),
+                    'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=feature-request&template=feature_request.md',
                 ],
             }) as TreeElement,
 
@@ -120,11 +118,9 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 id: `${parentId}/report-bug`,
                 label: vscode.l10n.t('Report a Bug'),
                 iconPath: new vscode.ThemeIcon('bug'),
-                commandId: 'vscode.open',
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
                 commandArgs: [
-                    vscode.Uri.parse(
-                        'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=bug&template=bug_report.md',
-                    ),
+                    'https://github.com/microsoft/vscode-documentdb/issues/new?assignees=&labels=bug&template=bug_report.md',
                 ],
             }) as TreeElement,
 
@@ -133,8 +129,8 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 id: `${parentId}/create-free-cluster`,
                 label: vscode.l10n.t('Create Free Azure DocumentDB Cluster'),
                 iconPath: new vscode.ThemeIcon('add'),
-                commandId: 'vscode.open',
-                commandArgs: [vscode.Uri.parse('https://aka.ms/tryvcore')],
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
+                commandArgs: ['https://aka.ms/tryvcore'],
             }) as TreeElement,
         ];
 
