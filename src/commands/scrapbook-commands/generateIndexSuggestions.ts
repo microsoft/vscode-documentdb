@@ -215,20 +215,7 @@ async function displayRecommendations(
     // Format improvements section
     const improvementsMarkdown = jsonRecommendations.improvements
         .map((improvement, index) => {
-            const priorityEmoji = {
-                high: '🔴',
-                medium: '🟡',
-                low: '🟢',
-            }[improvement.priority] || '⚪';
-
-            const actionEmoji = {
-                create: '➕',
-                drop: '🗑️',
-                modify: '✏️',
-                none: 'ℹ️',
-            }[improvement.action] || '';
-
-            let section = `### ${priorityEmoji} ${actionEmoji} Improvement ${index + 1}: ${improvement.action.toUpperCase()} Index\n\n`;
+            let section = `### Improvement ${index + 1}: ${improvement.action.toUpperCase()} Index\n\n`;
 
             section += `**Priority:** ${improvement.priority}\n\n`;
             section += `**Index Specification:**\n\`\`\`javascript\n${JSON.stringify(improvement.indexSpec, null, 2)}\n\`\`\`\n\n`;
@@ -240,7 +227,7 @@ async function displayRecommendations(
             section += `**Justification:** ${improvement.justification}\n\n`;
 
             if (improvement.risks) {
-                section += `⚠️ **Risks:** ${improvement.risks}\n\n`;
+                section += `**Risks:** ${improvement.risks}\n\n`;
             }
 
             section += `**MongoDB Shell Command:**\n\`\`\`javascript\n${improvement.mongoShell}\n\`\`\`\n\n`;
@@ -306,7 +293,7 @@ ${JSON.stringify(jsonRecommendations.metadata.collectionStats, null, 2)}
 
 </details>
 
-## 🔍 Current Index Statistics
+## Current Index Statistics
 
 <details>
 <summary>Click to expand index stats</summary>
@@ -317,7 +304,7 @@ ${JSON.stringify(jsonRecommendations.metadata.indexStats, null, 2)}
 
 </details>
 
-## 📈 Execution Statistics
+## Execution Statistics
 
 <details>
 <summary>Click to expand execution stats</summary>
