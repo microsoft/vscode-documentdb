@@ -35,6 +35,16 @@ import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
+import {
+    IndexAdvisorApis,
+    type CollectionStats,
+    type CreateIndexResult,
+    type DropIndexResult,
+    type ExplainOptions,
+    type ExplainResult,
+    type IndexSpecification,
+    type IndexStats,
+} from './IndexAdvisorApis';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -73,6 +83,7 @@ export class ClustersClient {
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
+    private _indexAdvisorApis: IndexAdvisorApis | null = null;
 
     /**
      * Use getClient instead of a constructor. Connections/Client are being cached and reused.
@@ -161,6 +172,7 @@ export class ClustersClient {
     ): Promise<void> {
         try {
             this._mongoClient = await MongoClient.connect(connectionString, options);
+            this._indexAdvisorApis = new IndexAdvisorApis(this._mongoClient);
         } catch (error) {
             const message = parseError(error).message;
             if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
@@ -533,5 +545,114 @@ export class ClustersClient {
                 insertedCount: error instanceof MongoBulkWriteError ? error.insertedCount || 0 : 0,
             };
         }
+    }
+    // ==========================================
+    // Index Advisor APIs
+    // ==========================================
+
+    /**
+     * Get detailed index statistics for a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @returns Array of index statistics including usage information
+     */
+    async getIndexStats(databaseName: string, collectionName: string): Promise<IndexStats[]> {
+        if (!this._indexAdvisorApis) {
+            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+        }
+        return this._indexAdvisorApis.getIndexStats(databaseName, collectionName);
+    }
+
+    /**
+     * Get detailed collection statistics
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @returns Collection statistics including size, count, and index information
+     */
+    async getCollectionStats(databaseName: string, collectionName: string): Promise<CollectionStats> {
+        if (!this._indexAdvisorApis) {
+            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+        }
+        return this._indexAdvisorApis.getCollectionStats(databaseName, collectionName);
+    }
+
+    /**
+     * Explain a find query with full execution statistics
+     * Supports sort, projection, skip, and limit options
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param options - Query options including filter, sort, projection, skip, and limit
+     * @returns Detailed explain result with execution statistics
+     */
+    async explainFind(
+        databaseName: string,
+        collectionName: string,
+        options: ExplainOptions = {},
+    ): Promise<ExplainResult> {
+        if (!this._indexAdvisorApis) {
+            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+        }
+        return this._indexAdvisorApis.explainFind(databaseName, collectionName, options);
+    }
+
+    /**
+     * Explain an aggregation pipeline with full execution statistics
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param pipeline - Aggregation pipeline stages
+     * @returns Detailed explain result with execution statistics
+     */
+    async explainAggregate(databaseName: string, collectionName: string, pipeline: Document[]): Promise<ExplainResult> {
+        if (!this._indexAdvisorApis) {
+            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+        }
+        return this._indexAdvisorApis.explainAggregate(databaseName, collectionName, pipeline);
+    }
+
+    /**
+     * Explain a count operation with full execution statistics
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param filter - Query filter for the count operation
+     * @returns Detailed explain result with execution statistics
+     */
+    async explainCount(databaseName: string, collectionName: string, filter: Filter<Document> = {}): Promise<Document> {
+        if (!this._indexAdvisorApis) {
+            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+        }
+        return this._indexAdvisorApis.explainCount(databaseName, collectionName, filter);
+    }
+
+    /**
+     * Create an index on a collection
+     * Supports both simple and composite indexes with various options
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexSpec - Index specification including key and options
+     * @returns Result of the index creation operation
+     */
+    async createIndex(
+        databaseName: string,
+        collectionName: string,
+        indexSpec: IndexSpecification,
+    ): Promise<CreateIndexResult> {
+        if (!this._indexAdvisorApis) {
+            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+        }
+        return this._indexAdvisorApis.createIndex(databaseName, collectionName, indexSpec);
+    }
+
+    /**
+     * Drop an index from a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to drop (use "*" to drop all non-_id indexes)
+     * @returns Result of the index drop operation
+     */
+    async dropIndex(databaseName: string, collectionName: string, indexName: string): Promise<DropIndexResult> {
+        if (!this._indexAdvisorApis) {
+            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+        }
+        return this._indexAdvisorApis.dropIndex(databaseName, collectionName, indexName);
     }
 }
