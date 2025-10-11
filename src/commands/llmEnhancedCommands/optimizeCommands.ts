@@ -209,14 +209,8 @@ export async function optimizeQuery(
             );
         }
 
-        collectionStats = await client.getCollectionStats(
-            queryContext.databaseName,
-            queryContext.collectionName,
-        );
-        indexes = await client.getIndexStats(
-            queryContext.databaseName,
-            queryContext.collectionName,
-        );
+        collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
+        indexes = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
     } catch (error) {
         throw new Error(
             l10n.t('Failed to gather query optimization data: {message}', {

@@ -8,7 +8,11 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { findCommandAtPosition, getAllCommandsFromText } from '../../documentdb/scrapbook/ScrapbookHelpers';
 import { ScrapbookService } from '../../documentdb/scrapbook/ScrapbookService';
-import { detectCommandType, optimizeQuery, type QueryOptimizationContext } from '../llmEnhancedCommands/optimizeCommands';
+import {
+    detectCommandType,
+    optimizeQuery,
+    type QueryOptimizationContext,
+} from '../llmEnhancedCommands/optimizeCommands';
 
 /**
  * Generates index optimization suggestions for the selected query in a scrapbook
@@ -146,7 +150,6 @@ function parseCollectionNameFromQuery(query: string): string | undefined {
  * @returns Collection name
  */
 async function promptForCollection(): Promise<string> {
-
     // Get the collection name from user input
     const collectionName = await vscode.window.showInputBox({
         prompt: l10n.t('Enter the collection name'),
@@ -164,7 +167,7 @@ async function promptForCollection(): Promise<string> {
         throw new Error(l10n.t('Collection name is required'));
     }
 
-    return collectionName.trim()
+    return collectionName.trim();
 }
 
 /**
