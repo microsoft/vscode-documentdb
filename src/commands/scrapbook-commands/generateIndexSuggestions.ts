@@ -15,6 +15,35 @@ import {
 } from '../llmEnhancedCommands/optimizeCommands';
 
 /**
+ * Structure of the JSON recommendations returned by the optimization service
+ */
+interface OptimizationRecommendations {
+    metadata: {
+        collectionName: string;
+        collectionStats: Record<string, unknown>;
+        indexStats: Array<Record<string, unknown>>;
+        executionStats: Record<string, unknown>;
+        derived: {
+            totalKeysExamined: number | null;
+            totalDocsExamined: number | null;
+            keysToDocsRatio: number | null;
+            usedIndex: string | null;
+        };
+    };
+    analysis: string;
+    improvements: Array<{
+        action: 'create' | 'drop' | 'none' | 'modify';
+        indexSpec: Record<string, number>;
+        indexOptions?: Record<string, unknown>;
+        mongoShell: string;
+        justification: string;
+        priority: 'high' | 'medium' | 'low';
+        risks?: string;
+    }>;
+    verification: string[];
+}
+
+/**
  * Generates index optimization suggestions for the selected query in a scrapbook
  * @param context Action context for telemetry
  * @param position Optional position to locate the command (when called from CodeLens)
@@ -181,25 +210,126 @@ async function displayRecommendations(
     modelUsed: string,
     queryContext: QueryOptimizationContext,
 ): Promise<void> {
+    const jsonRecommendations: OptimizationRecommendations = JSON.parse(recommendations) as OptimizationRecommendations;
+
+    // Format improvements section
+    const improvementsMarkdown = jsonRecommendations.improvements
+        .map((improvement, index) => {
+            const priorityEmoji = {
+                high: '🔴',
+                medium: '🟡',
+                low: '🟢',
+            }[improvement.priority] || '⚪';
+
+            const actionEmoji = {
+                create: '➕',
+                drop: '🗑️',
+                modify: '✏️',
+                none: 'ℹ️',
+            }[improvement.action] || '';
+
+            let section = `### ${priorityEmoji} ${actionEmoji} Improvement ${index + 1}: ${improvement.action.toUpperCase()} Index\n\n`;
+
+            section += `**Priority:** ${improvement.priority}\n\n`;
+            section += `**Index Specification:**\n\`\`\`javascript\n${JSON.stringify(improvement.indexSpec, null, 2)}\n\`\`\`\n\n`;
+
+            if (improvement.indexOptions && Object.keys(improvement.indexOptions).length > 0) {
+                section += `**Index Options:**\n\`\`\`javascript\n${JSON.stringify(improvement.indexOptions, null, 2)}\n\`\`\`\n\n`;
+            }
+
+            section += `**Justification:** ${improvement.justification}\n\n`;
+
+            if (improvement.risks) {
+                section += `⚠️ **Risks:** ${improvement.risks}\n\n`;
+            }
+
+            section += `**MongoDB Shell Command:**\n\`\`\`javascript\n${improvement.mongoShell}\n\`\`\`\n\n`;
+
+            return section;
+        })
+        .join('---\n\n');
+
+    // Format verification commands
+    const verificationMarkdown = jsonRecommendations.verification
+        .map((cmd) => `\`\`\`javascript\n${cmd}\n\`\`\``)
+        .join('\n\n');
+
     // Create a markdown document with the recommendations
     const markdownContent = `# Index Optimization Suggestions
 
-**Database:** ${queryContext.databaseName}
-**Collection:** ${queryContext.collectionName}
-**Query Type:** ${queryContext.commandType}
+**Database:** \`${queryContext.databaseName}\`
+**Collection:** \`${queryContext.collectionName}\`
+**Query Type:** \`${queryContext.commandType}\`
 **Model Used:** ${modelUsed}
 
-## Original Query
+---
 
-\`\`\`javascript
-${queryContext.query}
-\`\`\`
+## Performance Metrics
 
-## Recommendations
-
-${recommendations}
+| Metric | Value |
+|--------|-------|
+| Total Keys Examined | ${jsonRecommendations.metadata.derived.totalKeysExamined ?? 'N/A'} |
+| Total Docs Examined | ${jsonRecommendations.metadata.derived.totalDocsExamined ?? 'N/A'} |
+| Keys to Docs Ratio | ${jsonRecommendations.metadata.derived.keysToDocsRatio?.toFixed(2) ?? 'N/A'} |
+| Current Index Used | \`${jsonRecommendations.metadata.derived.usedIndex ?? 'COLLSCAN'}\` |
 
 ---
+
+## Analysis
+
+${jsonRecommendations.analysis}
+
+---
+
+## Recommended Improvements
+
+${improvementsMarkdown}
+
+---
+
+## Verification Steps
+
+After applying the changes, use these commands to verify the improvements:
+
+${verificationMarkdown}
+
+---
+
+## Collection Statistics
+
+<details>
+<summary>Click to expand collection stats</summary>
+
+\`\`\`json
+${JSON.stringify(jsonRecommendations.metadata.collectionStats, null, 2)}
+\`\`\`
+
+</details>
+
+## 🔍 Current Index Statistics
+
+<details>
+<summary>Click to expand index stats</summary>
+
+\`\`\`json
+${JSON.stringify(jsonRecommendations.metadata.indexStats, null, 2)}
+\`\`\`
+
+</details>
+
+## 📈 Execution Statistics
+
+<details>
+<summary>Click to expand execution stats</summary>
+
+\`\`\`json
+${JSON.stringify(jsonRecommendations.metadata.executionStats, null, 2)}
+\`\`\`
+
+</details>
+
+---
+
 *Generated by DocumentDB Index Advisor powered by GitHub Copilot*
 `;
 

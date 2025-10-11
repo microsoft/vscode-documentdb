@@ -123,22 +123,12 @@ function fillPromptTemplate(
     // Get the template for this command type
     const template = getPromptTemplate(templateType);
 
-    // Format indexes for display
-    const indexesFormatted = indexes
-        .map((idx) => {
-            const keys = Object.entries(idx.key)
-                .map(([field, direction]) => `${field}: ${direction}`)
-                .join(', ');
-            return `- **${idx.name}**: { ${keys} }`;
-        })
-        .join('\n');
-
     // Fill the template with actual data
     let filled = template
         .replace('{databaseName}', context.databaseName)
         .replace('{collectionName}', context.collectionName)
-        .replace('{documentCount}', collectionStats.count.toString())
-        .replace('{indexes}', indexesFormatted || l10n.t('No indexes found'))
+        .replace('{collectionStats}', JSON.stringify(collectionStats, null, 2))
+        .replace('{indexStats}', JSON.stringify(indexes, null, 2))
         .replace('{executionStats}', executionStats);
 
     // Replace query/pipeline placeholder based on command type
