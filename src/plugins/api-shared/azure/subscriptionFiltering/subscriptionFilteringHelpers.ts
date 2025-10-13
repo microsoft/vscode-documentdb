@@ -28,7 +28,7 @@ import { ext } from '../../../../extensionVariables';
 
 /**
  * Returns the currently selected subscription IDs from the shared configuration.
- * The ID of the tenant is being excluced from the ID.
+ * The ID of the tenant is being excluded from the ID.
  * The IDs are stored in the format 'tenantId/subscriptionId'.
  * For example: 'tenantId/subscriptionId'.
  * The function returns an array of subscription IDs without the tenant ID.
