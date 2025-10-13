@@ -58,7 +58,7 @@ export interface DocumentReader {
     /**
      * Streams documents from the source collection configured in the constructor.
      *
-     * @param options Optional streaming options (signal, keep-alive)
+     * @param options Optional streaming options (signal, keep-alive, telemetry)
      * @returns AsyncIterable of documents
      */
     streamDocuments(options?: DocumentReaderOptions): AsyncIterable<DocumentDetails>;
@@ -66,13 +66,15 @@ export interface DocumentReader {
     /**
      * Counts documents in the source collection configured in the constructor.
      *
+     * @param signal Optional AbortSignal for canceling the count operation
+     * @param actionContext Optional action context for telemetry collection
      * @returns Promise resolving to the number of documents
      */
-    countDocuments(): Promise<number>;
+    countDocuments(signal?: AbortSignal, actionContext?: IActionContext): Promise<number>;
 }
 
 /**
- * Options for streaming documents with keep-alive support.
+ * Options for reading documents with keep-alive support.
  */
 export interface DocumentReaderOptions {
     /**
@@ -96,6 +98,15 @@ export interface DocumentReaderOptions {
      * @default 10000 (10 seconds)
      */
     keepAliveIntervalMs?: number;
+
+    /**
+     * Maximum duration in milliseconds for keep-alive operation.
+     * If keep-alive runs longer than this timeout, the stream will be aborted.
+     * Only used when keepAlive is true.
+     *
+     * @default 600000 (10 minutes)
+     */
+    keepAliveTimeoutMs?: number;
 
     /**
      * Optional action context for telemetry collection.

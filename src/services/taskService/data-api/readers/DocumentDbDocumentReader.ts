@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type Document, type WithId } from 'mongodb';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { type DocumentDetails } from '../types';
@@ -38,9 +39,13 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
      * to DocumentDetails format with its _id and full content.
      *
      * @param signal Optional AbortSignal for canceling the stream
+     * @param _actionContext Optional action context for telemetry (currently unused)
      * @returns AsyncIterable of document details
      */
-    protected async *streamDocumentsFromDatabase(signal?: AbortSignal): AsyncIterable<DocumentDetails> {
+    protected async *streamDocumentsFromDatabase(
+        signal?: AbortSignal,
+        _actionContext?: IActionContext,
+    ): AsyncIterable<DocumentDetails> {
         const client = await ClustersClient.getClient(this.connectionId);
 
         const documentStream = client.streamDocuments(
@@ -66,9 +71,11 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
      * Note: estimatedDocumentCount doesn't support filtering, so exact counts
      * with filters would require countDocuments() method in future iterations.
      *
+     * @param _signal Optional AbortSignal for canceling the count operation (currently unused)
+     * @param _actionContext Optional action context for telemetry (currently unused)
      * @returns Promise resolving to the estimated document count
      */
-    protected async countDocumentsInDatabase(): Promise<number> {
+    protected async countDocumentsInDatabase(_signal?: AbortSignal, _actionContext?: IActionContext): Promise<number> {
         const client = await ClustersClient.getClient(this.connectionId);
         // Currently we use estimatedDocumentCount to get a rough idea of the document count
         // estimatedDocumentCount evaluates document counts based on metadata with O(1) complexity
