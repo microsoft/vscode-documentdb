@@ -124,11 +124,11 @@ Follow these strict instructions (must obey):
 12. **If no change recommended** — return an empty \`improvements\` array and a short \`verification\` suggestion to confirm the current plan.
 
 Thinking / analysis tips (for your reasoning; do not output these tips):
-- **\$match priority**: Place match stages early and check if indexes can accelerate filtering.
-- **\$sort optimization**: Match sort order to index order to avoid blocking in-memory sorts.
-- **\$group / \$project coverage**: Check if fields used in group or project stages are covered by indexes for potential index-only plans.
-- **\$lookup / \$unwind**: Evaluate whether join or array-unwind stages can benefit from supporting indexes.
-- **Multi-branch match**: For \$or or \$in conditions, consider compound indexes or index intersection.
+- **\\$match priority**: Place match stages early and check if indexes can accelerate filtering.
+- **\\$sort optimization**: Match sort order to index order to avoid blocking in-memory sorts.
+- **\\$group / \\$project coverage**: Check if fields used in group or project stages are covered by indexes for potential index-only plans.
+- **\\$lookup / \\$unwind**: Evaluate whether join or array-unwind stages can benefit from supporting indexes.
+- **Multi-branch match**: For \\$or or \\$in conditions, consider compound indexes or index intersection.
 - **Multikey / sparse / partial indexes**: Ensure indexes on array or sparse fields still support coverage without excessive size or write amplification.
 - **Index size and write cost**: Avoid high-cardinality indexes that rarely match queries; prefer selective prefixes or partial indexes.
 - **Projection coverage**: If all projected fields are indexed, prioritize index-only scan opportunities.
