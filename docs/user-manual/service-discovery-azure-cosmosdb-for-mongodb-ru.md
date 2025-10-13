@@ -1,7 +1,4 @@
-<!-- filepath: /home/tomek/github/ms/vscode-documentdb/docs/learn-more/service-discovery-azure-cosmosdb-for-mongodb-ru.md -->
-<!-- Learn More Section Badge or Breadcrumb -->
-
-> **Learn More** &mdash; [Back to Learn More Index](./index)
+> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
 
 ---
 
@@ -45,6 +42,8 @@ When you use the Azure CosmosDB for MongoDB (RU) plugin, the extension performs 
    - Expand an account entry to view databases and connection options.
    - Save an account to your `DocumentDB Connections` list using the context menu or the save icon next to its name.
    - When connecting or saving, the extension will extract credentials or connection details from Azure where available. If multiple authentication methods are supported, you will be prompted to choose one.
+
+For an overview of how service discovery works, see the [Service Discovery](./service-discovery) documentation. For details on managing your Azure accounts and subscriptions, refer to the [Managing Azure Subscriptions](./managing-azure-discovery) guide.
 
 ## Managing Credentials and Filters
 

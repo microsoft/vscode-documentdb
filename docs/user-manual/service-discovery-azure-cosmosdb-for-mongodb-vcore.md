@@ -1,6 +1,4 @@
-<!-- Learn More Section Badge or Breadcrumb -->
-
-> **Learn More** &mdash; [Back to Learn More Index](./index)
+> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
 
 ---
 
@@ -44,6 +42,8 @@ When you use the Azure CosmosDB for MongoDB (vCore) plugin, the following steps 
    - You can connect to a cluster by expanding its entry in the tree view.
    - You can save a cluster to your `DocumentDB Connections` list using the context menu or by clicking the save icon next to its name.
    - When connecting or saving, the extension detects the authentication methods supported by the cluster (e.g., **Username/Password** or **Entra ID**). If multiple are available, you will be prompted to choose your preferred method.
+
+For an overview of how service discovery works, see the [Service Discovery](./service-discovery) documentation. For details on managing your Azure accounts and subscriptions, refer to the [Managing Azure Subscriptions](./managing-azure-discovery) guide.
 
 ## Managing Credentials and Filters
 

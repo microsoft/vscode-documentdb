@@ -1,6 +1,4 @@
-<!-- Learn More Section Badge or Breadcrumb -->
-
-> **Learn More** &mdash; [Back to Learn More Index](./index)
+> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
 
 ---
 
@@ -16,7 +14,6 @@ You have two main options for connecting to a local instance:
 
 - **Use Preconfigured Options:**
   The extension provides ready-to-use configurations for popular local setups:
-
   - **[Azure CosmosDB for MongoDB (RU) Emulator](./local-connection-mongodb-ru)**
   - **[DocumentDB Local](./local-connection-documentdb-local)**
 
