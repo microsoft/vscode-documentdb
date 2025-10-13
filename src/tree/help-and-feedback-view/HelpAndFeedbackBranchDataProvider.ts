@@ -30,9 +30,6 @@ import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
  * which provides telemetry tracking for each URL opened.
  */
 export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvider<TreeElement> {
-    constructor() {
-        super();
-    }
 
     async getChildren(element?: TreeElement): Promise<TreeElement[] | null | undefined> {
         return callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
