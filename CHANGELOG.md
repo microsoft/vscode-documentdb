@@ -4,7 +4,7 @@
 
 ### New Features & Improvements
 
-- **Enhanced Microsoft Entra ID Support**: Overhauled Microsoft Entra ID integration to fully support multi-account and multi-tenant environments, enabling uninterrupted workflows for developers working across different organizations. This includes multi-account management and multi-tenant filtering. [#277](https://github.com/microsoft/vscode-documentdb/pull/277), [#285](https://github.com/microsoft/vscode-documentdb/issues/285), [#284](https://github.com/microsoft/vscode-documentdb/issues/284), [#265](https://github.com/microsoft/vscode-documentdb/issues/265), [#243](https://github.com/microsoft/vscode-documentdb/issues/243)
+- **Enhanced Microsoft Entra ID Support**: Overhauled Microsoft Entra ID integration for Azure Cosmos DB for MongoDB (vCore) to fully support multi-account and multi-tenant environments, enabling uninterrupted workflows for developers working across different organizations. This includes multi-account management and multi-tenant filtering. [#277](https://github.com/microsoft/vscode-documentdb/pull/277), [#285](https://github.com/microsoft/vscode-documentdb/issues/285), [#284](https://github.com/microsoft/vscode-documentdb/issues/284), [#265](https://github.com/microsoft/vscode-documentdb/issues/265), [#243](https://github.com/microsoft/vscode-documentdb/issues/243)
 - **New "Help and Feedback" View**: Added a new view to the extension sidebar, providing a central place to access documentation, see the changelog, report issues, and request features. [#289](https://github.com/microsoft/vscode-documentdb/pull/289)
 
 ### Fixes
