@@ -164,6 +164,11 @@ export abstract class BaseDocumentReader implements DocumentReader {
                 if (!buffer.isEmpty()) {
                     const doc = buffer.shift();
                     if (doc) {
+                        // Trace buffer read with remaining size
+                        ext.outputChannel.trace(
+                            l10n.t('[Reader] Read from buffer, remaining: {0} documents', buffer.length),
+                        );
+
                         yield doc;
                         lastYieldTimestamp = Date.now();
                         continue;

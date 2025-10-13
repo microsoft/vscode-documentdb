@@ -14,6 +14,7 @@
   "[Reader] Document count result: {0} documents": "[Reader] Document count result: {0} documents",
   "[Reader] Keep-alive read: count={0}, buffer length={1}": "[Reader] Keep-alive read: count={0}, buffer length={1}",
   "[Reader] Keep-alive skipped: only {0}s since last yield (interval: {1}s)": "[Reader] Keep-alive skipped: only {0}s since last yield (interval: {1}s)",
+  "[Reader] Read from buffer, remaining: {0} documents": "[Reader] Read from buffer, remaining: {0} documents",
   "[StreamWriter] An error occurred while writing documents. Error Count: {0}, First error: {1}": "[StreamWriter] An error occurred while writing documents. Error Count: {0}, First error: {1}",
   "[StreamWriter] Error inserting document (Abort): {0}": "[StreamWriter] Error inserting document (Abort): {0}",
   "[StreamWriter] Error inserting document (GenerateNewIds): {0}": "[StreamWriter] Error inserting document (GenerateNewIds): {0}",
