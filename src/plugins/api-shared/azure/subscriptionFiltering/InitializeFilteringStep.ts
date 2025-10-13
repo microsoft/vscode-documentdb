@@ -93,6 +93,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         // Initialize selectedTenants based on current filtering state (only if not already set from going back)
         if (!context.selectedTenants) {
             context.selectedTenants = this.getSelectedTenantsFromSettings(context.availableTenants);
+            context.telemetry.measurements.initialSelectedTenantCount = context.selectedTenants.length;
         }
 
         // Determine the flow based on tenant count, but let's look at the actual subscriptions,

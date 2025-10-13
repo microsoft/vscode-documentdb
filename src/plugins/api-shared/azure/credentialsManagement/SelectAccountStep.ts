@@ -27,7 +27,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
             context.availableAccounts = accounts;
 
             // Add telemetry for account availability
-            context.telemetry.measurements.availableAccountsCount = accounts.length;
+            context.telemetry.measurements.initialAccountCount = accounts.length;
             context.telemetry.measurements.accountsLoadingTimeMs = Date.now() - loadStartTime;
 
             const accountItems: AccountQuickPickItem[] = accounts.map((account) => ({
