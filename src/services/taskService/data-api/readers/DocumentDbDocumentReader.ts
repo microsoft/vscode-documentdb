@@ -37,15 +37,16 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
      * from the collection specified in the constructor. Each document is converted
      * to DocumentDetails format with its _id and full content.
      *
+     * @param signal Optional AbortSignal for canceling the stream
      * @returns AsyncIterable of document details
      */
-    protected async *streamDocumentsFromDatabase(): AsyncIterable<DocumentDetails> {
+    protected async *streamDocumentsFromDatabase(signal?: AbortSignal): AsyncIterable<DocumentDetails> {
         const client = await ClustersClient.getClient(this.connectionId);
 
         const documentStream = client.streamDocuments(
             this.databaseName,
             this.collectionName,
-            new AbortController().signal,
+            signal ?? new AbortController().signal,
         );
         for await (const document of documentStream) {
             yield {

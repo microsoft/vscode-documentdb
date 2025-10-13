@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DocumentDetails, type DocumentReader } from '../types';
+import Denque from 'denque';
+import { type DocumentDetails, type DocumentReader, type DocumentReaderOptions } from '../types';
 
 /**
  * Abstract base class for DocumentReader implementations.
@@ -12,6 +13,7 @@ import { type DocumentDetails, type DocumentReader } from '../types';
  * - Standardized database and collection parameters
  * - Clear separation between streaming and counting operations
  * - Database-agnostic interface for higher-level components
+ * - Optional keep-alive buffering for maintaining steady read rate
  *
  * Subclasses implement database-specific operations via abstract hooks:
  * - streamDocumentsFromDatabase(): Connect to database and stream documents
@@ -38,19 +40,97 @@ export abstract class BaseDocumentReader implements DocumentReader {
      * This is the main entry point for reading documents. It delegates to the
      * database-specific implementation to handle connection and streaming.
      *
+     * When keep-alive is enabled, maintains a buffer with periodic refills to
+     * prevent connection/cursor timeouts during slow consumption.
+     *
      * Uses the database and collection names provided in the constructor.
      *
+     * @param options Optional streaming options (signal, keep-alive)
      * @returns AsyncIterable of documents
      *
      * @example
-     * // Reading documents from Azure Cosmos DB for MongoDB (vCore)
+     * // Reading documents without keep-alive
      * const reader = new DocumentDbDocumentReader(connectionId, dbName, collectionName);
      * for await (const doc of reader.streamDocuments()) {
      *   console.log(`Read document: ${doc.id}`);
      * }
+     *
+     * @example
+     * // Reading documents with keep-alive to prevent timeouts
+     * const signal = new AbortController().signal;
+     * for await (const doc of reader.streamDocuments({ signal, keepAlive: true })) {
+     *   // Slow processing - keep-alive maintains connection
+     *   await processDocument(doc);
+     * }
      */
-    public async *streamDocuments(): AsyncIterable<DocumentDetails> {
-        yield* this.streamDocumentsFromDatabase();
+    public async *streamDocuments(options?: DocumentReaderOptions): AsyncIterable<DocumentDetails> {
+        // No keep-alive requested: direct passthrough to database
+        if (!options?.keepAlive) {
+            yield* this.streamDocumentsFromDatabase(options?.signal);
+            return;
+        }
+
+        // Keep-alive enabled: buffer-based streaming with periodic refills
+        const buffer = new Denque<DocumentDetails>();
+        const intervalMs = options.keepAliveIntervalMs ?? 10000;
+        let lastYieldTimestamp = Date.now();
+        let dbIterator: AsyncIterator<DocumentDetails> | null = null;
+        let keepAliveTimer: NodeJS.Timeout | null = null;
+
+        try {
+            // Start database stream
+            dbIterator = this.streamDocumentsFromDatabase(options.signal)[Symbol.asyncIterator]();
+
+            // Start keep-alive timer: periodically refill buffer to maintain database connection
+            keepAliveTimer = setInterval(() => {
+                void (async () => {
+                    // Fetch if enough time has passed since last yield (regardless of buffer state)
+                    // This ensures we "tickle" the database cursor regularly to prevent timeouts
+                    const timeSinceLastYield = Date.now() - lastYieldTimestamp;
+                    if (timeSinceLastYield >= intervalMs && dbIterator) {
+                        try {
+                            const result = await dbIterator.next();
+                            if (!result.done) {
+                                buffer.push(result.value);
+                            }
+                        } catch {
+                            // Silently ignore background fetch errors
+                            // Persistent errors will surface when main loop calls dbIterator.next()
+                        }
+                    }
+                })();
+            }, intervalMs);
+
+            // Unified control loop: queue-first, DB-fallback
+            while (!options.signal?.aborted) {
+                // 1. Try buffer first (already pre-fetched by keep-alive)
+                if (!buffer.isEmpty()) {
+                    const doc = buffer.shift();
+                    if (doc) {
+                        yield doc;
+                        lastYieldTimestamp = Date.now();
+                        continue;
+                    }
+                }
+
+                // 2. Buffer empty, fetch directly from database
+                const result = await dbIterator.next();
+                if (result.done) {
+                    break;
+                }
+
+                yield result.value;
+                lastYieldTimestamp = Date.now();
+            }
+        } finally {
+            // Cleanup resources
+            if (keepAliveTimer) {
+                clearInterval(keepAliveTimer);
+            }
+            if (dbIterator) {
+                await dbIterator.return?.();
+            }
+        }
     }
 
     /**
@@ -83,24 +163,26 @@ export abstract class BaseDocumentReader implements DocumentReader {
      * - Stream all documents from the collection specified in the constructor
      * - Convert each document to DocumentDetails format
      * - Yield documents one at a time for memory-efficient processing
+     * - Support cancellation via optional AbortSignal
      *
      * IMPLEMENTATION GUIDELINES:
      * - Use database-specific streaming APIs (e.g., MongoDB cursor)
      * - Extract document ID and full document content
      * - Handle connection errors gracefully
-     * - Support cancellation if needed (via AbortSignal)
+     * - Pass AbortSignal to database client if supported
      * - Use this.databaseName and this.collectionName from constructor
      *
+     * @param signal Optional AbortSignal for canceling the stream
      * @returns AsyncIterable of document details
      *
      * @example
      * // Azure Cosmos DB for MongoDB API implementation
-     * protected async *streamDocumentsFromDatabase() {
+     * protected async *streamDocumentsFromDatabase(signal?: AbortSignal) {
      *   const client = await ClustersClient.getClient(this.connectionId);
      *   const documentStream = client.streamDocuments(
      *     this.databaseName,
      *     this.collectionName,
-     *     abortSignal
+     *     signal
      *   );
      *
      *   for await (const document of documentStream) {
@@ -111,7 +193,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
      *   }
      * }
      */
-    protected abstract streamDocumentsFromDatabase(): AsyncIterable<DocumentDetails>;
+    protected abstract streamDocumentsFromDatabase(signal?: AbortSignal): AsyncIterable<DocumentDetails>;
 
     /**
      * Counts documents in the database-specific collection.
