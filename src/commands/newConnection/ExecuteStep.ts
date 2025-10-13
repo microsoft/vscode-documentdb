@@ -6,6 +6,7 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
@@ -36,8 +37,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 const parentId = context.parentId;
 
                 const newConnectionString = context.connectionString!;
-                const newPassword = context.password;
-                const newUsername = context.username;
+
+                const newPassword = context.nativeAuthConfig?.connectionPassword;
+                const newUsername = context.nativeAuthConfig?.connectionUser;
+
                 const newAuthenticationMethod = context.selectedAuthenticationMethod;
                 const newAvailableAuthenticationMethods =
                     context.availableAuthenticationMethods ??
@@ -52,10 +55,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 const existingDuplicateConnection = existingConnections.find((existingConnection) => {
                     const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
                     const existingHostsJoined = [...existingCS.hosts].sort().join(',');
+                    // Use nativeAuthConfig for comparison
+                    const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
 
-                    return (
-                        existingConnection.secrets.userName === newUsername && existingHostsJoined === newJoinedHosts
-                    );
+                    return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
                 });
 
                 if (existingDuplicateConnection) {
@@ -129,7 +132,18 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                         availableAuthMethods: newAvailableAuthenticationMethods,
                         selectedAuthMethod: newAuthenticationMethod,
                     },
-                    secrets: { connectionString: newParsedCS.toString(), userName: newUsername, password: newPassword },
+                    secrets: {
+                        connectionString: newParsedCS.toString(),
+                        nativeAuthConfig:
+                            context.nativeAuthConfig ??
+                            (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
+                                ? {
+                                      connectionUser: newUsername ?? '',
+                                      connectionPassword: newPassword,
+                                  }
+                                : undefined),
+                        entraIdAuthConfig: context.entraIdAuthConfig,
+                    },
                 };
 
                 await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);

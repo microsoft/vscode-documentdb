@@ -1,6 +1,4 @@
-<!-- Learn More Section Badge or Breadcrumb -->
-
-> **Learn More** &mdash; [Back to Learn More Index](./index.md)
+> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
 
 ---
 
@@ -81,7 +79,7 @@ This context allows providers to offer intelligent, targeted migration options b
 
 For detailed API documentation, plugin development information, and technical specifications, please refer to:
 
-**[Migration API Documentation](https://github.com/microsoft/vscode-documentdb/tree/main/api/README.md)**
+**[Migration API Documentation](https://github.com/microsoft/vscode-documentdb/tree/main/api/README)**
 
 The API documentation includes:
 

@@ -14,6 +14,7 @@ import { type ClustersWorkspaceBranchDataProvider } from './tree/azure-workspace
 import { type DocumentDbWorkspaceResourceProvider } from './tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
+import { type HelpAndFeedbackBranchDataProvider } from './tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
 import { type TreeElement } from './tree/TreeElement';
 
 /**
@@ -53,6 +54,8 @@ export namespace ext {
     export let connectionsTreeView: vscode.TreeView<TreeElement>;
 
     export let discoveryBranchDataProvider: DiscoveryBranchDataProvider;
+
+    export let helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
 
     export namespace settingsKeys {
         export const shellPath = 'documentDB.mongoShell.path';

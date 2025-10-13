@@ -22,7 +22,7 @@ import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticat
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
-import { ClusterItemBase, type ClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { nonNullValue } from '../../../../utils/nonNull';
 import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../../utils/clusterHelpers';
@@ -46,10 +46,11 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         super(cluster);
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
+            context.telemetry.properties.resourceType = 'mongoVCore';
 
             // Retrieve and validate cluster information (throws if invalid)
             const clusterInformation = await getClusterInformationFromAzure(
@@ -59,7 +60,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 this.cluster.name,
             );
 
-            return extractCredentialsFromCluster(context, clusterInformation);
+            return extractCredentialsFromCluster(context, clusterInformation, this.subscription);
         });
     }
 
@@ -82,8 +83,11 @@ export class DocumentDBResourceItem extends ClusterItemBase {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            const connectionStartTime = Date.now();
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
+            context.telemetry.properties.connectionInitiatedFrom = 'discoveryView';
+            context.telemetry.properties.resourceType = 'mongoVCore';
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -93,12 +97,12 @@ export class DocumentDBResourceItem extends ClusterItemBase {
 
             // Get and validate cluster information
             const clusterInformation = await this.getClusterInformation(context);
-            const credentials = extractCredentialsFromCluster(context, clusterInformation);
+            const credentials = extractCredentialsFromCluster(context, clusterInformation, this.subscription);
 
             // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
-                adminUserName: credentials.connectionUser,
+                adminUserName: credentials.nativeAuthConfig?.connectionUser,
                 resourceName: this.cluster.name,
                 availableAuthMethods: credentials.availableAuthMethods,
             };
@@ -122,8 +126,14 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                     'DocumentDBResourceItem.ts',
                 ),
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'DocumentDBResourceItem.ts'),
-                wizardContext.selectedUserName,
-                wizardContext.password,
+                wizardContext.selectedUserName || wizardContext.password
+                    ? {
+                          connectionUser: wizardContext.selectedUserName ?? '',
+                          connectionPassword: wizardContext.password,
+                      }
+                    : undefined,
+                undefined,
+                credentials.entraIdAuthConfig,
             );
 
             switch (wizardContext.selectedAuthMethod) {
@@ -147,8 +157,17 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                     }),
                 );
 
+                // Add success telemetry
+                context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                context.telemetry.properties.connectionResult = 'success';
+
                 return clustersClient;
             } catch (error) {
+                // Add error telemetry
+                context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                context.telemetry.properties.connectionResult = 'failed';
+                context.telemetry.properties.connectionErrorType = error instanceof Error ? error.name : 'UnknownError';
+
                 ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
 
                 void vscode.window.showErrorMessage(
@@ -182,7 +201,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
-            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
+            title: l10n.t('Authenticate to Connect with Your DocumentDB Cluster'),
             showLoadingPrompt: true,
         });
 
@@ -190,6 +209,8 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         await callWithTelemetryAndErrorHandling('connect.promptForCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
+            context.telemetry.properties.credentialsRequired = 'true';
+            context.telemetry.properties.credentialPromptReason = 'firstTime';
 
             context.errorHandling.rethrow = true;
             context.errorHandling.suppressDisplay = false;

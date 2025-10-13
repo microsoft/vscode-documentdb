@@ -105,8 +105,8 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                 }
 
                 const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
-                parsedCS.username = credentials?.connectionUser ?? '';
-                parsedCS.password = credentials?.connectionPassword ?? '';
+                parsedCS.username = CredentialCache.getConnectionUser(node.cluster.id) ?? '';
+                parsedCS.password = CredentialCache.getConnectionPassword(node.cluster.id) ?? '';
 
                 const options = {
                     connectionString: parsedCS.toString(),
@@ -122,33 +122,48 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                     // No actions available, execute default action
                     await selectedProvider.executeAction(options);
                 } else {
-                    // Extend actions with Learn More option if provider has a learn more URL
-                    const extendedActions: (QuickPickItem & {
-                        id: string;
-                        learnMoreUrl?: string;
-                        requiresAuthentication?: boolean;
-                    })[] = [...availableActions];
+                    // Create async function to provide better loading UX and debugging experience
+                    const getActionQuickPickItems = async (): Promise<
+                        (QuickPickItem & {
+                            id: string;
+                            learnMoreUrl?: string;
+                            requiresAuthentication?: boolean;
+                        })[]
+                    > => {
+                        // Get available actions from the provider
+                        const actions = await selectedProvider.getAvailableActions(options);
 
-                    const learnMoreUrl = selectedProvider.getLearnMoreUrl?.();
+                        // Extend actions with Learn More option if provider has a learn more URL
+                        const extendedActions: (QuickPickItem & {
+                            id: string;
+                            learnMoreUrl?: string;
+                            requiresAuthentication?: boolean;
+                        })[] = [...actions];
 
-                    if (learnMoreUrl) {
-                        extendedActions.push(
-                            { id: 'separator', label: '', kind: QuickPickItemKind.Separator },
-                            {
-                                id: 'learnMore',
-                                label: l10n.t('Learn more…'),
-                                detail: l10n.t('Learn more about {0}.', selectedProvider.label),
-                                learnMoreUrl,
-                                alwaysShow: true,
-                            },
-                        );
-                    }
+                        const learnMoreUrl = selectedProvider.getLearnMoreUrl?.();
+
+                        if (learnMoreUrl) {
+                            extendedActions.push(
+                                { id: 'separator', label: '', kind: QuickPickItemKind.Separator },
+                                {
+                                    id: 'learnMore',
+                                    label: l10n.t('Learn more…'),
+                                    detail: l10n.t('Learn more about {0}.', selectedProvider.label),
+                                    learnMoreUrl,
+                                    alwaysShow: true,
+                                },
+                            );
+                        }
+
+                        return extendedActions;
+                    };
 
                     // Show action picker to user
-                    const selectedAction = await context.ui.showQuickPick(extendedActions, {
+                    const selectedAction = await context.ui.showQuickPick(getActionQuickPickItems(), {
                         placeHolder: l10n.t('Choose the migration action…'),
                         stepName: 'selectMigrationAction',
                         suppressPersistence: true,
+                        loadingPlaceHolder: l10n.t('Loading migration actions…'),
                     });
 
                     if (selectedAction.id === 'learnMore') {

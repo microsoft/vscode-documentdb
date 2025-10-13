@@ -42,29 +42,31 @@ Your feedback, contributions, and ideas shape the future of the extension.
 
 ## User Manual
 
-The User Manual provides guidance on using DocumentDB for VS Code:
+The User Manual provides guidance on using DocumentDB for VS Code. It contains detailed documentation for specific features and concepts. These documents provide additional context and examples for features you encounter while using the extension:
 
-- [How to Construct a URL That Opens a Connection in the Extension](./manual/how-to-construct-url.md)
+### Connecting to Databases
 
-## Learn More
+- [Connecting with a URL](./user-manual/how-to-construct-url)
+- [Service Discovery](./user-manual/service-discovery)
+  - [Azure Cosmos DB for MongoDB (vCore)](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-vcore)
+  - [Azure Cosmos DB for MongoDB (RU)](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-ru)
+  - [Azure VMs (DocumentDB)](./user-manual/service-discovery-azure-vms)
+  - [Managing Azure Subscriptions](./user-manual/managing-azure-discovery)
+- [Connecting to Local Instances](./user-manual/local-connection)
+  - [Azure Cosmos DB for MongoDB (RU) Emulator](./user-manual/local-connection-mongodb-ru)
+  - [DocumentDB Local](./user-manual/local-connection-documentdb-local)
 
-This section contains detailed documentation for specific features and concepts that are directly accessible from within the DocumentDB for VS Code extension. These documents provide additional context and examples for features you encounter while using the extension:
+### Data Management
 
-- [Service Discovery](./learn-more/service-discovery.md)
-  - [Service Discovery: Azure CosmosDB for MongoDB (vCore)](./learn-more/service-discovery-azure-cosmosdb-for-mongodb-vcore.md)
-  - [Service Discovery: Azure VMs (DocumentDB)](./learn-more/service-discovery-azure-vms.md)
-- [Local Connection](./learn-more/local-connection.md)
-  - [Local Connection: Azure CosmosDB for MongoDB (RU) Emulator](./learn-more/local-connection-mongodb-ru.md)
-  - [Local Connection: DocumentDB Local](./learn-more/local-connection-documentdb-local.md)
-- [Data Migrations](./learn-more/data-migrations.md) ⚠️ _Experimental_
+- [Data Migrations (Experimental)](./user-manual/data-migrations)
 
 ## Release Notes
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
-- [0.4](./release-notes/0.4.md)
-- [0.3, 0.3.1](./release-notes/0.3.md)
-- [0.2.4](./release-notes/0.2.4.md)
-- [0.2.3](./release-notes/0.2.3.md)
-- [0.2.2](./release-notes/0.2.2.md)
-- [0.2.1](./release-notes/0.2.1.md)
+- [0.4](./release-notes/0.4)
+- [0.3, 0.3.1](./release-notes/0.3)
+- [0.2.4](./release-notes/0.2.4)
+- [0.2.3](./release-notes/0.2.3)
+- [0.2.2](./release-notes/0.2.2)
+- [0.2.1](./release-notes/0.2.1)

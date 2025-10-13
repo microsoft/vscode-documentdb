@@ -36,11 +36,11 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
             cluster.name!,
         );
 
-        const credentials = extractCredentialsFromCluster(context, clusterInformation);
+        const credentials = extractCredentialsFromCluster(context, clusterInformation, subscription);
 
         context.connectionString = credentials.connectionString;
-        context.username = credentials.connectionUser;
-        context.password = credentials.connectionPassword;
+        context.nativeAuthConfig = credentials.nativeAuthConfig;
+        context.entraIdAuthConfig = credentials.entraIdAuthConfig;
         context.availableAuthenticationMethods = credentials.availableAuthMethods;
 
         // clean-up
@@ -53,7 +53,7 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
      * Extracts and processes credentials from cluster information.
      * @param context The action context for telemetry and masking.
      * @param clusterInformation The MongoCluster object containing cluster details.
-     * @returns A ClusterCredentials object.
+     * @returns An EphemeralClusterCredentials object for service discovery scenarios.
      */
     // getClusterInformation and extractCredentials moved to shared helpers
 

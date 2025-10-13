@@ -18,7 +18,7 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
         const username = await context.ui.showInputBox({
             prompt: prompt,
             ignoreFocusOut: true,
-            value: context.username,
+            value: context.nativeAuthConfig?.connectionUser ?? '',
             validateInput: (username?: string) => this.validateInput(context, username),
             // eslint-disable-next-line @typescript-eslint/require-await
             asyncValidationTask: async (username?: string) => {
@@ -30,7 +30,11 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
         });
 
         context.valuesToMask.push(username);
-        context.username = username;
+        // Update structured config
+        context.nativeAuthConfig = {
+            connectionUser: username,
+            connectionPassword: context.nativeAuthConfig?.connectionPassword ?? '',
+        };
     }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
