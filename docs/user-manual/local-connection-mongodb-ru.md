@@ -1,6 +1,4 @@
-<!-- Learn More Section Badge or Breadcrumb -->
-
-> **Learn More** &mdash; [Back to Local Connection](./local-connection)
+> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
 
 ---
 

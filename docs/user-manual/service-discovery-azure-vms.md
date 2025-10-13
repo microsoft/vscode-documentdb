@@ -1,6 +1,4 @@
-<!-- Learn More Section Badge or Breadcrumb -->
-
-> **Learn More** &mdash; [Back to Learn More Index](./index)
+> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
 
 ---
 
@@ -49,6 +47,8 @@ When you use the Azure VMs (DocumentDB) plugin, the following steps are performe
    - You can connect to a VM by expanding its entry in the tree view.
    - You can save a VM to your `DocumentDB Connections` list using the context menu or by clicking the save icon next to its name.
    - When connecting, you'll be prompted to provide connection details for the DocumentDB/MongoDB instance running on the VM.
+
+For an overview of how service discovery works, see the [Service Discovery](./service-discovery) documentation. For details on managing your Azure accounts and subscriptions, refer to the [Managing Azure Subscriptions](./managing-azure-discovery) guide.
 
 ## Managing Credentials and Filters
 

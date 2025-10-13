@@ -1,5 +1,18 @@
 # Change Log
 
+## 0.5.0
+
+### New Features & Improvements
+
+- **Enhanced Microsoft Entra ID Support**: Overhauled Microsoft Entra ID integration for Azure Cosmos DB for MongoDB (vCore) to fully support multi-account and multi-tenant environments, enabling uninterrupted workflows for developers working across different organizations. This includes multi-account management and multi-tenant filtering. [#277](https://github.com/microsoft/vscode-documentdb/pull/277), [#285](https://github.com/microsoft/vscode-documentdb/issues/285), [#284](https://github.com/microsoft/vscode-documentdb/issues/284), [#265](https://github.com/microsoft/vscode-documentdb/issues/265), [#243](https://github.com/microsoft/vscode-documentdb/issues/243)
+- **New "Help and Feedback" View**: Added a new view to the extension sidebar, providing a central place to access documentation, see the changelog, report issues, and request features. [#289](https://github.com/microsoft/vscode-documentdb/pull/289)
+
+### Fixes
+
+- **Password Re-entry on Shell Launch**: Fixed a regression where users with saved credentials were still prompted for a password when launching the shell. [#285](https://github.com/microsoft/vscode-documentdb/issues/285)
+- **Tenant Information in Service Discovery**: Resolved an issue where the extension would fail to respect the tenant context when interacting with Azure resources from a non-default tenant. [#276](https://github.com/microsoft/vscode-documentdb/issues/276)
+- **Connection Authentication Update**: Corrected a failure that occurred when updating a connection's authentication method from Entra ID to a username/password. [#284](https://github.com/microsoft/vscode-documentdb/issues/284)
+
 ## 0.4.1
 
 ### Improvement
