@@ -64,6 +64,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
+- [0.5](./release-notes/0.5)
 - [0.4](./release-notes/0.4)
 - [0.3, 0.3.1](./release-notes/0.3)
 - [0.2.4](./release-notes/0.2.4)
