@@ -9,11 +9,7 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { type CollectionStats, type IndexStats } from '../../documentdb/IndexAdvisorApis';
 import { CopilotService } from '../../services/copilotService';
-import {
-    AGGREGATE_QUERY_PROMPT_TEMPLATE,
-    COUNT_QUERY_PROMPT_TEMPLATE,
-    FIND_QUERY_PROMPT_TEMPLATE,
-} from './promptTemplates';
+import { PromptTemplateService } from '../../services/PromptTemplateService';
 
 /**
  * Preferred language model for index optimization
@@ -65,17 +61,8 @@ export interface OptimizationResult {
  * @param commandType The type of command
  * @returns The prompt template string
  */
-function getPromptTemplate(commandType: CommandType): string {
-    switch (commandType) {
-        case CommandType.Find:
-            return FIND_QUERY_PROMPT_TEMPLATE;
-        case CommandType.Aggregate:
-            return AGGREGATE_QUERY_PROMPT_TEMPLATE;
-        case CommandType.Count:
-            return COUNT_QUERY_PROMPT_TEMPLATE;
-        default:
-            throw new Error(l10n.t('Prompt template not found for command type: {type}', { type: commandType }));
-    }
+async function getPromptTemplate(commandType: CommandType): Promise<string> {
+    return PromptTemplateService.getPromptTemplate(commandType);
 }
 
 /**
@@ -113,30 +100,24 @@ export function detectCommandType(command: string): CommandType {
  * @param executionStats Execution statistics from explain()
  * @returns The filled prompt template
  */
-function fillPromptTemplate(
+async function fillPromptTemplate(
     templateType: CommandType,
     context: QueryOptimizationContext,
     collectionStats: CollectionStats,
     indexes: Array<IndexStats>,
     executionStats: string,
-): string {
+): Promise<string> {
     // Get the template for this command type
-    const template = getPromptTemplate(templateType);
+    const template = await getPromptTemplate(templateType);
 
     // Fill the template with actual data
-    let filled = template
+    const filled = template
         .replace('{databaseName}', context.databaseName)
         .replace('{collectionName}', context.collectionName)
         .replace('{collectionStats}', JSON.stringify(collectionStats, null, 2))
         .replace('{indexStats}', JSON.stringify(indexes, null, 2))
-        .replace('{executionStats}', executionStats);
-
-    // Replace query/pipeline placeholder based on command type
-    if (templateType === CommandType.Aggregate) {
-        filled = filled.replace('{pipeline}', context.query);
-    } else {
-        filled = filled.replace('{query}', context.query);
-    }
+        .replace('{executionStats}', executionStats)
+        .replace('{query}', context.query);
 
     return filled;
 }
@@ -214,7 +195,7 @@ export async function optimizeQuery(
 
     // Fill the prompt template
     const commandType = queryContext.commandType;
-    const promptContent = fillPromptTemplate(commandType, queryContext, collectionStats, indexes, executionStats);
+    const promptContent = await fillPromptTemplate(commandType, queryContext, collectionStats, indexes, executionStats);
 
     // Send to Copilot with configured models
     const response = await CopilotService.sendMessage([vscode.LanguageModelChatMessage.User(promptContent)], {
