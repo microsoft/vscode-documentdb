@@ -83,6 +83,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
         let keepAliveTimer: NodeJS.Timeout | null = null;
         let keepAliveReadCount = 0;
         let maxBufferLength = 0;
+        let timedOut = false; // Flag to signal timeout from keep-alive callback to main loop
 
         try {
             // Start database stream
@@ -106,7 +107,8 @@ export abstract class BaseDocumentReader implements DocumentReader {
                             Math.floor(timeoutMs / 1000).toString(),
                         );
                         ext.outputChannel.error(l10n.t('[Reader] {0}', errorMessage));
-                        throw new Error(errorMessage);
+                        timedOut = true;
+                        return;
                     }
 
                     // Fetch if enough time has passed since last yield (regardless of buffer state)
@@ -153,6 +155,11 @@ export abstract class BaseDocumentReader implements DocumentReader {
 
             // Unified control loop: queue-first, DB-fallback
             while (!options.signal?.aborted) {
+                // Check for timeout from keep-alive callback
+                if (timedOut) {
+                    throw new Error(l10n.t('Keep-alive timeout exceeded'));
+                }
+
                 // 1. Try buffer first (already pre-fetched by keep-alive)
                 if (!buffer.isEmpty()) {
                     const doc = buffer.shift();

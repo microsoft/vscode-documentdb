@@ -365,6 +365,7 @@
   "Invalid document ID: {0}": "Invalid document ID: {0}",
   "Invalid semver \"{0}\".": "Invalid semver \"{0}\".",
   "JSON View": "JSON View",
+  "Keep-alive timeout exceeded": "Keep-alive timeout exceeded",
   "Keep-alive timeout exceeded: stream has been running for {0} seconds (limit: {1} seconds)": "Keep-alive timeout exceeded: stream has been running for {0} seconds (limit: {1} seconds)",
   "Large Collection Copy Operation": "Large Collection Copy Operation",
   "Learn more": "Learn more",
