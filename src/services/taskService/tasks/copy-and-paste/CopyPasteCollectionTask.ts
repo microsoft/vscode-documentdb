@@ -130,7 +130,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         this.updateStatus(this.getStatus().state, vscode.l10n.t('Counting documents in the source collection...'));
 
         try {
-            this.sourceDocumentCount = await this.documentReader.countDocuments();
+            this.sourceDocumentCount = await this.documentReader.countDocuments(signal, context);
 
             // Add document count to telemetry
             if (context) {
@@ -180,8 +180,12 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             return;
         }
 
-        // Create document stream
-        const documentStream = this.documentReader.streamDocuments();
+        // Create document stream with keep-alive enabled to prevent database timeouts
+        const documentStream = this.documentReader.streamDocuments({
+            signal,
+            keepAlive: true,
+            actionContext: context,
+        });
 
         // Create streamer
         const streamWriter = new StreamDocumentWriter(this.documentWriter);
