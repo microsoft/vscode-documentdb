@@ -3,54 +3,122 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/**
+ * Query Editor Component
+ *
+ * Overall Structure:
+ * ┌────────────────────────────────────────────────┐
+ * │ Filter Row:                                    │
+ * │ ┌──────────────────────────┬───────────────┐  │
+ * │ │ Filter (Monaco Adaptive) │ Toggle Button │  │
+ * │ └──────────────────────────┴───────────────┘  │
+ * │                                                │
+ * │ Enhanced Input Area (when toggled on):        │
+ * │ ┌──────────────────────────────────────────┐  │
+ * │ │ Row 1: Project (full width)              │  │
+ * │ ├──────────────────────┬──────┬────────────┤  │
+ * │ │ Row 2: Sort          │ Skip │ Limit      │  │
+ * │ │    (flexible)        │(10ch)│ (10ch)     │  │
+ * │ └──────────────────────┴──────┴────────────┘  │
+ * └────────────────────────────────────────────────┘
+ */
 .queryEditor {
     display: flex;
     flex-direction: column;
     row-gap: 10px;
+    width: 100%; // Ensure full width
+    max-width: 100%; // Prevent overflow
+    overflow: hidden; // Prevent content from overflowing
 
+    /**
+     * Filter Row
+     *
+     * Layout: [Filter Field (flexible)] [Toggle Button (fixed)]
+     * - Filter field takes all available space
+     * - Toggle button is fixed size on the right
+     */
     .filterRow {
         display: flex;
         flex-direction: row;
-        align-items: flex-end;
+        align-items: flex-end; // Align children to bottom (for consistent baseline)
         gap: 10px;
+        width: 100%; // Ensure full width
+        max-width: 100%; // Prevent overflow
 
         .filterField {
-            flex: 1;
+            flex: 1 1 0%; // Grow to fill space, can shrink, start from 0
+            min-width: 0; // Allow shrinking below content size
             display: flex;
             flex-direction: column;
         }
 
         .enhancedToggle {
-            flex-shrink: 0;
+            flex: 0 0 auto; // Don't grow or shrink, size based on content
             display: flex;
             align-items: flex-end;
             padding-bottom: 2px; // Align with monaco container bottom
         }
     }
 
-    .enhancedInputFields {
+    /**
+     * Enhanced Input Area Container
+     *
+     * Structure (Flex Layout):
+     * ┌───────────────────────────────────────┐
+     * │ Row 1: Project (full width)           │
+     * ├───────────────────┬──────┬────────────┤
+     * │ Row 2: Sort       │ Skip │ Limit      │
+     * │    (flexible)     │(10ch)│ (10ch)     │
+     * └───────────────────┴──────┴────────────┘
+     *
+     * Layout:
+     * - Row 1: Project field takes full width
+     * - Row 2: Sort takes remaining space, Skip and Limit are fixed width
+     */
+    .enhancedInputArea {
+        // Flex behavior within parent (queryEditor is a flex container)
+        flex: 0 1 auto; // Don't grow, can shrink, auto size based on content
+
+        // Flexbox configuration (vertical stacking of rows)
         display: flex;
         flex-direction: column;
         row-gap: 10px;
 
+        // Overflow prevention
+        width: 100%; // Ensure full width
+        max-width: 100%; // Prevent overflow
+        min-width: 0; // Allow shrinking below content size
+
+        // Row 1: Project field (full width)
+        // Row 2: Sort + Skip + Limit (horizontal layout)
         .fieldRow {
             display: flex;
             flex-direction: row;
             gap: 10px;
+            width: 100%;
+            min-width: 0; // Allow shrinking
 
             .field {
                 display: flex;
                 flex-direction: column;
                 row-gap: 4px;
+                min-width: 0; // Allow shrinking below content size
 
+                // Wide fields (Project, Sort) - take available space
                 &.fieldWide {
-                    flex: 1 1 0%;
-                    min-width: 0; // Allow field to shrink below content size
+                    flex: 1 1 0%; // Grow to fill space, can shrink
                 }
 
+                // Narrow fields (Skip, Limit) - fixed width ~10 characters
                 &.fieldNarrow {
-                    flex: 0 0 auto;
-                    width: 10ch; // Approximately 10 characters wide
+                    flex: 0 0 auto; // Don't grow or shrink
+                    width: 10ch; // Fixed width
+
+                    input {
+                        min-width: 0; // Allow input to shrink if needed
+                        width: 100%; // Take full width of parent
+                        max-width: 100%; // Don't exceed parent
+                    }
                 }
             }
         }

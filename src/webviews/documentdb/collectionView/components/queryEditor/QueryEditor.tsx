@@ -12,6 +12,7 @@ import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
 
 import { SearchSettingsFilled, SearchSettingsRegular } from '@fluentui/react-icons';
+// eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { MonacoAdaptive } from '../MonacoAdaptive';
@@ -23,7 +24,7 @@ interface QueryEditorProps {
 
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
     const [, setCurrentContext] = useContext(CollectionViewContext);
-    const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
+    const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(true);
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -175,7 +176,8 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             </div>
 
             {isEnhancedQueryMode && (
-                <div className="enhancedInputFields">
+                <div className="enhancedInputArea">
+                    {/* Row 1: Project field (full width) */}
                     <div className="fieldRow">
                         <div className="field fieldWide">
                             <Label size="small">{l10n.t('Project')}</Label>
@@ -192,12 +194,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 options={monacoOptions}
                             />
                         </div>
-                        <div className="field fieldNarrow">
-                            <Label size="small">{l10n.t('Skip')}</Label>
-                            <Input placeholder="0" />
-                        </div>
                     </div>
 
+                    {/* Row 2: Sort (flexible) + Skip (fixed) + Limit (fixed) */}
                     <div className="fieldRow">
                         <div className="field fieldWide">
                             <Label size="small">{l10n.t('Sort')}</Label>
@@ -213,6 +212,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 }}
                                 options={monacoOptions}
                             />
+                        </div>
+                        <div className="field fieldNarrow">
+                            <Label size="small">{l10n.t('Skip')}</Label>
+                            <Input placeholder="0" />
                         </div>
                         <div className="field fieldNarrow">
                             <Label size="small">{l10n.t('Limit')}</Label>
