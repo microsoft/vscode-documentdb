@@ -11,7 +11,7 @@ import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
 import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
 
-import { SearchSettingsFilled, SearchSettingsRegular } from '@fluentui/react-icons';
+import { PlaySettingsFilled, PlaySettingsRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { CollectionViewContext } from '../../collectionViewContext';
@@ -24,7 +24,7 @@ interface QueryEditorProps {
 
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
     const [, setCurrentContext] = useContext(CollectionViewContext);
-    const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(true);
+    const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -170,7 +170,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         appearance="subtle"
                         checked={isEnhancedQueryMode}
                         onClick={() => setIsEnhancedQueryMode(!isEnhancedQueryMode)}
-                        icon={isEnhancedQueryMode ? <SearchSettingsFilled /> : <SearchSettingsRegular />}
+                        icon={isEnhancedQueryMode ? <PlaySettingsFilled /> : <PlaySettingsRegular />}
                     ></ToggleButton>
                 </div>
             </div>

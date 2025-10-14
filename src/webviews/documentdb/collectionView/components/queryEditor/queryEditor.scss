@@ -40,7 +40,7 @@
     .filterRow {
         display: flex;
         flex-direction: row;
-        align-items: flex-end; // Align children to bottom (for consistent baseline)
+        align-items: flex-start;
         gap: 10px;
         width: 100%; // Ensure full width
         max-width: 100%; // Prevent overflow
@@ -55,8 +55,7 @@
         .enhancedToggle {
             flex: 0 0 auto; // Don't grow or shrink, size based on content
             display: flex;
-            align-items: flex-end;
-            padding-bottom: 2px; // Align with monaco container bottom
+            padding-top: 2px; // Align with monaco container
         }
     }
 
