@@ -177,7 +177,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             {isEnhancedQueryMode && (
                 <div className="enhancedInputFields">
                     <div className="fieldRow">
-                        <div className="field">
+                        <div className="field fieldWide">
                             <Label size="small">{l10n.t('Project')}</Label>
                             <MonacoAdaptive
                                 height={'100%'}
@@ -192,7 +192,14 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 options={monacoOptions}
                             />
                         </div>
-                        <div className="field">
+                        <div className="field fieldNarrow">
+                            <Label size="small">{l10n.t('Skip')}</Label>
+                            <Input placeholder="0" />
+                        </div>
+                    </div>
+
+                    <div className="fieldRow">
+                        <div className="field fieldWide">
                             <Label size="small">{l10n.t('Sort')}</Label>
                             <MonacoAdaptive
                                 height={'100%'}
@@ -207,16 +214,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 options={monacoOptions}
                             />
                         </div>
-                    </div>
-
-                    <div className="fieldRow">
-                        <div className="field fieldSmall">
-                            <Label size="small">{l10n.t('Skip')}</Label>
-                            <Input type="number" size="small" placeholder="0" />
-                        </div>
-                        <div className="field fieldSmall">
+                        <div className="field fieldNarrow">
                             <Label size="small">{l10n.t('Limit')}</Label>
-                            <Input type="number" size="small" placeholder="0" />
+                            <Input placeholder="0" />
                         </div>
                     </div>
                 </div>
