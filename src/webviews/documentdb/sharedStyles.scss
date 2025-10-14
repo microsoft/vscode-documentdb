@@ -10,8 +10,19 @@ $media-breakpoint-query-control-area: 1024px;
 /**
  * Shared border styling for input-like components
  * Used by: MonacoAdaptive, Fluent UI Input components
+ *
+ * Uses Fluent UI design tokens for consistent styling:
+ * - --colorNeutralStroke1: Fluent UI's default border color for input controls
+ * - --borderRadiusMedium: Fluent UI's medium border radius
+ *
+ * Note: Fluent UI Input/Textarea components use an ::after pseudo-element
+ * for the animated bottom border on focus. To replicate this:
+ * 1. Set position: relative on the container
+ * 2. Create ::after pseudo-element with bottom border
+ * 3. Use transform: scaleX() for the animation
+ * 4. Animate on :focus-within
  */
 @mixin input-border {
-    border: 2px solid var(--vscode-checkbox-border);
-    border-radius: 3px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--borderRadiusMedium);
 }
