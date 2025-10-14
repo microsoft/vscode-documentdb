@@ -3,15 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { useContext, useEffect, useRef, type JSX } from 'react'; // Add useEffect import
+import { Input, Label, ToggleButton } from '@fluentui/react-components';
+import * as l10n from '@vscode/l10n';
+import { useContext, useEffect, useRef, useState, type JSX } from 'react';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
-import basicFindQuerySchema from '../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
-// eslint-disable-next-line import/no-internal-modules
+import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
+
+import { SearchSettingsFilled, SearchSettingsRegular } from '@fluentui/react-icons';
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
-import { CollectionViewContext } from '../collectionViewContext';
-import { MonacoAdaptive } from './MonacoAdaptive';
+import { CollectionViewContext } from '../../collectionViewContext';
+import { MonacoAdaptive } from '../MonacoAdaptive';
+import './queryEditor.scss';
 
 interface QueryEditorProps {
     onExecuteRequest: (query: string) => void;
@@ -19,6 +23,7 @@ interface QueryEditorProps {
 
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
     const [, setCurrentContext] = useContext(CollectionViewContext);
+    const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -139,21 +144,83 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     }, []);
 
     return (
-        <MonacoAdaptive
-            height={'100%'}
-            width={'100%'}
-            language="json"
-            adaptiveHeight={{
-                enabled: true,
-                maxLines: 10,
-                minLines: 1,
-                lineHeight: 19,
-            }}
-            onExecuteRequest={(input) => {
-                onExecuteRequest(input);
-            }}
-            onMount={handleEditorDidMount}
-            options={monacoOptions}
-        />
+        <div className="queryEditor">
+            <div className="filterRow">
+                <div className="filterField">
+                    <MonacoAdaptive
+                        height={'100%'}
+                        width={'100%'}
+                        language="json"
+                        adaptiveHeight={{
+                            enabled: true,
+                            maxLines: 10,
+                            minLines: 1,
+                            lineHeight: 19,
+                        }}
+                        onExecuteRequest={(input) => {
+                            onExecuteRequest(input);
+                        }}
+                        onMount={handleEditorDidMount}
+                        options={monacoOptions}
+                    />
+                </div>
+                <div className="enhancedToggle">
+                    <ToggleButton
+                        appearance="subtle"
+                        checked={isEnhancedQueryMode}
+                        onClick={() => setIsEnhancedQueryMode(!isEnhancedQueryMode)}
+                        icon={isEnhancedQueryMode ? <SearchSettingsFilled /> : <SearchSettingsRegular />}
+                    ></ToggleButton>
+                </div>
+            </div>
+
+            {isEnhancedQueryMode && (
+                <div className="enhancedInputFields">
+                    <div className="fieldRow">
+                        <div className="field">
+                            <Label size="small">{l10n.t('Project')}</Label>
+                            <MonacoAdaptive
+                                height={'100%'}
+                                width={'100%'}
+                                language="json"
+                                adaptiveHeight={{
+                                    enabled: true,
+                                    maxLines: 5,
+                                    minLines: 1,
+                                    lineHeight: 19,
+                                }}
+                                options={monacoOptions}
+                            />
+                        </div>
+                        <div className="field">
+                            <Label size="small">{l10n.t('Sort')}</Label>
+                            <MonacoAdaptive
+                                height={'100%'}
+                                width={'100%'}
+                                language="json"
+                                adaptiveHeight={{
+                                    enabled: true,
+                                    maxLines: 5,
+                                    minLines: 1,
+                                    lineHeight: 19,
+                                }}
+                                options={monacoOptions}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="fieldRow">
+                        <div className="field fieldSmall">
+                            <Label size="small">{l10n.t('Skip')}</Label>
+                            <Input type="number" size="small" placeholder="0" />
+                        </div>
+                        <div className="field fieldSmall">
+                            <Label size="small">{l10n.t('Limit')}</Label>
+                            <Input type="number" size="small" placeholder="0" />
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };
