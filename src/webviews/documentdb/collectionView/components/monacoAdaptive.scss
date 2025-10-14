@@ -3,12 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+@use '../../sharedStyles.scss';
+
 .monacoAdaptiveContainer {
     background-color: inherit;
     padding-top: 6px;
     padding-bottom: 6px;
     padding-right: 4px;
 
-    border: 2px solid var(--vscode-checkbox-border); // TODO: find the style name of a fluent input field
-    border-radius: 3px;
+    @include sharedStyles.input-border;
 }

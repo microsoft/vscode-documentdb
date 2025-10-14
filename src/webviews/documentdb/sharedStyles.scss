@@ -6,3 +6,12 @@
 @use '../index.scss';
 
 $media-breakpoint-query-control-area: 1024px;
+
+/**
+ * Shared border styling for input-like components
+ * Used by: MonacoAdaptive, Fluent UI Input components
+ */
+@mixin input-border {
+    border: 2px solid var(--vscode-checkbox-border);
+    border-radius: 3px;
+}

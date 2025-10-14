@@ -215,11 +215,11 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         </div>
                         <div className="field fieldNarrow">
                             <Label size="small">{l10n.t('Skip')}</Label>
-                            <Input placeholder="0" />
+                            <Input className="queryEditorInput" appearance="underline" placeholder="10" />
                         </div>
                         <div className="field fieldNarrow">
                             <Label size="small">{l10n.t('Limit')}</Label>
-                            <Input placeholder="0" />
+                            <Input className="queryEditorInput" appearance="underline" placeholder="0" />
                         </div>
                     </div>
                 </div>
