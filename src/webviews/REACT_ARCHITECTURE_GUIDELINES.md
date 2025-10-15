@@ -58,7 +58,7 @@ DocumentView
 CollectionView
 ├── ToolbarMainView
 ├── QueryEditor
-│   └── MonacoAdaptive
+│   └── MonacoAutoHeight
 ├── DataView (switched based on currentView)
 │   ├── DataViewPanelTableV2
 │   ├── DataViewPanelTree
@@ -197,7 +197,7 @@ Use `@extend` to apply shared styles:
   padding-top: 10px; // Top padding for toolbars
 }
 
-.monacoAdaptiveContainer {
+.monacoAutoHeightContainer {
   padding-top: 6px;
   padding-bottom: 6px;
   padding-right: 4px;
@@ -421,12 +421,12 @@ useEffect(() => {
 }, []);
 ```
 
-### Adaptive Height Monaco Editor
+### Auto Height Monaco Editor
 
-The `MonacoAdaptive` component extends Monaco with dynamic height based on content:
+The `MonacoAutoHeight` component extends Monaco with dynamic height based on content:
 
 ```tsx
-<MonacoAdaptive
+<MonacoAutoHeight
   height={'100%'}
   width={'100%'}
   language="json"

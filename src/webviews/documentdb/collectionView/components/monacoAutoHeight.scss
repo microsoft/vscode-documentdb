@@ -6,12 +6,12 @@
 @use '../../sharedStyles.scss';
 
 /**
- * Monaco Editor Adaptive Container
+ * Monaco Editor Auto Height Container
  *
  * Applies Fluent UI Input styling to Monaco editor container
  * for visual consistency with other input components.
  */
-.monacoAdaptiveContainer {
+.monacoAutoHeightContainer {
     // Apply complete Fluent UI input styling
     @include sharedStyles.fluent-input;
 

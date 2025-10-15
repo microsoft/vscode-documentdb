@@ -16,7 +16,7 @@ import { PlaySettingsFilled, PlaySettingsRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { CollectionViewContext } from '../../collectionViewContext';
-import { MonacoAdaptive } from '../MonacoAdaptive';
+import { MonacoAutoHeight } from '../MonacoAutoHeight';
 import './queryEditor.scss';
 
 interface QueryEditorProps {
@@ -149,7 +149,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         <div className="queryEditor">
             <div className="filterRow">
                 <div className="filterField">
-                    <MonacoAdaptive
+                    <MonacoAutoHeight
                         height={'100%'}
                         width={'100%'}
                         language="json"
@@ -184,7 +184,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <Label size="small" weight="semibold">
                                 {l10n.t('Project')}
                             </Label>
-                            <MonacoAdaptive
+                            <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
                                 language="json"
@@ -205,7 +205,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <Label size="small" weight="semibold">
                                 {l10n.t('Sort')}
                             </Label>
-                            <MonacoAdaptive
+                            <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
                                 language="json"
