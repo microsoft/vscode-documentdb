@@ -47,7 +47,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
                 // The exception signals that initialization is done and we should proceed to subwizard
                 // Note: This was the only way to make the quick pick terminate. We're using it
                 // to maintain a UX-unified behavior to control the visibility of the tenant-selection step.
-                // Wizard steps upport "shouldPrompt" function and that'd be the preferred path, however
+                // Wizard steps support "shouldPrompt" function and that'd be the preferred path, however
                 // while "shouldPrompt" is processed, no UI is being shown. This is a bad UX.
                 return; // Proceed to getSubWizard
             }
@@ -93,6 +93,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         // Initialize selectedTenants based on current filtering state (only if not already set from going back)
         if (!context.selectedTenants) {
             context.selectedTenants = this.getSelectedTenantsFromSettings(context.availableTenants);
+            context.telemetry.measurements.initialSelectedTenantCount = context.selectedTenants.length;
         }
 
         // Determine the flow based on tenant count, but let's look at the actual subscriptions,

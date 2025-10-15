@@ -1,6 +1,4 @@
-<!-- Manual Section Badge or Breadcrumb -->
-
-> **Manual** &mdash; [Back to Documentation Index](./index.md)
+> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
 
 ---
 
@@ -115,7 +113,6 @@ When you click a DocumentDB for VS Code URL, the following process occurs:
 1. **Activation**: The `vscode://` prefix tells the operating system to activate VS Code. The `ms-azuretools.vscode-documentdb` segment activates the **DocumentDB for VS Code** extension.
 
 2. **Connection Handling**:
-
    - The extension parses the `connectionString` parameter and creates a new connection in the Connections View.
    - If a connection with the same host and username already exists, the existing connection will be selected instead of creating a duplicate.
 
