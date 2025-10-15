@@ -50,6 +50,8 @@
         @extend .selectionDisabled;
 
         flex-grow: 1;
+        flex-shrink: 1;
+        min-height: 0; // Required for flexbox children to shrink below content size
 
         //background-color: aqua; // used to invstigate layout issues
 
