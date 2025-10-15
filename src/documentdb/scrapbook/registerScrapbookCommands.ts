@@ -16,7 +16,8 @@ import { connectCluster } from '../../commands/scrapbook-commands/connectCluster
 import { createScrapbook } from '../../commands/scrapbook-commands/createScrapbook';
 import { executeAllCommand } from '../../commands/scrapbook-commands/executeAllCommand';
 import { executeCommand } from '../../commands/scrapbook-commands/executeCommand';
-import { generateIndexSuggestions } from '../../commands/scrapbook-commands/generateIndexSuggestions';
+import { generateQueryCommand } from '../../commands/scrapbook-commands/generateQuery';
+import { generateIndexSuggestions } from '../../commands/scrapbook-commands/indexAdvisor';
 import { ext } from '../../extensionVariables';
 import { MongoConnectError } from './connectToClient';
 import { MongoDBLanguageClient } from './languageClient';
@@ -45,6 +46,7 @@ export function registerScrapbookCommands(): void {
         'vscode-documentdb.command.scrapbook.generateIndexSuggestions',
         generateIndexSuggestions,
     );
+    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.generateQuery', generateQueryCommand);
 
     // #region Database command
 

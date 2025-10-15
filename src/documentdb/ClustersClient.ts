@@ -44,7 +44,7 @@ import {
     type ExplainResult,
     type IndexSpecification,
     type IndexStats,
-} from './IndexAdvisorApis';
+} from './llmEnhancedFeatureApis';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -81,6 +81,7 @@ export type InsertDocumentsResult = {
 export class ClustersClient {
     // cache of active/existing clients
     static _clients: Map<string, ClustersClient> = new Map();
+    static _clusterMetadata: Map<string, ClusterMetadata> = new Map();
 
     private _mongoClient: MongoClient;
     private _indexAdvisorApis: IndexAdvisorApis | null = null;
@@ -152,11 +153,11 @@ export class ClustersClient {
 
         // Connect with the configured options
         await this.connect(connectionString, options, credentials.emulatorConfiguration);
+        const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
+        ClustersClient._clusterMetadata.set(this.credentialId, metadata);
 
         // Collect telemetry (non-blocking)
         void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
-            const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
-
             context.telemetry.properties = {
                 authmethod: authMethod,
                 ...context.telemetry.properties,
@@ -209,11 +210,27 @@ export class ClustersClient {
             await client._mongoClient.connect();
         } else {
             client = new ClustersClient(credentialId);
+
+            // Cluster metadata is set in initClient
             await client.initClient();
             ClustersClient._clients.set(credentialId, client);
         }
 
         return client;
+    }
+
+    /**
+     * Retrieves cluster metadata of `ClustersClient` based on the provided `credentialId`.
+     *
+     * @param credentialId - A required string used as a key to get cached cluster metadata.
+     * @returns A promise that resolves to an instance of `ClustersClient`.
+     */
+    public static async getClusterInfo(credentialId: string): Promise<ClusterMetadata> {
+        if (!ClustersClient._clusterMetadata.has(credentialId)) {
+            // Try to initialize the client to fetch metadata if not already present
+            await ClustersClient.getClient(credentialId);
+        }
+        return ClustersClient._clusterMetadata.get(credentialId) as ClusterMetadata;
     }
 
     /**
@@ -654,5 +671,19 @@ export class ClustersClient {
             throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
         }
         return this._indexAdvisorApis.dropIndex(databaseName, collectionName, indexName);
+    }
+
+    /**
+     * Get sample documents from a collection using random sampling
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param limit - Maximum number of documents to sample (default: 10)
+     * @returns Array of sample documents
+     */
+    async getSampleDocuments(databaseName: string, collectionName: string, limit: number = 10): Promise<Document[]> {
+        if (!this._indexAdvisorApis) {
+            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+        }
+        return this._indexAdvisorApis.getSampleDocuments(databaseName, collectionName, limit);
     }
 }

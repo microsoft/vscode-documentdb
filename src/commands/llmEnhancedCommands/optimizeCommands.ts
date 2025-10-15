@@ -7,19 +7,11 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
-import { type CollectionStats, type IndexStats } from '../../documentdb/IndexAdvisorApis';
+import { type CollectionStats, type IndexStats } from '../../documentdb/llmEnhancedFeatureApis';
+import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/PromptTemplateService';
-
-/**
- * Preferred language model for index optimization
- */
-export const PREFERRED_MODEL = 'gpt-5';
-
-/**
- * Fallback models to use if the preferred model is not available
- */
-export const FALLBACK_MODELS = ['gpt-4o', 'gpt-4o-mini'];
+import { FALLBACK_MODELS, PREFERRED_MODEL } from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -106,6 +98,7 @@ async function fillPromptTemplate(
     collectionStats: CollectionStats,
     indexes: Array<IndexStats>,
     executionStats: string,
+    clusterInfo: ClusterMetadata,
 ): Promise<string> {
     // Get the template for this command type
     const template = await getPromptTemplate(templateType);
@@ -117,6 +110,8 @@ async function fillPromptTemplate(
         .replace('{collectionStats}', JSON.stringify(collectionStats, null, 2))
         .replace('{indexStats}', JSON.stringify(indexes, null, 2))
         .replace('{executionStats}', executionStats)
+        .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure , null, 2))
+        .replace('{AzureClusterType}', clusterInfo.domainInfo_isAzure == 'true' ? JSON.stringify(clusterInfo.domainInfo_api , null, 2) : 'N/A')
         .replace('{query}', context.query);
 
     return filled;
@@ -144,6 +139,7 @@ export async function optimizeQuery(
 
     // Get the MongoDB client
     const client = await ClustersClient.getClient(queryContext.clusterId);
+    const clusterInfo = await ClustersClient.getClusterInfo(queryContext.clusterId);
 
     // Parse the query to extract filter, sort, projection, etc.
     const parsedQuery = parseQueryString(queryContext.query, queryContext.commandType);
@@ -195,7 +191,7 @@ export async function optimizeQuery(
 
     // Fill the prompt template
     const commandType = queryContext.commandType;
-    const promptContent = await fillPromptTemplate(commandType, queryContext, collectionStats, indexes, executionStats);
+    const promptContent = await fillPromptTemplate(commandType, queryContext, collectionStats, indexes, executionStats, clusterInfo);
 
     // Send to Copilot with configured models
     const response = await CopilotService.sendMessage([vscode.LanguageModelChatMessage.User(promptContent)], {

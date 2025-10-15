@@ -4,6 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
+ * Preferred language model for index optimization
+ */
+export const PREFERRED_MODEL = 'gpt-5';
+
+/**
+ * Fallback models to use if the preferred model is not available
+ */
+export const FALLBACK_MODELS = ['gpt-4o', 'gpt-4o-mini'];
+
+
+/**
  * Embedded prompt templates for query optimization
  * These templates are compiled into the extension bundle at build time
  */
@@ -13,6 +24,10 @@ You are an expert MongoDB assistant to provide index suggestions for the followi
 - **Query**: {query}
 
 The query is executed against a MongoDB collection with the following details:
+## Cluster Information
+- **Is_Azure_Cluster**: {isAzureCluster}
+- **Azure_Cluster_Type**: {AzureClusterType}
+
 ## Collection Information
 - **Collection_Stats**: {collectionStats}
 
@@ -48,6 +63,9 @@ Thinking / analysis tips (useful signals to form recommendations; don't output t
 - For aggregation pipelines, identify whether early \`$match\`/\`$sort\` stages can benefit from indexes (match-before-project, sort after match).
 - Avoid recommending duplicate or superseded indexes — check \`indexStats\` names and key patterns first.
 - If the input query contains \`sort\`, \`projection\`, or aggregation stages, account for them when recommending index key order and coverage.
+- If you identify indexes related to the query that have **not been accessed for a long time** or **are not selective**, consider recommending **dropping** them to reduce write and storage overhead.
+- If you identify query is on a **small collection** (e.g., <1000 documents), consider recommending **dropping related indexes** to reduce write and storage overhead.
+- If the **Azure_Cluster_Type** is "vCore" and a **composite index** is being created, include in \`indexOptions\` the setting: \`"storageEngine": { "enableOrderedIndex": true }\`.
 
 Output JSON schema (required shape; **adhere exactly**):
 \`\`\`
@@ -97,6 +115,10 @@ You are an expert MongoDB assistant to provide index suggestions for the followi
 - **Pipeline**: {pipeline}
 
 The pipeline is executed against a MongoDB collection with the following details:
+## Cluster Information
+- **Is_Azure_Cluster**: {isAzureCluster}
+- **Azure_Cluster_Type**: {AzureClusterType}
+
 ## Collection Information
 - **Collection_Stats**: {collectionStats}
 
@@ -132,7 +154,28 @@ Thinking / analysis tips (for your reasoning; do not output these tips):
 - **Multikey / sparse / partial indexes**: Ensure indexes on array or sparse fields still support coverage without excessive size or write amplification.
 - **Index size and write cost**: Avoid high-cardinality indexes that rarely match queries; prefer selective prefixes or partial indexes.
 - **Projection coverage**: If all projected fields are indexed, prioritize index-only scan opportunities.
-- **Vector recall rule** — if the query or pipeline uses a vector search and the current index has \`kind: "vector-ivf"\` but recall (accuracy) is poor, explicitly recommend replacing it with a \`vector-hnsw\` index. Justify that this improves recall and retrieval quality for high-dimensional vectors.
+- If you identify indexes related to the query that have **not been accessed for a long time** or **are not selective**, consider recommending **dropping** them to reduce write and storage overhead.
+- If you identify query is on a **small collection** (e.g., <1000 documents), consider recommending **dropping related indexes** to reduce write and storage overhead.
+- If the **Azure_Cluster_Type** is "vCore" and a **composite index** is being created, include in \`indexOptions\` the setting: \`"storageEngine": { "enableOrderedIndex": true }\`.
+- **Vector recall rule** — If the **Azure_Cluster_Type** is "vCore" and uses a cosmosSearch with index has \`"kind": "vector-ivf"\`, but the collection contains many documents (over 10k) or the vector dimensionality is high, recommend replacing it with a \`vector-hnsw\` index for better recall and retrieval quality. The recommended creation command format is:
+  {
+      "createIndexes": "<collection_name>",
+      "indexes": [
+          {
+              "name": "<index_name>",
+              "key": {
+                  "<path_to_property>": "cosmosSearch"
+              },
+              "cosmosSearchOptions": {
+                  "kind": "vector-hnsw",
+                  "m": <integer_value>,
+                  "efConstruction": <integer_value>,
+                  "similarity": "<string_value>",
+                  "dimensions": <integer_value>
+              }
+          }
+      ]
+  }
 
 Output JSON schema (required shape; adhere exactly):
 \`\`\`
@@ -182,6 +225,10 @@ You are an expert MongoDB assistant to provide index suggestions for the followi
 - **Query**: {query}
 
 The query is executed against a MongoDB collection with the following details:
+## Cluster Information
+- **Is_Azure_Cluster**: {isAzureCluster}
+- **Azure_Cluster_Type**: {AzureClusterType}
+
 ## Collection Information
 - **Collection_Stats**: {collectionStats}
 
@@ -216,7 +263,9 @@ Thinking / analysis tips (for your reasoning; do not output these tips):
 - **Equality and range ordering**: For compound indexes, equality filters should precede range filters for optimal selectivity.
 - **Index-only count**: If projected or returned fields are all indexed (e.g., just counting documents matching criteria), prefer a covered plan for index-only count.
 - **Write cost tradeoff**: Avoid over-indexing — recommend only indexes that materially improve count query performance or prevent full collection scans.
-- **Vector recall rule** — if the query uses a vector search and the current index has \`kind: "vector-ivf"\` but recall (accuracy) is poor, explicitly recommend replacing it with a \`vector-hnsw\` index for improved recall and quality.
+- If you identify indexes related to the query that have **not been accessed for a long time** or **are not selective**, consider recommending **dropping** them to reduce write and storage overhead.
+- If you identify query is on a **small collection** (e.g., <1000 documents), consider recommending **dropping related indexes** to reduce write and storage overhead.
+- If the **Azure_Cluster_Type** is "vCore" and a **composite index** is being created, include in \`indexOptions\` the setting: \`"storageEngine": { "enableOrderedIndex": true }\`.
 
 Output JSON schema (required shape; adhere exactly):
 \`\`\`
@@ -259,4 +308,157 @@ Additional rules for the JSON:
 - \`analysis\` must be human-readable, in Markdown (you may use bold or a short bullet), and **no more than 6 sentences**.
 - \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
 - \`verification\` array entries must be short single-line mongosh commands.
+`;
+
+export const CROSS_COLLECTION_QUERY_PROMPT_TEMPLATE = `
+You are an expert MongoDB assistant. Generate a MongoDB query based on the user's natural language request.
+
+## Database Context
+- **Database Name**: {databaseName}
+- **User Request**: {naturalLanguageQuery}
+
+## Available Collections and Their Schemas
+
+{schemaInfo}
+
+## Instructions
+
+1. **Single JSON output only** — your response MUST be a single valid JSON object with two fields: \`query\` and \`explanation\`. No code fences, no surrounding text.
+2. **MongoDB shell commands** — all queries must be valid MongoDB shell commands (mongosh) that can be executed directly, not javaScript functions or pseudo-code.
+3. **Cross-collection queries** — the user has NOT specified a collection name, so you may need to generate queries that work across multiple collections. Consider using:
+   - Multiple separate queries (one per collection) if the request is collection-specific
+   - Aggregation pipelines with $lookup if joining data from multiple collections
+   - Union operations if combining results from different collections
+4. **Use sample documents** — examine the provided sample documents to understand the data structure and field types in each collection.
+5. **Respect data types** — use appropriate MongoDB operators based on the field types shown in the schema.
+6. **Handle array fields** — if you see \`_truncated: true\` and \`_dimensions\`, that field is an array. Use appropriate array operators like $elemMatch, $size, $all, etc.
+7. **Generate runnable queries** — output valid MongoDB shell syntax (mongosh) that can be executed directly.
+8. **Provide clear explanation** — explain which collection(s) you're querying and why, and describe the query logic.
+9. **Use db.<collectionName> syntax** — reference collections using \`db.collectionName\` or \`db.getCollection("collectionName")\` format.
+10. **Prefer simple queries** — start with the simplest query that meets the user's needs; avoid over-complication.
+11. **Consider performance** — if multiple approaches are possible, prefer the one that's more likely to be efficient.
+
+## Query Generation Guidelines
+
+- For **finding documents**: Use \`db.collectionName.find(filter, projection)\` with appropriate filters
+- For **counting**: Use \`db.collectionName.countDocuments(filter)\`
+- For **aggregations**: Use \`db.collectionName.aggregate([pipeline stages])\`
+- For **joins**: Use \`$lookup\` in aggregation pipelines
+- For **sorting/limiting**: Include \`.sort()\` and \`.limit()\` as needed
+- For **updates**: Use \`db.collectionName.updateOne/updateMany(filter, update)\`
+- For **deletes**: Use \`db.collectionName.deleteOne/deleteMany(filter)\`
+
+## Output JSON Schema
+
+\`\`\`json
+{
+  "query": "<MongoDB shell command(s) as string>",
+  "explanation": "<Clear explanation of what the query does and why this approach was chosen>"
+}
+\`\`\`
+
+## Examples
+
+User request: "Find all users who signed up in the last 7 days"
+\`\`\`json
+{
+  "query": "db.users.find({ createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } })",
+  "explanation": "This query searches the 'users' collection for documents where the createdAt field is greater than or equal to 7 days ago. It uses the $gte operator to filter dates."
+}
+\`\`\`
+
+User request: "Get total revenue by product category"
+\`\`\`json
+{
+  "query": "db.orders.aggregate([{ $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } }, { $unwind: '$product' }, { $group: { _id: '$product.category', totalRevenue: { $sum: '$amount' } } }, { $sort: { totalRevenue: -1 } }])",
+  "explanation": "This aggregation pipeline joins orders with products using $lookup, unwinds the product array, groups by product category, and calculates the sum of order amounts for each category, sorted by revenue descending."
+}
+\`\`\`
+
+Now generate the query based on the user's request and the provided schema information.
+`;
+
+export const SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE = `
+You are an expert MongoDB assistant. Generate a MongoDB query based on the user's natural language request.
+
+## Database Context
+- **Database Name**: {databaseName}
+- **Collection Name**: {collectionName}
+- **User Request**: {naturalLanguageQuery}
+
+## Collection Schema
+
+{schemaInfo}
+
+## Instructions
+
+1. **Single JSON output only** — your response MUST be a single valid JSON object with two fields: \`query\` and \`explanation\`. No code fences, no surrounding text.
+2. **MongoDB shell commands** — all queries must be valid MongoDB shell commands (mongosh) that can be executed directly, not javaScript functions or pseudo-code.
+3. **Single-collection query** — the user has specified a collection name, so generate a query that works on this collection only.
+4. **Use sample documents** — examine the provided sample documents (up to 10) to understand the data structure and field types.
+5. **Respect data types** — use appropriate MongoDB operators based on the field types shown in the schema and samples.
+6. **Handle array fields** — if you see \`_truncated: true\` and \`_dimensions\`, that field is an array with the specified dimension. Use appropriate array operators like $elemMatch, $size, $all, etc.
+7. **Handle long strings** — if you see \`_truncated: true\` with \`_preview\`, that's a truncated string field. Infer the full field usage from context.
+8. **Generate runnable queries** — output valid MongoDB shell syntax (mongosh) that can be executed directly on the specified collection.
+9. **Provide clear explanation** — describe what the query does and the operators/logic used.
+10. **Use db.{collectionName} syntax** — reference the collection using \`db.{collectionName}\` or \`db.getCollection("{collectionName}")\` format.
+11. **Prefer simple queries** — start with the simplest query that meets the user's needs; avoid over-complication.
+12. **Consider performance** — if multiple approaches are possible, prefer the one that's more likely to use indexes efficiently.
+
+## Query Generation Guidelines
+
+- For **finding documents**: Use \`db.{collectionName}.find(filter, projection)\` with appropriate filters
+- For **counting**: Use \`db.{collectionName}.countDocuments(filter)\`
+- For **aggregations**: Use \`db.{collectionName}.aggregate([pipeline stages])\`
+- For **sorting/limiting**: Include \`.sort()\` and \`.limit()\` as needed
+- For **updates**: Use \`db.{collectionName}.updateOne/updateMany(filter, update)\`
+- For **deletes**: Use \`db.{collectionName}.deleteOne/deleteMany(filter)\`
+- For **text search**: Use \`$text\` operator if text indexes are likely available
+- For **regex**: Use \`$regex\` for pattern matching on strings
+
+## Common MongoDB Operators Reference
+
+- **Comparison**: $eq, $ne, $gt, $gte, $lt, $lte, $in, $nin
+- **Logical**: $and, $or, $not, $nor
+- **Element**: $exists, $type
+- **Array**: $elemMatch, $size, $all
+- **Evaluation**: $regex, $text, $where, $expr
+- **Aggregation**: $match, $group, $project, $sort, $limit, $lookup, $unwind
+
+## Output JSON Schema
+
+\`\`\`json
+{
+  "query": "<MongoDB shell command as string>",
+  "explanation": "<Clear explanation of what the query does and why this approach was chosen>"
+}
+\`\`\`
+
+## Examples
+
+User request: "Find all documents where price is greater than 100"
+\`\`\`json
+{
+  "query": "db.{collectionName}.find({ price: { $gt: 100 } })",
+  "explanation": "This query filters documents where the price field is greater than 100 using the $gt comparison operator."
+}
+\`\`\`
+
+User request: "Get the average rating grouped by category"
+\`\`\`json
+{
+  "query": "db.{collectionName}.aggregate([{ $group: { _id: '$category', avgRating: { $avg: '$rating' } } }, { $sort: { avgRating: -1 } }])",
+  "explanation": "This aggregation pipeline groups documents by the category field, calculates the average rating for each group using $avg, and sorts the results by average rating in descending order."
+}
+\`\`\`
+
+User request: "Find documents with tags array containing 'featured' and status is 'active'"
+\`\`\`json
+{
+  "query": "db.{collectionName}.find({ tags: 'featured', status: 'active' })",
+  "explanation": "This query finds documents where the tags array contains 'featured' and the status field equals 'active'. MongoDB's default array behavior matches any element in the array."
+}
+\`\`\`
+
+Now generate the query based on the user's request and the provided collection schema.
 `;

@@ -415,4 +415,26 @@ export class IndexAdvisorApis {
             nIndexesWas: result.nIndexesWas as number | undefined,
         };
     }
+
+    /**
+     * Get sample documents from a collection using random sampling
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param limit - Maximum number of documents to sample (default: 10)
+     * @returns Array of sample documents
+     */
+    async getSampleDocuments(databaseName: string, collectionName: string, limit: number = 10): Promise<Document[]> {
+        const collection = this.mongoClient.db(databaseName).collection(collectionName);
+
+        // Use aggregation with $sample to get random documents
+        const sampleDocuments = await collection
+            .aggregate([
+                {
+                    $sample: { size: limit },
+                },
+            ])
+            .toArray();
+
+        return sampleDocuments;
+    }
 }

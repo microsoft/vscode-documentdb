@@ -25,6 +25,15 @@ import { ScrapbookService } from '../ScrapbookService';
  * 3. **Execute Single Command Lens**:
  *    - Appears for each individual MongoDB command found in the scrapbook.
  *    - Invokes execution of the command located at the specified range in the document.
+ *
+ * 4. **Index Advisor Lens**:
+ *    - Generates index optimization suggestions for the query at the specified range.
+ *    - Uses AI to analyze query performance and recommend index improvements.
+ *
+ * 5. **Generate Query Lens**:
+ *    - Generates MongoDB queries from natural language descriptions.
+ *    - Supports both single-collection and cross-collection query generation.
+ *    - Only visible when connected to a database.
  */
 export class MongoCodeLensProvider implements vscode.CodeLensProvider {
     private _onDidChangeEmitter: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
@@ -121,6 +130,19 @@ export class MongoCodeLensProvider implements vscode.CodeLensProvider {
                 },
                 range: cmd.range,
             });
+
+            // Generate Query lens (shown when connected)
+            if (ScrapbookService.isConnected()) {
+                lenses.push(<vscode.CodeLens>{
+                    command: {
+                        title: l10n.t('✨ Generate Query'),
+                        tooltip: l10n.t('Generate MongoDB query from natural language'),
+                        command: 'vscode-documentdb.command.scrapbook.generateQuery',
+                        arguments: [cmd.range.start],
+                    },
+                    range: cmd.range,
+                });
+            }
         });
 
         return lenses;

@@ -7,11 +7,14 @@ import * as l10n from '@vscode/l10n';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { QueryGenerationType } from '../commands/llmEnhancedCommands/generateCommands';
 import { CommandType } from '../commands/llmEnhancedCommands/optimizeCommands';
 import {
     AGGREGATE_QUERY_PROMPT_TEMPLATE,
     COUNT_QUERY_PROMPT_TEMPLATE,
+    CROSS_COLLECTION_QUERY_PROMPT_TEMPLATE,
     FIND_QUERY_PROMPT_TEMPLATE,
+    SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE,
 } from '../commands/llmEnhancedCommands/promptTemplates';
 
 /**
@@ -19,7 +22,7 @@ import {
  */
 export class PromptTemplateService {
     private static readonly configSection = 'documentDB.llm';
-    private static readonly templateCache: Map<CommandType, string> = new Map();
+    private static readonly templateCache: Map<CommandType | QueryGenerationType, string> = new Map();
 
     /**
      * Gets the prompt template for a given command type
@@ -50,7 +53,7 @@ export class PromptTemplateService {
         if (customTemplatePath) {
             try {
                 // Load custom template from file
-                template = await this.loadTemplateFromFile(customTemplatePath, commandType);
+                template = await this.loadTemplateFromFile(customTemplatePath, commandType.toString());
                 void vscode.window.showInformationMessage(
                     l10n.t('Using custom prompt template for {type} query: {path}', {
                         type: commandType,
@@ -75,6 +78,65 @@ export class PromptTemplateService {
         // Cache the template (if caching is enabled)
         if (cacheEnabled) {
             this.templateCache.set(commandType, template);
+        }
+
+        return template;
+    }
+
+    /**
+     * Gets the prompt template for query generation
+     * @param generationType The type of query generation (cross-collection or single-collection)
+     * @returns The prompt template string
+     */
+    public static async getQueryGenerationPromptTemplate(generationType: QueryGenerationType): Promise<string> {
+        // Get configuration
+        const config = vscode.workspace.getConfiguration(this.configSection);
+        const cacheEnabled = config.get<boolean>('enablePromptCache', true);
+
+        // Check if have a cached template
+        if (cacheEnabled) {
+            const cached = this.templateCache.get(generationType);
+            if (cached) {
+                return cached;
+            }
+        }
+
+        // Get the configuration key for this generation type
+        const configKey = this.getQueryGenerationConfigKey(generationType);
+
+        // Check if a custom template path is configured
+        const customTemplatePath = config.get<string | null>(configKey);
+
+        let template: string;
+
+        if (customTemplatePath) {
+            try {
+                // Load custom template from file
+                template = await this.loadTemplateFromFile(customTemplatePath, generationType.toString());
+                void vscode.window.showInformationMessage(
+                    l10n.t('Using custom prompt template for {type} query generation: {path}', {
+                        type: generationType,
+                        path: customTemplatePath,
+                    }),
+                );
+            } catch (error) {
+                // Log error and fall back to built-in template
+                void vscode.window.showWarningMessage(
+                    l10n.t('Failed to load custom prompt template from {path}: {error}. Using built-in template.', {
+                        path: customTemplatePath,
+                        error: error instanceof Error ? error.message : String(error),
+                    }),
+                );
+                template = this.getBuiltInQueryGenerationTemplate(generationType);
+            }
+        } else {
+            // Use built-in template
+            template = this.getBuiltInQueryGenerationTemplate(generationType);
+        }
+
+        // Cache the template (if caching is enabled)
+        if (cacheEnabled) {
+            this.templateCache.set(generationType, template);
         }
 
         return template;
@@ -106,6 +168,22 @@ export class PromptTemplateService {
     }
 
     /**
+     * Gets the configuration key for a query generation type
+     * @param generationType The query generation type
+     * @returns The configuration key
+     */
+    private static getQueryGenerationConfigKey(generationType: QueryGenerationType): string {
+        switch (generationType) {
+            case QueryGenerationType.CrossCollection:
+                return 'crossCollectionQueryPromptPath';
+            case QueryGenerationType.SingleCollection:
+                return 'singleCollectionQueryPromptPath';
+            default:
+                throw new Error(l10n.t('Unknown query generation type: {type}', { type: generationType }));
+        }
+    }
+
+    /**
      * Gets the built-in prompt template for a command type
      * @param commandType The command type
      * @returns The built-in template
@@ -124,12 +202,28 @@ export class PromptTemplateService {
     }
 
     /**
+     * Gets the built-in prompt template for a query generation type
+     * @param generationType The query generation type
+     * @returns The built-in template
+     */
+    private static getBuiltInQueryGenerationTemplate(generationType: QueryGenerationType): string {
+        switch (generationType) {
+            case QueryGenerationType.CrossCollection:
+                return CROSS_COLLECTION_QUERY_PROMPT_TEMPLATE;
+            case QueryGenerationType.SingleCollection:
+                return SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE;
+            default:
+                throw new Error(l10n.t('Unknown query generation type: {type}', { type: generationType }));
+        }
+    }
+
+    /**
      * Loads a template from a file path
      * @param filePath The absolute or relative file path
-     * @param commandType The command type (for error messages)
+     * @param templateType The template type identifier (for error messages)
      * @returns The template content
      */
-    private static async loadTemplateFromFile(filePath: string, commandType: CommandType): Promise<string> {
+    private static async loadTemplateFromFile(filePath: string, templateType: string): Promise<string> {
         try {
             let resolvedPath = filePath;
             if (!path.isAbsolute(filePath)) {
@@ -164,8 +258,8 @@ export class PromptTemplateService {
             return content;
         } catch (error) {
             throw new Error(
-                l10n.t('Failed to load template file for {type} query: {error}', {
-                    type: commandType,
+                l10n.t('Failed to load template file for {type}: {error}', {
+                    type: templateType,
                     error: error instanceof Error ? error.message : String(error),
                 }),
             );
