@@ -96,7 +96,7 @@ export function truncateArraysInDocument(doc: Document): Document {
                     if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
                         return truncateArraysInDocument(item as Document);
                     }
-                    return item;
+                    return item as Document;
                 });
             }
         } else if (typeof value === 'object' && value !== null) {
@@ -372,7 +372,7 @@ export async function generateQuery(
             explanation: result.explanation,
             modelUsed: response.modelUsed,
         };
-    } catch (err) {
+    } catch {
         // If JSON parsing fails, return the raw response
         return {
             generatedQuery: response.text,
