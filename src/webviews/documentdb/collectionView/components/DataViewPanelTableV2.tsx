@@ -128,10 +128,9 @@ export function DataViewPanelTableV2({ liveHeaders, liveData, handleStepIn }: Pr
         autoResize: {
             calculateAvailableSizeBy: 'container',
             container: '#resultsDisplayAreaId', // this is a selector of the parent container, in this case it's the collectionView.tsx and the class is "resultsDisplayArea"
-            delay: 100,
             bottomPadding: 2,
         },
-        enableAutoResize: true,
+        enableAutoResize: false, // Disable SlickGrid's automatic resize, we'll handle it manually with ResizeObserver
         enableAutoSizeColumns: true, // true by default, we disabled it under the assumption that there are a lot of columns in users' data in general
 
         enableCellNavigation: true,
@@ -180,6 +179,27 @@ export function DataViewPanelTableV2({ liveHeaders, liveData, handleStepIn }: Pr
     React.useEffect(() => {
         gridRef.current?.gridService.renderGrid();
     }, [liveData, gridColumns]); // Re-run when headers or data change
+
+    // Setup ResizeObserver to watch the results container and manually trigger grid resize
+    React.useEffect(() => {
+        const container = document.querySelector('.resultsDisplayArea');
+        let resizeObserver: ResizeObserver | null = null;
+
+        if (container) {
+            const debouncedResizeHandler = debounce(() => {
+                void gridRef.current?.resizerService?.resizeGrid(10);
+            }, 200);
+
+            resizeObserver = new ResizeObserver(debouncedResizeHandler);
+            resizeObserver.observe(container);
+        }
+
+        return () => {
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
+        };
+    }, []);
 
     if (currentContext.isFirstTimeLoad) {
         return <LoadingAnimationTable />;
