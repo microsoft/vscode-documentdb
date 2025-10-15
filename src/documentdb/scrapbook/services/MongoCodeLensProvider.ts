@@ -131,18 +131,16 @@ export class MongoCodeLensProvider implements vscode.CodeLensProvider {
                 range: cmd.range,
             });
 
-            // Generate Query lens (shown when connected)
-            if (ScrapbookService.isConnected()) {
-                lenses.push(<vscode.CodeLens>{
-                    command: {
-                        title: l10n.t('✨ Generate Query'),
-                        tooltip: l10n.t('Generate MongoDB query from natural language'),
-                        command: 'vscode-documentdb.command.scrapbook.generateQuery',
-                        arguments: [cmd.range.start],
-                    },
-                    range: cmd.range,
-                });
-            }
+            // Generate Query lens
+            lenses.push(<vscode.CodeLens>{
+                command: {
+                    title: l10n.t('✨ Generate Query'),
+                    tooltip: l10n.t('Generate MongoDB query from natural language'),
+                    command: 'vscode-documentdb.command.scrapbook.generateQuery',
+                    arguments: [cmd.range.start],
+                },
+                range: cmd.range,
+            });
         });
 
         return lenses;

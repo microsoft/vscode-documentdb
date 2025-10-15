@@ -13,7 +13,6 @@ export const PREFERRED_MODEL = 'gpt-5';
  */
 export const FALLBACK_MODELS = ['gpt-4o', 'gpt-4o-mini'];
 
-
 /**
  * Embedded prompt templates for query optimization
  * These templates are compiled into the extension bundle at build time
@@ -48,9 +47,9 @@ Follow these strict instructions (must obey):
 7. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
 8. **Include priority** — each suggested improvement must include a \`priority\` (\`high\`/\`medium\`/\`low\`) so an engineer can triage.
 9. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
-10. **Verification commands must be mongosh-ready** — provide concise commands that can be copy-pasted into mongosh to verify improvements (use \`explain("executionStats")\`, \`find(...).hint(...)\`, and \`db.getCollection("{collectionName}").stats()\` patterns).
+10. **Verification output** — the \`verification\` field must be a **Markdown string** (not an array). It should include one or more \`\`\`javascript code blocks\`\`\` containing **valid mongosh commands** to verify index performance or collection stats. Each command must be copy-paste runnable in mongosh (e.g. \`db.getCollection("{collectionName}").find(...).hint(...).explain("executionStats")\`).
 11. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate \`{collectionStats}\`, \`{indexStats}\`, or \`{executionStats}\`—just include them as-is (and add computed helper fields if needed).
-12. **If no change recommended** — return an empty \`improvements\` array and a short \`verification\` suggestion to confirm the current plan.
+12. **If no change recommended** — return an empty \`improvements\` array and still include a short Markdown \`verification\` section to confirm the current plan.
 
 Thinking / analysis tips (useful signals to form recommendations; don't output these tips themselves):
 - Check **which index(es)** the winning plan used (or whether a COLLSCAN occurred) and whether \`totalKeysExamined\` is much smaller than \`totalDocsExamined\` (indicates good index filtering vs heavy document fetch).
@@ -94,11 +93,7 @@ Output JSON schema (required shape; **adhere exactly**):
       "risks": "<short risk note or null>"
     }
   ],
-  "verification": [
-    "db.getCollection(\\"{collectionName}\\").find({<query>}).hint(<indexSpecOrName>).explain(\\"executionStats\\")",
-    "db.getCollection(\\"{collectionName}\\").stats()",
-    "db.getCollection(\\"{collectionName}\\").dropIndex(\\"index_name\\")"
-  ]
+  "verification": "<markdown string that contains one or more code blocks, each block showing mongosh commands to verify index performance or stats.>"
 }
 \`\`\`
 
@@ -107,7 +102,7 @@ Additional rules for the JSON:
 - \`derived.totalKeysExamined\`, \`derived.totalDocsExamined\`, and \`derived.keysToDocsRatio\` should be filled from \`executionStats\` if present, otherwise \`null\`. \`keysToDocsRatio\` = \`totalKeysExamined / max(1, totalDocsExamined)\`.
 - \`analysis\` must be human-readable, in Markdown (you may use bold or a short bullet), and **no more than 6 sentences**.
 - \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
-- \`verification\` array entries must be short single-line mongosh commands.
+- \`verification\` must be human-readable, in Markdown. It should include one or more \`\`\`javascript code blocks\`\`\` containing valid mongosh commands. Each code block should be concise and executable as-is in mongosh.
 `;
 
 export const AGGREGATE_QUERY_PROMPT_TEMPLATE = `
@@ -141,9 +136,9 @@ Follow these strict instructions (must obey):
 7. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
 8. **Include priority** — each suggested improvement must include a \`priority\` (\`high\`/\`medium\`/\`low\`) so an engineer can triage.
 9. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
-10. **Verification commands must be mongosh-ready** — provide concise commands that can be copy-pasted into mongosh to verify improvements (use \`explain("executionStats")\`, \`aggregate(...).hint(...)\`, and \`db.getCollection("{collectionName}").stats()\` patterns).
+10. **Verification output** — the \`verification\` field must be a **Markdown string** (not an array). It should include one or more \`\`\`javascript code blocks\`\`\` containing **valid mongosh commands** to verify index performance or collection stats. Each command must be copy-paste runnable in mongosh (e.g. \`db.getCollection("{collectionName}").find(...).hint(...).explain("executionStats")\`).
 11. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate \`{collectionStats}\`, \`{indexStats}\`, or \`{executionStats}\`—just include them as-is (and add computed helper fields if needed).
-12. **If no change recommended** — return an empty \`improvements\` array and a short \`verification\` suggestion to confirm the current plan.
+12. **If no change recommended** — return an empty \`improvements\` array and still include a short Markdown \`verification\` section to confirm the current plan.
 
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **\\$match priority**: Place match stages early and check if indexes can accelerate filtering.
@@ -204,11 +199,7 @@ Output JSON schema (required shape; adhere exactly):
       "risks": "<short risk note or null>"
     }
   ],
-  "verification": [
-    "db.getCollection(\\"{collectionName}\\").aggregate({<pipeline>}).hint(<indexSpecOrName>).explain(\\"executionStats\\")",
-    "db.getCollection(\\"{collectionName}\\").stats()",
-    "db.getCollection(\\"{collectionName}\\").dropIndex(\\"index_name\\")"
-  ]
+  "verification": "<markdown string that contains one or more code blocks, each block showing mongosh commands to verify index performance or stats.>"
 }
 \`\`\`
 
@@ -217,7 +208,7 @@ Additional rules for the JSON:
 - \`derived.totalKeysExamined\`, \`derived.totalDocsExamined\`, and \`derived.keysToDocsRatio\` should be filled from \`executionStats\` if present, otherwise \`null\`. \`keysToDocsRatio\` = \`totalKeysExamined / max(1, totalDocsExamined)\`.
 - \`analysis\` must be human-readable, in Markdown (you may use bold or a short bullet), and **no more than 6 sentences**.
 - \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
-- \`verification\` array entries must be short single-line mongosh commands.
+- \`verification\` must be human-readable, in Markdown. It should include one or more \`\`\`javascript code blocks\`\`\` containing valid mongosh commands. Each code block should be concise and executable as-is in mongosh.
 `;
 
 export const COUNT_QUERY_PROMPT_TEMPLATE = `
@@ -251,9 +242,9 @@ Follow these strict instructions (must obey):
 7. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
 8. **Include priority** — each suggested improvement must include a \`priority\` (\`high\`/\`medium\`/\`low\`) so an engineer can triage.
 9. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
-10. **Verification commands must be mongosh-ready** — provide concise commands that can be copy-pasted into mongosh to verify improvements (use \`explain("executionStats")\`, \`countDocuments(...).hint(...)\`, and \`db.getCollection("{collectionName}").stats()\` patterns).
+10. **Verification output** — the \`verification\` field must be a **Markdown string** (not an array). It should include one or more \`\`\`javascript code blocks\`\`\` containing **valid mongosh commands** to verify index performance or collection stats. Each command must be copy-paste runnable in mongosh (e.g. \`db.getCollection("{collectionName}").find(...).hint(...).explain("executionStats")\`).
 11. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate \`{collectionStats}\`, \`{indexStats}\`, or \`{executionStats}\`—just include them as-is (and add computed helper fields if needed).
-12. **If no change recommended** — return an empty \`improvements\` array and a short \`verification\` suggestion to confirm the current plan.
+12. **If no change recommended** — return an empty \`improvements\` array and still include a short Markdown \`verification\` section to confirm the current plan.
 
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **Index-only optimization**: The best count performance occurs when all filter fields are indexed, allowing a covered query that avoids document fetches entirely.
@@ -294,11 +285,7 @@ Output JSON schema (required shape; adhere exactly):
       "risks": "<short risk note or null>"
     }
   ],
-  "verification": [
-    "db.getCollection(\\"{collectionName}\\").countDocuments({<query>}).hint(<indexSpecOrName>).explain(\\"executionStats\\")",
-    "db.getCollection(\\"{collectionName}\\").stats()",
-    "db.getCollection(\\"{collectionName}\\").dropIndex(\\"index_name\\")"
-  ]
+    "verification": "<markdown string that contains one or more code blocks, each block showing mongosh commands to verify index performance or stats.>"
 }
 \`\`\`
 
@@ -307,7 +294,7 @@ Additional rules for the JSON:
 - \`derived.totalKeysExamined\`, \`derived.totalDocsExamined\`, and \`derived.keysToDocsRatio\` should be filled from \`executionStats\` if present, otherwise \`null\`. \`keysToDocsRatio\` = \`totalKeysExamined / max(1, totalDocsExamined)\`.
 - \`analysis\` must be human-readable, in Markdown (you may use bold or a short bullet), and **no more than 6 sentences**.
 - \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
-- \`verification\` array entries must be short single-line mongosh commands.
+- \`verification\` must be human-readable, in Markdown. It should include one or more \`\`\`javascript code blocks\`\`\` containing valid mongosh commands. Each code block should be concise and executable as-is in mongosh.
 `;
 
 export const CROSS_COLLECTION_QUERY_PROMPT_TEMPLATE = `

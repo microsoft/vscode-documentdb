@@ -25,11 +25,11 @@ export class PromptTemplateService {
     private static readonly templateCache: Map<CommandType | QueryGenerationType, string> = new Map();
 
     /**
-     * Gets the prompt template for a given command type
+     * Gets the prompt template for index advisor
      * @param commandType The type of command (find, aggregate, or count)
      * @returns The prompt template string
      */
-    public static async getPromptTemplate(commandType: CommandType): Promise<string> {
+    public static async getIndexAdvisorPromptTemplate(commandType: CommandType): Promise<string> {
         // Get configuration
         const config = vscode.workspace.getConfiguration(this.configSection);
         const cacheEnabled = config.get<boolean>('enablePromptCache', true);
@@ -43,7 +43,7 @@ export class PromptTemplateService {
         }
 
         // Get the configuration key for this command type
-        const configKey = this.getConfigKey(commandType);
+        const configKey = this.getIndexAdvisorConfigKey(commandType);
 
         // Check if a custom template path is configured
         const customTemplatePath = config.get<string | null>(configKey);
@@ -68,11 +68,11 @@ export class PromptTemplateService {
                         error: error instanceof Error ? error.message : String(error),
                     }),
                 );
-                template = this.getBuiltInTemplate(commandType);
+                template = this.getBuiltInIndexAdvisorTemplate(commandType);
             }
         } else {
             // Use built-in template
-            template = this.getBuiltInTemplate(commandType);
+            template = this.getBuiltInIndexAdvisorTemplate(commandType);
         }
 
         // Cache the template (if caching is enabled)
@@ -154,7 +154,7 @@ export class PromptTemplateService {
      * @param commandType The command type
      * @returns The configuration key
      */
-    private static getConfigKey(commandType: CommandType): string {
+    private static getIndexAdvisorConfigKey(commandType: CommandType): string {
         switch (commandType) {
             case CommandType.Find:
                 return 'findQueryPromptPath';
@@ -188,7 +188,7 @@ export class PromptTemplateService {
      * @param commandType The command type
      * @returns The built-in template
      */
-    private static getBuiltInTemplate(commandType: CommandType): string {
+    private static getBuiltInIndexAdvisorTemplate(commandType: CommandType): string {
         switch (commandType) {
             case CommandType.Find:
                 return FIND_QUERY_PROMPT_TEMPLATE;

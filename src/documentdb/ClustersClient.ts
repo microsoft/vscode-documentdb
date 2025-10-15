@@ -36,7 +36,7 @@ import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler'
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import {
-    IndexAdvisorApis,
+    llmEnhancedFeatureApis,
     type CollectionStats,
     type CreateIndexResult,
     type DropIndexResult,
@@ -84,7 +84,7 @@ export class ClustersClient {
     static _clusterMetadata: Map<string, ClusterMetadata> = new Map();
 
     private _mongoClient: MongoClient;
-    private _indexAdvisorApis: IndexAdvisorApis | null = null;
+    private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
 
     /**
      * Use getClient instead of a constructor. Connections/Client are being cached and reused.
@@ -173,7 +173,7 @@ export class ClustersClient {
     ): Promise<void> {
         try {
             this._mongoClient = await MongoClient.connect(connectionString, options);
-            this._indexAdvisorApis = new IndexAdvisorApis(this._mongoClient);
+            this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
         } catch (error) {
             const message = parseError(error).message;
             if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
@@ -574,10 +574,10 @@ export class ClustersClient {
      * @returns Array of index statistics including usage information
      */
     async getIndexStats(databaseName: string, collectionName: string): Promise<IndexStats[]> {
-        if (!this._indexAdvisorApis) {
+        if (!this._llmEnhancedFeatureApis) {
             throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
         }
-        return this._indexAdvisorApis.getIndexStats(databaseName, collectionName);
+        return this._llmEnhancedFeatureApis.getIndexStats(databaseName, collectionName);
     }
 
     /**
@@ -587,10 +587,10 @@ export class ClustersClient {
      * @returns Collection statistics including size, count, and index information
      */
     async getCollectionStats(databaseName: string, collectionName: string): Promise<CollectionStats> {
-        if (!this._indexAdvisorApis) {
+        if (!this._llmEnhancedFeatureApis) {
             throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
         }
-        return this._indexAdvisorApis.getCollectionStats(databaseName, collectionName);
+        return this._llmEnhancedFeatureApis.getCollectionStats(databaseName, collectionName);
     }
 
     /**
@@ -606,10 +606,10 @@ export class ClustersClient {
         collectionName: string,
         options: ExplainOptions = {},
     ): Promise<ExplainResult> {
-        if (!this._indexAdvisorApis) {
+        if (!this._llmEnhancedFeatureApis) {
             throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
         }
-        return this._indexAdvisorApis.explainFind(databaseName, collectionName, options);
+        return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, options);
     }
 
     /**
@@ -620,10 +620,10 @@ export class ClustersClient {
      * @returns Detailed explain result with execution statistics
      */
     async explainAggregate(databaseName: string, collectionName: string, pipeline: Document[]): Promise<ExplainResult> {
-        if (!this._indexAdvisorApis) {
+        if (!this._llmEnhancedFeatureApis) {
             throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
         }
-        return this._indexAdvisorApis.explainAggregate(databaseName, collectionName, pipeline);
+        return this._llmEnhancedFeatureApis.explainAggregate(databaseName, collectionName, pipeline);
     }
 
     /**
@@ -634,10 +634,10 @@ export class ClustersClient {
      * @returns Detailed explain result with execution statistics
      */
     async explainCount(databaseName: string, collectionName: string, filter: Filter<Document> = {}): Promise<Document> {
-        if (!this._indexAdvisorApis) {
+        if (!this._llmEnhancedFeatureApis) {
             throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
         }
-        return this._indexAdvisorApis.explainCount(databaseName, collectionName, filter);
+        return this._llmEnhancedFeatureApis.explainCount(databaseName, collectionName, filter);
     }
 
     /**
@@ -653,10 +653,10 @@ export class ClustersClient {
         collectionName: string,
         indexSpec: IndexSpecification,
     ): Promise<CreateIndexResult> {
-        if (!this._indexAdvisorApis) {
+        if (!this._llmEnhancedFeatureApis) {
             throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
         }
-        return this._indexAdvisorApis.createIndex(databaseName, collectionName, indexSpec);
+        return this._llmEnhancedFeatureApis.createIndex(databaseName, collectionName, indexSpec);
     }
 
     /**
@@ -667,10 +667,10 @@ export class ClustersClient {
      * @returns Result of the index drop operation
      */
     async dropIndex(databaseName: string, collectionName: string, indexName: string): Promise<DropIndexResult> {
-        if (!this._indexAdvisorApis) {
+        if (!this._llmEnhancedFeatureApis) {
             throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
         }
-        return this._indexAdvisorApis.dropIndex(databaseName, collectionName, indexName);
+        return this._llmEnhancedFeatureApis.dropIndex(databaseName, collectionName, indexName);
     }
 
     /**
@@ -681,9 +681,9 @@ export class ClustersClient {
      * @returns Array of sample documents
      */
     async getSampleDocuments(databaseName: string, collectionName: string, limit: number = 10): Promise<Document[]> {
-        if (!this._indexAdvisorApis) {
+        if (!this._llmEnhancedFeatureApis) {
             throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
         }
-        return this._indexAdvisorApis.getSampleDocuments(databaseName, collectionName, limit);
+        return this._llmEnhancedFeatureApis.getSampleDocuments(databaseName, collectionName, limit);
     }
 }

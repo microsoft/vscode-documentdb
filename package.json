@@ -393,13 +393,6 @@
         "title": "Execute Command"
       },
       {
-        "//": "Scrapbook: Generate Query",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scrapbook.generateQuery",
-        "title": "Generate Query from Natural Language",
-        "icon": "$(sparkle)"
-      },
-      {
         "//": "Scrapbook: New Scrapbook",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.scrapbook.new",
@@ -820,10 +813,6 @@
         {
           "command": "vscode-documentdb.command.scrapbook.executeCommand",
           "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.scrapbook.generateQuery",
-          "when": "never"
         }
       ]
     },
@@ -934,6 +923,22 @@
               "null"
             ],
             "description": "Path to a custom prompt template file for count query optimization. Leave empty to use the built-in template.",
+            "default": null
+          },
+          "documentDB.llm.crossCollectionQueryPromptPath": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Path to a custom prompt template file for cross-collection query generation. Leave empty to use the built-in template.",
+            "default": null
+          },
+          "documentDB.llm.singleCollectionQueryPromptPath": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Path to a custom prompt template file for single collection query generation. Leave empty to use the built-in template.",
             "default": null
           },
           "documentDB.llm.enablePromptCache": {

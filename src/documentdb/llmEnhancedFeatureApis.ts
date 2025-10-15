@@ -160,9 +160,9 @@ export interface ExplainResult {
 }
 
 /**
- * Index Advisor APIs
+ * LLM Enhanced Feature APIs
  */
-export class IndexAdvisorApis {
+export class llmEnhancedFeatureApis {
     constructor(private readonly mongoClient: MongoClient) {}
 
     /**
@@ -239,7 +239,6 @@ export class IndexAdvisorApis {
 
         const { filter = {}, sort, projection, skip, limit } = options;
 
-        // Build the find command object with all supported options
         const findCmd: Document = {
             find: collectionName,
             filter,
@@ -262,7 +261,6 @@ export class IndexAdvisorApis {
             findCmd.limit = limit;
         }
 
-        // Use the explain command with executionStats verbosity
         const command: Document = {
             explain: findCmd,
             verbosity: 'executionStats',
@@ -283,7 +281,6 @@ export class IndexAdvisorApis {
     async explainAggregate(databaseName: string, collectionName: string, pipeline: Document[]): Promise<ExplainResult> {
         const db = this.mongoClient.db(databaseName);
 
-        // Build the aggregate command with cursor
         const command: Document = {
             explain: {
                 aggregate: collectionName,
@@ -293,7 +290,6 @@ export class IndexAdvisorApis {
             verbosity: 'executionStats',
         };
 
-        // Use the explain command with executionStats verbosity
         const explainResult = await db.command(command);
 
         return explainResult as ExplainResult;
@@ -309,7 +305,6 @@ export class IndexAdvisorApis {
     async explainCount(databaseName: string, collectionName: string, filter: Filter<Document> = {}): Promise<Document> {
         const db = this.mongoClient.db(databaseName);
 
-        // Build the count command with query filter
         const command: Document = {
             explain: {
                 count: collectionName,
@@ -318,7 +313,6 @@ export class IndexAdvisorApis {
             verbosity: 'executionStats',
         };
 
-        // Use the explain command with executionStats verbosity
         const explainResult = await db.command(command);
 
         return explainResult;
@@ -338,11 +332,9 @@ export class IndexAdvisorApis {
     ): Promise<CreateIndexResult> {
         const db = this.mongoClient.db(databaseName);
 
-        // Build the createIndexes command
         const { key, name, unique, background, sparse, expireAfterSeconds, partialFilterExpression, ...otherOptions } =
             indexSpec;
 
-        // Build the index specification for the command
         const indexDefinition: Document = {
             key,
         };
@@ -375,7 +367,6 @@ export class IndexAdvisorApis {
         // Add any other options
         Object.assign(indexDefinition, otherOptions);
 
-        // Use the createIndexes command
         const command: Document = {
             createIndexes: collectionName,
             indexes: [indexDefinition],
@@ -402,7 +393,6 @@ export class IndexAdvisorApis {
     async dropIndex(databaseName: string, collectionName: string, indexName: string): Promise<DropIndexResult> {
         const db = this.mongoClient.db(databaseName);
 
-        // Use the dropIndexes command
         const command: Document = {
             dropIndexes: collectionName,
             index: indexName,
@@ -426,7 +416,6 @@ export class IndexAdvisorApis {
     async getSampleDocuments(databaseName: string, collectionName: string, limit: number = 10): Promise<Document[]> {
         const collection = this.mongoClient.db(databaseName).collection(collectionName);
 
-        // Use aggregation with $sample to get random documents
         const sampleDocuments = await collection
             .aggregate([
                 {

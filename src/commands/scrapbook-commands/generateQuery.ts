@@ -3,16 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IActionContext } from '@microsoft/vscode-azext-utils';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ScrapbookService } from '../../documentdb/scrapbook/ScrapbookService';
-import {
-    generateQuery,
-    QueryGenerationContext,
-    QueryGenerationType,
-} from '../llmEnhancedCommands/generateCommands';
+import { generateQuery, QueryGenerationType, type QueryGenerationContext } from '../llmEnhancedCommands/generateCommands';
 
 /**
  * Generates a MongoDB query from natural language input
@@ -20,18 +16,15 @@ import {
  * @param position Optional position to locate the command (when called from CodeLens)
  */
 export async function generateQueryCommand(context: IActionContext, position?: vscode.Position): Promise<void> {
-    // Get the active text editor
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
         throw new Error(l10n.t('No active editor found. Please open a scrapbook file.'));
     }
 
-    // Ensure this is a scrapbook document
     if (editor.document.languageId !== 'vscode-documentdb-scrapbook-language') {
         throw new Error(l10n.t('This command can only be run from a DocumentDB scrapbook.'));
     }
 
-    // Check if scrapbook is connected
     if (!ScrapbookService.isConnected()) {
         throw new Error(
             l10n.t('No database connection selected. Please connect to a database first using the "Connect" command.'),
@@ -49,7 +42,7 @@ export async function generateQueryCommand(context: IActionContext, position?: v
         throw new Error(l10n.t('Database name is required. Please connect to a database first.'));
     }
 
-    // Determine insertion position (next line after the position/selection)
+    // Determine insertion position
     let insertPosition: vscode.Position;
     if (position) {
         // Called from CodeLens - insert below the line with the description
@@ -59,13 +52,12 @@ export async function generateQueryCommand(context: IActionContext, position?: v
         insertPosition = new vscode.Position(editor.selection.active.line + 1, 0);
     }
 
-    // Get natural language query from the line text at the position (if called from CodeLens)
-    // or from user selection (if called from command palette)
+    // Get natural language query from the line text
+    // or from user selection
     let naturalLanguageQuery: string = '';
 
     if (position) {
-        // Called from CodeLens - get the text at the specific line
-        // Remove comment markers if present
+        // get the text at current line
         let lineText = editor.document.lineAt(position.line).text.trim();
 
         // Remove leading comment markers (// or #)
@@ -78,7 +70,7 @@ export async function generateQueryCommand(context: IActionContext, position?: v
         naturalLanguageQuery = lineText;
     }
 
-    // If still no text found, prompt user for input
+    // If no text found, prompt user for input
     if (naturalLanguageQuery.trim().length === 0) {
         const userInput = await vscode.window.showInputBox({
             prompt: l10n.t('Describe the query you want to generate'),
@@ -99,7 +91,7 @@ export async function generateQueryCommand(context: IActionContext, position?: v
         naturalLanguageQuery = userInput.trim();
     }
 
-    // Ask if user wants to specify a collection
+    // Choose between single-collection or cross-collection query
     const collectionChoice = await vscode.window.showQuickPick(
         [
             {
@@ -126,6 +118,8 @@ export async function generateQueryCommand(context: IActionContext, position?: v
     let collectionName: string | undefined;
     let generationType: QueryGenerationType;
 
+    // Single-collection query
+    // let user select the collection
     if (collectionChoice.collectionName === 'SELECT') {
         // Get list of collections
         const client = await ClustersClient.getClient(clusterId);
@@ -180,7 +174,7 @@ export async function generateQueryCommand(context: IActionContext, position?: v
         },
     );
 
-    // Insert the generated query into the editor at the determined position
+    // Insert the generated query
     await insertGeneratedQuery(editor, result.generatedQuery, result.explanation, insertPosition);
 
     // Show success message

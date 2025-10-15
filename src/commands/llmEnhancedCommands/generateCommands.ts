@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IActionContext } from '@microsoft/vscode-azext-utils';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import type { Document } from 'mongodb';
+import { type Document } from 'mongodb';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CopilotService } from '../../services/copilotService';
@@ -91,6 +91,7 @@ export function truncateArraysInDocument(doc: Document): Document {
                 };
             } else {
                 // Process array elements recursively
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-return
                 result[key] = value.map((item) => {
                     if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
                         return truncateArraysInDocument(item as Document);
@@ -109,6 +110,7 @@ export function truncateArraysInDocument(doc: Document): Document {
                 _preview: value.substring(0, MAX_STRING_LENGTH) + '...',
             };
         } else {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             result[key] = value;
         }
     }
@@ -161,7 +163,9 @@ function extractFieldTypes(obj: Document, prefix: string, fieldTypes: Map<string
         if (value === null) {
             addFieldType(fieldTypes, fieldName, 'null');
         } else if (Array.isArray(value)) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             if (typeof value[0] === 'object' && value[0] !== null && value[0]._truncated) {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 addFieldType(fieldTypes, fieldName, `array[${value[0]._dimensions}]`);
             } else {
                 addFieldType(fieldTypes, fieldName, 'array');
@@ -171,10 +175,14 @@ function extractFieldTypes(obj: Document, prefix: string, fieldTypes: Map<string
                 }
             }
         } else if (typeof value === 'object' && value !== null) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             if (value._truncated) {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 if (value._originalLength !== undefined) {
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                     addFieldType(fieldTypes, fieldName, `string(truncated, length: ${value._originalLength})`);
                 } else {
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                     addFieldType(fieldTypes, fieldName, `array[${value._dimensions}] (truncated)`);
                 }
             } else {
@@ -251,7 +259,7 @@ async function fillPromptTemplate(
 }
 
 /**
- * Generates a MongoDB query using Copilot AI based on natural language input
+ * Generates a MongoDB query based on natural language input
  * @param context Action context for telemetry
  * @param queryContext Query generation context
  * @returns Generated query and explanation
@@ -292,7 +300,9 @@ export async function generateQuery(
             }
 
             if (schemas.length === 0) {
-                throw new Error(l10n.t('No collections with documents found in database {db}', { db: queryContext.databaseName }));
+                throw new Error(
+                    l10n.t('No collections with documents found in database {db}', { db: queryContext.databaseName }),
+                );
             }
         } else {
             // Single collection - sample up to 10 documents
@@ -308,7 +318,9 @@ export async function generateQuery(
 
             if (sampleDocs.length === 0) {
                 throw new Error(
-                    l10n.t('No documents found in collection {collection}', { collection: queryContext.collectionName }),
+                    l10n.t('No documents found in collection {collection}', {
+                        collection: queryContext.collectionName,
+                    }),
                 );
             }
 
@@ -360,7 +372,7 @@ export async function generateQuery(
             explanation: result.explanation,
             modelUsed: response.modelUsed,
         };
-    } catch (error) {
+    } catch (err) {
         // If JSON parsing fails, return the raw response
         return {
             generatedQuery: response.text,

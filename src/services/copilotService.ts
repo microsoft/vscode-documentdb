@@ -14,7 +14,7 @@ export interface CopilotMessageOptions {
     // If the specified model is not available, will fall back to available models
     preferredModel?: string;
 
-    // List of fallback models to try if the preferred model is not available
+    // List of fallback models
     fallbackModels?: string[];
 
     // TODO:

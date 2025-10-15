@@ -54,7 +54,7 @@ export interface OptimizationResult {
  * @returns The prompt template string
  */
 async function getPromptTemplate(commandType: CommandType): Promise<string> {
-    return PromptTemplateService.getPromptTemplate(commandType);
+    return PromptTemplateService.getIndexAdvisorPromptTemplate(commandType);
 }
 
 /**
@@ -110,8 +110,11 @@ async function fillPromptTemplate(
         .replace('{collectionStats}', JSON.stringify(collectionStats, null, 2))
         .replace('{indexStats}', JSON.stringify(indexes, null, 2))
         .replace('{executionStats}', executionStats)
-        .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure , null, 2))
-        .replace('{AzureClusterType}', clusterInfo.domainInfo_isAzure == 'true' ? JSON.stringify(clusterInfo.domainInfo_api , null, 2) : 'N/A')
+        .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2))
+        .replace(
+            '{AzureClusterType}',
+            clusterInfo.domainInfo_isAzure === 'true' ? JSON.stringify(clusterInfo.domainInfo_api, null, 2) : 'N/A',
+        )
         .replace('{query}', context.query);
 
     return filled;
@@ -191,7 +194,14 @@ export async function optimizeQuery(
 
     // Fill the prompt template
     const commandType = queryContext.commandType;
-    const promptContent = await fillPromptTemplate(commandType, queryContext, collectionStats, indexes, executionStats, clusterInfo);
+    const promptContent = await fillPromptTemplate(
+        commandType,
+        queryContext,
+        collectionStats,
+        indexes,
+        executionStats,
+        clusterInfo,
+    );
 
     // Send to Copilot with configured models
     const response = await CopilotService.sendMessage([vscode.LanguageModelChatMessage.User(promptContent)], {
