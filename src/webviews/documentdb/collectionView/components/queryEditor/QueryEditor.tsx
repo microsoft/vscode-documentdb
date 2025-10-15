@@ -222,7 +222,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <Label size="small" weight="semibold">
                                 {l10n.t('Skip')}
                             </Label>
-                            <Input className="queryEditorInput" appearance="underline" placeholder="10" />
+                            <Input className="queryEditorInput" appearance="underline" placeholder="0" />
                         </div>
                         <div className="field fieldNarrow">
                             <Label size="small" weight="semibold">
