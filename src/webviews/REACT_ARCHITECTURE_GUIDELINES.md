@@ -60,7 +60,7 @@ CollectionView
 ├── QueryEditor
 │   └── MonacoAutoHeight
 ├── DataView (switched based on currentView)
-│   ├── DataViewPanelTableV2
+│   ├── DataViewPanelTable
 │   ├── DataViewPanelTree
 │   └── DataViewPanelJSON
 └── ToolbarTableNavigation
@@ -614,7 +614,7 @@ try {
 ```tsx
 {
     {
-        'Table View': <DataViewPanelTableV2 {...props} />,
+        'Table View': <DataViewPanelTable {...props} />,
         'Tree View': <DataViewPanelTree {...props} />,
         'JSON View': <DataViewPanelJSON {...props} />,
         default: <div>error '{currentContext.currentView}'</div>,
