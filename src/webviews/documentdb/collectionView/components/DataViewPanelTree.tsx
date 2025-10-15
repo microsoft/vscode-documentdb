@@ -31,6 +31,7 @@ export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
     ];
 
     const gridOptions: GridOption = {
+        // keep this so that slickgrid uses the container when we resize it manually
         autoResize: {
             calculateAvailableSizeBy: 'container',
             container: '.resultsDisplayArea', // this is a selector of the parent container, in this case it's the collectionView.tsx and the class is "resultsDisplayArea"
