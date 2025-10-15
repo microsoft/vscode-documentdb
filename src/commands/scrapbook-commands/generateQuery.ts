@@ -8,7 +8,11 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ScrapbookService } from '../../documentdb/scrapbook/ScrapbookService';
-import { generateQuery, QueryGenerationType, type QueryGenerationContext } from '../llmEnhancedCommands/generateCommands';
+import {
+    generateQuery,
+    QueryGenerationType,
+    type QueryGenerationContext,
+} from '../llmEnhancedCommands/generateCommands';
 
 /**
  * Generates a MongoDB query from natural language input
