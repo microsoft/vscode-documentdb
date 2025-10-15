@@ -5,38 +5,22 @@
 
 @use '../../sharedStyles.scss';
 
+/**
+ * Monaco Editor Adaptive Container
+ *
+ * Applies Fluent UI Input styling to Monaco editor container
+ * for visual consistency with other input components.
+ */
 .monacoAdaptiveContainer {
-    background-color: var(--colorNeutralBackground1);
-    padding: var(--spacingVerticalS) var(--spacingHorizontalS);
-    position: relative; // Required for ::after pseudo-element positioning
+    // Apply complete Fluent UI input styling
+    @include sharedStyles.fluent-input;
 
-    @include sharedStyles.input-border;
+    // Monaco-specific tweaks: adjust right padding for scrollbar
+    padding-right: 4px;
 
-    // Match Fluent UI's animated bottom border using ::after pseudo-element
-    // This creates the focus animation effect that appears at the bottom
-    &::after {
-        content: '';
-        position: absolute;
-        left: 0;
-        bottom: 0;
-        right: 0;
-        height: 0;
-        border-bottom: 2px solid var(--colorCompoundBrandStroke);
-        border-bottom-left-radius: var(--borderRadiusMedium);
-        border-bottom-right-radius: var(--borderRadiusMedium);
-        transform: scaleX(0);
-        transition-property: transform;
-        transition-duration: var(--durationFast);
-        transition-timing-function: var(--curveEasyEase);
-    }
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: 0px;
 
-    // Animate bottom border on focus
-    &:focus-within::after {
-        transform: scaleX(1);
-    }
-
-    // Optional: Add subtle hover effect
-    &:hover:not(:focus-within) {
-        border-color: var(--colorNeutralStroke1Hover);
-    }
+    border-width: 2px;
 }

@@ -8,21 +8,78 @@
 $media-breakpoint-query-control-area: 1024px;
 
 /**
- * Shared border styling for input-like components
- * Used by: MonacoAdaptive, Fluent UI Input components
+ * Shared Fluent UI Input-like Component Styling
  *
- * Uses Fluent UI design tokens for consistent styling:
- * - --colorNeutralStroke1: Fluent UI's default border color for input controls
- * - --borderRadiusMedium: Fluent UI's medium border radius
+ * These mixins replicate Fluent UI Input/Textarea component styling
+ * for consistency across custom components like MonacoAdaptive.
  *
- * Note: Fluent UI Input/Textarea components use an ::after pseudo-element
- * for the animated bottom border on focus. To replicate this:
- * 1. Set position: relative on the container
- * 2. Create ::after pseudo-element with bottom border
- * 3. Use transform: scaleX() for the animation
- * 4. Animate on :focus-within
+ * Uses Fluent UI design tokens:
+ * - Border: --colorNeutralStroke1, --borderRadiusMedium
+ * - Background: --colorNeutralBackground1
+ * - Spacing: --spacingVerticalS, --spacingHorizontalS
+ * - Animation: --durationFast, --curveEasyEase
+ * - Focus: --colorCompoundBrandStroke
+ */
+
+/**
+ * Base border styling for input-like components
  */
 @mixin input-border {
-    border: 1px solid var(--colorNeutralStroke1);
+    border: 1px solid var(--vscode-checkbox-border); // TODO: find the style name of a fluent input field var(--colorNeutralStroke1) doesn't work well, maybe we failed with style adatpation on this one.
     border-radius: var(--borderRadiusMedium);
+}
+
+/**
+ * Base input container styling (background, padding, positioning)
+ */
+@mixin input-base {
+    background-color: var(--colorNeutralBackground1);
+    padding: var(--spacingVerticalS) var(--spacingHorizontalS);
+    position: relative; // Required for ::after pseudo-element
+}
+
+/**
+ * Fluent UI's animated bottom border focus effect
+ * Creates an ::after pseudo-element that scales horizontally on focus
+ */
+@mixin input-focus-animation {
+    &::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        height: 0;
+        border-bottom: 2px solid var(--colorCompoundBrandStroke);
+        border-bottom-left-radius: var(--borderRadiusMedium);
+        border-bottom-right-radius: var(--borderRadiusMedium);
+        transform: scaleX(0);
+        transition-property: transform;
+        transition-duration: var(--durationFast);
+        transition-timing-function: var(--curveEasyEase);
+    }
+
+    &:focus-within::after {
+        transform: scaleX(1);
+    }
+}
+
+/**
+ * Hover effect for input-like components
+ */
+@mixin input-hover {
+    &:hover:not(:focus-within) {
+        border-color: var(--colorNeutralStroke1Hover);
+    }
+}
+
+/**
+ * Complete Fluent UI input styling
+ * Combines all input mixins for a complete Fluent UI Input appearance
+ */
+@mixin fluent-input {
+    @include input-base;
+    @include input-border;
+    @include input-focus-animation;
+    @include input-hover;
 }

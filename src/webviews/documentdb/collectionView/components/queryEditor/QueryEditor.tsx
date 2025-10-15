@@ -180,7 +180,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                     {/* Row 1: Project field (full width) */}
                     <div className="fieldRow">
                         <div className="field fieldWide">
-                            <Label size="small">{l10n.t('Project')}</Label>
+                            <Label size="small" weight="semibold">
+                                {l10n.t('Project')}
+                            </Label>
                             <MonacoAdaptive
                                 height={'100%'}
                                 width={'100%'}
@@ -199,7 +201,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                     {/* Row 2: Sort (flexible) + Skip (fixed) + Limit (fixed) */}
                     <div className="fieldRow">
                         <div className="field fieldWide">
-                            <Label size="small">{l10n.t('Sort')}</Label>
+                            <Label size="small" weight="semibold">
+                                {l10n.t('Sort')}
+                            </Label>
                             <MonacoAdaptive
                                 height={'100%'}
                                 width={'100%'}
@@ -214,11 +218,15 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             />
                         </div>
                         <div className="field fieldNarrow">
-                            <Label size="small">{l10n.t('Skip')}</Label>
+                            <Label size="small" weight="semibold">
+                                {l10n.t('Skip')}
+                            </Label>
                             <Input className="queryEditorInput" appearance="underline" placeholder="10" />
                         </div>
                         <div className="field fieldNarrow">
-                            <Label size="small">{l10n.t('Limit')}</Label>
+                            <Label size="small" weight="semibold">
+                                {l10n.t('Limit')}
+                            </Label>
                             <Input className="queryEditorInput" appearance="underline" placeholder="0" />
                         </div>
                     </div>
