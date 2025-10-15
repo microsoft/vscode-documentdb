@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Input, Label, ToggleButton } from '@fluentui/react-components';
-import { Slide } from '@fluentui/react-motion-components-preview';
+import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { useContext, useEffect, useRef, useState, type JSX } from 'react';
 // eslint-disable-next-line import/no-internal-modules
@@ -176,7 +176,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 </div>
             </div>
 
-            <Slide visible={isEnhancedQueryMode} fromY="-20px" unmountOnExit>
+            <Collapse visible={isEnhancedQueryMode} unmountOnExit>
                 <div className="enhancedInputArea">
                     {/* Row 1: Project field (full width) */}
                     <div className="fieldRow">
@@ -232,7 +232,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         </div>
                     </div>
                 </div>
-            </Slide>
+            </Collapse>
         </div>
     );
 };
