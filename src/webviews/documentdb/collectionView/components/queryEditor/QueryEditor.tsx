@@ -27,6 +27,7 @@ interface QueryEditorProps {
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
+    const [isAiActive, setIsAiActive] = useState(false);
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
     const aiInputRef = useRef<HTMLInputElement | null>(null);
@@ -167,11 +168,17 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         <div className="queryEditor">
             {/* Optional AI prompt row */}
             <Collapse visible={currentContext.isAiRowVisible} unmountOnExit>
-                <div className="aiRow">
+                <div className={`aiRow${isAiActive ? ' ai-active' : ''}`}>
                     <Input
                         ref={aiInputRef}
                         contentAfter={<SendButton />}
                         placeholder={l10n.t('Ask Copilot to generate the query for you...')}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                                // Toggle the ai-active state for testing
+                                setIsAiActive((prev) => !prev);
+                            }
+                        }}
                     />
                 </div>
             </Collapse>
