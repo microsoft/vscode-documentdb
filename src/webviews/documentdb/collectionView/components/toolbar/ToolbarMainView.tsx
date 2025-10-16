@@ -29,6 +29,7 @@ import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
+import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
 export const ToolbarMainView = (): JSX.Element => {
@@ -76,6 +77,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
     const { trpcClient } = useTrpcClient();
 
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
+    const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
     const handleExecuteQuery = () => {
         // return to the root level
@@ -147,6 +149,9 @@ const ToolbarQueryOperations = (): JSX.Element => {
                 ...prev,
                 isAiRowVisible: checkedItems.includes('copilot'),
             }));
+
+            // Temporarily hide scrollbars during the transition to improve UX responsiveness
+            hideScrollbarsTemporarily();
         }
     };
 

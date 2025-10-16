@@ -16,6 +16,7 @@ import { PlaySettingsFilled, PlaySettingsRegular, SendRegular } from '@fluentui/
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { CollectionViewContext } from '../../collectionViewContext';
+import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import { MonacoAutoHeight } from '../MonacoAutoHeight';
 import './queryEditor.scss';
 
@@ -28,7 +29,8 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
-    const scrollbarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const aiInputRef = useRef<HTMLInputElement | null>(null);
+    const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
     const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
         editor.setValue('{  }');
@@ -143,30 +145,18 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 schemaAbortControllerRef.current.abort();
                 schemaAbortControllerRef.current = null;
             }
-            if (scrollbarTimeoutRef.current) {
-                clearTimeout(scrollbarTimeoutRef.current);
-                scrollbarTimeoutRef.current = null;
-            }
         };
     }, []);
 
-    const hideScrollbarsTemporarily = () => {
-        const resultsArea = document.querySelector('.resultsDisplayArea');
-        if (resultsArea) {
-            resultsArea.classList.add('resizing');
-
-            // Clear any existing timeout
-            if (scrollbarTimeoutRef.current) {
-                clearTimeout(scrollbarTimeoutRef.current);
-            }
-
-            // Show scrollbars after 500ms
-            scrollbarTimeoutRef.current = setTimeout(() => {
-                resultsArea.classList.remove('resizing');
-                scrollbarTimeoutRef.current = null;
-            }, 500);
+    // Focus AI input when AI row becomes visible
+    useEffect(() => {
+        if (currentContext.isAiRowVisible && aiInputRef.current) {
+            // Use setTimeout to ensure the Collapse animation has started
+            setTimeout(() => {
+                aiInputRef.current?.focus();
+            }, 200);
         }
-    };
+    }, [currentContext.isAiRowVisible]);
 
     // Helper button component for the AI input's contentAfter slot
     const SendButton: React.FC = () => {
@@ -179,6 +169,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             <Collapse visible={currentContext.isAiRowVisible} unmountOnExit>
                 <div className="aiRow">
                     <Input
+                        ref={aiInputRef}
                         contentAfter={<SendButton />}
                         placeholder={l10n.t('Ask Copilot to generate the query for you...')}
                     />
