@@ -28,6 +28,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
+    const scrollbarTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
         editor.setValue('{  }');
@@ -170,7 +171,31 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                     <ToggleButton
                         appearance="subtle"
                         checked={isEnhancedQueryMode}
-                        onClick={() => setIsEnhancedQueryMode(!isEnhancedQueryMode)}
+                        onClick={() => {
+                            // Toggle enhanced mode
+                            setIsEnhancedQueryMode(!isEnhancedQueryMode);
+
+                            // Hide scrollbars during the transition to prevent flickering.
+                            // When enhanced mode is enabled, the query area grows and initially pushes
+                            // elements down. Due to the necessary debounce on resize handlers (100ms),
+                            // there's a brief moment where a scrollbar appears on the entire window
+                            // before the Monaco editor and SlickGrid resize themselves. This simple
+                            // 500ms timeout workaround hides scrollbars during the entire transition.
+                            const resultsArea = document.querySelector('.resultsDisplayArea');
+                            if (resultsArea) {
+                                resultsArea.classList.add('resizing');
+
+                                // Clear any existing timeout
+                                if (scrollbarTimeoutRef.current) {
+                                    clearTimeout(scrollbarTimeoutRef.current);
+                                }
+
+                                // Show scrollbars after 500ms
+                                scrollbarTimeoutRef.current = setTimeout(() => {
+                                    resultsArea.classList.remove('resizing');
+                                }, 500);
+                            }
+                        }}
                         icon={isEnhancedQueryMode ? <PlaySettingsFilled /> : <PlaySettingsRegular />}
                     ></ToggleButton>
                 </div>

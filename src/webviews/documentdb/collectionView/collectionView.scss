@@ -55,6 +55,20 @@
 
         //background-color: aqua; // used to invstigate layout issues
 
+        // Temporarily hide overflow during QueryEditor transitions to prevent scrollbar flickering.
+        // This class is applied when the enhanced query mode is toggled. The !important is needed
+        // because child components (Monaco editor, SlickGrid) may have inline styles that would
+        // otherwise override this. The overflow must be hidden on the resultsDisplayArea itself
+        // AND all its children to prevent window-level scrollbars from appearing during the
+        // ~100ms debounce period before resize handlers complete.
+        &.resizing {
+            overflow: hidden !important;
+
+            * {
+                overflow: hidden !important;
+            }
+        }
+
         .loadingAnimationTable {
             .headerRow {
                 align-items: center;
