@@ -3,7 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Input, Label, ToggleButton } from '@fluentui/react-components';
+import {
+    Button,
+    Dialog,
+    DialogBody,
+    DialogSurface,
+    DialogTitle,
+    Input,
+    Label,
+    makeStyles,
+    ToggleButton,
+} from '@fluentui/react-components';
 import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { useContext, useEffect, useRef, useState, type JSX } from 'react';
@@ -20,6 +30,23 @@ import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuri
 import { MonacoAutoHeight } from '../MonacoAutoHeight';
 import './queryEditor.scss';
 
+const useStyles = makeStyles({
+    aiDialog: {
+        width: '80vw',
+        maxWidth: '80vw',
+        top: '10vh',
+        position: 'fixed',
+    },
+    aiDialogBody: {
+        display: 'flex',
+        alignItems: 'center',
+        minHeight: '60px',
+    },
+    aiInput: {
+        width: '100%',
+    },
+});
+
 interface QueryEditorProps {
     onExecuteRequest: (query: string) => void;
 }
@@ -27,6 +54,7 @@ interface QueryEditorProps {
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
+    const styles = useStyles();
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
     const aiInputRef = useRef<HTMLInputElement | null>(null);
@@ -148,13 +176,29 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         };
     }, []);
 
+    const handleAiDialogClose = (_event: unknown, data: { open: boolean }): void => {
+        if (!data.open) {
+            setCurrentContext({
+                ...currentContext,
+                isAiRowVisible: false,
+            });
+        }
+    };
+
+    const closeAiDialog = (): void => {
+        setCurrentContext({
+            ...currentContext,
+            isAiRowVisible: false,
+        });
+    };
+
     // Focus AI input when AI row becomes visible
     useEffect(() => {
         if (currentContext.isAiRowVisible && aiInputRef.current) {
-            // Use setTimeout to ensure the Collapse animation has started
+            // Use setTimeout to ensure the Dialog has opened and rendered
             setTimeout(() => {
                 aiInputRef.current?.focus();
-            }, 200);
+            }, 100);
         }
     }, [currentContext.isAiRowVisible]);
 
@@ -164,115 +208,131 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     };
 
     return (
-        <div className="queryEditor">
-            {/* Optional AI prompt row */}
-            <Collapse visible={currentContext.isAiRowVisible} unmountOnExit>
-                <div className="aiRow">
-                    <Input
-                        ref={aiInputRef}
-                        contentAfter={<SendButton />}
-                        placeholder={l10n.t('Ask Copilot to generate the query for you...')}
-                    />
-                </div>
-            </Collapse>
+        <>
+            <div className="queryEditor">
+                <div className="filterRow">
+                    <div className="filterField">
+                        <MonacoAutoHeight
+                            height={'100%'}
+                            width={'100%'}
+                            language="json"
+                            adaptiveHeight={{
+                                enabled: true,
+                                maxLines: 10,
+                                minLines: 1,
+                                lineHeight: 19,
+                            }}
+                            onExecuteRequest={(input) => {
+                                onExecuteRequest(input);
+                            }}
+                            onMount={handleEditorDidMount}
+                            options={monacoOptions}
+                        />
+                    </div>
+                    <div className="enhancedToggle">
+                        <ToggleButton
+                            appearance="subtle"
+                            checked={isEnhancedQueryMode}
+                            onClick={() => {
+                                // Toggle enhanced mode
+                                setIsEnhancedQueryMode(!isEnhancedQueryMode);
 
-            <div className="filterRow">
-                <div className="filterField">
-                    <MonacoAutoHeight
-                        height={'100%'}
-                        width={'100%'}
-                        language="json"
-                        adaptiveHeight={{
-                            enabled: true,
-                            maxLines: 10,
-                            minLines: 1,
-                            lineHeight: 19,
-                        }}
-                        onExecuteRequest={(input) => {
-                            onExecuteRequest(input);
-                        }}
-                        onMount={handleEditorDidMount}
-                        options={monacoOptions}
-                    />
+                                // Temporarily hide scrollbars during the transition to improve UX responsiveness.
+                                // Note: The window-level scrollbar flickering (caused by cumulative fractional
+                                // pixel rounding) is now fixed by a media query on .collectionView. However,
+                                // this logic remains useful for making the transition feel snappier by hiding
+                                // intermediate scrollbar states in SlickGrid (Table/Tree views) during the
+                                // ~100ms debounce period before resize handlers complete and grids re-render.
+                                hideScrollbarsTemporarily();
+                            }}
+                            icon={isEnhancedQueryMode ? <PlaySettingsFilled /> : <PlaySettingsRegular />}
+                        ></ToggleButton>
+                    </div>
                 </div>
-                <div className="enhancedToggle">
-                    <ToggleButton
-                        appearance="subtle"
-                        checked={isEnhancedQueryMode}
-                        onClick={() => {
-                            // Toggle enhanced mode
-                            setIsEnhancedQueryMode(!isEnhancedQueryMode);
 
-                            // Temporarily hide scrollbars during the transition to improve UX responsiveness.
-                            // Note: The window-level scrollbar flickering (caused by cumulative fractional
-                            // pixel rounding) is now fixed by a media query on .collectionView. However,
-                            // this logic remains useful for making the transition feel snappier by hiding
-                            // intermediate scrollbar states in SlickGrid (Table/Tree views) during the
-                            // ~100ms debounce period before resize handlers complete and grids re-render.
-                            hideScrollbarsTemporarily();
-                        }}
-                        icon={isEnhancedQueryMode ? <PlaySettingsFilled /> : <PlaySettingsRegular />}
-                    ></ToggleButton>
-                </div>
+                <Collapse visible={isEnhancedQueryMode} unmountOnExit>
+                    <div className="enhancedInputArea">
+                        {/* Row 1: Project field (full width) */}
+                        <div className="fieldRow">
+                            <div className="field fieldWide">
+                                <Label size="small" weight="semibold">
+                                    {l10n.t('Project')}
+                                </Label>
+                                <MonacoAutoHeight
+                                    height={'100%'}
+                                    width={'100%'}
+                                    language="json"
+                                    adaptiveHeight={{
+                                        enabled: true,
+                                        maxLines: 5,
+                                        minLines: 1,
+                                        lineHeight: 19,
+                                    }}
+                                    options={monacoOptions}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Row 2: Sort (flexible) + Skip (fixed) + Limit (fixed) */}
+                        <div className="fieldRow">
+                            <div className="field fieldWide">
+                                <Label size="small" weight="semibold">
+                                    {l10n.t('Sort')}
+                                </Label>
+                                <MonacoAutoHeight
+                                    height={'100%'}
+                                    width={'100%'}
+                                    language="json"
+                                    adaptiveHeight={{
+                                        enabled: true,
+                                        maxLines: 5,
+                                        minLines: 1,
+                                        lineHeight: 19,
+                                    }}
+                                    options={monacoOptions}
+                                />
+                            </div>
+                            <div className="field fieldNarrow">
+                                <Label size="small" weight="semibold">
+                                    {l10n.t('Skip')}
+                                </Label>
+                                <Input type="number" className="queryEditorInput" />
+                            </div>
+                            <div className="field fieldNarrow">
+                                <Label size="small" weight="semibold">
+                                    {l10n.t('Limit')}
+                                </Label>
+                                <Input type="number" className="queryEditorInput" />
+                            </div>
+                        </div>
+                    </div>
+                </Collapse>
             </div>
 
-            <Collapse visible={isEnhancedQueryMode} unmountOnExit>
-                <div className="enhancedInputArea">
-                    {/* Row 1: Project field (full width) */}
-                    <div className="fieldRow">
-                        <div className="field fieldWide">
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Project')}
-                            </Label>
-                            <MonacoAutoHeight
-                                height={'100%'}
-                                width={'100%'}
-                                language="json"
-                                adaptiveHeight={{
-                                    enabled: true,
-                                    maxLines: 5,
-                                    minLines: 1,
-                                    lineHeight: 19,
-                                }}
-                                options={monacoOptions}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Row 2: Sort (flexible) + Skip (fixed) + Limit (fixed) */}
-                    <div className="fieldRow">
-                        <div className="field fieldWide">
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Sort')}
-                            </Label>
-                            <MonacoAutoHeight
-                                height={'100%'}
-                                width={'100%'}
-                                language="json"
-                                adaptiveHeight={{
-                                    enabled: true,
-                                    maxLines: 5,
-                                    minLines: 1,
-                                    lineHeight: 19,
-                                }}
-                                options={monacoOptions}
-                            />
-                        </div>
-                        <div className="field fieldNarrow">
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Skip')}
-                            </Label>
-                            <Input type="number" className="queryEditorInput" />
-                        </div>
-                        <div className="field fieldNarrow">
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Limit')}
-                            </Label>
-                            <Input type="number" className="queryEditorInput" />
-                        </div>
-                    </div>
-                </div>
-            </Collapse>
-        </div>
+            {/* AI Input Dialog */}
+            <Dialog open={currentContext.isAiRowVisible} onOpenChange={handleAiDialogClose}>
+                <DialogSurface className={styles.aiDialog}>
+                    <DialogTitle>{l10n.t('✨ Ask Copilot to generate the query for you...')}</DialogTitle>
+                    <DialogBody className={styles.aiDialogBody}>
+                        <Input
+                            ref={aiInputRef}
+                            contentAfter={<SendButton />}
+                            className={styles.aiInput}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                    // Handle Enter key for AI input submission
+                                    event.preventDefault();
+                                    // TODO: Add AI input submission logic
+                                } else if (event.key === 'Escape') {
+                                    // Handle Escape key to close dialog
+                                    event.preventDefault();
+                                    closeAiDialog();
+                                }
+                            }}
+                        />
+                    </DialogBody>
+                </DialogSurface>
+            </Dialog>
+        </>
     );
 };
