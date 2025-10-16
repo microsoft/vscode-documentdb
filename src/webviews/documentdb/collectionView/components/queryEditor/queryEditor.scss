@@ -113,6 +113,7 @@
                 &.fieldNarrow {
                     flex: 0 0 auto; // Don't grow or shrink
                     width: 10ch; // Fixed width
+                    row-gap: 5px; // Align with monaco container
 
                     input {
                         min-width: 0; // Allow input to shrink if needed
