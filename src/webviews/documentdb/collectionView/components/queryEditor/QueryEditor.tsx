@@ -175,12 +175,12 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             // Toggle enhanced mode
                             setIsEnhancedQueryMode(!isEnhancedQueryMode);
 
-                            // Hide scrollbars during the transition to prevent flickering.
-                            // When enhanced mode is enabled, the query area grows and initially pushes
-                            // elements down. Due to the necessary debounce on resize handlers (100ms),
-                            // there's a brief moment where a scrollbar appears on the entire window
-                            // before the Monaco editor and SlickGrid resize themselves. This simple
-                            // 500ms timeout workaround hides scrollbars during the entire transition.
+                            // Temporarily hide scrollbars during the transition to improve UX responsiveness.
+                            // Note: The window-level scrollbar flickering (caused by cumulative fractional
+                            // pixel rounding) is now fixed by a media query on .collectionView. However,
+                            // this logic remains useful for making the transition feel snappier by hiding
+                            // intermediate scrollbar states in SlickGrid (Table/Tree views) during the
+                            // ~100ms debounce period before resize handlers complete and grids re-render.
                             const resultsArea = document.querySelector('.resultsDisplayArea');
                             if (resultsArea) {
                                 resultsArea.classList.add('resizing');

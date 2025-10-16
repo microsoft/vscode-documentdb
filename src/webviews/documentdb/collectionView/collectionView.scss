@@ -22,6 +22,13 @@
 
     height: 100vh;
 
+    // Hide overflow only on larger viewports where the 1px scrollbar is clearly a rounding error
+    // caused by cumulative fractional pixel rounding (e.g., 34.799px + 41.904px + ... = 645px vs 644px viewport).
+    // On smaller screens (< 400px), keep scrollbars visible for accessibility and legitimate content overflow.
+    @media (min-height: 400px) {
+        overflow-y: hidden;
+    }
+
     .toolbarMainView {
         padding-top: 10px;
 
@@ -55,12 +62,14 @@
 
         //background-color: aqua; // used to invstigate layout issues
 
-        // Temporarily hide overflow during QueryEditor transitions to prevent scrollbar flickering.
-        // This class is applied when the enhanced query mode is toggled. The !important is needed
-        // because child components (Monaco editor, SlickGrid) may have inline styles that would
-        // otherwise override this. The overflow must be hidden on the resultsDisplayArea itself
-        // AND all its children to prevent window-level scrollbars from appearing during the
-        // ~100ms debounce period before resize handlers complete.
+        // Temporarily hide overflow during QueryEditor transitions to improve UX responsiveness.
+        // This class is applied when the enhanced query mode is toggled. While the window-level
+        // scrollbar flickering is now fixed by the media query on .collectionView, this logic
+        // remains useful for speeding up scrollbar re-rendering in SlickGrid (Table/Tree views).
+        // The !important is needed because child components (Monaco editor, SlickGrid) may have
+        // inline styles that would override this. Hiding overflow for 500ms makes the transition
+        // feel snappier by preventing intermediate scrollbar states during the ~100ms debounce
+        // period before resize handlers complete.
         &.resizing {
             overflow: hidden !important;
 
