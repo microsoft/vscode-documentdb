@@ -25,6 +25,7 @@
  * └────────────────────────────────────────────────┘
  */
 .queryEditor {
+    position: relative; // Required for absolute positioning of AI overlay
     display: flex;
     flex-direction: column;
     row-gap: 10px;
@@ -32,15 +33,51 @@
     max-width: 100%; // Prevent overflow
 
     /**
-     * AI Row
+     * Query Content Container
      *
-     * Layout: Single Input with icon decorations
-     * - Shows/hides with Collapse animation
+     * Contains the regular query inputs (filter + enhanced area)
+     * When AI mode is enabled, content is hidden but space is preserved
      */
-    .aiRow {
+    .queryContent {
         display: flex;
         flex-direction: column;
-        width: 100%;
+        row-gap: 10px;
+
+        &.hidden {
+            visibility: hidden; // Hide but keep space
+        }
+    }
+
+    /**
+     * AI Input Overlay
+     *
+     * Absolutely positioned overlay that appears with Scale animation
+     * Centers the AI input in the space occupied by regular query inputs
+     */
+    .aiInputOverlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        // padding: 20px;
+        background: var(--colorNeutralBackground1); // Semi-transparent backdrop
+        backdrop-filter: blur(2px); // Subtle blur effect
+        border-radius: var(--borderRadiusMedium);
+
+        .aiInputContainer {
+            width: 100%; // Takes full width of overlay (minus padding)
+            // max-width removed - input spans full available width
+
+            // Force Fluent UI Input to take full width
+            input,
+            .fui-Input {
+                width: 100%;
+            }
+        }
     }
 
     /**

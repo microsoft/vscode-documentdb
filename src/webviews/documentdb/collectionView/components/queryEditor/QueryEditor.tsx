@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Button, Input, Label, ToggleButton } from '@fluentui/react-components';
-import { Collapse } from '@fluentui/react-motion-components-preview';
+import { Collapse, Scale } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { useContext, useEffect, useRef, useState, type JSX } from 'react';
 // eslint-disable-next-line import/no-internal-modules
@@ -165,114 +165,119 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
     return (
         <div className="queryEditor">
-            {/* Optional AI prompt row */}
-            <Collapse visible={currentContext.isAiRowVisible} unmountOnExit>
-                <div className="aiRow">
-                    <Input
-                        ref={aiInputRef}
-                        contentAfter={<SendButton />}
-                        placeholder={l10n.t('Ask Copilot to generate the query for you...')}
-                    />
-                </div>
-            </Collapse>
+            {/* Regular query content - hidden but space preserved when AI is enabled */}
+            <div className={currentContext.isAiRowVisible ? 'queryContent hidden' : 'queryContent'}>
+                <div className="filterRow">
+                    <div className="filterField">
+                        <MonacoAutoHeight
+                            height={'100%'}
+                            width={'100%'}
+                            language="json"
+                            adaptiveHeight={{
+                                enabled: true,
+                                maxLines: 10,
+                                minLines: 1,
+                                lineHeight: 19,
+                            }}
+                            onExecuteRequest={(input) => {
+                                onExecuteRequest(input);
+                            }}
+                            onMount={handleEditorDidMount}
+                            options={monacoOptions}
+                        />
+                    </div>
+                    <div className="enhancedToggle">
+                        <ToggleButton
+                            appearance="subtle"
+                            checked={isEnhancedQueryMode}
+                            onClick={() => {
+                                // Toggle enhanced mode
+                                setIsEnhancedQueryMode(!isEnhancedQueryMode);
 
-            <div className="filterRow">
-                <div className="filterField">
-                    <MonacoAutoHeight
-                        height={'100%'}
-                        width={'100%'}
-                        language="json"
-                        adaptiveHeight={{
-                            enabled: true,
-                            maxLines: 10,
-                            minLines: 1,
-                            lineHeight: 19,
-                        }}
-                        onExecuteRequest={(input) => {
-                            onExecuteRequest(input);
-                        }}
-                        onMount={handleEditorDidMount}
-                        options={monacoOptions}
-                    />
+                                // Temporarily hide scrollbars during the transition to improve UX responsiveness.
+                                // Note: The window-level scrollbar flickering (caused by cumulative fractional
+                                // pixel rounding) is now fixed by a media query on .collectionView. However,
+                                // this logic remains useful for making the transition feel snappier by hiding
+                                // intermediate scrollbar states in SlickGrid (Table/Tree views) during the
+                                // ~100ms debounce period before resize handlers complete and grids re-render.
+                                hideScrollbarsTemporarily();
+                            }}
+                            icon={isEnhancedQueryMode ? <PlaySettingsFilled /> : <PlaySettingsRegular />}
+                        ></ToggleButton>
+                    </div>
                 </div>
-                <div className="enhancedToggle">
-                    <ToggleButton
-                        appearance="subtle"
-                        checked={isEnhancedQueryMode}
-                        onClick={() => {
-                            // Toggle enhanced mode
-                            setIsEnhancedQueryMode(!isEnhancedQueryMode);
 
-                            // Temporarily hide scrollbars during the transition to improve UX responsiveness.
-                            // Note: The window-level scrollbar flickering (caused by cumulative fractional
-                            // pixel rounding) is now fixed by a media query on .collectionView. However,
-                            // this logic remains useful for making the transition feel snappier by hiding
-                            // intermediate scrollbar states in SlickGrid (Table/Tree views) during the
-                            // ~100ms debounce period before resize handlers complete and grids re-render.
-                            hideScrollbarsTemporarily();
-                        }}
-                        icon={isEnhancedQueryMode ? <PlaySettingsFilled /> : <PlaySettingsRegular />}
-                    ></ToggleButton>
-                </div>
+                <Collapse visible={isEnhancedQueryMode} unmountOnExit>
+                    <div className="enhancedInputArea">
+                        {/* Row 1: Project field (full width) */}
+                        <div className="fieldRow">
+                            <div className="field fieldWide">
+                                <Label size="small" weight="semibold">
+                                    {l10n.t('Project')}
+                                </Label>
+                                <MonacoAutoHeight
+                                    height={'100%'}
+                                    width={'100%'}
+                                    language="json"
+                                    adaptiveHeight={{
+                                        enabled: true,
+                                        maxLines: 5,
+                                        minLines: 1,
+                                        lineHeight: 19,
+                                    }}
+                                    options={monacoOptions}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Row 2: Sort (flexible) + Skip (fixed) + Limit (fixed) */}
+                        <div className="fieldRow">
+                            <div className="field fieldWide">
+                                <Label size="small" weight="semibold">
+                                    {l10n.t('Sort')}
+                                </Label>
+                                <MonacoAutoHeight
+                                    height={'100%'}
+                                    width={'100%'}
+                                    language="json"
+                                    adaptiveHeight={{
+                                        enabled: true,
+                                        maxLines: 5,
+                                        minLines: 1,
+                                        lineHeight: 19,
+                                    }}
+                                    options={monacoOptions}
+                                />
+                            </div>
+                            <div className="field fieldNarrow">
+                                <Label size="small" weight="semibold">
+                                    {l10n.t('Skip')}
+                                </Label>
+                                <Input type="number" className="queryEditorInput" />
+                            </div>
+                            <div className="field fieldNarrow">
+                                <Label size="small" weight="semibold">
+                                    {l10n.t('Limit')}
+                                </Label>
+                                <Input type="number" className="queryEditorInput" />
+                            </div>
+                        </div>
+                    </div>
+                </Collapse>
             </div>
 
-            <Collapse visible={isEnhancedQueryMode} unmountOnExit>
-                <div className="enhancedInputArea">
-                    {/* Row 1: Project field (full width) */}
-                    <div className="fieldRow">
-                        <div className="field fieldWide">
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Project')}
-                            </Label>
-                            <MonacoAutoHeight
-                                height={'100%'}
-                                width={'100%'}
-                                language="json"
-                                adaptiveHeight={{
-                                    enabled: true,
-                                    maxLines: 5,
-                                    minLines: 1,
-                                    lineHeight: 19,
-                                }}
-                                options={monacoOptions}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Row 2: Sort (flexible) + Skip (fixed) + Limit (fixed) */}
-                    <div className="fieldRow">
-                        <div className="field fieldWide">
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Sort')}
-                            </Label>
-                            <MonacoAutoHeight
-                                height={'100%'}
-                                width={'100%'}
-                                language="json"
-                                adaptiveHeight={{
-                                    enabled: true,
-                                    maxLines: 5,
-                                    minLines: 1,
-                                    lineHeight: 19,
-                                }}
-                                options={monacoOptions}
-                            />
-                        </div>
-                        <div className="field fieldNarrow">
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Skip')}
-                            </Label>
-                            <Input type="number" className="queryEditorInput" />
-                        </div>
-                        <div className="field fieldNarrow">
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Limit')}
-                            </Label>
-                            <Input type="number" className="queryEditorInput" />
-                        </div>
+            {/* AI input overlay - absolutely positioned, centered with Scale animation */}
+            <Scale visible={currentContext.isAiRowVisible}>
+                <div className="aiInputOverlay">
+                    <div className="aiInputContainer">
+                        <Input
+                            ref={aiInputRef}
+                            contentAfter={<SendButton />}
+                            placeholder={l10n.t('Ask Copilot to generate the query for you...')}
+                        />
                     </div>
                 </div>
-            </Collapse>
+            </Scale>
         </div>
     );
 };
