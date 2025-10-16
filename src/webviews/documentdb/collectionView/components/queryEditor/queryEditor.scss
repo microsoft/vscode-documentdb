@@ -32,11 +32,23 @@
     max-width: 100%; // Prevent overflow
 
     /**
+     * AI Row
+     *
+     * Layout: Single Input with icon decorations
+     * - Shows/hides with Collapse animation
+     */
+    .aiRow {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    /**
      * Filter Row
      *
-     * Layout: [Filter Field (flexible)] [Toggle Button (fixed)]
+     * Layout: [Filter Field (flexible)] [Enhanced Toggle] [AI Toggle]
      * - Filter field takes all available space
-     * - Toggle button is fixed size on the right
+     * - Toggle buttons are fixed size on the right
      */
     .filterRow {
         display: flex;
@@ -53,7 +65,8 @@
             flex-direction: column;
         }
 
-        .enhancedToggle {
+        .enhancedToggle,
+        .aiToggle {
             flex: 0 0 auto; // Don't grow or shrink, size based on content
             display: flex;
             padding-top: 2px; // Align with monaco container

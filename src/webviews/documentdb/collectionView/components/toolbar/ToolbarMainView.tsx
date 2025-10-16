@@ -12,6 +12,7 @@ import {
     Toolbar,
     ToolbarButton,
     ToolbarDivider,
+    ToolbarToggleButton,
     Tooltip,
 } from '@fluentui/react-components';
 import {
@@ -21,6 +22,8 @@ import {
     CommentCheckmarkRegular,
     EmojiSmileSlightRegular,
     PlayRegular,
+    SparkleFilled,
+    SparkleRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
@@ -131,8 +134,24 @@ const ToolbarQueryOperations = (): JSX.Element => {
             });
     };
 
+    const checkedValues = {
+        aiToggle: currentContext.isAiRowVisible ? ['copilot'] : [],
+    };
+
+    const handleCheckedValueChange: React.ComponentProps<typeof Toolbar>['onCheckedValueChange'] = (
+        _e,
+        { name, checkedItems },
+    ) => {
+        if (name === 'aiToggle') {
+            setCurrentContext((prev) => ({
+                ...prev,
+                isAiRowVisible: checkedItems.includes('copilot'),
+            }));
+        }
+    };
+
     return (
-        <Toolbar size="small">
+        <Toolbar size="small" checkedValues={checkedValues} onCheckedValueChange={handleCheckedValueChange}>
             <ToolbarButton
                 aria-label={l10n.t('Execute the find query')}
                 disabled={currentContext.isLoading}
@@ -142,6 +161,18 @@ const ToolbarQueryOperations = (): JSX.Element => {
             >
                 {l10n.t('Find Query')}
             </ToolbarButton>
+
+            <ToolbarDividerTransparent />
+
+            <ToolbarToggleButton
+                appearance="subtle"
+                aria-label={l10n.t('Toggle Copilot')}
+                icon={currentContext.isAiRowVisible ? <SparkleFilled /> : <SparkleRegular />}
+                name="aiToggle"
+                value="copilot"
+            >
+                {l10n.t('Copilot')}
+            </ToolbarToggleButton>
 
             <ToolbarDividerTransparent />
 

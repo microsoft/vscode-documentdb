@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Input, Label, ToggleButton } from '@fluentui/react-components';
+import { Button, Input, Label, ToggleButton } from '@fluentui/react-components';
 import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { useContext, useEffect, useRef, useState, type JSX } from 'react';
@@ -12,7 +12,7 @@ import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
 import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
 
-import { PlaySettingsFilled, PlaySettingsRegular } from '@fluentui/react-icons';
+import { PlaySettingsFilled, PlaySettingsRegular, SendRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { CollectionViewContext } from '../../collectionViewContext';
@@ -24,7 +24,7 @@ interface QueryEditorProps {
 }
 
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
-    const [, setCurrentContext] = useContext(CollectionViewContext);
+    const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
@@ -143,11 +143,48 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 schemaAbortControllerRef.current.abort();
                 schemaAbortControllerRef.current = null;
             }
+            if (scrollbarTimeoutRef.current) {
+                clearTimeout(scrollbarTimeoutRef.current);
+                scrollbarTimeoutRef.current = null;
+            }
         };
     }, []);
 
+    const hideScrollbarsTemporarily = () => {
+        const resultsArea = document.querySelector('.resultsDisplayArea');
+        if (resultsArea) {
+            resultsArea.classList.add('resizing');
+
+            // Clear any existing timeout
+            if (scrollbarTimeoutRef.current) {
+                clearTimeout(scrollbarTimeoutRef.current);
+            }
+
+            // Show scrollbars after 500ms
+            scrollbarTimeoutRef.current = setTimeout(() => {
+                resultsArea.classList.remove('resizing');
+                scrollbarTimeoutRef.current = null;
+            }, 500);
+        }
+    };
+
+    // Helper button component for the AI input's contentAfter slot
+    const SendButton: React.FC = () => {
+        return <Button appearance="transparent" icon={<SendRegular />} size="small" aria-label={l10n.t('Submit')} />;
+    };
+
     return (
         <div className="queryEditor">
+            {/* Optional AI prompt row */}
+            <Collapse visible={currentContext.isAiRowVisible} unmountOnExit>
+                <div className="aiRow">
+                    <Input
+                        contentAfter={<SendButton />}
+                        placeholder={l10n.t('Ask Copilot to generate the query for you...')}
+                    />
+                </div>
+            </Collapse>
+
             <div className="filterRow">
                 <div className="filterField">
                     <MonacoAutoHeight
@@ -181,20 +218,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             // this logic remains useful for making the transition feel snappier by hiding
                             // intermediate scrollbar states in SlickGrid (Table/Tree views) during the
                             // ~100ms debounce period before resize handlers complete and grids re-render.
-                            const resultsArea = document.querySelector('.resultsDisplayArea');
-                            if (resultsArea) {
-                                resultsArea.classList.add('resizing');
-
-                                // Clear any existing timeout
-                                if (scrollbarTimeoutRef.current) {
-                                    clearTimeout(scrollbarTimeoutRef.current);
-                                }
-
-                                // Show scrollbars after 500ms
-                                scrollbarTimeoutRef.current = setTimeout(() => {
-                                    resultsArea.classList.remove('resizing');
-                                }, 500);
-                            }
+                            hideScrollbarsTemporarily();
                         }}
                         icon={isEnhancedQueryMode ? <PlaySettingsFilled /> : <PlaySettingsRegular />}
                     ></ToggleButton>
