@@ -62,49 +62,19 @@
          */
         &.ai-active {
             .fui-Input {
-                // Override the ::after pseudo-element that Fluent UI uses for focus border
+                position: relative;
+                border-bottom-color: transparent !important;
+                border-color: transparent !important;
+
                 &::after {
-                    // Keep the original structure but override the border styling
-                    content: '' !important;
-                    position: absolute !important;
-                    left: 0 !important;
-                    bottom: 0 !important;
-                    right: 0 !important;
-                    height: 3px !important; // Slightly taller for better visibility
-
-                    // Remove the default border
-                    border: none !important;
-                    border-radius: var(--borderRadiusMedium) !important;
-
-                    // Solid color background for testing
-                    background: var(--colorCompoundBrandStroke) !important;
-
-                    // Remove any transition that might interfere with animation
+                    opacity: 0 !important;
+                    border-bottom: none !important;
+                    background: transparent !important;
+                    height: 3px !important;
+                    transform: none !important;
                     transition: none !important;
-
-                    // Force hardware acceleration
-                    will-change: opacity, width !important;
-
-                    // Test with multiple animations: opacity (we know works) + width
-                    animation: aiTest 2s ease-in-out infinite !important;
                 }
             }
-        }
-    }
-
-    // Test animation: combine opacity (works) with width (to test dimension changes)
-    @keyframes aiTest {
-        0% {
-            opacity: 1;
-            right: 0;
-        }
-        50% {
-            opacity: 0.5;
-            right: 30%;
-        }
-        100% {
-            opacity: 1;
-            right: 0;
         }
     }
 
