@@ -16,9 +16,9 @@ import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/b
 import { PlaySettingsFilled, PlaySettingsRegular, SendRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
+import { MonacoAutoHeight } from '../../../../components/MonacoAutoHeight';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
-import { MonacoAutoHeight } from '../MonacoAutoHeight';
 import './queryEditor.scss';
 
 interface QueryEditorProps {

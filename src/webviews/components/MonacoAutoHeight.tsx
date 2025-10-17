@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type EditorProps } from '@monaco-editor/react';
-import { MonacoEditor } from '../../../MonacoEditor';
+import { MonacoEditor } from './MonacoEditor';
 
 // eslint-disable-next-line import/no-internal-modules
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';

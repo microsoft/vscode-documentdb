@@ -9,7 +9,7 @@ import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 
 import { useUncontrolledFocus } from '@fluentui/react-components';
 import { useEffect } from 'react';
-import { useThemeState } from './theme/state/ThemeContext';
+import { useThemeState } from '../theme/state/ThemeContext';
 
 loader.config({ monaco: monacoEditor });
 

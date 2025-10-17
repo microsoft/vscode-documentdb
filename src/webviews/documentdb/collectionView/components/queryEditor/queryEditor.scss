@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-@use '../../../sharedStyles.scss';
+@use '../../../../index.scss';
 
 /**
  * Query Editor Component
@@ -187,7 +187,7 @@
      * 3. Ensure inner input has no conflicting styles
      */
     :global(.qaueryEditorInput) {
-        @include sharedStyles.input-border;
+        @include index.input-border;
         background-color: inherit;
         padding: 4px 8px;
 

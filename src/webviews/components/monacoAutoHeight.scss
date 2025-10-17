@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-@use '../../sharedStyles.scss';
+@use '../index.scss';
 
 /**
  * Monaco Editor Auto Height Container
@@ -13,7 +13,7 @@
  */
 .monacoAutoHeightContainer {
     // Apply complete Fluent UI input styling
-    @include sharedStyles.fluent-input;
+    @include index.fluent-input;
 
     // Monaco-specific tweaks: adjust right padding for scrollbar
     padding-right: 4px;
