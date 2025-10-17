@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Input, Label, ToggleButton } from '@fluentui/react-components';
+import { Button, Input, Label, ProgressBar, ToggleButton } from '@fluentui/react-components';
 import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { useContext, useEffect, useRef, useState, type JSX } from 'react';
@@ -169,17 +169,37 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             {/* Optional AI prompt row */}
             <Collapse visible={currentContext.isAiRowVisible} unmountOnExit>
                 <div className={`aiRow${isAiActive ? ' ai-active' : ''}`}>
-                    <Input
-                        ref={aiInputRef}
-                        contentAfter={<SendButton />}
-                        placeholder={l10n.t('Ask Copilot to generate the query for you...')}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                                // Toggle the ai-active state for testing
-                                setIsAiActive((prev) => !prev);
-                            }
-                        }}
-                    />
+                    <div style={{ position: 'relative', width: '100%' }}>
+                        <Input
+                            ref={aiInputRef}
+                            contentAfter={<SendButton />}
+                            appearance="underline"
+                            style={{ width: '100%' }}
+                            placeholder={l10n.t('Ask Copilot to generate the query for you...')}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                    // Toggle the ai-active state for testing
+                                    setIsAiActive((prev) => !prev);
+                                }
+                            }}
+                        />
+                        {isAiActive ? (
+                            <ProgressBar
+                                thickness="large"
+                                shape="rounded"
+                                className="progressBar"
+                                style={{
+                                    position: 'absolute',
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    top: 'auto',
+                                    pointerEvents: 'none',
+                                }}
+                                aria-hidden={true}
+                            />
+                        ) : null}
+                    </div>
                 </div>
             </Collapse>
 
