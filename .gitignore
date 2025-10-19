@@ -273,7 +273,7 @@ stats.json
 
 .DS_Store
 
-# AI Testing Framework results
+# AI Testing Framework results (but allow examples directory)
 test-results/
-sample-config.json
-sample-test-cases.csv
+/sample-config.json
+/sample-test-cases.csv

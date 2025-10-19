@@ -1,0 +1,11 @@
+id,collection,query,expected_result,notes
+test_range_query,users,"db.users.find({age: {$gt: 25}})","Should recommend index on age field","Basic range query on numeric field"
+test_sort_query,orders,"db.orders.find({status: 'pending'}).sort({createdAt: -1})","Should recommend compound index on status and createdAt","Query with filter and sort"
+test_aggregation,products,"db.products.aggregate([{$match: {category: 'electronics'}}, {$group: {_id: '$brand', total: {$sum: 1}}}])","Should recommend index on category field","Aggregation pipeline with match stage"
+test_text_search,articles,"db.articles.find({title: {$regex: 'mongodb', $options: 'i'}})","May suggest text index or regular index","Text search pattern"
+test_compound_filter,customers,"db.customers.find({country: 'USA', active: true, age: {$gte: 18}})","Should recommend compound index","Multiple filter conditions"
+test_count_query,sessions,"db.sessions.count({userId: '12345', active: true})","Should recommend compound index on userId and active","Count query with filters"
+test_projection,employees,"db.employees.find({department: 'engineering'}, {name: 1, salary: 1})","Should recommend index on department with covered query suggestion","Query with projection"
+test_nested_field,events,"db.events.find({'user.location.country': 'USA'})","Should recommend index on nested field","Nested field query"
+test_array_query,tags,"db.tags.find({tags: {$in: ['mongodb', 'database']}})","Should recommend index on tags array field","Array field with $in operator"
+test_geospatial,locations,"db.locations.find({location: {$near: {$geometry: {type: 'Point', coordinates: [-73.9667, 40.78]}, $maxDistance: 5000}}})","Should recommend 2dsphere index on location field","Geospatial query"

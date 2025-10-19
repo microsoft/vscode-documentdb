@@ -1,0 +1,14 @@
+{
+  "connection": {
+    "clusterId": "your-cluster-id",
+    "databaseName": "sample_database"
+  },
+  "model": {
+    "preferredModel": "gpt-4",
+    "promptFilePath": "./prompts/index-advisor.txt"
+  },
+  "output": {
+    "outputDir": "./test-results",
+    "filePrefix": "index-advisor-test"
+  }
+}
