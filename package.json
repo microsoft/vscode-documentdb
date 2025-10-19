@@ -67,6 +67,7 @@
     "prettier-fix": "prettier -w \"(src|test|l10n|grammar|docs)/**/*.@(js|ts|jsx|tsx|json)\" \"./*.@(js|ts|jsx|tsx|json)\"",
     "pretest": "npm run build",
     "test": "vscode-test",
+    "test:ai-enhanced": "npm run build && node scripts/runAITests.js",
     "jesttest": "jest",
     "update-grammar": "antlr4ts -visitor ./grammar/mongo.g4 -o src/documentdb/grammar",
     "webpack-dev": "rimraf ./dist && npm run webpack-dev-ext && npm run webpack-dev-wv",

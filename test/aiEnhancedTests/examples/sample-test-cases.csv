@@ -1,0 +1,6 @@
+Collection Name,Query,Expected Result
+users,db.users.find({'age': {$gt: 25}}).sort({'name': -1}).limit(10),Should suggest index on age and name fields for better performance
+products,db.products.find({'category': 'electronics', 'price': {$lt: 1000}}),Should suggest compound index on category and price
+orders,"db.orders.aggregate([{$match: {'status': 'completed'}}, {$group: {_id: '$customerId', total: {$sum: '$amount'}}}])",Should suggest index on status field for faster aggregation
+inventory,db.inventory.countDocuments({'stock': {$lt: 10}}),Should suggest index on stock field for efficient counting
+customers,db.customers.find({'city': 'Seattle', 'active': true}).project({'name': 1, 'email': 1}),Should suggest compound index on city and active fields

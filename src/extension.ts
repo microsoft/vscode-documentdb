@@ -25,6 +25,8 @@ import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi } from '../api/src';
+import { generateQuery } from './commands/llmEnhancedCommands/generateCommands';
+import { detectCommandType, optimizeQuery } from './commands/llmEnhancedCommands/optimizeCommands';
 import { MigrationService } from './services/migrationServices';
 
 export async function activateInternal(
@@ -87,6 +89,16 @@ export async function activateInternal(
                 );
             },
         },
+        // Expose testing API only when environment variable is set
+        ...(process.env.VSCODE_DOCUMENTDB_TESTING_API === 'true'
+            ? {
+                  testing: {
+                      optimizeQuery,
+                      generateQuery,
+                      detectCommandType,
+                  },
+              }
+            : {}),
     };
 
     // Return both the DocumentDB API and Azure Extension API

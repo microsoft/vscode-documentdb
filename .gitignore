@@ -273,3 +273,4 @@ stats.json
 
 .DS_Store
 
+test/aiEnhancedTests/results/*.csv

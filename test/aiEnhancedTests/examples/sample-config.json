@@ -1,0 +1,9 @@
+{
+  "connectionString": "mongodb://localhost:27017",
+  "clusterId": "your-cluster-id-here",
+  "databaseName": "testdb",
+  "preferredModel": "gpt-4",
+  "csvFilePath": "./test/aiEnhancedTests/examples/sample-test-cases.csv",
+  "outputCsvPath": "./test/aiEnhancedTests/results/test-results.csv",
+  "warmupCount": 3
+}

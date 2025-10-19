@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type MigrationApi } from './migration/migrationApi';
+import { type TestingApi } from './testing/testingApi';
 
 /**
  * The main API interface for the DocumentDB extension
@@ -18,4 +19,9 @@ export interface DocumentDBExtensionApi {
      * Migration-related APIs
      */
     readonly migration: MigrationApi;
+
+    /**
+     * Testing-related APIs (only available in test mode)
+     */
+    readonly testing?: TestingApi;
 }

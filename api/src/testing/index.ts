@@ -3,8 +3,4 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Re-export all public APIs
-export * from './extensionApi';
-export * from './migration';
-export * from './testing';
-export * from './utils/getApi';
+export * from './testingApi';
