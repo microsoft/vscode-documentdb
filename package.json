@@ -83,7 +83,9 @@
     "l10n:check": "node l10n/scripts/check.l10n.mjs",
     "l10n:auto": "cross-env AZURE_TRANSLATOR_KEY= cross-env AZURE_TRANSLATOR_REGION= npx @vscode/l10n-dev generate-azure --outDir ./l10n ./l10n/bundle.l10n.json ./package.nls.json",
     "l10n:export": "npx @vscode/l10n-dev generate-xlf ./l10n/bundle.l10n.json --outFile vscode-documentdb.xlf",
-    "l10n:import": "npx @vscode/l10n-dev import-xlf ./translations.xlf"
+    "l10n:import": "npx @vscode/l10n-dev import-xlf ./translations.xlf",
+    "ai-test": "npm run build && node out/src/testing/testRunner.js",
+    "ai-test:samples": "node out/src/testing/testRunner.js --generate-samples"
   },
   "devDependencies": {
     "@eslint/js": "~9.31.0",
