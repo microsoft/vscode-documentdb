@@ -51,7 +51,7 @@ export const InputWithProgress = forwardRef<HTMLInputElement, InputWithProgressP
     ({ indeterminateProgress, ...inputProps }, ref): JSX.Element => {
         return (
             <div className={`inputWithProgress${indeterminateProgress ? ' progress-active' : ''}`}>
-                <InputWithHistory ref={ref} {...inputProps} style={{ width: '100%', ...inputProps.style }} />
+                <InputWithHistory ref={ref} {...inputProps} style={{ ...inputProps.style, width: '100%' }} />
                 {indeterminateProgress ? (
                     <ProgressBar
                         thickness="large"
