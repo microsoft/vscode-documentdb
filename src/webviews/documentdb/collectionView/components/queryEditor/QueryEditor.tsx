@@ -40,6 +40,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     const [limitValue, setLimitValue] = useState(0);
     const [aiPromptValue, setAiPromptValue] = useState('');
 
+    // AI prompt history (survives hide/show of AI input)
+    const [aiPromptHistory, setAiPromptHistory] = useState<string[]>([]);
+
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
     const aiInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -317,6 +320,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         ref={aiInputRef}
                         value={aiPromptValue}
                         onChange={(_e, data) => setAiPromptValue(data?.value ?? '')}
+                        history={aiPromptHistory}
+                        onHistoryChange={setAiPromptHistory}
+                        maxHistorySize={100}
                         contentAfter={<SendButton />}
                         appearance="underline"
                         placeholder={l10n.t('Ask Copilot to generate the query for you')}
@@ -399,6 +405,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             setSkipValue(0);
                             setLimitValue(0);
                             setAiPromptValue('');
+                            setAiPromptHistory([]); // Clear AI prompt history
                         }}
                     />
                 </div>

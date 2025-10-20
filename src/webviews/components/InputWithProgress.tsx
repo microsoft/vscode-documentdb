@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Input, ProgressBar, type InputProps } from '@fluentui/react-components';
+import { ProgressBar } from '@fluentui/react-components';
 import { forwardRef, type JSX } from 'react';
+import { InputWithHistory, type InputWithHistoryProps } from './InputWithHistory';
 import './inputWithProgress.scss';
 
-interface InputWithProgressProps extends InputProps {
+interface InputWithProgressProps extends InputWithHistoryProps {
     /**
      * When `true`, displays an indeterminate progress bar overlaid at the bottom of the input
      * and hides Fluent UI's default underline border to prevent visual conflicts.
@@ -18,10 +19,11 @@ interface InputWithProgressProps extends InputProps {
 /**
  * InputWithProgress Component
  *
- * A wrapper around Fluent UI's `Input` component that adds optional indeterminate progress indication.
+ * A wrapper around `InputWithHistory` that adds optional indeterminate progress indication.
+ * Combines history navigation features with visual progress feedback.
  *
  * Features:
- * - Transparently passes through all standard `InputProps` (placeholder, appearance, event handlers, etc.)
+ * - All features from `InputWithHistory` (arrow up/down navigation, draft preservation, etc.)
  * - When `indeterminateProgress` is `true`:
  *   - Renders a rounded progress bar overlaid at the bottom of the input
  *   - Automatically hides Fluent UI's default underline and borders to prevent visual overlap
@@ -29,16 +31,18 @@ interface InputWithProgressProps extends InputProps {
  * - Supports `ref` forwarding for direct access to the underlying `<input>` element
  *
  * Use Cases:
- * - Showing async operation feedback (e.g., AI query processing, autocomplete loading)
- * - Indicating in-progress states without blocking user input
+ * - AI query input with history and loading state
+ * - Command input with async operation feedback
+ * - Search bars with autocomplete and history
  *
  * @example
  * ```tsx
  * <InputWithProgress
  *   ref={inputRef}
- *   placeholder="Type something..."
+ *   placeholder="Ask Copilot..."
  *   appearance="underline"
  *   indeterminateProgress={isLoading}
+ *   initialHistory={previousQueries}
  *   onKeyDown={(e) => handleKeyPress(e)}
  * />
  * ```
@@ -47,7 +51,7 @@ export const InputWithProgress = forwardRef<HTMLInputElement, InputWithProgressP
     ({ indeterminateProgress, ...inputProps }, ref): JSX.Element => {
         return (
             <div className={`inputWithProgress${indeterminateProgress ? ' progress-active' : ''}`}>
-                <Input ref={ref} {...inputProps} style={{ width: '100%', ...inputProps.style }} />
+                <InputWithHistory ref={ref} {...inputProps} style={{ width: '100%', ...inputProps.style }} />
                 {indeterminateProgress ? (
                     <ProgressBar
                         thickness="large"
