@@ -13,7 +13,7 @@ import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
 import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
 
-import { PlaySettingsFilled, PlaySettingsRegular, SendRegular } from '@fluentui/react-icons';
+import { ArrowResetRegular, PlaySettingsFilled, PlaySettingsRegular, SendRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
@@ -225,6 +225,26 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         }
     }, [sortValue]);
 
+    // Add keydown event listeners to detect Ctrl+Enter for skip and limit inputs
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                onExecuteRequest();
+            }
+        };
+
+        const skipInput = document.querySelector('.queryEditorInput.skip');
+        const limitInput = document.querySelector('.queryEditorInput.limit');
+
+        skipInput?.addEventListener('keydown', handleKeyDown);
+        limitInput?.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            skipInput?.removeEventListener('keydown', handleKeyDown);
+            limitInput?.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [onExecuteRequest]);
+
     // Handler for AI query generation
     const handleGenerateQuery = async () => {
         if (!aiPromptValue.trim()) {
@@ -302,9 +322,12 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         placeholder={l10n.t('Ask Copilot to generate the query for you')}
                         indeterminateProgress={isAiActive}
                         onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                                // Generate query on Enter
+                            if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey) {
+                                // Generate query on Enter (without Ctrl/Cmd)
                                 void handleGenerateQuery();
+                            } else if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                                // Execute query on Ctrl+Enter / Cmd+Enter
+                                onExecuteRequest();
                             } else if (event.key === 'Escape') {
                                 // ESC key - hide AI area and reset active state
                                 setIsAiActive(false);
@@ -313,6 +336,8 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     ...prev,
                                     isAiRowVisible: false,
                                 }));
+                                // Give focus to the filter editor
+                                filterEditorRef.current?.focus();
                             }
                         }}
                     />
@@ -344,7 +369,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         options={monacoOptions}
                     />
                 </div>
-                <div className="enhancedToggle">
+                <div className="queryEditorActions">
                     <ToggleButton
                         appearance="subtle"
                         checked={isEnhancedQueryMode}
@@ -362,6 +387,20 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         }}
                         icon={isEnhancedQueryMode ? <PlaySettingsFilled /> : <PlaySettingsRegular />}
                     ></ToggleButton>
+
+                    <Button
+                        appearance="subtle"
+                        icon={<ArrowResetRegular />}
+                        onClick={() => {
+                            // Reset all query-related states
+                            setFilterValue('{  }');
+                            setProjectValue('{  }');
+                            setSortValue('{  }');
+                            setSkipValue(0);
+                            setLimitValue(0);
+                            setAiPromptValue('');
+                        }}
+                    />
                 </div>
             </div>
 
@@ -427,9 +466,12 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             </Label>
                             <Input
                                 type="number"
-                                className="queryEditorInput"
+                                className="queryEditorInput skip"
                                 value={skipValue.toString()}
-                                onChange={(_e, data) => setSkipValue(parseInt(data.value, 10) || 0)}
+                                onChange={(_e, data) => {
+                                    const value = parseInt(data.value, 10);
+                                    setSkipValue(value >= 0 ? value : 0);
+                                }}
                             />
                         </div>
                         <div className="field fieldNarrow">
@@ -438,9 +480,12 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             </Label>
                             <Input
                                 type="number"
-                                className="queryEditorInput"
+                                className="queryEditorInput limit"
                                 value={limitValue.toString()}
-                                onChange={(_e, data) => setLimitValue(parseInt(data.value, 10) || 0)}
+                                onChange={(_e, data) => {
+                                    const value = parseInt(data.value, 10);
+                                    setLimitValue(value >= 0 ? value : 0);
+                                }}
                             />
                         </div>
                     </div>

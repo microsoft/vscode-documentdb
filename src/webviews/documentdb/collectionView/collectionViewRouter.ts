@@ -334,8 +334,7 @@ export const collectionsViewRouter = router({
         )
         // procedure type
         .mutation(async ({ input }) => {
-            // Sleep for 2 seconds to simulate AI processing
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            await new Promise((resolve) => setTimeout(resolve, 1000));
 
             // Mock AI logic: if prompt contains "error", simulate an error
             if (input.prompt.toLowerCase().includes('error')) {
@@ -375,11 +374,11 @@ export const collectionsViewRouter = router({
                         result.sort = JSON.stringify(reversedSort, null, 0);
                     } catch {
                         // If parsing fails, use default sort
-                        result.sort = '{"_id": -1}';
+                        result.sort = '{ "_id": -1 }';
                     }
                 } else {
                     // No existing sort, use default
-                    result.sort = '{"_id": -1}';
+                    result.sort = '{ "_id": -1 }';
                 }
             }
 

@@ -100,10 +100,11 @@
             flex-direction: column;
         }
 
-        .enhancedToggle,
+        .queryEditorActions,
         .aiToggle {
             flex: 0 0 auto; // Don't grow or shrink, size based on content
             display: flex;
+            gap: 8px;
             padding-top: 2px; // Align with monaco container
         }
     }
