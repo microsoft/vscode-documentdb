@@ -1,0 +1,5 @@
+collectionName,query,expectedResult,notes
+users,"db.users.find({age: {$gt: 25}}).sort({name: 1})","db.users.createIndex({age: 1, name: 1})","Test compound index for filter + sort"
+orders,"db.orders.aggregate([{$match: {status: 'pending'}}, {$sort: {createdAt: -1}}])","db.orders.createIndex({status: 1, createdAt: -1})","Test aggregation pipeline optimization"
+products,"db.products.find({category: 'electronics', price: {$lt: 1000}})","db.products.createIndex({category: 1, price: 1})","Test multi-field filter"
+inventory,"db.inventory.find({quantity: {$lt: 10}}).sort({lastUpdated: -1}).limit(20)","db.inventory.createIndex({quantity: 1, lastUpdated: -1})","Test filter with sort and limit"

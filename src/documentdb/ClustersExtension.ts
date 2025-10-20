@@ -34,6 +34,7 @@ import { openHelpAndFeedbackUrl } from '../commands/helpAndFeedback.openUrl/open
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
+import { runIndexAdvisorTests } from '../commands/llmEnhancedCommands/runIndexAdvisorTests';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
@@ -291,6 +292,9 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.importDocuments', importDocuments);
 
                 registerScrapbookCommands();
+
+                // Register testing commands
+                registerCommand('vscode-documentdb.command.testing.runIndexAdvisorTests', runIndexAdvisorTests);
 
                 /**
                  * Here, exporting documents is done in two ways: one is accessible from the tree view
