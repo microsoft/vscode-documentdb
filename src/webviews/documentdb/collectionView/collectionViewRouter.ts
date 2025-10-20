@@ -250,7 +250,15 @@ export const collectionsViewRouter = router({
     exportDocuments: publicProcedure
         .use(trpcToTelemetry)
         // parameters
-        .input(z.object({ query: z.string() }))
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
         //procedure type
         .query(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
@@ -267,7 +275,13 @@ export const collectionsViewRouter = router({
                     'vscode-documentdb.command.internal.exportDocuments',
                     collectionTreeNode,
                     {
-                        queryText: input.query,
+                        queryParams: {
+                            filter: input.filter,
+                            project: input.project,
+                            sort: input.sort,
+                            skip: input.skip,
+                            limit: input.limit,
+                        },
                         source: 'webview;collectionView',
                     },
                 );

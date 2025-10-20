@@ -218,12 +218,22 @@ const ToolbarDataOperations = (): JSX.Element => {
     };
 
     const handleExportEntireCollection = () => {
-        void trpcClient.mongoClusters.collectionView.exportDocuments.query({ query: '{}' });
+        void trpcClient.mongoClusters.collectionView.exportDocuments.query({
+            filter: '{}',
+            project: undefined,
+            sort: undefined,
+            skip: undefined,
+            limit: undefined,
+        });
     };
 
     const handleExportQueryResults = () => {
         void trpcClient.mongoClusters.collectionView.exportDocuments.query({
-            query: currentContext.currentQueryDefinition.queryText,
+            filter: currentContext.currentQueryDefinition.filter,
+            project: currentContext.currentQueryDefinition.project,
+            sort: currentContext.currentQueryDefinition.sort,
+            skip: currentContext.currentQueryDefinition.skip,
+            limit: currentContext.currentQueryDefinition.limit,
         });
     };
 

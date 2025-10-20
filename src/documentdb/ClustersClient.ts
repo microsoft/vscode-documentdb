@@ -402,28 +402,52 @@ export class ClustersClient {
         return documents;
     }
 
-    async *streamDocuments(
+    /**
+     * Streams documents from a collection with full query support (filter, projection, sort, skip, limit).
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param abortSignal - Signal to abort the streaming operation
+     * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
+     * @returns AsyncGenerator yielding documents one at a time
+     */
+    async *streamDocumentsWithQuery(
         databaseName: string,
         collectionName: string,
         abortSignal: AbortSignal,
-        findQuery: string = '{}',
-        skip: number = 0,
-        limit: number = 0,
+        queryParams: FindQueryParams = {},
     ): AsyncGenerator<Document, void, unknown> {
         /**
          * Configuration
          */
 
-        if (findQuery === undefined || findQuery.trim().length === 0) {
-            findQuery = '{}';
+        // Parse filter query
+        const filterStr = queryParams.filter?.trim() || '{}';
+        const filterObj: Filter<Document> = toFilterQueryObj(filterStr);
+
+        // Build find options
+        const options: FindOptions = {
+            skip: queryParams.skip && queryParams.skip > 0 ? queryParams.skip : undefined,
+            limit: queryParams.limit && queryParams.limit > 0 ? queryParams.limit : undefined,
+        };
+
+        // Parse and add projection if provided
+        if (queryParams.project && queryParams.project.trim() !== '{}') {
+            try {
+                options.projection = EJSON.parse(queryParams.project) as Document;
+            } catch (error) {
+                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+            }
         }
 
-        const findQueryObj: Filter<Document> = toFilterQueryObj(findQuery);
-
-        const options: FindOptions = {
-            skip: skip > 0 ? skip : undefined,
-            limit: limit > 0 ? limit : undefined,
-        };
+        // Parse and add sort if provided
+        if (queryParams.sort && queryParams.sort.trim() !== '{}') {
+            try {
+                options.sort = EJSON.parse(queryParams.sort) as Document;
+            } catch (error) {
+                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+            }
+        }
 
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -431,12 +455,12 @@ export class ClustersClient {
          * Streaming
          */
 
-        const cursor = collection.find(findQueryObj, options).batchSize(100);
+        const cursor = collection.find(filterObj, options).batchSize(100);
 
         try {
             while (await cursor.hasNext()) {
                 if (abortSignal.aborted) {
-                    console.debug('streamDocuments: Aborted by an abort signal.');
+                    console.debug('streamDocumentsWithQuery: Aborted by an abort signal.');
                     return;
                 }
 
