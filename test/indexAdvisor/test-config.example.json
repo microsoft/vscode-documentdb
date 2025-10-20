@@ -1,0 +1,10 @@
+{
+  "clusterId": "",
+  "databaseName": "testDatabase",
+  "preferredModel": "gpt-4o",
+  "fallbackModels": ["gpt-4o-mini"],
+  "promptTemplatePath": "",
+  "warmupQuery": "db.test.findOne()",
+  "connectionTimeout": 30000,
+  "queryTimeout": 60000
+}
