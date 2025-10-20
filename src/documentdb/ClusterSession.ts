@@ -81,10 +81,22 @@ export class ClusterSession {
      *
      * @param databaseName - The name of the database
      * @param collectionName - The name of the collection
-     * @param queryParams - Find query parameters (filter, project, sort)
-     * @param pageNumber - The page number (1-based) for pagination
+     * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
+     * @param pageNumber - The page number (1-based) for pagination within the result window
      * @param pageSize - The number of documents per page
      * @returns The number of documents returned
+     *
+     * @remarks
+     * The skip/limit logic works as follows:
+     * - Query skip/limit define the overall "window" of data (e.g., skip: 0, limit: 100)
+     * - Pagination navigates within that window (e.g., page 1 with size 10 shows docs 0-9)
+     * - If query limit is smaller than pageSize, it takes precedence (e.g., limit: 5 caps pageSize: 10)
+     * - If query limit is 0 (no limit), pagination uses pageSize directly
+     *
+     * Examples:
+     * 1. Query: skip=0, limit=100 | Page 1, size=10 → dbSkip=0, dbLimit=10
+     * 2. Query: skip=0, limit=5  | Page 1, size=10 → dbSkip=0, dbLimit=5 (query limit caps it)
+     * 3. Query: skip=20, limit=0 | Page 2, size=10 → dbSkip=30, dbLimit=10
      */
     public async runFindQueryWithCache(
         databaseName: string,
@@ -93,25 +105,47 @@ export class ClusterSession {
         pageNumber: number,
         pageSize: number,
     ): Promise<number> {
-        // Convert pageNumber to skip amount (pageNumber is 1-based)
-        const skip = (pageNumber - 1) * pageSize;
-        const limit = pageSize;
+        const querySkip = queryParams.skip ?? 0;
+        const queryLimit = queryParams.limit ?? 0;
+
+        // Calculate pagination offset within the query window
+        const pageOffset = (pageNumber - 1) * pageSize;
+
+        // Combine query skip with pagination offset
+        const dbSkip = querySkip + pageOffset;
+
+        // Early return if trying to skip beyond the query limit
+        // Note: queryLimit=0 means no limit, so only check when queryLimit > 0
+        if (queryLimit > 0 && pageOffset >= queryLimit) {
+            // We're trying to page beyond the query's limit - return empty results
+            this._currentRawDocuments = [];
+            return 0;
+        }
+
+        // Calculate effective limit:
+        // - If query has no limit (0), use pageSize
+        // - If query has a limit, cap by remaining documents after pageOffset
+        let dbLimit = pageSize;
+        if (queryLimit > 0) {
+            const remainingInWindow = queryLimit - pageOffset;
+            dbLimit = Math.min(pageSize, remainingInWindow);
+        }
 
         // Create cache key from all query parameters to detect any changes
         const cacheKey = JSON.stringify({
             filter: queryParams.filter || '{}',
             project: queryParams.project || '{}',
             sort: queryParams.sort || '{}',
-            skip,
-            limit,
+            skip: dbSkip,
+            limit: dbLimit,
         });
         this.resetCachesIfQueryChanged(cacheKey);
 
-        // Override skip/limit from pagination parameters
+        // Build final query parameters with computed skip/limit
         const paginatedQueryParams: FindQueryParams = {
             ...queryParams,
-            skip,
-            limit,
+            skip: dbSkip,
+            limit: dbLimit,
         };
 
         const documents: WithId<Document>[] = await this._client.runFindQuery(
