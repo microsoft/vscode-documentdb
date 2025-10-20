@@ -187,12 +187,12 @@ const ToolbarQueryOperations = (): JSX.Element => {
 
             <ToolbarToggleButton
                 appearance="subtle"
-                aria-label={l10n.t('Toggle Copilot')}
+                aria-label={l10n.t('Generate query with AI')}
                 icon={currentContext.isAiRowVisible ? <SparkleFilled /> : <SparkleRegular />}
                 name="aiToggle"
                 value="copilot"
             >
-                {l10n.t('Copilot')}
+                {l10n.t('Generate')}
             </ToolbarToggleButton>
 
             <ToolbarDividerTransparent />
