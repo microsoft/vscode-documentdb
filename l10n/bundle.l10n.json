@@ -193,6 +193,7 @@
   "Error creating resource: {0}": "Error creating resource: {0}",
   "Error deleting selected documents": "Error deleting selected documents",
   "Error exporting documents: {error}": "Error exporting documents: {error}",
+  "Error generating query": "Error generating query",
   "Error opening the document view": "Error opening the document view",
   "Error running process: ": "Error running process: ",
   "Error saving the document": "Error saving the document",
