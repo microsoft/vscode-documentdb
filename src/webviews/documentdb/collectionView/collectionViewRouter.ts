@@ -89,6 +89,8 @@ export const collectionsViewRouter = router({
                 filter: z.string(),
                 project: z.string().optional(),
                 sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
                 pageNumber: z.number(),
                 pageSize: z.number(),
             }),
@@ -102,7 +104,13 @@ export const collectionsViewRouter = router({
             const size = await session.runFindQueryWithCache(
                 myCtx.databaseName,
                 myCtx.collectionName,
-                { filter: input.filter, project: input.project, sort: input.sort },
+                {
+                    filter: input.filter,
+                    project: input.project,
+                    sort: input.sort,
+                    skip: input.skip,
+                    limit: input.limit,
+                },
                 input.pageNumber,
                 input.pageSize,
             );

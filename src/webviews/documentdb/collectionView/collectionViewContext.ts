@@ -16,8 +16,8 @@ export type CollectionViewContextType = {
     isFirstTimeLoad: boolean; // this will be set to true during the first data fetch, here we need more time and add more loading animations, but only on the first load
     currentView: Views;
     currentViewState?: TableViewState; // | TreeViewConfiguration |  other views can get config over time
-    currentQueryDefinition: {
-        // holds the current query, we run a new database query when this changes
+    activeQuery: {
+        // The last executed query (used for export, pagination, display)
         queryText: string; // deprecated: use filter instead
         filter: string; // MongoDB find filter (same as queryText for backward compatibility)
         project: string; // MongoDB projection
@@ -40,7 +40,6 @@ export type CollectionViewContextType = {
         selectedDocumentIndexes: number[];
     };
     queryEditor?: {
-        getCurrentContent: () => string; // deprecated: use getCurrentQuery().filter instead
         getCurrentQuery: () => {
             filter: string;
             project: string;
@@ -61,7 +60,7 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
     isLoading: false,
     isFirstTimeLoad: true,
     currentView: Views.TABLE,
-    currentQueryDefinition: {
+    activeQuery: {
         queryText: '{  }', // deprecated: use filter instead
         filter: '{  }',
         project: '{  }',

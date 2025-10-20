@@ -22,7 +22,7 @@ import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuri
 import './queryEditor.scss';
 
 interface QueryEditorProps {
-    onExecuteRequest: (query: string) => void;
+    onExecuteRequest: () => void;
 }
 
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
@@ -30,15 +30,18 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
     const [isAiActive, setIsAiActive] = useState(false);
 
+    // Local state for query fields (survives show/hide of enhanced query section)
+    const [filterValue, setFilterValue] = useState('{  }');
+    const [projectValue, setProjectValue] = useState('{  }');
+    const [sortValue, setSortValue] = useState('{  }');
+    const [skipValue, setSkipValue] = useState(0);
+    const [limitValue, setLimitValue] = useState(0);
+
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
     const aiInputRef = useRef<HTMLInputElement | null>(null);
 
-    // Refs for all Monaco editors and inputs
+    // Refs for Monaco editors (still needed for setJsonSchema)
     const filterEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
-    const projectEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
-    const sortEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
-    const skipInputRef = useRef<HTMLInputElement | null>(null);
-    const limitInputRef = useRef<HTMLInputElement | null>(null);
 
     const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
@@ -48,20 +51,18 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         // Store the filter editor reference
         filterEditorRef.current = editor;
 
-        const getCurrentContentFunction = () => editor.getValue();
         const getCurrentQueryFunction = () => ({
-            filter: filterEditorRef.current?.getValue() ?? '{  }',
-            project: projectEditorRef.current?.getValue() ?? '{  }',
-            sort: sortEditorRef.current?.getValue() ?? '{  }',
-            skip: parseInt(skipInputRef.current?.value ?? '0', 10) || 0,
-            limit: parseInt(limitInputRef.current?.value ?? '0', 10) || 0,
+            filter: filterValue,
+            project: projectValue,
+            sort: sortValue,
+            skip: skipValue,
+            limit: limitValue,
         });
 
         // adding the functions to the context for use outside of the editor
         setCurrentContext((prev) => ({
             ...prev,
             queryEditor: {
-                getCurrentContent: getCurrentContentFunction, // deprecated: use getCurrentQuery().filter instead
                 getCurrentQuery: getCurrentQueryFunction,
                 /**
                  * Dynamically sets the JSON schema for the Monaco editor's validation and autocompletion.
@@ -170,6 +171,26 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         };
     }, []);
 
+    // Update getCurrentQuery function whenever state changes
+    useEffect(() => {
+        setCurrentContext((prev) => ({
+            ...prev,
+            queryEditor: prev.queryEditor
+                ? {
+                      ...prev.queryEditor,
+                      getCurrentContent: () => filterValue,
+                      getCurrentQuery: () => ({
+                          filter: filterValue,
+                          project: projectValue,
+                          sort: sortValue,
+                          skip: skipValue,
+                          limit: limitValue,
+                      }),
+                  }
+                : prev.queryEditor,
+        }));
+    }, [filterValue, projectValue, sortValue, skipValue, limitValue, setCurrentContext]);
+
     // Focus AI input when AI row becomes visible
     useEffect(() => {
         if (currentContext.isAiRowVisible && aiInputRef.current) {
@@ -218,10 +239,16 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             minLines: 1,
                             lineHeight: 19,
                         }}
-                        onExecuteRequest={(input) => {
-                            onExecuteRequest(input);
+                        onExecuteRequest={() => {
+                            onExecuteRequest();
                         }}
-                        onMount={handleEditorDidMount}
+                        onMount={(editor, monaco) => {
+                            handleEditorDidMount(editor, monaco);
+                            // Sync initial value
+                            editor.onDidChangeModelContent(() => {
+                                setFilterValue(editor.getValue());
+                            });
+                        }}
                         options={monacoOptions}
                     />
                 </div>
@@ -265,8 +292,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     lineHeight: 19,
                                 }}
                                 onMount={(editor) => {
-                                    editor.setValue('{  }');
-                                    projectEditorRef.current = editor;
+                                    editor.setValue(projectValue);
+                                    editor.onDidChangeModelContent(() => {
+                                        setProjectValue(editor.getValue());
+                                    });
                                 }}
                                 options={monacoOptions}
                             />
@@ -290,8 +319,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     lineHeight: 19,
                                 }}
                                 onMount={(editor) => {
-                                    editor.setValue('{  }');
-                                    sortEditorRef.current = editor;
+                                    editor.setValue(sortValue);
+                                    editor.onDidChangeModelContent(() => {
+                                        setSortValue(editor.getValue());
+                                    });
                                 }}
                                 options={monacoOptions}
                             />
@@ -300,13 +331,23 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <Label size="small" weight="semibold">
                                 {l10n.t('Skip')}
                             </Label>
-                            <Input ref={skipInputRef} type="number" className="queryEditorInput" defaultValue="0" />
+                            <Input
+                                type="number"
+                                className="queryEditorInput"
+                                value={skipValue.toString()}
+                                onChange={(_e, data) => setSkipValue(parseInt(data.value, 10) || 0)}
+                            />
                         </div>
                         <div className="field fieldNarrow">
                             <Label size="small" weight="semibold">
                                 {l10n.t('Limit')}
                             </Label>
-                            <Input ref={limitInputRef} type="number" className="queryEditorInput" defaultValue="0" />
+                            <Input
+                                type="number"
+                                className="queryEditorInput"
+                                value={limitValue.toString()}
+                                onChange={(_e, data) => setLimitValue(parseInt(data.value, 10) || 0)}
+                            />
                         </div>
                     </div>
                 </div>

@@ -100,8 +100,8 @@ const ToolbarQueryOperations = (): JSX.Element => {
 
         setCurrentContext((prev) => ({
             ...prev,
-            currentQueryDefinition: {
-                ...prev.currentQueryDefinition,
+            activeQuery: {
+                ...prev.activeQuery,
                 queryText: query.filter, // deprecated: kept in sync with filter for backward compatibility
                 filter: query.filter,
                 project: query.project,
@@ -131,7 +131,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
         // basically, do not modify the query at all, do not use the input from the editor
         setCurrentContext((prev) => ({
             ...prev,
-            currentQueryDefinition: { ...prev.currentQueryDefinition },
+            activeQuery: { ...prev.activeQuery },
         }));
 
         trpcClient.common.reportEvent
@@ -142,9 +142,9 @@ const ToolbarQueryOperations = (): JSX.Element => {
                     view: currentContext.currentView,
                 },
                 measurements: {
-                    page: currentContext.currentQueryDefinition.pageNumber,
-                    pageSize: currentContext.currentQueryDefinition.pageSize,
-                    queryLength: currentContext.currentQueryDefinition.queryText.length,
+                    page: currentContext.activeQuery.pageNumber,
+                    pageSize: currentContext.activeQuery.pageSize,
+                    queryLength: currentContext.activeQuery.queryText.length,
                 },
             })
             .catch((error) => {
@@ -229,11 +229,11 @@ const ToolbarDataOperations = (): JSX.Element => {
 
     const handleExportQueryResults = () => {
         void trpcClient.mongoClusters.collectionView.exportDocuments.query({
-            filter: currentContext.currentQueryDefinition.filter,
-            project: currentContext.currentQueryDefinition.project,
-            sort: currentContext.currentQueryDefinition.sort,
-            skip: currentContext.currentQueryDefinition.skip,
-            limit: currentContext.currentQueryDefinition.limit,
+            filter: currentContext.activeQuery.filter,
+            project: currentContext.activeQuery.project,
+            sort: currentContext.activeQuery.sort,
+            skip: currentContext.activeQuery.skip,
+            limit: currentContext.activeQuery.limit,
         });
     };
 
