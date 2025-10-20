@@ -88,17 +88,40 @@ const [editorContent, setEditorContent] = useState('{ }');
 // Define context type
 export type CollectionViewContextType = {
   isLoading: boolean;
+  isFirstTimeLoad: boolean;
   currentView: Views;
-  currentQueryDefinition: {
-    queryText: string;
+  currentViewState?: TableViewState;
+  activeQuery: {
+    queryText: string; // deprecated: use filter instead
+    filter: string;
+    project: string;
+    sort: string;
+    skip: number;
+    limit: number;
     pageNumber: number;
     pageSize: number;
+  };
+  commands: {
+    disableAddDocument: boolean;
+    disableViewDocument: boolean;
+    disableEditDocument: boolean;
+    disableDeleteDocument: boolean;
   };
   dataSelection: {
     selectedDocumentObjectIds: string[];
     selectedDocumentIndexes: number[];
   };
-  // ... more state
+  queryEditor?: {
+    getCurrentQuery: () => {
+      filter: string;
+      project: string;
+      sort: string;
+      skip: number;
+      limit: number;
+    };
+    setJsonSchema(schema: object): Promise<void>;
+  };
+  isAiRowVisible: boolean;
 };
 
 // Create context with tuple pattern [state, setState]
@@ -129,8 +152,8 @@ Always use functional updates when new state depends on previous state:
 setCurrentContext((prev) => ({
   ...prev,
   isLoading: true,
-  currentQueryDefinition: {
-    ...prev.currentQueryDefinition,
+  activeQuery: {
+    ...prev.activeQuery,
     pageNumber: 1,
   },
 }));
@@ -250,8 +273,27 @@ Some inline styles are used in components:
 
 ```tsx
 useEffect(() => {
-  // Fetch initial data
-  void trpcClient.mongoClusters.documentView.getDocumentById.query(documentId).then((response) => setContent(response));
+  if (configuration.mode !== 'add') {
+    const documentId: string = configuration.documentId;
+
+    setIsLoading(true);
+
+    void trpcClient.mongoClusters.documentView.getDocumentById
+      .query(documentId)
+      .then((response) => {
+        setContent(response);
+      })
+      .catch((error) => {
+        void trpcClient.common.displayErrorMessage.mutate({
+          message: l10n.t('Error while loading the document'),
+          modal: false,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }
 }, []); // Empty array = run once on mount
 ```
 
@@ -259,12 +301,23 @@ useEffect(() => {
 
 ```tsx
 useEffect(() => {
-  // Run query whenever query definition changes
-  trpcClient.mongoClusters.collectionView.runQuery.query({
-    findQuery: currentContext.currentQueryDefinition.queryText,
-    pageNumber: currentContext.currentQueryDefinition.pageNumber,
-  });
-}, [currentContext.currentQueryDefinition]); // Re-run when this changes
+  // Update query editor context whenever filter value changes
+  setCurrentContext((prev) => ({
+    ...prev,
+    queryEditor: prev.queryEditor
+      ? {
+          ...prev.queryEditor,
+          getCurrentQuery: () => ({
+            filter: filterValue,
+            project: projectValue,
+            sort: sortValue,
+            skip: skipValue,
+            limit: limitValue,
+          }),
+        }
+      : prev.queryEditor,
+  }));
+}, [filterValue, projectValue, sortValue, skipValue, limitValue, setCurrentContext]); // Re-run when these change
 ```
 
 #### Cleanup Pattern
@@ -298,6 +351,28 @@ const handleMonacoEditorMount = (editor: monacoEditor.editor.IStandaloneCodeEdit
 
 // Access later without causing re-renders
 const getCurrentContent = () => editorRef.current?.getValue() || '';
+```
+
+**Example from QueryEditor** - storing query state in context:
+
+```tsx
+const getCurrentQueryFunction = () => ({
+  filter: filterValue,
+  project: projectValue,
+  sort: sortValue,
+  skip: skipValue,
+  limit: limitValue,
+});
+
+setCurrentContext((prev) => ({
+  ...prev,
+  queryEditor: {
+    getCurrentQuery: getCurrentQueryFunction,
+    setJsonSchema: async (schema) => {
+      /* ... */
+    },
+  },
+}));
 ```
 
 #### Solving Stale Closure Issues
@@ -436,17 +511,20 @@ The `MonacoAutoHeight` component extends Monaco with dynamic height based on con
     minLines: 1,
     lineHeight: 19,
   }}
-  onExecuteRequest={(query) => {
-    /* Handle Ctrl+Enter */
+  onExecuteRequest={() => {
+    onExecuteRequest();
   }}
-  onMount={handleEditorDidMount}
+  onMount={(editor, monaco) => {
+    handleEditorDidMount(editor, monaco);
+  }}
+  options={monacoOptions}
 />
 ```
 
 **Features:**
 
 - Adjusts height based on line count (between minLines and maxLines)
-- Registers Ctrl/Cmd+Enter shortcut
+- Registers Ctrl/Cmd+Enter shortcut via `onExecuteRequest`
 - Uses ref pattern to avoid stale closures
 
 ### JSON Schema Integration
@@ -818,6 +896,6 @@ trpcClient.common.reportEvent
 
 ---
 
-_Document Version: 1.0_
-_Last Updated: October 14, 2025_
-_Based on: DocumentView and CollectionView analysis_
+_Document Version: 1.1_
+_Last Updated: October 20, 2025_
+_Based on: DocumentView and CollectionView analysis with QueryEditor enhancements_
