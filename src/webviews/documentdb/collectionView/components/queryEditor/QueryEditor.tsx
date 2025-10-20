@@ -16,6 +16,7 @@ import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/b
 import { PlaySettingsFilled, PlaySettingsRegular, SendRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
+import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { MonacoAutoHeight } from '../../../../components/MonacoAutoHeight';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
@@ -26,6 +27,7 @@ interface QueryEditorProps {
 }
 
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
+    const { trpcClient } = useTrpcClient();
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
     const [isAiActive, setIsAiActive] = useState(false);
@@ -36,12 +38,15 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     const [sortValue, setSortValue] = useState('{  }');
     const [skipValue, setSkipValue] = useState(0);
     const [limitValue, setLimitValue] = useState(0);
+    const [aiPromptValue, setAiPromptValue] = useState('');
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
     const aiInputRef = useRef<HTMLInputElement | null>(null);
 
-    // Refs for Monaco editors (still needed for setJsonSchema)
+    // Refs for Monaco editors
     const filterEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    const projectEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    const sortEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
 
     const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
@@ -201,9 +206,86 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         }
     }, [currentContext.isAiRowVisible]);
 
+    // Sync state changes to Monaco editors (for AI-generated updates)
+    useEffect(() => {
+        if (filterEditorRef.current && filterEditorRef.current.getValue() !== filterValue) {
+            filterEditorRef.current.setValue(filterValue);
+        }
+    }, [filterValue]);
+
+    useEffect(() => {
+        if (projectEditorRef.current && projectEditorRef.current.getValue() !== projectValue) {
+            projectEditorRef.current.setValue(projectValue);
+        }
+    }, [projectValue]);
+
+    useEffect(() => {
+        if (sortEditorRef.current && sortEditorRef.current.getValue() !== sortValue) {
+            sortEditorRef.current.setValue(sortValue);
+        }
+    }, [sortValue]);
+
+    // Handler for AI query generation
+    const handleGenerateQuery = async () => {
+        if (!aiPromptValue.trim()) {
+            return; // Don't generate if prompt is empty
+        }
+
+        setIsAiActive(true);
+
+        try {
+            const result = await trpcClient.mongoClusters.collectionView.generateQuery.mutate({
+                currentQuery: {
+                    filter: filterValue,
+                    project: projectValue,
+                    sort: sortValue,
+                    skip: skipValue,
+                    limit: limitValue,
+                },
+                prompt: aiPromptValue,
+            });
+
+            // Update state with generated query
+            setFilterValue(result.filter);
+            setProjectValue(result.project);
+            setSortValue(result.sort);
+            setSkipValue(result.skip);
+            setLimitValue(result.limit);
+
+            // Check if we need to expand enhanced query mode
+            const hasNonDefaultValues =
+                result.project !== '{  }' || result.sort !== '{  }' || result.skip !== 0 || result.limit !== 0;
+
+            if (hasNonDefaultValues && !isEnhancedQueryMode) {
+                setIsEnhancedQueryMode(true);
+            }
+
+            // Clear the AI prompt after successful generation
+            setAiPromptValue('');
+        } catch (error) {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Error generating query'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
+            });
+        } finally {
+            setIsAiActive(false);
+        }
+    };
+
     // Helper button component for the AI input's contentAfter slot
     const SendButton: React.FC = () => {
-        return <Button appearance="transparent" icon={<SendRegular />} size="small" aria-label={l10n.t('Submit')} />;
+        return (
+            <Button
+                appearance="transparent"
+                icon={<SendRegular />}
+                size="small"
+                aria-label={l10n.t('Submit')}
+                onClick={() => {
+                    void handleGenerateQuery();
+                }}
+            />
+        );
     };
 
     return (
@@ -213,14 +295,24 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 <div className={`aiRow${isAiActive ? ' ai-active' : ''}`}>
                     <InputWithProgress
                         ref={aiInputRef}
+                        value={aiPromptValue}
+                        onChange={(_e, data) => setAiPromptValue(data?.value ?? '')}
                         contentAfter={<SendButton />}
                         appearance="underline"
                         placeholder={l10n.t('Ask Copilot to generate the query for you')}
                         indeterminateProgress={isAiActive}
                         onKeyDown={(event) => {
                             if (event.key === 'Enter') {
-                                // Toggle the ai-active state for testing
-                                setIsAiActive((prev) => !prev);
+                                // Generate query on Enter
+                                void handleGenerateQuery();
+                            } else if (event.key === 'Escape') {
+                                // ESC key - hide AI area and reset active state
+                                setIsAiActive(false);
+                                setAiPromptValue(''); // Clear the prompt
+                                setCurrentContext((prev) => ({
+                                    ...prev,
+                                    isAiRowVisible: false,
+                                }));
                             }
                         }}
                     />
@@ -292,6 +384,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     lineHeight: 19,
                                 }}
                                 onMount={(editor) => {
+                                    projectEditorRef.current = editor;
                                     editor.setValue(projectValue);
                                     editor.onDidChangeModelContent(() => {
                                         setProjectValue(editor.getValue());
@@ -319,6 +412,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     lineHeight: 19,
                                 }}
                                 onMount={(editor) => {
+                                    sortEditorRef.current = editor;
                                     editor.setValue(sortValue);
                                     editor.onDidChangeModelContent(() => {
                                         setSortValue(editor.getValue());
