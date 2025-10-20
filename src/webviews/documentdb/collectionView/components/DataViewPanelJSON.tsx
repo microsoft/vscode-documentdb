@@ -5,7 +5,7 @@
 
 import { debounce } from 'es-toolkit';
 import * as React from 'react';
-import { MonacoEditor } from '../../../MonacoEditor';
+import { MonacoEditor } from '../../../components/MonacoEditor';
 
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
@@ -27,9 +27,17 @@ export const DataViewPanelJSON = ({ value }: Props): React.JSX.Element => {
     const editorRef = React.useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
 
     React.useEffect(() => {
-        // Add the debounced resize event listener
-        const debouncedResizeHandler = debounce(handleResize, 200);
-        window.addEventListener('resize', debouncedResizeHandler);
+        // Add ResizeObserver to watch parent container size changes
+        // This detects all resize events: window resize, QueryEditor Collapse animation, etc.
+        // Debouncing prevents "ResizeObserver loop completed with undelivered notifications" warning
+        const container = document.querySelector('.resultsDisplayArea');
+        let resizeObserver: ResizeObserver | null = null;
+
+        if (container) {
+            const debouncedResizeHandler = debounce(handleResize, 100);
+            resizeObserver = new ResizeObserver(debouncedResizeHandler);
+            resizeObserver.observe(container);
+        }
 
         // Initial layout adjustment
         handleResize();
@@ -39,7 +47,9 @@ export const DataViewPanelJSON = ({ value }: Props): React.JSX.Element => {
             if (editorRef.current) {
                 editorRef.current.dispose();
             }
-            window.removeEventListener('resize', debouncedResizeHandler);
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
         };
     }, []);
 

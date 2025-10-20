@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { debounce } from 'es-toolkit';
 import * as React from 'react';
 import { FieldType, Formatters, SlickgridReact, type GridOption } from 'slickgrid-react';
 
@@ -11,6 +12,8 @@ interface Props {
 }
 
 export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
+    const gridRef = React.useRef<SlickgridReact>(null);
+
     const columnsDef = [
         {
             id: 'id_field',
@@ -28,13 +31,13 @@ export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
     ];
 
     const gridOptions: GridOption = {
+        // keep this so that slickgrid uses the container when we resize it manually
         autoResize: {
             calculateAvailableSizeBy: 'container',
             container: '.resultsDisplayArea', // this is a selector of the parent container, in this case it's the collectionView.tsx and the class is "resultsDisplayArea"
-            delay: 100,
             bottomPadding: 0,
         },
-        enableAutoResize: true,
+        enableAutoResize: false, // Disable SlickGrid's automatic resize, we'll handle it manually with ResizeObserver
         enableAutoSizeColumns: true, // true as when using a tree, there are only 3 columns to work with
 
         showHeaderRow: false, // this actually hides the filter-view, not the header: https://ghiscoding.gitbook.io/slickgrid-universal/grid-functionalities/tree-data-grid#parentchild-relation-dataset:~:text=If%20you%20don%27t,showHeaderRow%3A%20false
@@ -62,7 +65,6 @@ export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
 
             // we can also add a custom Formatter just for the title text portion
             titleFormatter: (_row, _cell, value, _def, _dataContext) => {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/restrict-plus-operands
                 //return `<span class="bold">${value}</span> <span style="font-size:11px; margin-left: 15px;">(id: ${dataContext.id} | ${dataContext.parentId ? `parentId: ` + dataContext.parentId : `root`})</span>`;
                 return `<span class="bold">${value}</span>`;
             },
@@ -77,14 +79,33 @@ export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
         enableHeaderMenu: false,
     };
 
-    // Empty dependency array means this runs only once, like componentDidMount
+    // Setup ResizeObserver to watch the results container and manually trigger grid resize
+    React.useEffect(() => {
+        const container = document.querySelector('.resultsDisplayArea');
+        let resizeObserver: ResizeObserver | null = null;
+
+        if (container) {
+            const debouncedResizeHandler = debounce(() => {
+                void gridRef.current?.resizerService?.resizeGrid(10);
+            }, 200);
+
+            resizeObserver = new ResizeObserver(debouncedResizeHandler);
+            resizeObserver.observe(container);
+        }
+
+        return () => {
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
+        };
+    }, []);
 
     return (
         <SlickgridReact
             gridId="myGridTree"
+            ref={gridRef}
             gridOptions={gridOptions}
             columnDefinitions={columnsDef}
-            // eslint-disable-next-line
             dataset={liveData}
             onReactGridCreated={() => console.log('Tree View created')}
         />

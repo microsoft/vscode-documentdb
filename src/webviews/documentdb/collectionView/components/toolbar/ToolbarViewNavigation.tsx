@@ -21,12 +21,12 @@ export const ToolbarViewNavigation = (): JSX.Element => {
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
 
     function goToNextPage() {
-        const newPage = currentContext.currentQueryDefinition.pageNumber + 1;
+        const newPage = currentContext.activeQuery.pageNumber + 1;
 
         setCurrentContext({
             ...currentContext,
-            currentQueryDefinition: {
-                ...currentContext.currentQueryDefinition,
+            activeQuery: {
+                ...currentContext.activeQuery,
                 pageNumber: newPage,
             },
         });
@@ -41,7 +41,7 @@ export const ToolbarViewNavigation = (): JSX.Element => {
                 },
                 measurements: {
                     page: newPage,
-                    pageSize: currentContext.currentQueryDefinition.pageSize,
+                    pageSize: currentContext.activeQuery.pageSize,
                 },
             })
             .catch((error) => {
@@ -52,12 +52,12 @@ export const ToolbarViewNavigation = (): JSX.Element => {
     }
 
     function goToPreviousPage() {
-        const newPage = Math.max(1, currentContext.currentQueryDefinition.pageNumber - 1);
+        const newPage = Math.max(1, currentContext.activeQuery.pageNumber - 1);
 
         setCurrentContext({
             ...currentContext,
-            currentQueryDefinition: {
-                ...currentContext.currentQueryDefinition,
+            activeQuery: {
+                ...currentContext.activeQuery,
                 pageNumber: newPage,
             },
         });
@@ -72,7 +72,7 @@ export const ToolbarViewNavigation = (): JSX.Element => {
                 },
                 measurements: {
                     page: newPage,
-                    pageSize: currentContext.currentQueryDefinition.pageSize,
+                    pageSize: currentContext.activeQuery.pageSize,
                 },
             })
             .catch((error) => {
@@ -85,7 +85,7 @@ export const ToolbarViewNavigation = (): JSX.Element => {
     function goToFirstPage() {
         setCurrentContext({
             ...currentContext,
-            currentQueryDefinition: { ...currentContext.currentQueryDefinition, pageNumber: 1 },
+            activeQuery: { ...currentContext.activeQuery, pageNumber: 1 },
         });
 
         trpcClient.common.reportEvent
@@ -98,7 +98,7 @@ export const ToolbarViewNavigation = (): JSX.Element => {
                 },
                 measurements: {
                     page: 1,
-                    pageSize: currentContext.currentQueryDefinition.pageSize,
+                    pageSize: currentContext.activeQuery.pageSize,
                 },
             })
             .catch((error) => {
@@ -109,8 +109,8 @@ export const ToolbarViewNavigation = (): JSX.Element => {
     function setPageSize(pageSize: number) {
         setCurrentContext({
             ...currentContext,
-            currentQueryDefinition: {
-                ...currentContext.currentQueryDefinition,
+            activeQuery: {
+                ...currentContext.activeQuery,
                 pageSize: pageSize,
                 pageNumber: 1,
             },
@@ -125,7 +125,7 @@ export const ToolbarViewNavigation = (): JSX.Element => {
                     view: currentContext.currentView,
                 },
                 measurements: {
-                    page: currentContext.currentQueryDefinition.pageNumber,
+                    page: currentContext.activeQuery.pageNumber,
                     pageSize: pageSize,
                 },
             })
@@ -185,7 +185,7 @@ export const ToolbarViewNavigation = (): JSX.Element => {
             <ToolbarDividerTransparent />
 
             <Label weight="semibold" className="lblPageNumber">
-                <pre>Page {currentContext.currentQueryDefinition.pageNumber}</pre>
+                <pre>Page {currentContext.activeQuery.pageNumber}</pre>
             </Label>
         </Toolbar>
     );

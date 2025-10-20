@@ -18,9 +18,9 @@ import {
     Views,
 } from './collectionViewContext';
 import { DataViewPanelJSON } from './components/DataViewPanelJSON';
-import { DataViewPanelTableV2 } from './components/DataViewPanelTableV2';
+import { DataViewPanelTable } from './components/DataViewPanelTable';
 import { DataViewPanelTree } from './components/DataViewPanelTree';
-import { QueryEditor } from './components/QueryEditor';
+import { QueryEditor } from './components/queryEditor/QueryEditor';
 import { ToolbarDocumentManipulation } from './components/toolbar/ToolbarDocumentManipulation';
 import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
@@ -96,11 +96,15 @@ export const CollectionView = (): JSX.Element => {
 
         // 1. Run the query, this operation only acknowledges the request.
         //    Next we need to load the ones we need.
-        trpcClient.mongoClusters.collectionView.runQuery
+        trpcClient.mongoClusters.collectionView.runFindQuery
             .query({
-                findQuery: currentContext.currentQueryDefinition.queryText,
-                pageNumber: currentContext.currentQueryDefinition.pageNumber,
-                pageSize: currentContext.currentQueryDefinition.pageSize,
+                filter: currentContext.activeQuery.filter,
+                project: currentContext.activeQuery.project,
+                sort: currentContext.activeQuery.sort,
+                skip: currentContext.activeQuery.skip,
+                limit: currentContext.activeQuery.limit,
+                pageNumber: currentContext.activeQuery.pageNumber,
+                pageSize: currentContext.activeQuery.pageSize,
             })
             .then((_response) => {
                 // 2. This is the time to update the auto-completion data
@@ -122,7 +126,7 @@ export const CollectionView = (): JSX.Element => {
             .finally(() => {
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             });
-    }, [currentContext.currentQueryDefinition]);
+    }, [currentContext.activeQuery]);
 
     useEffect(() => {
         if (currentContext.currentView === Views.TABLE && currentContext.currentViewState?.currentPath) {
@@ -403,10 +407,28 @@ export const CollectionView = (): JSX.Element => {
                 </div>
 
                 <QueryEditor
-                    onExecuteRequest={(q: string) => {
+                    onExecuteRequest={() => {
+                        // Get all query values from the editor at once
+                        const query = currentContext.queryEditor?.getCurrentQuery() ?? {
+                            filter: '{  }',
+                            project: '{  }',
+                            sort: '{  }',
+                            skip: 0,
+                            limit: 0,
+                        };
+
                         setCurrentContext((prev) => ({
                             ...prev,
-                            currentQueryDefinition: { ...prev.currentQueryDefinition, queryText: q, pageNumber: 1 },
+                            activeQuery: {
+                                ...prev.activeQuery,
+                                queryText: query.filter, // deprecated: kept in sync with filter
+                                filter: query.filter,
+                                project: query.project,
+                                sort: query.sort,
+                                skip: query.skip,
+                                limit: query.limit,
+                                pageNumber: 1,
+                            },
                         }));
 
                         trpcClient.common.reportEvent
@@ -416,7 +438,7 @@ export const CollectionView = (): JSX.Element => {
                                     ui: 'shortcut',
                                 },
                                 measurements: {
-                                    queryLenth: q.length,
+                                    queryLenth: query.filter.length,
                                 },
                             })
                             .catch((error) => {
@@ -446,7 +468,7 @@ export const CollectionView = (): JSX.Element => {
                     {
                         {
                             'Table View': (
-                                <DataViewPanelTableV2
+                                <DataViewPanelTable
                                     liveHeaders={currentQueryResults?.tableHeaders ?? []}
                                     liveData={currentQueryResults?.tableData ?? []}
                                     handleStepIn={handleStepInRequest}

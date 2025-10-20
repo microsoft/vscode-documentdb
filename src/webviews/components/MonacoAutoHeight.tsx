@@ -4,19 +4,19 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type EditorProps } from '@monaco-editor/react';
-import { MonacoEditor } from '../../../MonacoEditor';
+import { MonacoEditor } from './MonacoEditor';
 
 // eslint-disable-next-line import/no-internal-modules
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 
 import { debounce } from 'es-toolkit';
 import { useEffect, useRef, useState } from 'react';
-import './monacoAdaptive.scss';
+import './monacoAutoHeight.scss';
 
 /**
- * Props for the MonacoEditor component.
+ * Props for the MonacoAutoHeight component.
  *
- * @typedef {Object} MonacoEditorProps
+ * @typedef {Object} MonacoAutoHeightProps
  *
  * @property {Object} adaptiveHeight - Configuration for adaptive height of the editor.
  * @property {boolean} adaptiveHeight.enabled - Whether adaptive height is enabled.
@@ -29,7 +29,7 @@ import './monacoAdaptive.scss';
  *                                        You can use it to access editor instance and get a reference to a function you need (e.g. to get the editor content)
  * @property {function} [onExecuteRequest] - Optional: Invoked when the user presses Ctrl/Cmd + Enter in the editor.
  */
-export type MonacoAdaptiveProps = EditorProps & {
+export type MonacoAutoHeightProps = EditorProps & {
     adaptiveHeight?: {
         // Optional
         enabled: boolean; // Whether adaptive height is enabled
@@ -40,7 +40,7 @@ export type MonacoAdaptiveProps = EditorProps & {
     onExecuteRequest?: (editorContent: string) => void; // Optional: Invoked when the user presses Ctrl/Cmd + Enter in the editor
 };
 
-export const MonacoAdaptive = (props: MonacoAdaptiveProps) => {
+export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
     const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
 
     const [editorHeight, setEditorHeight] = useState<number>(1 * 19); // Initial height
@@ -164,7 +164,7 @@ export const MonacoAdaptive = (props: MonacoAdaptiveProps) => {
     };
 
     return (
-        <div className="monacoAdaptiveContainer" style={{ height: editorHeight }}>
+        <div className="monacoAutoHeightContainer" style={{ height: editorHeight }}>
             <MonacoEditor {...editorProps} onMount={handleMonacoEditorMount} />
         </div>
     );

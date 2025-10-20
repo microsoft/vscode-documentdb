@@ -48,9 +48,42 @@ export interface DatabaseItemModel {
 export interface CollectionItemModel {
     name: string;
     type?: string;
-    info?: {
-        readOnly?: false;
-    };
+}
+
+/**
+ * Find query parameters for MongoDB find operations.
+ * Each field accepts a JSON string representation of the MongoDB query syntax.
+ */
+export interface FindQueryParams {
+    /**
+     * The filter/query to match documents.
+     * @default '{}'
+     */
+    filter?: string;
+
+    /**
+     * The projection to determine which fields to include/exclude.
+     * @default '{}'
+     */
+    project?: string;
+
+    /**
+     * The sort specification for ordering results.
+     * @default '{}'
+     */
+    sort?: string;
+
+    /**
+     * Number of documents to skip.
+     * @default 0
+     */
+    skip?: number;
+
+    /**
+     * Maximum number of documents to return.
+     * @default 0 (unlimited)
+     */
+    limit?: number;
 }
 
 export interface IndexItemModel {
@@ -291,6 +324,57 @@ export class ClustersClient {
         });
     }
 
+    /**
+     * Executes a MongoDB find query with support for filter, projection, sort, skip, and limit.
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
+     * @returns Array of matching documents
+     */
+    async runFindQuery(
+        databaseName: string,
+        collectionName: string,
+        queryParams: FindQueryParams,
+    ): Promise<WithId<Document>[]> {
+        // Parse filter query
+        const filterStr = queryParams.filter?.trim() || '{}';
+        const filterObj: Filter<Document> = toFilterQueryObj(filterStr);
+
+        // Build find options
+        const options: FindOptions = {
+            skip: queryParams.skip ?? 0,
+            limit: queryParams.limit ?? 0,
+        };
+
+        // Parse and add projection if provided
+        if (queryParams.project && queryParams.project.trim() !== '{}') {
+            try {
+                options.projection = EJSON.parse(queryParams.project) as Document;
+            } catch (error) {
+                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+            }
+        }
+
+        // Parse and add sort if provided
+        if (queryParams.sort && queryParams.sort.trim() !== '{}') {
+            try {
+                options.sort = EJSON.parse(queryParams.sort) as Document;
+            } catch (error) {
+                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+            }
+        }
+
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+        const documents = await collection.find(filterObj, options).toArray();
+
+        return documents;
+    }
+
+    /**
+     * @deprecated Use runFindQuery() instead which supports filter, projection, sort, skip, and limit parameters.
+     * This method will be removed in a future version.
+     */
     //todo: this is just a to see how it could work, we need to use a cursor here for paging
     async runQuery(
         databaseName: string,
@@ -318,28 +402,52 @@ export class ClustersClient {
         return documents;
     }
 
-    async *streamDocuments(
+    /**
+     * Streams documents from a collection with full query support (filter, projection, sort, skip, limit).
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param abortSignal - Signal to abort the streaming operation
+     * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
+     * @returns AsyncGenerator yielding documents one at a time
+     */
+    async *streamDocumentsWithQuery(
         databaseName: string,
         collectionName: string,
         abortSignal: AbortSignal,
-        findQuery: string = '{}',
-        skip: number = 0,
-        limit: number = 0,
+        queryParams: FindQueryParams = {},
     ): AsyncGenerator<Document, void, unknown> {
         /**
          * Configuration
          */
 
-        if (findQuery === undefined || findQuery.trim().length === 0) {
-            findQuery = '{}';
+        // Parse filter query
+        const filterStr = queryParams.filter?.trim() || '{}';
+        const filterObj: Filter<Document> = toFilterQueryObj(filterStr);
+
+        // Build find options
+        const options: FindOptions = {
+            skip: queryParams.skip && queryParams.skip > 0 ? queryParams.skip : undefined,
+            limit: queryParams.limit && queryParams.limit > 0 ? queryParams.limit : undefined,
+        };
+
+        // Parse and add projection if provided
+        if (queryParams.project && queryParams.project.trim() !== '{}') {
+            try {
+                options.projection = EJSON.parse(queryParams.project) as Document;
+            } catch (error) {
+                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+            }
         }
 
-        const findQueryObj: Filter<Document> = toFilterQueryObj(findQuery);
-
-        const options: FindOptions = {
-            skip: skip > 0 ? skip : undefined,
-            limit: limit > 0 ? limit : undefined,
-        };
+        // Parse and add sort if provided
+        if (queryParams.sort && queryParams.sort.trim() !== '{}') {
+            try {
+                options.sort = EJSON.parse(queryParams.sort) as Document;
+            } catch (error) {
+                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+            }
+        }
 
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -347,12 +455,12 @@ export class ClustersClient {
          * Streaming
          */
 
-        const cursor = collection.find(findQueryObj, options).batchSize(100);
+        const cursor = collection.find(filterObj, options).batchSize(100);
 
         try {
             while (await cursor.hasNext()) {
                 if (abortSignal.aborted) {
-                    console.debug('streamDocuments: Aborted by an abort signal.');
+                    console.debug('streamDocumentsWithQuery: Aborted by an abort signal.');
                     return;
                 }
 

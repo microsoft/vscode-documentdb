@@ -13,7 +13,7 @@ import { publicProcedure, router, trpcToTelemetry } from '../../api/extension-se
 
 import * as l10n from '@vscode/l10n';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
-// eslint-disable-next-line import/no-internal-modules
+
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
@@ -81,12 +81,16 @@ export const collectionsViewRouter = router({
 
         return l10n.t('Info from the webview: ') + JSON.stringify(myCtx);
     }),
-    runQuery: publicProcedure
+    runFindQuery: publicProcedure
         .use(trpcToTelemetry)
         // parameters
         .input(
             z.object({
-                findQuery: z.string(),
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
                 pageNumber: z.number(),
                 pageSize: z.number(),
             }),
@@ -97,10 +101,16 @@ export const collectionsViewRouter = router({
 
             // run query
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
-            const size = await session.runQueryWithCache(
+            const size = await session.runFindQueryWithCache(
                 myCtx.databaseName,
                 myCtx.collectionName,
-                input.findQuery,
+                {
+                    filter: input.filter,
+                    project: input.project,
+                    sort: input.sort,
+                    skip: input.skip,
+                    limit: input.limit,
+                },
                 input.pageNumber,
                 input.pageSize,
             );
@@ -125,7 +135,6 @@ export const collectionsViewRouter = router({
             if (autoCompletionData.length > 0) {
                 querySchema = generateMongoFindJsonSchema(autoCompletionData);
             } else {
-                // eslint-disable-next-line
                 querySchema = basicFindQuerySchema;
             }
 
@@ -249,7 +258,15 @@ export const collectionsViewRouter = router({
     exportDocuments: publicProcedure
         .use(trpcToTelemetry)
         // parameters
-        .input(z.object({ query: z.string() }))
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
         //procedure type
         .query(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
@@ -266,7 +283,13 @@ export const collectionsViewRouter = router({
                     'vscode-documentdb.command.internal.exportDocuments',
                     collectionTreeNode,
                     {
-                        queryText: input.query,
+                        queryParams: {
+                            filter: input.filter,
+                            project: input.project,
+                            sort: input.sort,
+                            skip: input.skip,
+                            limit: input.limit,
+                        },
                         source: 'webview;collectionView',
                     },
                 );
@@ -293,4 +316,72 @@ export const collectionsViewRouter = router({
             throw new Error('Could not find the specified collection in the tree.');
         }
     }),
+
+    generateQuery: publicProcedure
+        .use(trpcToTelemetry)
+        // parameters
+        .input(
+            z.object({
+                currentQuery: z.object({
+                    filter: z.string(),
+                    project: z.string().optional(),
+                    sort: z.string().optional(),
+                    skip: z.number().optional(),
+                    limit: z.number().optional(),
+                }),
+                prompt: z.string(),
+            }),
+        )
+        // procedure type
+        .mutation(async ({ input }) => {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+
+            // Mock AI logic: if prompt contains "error", simulate an error
+            if (input.prompt.toLowerCase().includes('error')) {
+                throw new Error('Simulated AI error for testing purposes');
+            }
+
+            // Start with current query values
+            const result = {
+                filter: input.currentQuery.filter,
+                project: input.currentQuery.project ?? '{  }',
+                sort: input.currentQuery.sort ?? '{  }',
+                skip: input.currentQuery.skip ?? 0,
+                limit: input.currentQuery.limit ?? 0,
+            };
+
+            // Mock AI logic: if prompt contains "sort"
+            if (input.prompt.toLowerCase().includes('sort')) {
+                const currentSort = input.currentQuery.sort?.trim();
+
+                // If there's an existing sort, reverse the directions
+                if (currentSort && currentSort !== '{}' && currentSort !== '{  }') {
+                    try {
+                        // Parse the current sort to reverse field directions
+                        const sortObj = JSON.parse(currentSort) as Record<string, unknown>;
+                        const reversedSort: Record<string, number> = {};
+
+                        for (const [field, direction] of Object.entries(sortObj)) {
+                            if (typeof direction === 'number') {
+                                // Reverse: 1 → -1, -1 → 1
+                                reversedSort[field] = direction === 1 ? -1 : 1;
+                            } else {
+                                // Keep as-is if not a number
+                                reversedSort[field] = direction as number;
+                            }
+                        }
+
+                        result.sort = JSON.stringify(reversedSort, null, 0);
+                    } catch {
+                        // If parsing fails, use default sort
+                        result.sort = '{ "_id": -1 }';
+                    }
+                } else {
+                    // No existing sort, use default
+                    result.sort = '{ "_id": -1 }';
+                }
+            }
+
+            return result;
+        }),
 });

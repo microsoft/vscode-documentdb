@@ -10,7 +10,7 @@ import { type JSONSchema } from '../utils/json/JSONSchema';
 import { getPropertyNamesAtLevel, updateSchemaWithDocument } from '../utils/json/mongo/SchemaAnalyzer';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
-import { ClustersClient } from './ClustersClient';
+import { ClustersClient, type FindQueryParams } from './ClustersClient';
 
 export type TableDataEntry = {
     /**
@@ -76,6 +76,95 @@ export class ClusterSession {
         this._currentQueryText = query.trim();
     }
 
+    /**
+     * Executes a MongoDB find query with caching support and pagination.
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
+     * @param pageNumber - The page number (1-based) for pagination within the result window
+     * @param pageSize - The number of documents per page
+     * @returns The number of documents returned
+     *
+     * @remarks
+     * The skip/limit logic works as follows:
+     * - Query skip/limit define the overall "window" of data (e.g., skip: 0, limit: 100)
+     * - Pagination navigates within that window (e.g., page 1 with size 10 shows docs 0-9)
+     * - If query limit is smaller than pageSize, it takes precedence (e.g., limit: 5 caps pageSize: 10)
+     * - If query limit is 0 (no limit), pagination uses pageSize directly
+     *
+     * Examples:
+     * 1. Query: skip=0, limit=100 | Page 1, size=10 → dbSkip=0, dbLimit=10
+     * 2. Query: skip=0, limit=5  | Page 1, size=10 → dbSkip=0, dbLimit=5 (query limit caps it)
+     * 3. Query: skip=20, limit=0 | Page 2, size=10 → dbSkip=30, dbLimit=10
+     */
+    public async runFindQueryWithCache(
+        databaseName: string,
+        collectionName: string,
+        queryParams: FindQueryParams,
+        pageNumber: number,
+        pageSize: number,
+    ): Promise<number> {
+        const querySkip = queryParams.skip ?? 0;
+        const queryLimit = queryParams.limit ?? 0;
+
+        // Calculate pagination offset within the query window
+        const pageOffset = (pageNumber - 1) * pageSize;
+
+        // Combine query skip with pagination offset
+        const dbSkip = querySkip + pageOffset;
+
+        // Early return if trying to skip beyond the query limit
+        // Note: queryLimit=0 means no limit, so only check when queryLimit > 0
+        if (queryLimit > 0 && pageOffset >= queryLimit) {
+            // We're trying to page beyond the query's limit - return empty results
+            this._currentRawDocuments = [];
+            return 0;
+        }
+
+        // Calculate effective limit:
+        // - If query has no limit (0), use pageSize
+        // - If query has a limit, cap by remaining documents after pageOffset
+        let dbLimit = pageSize;
+        if (queryLimit > 0) {
+            const remainingInWindow = queryLimit - pageOffset;
+            dbLimit = Math.min(pageSize, remainingInWindow);
+        }
+
+        // Create cache key from all query parameters to detect any changes
+        const cacheKey = JSON.stringify({
+            filter: queryParams.filter || '{}',
+            project: queryParams.project || '{}',
+            sort: queryParams.sort || '{}',
+            skip: dbSkip,
+            limit: dbLimit,
+        });
+        this.resetCachesIfQueryChanged(cacheKey);
+
+        // Build final query parameters with computed skip/limit
+        const paginatedQueryParams: FindQueryParams = {
+            ...queryParams,
+            skip: dbSkip,
+            limit: dbLimit,
+        };
+
+        const documents: WithId<Document>[] = await this._client.runFindQuery(
+            databaseName,
+            collectionName,
+            paginatedQueryParams,
+        );
+
+        // Cache the results and update schema
+        this._currentRawDocuments = documents;
+        this._currentRawDocuments.map((doc) => updateSchemaWithDocument(this._currentJsonSchema, doc));
+
+        return documents.length;
+    }
+
+    /**
+     * @deprecated Use runFindQueryWithCache() instead which supports filter, projection, and sort parameters.
+     * This method will be removed in a future version.
+     */
     public async runQueryWithCache(
         databaseName: string,
         collectionName: string,
