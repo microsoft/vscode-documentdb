@@ -48,9 +48,42 @@ export interface DatabaseItemModel {
 export interface CollectionItemModel {
     name: string;
     type?: string;
-    info?: {
-        readOnly?: false;
-    };
+}
+
+/**
+ * Find query parameters for MongoDB find operations.
+ * Each field accepts a JSON string representation of the MongoDB query syntax.
+ */
+export interface FindQueryParams {
+    /**
+     * The filter/query to match documents.
+     * @default '{}'
+     */
+    filter?: string;
+
+    /**
+     * The projection to determine which fields to include/exclude.
+     * @default '{}'
+     */
+    project?: string;
+
+    /**
+     * The sort specification for ordering results.
+     * @default '{}'
+     */
+    sort?: string;
+
+    /**
+     * Number of documents to skip.
+     * @default 0
+     */
+    skip?: number;
+
+    /**
+     * Maximum number of documents to return.
+     * @default 0 (unlimited)
+     */
+    limit?: number;
 }
 
 export interface IndexItemModel {
@@ -291,6 +324,57 @@ export class ClustersClient {
         });
     }
 
+    /**
+     * Executes a MongoDB find query with support for filter, projection, sort, skip, and limit.
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
+     * @returns Array of matching documents
+     */
+    async runFindQuery(
+        databaseName: string,
+        collectionName: string,
+        queryParams: FindQueryParams,
+    ): Promise<WithId<Document>[]> {
+        // Parse filter query
+        const filterStr = queryParams.filter?.trim() || '{}';
+        const filterObj: Filter<Document> = toFilterQueryObj(filterStr);
+
+        // Build find options
+        const options: FindOptions = {
+            skip: queryParams.skip ?? 0,
+            limit: queryParams.limit ?? 0,
+        };
+
+        // Parse and add projection if provided
+        if (queryParams.project && queryParams.project.trim() !== '{}') {
+            try {
+                options.projection = EJSON.parse(queryParams.project) as Document;
+            } catch (error) {
+                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+            }
+        }
+
+        // Parse and add sort if provided
+        if (queryParams.sort && queryParams.sort.trim() !== '{}') {
+            try {
+                options.sort = EJSON.parse(queryParams.sort) as Document;
+            } catch (error) {
+                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+            }
+        }
+
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+        const documents = await collection.find(filterObj, options).toArray();
+
+        return documents;
+    }
+
+    /**
+     * @deprecated Use runFindQuery() instead which supports filter, projection, sort, skip, and limit parameters.
+     * This method will be removed in a future version.
+     */
     //todo: this is just a to see how it could work, we need to use a cursor here for paging
     async runQuery(
         databaseName: string,

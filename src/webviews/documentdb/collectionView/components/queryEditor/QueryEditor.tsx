@@ -32,17 +32,37 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
     const aiInputRef = useRef<HTMLInputElement | null>(null);
+
+    // Refs for all Monaco editors and inputs
+    const filterEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    const projectEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    const sortEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    const skipInputRef = useRef<HTMLInputElement | null>(null);
+    const limitInputRef = useRef<HTMLInputElement | null>(null);
+
     const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
     const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
         editor.setValue('{  }');
 
+        // Store the filter editor reference
+        filterEditorRef.current = editor;
+
         const getCurrentContentFunction = () => editor.getValue();
-        // adding the function to the context for use outside of the editor
+        const getCurrentQueryFunction = () => ({
+            filter: filterEditorRef.current?.getValue() ?? '{  }',
+            project: projectEditorRef.current?.getValue() ?? '{  }',
+            sort: sortEditorRef.current?.getValue() ?? '{  }',
+            skip: parseInt(skipInputRef.current?.value ?? '0', 10) || 0,
+            limit: parseInt(limitInputRef.current?.value ?? '0', 10) || 0,
+        });
+
+        // adding the functions to the context for use outside of the editor
         setCurrentContext((prev) => ({
             ...prev,
             queryEditor: {
-                getCurrentContent: getCurrentContentFunction,
+                getCurrentContent: getCurrentContentFunction, // deprecated: use getCurrentQuery().filter instead
+                getCurrentQuery: getCurrentQueryFunction,
                 /**
                  * Dynamically sets the JSON schema for the Monaco editor's validation and autocompletion.
                  *
@@ -244,6 +264,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     minLines: 1,
                                     lineHeight: 19,
                                 }}
+                                onMount={(editor) => {
+                                    editor.setValue('{  }');
+                                    projectEditorRef.current = editor;
+                                }}
                                 options={monacoOptions}
                             />
                         </div>
@@ -265,6 +289,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     minLines: 1,
                                     lineHeight: 19,
                                 }}
+                                onMount={(editor) => {
+                                    editor.setValue('{  }');
+                                    sortEditorRef.current = editor;
+                                }}
                                 options={monacoOptions}
                             />
                         </div>
@@ -272,13 +300,13 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <Label size="small" weight="semibold">
                                 {l10n.t('Skip')}
                             </Label>
-                            <Input type="number" className="queryEditorInput" />
+                            <Input ref={skipInputRef} type="number" className="queryEditorInput" defaultValue="0" />
                         </div>
                         <div className="field fieldNarrow">
                             <Label size="small" weight="semibold">
                                 {l10n.t('Limit')}
                             </Label>
-                            <Input type="number" className="queryEditorInput" />
+                            <Input ref={limitInputRef} type="number" className="queryEditorInput" defaultValue="0" />
                         </div>
                     </div>
                 </div>

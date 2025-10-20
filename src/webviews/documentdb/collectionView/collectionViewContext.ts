@@ -18,7 +18,12 @@ export type CollectionViewContextType = {
     currentViewState?: TableViewState; // | TreeViewConfiguration |  other views can get config over time
     currentQueryDefinition: {
         // holds the current query, we run a new database query when this changes
-        queryText: string;
+        queryText: string; // deprecated: use filter instead
+        filter: string; // MongoDB find filter (same as queryText for backward compatibility)
+        project: string; // MongoDB projection
+        sort: string; // MongoDB sort specification
+        skip: number; // Number of documents to skip
+        limit: number; // Maximum number of documents to return
         pageNumber: number;
         pageSize: number;
     };
@@ -35,7 +40,14 @@ export type CollectionViewContextType = {
         selectedDocumentIndexes: number[];
     };
     queryEditor?: {
-        getCurrentContent: () => string;
+        getCurrentContent: () => string; // deprecated: use getCurrentQuery().filter instead
+        getCurrentQuery: () => {
+            filter: string;
+            project: string;
+            sort: string;
+            skip: number;
+            limit: number;
+        };
         setJsonSchema(schema: object): Promise<void>; //monacoEditor.languages.json.DiagnosticsOptions, but we don't want to import monacoEditor here
     };
     isAiRowVisible: boolean; // Controls visibility of the AI prompt row in QueryEditor
@@ -50,7 +62,12 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
     isFirstTimeLoad: true,
     currentView: Views.TABLE,
     currentQueryDefinition: {
-        queryText: '{  }',
+        queryText: '{  }', // deprecated: use filter instead
+        filter: '{  }',
+        project: '{  }',
+        sort: '{  }',
+        skip: 0,
+        limit: 0,
         pageNumber: 1,
         pageSize: 10,
     },

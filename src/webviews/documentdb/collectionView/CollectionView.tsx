@@ -96,9 +96,11 @@ export const CollectionView = (): JSX.Element => {
 
         // 1. Run the query, this operation only acknowledges the request.
         //    Next we need to load the ones we need.
-        trpcClient.mongoClusters.collectionView.runQuery
+        trpcClient.mongoClusters.collectionView.runFindQuery
             .query({
-                findQuery: currentContext.currentQueryDefinition.queryText,
+                filter: currentContext.currentQueryDefinition.filter,
+                project: currentContext.currentQueryDefinition.project,
+                sort: currentContext.currentQueryDefinition.sort,
                 pageNumber: currentContext.currentQueryDefinition.pageNumber,
                 pageSize: currentContext.currentQueryDefinition.pageSize,
             })
@@ -406,7 +408,12 @@ export const CollectionView = (): JSX.Element => {
                     onExecuteRequest={(q: string) => {
                         setCurrentContext((prev) => ({
                             ...prev,
-                            currentQueryDefinition: { ...prev.currentQueryDefinition, queryText: q, pageNumber: 1 },
+                            currentQueryDefinition: {
+                                ...prev.currentQueryDefinition,
+                                queryText: q, // deprecated: kept in sync with filter
+                                filter: q,
+                                pageNumber: 1,
+                            },
                         }));
 
                         trpcClient.common.reportEvent

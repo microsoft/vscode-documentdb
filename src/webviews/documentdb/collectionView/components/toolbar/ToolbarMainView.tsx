@@ -89,11 +89,27 @@ const ToolbarQueryOperations = (): JSX.Element => {
             },
         }));
 
-        // execute the query
-        const queryContent = currentContext.queryEditor?.getCurrentContent() ?? '';
+        // execute the query - get all values from the query editor at once
+        const query = currentContext.queryEditor?.getCurrentQuery() ?? {
+            filter: '{  }',
+            project: '{  }',
+            sort: '{  }',
+            skip: 0,
+            limit: 0,
+        };
+
         setCurrentContext((prev) => ({
             ...prev,
-            currentQueryDefinition: { ...prev.currentQueryDefinition, queryText: queryContent, pageNumber: 1 },
+            currentQueryDefinition: {
+                ...prev.currentQueryDefinition,
+                queryText: query.filter, // deprecated: kept in sync with filter for backward compatibility
+                filter: query.filter,
+                project: query.project,
+                sort: query.sort,
+                skip: query.skip,
+                limit: query.limit,
+                pageNumber: 1,
+            },
         }));
 
         trpcClient.common.reportEvent
@@ -103,7 +119,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
                     ui: 'button',
                 },
                 measurements: {
-                    queryLength: queryContent.length,
+                    queryLength: query.filter.length,
                 },
             })
             .catch((error) => {

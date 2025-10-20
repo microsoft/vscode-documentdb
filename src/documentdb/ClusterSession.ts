@@ -10,7 +10,7 @@ import { type JSONSchema } from '../utils/json/JSONSchema';
 import { getPropertyNamesAtLevel, updateSchemaWithDocument } from '../utils/json/mongo/SchemaAnalyzer';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
-import { ClustersClient } from './ClustersClient';
+import { ClustersClient, type FindQueryParams } from './ClustersClient';
 
 export type TableDataEntry = {
     /**
@@ -76,6 +76,61 @@ export class ClusterSession {
         this._currentQueryText = query.trim();
     }
 
+    /**
+     * Executes a MongoDB find query with caching support and pagination.
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param queryParams - Find query parameters (filter, project, sort)
+     * @param pageNumber - The page number (1-based) for pagination
+     * @param pageSize - The number of documents per page
+     * @returns The number of documents returned
+     */
+    public async runFindQueryWithCache(
+        databaseName: string,
+        collectionName: string,
+        queryParams: FindQueryParams,
+        pageNumber: number,
+        pageSize: number,
+    ): Promise<number> {
+        // Convert pageNumber to skip amount (pageNumber is 1-based)
+        const skip = (pageNumber - 1) * pageSize;
+        const limit = pageSize;
+
+        // Create cache key from all query parameters to detect any changes
+        const cacheKey = JSON.stringify({
+            filter: queryParams.filter || '{}',
+            project: queryParams.project || '{}',
+            sort: queryParams.sort || '{}',
+            skip,
+            limit,
+        });
+        this.resetCachesIfQueryChanged(cacheKey);
+
+        // Override skip/limit from pagination parameters
+        const paginatedQueryParams: FindQueryParams = {
+            ...queryParams,
+            skip,
+            limit,
+        };
+
+        const documents: WithId<Document>[] = await this._client.runFindQuery(
+            databaseName,
+            collectionName,
+            paginatedQueryParams,
+        );
+
+        // Cache the results and update schema
+        this._currentRawDocuments = documents;
+        this._currentRawDocuments.map((doc) => updateSchemaWithDocument(this._currentJsonSchema, doc));
+
+        return documents.length;
+    }
+
+    /**
+     * @deprecated Use runFindQueryWithCache() instead which supports filter, projection, and sort parameters.
+     * This method will be removed in a future version.
+     */
     public async runQueryWithCache(
         databaseName: string,
         collectionName: string,
