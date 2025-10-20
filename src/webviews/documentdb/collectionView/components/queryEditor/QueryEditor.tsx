@@ -186,7 +186,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             queryEditor: prev.queryEditor
                 ? {
                       ...prev.queryEditor,
-                      getCurrentContent: () => filterValue,
                       getCurrentQuery: () => ({
                           filter: filterValue,
                           project: projectValue,

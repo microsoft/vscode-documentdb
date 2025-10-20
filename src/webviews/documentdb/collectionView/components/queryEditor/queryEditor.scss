@@ -173,40 +173,4 @@
             }
         }
     }
-
-    /**
-     * Custom styling for Fluent UI Input components to match MonacoAutoHeight border
-     *
-     * Note: Fluent UI Input renders as:
-     * <span class="fui-Input queryEditorInput ...">
-     *   <input class="fui-Input__input" />
-     * </span>
-     *
-     * We need to:
-     * 1. Apply border to the wrapper span
-     * 2. Remove Fluent UI's default underline border
-     * 3. Ensure inner input has no conflicting styles
-     */
-    :global(.qaueryEditorInput) {
-        @include index.input-border;
-        background-color: inherit;
-        padding: 4px 8px;
-
-        // Remove Fluent UI default bottom border (applied via ::after pseudo-element)
-        &::after {
-            border-bottom: none !important;
-        }
-
-        // Remove hover/focus border effects
-        &:hover::after,
-        &:focus-within::after {
-            border-bottom: none !important;
-        }
-
-        // Style the actual input element inside
-        input {
-            background-color: red !important;
-            padding: 2px 0;
-        }
-    }
 }
