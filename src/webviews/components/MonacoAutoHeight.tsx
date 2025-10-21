@@ -211,6 +211,17 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
         });
     };
 
+    /**
+     * Moves keyboard focus to the next or previous focusable element relative to the editor.
+     *
+     * @param {monacoEditor.editor.IStandaloneCodeEditor} editor - The Monaco editor instance.
+     * @param {'next' | 'previous'} direction - The direction to move focus:
+     *        'next' moves to the next focusable element, 'previous' moves to the previous one.
+     *        Typically determined by whether Shift is held during Tab key press.
+     *
+     * If no focusable element is found in the given direction, the currently active element
+     * or the editor DOM node will be blurred as a fallback.
+     */
     const moveFocus = (editor: monacoEditor.editor.IStandaloneCodeEditor, direction: 'next' | 'previous') => {
         const focusFinders = focusFindersRef.current;
         const editorDomNode = editor.getDomNode();
