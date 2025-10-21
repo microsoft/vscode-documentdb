@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { useFocusFinders } from '@fluentui/react-components';
 import { type EditorProps } from '@monaco-editor/react';
 import { MonacoEditor } from './MonacoEditor';
 
@@ -38,10 +39,17 @@ export type MonacoAutoHeightProps = EditorProps & {
         lineHeight?: number; // Height of each line in pixels (optional)
     };
     onExecuteRequest?: (editorContent: string) => void; // Optional: Invoked when the user presses Ctrl/Cmd + Enter in the editor
+    /**
+     * When true, Monaco keeps focus on the editor when Tab / Shift+Tab are pressed.
+     * When false (default), Tab navigation behaves like a standard input and moves focus to the next/previous focusable element.
+     */
+    trapTabKey?: boolean;
 };
 
 export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
     const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    const tabKeyDisposerRef = useRef<monacoEditor.IDisposable | null>(null);
+    const focusFindersRef = useRef<ReturnType<typeof useFocusFinders> | null>(null);
 
     const [editorHeight, setEditorHeight] = useState<number>(1 * 19); // Initial height
     const [lastLineCount, setLastLineCount] = useState<number>(0);
@@ -51,6 +59,7 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
     // won't automatically update when state changes
     const lastLineCountRef = useRef(lastLineCount);
     const propsRef = useRef(props);
+    const focusFinders = useFocusFinders();
 
     // Keep refs updated with the latest values
     useEffect(() => {
@@ -61,13 +70,17 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
         propsRef.current = props;
     }, [props]);
 
+    useEffect(() => {
+        focusFindersRef.current = focusFinders;
+    }, [focusFinders]);
+
     // Exclude adaptiveHeight prop and onExecuteRequest prop from being passed to the Monaco editor
     // also, let's exclude onMount as we're adding our own handler and will invoke the provided one
     // once we're done with our setup
 
     // These props are intentionally destructured but not used directly - they're handled specially
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { adaptiveHeight, onExecuteRequest, onMount, ...editorProps } = props;
+    const { adaptiveHeight, onExecuteRequest, onMount, trapTabKey, ...editorProps } = props;
 
     const handleMonacoEditorMount = (
         editor: monacoEditor.editor.IStandaloneCodeEditor,
@@ -81,6 +94,8 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
         if (propsRef.current.adaptiveHeight?.enabled) {
             setupAdaptiveHeight(editor);
         }
+
+        configureTabKeyMode(editor, propsRef.current.trapTabKey ?? false);
 
         // Register a command for Ctrl + Enter / Cmd + Enter
         if (propsRef.current.onExecuteRequest) {
@@ -106,12 +121,22 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
 
         // Clean up on component unmount
         return () => {
+            if (tabKeyDisposerRef.current) {
+                tabKeyDisposerRef.current.dispose();
+                tabKeyDisposerRef.current = null;
+            }
             if (editorRef.current) {
                 editorRef.current.dispose();
             }
             window.removeEventListener('resize', debouncedResizeHandler);
         };
     }, []);
+
+    useEffect(() => {
+        if (editorRef.current) {
+            configureTabKeyMode(editorRef.current, trapTabKey ?? false);
+        }
+    }, [trapTabKey]);
 
     const handleResize = () => {
         if (editorRef.current) {
@@ -160,6 +185,57 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
 
             // Save the last line count to avoid unnecessary updates
             setLastLineCount(lineCount);
+        }
+    };
+
+    const configureTabKeyMode = (editor: monacoEditor.editor.IStandaloneCodeEditor, shouldTrap: boolean) => {
+        if (tabKeyDisposerRef.current) {
+            tabKeyDisposerRef.current.dispose();
+            tabKeyDisposerRef.current = null;
+        }
+
+        if (shouldTrap) {
+            return;
+        }
+
+        tabKeyDisposerRef.current = editor.onKeyDown((event) => {
+            if (event.keyCode !== monacoEditor.KeyCode.Tab) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const direction = event.browserEvent.shiftKey ? 'previous' : 'next';
+            moveFocus(editor, direction);
+        });
+    };
+
+    const moveFocus = (editor: monacoEditor.editor.IStandaloneCodeEditor, direction: 'next' | 'previous') => {
+        const focusFinders = focusFindersRef.current;
+        const editorDomNode = editor.getDomNode();
+
+        if (!focusFinders || !editorDomNode) {
+            return;
+        }
+
+        const activeElement = document.activeElement as HTMLElement | null;
+        const startElement = activeElement ?? (editorDomNode as HTMLElement);
+
+        const targetElement =
+            direction === 'next'
+                ? focusFinders.findNextFocusable(startElement)
+                : focusFinders.findPrevFocusable(startElement);
+
+        if (targetElement) {
+            targetElement.focus();
+            return;
+        }
+
+        if (activeElement) {
+            activeElement.blur();
+        } else if (editorDomNode instanceof HTMLElement) {
+            editorDomNode.blur();
         }
     };
 
