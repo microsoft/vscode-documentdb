@@ -14,10 +14,10 @@ import {
     type OnDblClickEventArgs,
     type OnSelectedRowsChangedEventArgs,
 } from 'slickgrid-react';
-import { type TableDataEntry } from '../../../../documentdb/ClusterSession';
-import { type CellValue } from '../../../../utils/slickgrid/CellValue';
-import { bsonStringToDisplayString } from '../../../utils/slickgrid/typeToDisplayString';
-import { CollectionViewContext } from '../collectionViewContext';
+import { type TableDataEntry } from '../../../../../documentdb/ClusterSession';
+import { type CellValue } from '../../../../../utils/slickgrid/CellValue';
+import { bsonStringToDisplayString } from '../../../../utils/slickgrid/typeToDisplayString';
+import { CollectionViewContext } from '../../collectionViewContext';
 import './dataViewPanelTable.scss';
 import { LoadingAnimationTable } from './LoadingAnimationTable';
 

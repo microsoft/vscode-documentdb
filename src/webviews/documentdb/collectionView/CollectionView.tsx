@@ -17,10 +17,10 @@ import {
     DefaultCollectionViewContext,
     Views,
 } from './collectionViewContext';
-import { DataViewPanelJSON } from './components/DataViewPanelJSON';
-import { DataViewPanelTable } from './components/DataViewPanelTable';
-import { DataViewPanelTree } from './components/DataViewPanelTree';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
+import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
+import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
+import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
 import { ToolbarDocumentManipulation } from './components/toolbar/ToolbarDocumentManipulation';
 import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
