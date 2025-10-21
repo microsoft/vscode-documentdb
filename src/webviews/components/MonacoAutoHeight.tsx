@@ -188,6 +188,18 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
         }
     };
 
+    /**
+     * Configures the Tab key behavior for the Monaco editor.
+     *
+     * When called, this function sets up or removes a keydown handler for the Tab key.
+     * If `shouldTrap` is true, Tab/Shift+Tab are trapped within the editor (focus remains in editor).
+     * If `shouldTrap` is false, Tab/Shift+Tab move focus to the next/previous focusable element outside the editor.
+     *
+     * @param {monacoEditor.editor.IStandaloneCodeEditor} editor - The Monaco editor instance.
+     * @param {boolean} shouldTrap - Whether to trap Tab key in the editor.
+     *   - true: Tab/Shift+Tab are trapped in the editor.
+     *   - false: Tab/Shift+Tab move focus to next/previous element.
+     */
     const configureTabKeyMode = (editor: monacoEditor.editor.IStandaloneCodeEditor, shouldTrap: boolean) => {
         if (tabKeyDisposerRef.current) {
             tabKeyDisposerRef.current.dispose();
