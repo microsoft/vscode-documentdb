@@ -426,6 +426,75 @@ describe('DocumentDBConnectionString', () => {
         });
     });
 
+    describe('duplicate query parameter keys', () => {
+        it('should preserve duplicate readPreference parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?readPreference=secondary&readPreference=primary';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            // URLSearchParams.getAll() returns all values for a key
+            const readPreferences = connStr.searchParams.getAll('readPreference');
+            expect(readPreferences).toEqual(['secondary', 'primary']);
+        });
+
+        it('should preserve duplicate tag parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?tag=prod&tag=us-east&tag=critical';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            const tags = connStr.searchParams.getAll('tag');
+            expect(tags).toEqual(['prod', 'us-east', 'critical']);
+        });
+
+        it('should preserve duplicate parameters with special characters', () => {
+            const uri = 'mongodb://host.example.com:27017/?appName=@app1@&appName=@app2@&ssl=true';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            const appNames = connStr.searchParams.getAll('appName');
+            expect(appNames).toEqual(['@app1@', '@app2@']);
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+        });
+
+        it('should maintain order of duplicate parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?a=1&b=2&a=3&c=4&a=5';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            const aValues = connStr.searchParams.getAll('a');
+            expect(aValues).toEqual(['1', '3', '5']);
+            expect(connStr.searchParams.get('b')).toBe('2');
+            expect(connStr.searchParams.get('c')).toBe('4');
+        });
+
+        it('should handle duplicate parameters in toString and re-parsing', () => {
+            const uri = 'mongodb://user:pass@host.example.com:27017/?tag=prod&tag=critical';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const connStrText = connStr.toString();
+
+            // Re-parse the connection string
+            const reparsed = new DocumentDBConnectionString(connStrText);
+            const tags = reparsed.searchParams.getAll('tag');
+
+            // Should preserve all tag values
+            expect(tags).toEqual(['prod', 'critical']);
+        });
+
+        it('should handle mixed duplicate and unique parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?ssl=true&tag=prod&tag=us-east&replicaSet=rs0&tag=critical';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+            expect(connStr.searchParams.get('replicaSet')).toBe('rs0');
+
+            const tags = connStr.searchParams.getAll('tag');
+            expect(tags).toEqual(['prod', 'us-east', 'critical']);
+        });
+    });
+
     describe('edge cases with special characters in query parameters', () => {
         it('should handle connection string with only @ in one parameter', () => {
             const uri = 'mongodb://host.example.com:27017/?tag=@';

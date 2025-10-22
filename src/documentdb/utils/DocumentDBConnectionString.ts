@@ -69,12 +69,19 @@ export class DocumentDBConnectionString extends ConnectionString {
         const searchParams = new URLSearchParams(queryString);
         const encodedParams: string[] = [];
 
-        // Re-encode all parameter values consistently
-        for (const [key, value] of searchParams.entries()) {
-            // URLSearchParams already decodes values when iterating
-            // So we just need to re-encode them properly
-            const encodedValue = encodeURIComponent(value);
-            encodedParams.push(`${key}=${encodedValue}`);
+        // Get all unique keys (without duplicates)
+        const uniqueKeys = [...new Set([...searchParams.keys()])];
+
+        // Process each key, preserving all values for duplicate keys
+        for (const key of uniqueKeys) {
+            // Get all values for this key (supports duplicate parameters)
+            const values = searchParams.getAll(key);
+
+            // Encode each value and add to the result
+            for (const value of values) {
+                const encodedValue = encodeURIComponent(value);
+                encodedParams.push(`${key}=${encodedValue}`);
+            }
         }
 
         return `${baseUrl}?${encodedParams.join('&')}`;
