@@ -17,6 +17,14 @@ import {
     DefaultCollectionViewContext,
     Views,
 } from './collectionViewContext';
+import { PerformanceTab } from './components/performanceTab/PerformanceTab';
+import { PerformanceTab2 } from './components/performanceTab/PerformanceTab2';
+import { PerformanceTab3 } from './components/performanceTab/PerformanceTab3';
+import { PerformanceTab4 } from './components/performanceTab/PerformanceTab4';
+import { PerformanceTabA } from './components/performanceTab/PerformanceTabA';
+import { PerformanceTabB } from './components/performanceTab/PerformanceTabB';
+import { PerformanceTabC } from './components/performanceTab/PerformanceTabC';
+import { PerformanceTabD } from './components/performanceTab/PerformanceTabD';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
@@ -73,6 +81,19 @@ export const CollectionView = (): JSX.Element => {
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
+
+    // Track which tab is currently active
+    const [selectedTab, setSelectedTab] = useState<
+        | 'tab_result'
+        | 'tab_performance1'
+        | 'tab_performance2'
+        | 'tab_performance3'
+        | 'tab_performance4'
+        | 'tab_pa'
+        | 'tab_pb'
+        | 'tab_pc'
+        | 'tab_pd'
+    >('tab_result');
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
@@ -447,48 +468,99 @@ export const CollectionView = (): JSX.Element => {
                     }}
                 />
 
-                <TabList selectedValue="tab_result" style={{ marginTop: '-10px' }}>
+                <TabList
+                    selectedValue={selectedTab}
+                    onTabSelect={(_event, data) => {
+                        setSelectedTab(
+                            data.value as
+                                | 'tab_result'
+                                | 'tab_performance1'
+                                | 'tab_performance2'
+                                | 'tab_performance3'
+                                | 'tab_performance4'
+                                | 'tab_pa'
+                                | 'tab_pb'
+                                | 'tab_pc'
+                                | 'tab_pd',
+                        );
+                    }}
+                    style={{ marginTop: '-10px' }}
+                >
                     <Tab id="tab.results" value="tab_result">
                         Results
                     </Tab>
-                    <Tab id="tab.performance" value="tab_performance">
-                        Performance
+                    <Tab id="tab.performance1" value="tab_performance1">
+                        Performance 1
+                    </Tab>
+                    <Tab id="tab.performance2" value="tab_performance2">
+                        Performance 2
+                    </Tab>
+                    <Tab id="tab.performance3" value="tab_performance3">
+                        Performance 3
+                    </Tab>
+                    <Tab id="tab.performance4" value="tab_performance4">
+                        Performance 4
+                    </Tab>
+                    <Tab id="tab.pa" value="tab_pa">
+                        P.A
+                    </Tab>
+                    <Tab id="tab.pb" value="tab_pb">
+                        P.B
+                    </Tab>
+                    <Tab id="tab.pc" value="tab_pc">
+                        P.C
+                    </Tab>
+                    <Tab id="tab.pd" value="tab_pd">
+                        P.D
                     </Tab>
                 </TabList>
 
-                <div className="resultsActionBar">
-                    <ToolbarViewNavigation />
-                    <ToolbarDocumentManipulation
-                        onDeleteClick={handleDeleteDocumentRequest}
-                        onEditClick={handleEditDocumentRequest}
-                        onViewClick={handleViewDocumentRequest}
-                        onAddClick={handleAddDocumentRequest}
-                    />
-                    <ViewSwitcher onViewChanged={handleViewChanged} />
-                </div>
+                {selectedTab === 'tab_result' && (
+                    <>
+                        <div className="resultsActionBar">
+                            <ToolbarViewNavigation />
+                            <ToolbarDocumentManipulation
+                                onDeleteClick={handleDeleteDocumentRequest}
+                                onEditClick={handleEditDocumentRequest}
+                                onViewClick={handleViewDocumentRequest}
+                                onAddClick={handleAddDocumentRequest}
+                            />
+                            <ViewSwitcher onViewChanged={handleViewChanged} />
+                        </div>
 
-                <div className="resultsDisplayArea" id="resultsDisplayAreaId">
-                    {
-                        {
-                            'Table View': (
-                                <DataViewPanelTable
-                                    liveHeaders={currentQueryResults?.tableHeaders ?? []}
-                                    liveData={currentQueryResults?.tableData ?? []}
-                                    handleStepIn={handleStepInRequest}
-                                />
-                            ),
-                            'Tree View': <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />,
-                            'JSON View': <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />,
-                            default: <div>error '{currentContext.currentView}'</div>,
-                        }[currentContext.currentView] // switch-statement
-                    }
-                </div>
+                        <div className="resultsDisplayArea" id="resultsDisplayAreaId">
+                            {
+                                {
+                                    'Table View': (
+                                        <DataViewPanelTable
+                                            liveHeaders={currentQueryResults?.tableHeaders ?? []}
+                                            liveData={currentQueryResults?.tableData ?? []}
+                                            handleStepIn={handleStepInRequest}
+                                        />
+                                    ),
+                                    'Tree View': <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />,
+                                    'JSON View': <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />,
+                                    default: <div>error '{currentContext.currentView}'</div>,
+                                }[currentContext.currentView] // switch-statement
+                            }
+                        </div>
 
-                {currentContext.currentView === Views.TABLE && (
-                    <div className="toolbarTableNavigation">
-                        <ToolbarTableNavigation />
-                    </div>
+                        {currentContext.currentView === Views.TABLE && (
+                            <div className="toolbarTableNavigation">
+                                <ToolbarTableNavigation />
+                            </div>
+                        )}
+                    </>
                 )}
+
+                {selectedTab === 'tab_performance1' && <PerformanceTab />}
+                {selectedTab === 'tab_performance2' && <PerformanceTab2 />}
+                {selectedTab === 'tab_performance3' && <PerformanceTab3 />}
+                {selectedTab === 'tab_performance4' && <PerformanceTab4 />}
+                {selectedTab === 'tab_pa' && <PerformanceTabA />}
+                {selectedTab === 'tab_pb' && <PerformanceTabB />}
+                {selectedTab === 'tab_pc' && <PerformanceTabC />}
+                {selectedTab === 'tab_pd' && <PerformanceTabD />}
             </div>
         </CollectionViewContext.Provider>
     );
