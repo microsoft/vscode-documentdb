@@ -113,7 +113,7 @@ export class DocumentDBConnectionString extends ConnectionString {
         try {
             return encodedUsername ? decodeURIComponent(encodedUsername) : '';
         } catch (err) {
-            console.error('Failed to decode connection string username', err);
+            console.warn('Failed to decode connection string username', err);
             return encodedUsername;
         }
     }
