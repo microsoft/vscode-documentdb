@@ -466,7 +466,8 @@ describe('DocumentDBConnectionString', () => {
         });
 
         it('should handle mixed special characters in parameters', () => {
-            const uri = 'mongodb://host.example.com:27017/?tag1=@user@&tag2=[prod]&tag3=test#1';
+            // Note: # must be encoded as %23, otherwise it's treated as a URL fragment
+            const uri = 'mongodb://host.example.com:27017/?tag1=@user@&tag2=[prod]&tag3=test%231';
 
             const connStr = new DocumentDBConnectionString(uri);
 
