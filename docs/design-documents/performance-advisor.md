@@ -339,29 +339,18 @@ Replace `n/a` with real values and recompute the ratio.
 
 ---
 
-## 4. Stage 3: AI-Powered Advisor (Opt-in)
+## 4. Tech Background: Paging and Query Scope
 
-After the user opts in, show a loading indicator and then the guidance.
+The current paging implementation in the extension relies on `skip` and `limit` to display results in pages. This approach is practical for some scenarios. For instance, the MongoDB RU (Request Unit) implementation has a cursor that expires after 60 seconds, making it risky to maintain a long-lived cursor for paging. Using `skip` and `limit` provides a stateless and reliable way to handle pagination in such environments.
 
-**Non-sharded example (summary)**
+However, this presents a challenge for the Query Insights tab. The `explain` plan reflects the query with `skip` and `limit`, which analyzes the performance of fetching a single page, not the overall query. For meaningful performance analysis, the insights should be based on the entire query scope, without the paging modifiers.
 
-> _The plan is an `IXSCAN` returning `100` docs with `1:1` docs/returned. No change recommended._
+To address this, we should consider one of the following solutions:
 
-**Sharded example (summary)**
+1.  **Rebuild Paging Entirely**: We could move to a cursor-based paging system. In this model, we would initiate a cursor for the base query (without `skip` or `limit`) and fetch documents page by page. This way, the `explain` plan would analyze the performance of the full query, providing a more accurate picture.
+2.  **Run an Unbounded Query for Analysis**: Alternatively, when the performance tab is activated, we could run a separate, unbounded query (without `skip` or `limit`) specifically for `explain("executionStats")`. This would allow us to gather performance metrics for the full query scope while keeping the existing `skip`/`limit` paging for the results view.
 
-> _Merged results across shards; examined `9,900` docs to return `50` (`198:1`). Consider indexing `{ status: 1, createdAt: -1 }` to support filter + sort._
-
-**Typical recommendation**
-
-- **Create/Adjust Index** `[Priority: High]`
-  - **Index**: `{ "user_id": 1 }`
-  - **Justification**: High docs/returned ratio suggests low selectivity.
-  - **Risks**: Additional write/storage overhead.
-  - **Mongo Shell Command**:
-    ```javascript
-    db.getCollection('a').createIndex({ user_id: 1 });
-    ```
-  - **[Button] Create Index**: Executes the command to create the suggested index.
+The goal is to ensure that the Query Insights tab always reflects the performance of the "full result" scope, giving users accurate and actionable recommendations.
 
 ---
 

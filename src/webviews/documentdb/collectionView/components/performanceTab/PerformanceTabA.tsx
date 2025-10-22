@@ -3,304 +3,366 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Button, Card, CardHeader, Label, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import { CheckmarkCircleRegular, LightbulbRegular, SparkleRegular } from '@fluentui/react-icons';
+import {
+    Badge,
+    Button,
+    Card,
+    Label,
+    makeStyles,
+    shorthands,
+    Skeleton,
+    SkeletonItem,
+    Text,
+    tokens,
+} from '@fluentui/react-components';
+import { ChevronRightRegular, LightbulbRegular, SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
+import { type JSX, useState } from 'react';
 
 const useStyles = makeStyles({
     container: {
         display: 'flex',
         flexDirection: 'column',
-        ...shorthands.gap('16px'),
-        ...shorthands.padding('16px'),
+        ...shorthands.gap('20px'),
+        ...shorthands.padding('20px'),
         height: '100%',
         overflowY: 'auto',
     },
-    header: {
+    summaryBar: {
         display: 'flex',
-        flexDirection: 'column',
-        ...shorthands.gap('8px'),
-    },
-    summaryGrid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-        ...shorthands.gap('16px'),
+        ...shorthands.gap('12px'),
+        ...shorthands.padding('16px'),
+        backgroundColor: tokens.colorNeutralBackground2,
+        ...shorthands.borderRadius('8px'),
+        ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     },
     summaryItem: {
+        flex: 1,
         display: 'flex',
         flexDirection: 'column',
         ...shorthands.gap('4px'),
     },
-    successBadge: {
-        backgroundColor: tokens.colorPaletteGreenBackground2,
-        color: tokens.colorPaletteGreenForeground2,
+    summaryValue: {
+        fontSize: '24px',
+        fontWeight: 600,
+        lineHeight: '28px',
     },
-    stagesCard: {
-        backgroundColor: tokens.colorNeutralBackground3,
-    },
-    stageItem: {
-        ...shorthands.padding('12px', '16px'),
-        ...shorthands.borderRadius('4px'),
-        backgroundColor: tokens.colorNeutralBackground1,
-        ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-        display: 'flex',
-        flexDirection: 'column',
-        ...shorthands.gap('8px'),
-    },
-    stageHeader: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    stageName: {
-        display: 'flex',
-        alignItems: 'center',
-        ...shorthands.gap('8px'),
-    },
-    stageMetrics: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        ...shorthands.gap('12px'),
-        marginTop: '8px',
-    },
-    metricItem: {
-        display: 'flex',
-        flexDirection: 'column',
-        ...shorthands.gap('4px'),
-    },
-    codeBlock: {
-        backgroundColor: tokens.colorNeutralBackground1,
-        ...shorthands.padding('12px'),
-        ...shorthands.borderRadius('4px'),
-        fontFamily: 'monospace',
+    summaryLabel: {
         fontSize: '12px',
-        ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
-        overflowX: 'auto',
+        color: tokens.colorNeutralForeground2,
     },
-    indexInfo: {
-        ...shorthands.padding('12px', '16px'),
+    planSection: {
+        display: 'flex',
+        flexDirection: 'column',
+        ...shorthands.gap('12px'),
+    },
+    planStages: {
+        display: 'flex',
+        alignItems: 'center',
+        ...shorthands.gap('8px'),
+        ...shorthands.padding('16px'),
+        backgroundColor: tokens.colorNeutralBackground1,
+        ...shorthands.borderRadius('6px'),
+        ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    },
+    stageChip: {
+        ...shorthands.padding('6px', '12px'),
         backgroundColor: tokens.colorBrandBackground2,
         ...shorthands.borderRadius('4px'),
-        ...shorthands.border('1px', 'solid', tokens.colorBrandStroke1),
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        fontWeight: 600,
     },
-    analysisSection: {
+    indexBounds: {
         display: 'flex',
-        flexDirection: 'column',
         ...shorthands.gap('8px'),
-        ...shorthands.padding('12px', '16px'),
-        backgroundColor: tokens.colorNeutralBackground2,
+        flexWrap: 'wrap',
+    },
+    boundsChip: {
+        ...shorthands.padding('4px', '8px'),
+        backgroundColor: tokens.colorNeutralBackground3,
         ...shorthands.borderRadius('4px'),
-        ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+        fontSize: '11px',
+        fontFamily: 'monospace',
     },
-    buttonGroup: {
-        display: 'flex',
-        ...shorthands.gap('8px'),
-        marginTop: '8px',
+    ctaButton: {
+        width: '100%',
+        justifyContent: 'center',
+    },
+    aiSection: {
+        ...shorthands.padding('20px'),
+        backgroundColor: tokens.colorBrandBackground2,
+        ...shorthands.borderRadius('8px'),
+        ...shorthands.border('1px', 'solid', tokens.colorBrandStroke1),
     },
 });
 
 export const PerformanceTabA = (): JSX.Element => {
     const styles = useStyles();
+    const [stage, setStage] = useState<1 | 2 | 3>(1);
+    const [isLoadingStage2, setIsLoadingStage2] = useState(false);
+    const [isLoadingAI, setIsLoadingAI] = useState(false);
+
+    const handleRunDetailedAnalysis = () => {
+        setIsLoadingStage2(true);
+        setTimeout(() => {
+            setIsLoadingStage2(false);
+            setStage(2);
+        }, 5000);
+    };
+
+    const handleGetAISuggestions = () => {
+        setIsLoadingAI(true);
+        setTimeout(() => {
+            setIsLoadingAI(false);
+            setStage(3);
+        }, 10000);
+    };
 
     return (
         <div className={styles.container}>
-            <div className={styles.header}>
+            {/* Summary Bar - Always Visible */}
+            <div className={styles.summaryBar}>
+                <div className={styles.summaryItem}>
+                    <div className={styles.summaryValue}>180 ms</div>
+                    <div className={styles.summaryLabel}>{l10n.t('Execution Time')}</div>
+                </div>
+                <div className={styles.summaryItem}>
+                    <div className={styles.summaryValue}>100</div>
+                    <div className={styles.summaryLabel}>{l10n.t('Documents Returned')}</div>
+                </div>
+                <div className={styles.summaryItem}>
+                    {stage === 1 ? (
+                        <>
+                            <div className={styles.summaryValue}>n/a</div>
+                            <div className={styles.summaryLabel}>{l10n.t('Keys Examined')}</div>
+                        </>
+                    ) : (
+                        <>
+                            <div className={styles.summaryValue}>100</div>
+                            <div className={styles.summaryLabel}>{l10n.t('Keys Examined')}</div>
+                        </>
+                    )}
+                </div>
+                <div className={styles.summaryItem}>
+                    {stage === 1 ? (
+                        <>
+                            <div className={styles.summaryValue}>n/a</div>
+                            <div className={styles.summaryLabel}>{l10n.t('Docs Examined')}</div>
+                        </>
+                    ) : (
+                        <>
+                            <div className={styles.summaryValue}>100</div>
+                            <div className={styles.summaryLabel}>{l10n.t('Docs Examined')}</div>
+                        </>
+                    )}
+                </div>
+                <div className={styles.summaryItem}>
+                    {stage === 1 ? (
+                        <>
+                            <div className={styles.summaryValue}>n/a</div>
+                            <div className={styles.summaryLabel}>{l10n.t('Docs/Returned')}</div>
+                        </>
+                    ) : (
+                        <>
+                            <div className={styles.summaryValue}>1 : 1</div>
+                            <div className={styles.summaryLabel}>{l10n.t('Docs/Returned')}</div>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Stage 1: Query Plan Summary */}
+            <div className={styles.planSection}>
                 <Label size="large" weight="semibold">
-                    {l10n.t('Query Performance Summary')}
+                    {l10n.t('Query Plan Summary')}
                 </Label>
 
-                <div className={styles.summaryGrid}>
-                    <div className={styles.summaryItem}>
-                        <Label size="small">{l10n.t('Documents Returned:')}</Label>
-                        <Label size="large" weight="semibold">
-                            10
+                <Card>
+                    <div style={{ padding: '16px' }}>
+                        <Label size="small" style={{ marginBottom: '8px', display: 'block' }}>
+                            {l10n.t('Winning Plan')}
                         </Label>
+                        <div className={styles.planStages}>
+                            <div className={styles.stageChip}>IXSCAN(status_1)</div>
+                            <ChevronRightRegular fontSize={20} />
+                            <div className={styles.stageChip}>FETCH</div>
+                            <ChevronRightRegular fontSize={20} />
+                            <div className={styles.stageChip}>PROJECTION</div>
+                        </div>
                     </div>
-                    <div className={styles.summaryItem}>
-                        <Label size="small">{l10n.t('Execution Time (ms):')}</Label>
-                        <Label size="large" weight="semibold">
-                            0.45
+                </Card>
+
+                <Card>
+                    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Label size="small">{l10n.t('Index Bounds')}</Label>
+                            <Badge appearance="tint" color="success">
+                                {l10n.t('Uses index')}
+                            </Badge>
+                        </div>
+                        <div className={styles.indexBounds}>
+                            <div className={styles.boundsChip}>status: ["PENDING", "PENDING"]</div>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card>
+                    <div style={{ padding: '16px' }}>
+                        <Label size="small" style={{ marginBottom: '8px', display: 'block' }}>
+                            {l10n.t('Rejected Plans')}
                         </Label>
+                        <Text size={300}>1 other plan considered (COLLSCAN)</Text>
                     </div>
-                    <div className={styles.summaryItem}>
-                        <Label size="small">{l10n.t('Index Keys Examined:')}</Label>
+                </Card>
+            </div>
+
+            {/* CTA for Stage 2 */}
+            {stage === 1 && (
+                <Button
+                    appearance="primary"
+                    size="large"
+                    className={styles.ctaButton}
+                    onClick={handleRunDetailedAnalysis}
+                    disabled={isLoadingStage2}
+                >
+                    {isLoadingStage2 ? l10n.t('Running Analysis...') : l10n.t('Run Detailed Analysis')}
+                </Button>
+            )}
+
+            {/* Loading State for Stage 2 */}
+            {isLoadingStage2 && (
+                <Card>
+                    <div style={{ padding: '20px' }}>
+                        <Text weight="semibold" style={{ marginBottom: '12px', display: 'block' }}>
+                            {l10n.t('Loading Execution Statistics...')}
+                        </Text>
+                        <Skeleton>
+                            <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                            <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                            <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                        </Skeleton>
+                    </div>
+                </Card>
+            )}
+
+            {/* Stage 2: Execution Details */}
+            {stage >= 2 && !isLoadingStage2 && (
+                <>
+                    <div className={styles.planSection}>
                         <Label size="large" weight="semibold">
-                            10
+                            {l10n.t('Execution Details')}
                         </Label>
+
+                        <Card>
+                            <div style={{ padding: '16px' }}>
+                                <Label size="small" style={{ marginBottom: '12px', display: 'block' }}>
+                                    {l10n.t('Per-Stage Counters')}
+                                </Label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <Text size={300}>IXSCAN(status_1)</Text>
+                                        <Text size={300} weight="semibold">
+                                            keysExamined: 100, nReturned: 100
+                                        </Text>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <Text size={300}>FETCH</Text>
+                                        <Text size={300} weight="semibold">
+                                            docsExamined: 100, nReturned: 100
+                                        </Text>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <Text size={300}>PROJECTION</Text>
+                                        <Text size={300} weight="semibold">
+                                            nReturned: 100
+                                        </Text>
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card>
+                            <div style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <Badge appearance="tint" color="success">
+                                    {l10n.t('Efficient')}
+                                </Badge>
+                                <Text size={300}>
+                                    {l10n.t('1:1 docs/returned ratio - All examined documents were returned')}
+                                </Text>
+                            </div>
+                        </Card>
                     </div>
-                    <div className={styles.summaryItem}>
-                        <Label size="small">{l10n.t('Documents Examined:')}</Label>
-                        <Label size="large" weight="semibold">
-                            10
-                        </Label>
-                    </div>
-                    <div className={styles.summaryItem}>
-                        <Label size="small">{l10n.t('Efficiency Ratio:')}</Label>
-                        <Label size="large" weight="semibold">
-                            1.0
-                        </Label>
-                    </div>
-                    <div className={styles.summaryItem}>
-                        <Badge
-                            appearance="filled"
-                            color="success"
-                            icon={<CheckmarkCircleRegular />}
-                            className={styles.successBadge}
+
+                    {/* CTA for Stage 3 */}
+                    {stage === 2 && (
+                        <Button
+                            appearance="primary"
+                            size="large"
+                            icon={<SparkleRegular />}
+                            className={styles.ctaButton}
+                            onClick={handleGetAISuggestions}
+                            disabled={isLoadingAI}
                         >
-                            {l10n.t('Index Used Efficiently')}
-                        </Badge>
-                    </div>
-                </div>
-            </div>
-
-            <div className={styles.indexInfo}>
-                <Label weight="semibold" style={{ marginBottom: '8px', display: 'block' }}>
-                    {l10n.t('Index Used')}
-                </Label>
-                <div className={styles.codeBlock}>{`region_id_1_purchase_items.item_id_1_purchase_date_-1`}</div>
-                <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <Label size="small">{l10n.t('Key Pattern:')}</Label>
-                    <div className={styles.codeBlock}>
-                        {`{ region_id: 1, "purchase_items.item_id": 1, purchase_date: -1 }`}
-                    </div>
-                </div>
-            </div>
-
-            <Card className={styles.stagesCard}>
-                <CardHeader
-                    header={
-                        <Label weight="semibold" size="large">
-                            {l10n.t('Execution Stages')}
-                        </Label>
-                    }
-                />
-
-                <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div className={styles.stageItem}>
-                        <div className={styles.stageHeader}>
-                            <div className={styles.stageName}>
-                                <Badge appearance="tint">LIMIT</Badge>
-                                <Label size="small">{l10n.t('Limit results to 10')}</Label>
-                            </div>
-                            <Label size="small" style={{ color: tokens.colorNeutralForeground3 }}>
-                                0.00 ms
-                            </Label>
-                        </div>
-                        <div className={styles.stageMetrics}>
-                            <div className={styles.metricItem}>
-                                <Label size="small">{l10n.t('nReturned')}</Label>
-                                <Label weight="semibold">10</Label>
-                            </div>
-                            <div className={styles.metricItem}>
-                                <Label size="small">{l10n.t('works')}</Label>
-                                <Label weight="semibold">11</Label>
-                            </div>
-                            <div className={styles.metricItem}>
-                                <Label size="small">{l10n.t('advanced')}</Label>
-                                <Label weight="semibold">10</Label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className={styles.stageItem}>
-                        <div className={styles.stageHeader}>
-                            <div className={styles.stageName}>
-                                <Badge appearance="tint">FETCH</Badge>
-                                <Label size="small">{l10n.t('Fetch matching documents')}</Label>
-                            </div>
-                            <Label size="small" style={{ color: tokens.colorNeutralForeground3 }}>
-                                0.00 ms
-                            </Label>
-                        </div>
-                        <div className={styles.stageMetrics}>
-                            <div className={styles.metricItem}>
-                                <Label size="small">{l10n.t('nReturned')}</Label>
-                                <Label weight="semibold">10</Label>
-                            </div>
-                            <div className={styles.metricItem}>
-                                <Label size="small">{l10n.t('docsExamined')}</Label>
-                                <Label weight="semibold">10</Label>
-                            </div>
-                            <div className={styles.metricItem}>
-                                <Label size="small">{l10n.t('works')}</Label>
-                                <Label weight="semibold">10</Label>
-                            </div>
-                        </div>
-                        <div style={{ marginTop: '8px' }}>
-                            <Label size="small">{l10n.t('Filter:')}</Label>
-                            <div className={styles.codeBlock}>
-                                {`purchase_items: { $elemMatch: { item_id: { $eq: 5 } } }`}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className={styles.stageItem}>
-                        <div className={styles.stageHeader}>
-                            <div className={styles.stageName}>
-                                <Badge appearance="tint">IXSCAN</Badge>
-                                <Label size="small">{l10n.t('Index Scan')}</Label>
-                            </div>
-                            <Label size="small" style={{ color: tokens.colorNeutralForeground3 }}>
-                                0.00 ms
-                            </Label>
-                        </div>
-                        <div className={styles.stageMetrics}>
-                            <div className={styles.metricItem}>
-                                <Label size="small">{l10n.t('nReturned')}</Label>
-                                <Label weight="semibold">10</Label>
-                            </div>
-                            <div className={styles.metricItem}>
-                                <Label size="small">{l10n.t('keysExamined')}</Label>
-                                <Label weight="semibold">10</Label>
-                            </div>
-                            <div className={styles.metricItem}>
-                                <Label size="small">{l10n.t('direction')}</Label>
-                                <Label weight="semibold">forward</Label>
-                            </div>
-                        </div>
-                        <div style={{ marginTop: '8px' }}>
-                            <Label size="small">{l10n.t('Index Bounds:')}</Label>
-                            <div className={styles.codeBlock}>
-                                {`region_id: [1, 1]\npurchase_items.item_id: [5, 5]\npurchase_date: [MaxKey, MinKey]`}
-                            </div>
-                        </div>
-                        <div style={{ marginTop: '8px', display: 'flex', gap: '16px' }}>
-                            <div>
-                                <Label size="small">{l10n.t('Multi-Key:')}</Label>
-                                <Label weight="semibold"> true</Label>
-                            </div>
-                            <div>
-                                <Label size="small">{l10n.t('Unique:')}</Label>
-                                <Label weight="semibold"> false</Label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </Card>
-
-            <Card>
-                <div style={{ padding: '16px' }}>
-                    <div className={styles.analysisSection}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <LightbulbRegular />
-                            <Label weight="semibold">{l10n.t('AI ANALYSIS')}</Label>
-                        </div>
-                        <Label>
-                            {l10n.t(
-                                'Excellent query performance! The index is being used efficiently with a 1:1 ratio of documents examined to returned. The compound index on region_id, purchase_items.item_id, and purchase_date allows the query to skip directly to relevant documents. The multi-key index on the purchase_items array handles the $elemMatch filter effectively.',
-                            )}
-                        </Label>
-                    </div>
-
-                    <div className={styles.buttonGroup}>
-                        <Button appearance="primary" icon={<SparkleRegular />}>
-                            {l10n.t('Get Detailed Analysis')}
+                            {isLoadingAI ? l10n.t('AI is analyzing...') : l10n.t('Get AI Suggestions')}
                         </Button>
-                        <Button appearance="secondary">{l10n.t('Export Plan')}</Button>
+                    )}
+
+                    {/* Loading State for AI */}
+                    {isLoadingAI && (
+                        <Card>
+                            <div style={{ padding: '20px' }}>
+                                <div
+                                    style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}
+                                >
+                                    <SparkleRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />
+                                    <Text weight="semibold">{l10n.t('AI is analyzing your query...')}</Text>
+                                </div>
+                                <Skeleton>
+                                    <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                                    <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                                    <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                                    <SkeletonItem size={16} style={{ width: '60%' }} />
+                                </Skeleton>
+                            </div>
+                        </Card>
+                    )}
+                </>
+            )}
+
+            {/* Stage 3: AI Recommendations */}
+            {stage === 3 && !isLoadingAI && (
+                <div className={styles.aiSection}>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <SparkleRegular fontSize={32} style={{ color: tokens.colorBrandForeground1 }} />
+                        <div style={{ flex: 1 }}>
+                            <Text weight="semibold" size={500} style={{ display: 'block', marginBottom: '12px' }}>
+                                {l10n.t('AI Analysis')}
+                            </Text>
+                            <Text size={300} style={{ display: 'block', marginBottom: '16px' }}>
+                                {l10n.t(
+                                    'The plan is an IXSCAN returning 100 docs with 1:1 docs/returned. No change recommended.',
+                                )}
+                            </Text>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '8px',
+                                    padding: '12px',
+                                    backgroundColor: tokens.colorNeutralBackground1,
+                                    borderRadius: '6px',
+                                }}
+                            >
+                                <LightbulbRegular fontSize={20} />
+                                <Text size={300}>
+                                    {l10n.t('Your query is already well-optimized. Consider monitoring as data grows.')}
+                                </Text>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </Card>
+            )}
         </div>
     );
 };

@@ -11,22 +11,18 @@ import {
     Badge,
     Button,
     Card,
-    InfoLabel,
     Label,
     makeStyles,
     ProgressBar,
     shorthands,
+    Skeleton,
+    SkeletonItem,
     Text,
     tokens,
 } from '@fluentui/react-components';
-import {
-    ArrowClockwiseRegular,
-    CheckmarkCircleRegular,
-    ChevronRightRegular,
-    SparkleRegular,
-} from '@fluentui/react-icons';
+import { ChevronRightRegular, SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
+import { type JSX, useState } from 'react';
 
 const useStyles = makeStyles({
     container: {
@@ -110,25 +106,36 @@ const useStyles = makeStyles({
 
 export const PerformanceTabC = (): JSX.Element => {
     const styles = useStyles();
+    const [stage, setStage] = useState<1 | 2 | 3>(1);
+    const [isLoadingStage2, setIsLoadingStage2] = useState(false);
+    const [isLoadingAI, setIsLoadingAI] = useState(false);
+
+    const handleRunDetailedAnalysis = () => {
+        setIsLoadingStage2(true);
+        setTimeout(() => {
+            setIsLoadingStage2(false);
+            setStage(2);
+        }, 5000);
+    };
+
+    const handleGetAISuggestions = () => {
+        setIsLoadingAI(true);
+        setTimeout(() => {
+            setIsLoadingAI(false);
+            setStage(3);
+        }, 10000);
+    };
 
     return (
         <div className={styles.container}>
-            <div className={styles.header}>
-                <Text size={600} weight="semibold">
-                    {l10n.t('Query Execution Analysis')}
-                </Text>
-                <Button appearance="subtle" icon={<ArrowClockwiseRegular />}>
-                    {l10n.t('Re-analyze')}
-                </Button>
-            </div>
-
+            {/* Stats Grid */}
             <div className={styles.statsGrid}>
                 <div className={styles.statBox}>
                     <Label size="small" style={{ color: tokens.colorNeutralForeground2 }}>
                         {l10n.t('Execution Time')}
                     </Label>
                     <Text size={500} weight="semibold">
-                        0.45 ms
+                        {stage >= 2 ? '120 ms' : '180 ms'}
                     </Text>
                 </div>
                 <div className={styles.statBox}>
@@ -136,7 +143,7 @@ export const PerformanceTabC = (): JSX.Element => {
                         {l10n.t('Documents Returned')}
                     </Label>
                     <Text size={500} weight="semibold">
-                        10
+                        100
                     </Text>
                 </div>
                 <div className={styles.statBox}>
@@ -144,71 +151,40 @@ export const PerformanceTabC = (): JSX.Element => {
                         {l10n.t('Documents Examined')}
                     </Label>
                     <Text size={500} weight="semibold">
-                        10
+                        {stage === 1 ? 'n/a' : '100'}
                     </Text>
                 </div>
-                <div className={`${styles.statBox} ${styles.statBoxSuccess}`}>
+                <div className={styles.statBox}>
                     <Label size="small" style={{ color: tokens.colorNeutralForeground2 }}>
                         {l10n.t('Index Keys Used')}
                     </Label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Text size={500} weight="semibold">
-                            10
-                        </Text>
-                        <CheckmarkCircleRegular fontSize={20} color={tokens.colorPaletteGreenForeground1} />
-                    </div>
+                    <Text size={500} weight="semibold">
+                        {stage === 1 ? 'n/a' : '100'}
+                    </Text>
                 </div>
             </div>
 
-            <Card>
-                <div style={{ padding: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                        <Text weight="semibold">{l10n.t('Query Efficiency')}</Text>
-                        <InfoLabel
-                            info={l10n.t(
-                                'Ratio of documents examined to documents returned. A ratio of 1.0 indicates perfect efficiency.',
-                            )}
-                        />
+            {/* Efficiency Bar - only show in Stage 2+ */}
+            {stage >= 2 && (
+                <Card>
+                    <div style={{ padding: '16px' }}>
+                        <Text weight="semibold" style={{ marginBottom: '12px', display: 'block' }}>
+                            {l10n.t('Query Efficiency')}
+                        </Text>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <ProgressBar value={1} max={1} color="success" style={{ flex: 1 }} />
+                            <Badge appearance="filled" color="success">
+                                {l10n.t('Perfect')}
+                            </Badge>
+                        </div>
+                        <Text size={200} style={{ marginTop: '8px', color: tokens.colorNeutralForeground2 }}>
+                            {l10n.t('1.0 ratio - All examined documents were returned')}
+                        </Text>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <ProgressBar value={1} max={1} color="success" style={{ flex: 1 }} />
-                        <Badge appearance="filled" color="success">
-                            {l10n.t('Perfect')}
-                        </Badge>
-                    </div>
-                    <Text size={200} style={{ marginTop: '8px', color: tokens.colorNeutralForeground2 }}>
-                        {l10n.t('1.0 ratio - Index scan returns exactly the documents needed')}
-                    </Text>
-                </div>
-            </Card>
+                </Card>
+            )}
 
-            <Card>
-                <div style={{ padding: '16px' }}>
-                    <Text weight="semibold" style={{ marginBottom: '12px', display: 'block' }}>
-                        {l10n.t('Index Information')}
-                    </Text>
-                    <div className={styles.codeBlock}>region_id_1_purchase_items.item_id_1_purchase_date_-1</div>
-                    <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                            <Label size="small">{l10n.t('Type:')}</Label>
-                            <Text> Compound Multi-Key</Text>
-                        </div>
-                        <div>
-                            <Label size="small">{l10n.t('Direction:')}</Label>
-                            <Text> Forward</Text>
-                        </div>
-                        <div>
-                            <Label size="small">{l10n.t('Unique:')}</Label>
-                            <Text> No</Text>
-                        </div>
-                        <div>
-                            <Label size="small">{l10n.t('Sparse:')}</Label>
-                            <Text> No</Text>
-                        </div>
-                    </div>
-                </div>
-            </Card>
-
+            {/* Stage 1: Execution Plan */}
             <div className={styles.executionPlan}>
                 <Text size={500} weight="semibold">
                     {l10n.t('Execution Plan Stages')}
@@ -218,49 +194,36 @@ export const PerformanceTabC = (): JSX.Element => {
                     <div className={styles.stageHeader}>
                         <div className={styles.stageTitle}>
                             <ChevronRightRegular fontSize={20} />
-                            <Text weight="semibold">LIMIT</Text>
-                            <Badge appearance="tint">{l10n.t('Result Limiter')}</Badge>
+                            <Text weight="semibold">IXSCAN</Text>
+                            <Badge appearance="tint">{l10n.t('Index Scan')}</Badge>
                         </div>
                         <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
-                            0.00 ms
+                            {stage >= 2 ? '0.00 ms' : '—'}
                         </Text>
                     </div>
 
-                    <div className={styles.stageDetails}>
-                        <div className={styles.metricItem}>
-                            <Label size="small">{l10n.t('nReturned')}</Label>
-                            <Text weight="semibold">10</Text>
+                    {stage >= 2 && (
+                        <div className={styles.stageDetails}>
+                            <div className={styles.metricItem}>
+                                <Label size="small">{l10n.t('keysExamined')}</Label>
+                                <Text weight="semibold">100</Text>
+                            </div>
+                            <div className={styles.metricItem}>
+                                <Label size="small">{l10n.t('nReturned')}</Label>
+                                <Text weight="semibold">100</Text>
+                            </div>
+                            <div className={styles.metricItem}>
+                                <Label size="small">{l10n.t('direction')}</Label>
+                                <Text weight="semibold">forward</Text>
+                            </div>
                         </div>
-                        <div className={styles.metricItem}>
-                            <Label size="small">{l10n.t('works')}</Label>
-                            <Text weight="semibold">11</Text>
-                        </div>
-                        <div className={styles.metricItem}>
-                            <Label size="small">{l10n.t('limitAmount')}</Label>
-                            <Text weight="semibold">10</Text>
-                        </div>
-                    </div>
+                    )}
 
                     <Accordion collapsible style={{ marginTop: '12px' }}>
-                        <AccordionItem value="details">
-                            <AccordionHeader size="small">{l10n.t('Stage Details')}</AccordionHeader>
+                        <AccordionItem value="bounds">
+                            <AccordionHeader size="small">{l10n.t('Index Bounds')}</AccordionHeader>
                             <AccordionPanel>
-                                <div className={styles.codeBlock}>
-                                    <pre style={{ margin: 0 }}>
-                                        {JSON.stringify(
-                                            {
-                                                stage: 'LIMIT',
-                                                nReturned: 10,
-                                                executionTimeMillisEstimate: 0,
-                                                works: 11,
-                                                advanced: 10,
-                                                limitAmount: 10,
-                                            },
-                                            null,
-                                            2,
-                                        )}
-                                    </pre>
-                                </div>
+                                <div className={styles.codeBlock}>status: ["PENDING", "PENDING"]</div>
                             </AccordionPanel>
                         </AccordionItem>
                     </Accordion>
@@ -274,87 +237,123 @@ export const PerformanceTabC = (): JSX.Element => {
                             <Badge appearance="tint">{l10n.t('Document Retrieval')}</Badge>
                         </div>
                         <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
-                            0.00 ms
+                            {stage >= 2 ? '0.00 ms' : '—'}
                         </Text>
                     </div>
 
-                    <div className={styles.stageDetails}>
-                        <div className={styles.metricItem}>
-                            <Label size="small">{l10n.t('nReturned')}</Label>
-                            <Text weight="semibold">10</Text>
+                    {stage >= 2 && (
+                        <div className={styles.stageDetails}>
+                            <div className={styles.metricItem}>
+                                <Label size="small">{l10n.t('docsExamined')}</Label>
+                                <Text weight="semibold">100</Text>
+                            </div>
+                            <div className={styles.metricItem}>
+                                <Label size="small">{l10n.t('nReturned')}</Label>
+                                <Text weight="semibold">100</Text>
+                            </div>
+                            <div className={styles.metricItem}>
+                                <Label size="small">{l10n.t('works')}</Label>
+                                <Text weight="semibold">100</Text>
+                            </div>
                         </div>
-                        <div className={styles.metricItem}>
-                            <Label size="small">{l10n.t('docsExamined')}</Label>
-                            <Text weight="semibold">10</Text>
-                        </div>
-                        <div className={styles.metricItem}>
-                            <Label size="small">{l10n.t('works')}</Label>
-                            <Text weight="semibold">10</Text>
-                        </div>
-                    </div>
-
-                    <div style={{ marginTop: '12px' }}>
-                        <Label size="small">{l10n.t('Filter:')}</Label>
-                        <div className={styles.codeBlock}>
-                            {`purchase_items: { $elemMatch: { item_id: { $eq: 5 } } }`}
-                        </div>
-                    </div>
-                </div>
-
-                <div className={styles.stageCard}>
-                    <div className={styles.stageHeader}>
-                        <div className={styles.stageTitle}>
-                            <ChevronRightRegular fontSize={20} />
-                            <Text weight="semibold">IXSCAN</Text>
-                            <Badge appearance="tint">{l10n.t('Index Scan')}</Badge>
-                        </div>
-                        <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
-                            0.00 ms
-                        </Text>
-                    </div>
-
-                    <div className={styles.stageDetails}>
-                        <div className={styles.metricItem}>
-                            <Label size="small">{l10n.t('nReturned')}</Label>
-                            <Text weight="semibold">10</Text>
-                        </div>
-                        <div className={styles.metricItem}>
-                            <Label size="small">{l10n.t('keysExamined')}</Label>
-                            <Text weight="semibold">10</Text>
-                        </div>
-                        <div className={styles.metricItem}>
-                            <Label size="small">{l10n.t('direction')}</Label>
-                            <Text weight="semibold">forward</Text>
-                        </div>
-                    </div>
-
-                    <div style={{ marginTop: '12px' }}>
-                        <Label size="small">{l10n.t('Index Bounds:')}</Label>
-                        <div className={styles.codeBlock}>
-                            {`region_id: [1, 1]\npurchase_items.item_id: [5, 5]\npurchase_date: [MaxKey, MinKey]`}
-                        </div>
-                    </div>
+                    )}
                 </div>
             </div>
 
-            <div className={styles.aiSuggestion}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    <SparkleRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />
-                    <div style={{ flex: 1 }}>
-                        <Text weight="semibold" style={{ display: 'block', marginBottom: '8px' }}>
-                            {l10n.t('AI Performance Review')}
+            {/* CTA for Stage 2 */}
+            {stage === 1 && (
+                <Button
+                    appearance="primary"
+                    size="large"
+                    style={{ width: '100%' }}
+                    onClick={handleRunDetailedAnalysis}
+                    disabled={isLoadingStage2}
+                >
+                    {isLoadingStage2 ? l10n.t('Running Analysis...') : l10n.t('Run Detailed Analysis')}
+                </Button>
+            )}
+
+            {/* Loading State for Stage 2 */}
+            {isLoadingStage2 && (
+                <Card>
+                    <div style={{ padding: '20px' }}>
+                        <Text weight="semibold" style={{ marginBottom: '12px', display: 'block' }}>
+                            {l10n.t('Executing query with instrumentation...')}
                         </Text>
-                        <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
-                            {l10n.t(
-                                'Excellent! Your compound index perfectly matches the query pattern. The multi-key index on purchase_items efficiently handles the array filtering. With a 1:1 efficiency ratio, no optimization is needed.',
-                            )}
-                        </Text>
-                        <Button appearance="primary" icon={<SparkleRegular />} size="small">
-                            {l10n.t('Get Detailed Insights')}
-                        </Button>
+                        <Skeleton>
+                            <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                            <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                            <SkeletonItem size={16} />
+                        </Skeleton>
+                    </div>
+                </Card>
+            )}
+
+            {/* CTA for Stage 3 */}
+            {stage === 2 && !isLoadingStage2 && (
+                <Button
+                    appearance="primary"
+                    size="large"
+                    icon={<SparkleRegular />}
+                    style={{ width: '100%' }}
+                    onClick={handleGetAISuggestions}
+                    disabled={isLoadingAI}
+                >
+                    {isLoadingAI ? l10n.t('AI is analyzing...') : l10n.t('Get AI Performance Insights')}
+                </Button>
+            )}
+
+            {/* Loading State for AI */}
+            {isLoadingAI && (
+                <Card>
+                    <div style={{ padding: '20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                            <SparkleRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />
+                            <Text weight="semibold">{l10n.t('AI is reviewing your execution plan...')}</Text>
+                        </div>
+                        <Skeleton>
+                            <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                            <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                            <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                            <SkeletonItem size={16} style={{ width: '75%' }} />
+                        </Skeleton>
+                    </div>
+                </Card>
+            )}
+
+            {/* Stage 3: AI Recommendations */}
+            {stage === 3 && !isLoadingAI && (
+                <div className={styles.aiSuggestion}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                        <SparkleRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />
+                        <div style={{ flex: 1 }}>
+                            <Text weight="semibold" style={{ display: 'block', marginBottom: '8px' }}>
+                                {l10n.t('AI Performance Review')}
+                            </Text>
+                            <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
+                                {l10n.t(
+                                    'The plan is an IXSCAN returning 100 docs with 1:1 docs/returned. No change recommended. Your query is already well-optimized.',
+                                )}
+                            </Text>
+                            <div
+                                style={{
+                                    padding: '12px',
+                                    backgroundColor: tokens.colorNeutralBackground1,
+                                    borderRadius: '6px',
+                                    marginTop: '8px',
+                                }}
+                            >
+                                <Badge appearance="filled" color="success" style={{ marginRight: '8px' }}>
+                                    {l10n.t('Optimal')}
+                                </Badge>
+                                <Text size={200}>
+                                    {l10n.t('Index usage is efficient. Continue monitoring as data grows.')}
+                                </Text>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };

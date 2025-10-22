@@ -25,6 +25,7 @@ import { PerformanceTabA } from './components/performanceTab/PerformanceTabA';
 import { PerformanceTabB } from './components/performanceTab/PerformanceTabB';
 import { PerformanceTabC } from './components/performanceTab/PerformanceTabC';
 import { PerformanceTabD } from './components/performanceTab/PerformanceTabD';
+import { PerformanceTabMain } from './components/performanceTab/PerformanceTabMain';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
@@ -85,6 +86,7 @@ export const CollectionView = (): JSX.Element => {
     // Track which tab is currently active
     const [selectedTab, setSelectedTab] = useState<
         | 'tab_result'
+        | 'tab_performance_main'
         | 'tab_performance1'
         | 'tab_performance2'
         | 'tab_performance3'
@@ -474,6 +476,7 @@ export const CollectionView = (): JSX.Element => {
                         setSelectedTab(
                             data.value as
                                 | 'tab_result'
+                                | 'tab_performance_main'
                                 | 'tab_performance1'
                                 | 'tab_performance2'
                                 | 'tab_performance3'
@@ -488,6 +491,9 @@ export const CollectionView = (): JSX.Element => {
                 >
                     <Tab id="tab.results" value="tab_result">
                         Results
+                    </Tab>
+                    <Tab id="tab.performance.main" value="tab_performance_main">
+                        Query Insights Mock
                     </Tab>
                     <Tab id="tab.performance1" value="tab_performance1">
                         Performance 1
@@ -553,6 +559,7 @@ export const CollectionView = (): JSX.Element => {
                     </>
                 )}
 
+                {selectedTab === 'tab_performance_main' && <PerformanceTabMain />}
                 {selectedTab === 'tab_performance1' && <PerformanceTab />}
                 {selectedTab === 'tab_performance2' && <PerformanceTab2 />}
                 {selectedTab === 'tab_performance3' && <PerformanceTab3 />}

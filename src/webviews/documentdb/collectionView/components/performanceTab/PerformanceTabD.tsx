@@ -7,35 +7,21 @@ import {
     Badge,
     Button,
     Card,
-    createTableColumn,
-    DataGrid,
-    DataGridBody,
-    DataGridCell,
-    DataGridHeader,
-    DataGridHeaderCell,
-    DataGridRow,
     Label,
     makeStyles,
     mergeClasses,
     shorthands,
-    TableCellLayout,
-    type TableColumnDefinition,
+    Skeleton,
+    SkeletonItem,
     Text,
     tokens,
     Tree,
     TreeItem,
     TreeItemLayout,
 } from '@fluentui/react-components';
-import {
-    ChevronDownRegular,
-    ChevronRightRegular,
-    CircleRegular,
-    DatabaseRegular,
-    SparkleRegular,
-    TargetArrowRegular,
-} from '@fluentui/react-icons';
+import { ChevronRightRegular, DatabaseRegular, SparkleRegular, TargetArrowRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
+import { type JSX, useState } from 'react';
 
 const useStyles = makeStyles({
     container: {
@@ -133,328 +119,273 @@ const useStyles = makeStyles({
     },
 });
 
-interface StageMetric {
-    metric: string;
-    value: string | number;
-    unit?: string;
-}
-
-const columns: TableColumnDefinition<StageMetric>[] = [
-    createTableColumn<StageMetric>({
-        columnId: 'metric',
-        renderHeaderCell: () => l10n.t('Metric'),
-        renderCell: (item) => <TableCellLayout>{item.metric}</TableCellLayout>,
-    }),
-    createTableColumn<StageMetric>({
-        columnId: 'value',
-        renderHeaderCell: () => l10n.t('Value'),
-        renderCell: (item) => (
-            <TableCellLayout>
-                <Text weight="semibold">
-                    {item.value} {item.unit || ''}
-                </Text>
-            </TableCellLayout>
-        ),
-    }),
-];
-
-const stageMetrics: StageMetric[] = [
-    { metric: l10n.t('nReturned'), value: 10 },
-    { metric: l10n.t('executionTimeMillis'), value: 0.45, unit: 'ms' },
-    { metric: l10n.t('totalKeysExamined'), value: 10 },
-    { metric: l10n.t('totalDocsExamined'), value: 10 },
-    { metric: l10n.t('Efficiency Ratio'), value: '1.0' },
-    { metric: l10n.t('Index Used'), value: 'Yes' },
-];
-
 export const PerformanceTabD = (): JSX.Element => {
     const styles = useStyles();
+    const [stage, setStage] = useState<1 | 2 | 3>(1);
+    const [isLoadingStage2, setIsLoadingStage2] = useState(false);
+    const [isLoadingAI, setIsLoadingAI] = useState(false);
+
+    const handleRunDetailedAnalysis = () => {
+        setIsLoadingStage2(true);
+        setTimeout(() => {
+            setIsLoadingStage2(false);
+            setStage(2);
+        }, 5000);
+    };
+
+    const handleGetAISuggestions = () => {
+        setIsLoadingAI(true);
+        setTimeout(() => {
+            setIsLoadingAI(false);
+            setStage(3);
+        }, 10000);
+    };
 
     return (
         <div className={styles.container}>
             <div className={styles.leftPanel}>
+                {/* Metrics Row */}
                 <Card>
                     <div className={styles.metricsRow}>
                         <Card className={styles.metricCard} appearance="filled">
                             <DatabaseRegular fontSize={24} />
-                            <div className={styles.metricValue}>10</div>
+                            <div className={styles.metricValue}>100</div>
                             <Label size="small">{l10n.t('Docs Returned')}</Label>
                         </Card>
                         <Card className={styles.metricCard} appearance="filled">
                             <TargetArrowRegular fontSize={24} />
-                            <div className={styles.metricValue}>10</div>
+                            <div className={styles.metricValue}>{stage === 1 ? 'n/a' : '100'}</div>
                             <Label size="small">{l10n.t('Docs Examined')}</Label>
                         </Card>
                         <Card className={styles.metricCard} appearance="filled">
-                            <CircleRegular fontSize={24} />
-                            <div className={styles.metricValue}>0.45</div>
-                            <Label size="small">{l10n.t('Time (ms)')}</Label>
+                            <Label size="small" style={{ fontSize: '10px' }}>
+                                {l10n.t('Time')}
+                            </Label>
+                            <div className={styles.metricValue}>{stage >= 2 ? '120' : '180'}</div>
+                            <Label size="small">{l10n.t('ms')}</Label>
                         </Card>
                     </div>
                 </Card>
 
+                {/* Execution Plan Tree */}
                 <Card>
                     <div className={styles.treeContainer}>
                         <Text weight="semibold" style={{ marginBottom: '12px', display: 'block' }}>
                             {l10n.t('Execution Plan Tree')}
                         </Text>
                         <Tree aria-label="Execution Plan">
-                            <TreeItem itemType="branch" value="limit">
+                            <TreeItem itemType="branch" value="ixscan">
                                 <TreeItemLayout>
                                     <div className={styles.stageNode}>
                                         <Badge appearance="filled" className={styles.stageBadge}>
-                                            LIMIT
+                                            IXSCAN
                                         </Badge>
-                                        <Text size={300}>{l10n.t('Limit Results')}</Text>
-                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                            0.00ms
-                                        </Text>
+                                        <Text size={300}>{l10n.t('Index Scan')}</Text>
+                                        {stage >= 2 && (
+                                            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                                0.00ms
+                                            </Text>
+                                        )}
                                     </div>
                                 </TreeItemLayout>
                                 <Tree>
-                                    <TreeItem itemType="branch" value="fetch">
+                                    <TreeItem itemType="leaf">
                                         <TreeItemLayout>
-                                            <div className={styles.stageNode}>
-                                                <Badge appearance="filled" className={styles.stageBadge}>
-                                                    FETCH
-                                                </Badge>
-                                                <Text size={300}>{l10n.t('Fetch Documents')}</Text>
-                                                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                                    0.00ms
-                                                </Text>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <ChevronRightRegular fontSize={16} />
+                                                <Text size={300}>{l10n.t('Index: status_1')}</Text>
                                             </div>
                                         </TreeItemLayout>
-                                        <Tree>
-                                            <TreeItem itemType="leaf">
-                                                <TreeItemLayout>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <ChevronRightRegular fontSize={16} />
-                                                        <Text size={300}>
-                                                            {l10n.t('Filter: purchase_items.$elemMatch')}
-                                                        </Text>
-                                                    </div>
-                                                </TreeItemLayout>
-                                            </TreeItem>
-                                            <TreeItem itemType="leaf">
-                                                <TreeItemLayout>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <ChevronRightRegular fontSize={16} />
-                                                        <Text size={300}>
-                                                            {l10n.t('10 docs examined → 10 returned')}
-                                                        </Text>
-                                                    </div>
-                                                </TreeItemLayout>
-                                            </TreeItem>
-                                            <TreeItem itemType="branch" value="ixscan">
-                                                <TreeItemLayout>
-                                                    <div className={styles.stageNode}>
-                                                        <Badge appearance="filled" className={styles.stageBadge}>
-                                                            IXSCAN
-                                                        </Badge>
-                                                        <Text size={300}>{l10n.t('Index Scan')}</Text>
-                                                        <Text
-                                                            size={200}
-                                                            style={{ color: tokens.colorNeutralForeground3 }}
-                                                        >
-                                                            0.00ms
-                                                        </Text>
-                                                    </div>
-                                                </TreeItemLayout>
-                                                <Tree>
-                                                    <TreeItem itemType="leaf">
-                                                        <TreeItemLayout>
-                                                            <div
-                                                                style={{
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '8px',
-                                                                }}
-                                                            >
-                                                                <ChevronRightRegular fontSize={16} />
-                                                                <Text size={300}>
-                                                                    {l10n.t(
-                                                                        'Index: region_id + purchase_items.item_id + purchase_date',
-                                                                    )}
-                                                                </Text>
-                                                            </div>
-                                                        </TreeItemLayout>
-                                                    </TreeItem>
-                                                    <TreeItem itemType="leaf">
-                                                        <TreeItemLayout>
-                                                            <div
-                                                                style={{
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '8px',
-                                                                }}
-                                                            >
-                                                                <ChevronRightRegular fontSize={16} />
-                                                                <Text size={300}>
-                                                                    {l10n.t('10 keys examined, 10 returned')}
-                                                                </Text>
-                                                            </div>
-                                                        </TreeItemLayout>
-                                                    </TreeItem>
-                                                    <TreeItem itemType="leaf">
-                                                        <TreeItemLayout>
-                                                            <div
-                                                                style={{
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '8px',
-                                                                }}
-                                                            >
-                                                                <ChevronRightRegular fontSize={16} />
-                                                                <Text size={300}>{l10n.t('Multi-key: true')}</Text>
-                                                            </div>
-                                                        </TreeItemLayout>
-                                                    </TreeItem>
-                                                </Tree>
-                                            </TreeItem>
-                                        </Tree>
                                     </TreeItem>
+                                    {stage >= 2 && (
+                                        <TreeItem itemType="leaf">
+                                            <TreeItemLayout>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <ChevronRightRegular fontSize={16} />
+                                                    <Text size={300}>{l10n.t('100 keys examined, 100 returned')}</Text>
+                                                </div>
+                                            </TreeItemLayout>
+                                        </TreeItem>
+                                    )}
                                 </Tree>
+                            </TreeItem>
+                        </Tree>
+
+                        <Tree aria-label="Fetch Stage" style={{ marginTop: '12px' }}>
+                            <TreeItem itemType="branch" value="fetch">
+                                <TreeItemLayout>
+                                    <div className={styles.stageNode}>
+                                        <Badge appearance="filled" className={styles.stageBadge}>
+                                            FETCH
+                                        </Badge>
+                                        <Text size={300}>{l10n.t('Fetch Documents')}</Text>
+                                        {stage >= 2 && (
+                                            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                                0.00ms
+                                            </Text>
+                                        )}
+                                    </div>
+                                </TreeItemLayout>
+                                {stage >= 2 && (
+                                    <Tree>
+                                        <TreeItem itemType="leaf">
+                                            <TreeItemLayout>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <ChevronRightRegular fontSize={16} />
+                                                    <Text size={300}>{l10n.t('100 docs examined → 100 returned')}</Text>
+                                                </div>
+                                            </TreeItemLayout>
+                                        </TreeItem>
+                                    </Tree>
+                                )}
                             </TreeItem>
                         </Tree>
                     </div>
                 </Card>
 
-                <Card>
-                    <div style={{ padding: '16px' }}>
-                        <Text weight="semibold" style={{ marginBottom: '12px', display: 'block' }}>
-                            {l10n.t('Overall Metrics')}
-                        </Text>
-                        <DataGrid items={stageMetrics} columns={columns} size="small">
-                            <DataGridHeader>
-                                <DataGridRow>
-                                    {({ renderHeaderCell }) => (
-                                        <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                                    )}
-                                </DataGridRow>
-                            </DataGridHeader>
-                            <DataGridBody<StageMetric>>
-                                {({ item, rowId }) => (
-                                    <DataGridRow<StageMetric> key={rowId}>
-                                        {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-                                    </DataGridRow>
-                                )}
-                            </DataGridBody>
-                        </DataGrid>
-                    </div>
-                </Card>
+                {/* CTA for Stage 2 */}
+                {stage === 1 && (
+                    <Button
+                        appearance="primary"
+                        size="large"
+                        style={{ width: '100%' }}
+                        onClick={handleRunDetailedAnalysis}
+                        disabled={isLoadingStage2}
+                    >
+                        {isLoadingStage2 ? l10n.t('Running Detailed Analysis...') : l10n.t('Run Detailed Analysis')}
+                    </Button>
+                )}
+
+                {/* Loading State for Stage 2 */}
+                {isLoadingStage2 && (
+                    <Card>
+                        <div style={{ padding: '20px' }}>
+                            <Text weight="semibold" style={{ marginBottom: '12px', display: 'block' }}>
+                                {l10n.t('Collecting execution statistics...')}
+                            </Text>
+                            <Skeleton>
+                                <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                                <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                                <SkeletonItem size={16} />
+                            </Skeleton>
+                        </div>
+                    </Card>
+                )}
             </div>
 
             <div className={styles.rightPanel}>
-                <Card className={styles.detailsCard}>
-                    <Text weight="semibold" size={500}>
-                        {l10n.t('Index Details')}
-                    </Text>
-
-                    <div style={{ marginTop: '12px' }}>
-                        <Label size="small">{l10n.t('Index Name:')}</Label>
-                        <div className={styles.codeBlock}>region_id_1_purchase_items.item_id_1_purchase_date_-1</div>
-                    </div>
-
-                    <div className={styles.detailsGrid}>
-                        <div className={styles.detailItem}>
-                            <Label size="small">{l10n.t('Type')}</Label>
-                            <Text>Compound Multi-Key</Text>
-                        </div>
-                        <div className={styles.detailItem}>
-                            <Label size="small">{l10n.t('Direction')}</Label>
-                            <Text>Forward</Text>
-                        </div>
-                        <div className={styles.detailItem}>
-                            <Label size="small">{l10n.t('Unique')}</Label>
-                            <Text>No</Text>
-                        </div>
-                        <div className={styles.detailItem}>
-                            <Label size="small">{l10n.t('Sparse')}</Label>
-                            <Text>No</Text>
-                        </div>
-                        <div className={styles.detailItem}>
-                            <Label size="small">{l10n.t('Partial')}</Label>
-                            <Text>No</Text>
-                        </div>
-                        <div className={styles.detailItem}>
-                            <Label size="small">{l10n.t('Version')}</Label>
-                            <Text>2</Text>
-                        </div>
-                    </div>
-
-                    <div style={{ marginTop: '16px' }}>
-                        <Label size="small">{l10n.t('Multi-Key Paths:')}</Label>
-                        <div className={styles.codeBlock}>{`purchase_items.item_id: ["purchase_items"]`}</div>
-                    </div>
-
-                    <div style={{ marginTop: '16px' }}>
-                        <Label size="small" style={{ marginBottom: '8px', display: 'block' }}>
-                            {l10n.t('Performance Rating')}
-                        </Label>
-                        <div className={styles.efficiencyIndicator}>
-                            <div className={mergeClasses(styles.efficiencyDot, styles.excellentDot)} />
-                            <div style={{ flex: 1 }}>
-                                <Text weight="semibold">{l10n.t('Excellent')}</Text>
-                                <Text size={200} style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-                                    {l10n.t('Perfect 1:1 scan ratio - optimal index usage')}
-                                </Text>
-                            </div>
-                        </div>
-                    </div>
-                </Card>
-
-                <Card className={styles.aiCard}>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                        <SparkleRegular fontSize={32} style={{ color: tokens.colorBrandForeground1 }} />
-                        <div style={{ flex: 1 }}>
-                            <Text weight="semibold" size={500} style={{ display: 'block', marginBottom: '8px' }}>
-                                {l10n.t('AI Performance Insights')}
-                            </Text>
-                            <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
-                                {l10n.t(
-                                    'Outstanding performance! Your compound index perfectly matches the query predicates. The multi-key index efficiently handles the array field filtering, achieving a perfect 1:1 efficiency ratio.',
-                                )}
-                            </Text>
-                            <Text
-                                size={300}
-                                weight="semibold"
-                                style={{ display: 'block', marginBottom: '12px', color: tokens.colorBrandForeground1 }}
-                            >
-                                {l10n.t('✓ No optimization needed')}
-                            </Text>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <Button appearance="primary" icon={<SparkleRegular />} size="small">
-                                    {l10n.t('Get Detailed Report')}
-                                </Button>
-                                <Button appearance="subtle" size="small">
-                                    {l10n.t('View Tips')}
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </Card>
-
-                <Card>
-                    <div style={{ padding: '16px' }}>
-                        <Text weight="semibold" size={500} style={{ marginBottom: '12px', display: 'block' }}>
-                            {l10n.t('Quick Actions')}
+                {/* Index Details */}
+                {stage >= 2 && !isLoadingStage2 && (
+                    <Card className={styles.detailsCard}>
+                        <Text weight="semibold" size={500}>
+                            {l10n.t('Execution Summary')}
                         </Text>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <Button appearance="outline" style={{ justifyContent: 'flex-start' }}>
-                                <ChevronDownRegular style={{ marginRight: '8px' }} />
-                                {l10n.t('Export Execution Plan')}
-                            </Button>
-                            <Button appearance="outline" style={{ justifyContent: 'flex-start' }}>
-                                <ChevronDownRegular style={{ marginRight: '8px' }} />
-                                {l10n.t('View Raw Explain Output')}
-                            </Button>
-                            <Button appearance="outline" style={{ justifyContent: 'flex-start' }}>
-                                <ChevronDownRegular style={{ marginRight: '8px' }} />
-                                {l10n.t('Share Performance Report')}
-                            </Button>
+
+                        <div className={styles.detailsGrid}>
+                            <div className={styles.detailItem}>
+                                <Label size="small">{l10n.t('Plan Type')}</Label>
+                                <Text>IXSCAN → FETCH</Text>
+                            </div>
+                            <div className={styles.detailItem}>
+                                <Label size="small">{l10n.t('Index Used')}</Label>
+                                <Text>status_1</Text>
+                            </div>
+                            <div className={styles.detailItem}>
+                                <Label size="small">{l10n.t('Efficiency Ratio')}</Label>
+                                <Text>1.0</Text>
+                            </div>
+                            <div className={styles.detailItem}>
+                                <Label size="small">{l10n.t('In-Memory Sort')}</Label>
+                                <Text>No</Text>
+                            </div>
                         </div>
-                    </div>
-                </Card>
+
+                        <div style={{ marginTop: '16px' }}>
+                            <div className={styles.efficiencyIndicator}>
+                                <div className={mergeClasses(styles.efficiencyDot, styles.excellentDot)} />
+                                <div style={{ flex: 1 }}>
+                                    <Text weight="semibold">{l10n.t('Excellent')}</Text>
+                                    <Text
+                                        size={200}
+                                        style={{ display: 'block', color: tokens.colorNeutralForeground3 }}
+                                    >
+                                        {l10n.t('Perfect 1:1 scan ratio')}
+                                    </Text>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+                )}
+
+                {/* CTA for Stage 3 */}
+                {stage === 2 && !isLoadingStage2 && (
+                    <Button
+                        appearance="primary"
+                        size="large"
+                        icon={<SparkleRegular />}
+                        style={{ width: '100%' }}
+                        onClick={handleGetAISuggestions}
+                        disabled={isLoadingAI}
+                    >
+                        {isLoadingAI ? l10n.t('AI is analyzing...') : l10n.t('Get AI Insights')}
+                    </Button>
+                )}
+
+                {/* Loading State for AI */}
+                {isLoadingAI && (
+                    <Card>
+                        <div style={{ padding: '20px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                                <SparkleRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />
+                                <Text weight="semibold">{l10n.t('Generating AI insights...')}</Text>
+                            </div>
+                            <Skeleton>
+                                <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                                <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                                <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
+                                <SkeletonItem size={16} style={{ width: '65%' }} />
+                            </Skeleton>
+                        </div>
+                    </Card>
+                )}
+
+                {/* Stage 3: AI Recommendations */}
+                {stage === 3 && !isLoadingAI && (
+                    <Card className={styles.aiCard}>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <SparkleRegular fontSize={32} style={{ color: tokens.colorBrandForeground1 }} />
+                            <div style={{ flex: 1 }}>
+                                <Text weight="semibold" size={500} style={{ display: 'block', marginBottom: '8px' }}>
+                                    {l10n.t('AI Analysis')}
+                                </Text>
+                                <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
+                                    {l10n.t(
+                                        'The plan is an IXSCAN returning 100 docs with 1:1 docs/returned. No change recommended.',
+                                    )}
+                                </Text>
+                                <Text
+                                    size={300}
+                                    weight="semibold"
+                                    style={{
+                                        display: 'block',
+                                        marginBottom: '12px',
+                                        color: tokens.colorBrandForeground1,
+                                    }}
+                                >
+                                    {l10n.t('✓ Query is already optimized')}
+                                </Text>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <Button appearance="primary" size="small">
+                                        {l10n.t('Export Report')}
+                                    </Button>
+                                    <Button appearance="subtle" size="small">
+                                        {l10n.t('Close')}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+                )}
             </div>
         </div>
     );
