@@ -394,9 +394,27 @@ export class ClustersClient {
             }
         }
 
+        // Build and log the query command for debugging
+        const commandParts: string[] = [`db.${databaseName}.${collectionName}.find(${filterStr})`];
+        if (queryParams.sort && queryParams.sort.trim() !== '{}') {
+            commandParts.push(`.sort(${queryParams.sort})`);
+        }
+        if (queryParams.project && queryParams.project.trim() !== '{}') {
+            commandParts.push(`.projection(${queryParams.project})`);
+        }
+        if (queryParams.skip && queryParams.skip > 0) {
+            commandParts.push(`.skip(${queryParams.skip})`);
+        }
+        if (queryParams.limit && queryParams.limit > 0) {
+            commandParts.push(`.limit(${queryParams.limit})`);
+        }
+        // const commandStr = commandParts.join('');
+        // console.log(`[runFindQuery] Executing command: ${commandStr}`);
+
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
         const documents = await collection.find(filterObj, options).toArray();
 
+        // console.log(`[runFindQuery] Query returned ${documents.length} documents`);
         return documents;
     }
 

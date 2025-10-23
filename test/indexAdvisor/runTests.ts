@@ -10,13 +10,14 @@
  * to execute optimization tests.
  */
 
-import * as fs from 'fs';
-import { generateOutputPath, loadConfig, loadTestCases, saveResults } from './utils';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-// Load types via JSDoc comments instead of import type
-/**
- * @typedef {import('./types').TestResult} TestResult
- */
+import * as fs from 'fs';
+import type { TestResult } from './types';
+import { generateOutputPath, loadConfig, loadTestCases, saveResults } from './utils';
 
 // Parse command line arguments
 interface CliArgs {
@@ -170,9 +171,10 @@ async function main(): Promise<void> {
         // Create placeholder results file
         const placeholderResults: TestResult[] = testCases.map((tc) => ({
             collectionName: tc.collectionName,
+            category: tc.category,
+            scenarioDescription: tc.scenarioDescription,
             query: tc.query,
             expectedResult: tc.expectedResult,
-            notes: tc.notes,
             errors: 'Test not executed - please run via VS Code extension',
         }));
 

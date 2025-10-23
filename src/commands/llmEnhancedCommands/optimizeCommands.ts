@@ -36,6 +36,10 @@ export interface QueryOptimizationContext {
     query: string;
     // The detected command type
     commandType: CommandType;
+    // Preferred LLM model for optimization
+    preferredModel?: string;
+    // Fallback LLM models
+    fallbackModels?: string[];
 }
 
 /**
@@ -204,20 +208,23 @@ export async function optimizeQuery(
     );
 
     // Send to Copilot with configured models
+    const preferredModelToUse = queryContext.preferredModel || PREFERRED_MODEL;
+    const fallbackModelsToUse = queryContext.fallbackModels || FALLBACK_MODELS;
+
     const response = await CopilotService.sendMessage([vscode.LanguageModelChatMessage.User(promptContent)], {
-        preferredModel: PREFERRED_MODEL,
-        fallbackModels: FALLBACK_MODELS,
+        preferredModel: preferredModelToUse,
+        fallbackModels: fallbackModelsToUse,
     });
 
     // Check if the preferred model was used
-    if (response.modelUsed !== PREFERRED_MODEL && PREFERRED_MODEL) {
+    if (response.modelUsed !== preferredModelToUse && preferredModelToUse) {
         // Show warning if not using preferred model
         void vscode.window.showWarningMessage(
             l10n.t(
                 'Index optimization is using model "{actualModel}" instead of preferred "{preferredModel}". Recommendations may be less optimal.',
                 {
                     actualModel: response.modelUsed,
-                    preferredModel: PREFERRED_MODEL,
+                    preferredModel: preferredModelToUse,
                 },
             ),
         );

@@ -43,9 +43,10 @@ export function loadTestCases(csvPath: string): TestCase[] {
     // Parse header
     const header = lines[0].split(',').map((h) => h.trim());
     const colNameIdx = header.indexOf('collectionName');
+    const categoryIdx = header.indexOf('category');
+    const scenarioIdx = header.indexOf('scenarioDescription');
     const queryIdx = header.indexOf('query');
     const expectedIdx = header.indexOf('expectedResult');
-    const notesIdx = header.indexOf('notes');
 
     // Parse rows
     const testCases: TestCase[] = [];
@@ -60,9 +61,10 @@ export function loadTestCases(csvPath: string): TestCase[] {
 
         testCases.push({
             collectionName: values[colNameIdx] || '',
+            category: values[categoryIdx] || '',
+            scenarioDescription: values[scenarioIdx] || '',
             query: values[queryIdx] || '',
             expectedResult: values[expectedIdx] || '',
-            notes: notesIdx >= 0 ? values[notesIdx] : undefined,
         });
     }
 
@@ -108,58 +110,117 @@ function parseCSVLine(line: string): string[] {
 }
 
 /**
- * Saves test results to a CSV file
+ * Saves test results to both CSV and JSON files
  * @param results Array of test results
- * @param outputPath Path to the output CSV file
+ * @param outputPath Path to the output file (CSV)
  */
 export function saveResults(results: TestResult[], outputPath: string): void {
-    const header = [
-        'collectionName',
-        'query',
-        'expectedResult',
-        'collectionStats',
-        'indexStats',
-        'executionPlan',
-        'queryPerformance',
-        'suggestions',
-        'analysis',
-        'updatedPerformance',
-        'performanceImprovement',
-        'matchesExpected',
-        'modelUsed',
-        'notes',
-        'errors',
-        'timestamp',
-    ];
-
-    const rows = results.map((result) => [
-        escapeCSV(result.collectionName),
-        escapeCSV(result.query),
-        escapeCSV(result.expectedResult),
-        escapeCSV(result.collectionStats || ''),
-        escapeCSV(result.indexStats || ''),
-        escapeCSV(result.executionPlan || ''),
-        result.queryPerformance?.toString() || '',
-        escapeCSV(result.suggestions || ''),
-        escapeCSV(result.analysis || ''),
-        result.updatedPerformance?.toString() || '',
-        result.performanceImprovement?.toFixed(2) || '',
-        result.matchesExpected?.toString() || '',
-        result.modelUsed || '',
-        escapeCSV(result.notes || ''),
-        escapeCSV(result.errors || ''),
-        result.timestamp || '',
-    ]);
-
-    const csvContent = [header.join(','), ...rows.map((row) => row.join(','))].join('\n');
-
     // Ensure directory exists
     const dir = path.dirname(outputPath);
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
 
+    // Save as CSV
+    saveResultsAsCSV(results, outputPath);
+
+    // Save as JSON
+    const jsonOutputPath = outputPath.replace(/\.csv$/, '.json');
+    saveResultsAsJSON(results, jsonOutputPath);
+}
+
+/**
+ * Saves test results to a CSV file
+ * @param results Array of test results
+ * @param outputPath Path to the output CSV file
+ */
+function saveResultsAsCSV(results: TestResult[], outputPath: string): void {
+    const header = [
+        'Collection Name',
+        'Category',
+        'Scenario Description',
+        'Query',
+        'Expected Indexs',
+        'Suggested Indexes',
+        'If Matches Expected',
+        'Execution Time(ms)',
+        'Updated Execution Time(ms)',
+        'Performance Improvement(%)',
+        'Collection Status',
+        'Index Status',
+        'Execution Plan',
+        'Updated Execution Plan',
+        'Model Used',
+        'Errors',
+        'Timestamp',
+        'Analysis',
+    ];
+
+    const rows = results.map((result) => [
+        escapeCSV(result.collectionName),                                                     // Collection Name
+        escapeCSV(result.category),                                                           // Category
+        escapeCSV(result.scenarioDescription),                                                // Scenario Description
+        escapeCSV(result.query),                                                              // Query
+        escapeCSV(result.expectedResult),                                                     // Expected Indexs
+        escapeCSV(result.suggestions || ''),                                                  // Suggested Indexes
+        result.matchesExpected !== undefined ? result.matchesExpected.toString() : '',        // If Matches Expected
+        result.queryPerformance !== undefined ? result.queryPerformance.toFixed(2) : '',      // Execution Time(ms)
+        result.updatedPerformance !== undefined ? result.updatedPerformance.toFixed(2) : '', // Updated Execution Time(ms)
+        result.performanceImprovement !== undefined ? result.performanceImprovement.toFixed(2) : '', // Performance Improvement(%)
+        escapeCSV(result.collectionStats || ''),                                              // Collection Status
+        escapeCSV(result.indexStats || ''),                                                   // Index Status
+        escapeCSV(result.executionPlan || ''),                                                // Execution Plan
+        escapeCSV(result.updatedExecutionPlan || ''),                                          // Updated Execution Plan
+        result.modelUsed || '',                                                               // Model Used
+        escapeCSV(result.errors || ''),                                                       // Errors
+        result.timestamp || '',                                                               // Timestamp
+        escapeCSV(result.analysis || ''),                                                     // Analysis
+    ]);
+
+    const csvContent = [header.join(','), ...rows.map((row) => row.join(','))].join('\n');
     fs.writeFileSync(outputPath, csvContent, 'utf-8');
+}
+
+/**
+ * Saves test results to a JSON file
+ * @param results Array of test results
+ * @param outputPath Path to the output JSON file
+ */
+function saveResultsAsJSON(results: TestResult[], outputPath: string): void {
+    // Parse JSON strings back to objects for the specified fields
+    const parsedResults = results.map((result) => ({
+        collectionName: result.collectionName,
+        category: result.category,
+        scenarioDescription: result.scenarioDescription,
+        query: result.query,
+        expectedResult: result.expectedResult,
+        suggestions: result.suggestions || null,
+        matchesExpected: result.matchesExpected ?? null,
+        queryPerformance: result.queryPerformance ?? null,
+        updatedPerformance: result.updatedPerformance ?? null,
+        performanceImprovement: result.performanceImprovement ?? null,
+        collectionStats: result.collectionStats ? JSON.parse(result.collectionStats) : null,
+        indexStats: result.indexStats ? JSON.parse(result.indexStats) : null,
+        executionPlan: result.executionPlan ? JSON.parse(result.executionPlan) : null,
+        updatedExecutionPlan: result.updatedExecutionPlan ? JSON.parse(result.updatedExecutionPlan) : null,
+        modelUsed: result.modelUsed || null,
+        errors: result.errors || null,
+        timestamp: result.timestamp || null,
+        analysis: result.analysis || null,
+    }));
+
+    const jsonContent = {
+        metadata: {
+            totalTests: results.length,
+            successfulTests: results.filter((r) => !r.errors).length,
+            failedTests: results.filter((r) => r.errors).length,
+            matchingTests: results.filter((r) => r.matchesExpected).length,
+            generatedAt: new Date().toISOString(),
+        },
+        results: parsedResults,
+    };
+
+    fs.writeFileSync(outputPath, JSON.stringify(jsonContent, null, 2), 'utf-8');
 }
 
 /**

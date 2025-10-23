@@ -37,12 +37,14 @@ export interface TestConfig {
 export interface TestCase {
     // Collection name
     collectionName: string;
+    // Category of the test case
+    category: string;
+    // Scenario description
+    scenarioDescription: string;
     // Query to optimize
     query: string;
     // Expected result (Mongo shell command)
     expectedResult: string;
-    // Notes about the test case
-    notes?: string;
 }
 
 /**
@@ -57,6 +59,8 @@ export interface PerformanceMeasurement {
     keysExamined?: number;
     // Whether index was used
     indexUsed?: string;
+    // Execution plan (JSON string)
+    executionPlan?: string;
 }
 
 /**
@@ -65,14 +69,16 @@ export interface PerformanceMeasurement {
 export interface TestResult {
     // Test case information
     collectionName: string;
+    category: string;
+    scenarioDescription: string;
     query: string;
     expectedResult: string;
-    notes?: string;
 
     // Metadata collected
     collectionStats?: string; // JSON string
     indexStats?: string; // JSON string
     executionPlan?: string; // JSON string
+    updatedExecutionPlan?: string; // JSON string
 
     // Performance metrics
     queryPerformance?: number; // ms

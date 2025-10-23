@@ -49,7 +49,8 @@ Follow these strict instructions (must obey):
 9. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
 10. **Verification output** — the \`verification\` field must be a **Markdown string** (not an array). It should include one or more \`\`\`javascript code blocks\`\`\` containing **valid mongosh commands** to verify index performance or collection stats. Each command must be copy-paste runnable in mongosh (e.g. \`db.getCollection("{collectionName}").find(...).hint(...).explain("executionStats")\`).
 11. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate \`{collectionStats}\`, \`{indexStats}\`, or \`{executionStats}\`—just include them as-is (and add computed helper fields if needed).
-12. **If no change recommended** — return an empty \`improvements\` array and still include a short Markdown \`verification\` section to confirm the current plan.
+12. **Drop indexes with index Name** — when you drop an index, use the **index name** to reference it, not the field name.
+13. **If no change recommended** — return an empty \`improvements\` array and still include a short Markdown \`verification\` section to confirm the current plan.
 
 Thinking / analysis tips (useful signals to form recommendations; don't output these tips themselves):
 - Check **which index(es)** the winning plan used (or whether a COLLSCAN occurred) and whether \`totalKeysExamined\` is much smaller than \`totalDocsExamined\` (indicates good index filtering vs heavy document fetch).

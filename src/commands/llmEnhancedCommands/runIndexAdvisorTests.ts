@@ -125,7 +125,7 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
 
             // Warm up connection
             progress.report({ message: l10n.t('Warming up connection...') });
-            outputChannel.appendLine('🔄 Warming up connection...');
+            outputChannel.appendLine('Warming up connection...');
 
             // Progress callback for warmup
             const warmupProgress = (msg: string) => {
@@ -181,11 +181,13 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
                     outputChannel.appendLine(`└─ ✗ ERROR: ${error instanceof Error ? error.message : String(error)}`);
 
                     // Add failed result
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     results.push({
                         collectionName: testCase.collectionName,
+                        category: testCase.category,
+                        scenarioDescription: testCase.scenarioDescription,
                         query: testCase.query,
                         expectedResult: testCase.expectedResult,
-                        notes: testCase.notes,
                         errors: error instanceof Error ? error.message : String(error),
                         timestamp: new Date().toISOString(),
                     });
@@ -195,9 +197,9 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
             }
 
             progress.report({ message: l10n.t('Saving results...') });
-            outputChannel.appendLine('💾 Saving results...');
+            outputChannel.appendLine('Saving results...');
             saveResults(results, outputPath);
-            outputChannel.appendLine(`✓ Results saved to: ${outputPath}`);
+            outputChannel.appendLine(`Results saved to: ${outputPath}`);
             outputChannel.appendLine('');
         },
     );
