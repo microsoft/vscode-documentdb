@@ -1,5 +1,7 @@
 collectionName,query,expectedResult,notes
-users,"db.users.find({age: {$gt: 25}}).sort({name: 1})","db.users.createIndex({age: 1, name: 1})","Test compound index for filter + sort"
-orders,"db.orders.aggregate([{$match: {status: 'pending'}}, {$sort: {createdAt: -1}}])","db.orders.createIndex({status: 1, createdAt: -1})","Test aggregation pipeline optimization"
-products,"db.products.find({category: 'electronics', price: {$lt: 1000}})","db.products.createIndex({category: 1, price: 1})","Test multi-field filter"
-inventory,"db.inventory.find({quantity: {$lt: 10}}).sort({lastUpdated: -1}).limit(20)","db.inventory.createIndex({quantity: 1, lastUpdated: -1})","Test filter with sort and limit"
+a,"Missing Index","No single index exists for the query","db.a.find({user_id: 1234})","db.getCollection('a').createIndex({'user_id':1},{})"
+b,"Missing Index","No single index exists for the query","db.b.find({age: {$gt: 30, $lt: 40}})","db.getCollection('b').createIndex({'age':1},{})"
+c,"Missing Index","Composite index for find","db.c.find({country: 'US', city: 'NY'})","db.getCollection('c').createIndex({'country':1,'city':1},{'storageEngine':{'enableOrderedIndex':true}})"
+d,"Missing Index","Composite index for find and sort","db.d.find({score: {$gt: 42, $lt: 10340}}).sort({timestamp: -1})","db.getCollection('d').createIndex({'score':1,'timestamp':-1},{'name':'score_1_timestamp_-1','storageEngine':{'enableOrderedIndex':true}})"
+f,"Unused Index","Index is not needed on low selectivity field","db.f.find({gender: 'F'})","db.getCollection('f').dropIndex({'gender':1})"
+g,"No Index","Index is not needed on small collection","db.g.find({flag: true})","db.getCollection('g').dropIndex({'flag':1})"
