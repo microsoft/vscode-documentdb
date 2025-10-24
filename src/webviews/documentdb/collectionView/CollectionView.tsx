@@ -18,14 +18,6 @@ import {
     Views,
 } from './collectionViewContext';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
-import { PerformanceTab } from './components/queryInsights/PerformanceTab';
-import { PerformanceTab2 } from './components/queryInsights/PerformanceTab2';
-import { PerformanceTab3 } from './components/queryInsights/PerformanceTab3';
-import { PerformanceTab4 } from './components/queryInsights/PerformanceTab4';
-import { PerformanceTabA } from './components/queryInsights/PerformanceTabA';
-import { PerformanceTabB } from './components/queryInsights/PerformanceTabB';
-import { PerformanceTabC } from './components/queryInsights/PerformanceTabC';
-import { PerformanceTabD } from './components/queryInsights/PerformanceTabD';
 import { QueryInsightsMain } from './components/queryInsights/QueryInsightsMain';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
@@ -84,18 +76,7 @@ export const CollectionView = (): JSX.Element => {
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
     // Track which tab is currently active
-    const [selectedTab, setSelectedTab] = useState<
-        | 'tab_result'
-        | 'tab_performance_main'
-        | 'tab_performance1'
-        | 'tab_performance2'
-        | 'tab_performance3'
-        | 'tab_performance4'
-        | 'tab_pa'
-        | 'tab_pb'
-        | 'tab_pc'
-        | 'tab_pd'
-    >('tab_result');
+    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_performance_main'>('tab_result');
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
@@ -473,19 +454,7 @@ export const CollectionView = (): JSX.Element => {
                 <TabList
                     selectedValue={selectedTab}
                     onTabSelect={(_event, data) => {
-                        setSelectedTab(
-                            data.value as
-                                | 'tab_result'
-                                | 'tab_performance_main'
-                                | 'tab_performance1'
-                                | 'tab_performance2'
-                                | 'tab_performance3'
-                                | 'tab_performance4'
-                                | 'tab_pa'
-                                | 'tab_pb'
-                                | 'tab_pc'
-                                | 'tab_pd',
-                        );
+                        setSelectedTab(data.value as 'tab_result' | 'tab_performance_main');
                     }}
                     style={{ marginTop: '-10px' }}
                 >
@@ -493,31 +462,7 @@ export const CollectionView = (): JSX.Element => {
                         Results
                     </Tab>
                     <Tab id="tab.performance.main" value="tab_performance_main">
-                        Query Insights Mock
-                    </Tab>
-                    <Tab id="tab.performance1" value="tab_performance1">
-                        Performance 1
-                    </Tab>
-                    <Tab id="tab.performance2" value="tab_performance2">
-                        Performance 2
-                    </Tab>
-                    <Tab id="tab.performance3" value="tab_performance3">
-                        Performance 3
-                    </Tab>
-                    <Tab id="tab.performance4" value="tab_performance4">
-                        Performance 4
-                    </Tab>
-                    <Tab id="tab.pa" value="tab_pa">
-                        P.A
-                    </Tab>
-                    <Tab id="tab.pb" value="tab_pb">
-                        P.B
-                    </Tab>
-                    <Tab id="tab.pc" value="tab_pc">
-                        P.C
-                    </Tab>
-                    <Tab id="tab.pd" value="tab_pd">
-                        P.D
+                        Query Insights
                     </Tab>
                 </TabList>
 
@@ -560,14 +505,6 @@ export const CollectionView = (): JSX.Element => {
                 )}
 
                 {selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
-                {selectedTab === 'tab_performance1' && <PerformanceTab />}
-                {selectedTab === 'tab_performance2' && <PerformanceTab2 />}
-                {selectedTab === 'tab_performance3' && <PerformanceTab3 />}
-                {selectedTab === 'tab_performance4' && <PerformanceTab4 />}
-                {selectedTab === 'tab_pa' && <PerformanceTabA />}
-                {selectedTab === 'tab_pb' && <PerformanceTabB />}
-                {selectedTab === 'tab_pc' && <PerformanceTabC />}
-                {selectedTab === 'tab_pd' && <PerformanceTabD />}
             </div>
         </CollectionViewContext.Provider>
     );

@@ -35,7 +35,7 @@ import { QuickActions } from './components/QuickActions';
 import './queryInsights.scss';
 import './QueryInsightsMain.scss';
 
-type Stage = 'IXSCAN' | 'FETCH' | 'PROJECTION';
+type Stage = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
 
 interface StageDetails {
     stage: Stage;
@@ -142,6 +142,15 @@ export const QueryInsightsMain = (): JSX.Element => {
         PROJECTION: {
             stage: 'PROJECTION',
             nReturned: stageState >= 2 ? 2 : undefined,
+        },
+        SORT: {
+            stage: 'SORT',
+            nReturned: stageState >= 2 ? 2 : undefined,
+        },
+        COLLSCAN: {
+            stage: 'COLLSCAN',
+            docsExamined: stageState >= 2 ? 10000 : undefined,
+            nReturned: stageState >= 2 ? 10000 : undefined,
         },
     };
 
