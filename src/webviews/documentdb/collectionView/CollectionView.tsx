@@ -17,16 +17,16 @@ import {
     DefaultCollectionViewContext,
     Views,
 } from './collectionViewContext';
-import { PerformanceTab } from './components/performanceTab/PerformanceTab';
-import { PerformanceTab2 } from './components/performanceTab/PerformanceTab2';
-import { PerformanceTab3 } from './components/performanceTab/PerformanceTab3';
-import { PerformanceTab4 } from './components/performanceTab/PerformanceTab4';
-import { PerformanceTabA } from './components/performanceTab/PerformanceTabA';
-import { PerformanceTabB } from './components/performanceTab/PerformanceTabB';
-import { PerformanceTabC } from './components/performanceTab/PerformanceTabC';
-import { PerformanceTabD } from './components/performanceTab/PerformanceTabD';
-import { PerformanceTabMain } from './components/performanceTab/PerformanceTabMain';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
+import { PerformanceTab } from './components/queryInsights/PerformanceTab';
+import { PerformanceTab2 } from './components/queryInsights/PerformanceTab2';
+import { PerformanceTab3 } from './components/queryInsights/PerformanceTab3';
+import { PerformanceTab4 } from './components/queryInsights/PerformanceTab4';
+import { PerformanceTabA } from './components/queryInsights/PerformanceTabA';
+import { PerformanceTabB } from './components/queryInsights/PerformanceTabB';
+import { PerformanceTabC } from './components/queryInsights/PerformanceTabC';
+import { PerformanceTabD } from './components/queryInsights/PerformanceTabD';
+import { QueryInsightsMain } from './components/queryInsights/QueryInsightsMain';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
 import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
@@ -559,7 +559,7 @@ export const CollectionView = (): JSX.Element => {
                     </>
                 )}
 
-                {selectedTab === 'tab_performance_main' && <PerformanceTabMain />}
+                {selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
                 {selectedTab === 'tab_performance1' && <PerformanceTab />}
                 {selectedTab === 'tab_performance2' && <PerformanceTab2 />}
                 {selectedTab === 'tab_performance3' && <PerformanceTab3 />}
