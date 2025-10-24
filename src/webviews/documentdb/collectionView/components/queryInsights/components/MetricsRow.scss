@@ -18,32 +18,3 @@
     text-align: left;
     gap: 8px;
 }
-
-// Responsive behavior for desktop (in panel)
-.metricsRowInPanel {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    min-width: 0;
-
-    @media (min-width: 1200px) {
-        display: grid;
-    }
-
-    @media (max-width: 1199px) {
-        display: none;
-    }
-}
-
-// Responsive behavior for mobile
-.metricsWrapper {
-    @media (min-width: 1200px) {
-        display: none;
-    }
-
-    @media (max-width: 1199px) {
-        display: block;
-        order: 0;
-        margin-bottom: 20px;
-    }
-}

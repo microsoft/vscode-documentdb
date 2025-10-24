@@ -11,34 +11,29 @@ import './QuickActions.scss';
 
 interface QuickActionsProps {
     stageState: 1 | 2 | 3;
-    inPanel?: boolean;
 }
 
-export const QuickActions: React.FC<QuickActionsProps> = ({ stageState, inPanel = false }) => {
+export const QuickActions: React.FC<QuickActionsProps> = ({ stageState }) => {
     if (stageState < 2) {
         return null;
     }
 
-    const containerClass = inPanel ? 'quickActionsInPanel' : 'quickActionsWrapper';
-
     return (
-        <div className={containerClass}>
-            <Card className="quickActionsCard">
-                <Text weight="semibold" size={400} className="quickActionsTitle">
-                    {l10n.t('Quick Actions')}
-                </Text>
-                <div className="quickActionsButtons">
-                    <Button appearance="secondary" size="small" icon={<DocumentArrowLeftRegular />}>
-                        {l10n.t('Export Optimization Opportunities')}
-                    </Button>
-                    <Button appearance="secondary" size="small" icon={<DocumentArrowLeftRegular />}>
-                        {l10n.t('Export Execution Plan Details')}
-                    </Button>
-                    <Button appearance="secondary" size="small" icon={<EyeRegular />}>
-                        {l10n.t('View Raw Explain Output')}
-                    </Button>
-                </div>
-            </Card>
-        </div>
+        <Card className="quickActionsCard">
+            <Text weight="semibold" size={400} className="quickActionsTitle">
+                {l10n.t('Quick Actions')}
+            </Text>
+            <div className="quickActionsButtons">
+                <Button appearance="secondary" size="small" icon={<DocumentArrowLeftRegular />}>
+                    {l10n.t('Export Optimization Opportunities')}
+                </Button>
+                <Button appearance="secondary" size="small" icon={<DocumentArrowLeftRegular />}>
+                    {l10n.t('Export Execution Plan Details')}
+                </Button>
+                <Button appearance="secondary" size="small" icon={<EyeRegular />}>
+                    {l10n.t('View Raw Explain Output')}
+                </Button>
+            </div>
+        </Card>
     );
 };

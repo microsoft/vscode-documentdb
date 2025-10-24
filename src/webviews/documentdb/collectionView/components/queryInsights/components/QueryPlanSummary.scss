@@ -81,25 +81,3 @@
     margin-top: 12px;
     display: block;
 }
-
-// Responsive behavior for desktop (in panel)
-.queryPlanInPanel {
-    @media (min-width: 1200px) {
-        display: block;
-    }
-
-    @media (max-width: 1199px) {
-        display: none;
-    }
-}
-
-// Responsive behavior for mobile
-.queryPlanWrapper {
-    @media (min-width: 1200px) {
-        display: none;
-    }
-
-    @media (max-width: 1199px) {
-        display: block;
-    }
-}

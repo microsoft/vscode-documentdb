@@ -150,14 +150,16 @@ export const QueryInsightsMain = (): JSX.Element => {
             {/* Content Area */}
             <div className="contentArea">
                 {/* Metrics Row - Mobile Only (appears first) */}
-                <div style={{ order: 0 }}>
+                <div className="metricsWrapper">
                     <MetricsRow stageState={stageState} />
                 </div>
 
                 {/* Left Panel */}
                 <div className="leftPanel">
                     {/* Metrics Row - Desktop Only */}
-                    <MetricsRow stageState={stageState} inPanel={true} />
+                    <div className="metricsInPanel">
+                        <MetricsRow stageState={stageState} />
+                    </div>
 
                     {/* Optimization Opportunities */}
                     <div>
@@ -601,12 +603,14 @@ export const QueryInsightsMain = (): JSX.Element => {
                     </div>
 
                     {/* Query Plan Summary - Mobile Only */}
-                    <QueryPlanSummary
-                        stageState={stageState}
-                        selectedTab={selectedTab}
-                        setSelectedTab={setSelectedTab}
-                        stageDetails={stageDetails}
-                    />
+                    <div className="queryPlanWrapper">
+                        <QueryPlanSummary
+                            stageState={stageState}
+                            selectedTab={selectedTab}
+                            setSelectedTab={setSelectedTab}
+                            stageDetails={stageDetails}
+                        />
+                    </div>
                 </div>
 
                 {/* Right Panel */}
@@ -615,20 +619,25 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <QueryEfficiencyAnalysis stageState={stageState} />
 
                     {/* Query Plan Summary - Desktop Only */}
-                    <QueryPlanSummary
-                        stageState={stageState}
-                        selectedTab={selectedTab}
-                        setSelectedTab={setSelectedTab}
-                        stageDetails={stageDetails}
-                        inPanel={true}
-                    />
+                    <div className="queryPlanInPanel">
+                        <QueryPlanSummary
+                            stageState={stageState}
+                            selectedTab={selectedTab}
+                            setSelectedTab={setSelectedTab}
+                            stageDetails={stageDetails}
+                        />
+                    </div>
 
                     {/* Quick Actions - Desktop Only */}
-                    <QuickActions stageState={stageState} inPanel={true} />
+                    <div className="quickActionsInPanel">
+                        <QuickActions stageState={stageState} />
+                    </div>
                 </div>
 
                 {/* Quick Actions - Mobile Only (appears last) */}
-                <QuickActions stageState={stageState} />
+                <div className="quickActionsWrapper">
+                    <QuickActions stageState={stageState} />
+                </div>
             </div>
         </div>
     );

@@ -11,14 +11,11 @@ import './MetricsRow.scss';
 
 interface MetricsRowProps {
     stageState: 1 | 2 | 3;
-    inPanel?: boolean;
 }
 
-export const MetricsRow: React.FC<MetricsRowProps> = ({ stageState, inPanel = false }) => {
-    const containerClass = inPanel ? 'metricsRowInPanel' : 'metricsRow';
-
+export const MetricsRow: React.FC<MetricsRowProps> = ({ stageState }) => {
     return (
-        <div className={containerClass}>
+        <div className="metricsRow">
             <Tooltip content={l10n.t('WIP: Available at Stage 1')} relationship="label">
                 <Card className="metricCard" appearance="filled">
                     <div className="dataHeader">{l10n.t('Execution Time')}</div>

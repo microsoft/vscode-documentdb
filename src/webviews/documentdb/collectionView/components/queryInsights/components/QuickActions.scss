@@ -18,26 +18,3 @@
     gap: 8px;
     align-items: flex-start;
 }
-
-// Responsive behavior for desktop (in panel)
-.quickActionsInPanel {
-    @media (min-width: 1200px) {
-        display: block;
-    }
-
-    @media (max-width: 1199px) {
-        display: none;
-    }
-}
-
-// Responsive behavior for mobile
-.quickActionsWrapper {
-    @media (min-width: 1200px) {
-        display: none;
-    }
-
-    @media (max-width: 1199px) {
-        display: block;
-        order: 3;
-    }
-}
