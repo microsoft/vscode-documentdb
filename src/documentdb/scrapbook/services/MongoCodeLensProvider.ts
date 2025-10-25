@@ -34,6 +34,11 @@ import { ScrapbookService } from '../ScrapbookService';
  *    - Generates MongoDB queries from natural language descriptions.
  *    - Supports both single-collection and cross-collection query generation.
  *    - Only visible when connected to a database.
+ *
+ * 6. **Performance Summary Lens**:
+ *    - Analyzes performance changes between two query executions.
+ *    - Compares execution plans, times, and index changes.
+ *    - Provides AI-powered insights into performance improvements or degradations.
  */
 export class MongoCodeLensProvider implements vscode.CodeLensProvider {
     private _onDidChangeEmitter: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
@@ -137,6 +142,17 @@ export class MongoCodeLensProvider implements vscode.CodeLensProvider {
                     title: l10n.t('✨ Generate Query'),
                     tooltip: l10n.t('Generate MongoDB query from natural language'),
                     command: 'vscode-documentdb.command.scrapbook.generateQuery',
+                    arguments: [cmd.range.start],
+                },
+                range: cmd.range,
+            });
+
+            // Performance Summary lens
+            lenses.push(<vscode.CodeLens>{
+                command: {
+                    title: l10n.t('📊 Performance Summary'),
+                    tooltip: l10n.t('Analyze performance changes between query executions'),
+                    command: 'vscode-documentdb.command.scrapbook.generatePerformanceSummary',
                     arguments: [cmd.range.start],
                 },
                 range: cmd.range,

@@ -12,12 +12,14 @@ import {
     type IErrorHandlerContext,
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { processTestResultsCommand } from '../../commands/batchPerformanceAnalysis/processTestResults';
 import { connectCluster } from '../../commands/scrapbook-commands/connectCluster';
 import { createScrapbook } from '../../commands/scrapbook-commands/createScrapbook';
 import { executeAllCommand } from '../../commands/scrapbook-commands/executeAllCommand';
 import { executeCommand } from '../../commands/scrapbook-commands/executeCommand';
 import { generateQueryCommand } from '../../commands/scrapbook-commands/generateQuery';
 import { generateIndexSuggestionCommand } from '../../commands/scrapbook-commands/indexAdvisor';
+import { generatePerformanceSummaryCommand } from '../../commands/scrapbook-commands/performanceSummary';
 import { ext } from '../../extensionVariables';
 import { MongoConnectError } from './connectToClient';
 import { MongoDBLanguageClient } from './languageClient';
@@ -47,6 +49,12 @@ export function registerScrapbookCommands(): void {
         generateIndexSuggestionCommand,
     );
     registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.generateQuery', generateQueryCommand);
+    registerCommandWithTreeNodeUnwrapping(
+        'vscode-documentdb.command.scrapbook.generatePerformanceSummary',
+        generatePerformanceSummaryCommand,
+    );
+
+    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.processTestResults', processTestResultsCommand);
 
     // #region Database command
 

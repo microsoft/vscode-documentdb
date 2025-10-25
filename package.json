@@ -393,6 +393,30 @@
         "title": "Execute Command"
       },
       {
+        "//": "Scrapbook: Generate Index Suggestions",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scrapbook.generateIndexSuggestions",
+        "title": "Generate Index Suggestions"
+      },
+      {
+        "//": "Scrapbook: Generate Query",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scrapbook.generateQuery",
+        "title": "Generate Query"
+      },
+      {
+        "//": "Scrapbook: Generate Performance Summary",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scrapbook.generatePerformanceSummary",
+        "title": "Generate Performance Summary"
+      },
+      {
+        "//": "Batch Performance Analysis",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.processTestResults",
+        "title": "Process Test Results (Batch Performance Analysis)"
+      },
+      {
         "//": "Scrapbook: New Scrapbook",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.scrapbook.new",
