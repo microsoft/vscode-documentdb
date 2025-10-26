@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type Document, type Filter, type Sort } from 'mongodb';
 import {
     CommandType,
     detectCommandType,
@@ -14,12 +13,7 @@ import {
 import { ClustersClient } from '../../src/documentdb/ClustersClient';
 import { CredentialCache } from '../../src/documentdb/CredentialCache';
 import { type NativeAuthConfig } from '../../src/documentdb/auth/AuthConfig';
-import { AuthMethodId } from '../../src/documentdb/auth/AuthMethod';
-import {
-    type CollectionStats,
-    type IndexSpecification,
-    type IndexStats,
-} from '../../src/documentdb/llmEnhancedFeatureApis';
+import { type IndexSpecification } from '../../src/documentdb/llmEnhancedFeatureApis';
 import { type PerformanceMeasurement, type TestCase, type TestConfig, type TestResult } from './types';
 
 /**
@@ -151,16 +145,22 @@ function extractBraceContent(methodCall: string): string | null {
  * @returns ExplainOptions object with parsed parameters
  */
 function parseFindQueryParameters(queryString: string): {
-    filter?: Filter<Document>;
-    sort?: Sort;
-    projection?: Document;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    filter?: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sort?: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    projection?: any;
     skip?: number;
     limit?: number;
 } {
     const result: {
-        filter?: Filter<Document>;
-        sort?: Sort;
-        projection?: Document;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        filter?: any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sort?: any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        projection?: any;
         skip?: number;
         limit?: number;
     } = {};
@@ -172,6 +172,7 @@ function parseFindQueryParameters(queryString: string): {
             const filterContent = extractBraceContent(findMatch[0]);
             if (filterContent) {
                 const jsonStr = mongoToJSON(filterContent);
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 result.filter = JSON.parse(jsonStr);
             } else {
                 result.filter = {};
@@ -186,6 +187,7 @@ function parseFindQueryParameters(queryString: string): {
             const sortContent = extractBraceContent(sortMatch[0]);
             if (sortContent) {
                 const jsonStr = mongoToJSON(sortContent);
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 result.sort = JSON.parse(jsonStr);
             }
         }
@@ -196,6 +198,7 @@ function parseFindQueryParameters(queryString: string): {
             const projectionContent = extractBraceContent(projectionMatch[0]);
             if (projectionContent) {
                 const jsonStr = mongoToJSON(projectionContent);
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 result.projection = JSON.parse(jsonStr);
             }
         }
@@ -239,7 +242,7 @@ async function getOrCreateClusterId(config: TestConfig): Promise<string | undefi
         if (!config.connectionString) {
             throw new Error(
                 `No credentials found for cluster ID "${config.clusterId}". ` +
-                    `Please provide either: 1) pre-registered credentials in VS Code, or 2) a "connectionString" field in the test config.`,
+                `Please provide either: 1) pre-registered credentials in VS Code, or 2) a "connectionString" field in the test config.`
             );
         }
     }
@@ -252,9 +255,10 @@ async function getOrCreateClusterId(config: TestConfig): Promise<string | undefi
         const nativeAuthConfig = parseCredentialsFromConnectionString(config.connectionString);
 
         // Register the connection string in the credential cache with native auth method
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         CredentialCache.setAuthCredentials(
             tempId,
-            AuthMethodId.NativeAuth,
+            'NativeAuth' as any, // Using NativeAuth as default for test connections
             config.connectionString,
             nativeAuthConfig, // Pass parsed credentials
             undefined, // No emulator configuration
@@ -264,9 +268,7 @@ async function getOrCreateClusterId(config: TestConfig): Promise<string | undefi
         return tempId;
     }
 
-    throw new Error(
-        'Either clusterId with registered credentials or connectionString is required in test configuration',
-    );
+    throw new Error('Either clusterId with registered credentials or connectionString is required in test configuration');
 }
 
 /**
@@ -274,7 +276,6 @@ async function getOrCreateClusterId(config: TestConfig): Promise<string | undefi
  * @param testCase The test case to execute
  * @param config Test configuration
  * @param context Action context for telemetry
- * @param isCSVMode Whether to run in CSV mode
  * @param skipPerformance Whether to skip performance measurements
  * @param progress Optional progress callback
  * @returns Test result
@@ -283,75 +284,55 @@ export async function executeTestCase(
     testCase: TestCase,
     config: TestConfig,
     context: IActionContext,
-    isCSVMode: boolean = false,
     skipPerformance: boolean = false,
     progress?: ProgressCallback,
 ): Promise<TestResult> {
     const result: TestResult = {
-        testCaseName: testCase.testCaseName,
         collectionName: testCase.collectionName,
         category: testCase.category,
         scenarioDescription: testCase.scenarioDescription,
         query: testCase.query,
         expectedResult: testCase.expectedResult,
-        notes: testCase.notes,
         timestamp: new Date().toISOString(),
     };
-    let queryContext: QueryOptimizationContext;
-    let clusterId;
+
     try {
-        if (!isCSVMode) {
-            // directory-based mode
-            progress?.(`Using pre-loaded execution data...`);
+        progress?.(`Detecting command type...`);
+        // Detect command type
+        const commandType = detectCommandType(testCase.query);
 
-            // Build query context with pre-loaded data
-            queryContext = {
-                databaseName: config.databaseName,
-                collectionName: testCase.collectionName,
-                commandType: CommandType.Find, // Default for now
-                executionPlan: testCase.executionPlan,
-                collectionStats: testCase.collectionStats as CollectionStats | undefined,
-                indexStats: testCase.indexStats as IndexStats[] | undefined,
-                preferredModel: config.preferredModel,
-                fallbackModels: config.fallbackModels,
-            };
-        } else {
-            if (!testCase.query) {
-                throw new Error('Query is required for CSV-based test mode');
-            }
-
-            progress?.(`Detecting command type...`);
-            const commandType = detectCommandType(testCase.query);
-
-            // Get or create cluster client
-            clusterId = await getOrCreateClusterId(config);
-            if (!clusterId) {
-                throw new Error('clusterId or connectionString is required in configuration');
-            }
-
-            progress?.(`Building query context...`);
-            queryContext = {
-                clusterId,
-                databaseName: config.databaseName,
-                collectionName: testCase.collectionName,
-                query: testCase.query,
-                commandType,
-                preferredModel: config.preferredModel,
-                fallbackModels: config.fallbackModels,
-            };
-
-            // Measure initial performance if not skipped
-            if (!skipPerformance) {
-                progress?.(`Measuring initial query performance...`);
-                const initialPerf = await measureQueryPerformance(queryContext, config, progress);
-                result.queryPerformance = initialPerf.executionTime;
-            }
+        // Get or create cluster client
+        const clusterId = await getOrCreateClusterId(config);
+        if (!clusterId) {
+            throw new Error('clusterId or connectionString is required in configuration');
         }
 
+        progress?.(`Building query context...`);
+        // Build query optimization context
+        const queryContext: QueryOptimizationContext = {
+            clusterId,
+            databaseName: config.databaseName,
+            collectionName: testCase.collectionName,
+            query: testCase.query,
+            commandType,
+        };
+
+        // Measure initial performance if not skipped
+        if (!skipPerformance) {
+            progress?.(`Measuring initial query performance...`);
+            const initialPerf = await measureQueryPerformance(queryContext, config, progress);
+            result.queryPerformance = initialPerf.executionTime;
+        }
+
+        // Get client for later use (creating/dropping indexes if needed)
+        const client = await ClustersClient.getClient(clusterId);
+
         progress?.(`Running AI optimization...`);
+        // Run optimization
         const optimizationResult = await optimizeQuery(context, queryContext);
 
         progress?.(`Parsing AI recommendations...`);
+        // Parse the optimization recommendations
         try {
             const recommendations = JSON.parse(optimizationResult.recommendations) as {
                 metadata?: {
@@ -365,6 +346,7 @@ export async function executeTestCase(
                 }>;
             };
 
+            // Extract execution plan, collection stats, and index stats from recommendations
             if (recommendations.metadata?.executionStats) {
                 result.executionPlan = JSON.stringify(recommendations.metadata.executionStats);
             }
@@ -381,15 +363,16 @@ export async function executeTestCase(
             result.analysis = recommendations.analysis || '';
 
             // Extract suggestions (Mongo shell commands)
-            result.suggestions =
-                recommendations.improvements
-                    ?.map((imp) => imp.mongoShell)
+            if (recommendations.improvements && recommendations.improvements.length > 0) {
+                result.suggestions = recommendations.improvements
+                    .map((imp) => imp.mongoShell)
                     .filter((cmd) => cmd)
-                    .join('\n') || '';
+                    .join('\n');
 
-            progress?.(`Comparing with expected results...`);
-            // Compare with expected result
-            result.matchesExpected = compareWithExpected(result.suggestions, testCase.expectedResult);
+                progress?.(`Comparing with expected results...`);
+                // Compare with expected result
+                result.matchesExpected = compareWithExpected(result.suggestions, testCase.expectedResult);
+            }
         } catch (parseError) {
             // If parsing fails, store raw recommendations
             result.suggestions = optimizationResult.recommendations;
@@ -398,11 +381,10 @@ export async function executeTestCase(
 
         result.modelUsed = optimizationResult.modelUsed;
 
+        progress?.(`Test completed successfully`);
         // Measure performance after applying suggestions (if not skipped and suggestions exist)
         if (!skipPerformance && result.suggestions) {
             try {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                const client = await ClustersClient.getClient(clusterId);
                 // Detect the action type from suggestions
                 const actionType = detectIndexAction(result.suggestions);
                 progress?.(`Detected action type: ${actionType}`);
@@ -479,14 +461,11 @@ export async function executeTestCase(
                     }
                 }
             } catch (perfError) {
-                progress?.(
-                    `Performance measurement failed: ${perfError instanceof Error ? perfError.message : String(perfError)}`,
-                );
+                // Non-fatal error for performance measurement
+                progress?.(`Performance measurement failed: ${perfError instanceof Error ? perfError.message : String(perfError)}`);
                 console.warn('Performance measurement after optimization failed:', perfError);
             }
         }
-
-        progress?.(`Test completed successfully`);
     } catch (error) {
         result.errors = error instanceof Error ? error.message : String(error);
         progress?.(`Test failed: ${result.errors}`);
@@ -494,6 +473,7 @@ export async function executeTestCase(
 
     return result;
 }
+
 
 /**
  * Measures query performance
@@ -507,15 +487,16 @@ async function measureQueryPerformance(
     config: TestConfig,
     progress?: ProgressCallback,
 ): Promise<PerformanceMeasurement> {
+    // Validate clusterId is provided
     if (!queryContext.clusterId) {
         throw new Error('clusterId is required in query context');
     }
 
     const client = await ClustersClient.getClient(queryContext.clusterId);
 
-    if (config.shouldWarmup !== false) {
+    // Warm up connection by listing collections (simple, non-intrusive operation)
+    if (config.warmupQuery) {
         try {
-            // execute list for now update in later version
             await client.listCollections(config.databaseName);
         } catch {
             // Ignore warmup errors
@@ -525,13 +506,9 @@ async function measureQueryPerformance(
     try {
         // Execute the query with explain to get execution stats
         let explainResult;
-        let findParams: ReturnType<typeof parseFindQueryParameters> | undefined;
+        let findParams;
 
         if (queryContext.commandType === CommandType.Find) {
-            // Validate query exists
-            if (!queryContext.query) {
-                throw new Error('Query is required for Find command type');
-            }
             // Parse the find query to extract parameters
             findParams = parseFindQueryParameters(queryContext.query);
             explainResult = await client.explainFind(
@@ -555,33 +532,23 @@ async function measureQueryPerformance(
 
         // Calculate execution time with 5 tries
         const tries = 5;
-        const executionTimes: number[] = [];
+        let executionTimes: number[] = [];
         let startTime: number;
         // convert the value of each field in findParams from object to json string (not entire findParams)
-        const findParamsCopy: {
-            filter?: string;
-            sort?: string;
-            project?: string;
-            skip?: number;
-            limit?: number;
-        } = {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let findParamsCopy: any = { };
         for (const key in findParams) {
-            const value = findParams[key as keyof typeof findParams];
-            if (key === 'skip' || key === 'limit') {
-                findParamsCopy[key] = value as number;
+            if (typeof findParams[key] === 'object') {
+                findParamsCopy[key] = JSON.stringify(findParams[key]);
             } else {
-                if (typeof value === 'object' && value !== null) {
-                    findParamsCopy[key] = JSON.stringify(value);
-                }
+                findParamsCopy[key] = findParams[key];
             }
         }
 
         // Build and print the query command string once (before the loop)
         if (queryContext.commandType === CommandType.Find) {
             const filterStr = findParamsCopy.filter || '{}';
-            const commandParts: string[] = [
-                `db.${queryContext.databaseName}.${queryContext.collectionName}.find(${filterStr})`,
-            ];
+            const commandParts: string[] = [`db.${queryContext.databaseName}.${queryContext.collectionName}.find(${filterStr})`];
             if (findParamsCopy.sort) {
                 commandParts.push(`.sort(${findParamsCopy.sort})`);
             }
@@ -598,15 +565,17 @@ async function measureQueryPerformance(
         } else if (queryContext.commandType === CommandType.Aggregate) {
             progress?.(`Executing: db.${queryContext.databaseName}.${queryContext.collectionName}.aggregate([...])`);
         } else if (queryContext.commandType === CommandType.Count) {
-            progress?.(
-                `Executing: db.${queryContext.databaseName}.${queryContext.collectionName}.countDocuments({...})`,
-            );
+            progress?.(`Executing: db.${queryContext.databaseName}.${queryContext.collectionName}.countDocuments({...})`);
         }
 
         for (let i = 0; i < tries - 1; i += 1) {
             if (queryContext.commandType === CommandType.Find) {
                 startTime = performance.now();
-                await client.runFindQuery(queryContext.databaseName, queryContext.collectionName, findParamsCopy);
+                await client.runFindQuery(
+                    queryContext.databaseName,
+                    queryContext.collectionName,
+                    findParamsCopy,
+                );
             } else if (queryContext.commandType === CommandType.Aggregate) {
                 startTime = performance.now();
             } else if (queryContext.commandType === CommandType.Count) {
@@ -655,17 +624,16 @@ function compareWithExpected(suggestions: string, expected: string): boolean {
  * @param mongoShellCommand Mongo shell command to analyze
  * @returns 'create', 'drop', or 'modify'
  */
-function detectIndexAction(mongoShellCommand: string): 'create' | 'drop' | 'modify' | 'none' {
+function detectIndexAction(mongoShellCommand: string): 'create' | 'drop' | 'modify' {
     const command = mongoShellCommand.toLowerCase();
 
     if (command.includes('dropindex')) {
         return 'drop';
     } else if (command.includes('createindex')) {
         return 'create';
-    } else if (command.includes('updateindex')) {
-        return 'modify';
     } else {
-        return 'none';
+        // Default to modify for other operations
+        return 'modify';
     }
 }
 
@@ -798,8 +766,19 @@ async function dropIndexFromSuggestion(
     progress?: ProgressCallback,
 ): Promise<boolean> {
     try {
-        // Extract index name from dropIndex command
-        const indexName = extractIndexNameFromDropCommand(suggestions);
+        // Check if this is a dropIndex command or createIndex command
+        let indexName: string | undefined;
+
+        if (suggestions.toLowerCase().includes('dropindex')) {
+            // Extract index name from dropIndex command
+            indexName = extractIndexNameFromDropCommand(suggestions);
+        } else {
+            // Extract from createIndex command
+            const indexSpec = parseCreateIndexCommand(suggestions);
+            if (indexSpec && indexSpec.key) {
+                indexName = indexSpec.name || generateIndexName(indexSpec.key);
+            }
+        }
 
         if (!indexName) {
             progress?.(`Could not extract index name from command`);
@@ -887,7 +866,7 @@ async function restoreOriginalIndexState(
     client: ClustersClient,
     databaseName: string,
     collectionName: string,
-    actionType: 'create' | 'drop' | 'modify' | 'none',
+    actionType: 'create' | 'drop' | 'modify',
     _originalIndexSpec: IndexSpecification | undefined,
     suggestions: string,
     indexStats: string | undefined,
@@ -929,40 +908,29 @@ async function restoreOriginalIndexState(
                             progress?.(`Recreating dropped index: ${indexNameToDrop}`);
 
                             try {
-                                const recreateResult = await client.createIndex(
-                                    databaseName,
-                                    collectionName,
-                                    indexSpecToRestore,
-                                );
+                                const recreateResult = await client.createIndex(databaseName, collectionName, indexSpecToRestore);
                                 if (recreateResult.ok === 1) {
                                     progress?.(`Index recreated successfully: ${indexNameToDrop}`);
                                 } else {
-                                    progress?.(
-                                        `Warning: Failed to recreate index ${indexNameToDrop}: ${recreateResult.note || 'Unknown error'}`,
-                                    );
+                                    progress?.(`Warning: Failed to recreate index ${indexNameToDrop}: ${recreateResult.note || 'Unknown error'}`);
                                 }
                             } catch (recreateError) {
-                                progress?.(
-                                    `Warning: Error recreating index ${indexNameToDrop}: ${recreateError instanceof Error ? recreateError.message : String(recreateError)}`,
-                                );
+                                progress?.(`Warning: Error recreating index ${indexNameToDrop}: ${recreateError instanceof Error ? recreateError.message : String(recreateError)}`);
                             }
                         }
                     } else {
                         progress?.(`Warning: Could not find index "${indexNameToDrop}" in indexStats for restoration`);
                     }
                 } catch (parseError) {
-                    progress?.(
-                        `Warning: Failed to parse indexStats for restoration: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
-                    );
+                    progress?.(`Warning: Failed to parse indexStats for restoration: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
                 }
             }
         } else if (actionType === 'modify') {
-            // donot do for now
+            // Restore: drop the modified index (revert to previous state)
+            await dropIndexFromSuggestion(client, databaseName, collectionName, suggestions, progress);
         }
     } catch (error) {
-        progress?.(
-            `Warning: Failed to restore original state: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        progress?.(`Warning: Failed to restore original state: ${error instanceof Error ? error.message : String(error)}`);
         console.warn('Failed to restore original index state:', error);
     }
 }
@@ -970,16 +938,10 @@ async function restoreOriginalIndexState(
 /**
  * Runs warm-up to initialize cluster connection
  * @param config Test configuration
- * @param isCSVMode Flag indicating if the test is running in CSV mode
  * @param progress Optional progress callback
  */
-export async function warmupConnection(
-    config: TestConfig,
-    isCSVMode: boolean,
-    progress?: ProgressCallback,
-): Promise<void> {
-    if (!isCSVMode || config.shouldWarmup === false) {
-        progress?.('Skipping connection warmup for directory-based mode');
+export async function warmupConnection(config: TestConfig, progress?: ProgressCallback): Promise<void> {
+    if (!config.warmupQuery) {
         return;
     }
 

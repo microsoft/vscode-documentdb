@@ -4,7 +4,7 @@
   "preferredModel": "gpt-4o",
   "fallbackModels": ["gpt-4o-mini"],
   "promptTemplatePath": "",
-  "warmupQuery": "db.test.findOne()",
+  "shouldWarmup": true,
   "connectionTimeout": 30000,
   "queryTimeout": 60000
 }

@@ -5,11 +5,18 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { executeTestCase, warmupConnection } from '../../../test/indexAdvisor/testRunner';
 import { type TestCase, type TestConfig, type TestResult, type TestRunSummary } from '../../../test/indexAdvisor/types';
-import { generateOutputPath, loadConfig, loadTestCases, saveResults } from '../../../test/indexAdvisor/utils';
+import {
+    generateOutputPath,
+    loadConfig,
+    loadTestCases,
+    loadTestCasesFromDirectory,
+    saveResults,
+} from '../../../test/indexAdvisor/utils';
 
 /**
  * Runs the Index Advisor test suite
@@ -32,20 +39,20 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
         throw new Error(l10n.t('No configuration file selected'));
     }
 
-    // Prompt for test cases file
+    // Prompt for test cases
     const casesUri = await vscode.window.showOpenDialog({
         canSelectFiles: true,
-        canSelectFolders: false,
+        canSelectFolders: true,
         canSelectMany: false,
         filters: {
             'CSV Files': ['csv'],
         },
-        title: l10n.t('Select Test Cases File'),
-        openLabel: l10n.t('Select Test Cases'),
+        title: l10n.t('Select Test Cases (Directory or CSV File)'),
+        openLabel: l10n.t('Select'),
     });
 
     if (!casesUri || casesUri.length === 0) {
-        throw new Error(l10n.t('No test cases file selected'));
+        throw new Error(l10n.t('No test cases selected'));
     }
 
     // Prompt for output location
@@ -66,27 +73,28 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
     const casesPath = casesUri[0].fsPath;
     const outputPath = outputUri.fsPath;
 
-    // Ask if performance measurement should be skipped
-    const skipPerformance = await vscode.window.showQuickPick(
-        [
-            { label: l10n.t('Measure Performance'), value: false },
-            { label: l10n.t('Skip Performance Measurement (Faster)'), value: true },
-        ],
-        {
-            title: l10n.t('Performance Measurement'),
-            placeHolder: l10n.t('Should performance be measured for each test?'),
-        },
-    );
-
-    const skipPerfMeasurement = skipPerformance?.value ?? false;
-
     // Load configuration and test cases
     let config: TestConfig;
     let testCases: TestCase[];
+    let isCSVMode = false;
 
     try {
         config = loadConfig(configPath);
-        testCases = loadTestCases(casesPath);
+
+        // Differnt loader for directly and csv file
+        const stat = fs.statSync(casesPath);
+
+        if (stat.isFile() && casesPath.toLowerCase().endsWith('.csv')) {
+            // CSV-based test cases
+            isCSVMode = true;
+            testCases = loadTestCases(casesPath);
+        } else if (stat.isDirectory()) {
+            // directory-based test cases
+            isCSVMode = false;
+            testCases = loadTestCasesFromDirectory(casesPath);
+        } else {
+            throw new Error(l10n.t('Invalid test cases selection. Please select either a CSV file or a directory.'));
+        }
     } catch (error) {
         throw new Error(
             l10n.t('Failed to load test files: {message}', {
@@ -96,7 +104,55 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
     }
 
     if (testCases.length === 0) {
-        throw new Error(l10n.t('No test cases found in the CSV file'));
+        throw new Error(
+            l10n.t(isCSVMode ? 'No test cases found in the CSV file' : 'No test cases found in the directory'),
+        );
+    }
+
+    // Ask about performance measurement only in csv mode
+    let skipPerformance = true; // Default to skip for directory mode
+    if (isCSVMode) {
+        if (!config.clusterId && !config.connectionString) {
+            throw new Error(
+                l10n.t(
+                    ' CSV mode requires either "clusterId" or "connectionString" in the configuration file for database access.',
+                ),
+            );
+        }
+
+        const perfChoice = await vscode.window.showQuickPick(
+            [
+                {
+                    label: l10n.t('Yes, Measure Performance'),
+                    description: l10n.t('Run queries and measure execution time (slower)'),
+                    value: false,
+                },
+                {
+                    label: l10n.t('No, Skip Performance Measurement'),
+                    description: l10n.t('Only get AI recommendations (faster)'),
+                    value: true,
+                },
+            ],
+            {
+                title: l10n.t('Performance Measurement'),
+                placeHolder: l10n.t('Do you want to measure query performance?'),
+            },
+        );
+
+        if (perfChoice === undefined) {
+            // User cancelled
+            return;
+        }
+
+        skipPerformance = perfChoice.value;
+    } else {
+        // For directory-based mode, we don't need database connection
+        if (config.clusterId || config.connectionString) {
+            const warningMsg = l10n.t(
+                'Configuration contains connection details, but using directory-based mode. Connection details will be ignored.',
+            );
+            void vscode.window.showWarningMessage(warningMsg);
+        }
     }
 
     // Show progress
@@ -110,16 +166,15 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
             cancellable: false,
         },
         async (progress) => {
-            // Create output channel for detailed progress
             const outputChannel = vscode.window.createOutputChannel('Index Advisor Tests');
             outputChannel.show(true);
 
             outputChannel.appendLine('='.repeat(60));
             outputChannel.appendLine(`Index Advisor Test Run - ${new Date().toLocaleString()}`);
             outputChannel.appendLine('='.repeat(60));
+            outputChannel.appendLine(`Mode: ${isCSVMode ? 'CSV Mode' : 'Directory Mode'}`);
             outputChannel.appendLine(`Total Test Cases: ${testCases.length}`);
             outputChannel.appendLine(`Database: ${config.databaseName}`);
-            outputChannel.appendLine(`Skip Performance: ${skipPerfMeasurement}`);
             outputChannel.appendLine('='.repeat(60));
             outputChannel.appendLine('');
 
@@ -127,31 +182,29 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
             progress.report({ message: l10n.t('Warming up connection...') });
             outputChannel.appendLine('Warming up connection...');
 
-            // Progress callback for warmup
             const warmupProgress = (msg: string) => {
                 outputChannel.appendLine(msg);
             };
 
-            await warmupConnection(config, warmupProgress);
+            await warmupConnection(config, isCSVMode, warmupProgress);
             outputChannel.appendLine('');
 
             // Run each test case
             for (let i = 0; i < testCases.length; i++) {
                 const testCase = testCases[i];
-                const progressPercent = Math.round(((i + 1) / testCases.length) * 100);
+                const progressPercent = Math.round(((i + 1) / (testCases.length + 1)) * 100);
 
                 outputChannel.appendLine(
-                    `┌─ Test ${i + 1}/${testCases.length}: ${testCase.collectionName} ${'─'.repeat(40)}`,
+                    `┌─ Test ${i + 1}/${testCases.length}: ${testCase.testCaseName} ${'─'.repeat(40)}`,
                 );
-                outputChannel.appendLine(
-                    `│  Query: ${testCase.query.substring(0, 60)}${testCase.query.length > 60 ? '...' : ''}`,
-                );
+                outputChannel.appendLine(`│  Collection: ${testCase.collectionName}`);
+                outputChannel.appendLine(`│  Category: ${testCase.category}`);
 
                 progress.report({
-                    message: l10n.t('Test {current}/{total}: {collection}', {
+                    message: l10n.t('Test {current}/{total}: {testCase}', {
                         current: (i + 1).toString(),
                         total: testCases.length.toString(),
-                        collection: testCase.collectionName,
+                        testCase: testCase.testCaseName,
                     }),
                     increment: progressPercent,
                 });
@@ -164,7 +217,14 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
                         outputChannel.appendLine(`│  ${msg}`);
                     };
 
-                    const result = await executeTestCase(testCase, config, context, skipPerfMeasurement, testProgress);
+                    const result = await executeTestCase(
+                        testCase,
+                        config,
+                        context,
+                        isCSVMode,
+                        skipPerformance,
+                        testProgress,
+                    );
                     results.push(result);
 
                     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -181,12 +241,11 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
                     outputChannel.appendLine(`└─ ✗ ERROR: ${error instanceof Error ? error.message : String(error)}`);
 
                     // Add failed result
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     results.push({
+                        testCaseName: testCase.testCaseName,
                         collectionName: testCase.collectionName,
                         category: testCase.category,
                         scenarioDescription: testCase.scenarioDescription,
-                        query: testCase.query,
                         expectedResult: testCase.expectedResult,
                         errors: error instanceof Error ? error.message : String(error),
                         timestamp: new Date().toISOString(),
@@ -215,18 +274,13 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
     context.telemetry.properties.successfulTests = summary.successfulTests.toString();
     context.telemetry.properties.failedTests = summary.failedTests.toString();
     context.telemetry.properties.matchRate = summary.matchRate.toFixed(2);
-    context.telemetry.properties.avgPerformanceImprovement = summary.averagePerformanceImprovement.toFixed(2);
 
     // Show summary
-    const summaryMessage = l10n.t(
-        'Tests completed: {successful}/{total} successful, Match rate: {matchRate}%, Avg improvement: {improvement}%',
-        {
-            successful: summary.successfulTests.toString(),
-            total: summary.totalTests.toString(),
-            matchRate: summary.matchRate.toFixed(1),
-            improvement: summary.averagePerformanceImprovement.toFixed(1),
-        },
-    );
+    const summaryMessage = l10n.t('Tests completed: {successful}/{total} successful, Match rate: {matchRate}%', {
+        successful: summary.successfulTests.toString(),
+        total: summary.totalTests.toString(),
+        matchRate: summary.matchRate.toFixed(1),
+    });
 
     void vscode.window.showInformationMessage(summaryMessage);
 
@@ -257,16 +311,6 @@ function calculateSummary(results: TestResult[], totalDuration: number): TestRun
     const matchedTests = results.filter((r) => r.matchesExpected === true).length;
     const matchRate = totalTests > 0 ? (matchedTests / totalTests) * 100 : 0;
 
-    // Calculate average performance improvement
-    const performanceImprovements = results
-        .filter((r) => typeof r.performanceImprovement === 'number')
-        .map((r) => r.performanceImprovement as number);
-
-    const averagePerformanceImprovement =
-        performanceImprovements.length > 0
-            ? performanceImprovements.reduce((sum, val) => sum + val, 0) / performanceImprovements.length
-            : 0;
-
     // Count model usage
     const modelUsage: Record<string, number> = {};
     for (const result of results) {
@@ -279,7 +323,7 @@ function calculateSummary(results: TestResult[], totalDuration: number): TestRun
         totalTests,
         successfulTests,
         failedTests,
-        averagePerformanceImprovement,
+        averagePerformanceImprovement: 0,
         matchRate,
         totalDuration,
         modelUsage,

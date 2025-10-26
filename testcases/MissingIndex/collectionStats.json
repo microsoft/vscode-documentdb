@@ -1,0 +1,12 @@
+{
+  "ns": "index_advisor_test.b",
+  "count": 20000,
+  "size": 2220000,
+  "avgObjSize": 111,
+  "storageSize": 2228224,
+  "nindexes": 1,
+  "totalIndexSize": 1007616,
+  "indexSizes": {
+    "_id_": 1007616
+  }
+}

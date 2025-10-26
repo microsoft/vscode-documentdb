@@ -27,15 +27,21 @@ export enum CommandType {
  */
 export interface QueryOptimizationContext {
     // The cluster/connection ID
-    clusterId: string;
+    clusterId?: string;
     // Database name
     databaseName: string;
     // Collection name
     collectionName: string;
     // The query or pipeline to optimize
-    query: string;
+    query?: string;
     // The detected command type
     commandType: CommandType;
+    // Pre-loaded execution plan
+    executionPlan?: unknown;
+    // Pre-loaded collection stats
+    collectionStats?: CollectionStats;
+    // Pre-loaded index stat
+    indexStats?: IndexStats[];
     // Preferred LLM model for optimization
     preferredModel?: string;
     // Fallback LLM models
@@ -118,9 +124,8 @@ async function fillPromptTemplate(
         .replace(
             '{AzureClusterType}',
             clusterInfo.domainInfo_isAzure === 'true' ? JSON.stringify(clusterInfo.domainInfo_api, null, 2) : 'N/A',
-        )
-        .replace('{query}', context.query);
-
+        );
+    // .replace('{query}', context.query || 'N/A');
     return filled;
 }
 
@@ -144,53 +149,76 @@ export async function optimizeQuery(
         );
     }
 
-    // Get the MongoDB client
-    const client = await ClustersClient.getClient(queryContext.clusterId);
-    const clusterInfo = await ClustersClient.getClusterInfo(queryContext.clusterId);
-
-    // Parse the query to extract filter, sort, projection, etc.
-    const parsedQuery = parseQueryString(queryContext.query, queryContext.commandType);
-
-    // Gather information needed for optimization
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let explainResult: any;
+    let explainResult: unknown;
     let collectionStats: CollectionStats;
     let indexes: Array<IndexStats>;
+    let clusterInfo: ClusterMetadata;
 
-    try {
-        // Execute explain based on command type
-        if (queryContext.commandType === CommandType.Find) {
-            const explainData = await client.explainFind(
-                queryContext.databaseName,
-                queryContext.collectionName,
-                parsedQuery.explainOptions,
-            );
-            explainResult = explainData;
-        } else if (queryContext.commandType === CommandType.Aggregate) {
-            const explainData = await client.explainAggregate(
-                queryContext.databaseName,
-                queryContext.collectionName,
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                parsedQuery.pipeline || [],
-            );
-            explainResult = explainData;
-        } else if (queryContext.commandType === CommandType.Count) {
-            explainResult = await client.explainCount(
-                queryContext.databaseName,
-                queryContext.collectionName,
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                parsedQuery.filter || {},
-            );
+    // Check if we have pre-loaded data
+    const hasPreloadedData = queryContext.executionPlan && queryContext.collectionStats && queryContext.indexStats;
+
+    if (hasPreloadedData) {
+        // Use pre-loaded data
+        explainResult = queryContext.executionPlan;
+        collectionStats = queryContext.collectionStats!;
+        indexes = queryContext.indexStats!;
+
+        // For pre-loaded data, create a minimal cluster info
+        clusterInfo = {
+            domainInfo_isAzure: 'false',
+            domainInfo_api: 'N/A',
+        };
+    } else {
+        if (!queryContext.clusterId) {
+            throw new Error(l10n.t('clusterId is required when not using pre-loaded data'));
+        }
+        if (!queryContext.query) {
+            throw new Error(l10n.t('query is required when not using pre-loaded data'));
         }
 
-        collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
-        indexes = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
-    } catch (error) {
-        throw new Error(
-            l10n.t('Failed to gather query optimization data: {message}', {
-                message: error instanceof Error ? error.message : String(error),
-            }),
-        );
+        // Get the MongoDB client
+        const client = await ClustersClient.getClient(queryContext.clusterId);
+        clusterInfo = await ClustersClient.getClusterInfo(queryContext.clusterId);
+
+        // Parse the query to extract filter, sort, projection, etc.
+        const parsedQuery = parseQueryString(queryContext.query, queryContext.commandType);
+
+        // Gather information needed for optimization
+        try {
+            // Execute explain based on command type
+            if (queryContext.commandType === CommandType.Find) {
+                const explainData = await client.explainFind(
+                    queryContext.databaseName,
+                    queryContext.collectionName,
+                    parsedQuery.explainOptions,
+                );
+                explainResult = explainData;
+            } else if (queryContext.commandType === CommandType.Aggregate) {
+                const explainData = await client.explainAggregate(
+                    queryContext.databaseName,
+                    queryContext.collectionName,
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                    parsedQuery.pipeline || [],
+                );
+                explainResult = explainData;
+            } else if (queryContext.commandType === CommandType.Count) {
+                explainResult = await client.explainCount(
+                    queryContext.databaseName,
+                    queryContext.collectionName,
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                    parsedQuery.filter || {},
+                );
+            }
+
+            collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
+            indexes = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
+        } catch (error) {
+            throw new Error(
+                l10n.t('Failed to gather query optimization data: {message}', {
+                    message: error instanceof Error ? error.message : String(error),
+                }),
+            );
+        }
     }
 
     // Format execution stats for the prompt

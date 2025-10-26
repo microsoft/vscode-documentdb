@@ -1,0 +1,6 @@
+{
+  "collectionName": "a",
+  "category": "missing index",
+  "description": "No single index exists for the query",
+  "expectedResults": "db.getCollection('b').createIndex({'age':1},{})"
+}

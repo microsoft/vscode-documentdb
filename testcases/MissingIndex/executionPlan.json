@@ -1,0 +1,43 @@
+{
+  "explainVersion": 2,
+  "command": "db.runCommand({explain: { 'find' : 'b', 'filter' : { 'age' : { '$gt' : 30, '$lt' : 40 } } }})",
+  "explainCommandPlanningTimeMillis": 0.085,
+  "explainCommandExecTimeMillis": 7.3660000000000005,
+  "queryPlanner": {
+    "namespace": "index_advisor_test.b",
+    "winningPlan": {
+      "stage": "COLLSCAN",
+      "runtimeFilterSet": [
+        {
+          "$gt": {
+            "age": 30
+          }
+        },
+        {
+          "$lt": {
+            "age": 40
+          }
+        }
+      ],
+      "estimatedTotalKeysExamined": 5000
+    }
+  },
+  "executionStats": {
+    "nReturned": 3325,
+    "executionTimeMillis": 7.2620000000000005,
+    "executionStartAtTimeMillis": 0.012,
+    "totalDocsExamined": 20000,
+    "totalKeysExamined": 3325,
+    "executionStages": {
+      "stage": "COLLSCAN",
+      "nReturned": 3325,
+      "executionTimeMillis": 7.2620000000000005,
+      "executionStartAtTimeMillis": 0.012,
+      "totalDocsExamined": 20000,
+      "totalKeysExamined": 3325,
+      "totalDocsRemovedByRuntimeFilter": 16675,
+      "numBlocksFromCache": 267
+    }
+  },
+  "ok": 1
+}

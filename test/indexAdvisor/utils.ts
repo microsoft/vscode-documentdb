@@ -16,14 +16,6 @@ export function loadConfig(configPath: string): TestConfig {
     const configContent = fs.readFileSync(configPath, 'utf-8');
     const config = JSON.parse(configContent) as TestConfig;
 
-    // Validate required fields
-    if (!config.clusterId && !config.connectionString) {
-        throw new Error('Either clusterId or connectionString is required in configuration');
-    }
-    if (!config.databaseName) {
-        throw new Error('databaseName is required in configuration');
-    }
-
     return config;
 }
 
@@ -45,8 +37,8 @@ export function loadTestCases(csvPath: string): TestCase[] {
     const colNameIdx = header.indexOf('collectionName');
     const categoryIdx = header.indexOf('category');
     const scenarioIdx = header.indexOf('scenarioDescription');
-    const queryIdx = header.indexOf('query');
     const expectedIdx = header.indexOf('expectedResult');
+    const queryIdx = header.indexOf('query');
 
     // Parse rows
     const testCases: TestCase[] = [];
@@ -60,15 +52,101 @@ export function loadTestCases(csvPath: string): TestCase[] {
         const values = parseCSVLine(line);
 
         testCases.push({
+            testCaseName: `test-${i}`,
             collectionName: values[colNameIdx] || '',
             category: values[categoryIdx] || '',
             scenarioDescription: values[scenarioIdx] || '',
-            query: values[queryIdx] || '',
+            executionPlan: {},
+            collectionStats: {},
+            indexStats: [],
             expectedResult: values[expectedIdx] || '',
+            query: values[queryIdx],
         });
     }
 
     return testCases;
+}
+
+/**
+ * Loads test cases from a directory structure
+ * @param rootPath Path to the root directory containing test case folders
+ * @returns Array of test cases
+ */
+export function loadTestCasesFromDirectory(rootPath: string): TestCase[] {
+    if (!fs.existsSync(rootPath)) {
+        throw new Error(`Test cases directory not found: ${rootPath}`);
+    }
+
+    const testCases: TestCase[] = [];
+    const entries = fs.readdirSync(rootPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+        if (!entry.isDirectory()) {
+            continue;
+        }
+
+        const testCasePath = path.join(rootPath, entry.name);
+
+        try {
+            const testCase = loadSingleTestCase(testCasePath, entry.name);
+            testCases.push(testCase);
+        } catch (error) {
+            console.warn(`Failed to load test case from ${entry.name}:`, error);
+        }
+    }
+
+    return testCases;
+}
+
+/**
+ * Loads a single test case from a directory
+ * @param testCasePath Path to the test case directory
+ * @param testCaseName Name of the test case
+ * @returns Test case
+ */
+function loadSingleTestCase(testCasePath: string, testCaseName: string): TestCase {
+    // Load required files
+    const executionPlanPath = path.join(testCasePath, 'executionPlan.json');
+    const collectionStatsPath = path.join(testCasePath, 'collectionStats.json');
+    const indexStatsPath = path.join(testCasePath, 'indexStats.json');
+    const descriptionPath = path.join(testCasePath, 'description.json');
+
+    // Validate required files exist
+    if (!fs.existsSync(executionPlanPath)) {
+        throw new Error(`Missing executionPlan.json in ${testCaseName}`);
+    }
+    if (!fs.existsSync(collectionStatsPath)) {
+        throw new Error(`Missing collectionStats.json in ${testCaseName}`);
+    }
+    if (!fs.existsSync(indexStatsPath)) {
+        throw new Error(`Missing indexStats.json in ${testCaseName}`);
+    }
+    if (!fs.existsSync(descriptionPath)) {
+        throw new Error(`Missing description.json in ${testCaseName}`);
+    }
+
+    // Load and parse JSON files
+    const executionPlan = JSON.parse(fs.readFileSync(executionPlanPath, 'utf-8')) as unknown;
+    const collectionStats = JSON.parse(fs.readFileSync(collectionStatsPath, 'utf-8')) as unknown;
+    const indexStats = JSON.parse(fs.readFileSync(indexStatsPath, 'utf-8')) as unknown[];
+
+    const description = JSON.parse(fs.readFileSync(descriptionPath, 'utf-8')) as {
+        collectionName?: string;
+        category?: string;
+        description?: string;
+        expectedResults?: string;
+    };
+
+    return {
+        testCaseName,
+        collectionName: description.collectionName || testCaseName,
+        category: description.category || 'unknown',
+        scenarioDescription: description.description || '',
+        executionPlan,
+        collectionStats,
+        indexStats,
+        expectedResult: description.expectedResults || '',
+    };
 }
 
 /**
@@ -136,45 +214,49 @@ export function saveResults(results: TestResult[], outputPath: string): void {
  */
 function saveResultsAsCSV(results: TestResult[], outputPath: string): void {
     const header = [
+        'Test Case Name',
         'Collection Name',
         'Category',
         'Scenario Description',
         'Query',
-        'Expected Indexs',
+        'Expected Indexes',
         'Suggested Indexes',
         'If Matches Expected',
-        'Execution Time(ms)',
-        'Updated Execution Time(ms)',
-        'Performance Improvement(%)',
-        'Collection Status',
-        'Index Status',
+        'Analysis',
         'Execution Plan',
         'Updated Execution Plan',
+        'Query Performance',
+        'Updated Performance',
+        'Performance Improvement',
+        'Collection Stats',
+        'Index Stats',
         'Model Used',
         'Errors',
         'Timestamp',
-        'Analysis',
+        'Notes',
     ];
 
     const rows = results.map((result) => [
-        escapeCSV(result.collectionName),                                                     // Collection Name
-        escapeCSV(result.category),                                                           // Category
-        escapeCSV(result.scenarioDescription),                                                // Scenario Description
-        escapeCSV(result.query),                                                              // Query
-        escapeCSV(result.expectedResult),                                                     // Expected Indexs
-        escapeCSV(result.suggestions || ''),                                                  // Suggested Indexes
-        result.matchesExpected !== undefined ? result.matchesExpected.toString() : '',        // If Matches Expected
-        result.queryPerformance !== undefined ? result.queryPerformance.toFixed(2) : '',      // Execution Time(ms)
-        result.updatedPerformance !== undefined ? result.updatedPerformance.toFixed(2) : '', // Updated Execution Time(ms)
-        result.performanceImprovement !== undefined ? result.performanceImprovement.toFixed(2) : '', // Performance Improvement(%)
-        escapeCSV(result.collectionStats || ''),                                              // Collection Status
-        escapeCSV(result.indexStats || ''),                                                   // Index Status
-        escapeCSV(result.executionPlan || ''),                                                // Execution Plan
-        escapeCSV(result.updatedExecutionPlan || ''),                                          // Updated Execution Plan
-        result.modelUsed || '',                                                               // Model Used
-        escapeCSV(result.errors || ''),                                                       // Errors
-        result.timestamp || '',                                                               // Timestamp
-        escapeCSV(result.analysis || ''),                                                     // Analysis
+        escapeCSV(result.testCaseName), // Test Case Name
+        escapeCSV(result.collectionName), // Collection Name
+        escapeCSV(result.category), // Category
+        escapeCSV(result.scenarioDescription), // Scenario Description
+        escapeCSV(result.query || ''), // Query
+        escapeCSV(result.expectedResult), // Expected Indexes
+        escapeCSV(result.suggestions || ''), // Suggested Indexes
+        result.matchesExpected !== undefined ? result.matchesExpected.toString() : '', // If Matches Expected
+        escapeCSV(result.analysis || ''), // Analysis
+        escapeCSV(result.executionPlan || ''), // Execution Plan
+        escapeCSV(result.updatedExecutionPlan || ''), // Updated Execution Plan
+        result.queryPerformance !== undefined ? result.queryPerformance.toString() : '', // Query Performance
+        result.updatedPerformance !== undefined ? result.updatedPerformance.toString() : '', // Updated Performance
+        result.performanceImprovement !== undefined ? result.performanceImprovement.toFixed(2) : '', // Performance Improvement
+        escapeCSV(result.collectionStats || ''), // Collection Stats
+        escapeCSV(result.indexStats || ''), // Index Stats
+        result.modelUsed || '', // Model Used
+        escapeCSV(result.errors || ''), // Errors
+        result.timestamp || '', // Timestamp
+        escapeCSV(result.notes || ''), // Notes
     ]);
 
     const csvContent = [header.join(','), ...rows.map((row) => row.join(','))].join('\n');
@@ -189,24 +271,26 @@ function saveResultsAsCSV(results: TestResult[], outputPath: string): void {
 function saveResultsAsJSON(results: TestResult[], outputPath: string): void {
     // Parse JSON strings back to objects for the specified fields
     const parsedResults = results.map((result) => ({
+        testCaseName: result.testCaseName,
         collectionName: result.collectionName,
         category: result.category,
         scenarioDescription: result.scenarioDescription,
-        query: result.query,
+        query: result.query || null,
         expectedResult: result.expectedResult,
         suggestions: result.suggestions || null,
         matchesExpected: result.matchesExpected ?? null,
-        queryPerformance: result.queryPerformance ?? null,
-        updatedPerformance: result.updatedPerformance ?? null,
-        performanceImprovement: result.performanceImprovement ?? null,
         collectionStats: result.collectionStats ? JSON.parse(result.collectionStats) : null,
         indexStats: result.indexStats ? JSON.parse(result.indexStats) : null,
         executionPlan: result.executionPlan ? JSON.parse(result.executionPlan) : null,
         updatedExecutionPlan: result.updatedExecutionPlan ? JSON.parse(result.updatedExecutionPlan) : null,
+        queryPerformance: result.queryPerformance ?? null,
+        updatedPerformance: result.updatedPerformance ?? null,
+        performanceImprovement: result.performanceImprovement ?? null,
         modelUsed: result.modelUsed || null,
         errors: result.errors || null,
         timestamp: result.timestamp || null,
         analysis: result.analysis || null,
+        notes: result.notes || null,
     }));
 
     const jsonContent = {

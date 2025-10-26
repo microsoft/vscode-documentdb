@@ -11,9 +11,9 @@
  * Configuration for the test runner
  */
 export interface TestConfig {
-    // Cluster connection ID (optional if connectionString is provided)
+    // Cluster connection ID
     clusterId?: string;
-    // Connection string (optional if clusterId is provided)
+    // Connection string
     connectionString?: string;
     // Target database name
     databaseName: string;
@@ -24,7 +24,7 @@ export interface TestConfig {
     // Path to custom prompt template
     promptTemplatePath?: string;
     // Query to warm up the connection
-    warmupQuery?: string;
+    shouldWarmup?: boolean;
     // Connection timeout in milliseconds
     connectionTimeout?: number;
     // Query timeout in milliseconds
@@ -35,14 +35,24 @@ export interface TestConfig {
  * A single test case
  */
 export interface TestCase {
+    // Test case name (directory name or from CSV)
+    testCaseName: string;
     // Collection name
     collectionName: string;
     // Category of the test case
     category: string;
     // Scenario description
     scenarioDescription: string;
-    // Query to optimize
-    query: string;
+    // Pre-loaded execution plan (directory-based mode)
+    executionPlan?: unknown;
+    // Pre-loaded collection stats (directory-based mode)
+    collectionStats?: unknown;
+    // Pre-loaded index stats (directory-based mode)
+    indexStats?: unknown[];
+    // Query string (csv-based mode)
+    query?: string;
+    // Additional notes
+    notes?: string;
     // Expected result (Mongo shell command)
     expectedResult: string;
 }
@@ -68,19 +78,20 @@ export interface PerformanceMeasurement {
  */
 export interface TestResult {
     // Test case information
+    testCaseName: string;
     collectionName: string;
     category: string;
     scenarioDescription: string;
-    query: string;
     expectedResult: string;
+    query?: string; // csv-based mode query
 
     // Metadata collected
     collectionStats?: string; // JSON string
     indexStats?: string; // JSON string
     executionPlan?: string; // JSON string
-    updatedExecutionPlan?: string; // JSON string
+    updatedExecutionPlan?: string; // JSON string (csv-based mode with performance measurement)
 
-    // Performance metrics
+    // Performance metrics (csv-based mode only)
     queryPerformance?: number; // ms
     updatedPerformance?: number; // ms
     performanceImprovement?: number; // percentage
@@ -95,6 +106,9 @@ export interface TestResult {
 
     // Errors
     errors?: string;
+
+    // Additional notes
+    notes?: string;
 
     // Timestamp
     timestamp?: string;

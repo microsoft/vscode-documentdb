@@ -50,7 +50,7 @@ export class CopilotService {
         // Get all available models from VS Code
         const availableModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
 
-        const preferredFamilies = this.getPreferredFamilies(options);
+        const preferredFamilies = this.getPreferredModels(options);
         const selectedModel = this.selectBestModel(availableModels, preferredFamilies);
 
         if (!selectedModel) {
@@ -69,40 +69,40 @@ export class CopilotService {
     }
 
     /**
-     * Builds the ordered list of preferred model families
+     * Builds the ordered list of preferred models
      */
-    private static getPreferredFamilies(options?: CopilotMessageOptions): string[] {
-        const families: string[] = [];
+    private static getPreferredModels(options?: CopilotMessageOptions): string[] {
+        const models: string[] = [];
 
         if (options?.preferredModel) {
-            families.push(options.preferredModel);
+            models.push(options.preferredModel);
         }
 
         if (options?.fallbackModels && options.fallbackModels.length > 0) {
-            families.push(...options.fallbackModels);
+            models.push(...options.fallbackModels);
         }
 
-        return families;
+        return models;
     }
 
     /**
      * Selects the best available model based on preference order
      *
      * @param availableModels - All available models from VS Code
-     * @param preferredFamilies - Ordered list of preferred model families
+     * @param preferredModels - Ordered list of preferred models
      * @returns The best matching model, or the first available model if no matches
      */
     private static selectBestModel(
         availableModels: vscode.LanguageModelChat[],
-        preferredFamilies: string[],
+        preferredModels: string[],
     ): vscode.LanguageModelChat | undefined {
         if (availableModels.length === 0) {
             return undefined;
         }
 
-        if (preferredFamilies.length !== 0) {
-            for (const preferredFamily of preferredFamilies) {
-                const matchingModel = availableModels.find((model) => model.family === preferredFamily);
+        if (preferredModels.length !== 0) {
+            for (const preferredModel of preferredModels) {
+                const matchingModel = availableModels.find((model) => model.id === preferredModel);
                 if (matchingModel) {
                     return matchingModel;
                 }
@@ -123,15 +123,21 @@ export class CopilotService {
         // LanguageModelChatRequestOptions, but we keep them here for potential future use
         const requestOptions: vscode.LanguageModelChatRequestOptions = {};
 
-        const chatResponse = await model.sendRequest(messages, requestOptions);
+        try {
+            const chatResponse = await model.sendRequest(messages, requestOptions);
 
-        // Collect the streaming response
-        let fullResponse = '';
-        for await (const fragment of chatResponse.text) {
-            fullResponse += fragment;
+            // Collect the streaming response
+            let fullResponse = '';
+            for await (const fragment of chatResponse.text) {
+                fullResponse += fragment;
+            }
+
+            return fullResponse;
+        } catch (error) {
+            throw new Error(
+                `Failed to send message to model: ${error instanceof Error ? error.message : String(error)}`,
+            );
         }
-
-        return fullResponse;
     }
 
     /**
