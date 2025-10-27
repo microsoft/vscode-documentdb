@@ -6,7 +6,7 @@
 // Shared styles for Query Insights components
 
 // Data display styles
-.dataHeader {
+.baseDataHeader {
     font-size: 12px;
     font-weight: 600;
     color: var(--vscode-descriptionForeground);
@@ -16,7 +16,7 @@
     width: 100%;
 }
 
-.dataValue {
+.baseDataValue {
     font-size: 28px;
     font-weight: 600;
     line-height: 32px;

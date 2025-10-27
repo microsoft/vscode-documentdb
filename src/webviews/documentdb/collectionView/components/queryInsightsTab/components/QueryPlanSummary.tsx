@@ -342,20 +342,20 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                     <div>
-                        <div className="dataHeader">{l10n.t('Total Returned')}</div>
-                        <div className="dataValue" style={{ fontSize: '20px', lineHeight: '28px' }}>
+                        <div className="baseDataHeader">{l10n.t('Total Returned')}</div>
+                        <div className="baseDataValue" style={{ fontSize: '20px', lineHeight: '28px' }}>
                             50
                         </div>
                     </div>
                     <div>
-                        <div className="dataHeader">{l10n.t('Shards')}</div>
-                        <div className="dataValue" style={{ fontSize: '20px', lineHeight: '28px' }}>
+                        <div className="baseDataHeader">{l10n.t('Shards')}</div>
+                        <div className="baseDataValue" style={{ fontSize: '20px', lineHeight: '28px' }}>
                             2
                         </div>
                     </div>
                     <div>
-                        <div className="dataHeader">{l10n.t('Total Time')}</div>
-                        <div className="dataValue" style={{ fontSize: '20px', lineHeight: '28px' }}>
+                        <div className="baseDataHeader">{l10n.t('Total Time')}</div>
+                        <div className="baseDataValue" style={{ fontSize: '20px', lineHeight: '28px' }}>
                             1.4 s
                         </div>
                     </div>
@@ -395,19 +395,19 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                         <div>
-                            <div className="dataHeader">{l10n.t('Returned')}</div>
+                            <div className="baseDataHeader">{l10n.t('Returned')}</div>
                             <Text weight="semibold">{shard.nReturned}</Text>
                         </div>
                         <div>
-                            <div className="dataHeader">{l10n.t('Keys Examined')}</div>
+                            <div className="baseDataHeader">{l10n.t('Keys Examined')}</div>
                             <Text weight="semibold">{shard.keysExamined.toLocaleString()}</Text>
                         </div>
                         <div>
-                            <div className="dataHeader">{l10n.t('Docs Examined')}</div>
+                            <div className="baseDataHeader">{l10n.t('Docs Examined')}</div>
                             <Text weight="semibold">{shard.docsExamined.toLocaleString()}</Text>
                         </div>
                         <div>
-                            <div className="dataHeader">{l10n.t('Time')}</div>
+                            <div className="baseDataHeader">{l10n.t('Time')}</div>
                             <Text weight="semibold">{shard.executionTimeMs} ms</Text>
                         </div>
                     </div>

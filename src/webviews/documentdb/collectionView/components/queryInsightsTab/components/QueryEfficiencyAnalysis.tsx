@@ -23,19 +23,19 @@ export const QueryEfficiencyAnalysis: React.FC<QueryEfficiencyAnalysisProps> = (
 
             <div className="summaryGrid">
                 <div className="summaryItem">
-                    <div className="dataHeader">{l10n.t('Execution Strategy')}</div>
+                    <div className="baseDataHeader">{l10n.t('Execution Strategy')}</div>
                     {stageState >= 2 ? <Text>COLLSCAN</Text> : <SkeletonItem size={16} />}
                 </div>
                 <div className="summaryItem">
-                    <div className="dataHeader">{l10n.t('Index Used')}</div>
+                    <div className="baseDataHeader">{l10n.t('Index Used')}</div>
                     {stageState >= 2 ? <Text>{l10n.t('None')}</Text> : <SkeletonItem size={16} />}
                 </div>
                 <div className="summaryItem">
-                    <div className="dataHeader">{l10n.t('Examined/Returned Ratio')}</div>
+                    <div className="baseDataHeader">{l10n.t('Examined/Returned Ratio')}</div>
                     {stageState >= 2 ? <Text>5,000 : 1</Text> : <SkeletonItem size={16} />}
                 </div>
                 <div className="summaryItem">
-                    <div className="dataHeader">{l10n.t('In-Memory Sort')}</div>
+                    <div className="baseDataHeader">{l10n.t('In-Memory Sort')}</div>
                     {stageState >= 2 ? <Text>{l10n.t('No')}</Text> : <SkeletonItem size={16} />}
                 </div>
             </div>

@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+@use '../../queryInsights.scss' as *;
+
 .metricsRow {
     display: grid;
     gap: 16px;
@@ -31,25 +33,12 @@
     text-align: left;
     gap: 8px;
 
-    // Metric label styling
+    // Reference base styles from queryInsights.scss
     .dataHeader {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--vscode-descriptionForeground);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        width: 100%;
+        @extend .baseDataHeader;
     }
 
-    // Metric value styling
     .dataValue {
-        font-size: 28px;
-        font-weight: 600;
-        line-height: 32px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        width: 100%;
+        @extend .baseDataValue;
     }
 }
