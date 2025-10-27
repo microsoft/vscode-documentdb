@@ -174,26 +174,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                 <div className="leftPanel">
                     {/* Metrics Row */}
                     <MetricsRow>
-                        <TimeMetric
-                            label={l10n.t('Execution Time')}
-                            valueMs={executionTime}
-                            tooltip={l10n.t('WIP: Available at Stage 1')}
-                        />
-                        <CountMetric
-                            label={l10n.t('Documents Returned')}
-                            value={docsReturned}
-                            tooltip={l10n.t('WIP: Available at Stage 1')}
-                        />
-                        <CountMetric
-                            label={l10n.t('Keys Examined')}
-                            value={keysExamined}
-                            tooltip={l10n.t('WIP: Available at Stage 2')}
-                        />
-                        <CountMetric
-                            label={l10n.t('Docs Examined')}
-                            value={docsExamined}
-                            tooltip={l10n.t('WIP: Available at Stage 2')}
-                        />
+                        <TimeMetric label={l10n.t('Execution Time')} valueMs={executionTime} />
+                        <CountMetric label={l10n.t('Documents Returned')} value={docsReturned} />
+                        <CountMetric label={l10n.t('Keys Examined')} value={keysExamined} />
+                        <CountMetric label={l10n.t('Docs Examined')} value={docsExamined} />
                     </MetricsRow>
 
                     {/* Optimization Opportunities */}
