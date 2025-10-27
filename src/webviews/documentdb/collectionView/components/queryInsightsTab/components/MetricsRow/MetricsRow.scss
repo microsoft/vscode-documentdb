@@ -8,6 +8,19 @@
     gap: 16px;
     min-width: 0;
     grid-auto-rows: auto;
+
+    // Mobile: 1 column
+    grid-template-columns: 1fr;
+
+    // Tablet: 2 columns
+    @media (min-width: 600px) {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    // Desktop: 4 columns
+    @media (min-width: 1200px) {
+        grid-template-columns: repeat(4, 1fr);
+    }
 }
 
 .metricCard {
@@ -17,4 +30,26 @@
     align-items: flex-start;
     text-align: left;
     gap: 8px;
+
+    // Metric label styling
+    .dataHeader {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--vscode-descriptionForeground);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
+    }
+
+    // Metric value styling
+    .dataValue {
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 32px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
+    }
 }

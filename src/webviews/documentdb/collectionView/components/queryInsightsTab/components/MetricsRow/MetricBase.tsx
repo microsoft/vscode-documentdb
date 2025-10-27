@@ -5,7 +5,6 @@
 
 import { Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
 import * as React from 'react';
-import '../../queryInsights.scss';
 import './MetricsRow.scss';
 
 /**

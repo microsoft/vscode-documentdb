@@ -28,7 +28,9 @@ import {
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useState } from 'react';
+import { RatioMetric } from './components/MetricsRow';
 import { CountMetric } from './components/MetricsRow/CountMetric';
+import { GenericMetric } from './components/MetricsRow/GenericMetric';
 import { MetricsRow } from './components/MetricsRow/MetricsRow';
 import { TimeMetric } from './components/MetricsRow/TimeMetric';
 import { QueryEfficiencyAnalysis } from './components/QueryEfficiencyAnalysis';
@@ -177,6 +179,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <CountMetric label={l10n.t('Documents Returned')} value={docsReturned} />
                         <CountMetric label={l10n.t('Keys Examined')} value={keysExamined} />
                         <CountMetric label={l10n.t('Docs Examined')} value={docsExamined} />
+                        <GenericMetric label={l10n.t('Database')} value="asdf" placeholder="empty" />
+                        <RatioMetric label="ratio" ratio={0.85} />
                     </MetricsRow>
                 </div>
 
