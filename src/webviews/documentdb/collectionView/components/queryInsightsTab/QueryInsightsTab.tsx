@@ -547,18 +547,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                         {l10n.t('Return only the requested fields')}
                                                     </Text>
                                                 </div>
-                                                <Text
-                                                    size={300}
-                                                    style={{
-                                                        display: 'block',
-                                                        color: tokens.colorBrandForeground1,
-                                                        fontWeight: 600,
-                                                    }}
-                                                >
-                                                    {l10n.t(
-                                                        'Result: Examine ~2 documents instead of 10,000 — a 5,000x improvement in efficiency!',
-                                                    )}
-                                                </Text>
                                             </div>
                                         </div>
                                     </Card>
