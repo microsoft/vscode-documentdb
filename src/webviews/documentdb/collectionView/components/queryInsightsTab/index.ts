@@ -3,4 +3,4 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { QueryInsightsMain } from './QueryInsightsMain';
+export { QueryInsightsMain } from './QueryInsightsTab';

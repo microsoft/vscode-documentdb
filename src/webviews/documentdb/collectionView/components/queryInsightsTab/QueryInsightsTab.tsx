@@ -33,7 +33,7 @@ import { QueryEfficiencyAnalysis } from './components/QueryEfficiencyAnalysis';
 import { QueryPlanSummary } from './components/QueryPlanSummary';
 import { QuickActions } from './components/QuickActions';
 import './queryInsights.scss';
-import './QueryInsightsMain.scss';
+import './QueryInsightsTab.scss';
 
 type Stage = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
 

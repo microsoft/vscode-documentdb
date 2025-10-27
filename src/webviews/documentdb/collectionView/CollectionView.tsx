@@ -18,7 +18,7 @@ import {
     Views,
 } from './collectionViewContext';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
-import { QueryInsightsMain } from './components/queryInsights/QueryInsightsMain';
+import { QueryInsightsMain } from './components/queryInsightsTab/QueryInsightsTab';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
 import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
