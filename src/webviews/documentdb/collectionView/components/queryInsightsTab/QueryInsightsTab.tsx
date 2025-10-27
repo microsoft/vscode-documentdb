@@ -28,9 +28,9 @@ import {
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useState } from 'react';
-import { CountMetric } from './components/MetricsRow/CountMetric';
-import { MetricsRow } from './components/MetricsRow/MetricsRow';
-import { TimeMetric } from './components/MetricsRow/TimeMetric';
+import { CountMetric } from './components/metricsRow/CountMetric';
+import { MetricsRow } from './components/metricsRow/MetricsRow';
+import { TimeMetric } from './components/metricsRow/TimeMetric';
 import { QueryEfficiencyAnalysis } from './components/QueryEfficiencyAnalysis';
 import { QueryPlanSummary } from './components/QueryPlanSummary';
 import { QuickActions } from './components/QuickActions';
