@@ -172,7 +172,12 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                     {/* Optimization Opportunities */}
                     <div>
-                        <Text weight="semibold" size={400} className="optimizationTitle">
+                        <Text
+                            weight="semibold"
+                            size={400}
+                            className="optimizationTitle"
+                            style={{ marginBottom: '12px', display: 'block' }}
+                        >
                             {l10n.t('Optimization Opportunities')}
                         </Text>
 
