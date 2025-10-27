@@ -9,16 +9,16 @@
     min-width: 0;
     grid-auto-rows: auto;
 
-    // Mobile: 1 column
+    // Default: 1 column
     grid-template-columns: 1fr;
 
-    // Tablet: 2 columns
-    @media (min-width: 600px) {
+    // Medium screen: 2 columns
+    @media (min-width: 400px) {
         grid-template-columns: repeat(2, 1fr);
     }
 
-    // Desktop: 4 columns
-    @media (min-width: 1200px) {
+    // Wide screen: 4 columns
+    @media (min-width: 800px) {
         grid-template-columns: repeat(4, 1fr);
     }
 }

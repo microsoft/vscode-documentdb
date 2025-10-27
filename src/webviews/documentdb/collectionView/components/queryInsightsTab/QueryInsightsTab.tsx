@@ -28,9 +28,7 @@ import {
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useState } from 'react';
-import { RatioMetric } from './components/MetricsRow';
 import { CountMetric } from './components/MetricsRow/CountMetric';
-import { GenericMetric } from './components/MetricsRow/GenericMetric';
 import { MetricsRow } from './components/MetricsRow/MetricsRow';
 import { TimeMetric } from './components/MetricsRow/TimeMetric';
 import { QueryEfficiencyAnalysis } from './components/QueryEfficiencyAnalysis';
@@ -172,45 +170,31 @@ export const QueryInsightsMain = (): JSX.Element => {
         <div className="container">
             {/* Content Area */}
             <div className="contentArea">
-                {/* Metrics Row - Mobile Only (appears first) */}
-                <div className="metricsWrapper">
-                    <MetricsRow>
-                        <TimeMetric label={l10n.t('Execution Time')} valueMs={executionTime} />
-                        <CountMetric label={l10n.t('Documents Returned')} value={docsReturned} />
-                        <CountMetric label={l10n.t('Keys Examined')} value={keysExamined} />
-                        <CountMetric label={l10n.t('Docs Examined')} value={docsExamined} />
-                        <GenericMetric label={l10n.t('Database')} value="asdf" placeholder="empty" />
-                        <RatioMetric label="ratio" ratio={0.85} />
-                    </MetricsRow>
-                </div>
-
                 {/* Left Panel */}
                 <div className="leftPanel">
-                    {/* Metrics Row - Desktop Only */}
-                    <div className="metricsInPanel">
-                        <MetricsRow>
-                            <TimeMetric
-                                label={l10n.t('Execution Time')}
-                                valueMs={executionTime}
-                                tooltip={l10n.t('WIP: Available at Stage 1')}
-                            />
-                            <CountMetric
-                                label={l10n.t('Documents Returned')}
-                                value={docsReturned}
-                                tooltip={l10n.t('WIP: Available at Stage 1')}
-                            />
-                            <CountMetric
-                                label={l10n.t('Keys Examined')}
-                                value={keysExamined}
-                                tooltip={l10n.t('WIP: Available at Stage 2')}
-                            />
-                            <CountMetric
-                                label={l10n.t('Docs Examined')}
-                                value={docsExamined}
-                                tooltip={l10n.t('WIP: Available at Stage 2')}
-                            />
-                        </MetricsRow>
-                    </div>
+                    {/* Metrics Row */}
+                    <MetricsRow>
+                        <TimeMetric
+                            label={l10n.t('Execution Time')}
+                            valueMs={executionTime}
+                            tooltip={l10n.t('WIP: Available at Stage 1')}
+                        />
+                        <CountMetric
+                            label={l10n.t('Documents Returned')}
+                            value={docsReturned}
+                            tooltip={l10n.t('WIP: Available at Stage 1')}
+                        />
+                        <CountMetric
+                            label={l10n.t('Keys Examined')}
+                            value={keysExamined}
+                            tooltip={l10n.t('WIP: Available at Stage 2')}
+                        />
+                        <CountMetric
+                            label={l10n.t('Docs Examined')}
+                            value={docsExamined}
+                            tooltip={l10n.t('WIP: Available at Stage 2')}
+                        />
+                    </MetricsRow>
 
                     {/* Optimization Opportunities */}
                     <div>
