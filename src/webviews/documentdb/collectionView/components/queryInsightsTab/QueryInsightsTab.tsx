@@ -31,9 +31,9 @@ import { type JSX, useEffect, useState } from 'react';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
-import { QueryEfficiencyAnalysis } from './components/QueryEfficiencyAnalysis';
 import { QueryPlanSummary } from './components/QueryPlanSummary';
 import { QuickActions } from './components/QuickActions';
+import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
 import './QueryInsightsTab.scss';
 
@@ -640,7 +640,34 @@ export const QueryInsightsMain = (): JSX.Element => {
                 {/* Right Panel */}
                 <div className="rightPanel">
                     {/* Query Efficiency Analysis */}
-                    <QueryEfficiencyAnalysis stageState={stageState} />
+                    <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
+                        <GenericCell
+                            label={l10n.t('Execution Strategy')}
+                            value={stageState >= 2 ? 'COLLSCAN' : undefined}
+                            placeholder="skeleton"
+                        />
+                        <GenericCell
+                            label={l10n.t('Index Used')}
+                            value={stageState >= 2 ? l10n.t('None') : undefined}
+                            placeholder="skeleton"
+                        />
+                        <GenericCell
+                            label={l10n.t('Examined/Returned Ratio')}
+                            value={stageState >= 2 ? '5,000 : 1' : undefined}
+                            placeholder="skeleton"
+                        />
+                        <GenericCell
+                            label={l10n.t('In-Memory Sort')}
+                            value={stageState >= 2 ? l10n.t('No') : undefined}
+                            placeholder="skeleton"
+                        />
+                        <PerformanceRatingCell
+                            label={l10n.t('Performance Rating')}
+                            rating={stageState >= 2 ? 'poor' : undefined}
+                            description={l10n.t('Only 0.02% of examined documents were returned')}
+                            visible={stageState >= 2}
+                        />
+                    </SummaryCard>
 
                     {/* Query Plan Summary - Desktop Only */}
                     <div className="queryPlanInPanel">

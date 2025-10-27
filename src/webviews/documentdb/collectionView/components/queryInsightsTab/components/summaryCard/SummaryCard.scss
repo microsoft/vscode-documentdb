@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-.executionSummary {
-    padding: 16px;
+@use '../../queryInsights.scss' as *;
+
+.summaryCard {
     flex-shrink: 0;
 }
 
@@ -12,36 +13,27 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 16px;
-    margin-top: 12px;
 }
 
-.summaryItem {
+.summaryCell {
     display: flex;
     flex-direction: column;
     gap: 4px;
     align-items: flex-start;
-}
+    grid-column: span 1;
 
-.efficiencyIndicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px;
-    border-radius: 6px;
-    background-color: var(--vscode-editorWidget-background);
-}
+    .cellLabel {
+        @extend .baseDataHeader;
+    }
 
-.efficiencyDot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-}
+    &.cellSpanFull {
+        grid-column: span 2;
+        margin-top: 4px;
+        align-items: stretch; // Allow children to fill full width
 
-.ratingSection {
-    margin-top: 16px;
-}
-
-.ratingLabel {
-    margin-bottom: 8px;
-    display: block;
+        .cellLabel {
+            margin-bottom: 8px;
+            display: block;
+        }
+    }
 }
