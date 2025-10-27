@@ -28,7 +28,9 @@ import {
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useState } from 'react';
-import { MetricsRow } from './components/MetricsRow';
+import { CountMetric } from './components/MetricsRow/CountMetric';
+import { MetricsRow } from './components/MetricsRow/MetricsRow';
+import { TimeMetric } from './components/MetricsRow/TimeMetric';
 import { QueryEfficiencyAnalysis } from './components/QueryEfficiencyAnalysis';
 import { QueryPlanSummary } from './components/QueryPlanSummary';
 import { QuickActions } from './components/QuickActions';
@@ -56,6 +58,12 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [currentTipIndex, setCurrentTipIndex] = useState(0);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [selectedTab, setSelectedTab] = useState<Stage | null>(null);
+
+    // Metric values
+    const [executionTime, setExecutionTime] = useState<number | null>(23433235);
+    const [docsReturned] = useState<number | null>(2);
+    const [keysExamined, setKeysExamined] = useState<number | null>(null);
+    const [docsExamined, setDocsExamined] = useState<number | null>(null);
 
     const performanceTips = [
         {
@@ -88,6 +96,10 @@ export const QueryInsightsMain = (): JSX.Element => {
     useEffect(() => {
         const timer = setTimeout(() => {
             setStageState(2);
+            // Update metrics when stage 2 starts
+            setExecutionTime(2.333);
+            setKeysExamined(2);
+            setDocsExamined(10000);
         }, 5000);
 
         return () => clearTimeout(timer);
@@ -160,14 +172,40 @@ export const QueryInsightsMain = (): JSX.Element => {
             <div className="contentArea">
                 {/* Metrics Row - Mobile Only (appears first) */}
                 <div className="metricsWrapper">
-                    <MetricsRow stageState={stageState} />
+                    <MetricsRow>
+                        <TimeMetric label={l10n.t('Execution Time')} valueMs={executionTime} />
+                        <CountMetric label={l10n.t('Documents Returned')} value={docsReturned} />
+                        <CountMetric label={l10n.t('Keys Examined')} value={keysExamined} />
+                        <CountMetric label={l10n.t('Docs Examined')} value={docsExamined} />
+                    </MetricsRow>
                 </div>
 
                 {/* Left Panel */}
                 <div className="leftPanel">
                     {/* Metrics Row - Desktop Only */}
                     <div className="metricsInPanel">
-                        <MetricsRow stageState={stageState} />
+                        <MetricsRow>
+                            <TimeMetric
+                                label={l10n.t('Execution Time')}
+                                valueMs={executionTime}
+                                tooltip={l10n.t('WIP: Available at Stage 1')}
+                            />
+                            <CountMetric
+                                label={l10n.t('Documents Returned')}
+                                value={docsReturned}
+                                tooltip={l10n.t('WIP: Available at Stage 1')}
+                            />
+                            <CountMetric
+                                label={l10n.t('Keys Examined')}
+                                value={keysExamined}
+                                tooltip={l10n.t('WIP: Available at Stage 2')}
+                            />
+                            <CountMetric
+                                label={l10n.t('Docs Examined')}
+                                value={docsExamined}
+                                tooltip={l10n.t('WIP: Available at Stage 2')}
+                            />
+                        </MetricsRow>
                     </div>
 
                     {/* Optimization Opportunities */}
