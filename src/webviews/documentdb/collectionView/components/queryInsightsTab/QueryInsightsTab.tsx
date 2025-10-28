@@ -218,7 +218,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                                             size={300}
                                             style={{
                                                 display: 'block',
-                                                marginTop: '12px',
                                                 marginBottom: '12px',
                                             }}
                                         >
