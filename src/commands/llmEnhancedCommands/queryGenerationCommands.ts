@@ -212,7 +212,6 @@ export async function generateQuery(
     // Add telemetry for the model used
     context.telemetry.properties.modelUsed = response.modelUsed;
     context.telemetry.properties.generationType = queryContext.targetQueryType || 'Find';
-    context.telemetry.properties.collectionCount = schemas.length.toString();
 
     // Parse the response
     try {
