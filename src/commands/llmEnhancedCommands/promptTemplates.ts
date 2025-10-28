@@ -433,9 +433,9 @@ export function getQueryTypeConfig(queryType: string): { guidelines: string; out
 {
   "explanation": "<Clear explanation of what the query does and why this approach was chosen>",
   "command": {
-    "filter": "<MongoDB filter as JSON string, e.g., '{ \"age\": { \"$gt\": 25 } }'>",
-    "project": "<MongoDB projection as JSON string, e.g., '{ \"name\": 1, \"age\": 1 }'>",
-    "sort": "<MongoDB sort as JSON string, e.g., '{ \"age\": -1 }'>",
+    "filter": "<MongoDB filter as JSON string, e.g., '{ \\"age\\": { \\"$gt\\": 25 } }'>",
+    "project": "<MongoDB projection as JSON string, e.g., '{ \\"name\\": 1, \\"age\\": 1 }'>",
+    "sort": "<MongoDB sort as JSON string, e.g., '{ \\"age\\": -1 }'>",
     "skip": <number>,
     "limit": <number>
   }
@@ -456,7 +456,7 @@ export function getQueryTypeConfig(queryType: string): { guidelines: string; out
 {
   "explanation": "<Clear explanation of each pipeline stage and why this approach was chosen>",
   "command": {
-    "pipeline": "<Aggregation pipeline as JSON string, e.g., '[{ \"$match\": { \"age\": { \"$gt\": 25 } } }, { \"$group\": { \"_id\": \"$city\", \"count\": { \"$sum\": 1 } } }]'>"
+    "pipeline": "<Aggregation pipeline as JSON string, e.g., '[{ \\"$match\\": { \\"age\\": { \\"$gt\\": 25 } } }, { \\"$group\\": { \\"_id\\": \\"$city\\", \\"count\\": { \\"$sum\\": 1 } } }]'>"
   }
 }
 \`\`\``,
@@ -471,7 +471,7 @@ export function getQueryTypeConfig(queryType: string): { guidelines: string; out
 {
   "explanation": "<Clear explanation of the filter and count operation>",
   "command": {
-    "filter": "<MongoDB filter as JSON string, e.g., '{ \"status\": \"active\" }'>"
+    "filter": "<MongoDB filter as JSON string, e.g., '{ \\"status\\": \\"active\\" }'>"
   }
 }
 \`\`\``,
@@ -489,8 +489,8 @@ export function getQueryTypeConfig(queryType: string): { guidelines: string; out
   "explanation": "<Clear explanation of the filter, update operation, and expected result>",
   "command": {
     "filter": "<MongoDB filter as JSON string>",
-    "update": "<MongoDB update operations as JSON string, e.g., '{ \"$set\": { \"status\": \"active\" } }'>",
-    "options": "<Optional update options as JSON string, e.g., '{ \"upsert\": true }'>"
+    "update": "<MongoDB update operations as JSON string, e.g., '{ \\"$set\\": { \\"status\\": \\"active\\" } }'>",
+    "options": "<Optional update options as JSON string, e.g., '{ \\"upsert\\": true }'>"
   }
 }
 \`\`\``,
