@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { type JSONSchema } from 'vscode-json-languageservice';
 import { z } from 'zod';
@@ -12,6 +13,11 @@ import { getKnownFields, type FieldEntry } from '../../../utils/json/mongo/autoc
 import { publicProcedure, router, trpcToTelemetry } from '../../api/extension-server/trpc';
 
 import * as l10n from '@vscode/l10n';
+import {
+    generateQuery,
+    QueryGenerationType,
+    type QueryGenerationContext,
+} from '../../../commands/llmEnhancedCommands/queryGenerationCommands';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
 import { Views } from '../../../documentdb/Views';
@@ -332,54 +338,63 @@ export const collectionsViewRouter = router({
                 prompt: z.string(),
             }),
         )
-        // procedure type
-        .mutation(async ({ input }) => {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+        // handle generation request
+        .mutation(async ({ input, ctx }) => {
+            const generationCtx = ctx as RouterContext;
 
-            // Mock AI logic: if prompt contains "error", simulate an error
-            if (input.prompt.toLowerCase().includes('error')) {
-                throw new Error('Simulated AI error for testing purposes');
-            }
+            const result = await callWithTelemetryAndErrorHandling(
+                'vscode-documentdb.collectionView.generateQuery',
+                async (context: IActionContext) => {
+                    // Prepare query generation context
+                    const queryContext: QueryGenerationContext = {
+                        clusterId: generationCtx.clusterId,
+                        databaseName: generationCtx.databaseName,
+                        collectionName: generationCtx.collectionName,
+                        // For now, only handle Find queries
+                        targetQueryType: 'Find',
+                        naturalLanguageQuery: input.prompt,
+                        generationType: QueryGenerationType.SingleCollection,
+                    };
 
-            // Start with current query values
-            const result = {
-                filter: input.currentQuery.filter,
-                project: input.currentQuery.project ?? '{  }',
-                sort: input.currentQuery.sort ?? '{  }',
-                skip: input.currentQuery.skip ?? 0,
-                limit: input.currentQuery.limit ?? 0,
-            };
+                    // Generate query with LLM
+                    const generationResult = await generateQuery(context, queryContext);
 
-            // Mock AI logic: if prompt contains "sort"
-            if (input.prompt.toLowerCase().includes('sort')) {
-                const currentSort = input.currentQuery.sort?.trim();
+                    // Parse the generated command
+                    // For now we only support find query
+                    let parsedCommand: {
+                        filter?: string;
+                        project?: string;
+                        sort?: string;
+                        skip?: number;
+                        limit?: number;
+                    };
 
-                // If there's an existing sort, reverse the directions
-                if (currentSort && currentSort !== '{}' && currentSort !== '{  }') {
                     try {
-                        // Parse the current sort to reverse field directions
-                        const sortObj = JSON.parse(currentSort) as Record<string, unknown>;
-                        const reversedSort: Record<string, number> = {};
-
-                        for (const [field, direction] of Object.entries(sortObj)) {
-                            if (typeof direction === 'number') {
-                                // Reverse: 1 → -1, -1 → 1
-                                reversedSort[field] = direction === 1 ? -1 : 1;
-                            } else {
-                                // Keep as-is if not a number
-                                reversedSort[field] = direction as number;
-                            }
-                        }
-
-                        result.sort = JSON.stringify(reversedSort, null, 0);
+                        parsedCommand = JSON.parse(generationResult.generatedQuery) as {
+                            filter?: string;
+                            project?: string;
+                            sort?: string;
+                            skip?: number;
+                            limit?: number;
+                        };
                     } catch {
-                        // If parsing fails, use default sort
-                        result.sort = '{ "_id": -1 }';
+                        throw new Error(
+                            l10n.t('Failed to parse generated query. The AI returned an invalid response.'),
+                        );
                     }
-                } else {
-                    // No existing sort, use default
-                    result.sort = '{ "_id": -1 }';
-                }
+
+                    return {
+                        filter: parsedCommand.filter ?? input.currentQuery.filter,
+                        project: parsedCommand.project ?? input.currentQuery.project ?? '{  }',
+                        sort: parsedCommand.sort ?? input.currentQuery.sort ?? '{  }',
+                        skip: parsedCommand.skip ?? input.currentQuery.skip ?? 0,
+                        limit: parsedCommand.limit ?? input.currentQuery.limit ?? 0,
+                    };
+                },
+            );
+
+            if (!result) {
+                throw new Error(l10n.t('Query generation failed'));
             }
 
             return result;
