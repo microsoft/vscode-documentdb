@@ -17,21 +17,14 @@ import {
     Text,
     tokens,
 } from '@fluentui/react-components';
-import {
-    ChevronLeftRegular,
-    ChevronRightRegular,
-    CopyRegular,
-    DismissRegular,
-    LightbulbRegular,
-    SparkleRegular,
-} from '@fluentui/react-icons';
+import { SparkleRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useState } from 'react';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
-import { AiCard } from './components/optimizationCards';
+import { AiCard, TipsCard } from './components/optimizationCards';
 import { QueryPlanSummary } from './components/QueryPlanSummary';
 import { QuickActions } from './components/QuickActions';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
@@ -56,7 +49,6 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [showSuggestion2, setShowSuggestion2] = useState(false);
     const [showSuggestion3, setShowSuggestion3] = useState(false);
     const [showTipsCard, setShowTipsCard] = useState(false);
-    const [currentTipIndex, setCurrentTipIndex] = useState(0);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [selectedTab, setSelectedTab] = useState<Stage | null>(null);
 
@@ -124,14 +116,6 @@ export const QueryInsightsMain = (): JSX.Element => {
         }, 5000);
 
         return () => clearTimeout(tipsTimer);
-    };
-
-    const handleNextTip = () => {
-        setCurrentTipIndex((prev) => (prev + 1) % performanceTips.length);
-    };
-
-    const handlePreviousTip = () => {
-        setCurrentTipIndex((prev) => (prev - 1 + performanceTips.length) % performanceTips.length);
     };
 
     const handleDismissTips = () => {
@@ -481,59 +465,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                         {/* Performance Tips Carousel - Always Last */}
                         {showTipsCard && !isTipsCardDismissed && (
                             <CollapseRelaxed visible>
-                                <Card style={{ padding: '16px', marginBottom: '12px' }}>
-                                    <div style={{ display: 'flex', gap: '16px' }}>
-                                        <LightbulbRegular
-                                            fontSize={32}
-                                            style={{ color: tokens.colorPaletteYellowForeground1, flexShrink: 0 }}
-                                        />
-                                        <div style={{ flex: 1 }}>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'flex-start',
-                                                    marginBottom: '12px',
-                                                }}
-                                            >
-                                                <Text weight="semibold" size={400}>
-                                                    {l10n.t('DocumentDB Performance Tips')}
-                                                </Text>
-                                                <div style={{ display: 'flex', gap: '4px' }}>
-                                                    <Button appearance="subtle" icon={<CopyRegular />} size="small" />
-                                                    <Button
-                                                        appearance="subtle"
-                                                        icon={<ChevronLeftRegular />}
-                                                        size="small"
-                                                        onClick={handlePreviousTip}
-                                                        disabled={currentTipIndex === 0}
-                                                    />
-                                                    <Button
-                                                        appearance="subtle"
-                                                        icon={<ChevronRightRegular />}
-                                                        size="small"
-                                                        onClick={handleNextTip}
-                                                        disabled={currentTipIndex === performanceTips.length - 1}
-                                                    />
-                                                    <Button
-                                                        appearance="subtle"
-                                                        icon={<DismissRegular />}
-                                                        size="small"
-                                                        onClick={handleDismissTips}
-                                                    />
-                                                </div>
-                                            </div>
-                                            <Text
-                                                weight="semibold"
-                                                size={300}
-                                                style={{ display: 'block', marginBottom: '8px' }}
-                                            >
-                                                {performanceTips[currentTipIndex].title}
-                                            </Text>
-                                            <Text size={300}>{performanceTips[currentTipIndex].description}</Text>
-                                        </div>
-                                    </div>
-                                </Card>
+                                <TipsCard
+                                    title={l10n.t('DocumentDB Performance Tips')}
+                                    tips={performanceTips}
+                                    onDismiss={handleDismissTips}
+                                />
                             </CollapseRelaxed>
                         )}
                     </div>
