@@ -6,6 +6,8 @@
 import { Button, Card, CardHeader, Text, tokens } from '@fluentui/react-components';
 import { ChevronLeftRegular, ChevronRightRegular, DismissRegular, LightbulbRegular } from '@fluentui/react-icons';
 import { type JSX, useState } from 'react';
+import './optimizationCard.scss';
+import './TipsCard.scss';
 
 export interface Tip {
     title: string;
@@ -47,9 +49,9 @@ export const TipsCard = ({ title, tips, onDismiss }: TipsCardProps): JSX.Element
 
     return (
         <Card>
-            <div style={{ display: 'flex', gap: '16px' }}>
+            <div className="optimization-card-container">
                 <LightbulbRegular
-                    fontSize={40}
+                    className="optimization-card-icon"
                     style={{ color: tokens.colorPaletteYellowForeground1, flexShrink: 0 }}
                 />
                 <div style={{ flex: 1 }}>
@@ -60,7 +62,7 @@ export const TipsCard = ({ title, tips, onDismiss }: TipsCardProps): JSX.Element
                             </Text>
                         }
                         action={
-                            <div style={{ display: 'flex', gap: '4px' }}>
+                            <div className="tips-card-actions-container">
                                 <Button
                                     appearance="subtle"
                                     icon={<ChevronLeftRegular />}

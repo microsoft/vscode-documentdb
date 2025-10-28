@@ -6,6 +6,8 @@
 import { Button, Card, CardHeader, Text } from '@fluentui/react-components';
 import { CopyRegular, SparkleRegular } from '@fluentui/react-icons';
 import { type JSX, type ReactNode } from 'react';
+import './AiCard.scss';
+import './optimizationCard.scss';
 
 export interface AiCardProps {
     /**
@@ -32,12 +34,12 @@ export interface AiCardProps {
 export const AiCard = ({ title, titleChildren, children, onCopy }: AiCardProps): JSX.Element => {
     return (
         <Card>
-            <div style={{ display: 'flex', gap: '16px' }}>
-                <SparkleRegular fontSize={40} style={{ flexShrink: 0 }} />
+            <div className="optimization-card-container">
+                <SparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                     <CardHeader
                         header={
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="ai-card-title-container">
                                 <Text weight="semibold" size={400}>
                                     {title}
                                 </Text>
@@ -50,7 +52,7 @@ export const AiCard = ({ title, titleChildren, children, onCopy }: AiCardProps):
                             ) : undefined
                         }
                     />
-                    {children}
+                    <div style={{ marginTop: '12px' }}>{children}</div>
                 </div>
             </div>
         </Card>

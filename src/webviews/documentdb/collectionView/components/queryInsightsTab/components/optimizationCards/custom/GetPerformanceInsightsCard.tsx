@@ -7,6 +7,8 @@ import { Button, Card, Spinner, Text, tokens } from '@fluentui/react-components'
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
+import '../optimizationCard.scss';
+import './GetPerformanceInsightsCard.scss';
 
 export interface GetPerformanceInsightsCardProps {
     /**
@@ -50,12 +52,10 @@ export const GetPerformanceInsightsCard = ({
 }: GetPerformanceInsightsCardProps): JSX.Element => {
     return (
         <Card
+            className="get-performance-insights-card"
             style={{
-                padding: '20px',
                 backgroundColor: tokens.colorBrandBackground2,
                 border: `1px solid ${tokens.colorBrandStroke1}`,
-                marginBottom: '12px',
-                position: 'relative',
             }}
         >
             <Text
@@ -69,8 +69,11 @@ export const GetPerformanceInsightsCard = ({
             >
                 {l10n.t('AI responses may be inaccurate.')}
             </Text>
-            <div style={{ display: 'flex', gap: '16px' }}>
-                <SparkleRegular fontSize={40} style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
+            <div className="optimization-card-container">
+                <SparkleRegular
+                    className="optimization-card-icon"
+                    style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }}
+                />
                 <div style={{ flex: 1 }}>
                     <Text weight="semibold" size={500} style={{ display: 'block', marginBottom: '8px' }}>
                         {l10n.t('AI Performance Insights')}
@@ -84,7 +87,7 @@ export const GetPerformanceInsightsCard = ({
                         </Text>
                     )}
                     {!isLoading ? (
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div className="get-performance-insights-card-actions">
                             <Button appearance="primary" icon={<SparkleRegular />} onClick={onGetInsights}>
                                 {l10n.t('Get AI Performance Insights')}
                             </Button>
@@ -93,7 +96,7 @@ export const GetPerformanceInsightsCard = ({
                             </Button>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="get-performance-insights-card-loading">
                             <Spinner size="small" />
                             <Text size={300}>{l10n.t('AI is analyzing...')}</Text>
                             <Button appearance="subtle" size="small" onClick={onCancel}>
