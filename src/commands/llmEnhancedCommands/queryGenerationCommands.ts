@@ -95,19 +95,22 @@ async function fillPromptTemplate(
 
     // Prepare schema information
     let schemaInfo: string;
-    if (templateType === QueryGenerationType.CrossCollection) {
-        schemaInfo = schemas
-            .map(
-                (schema) =>
-                    `## Collection: ${schema.collectionName}\n\nData Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\``,
-            )
-            .join('\n\n---\n\n');
+    if (schemas.length > 0) {
+        if (templateType === QueryGenerationType.CrossCollection) {
+            schemaInfo = schemas
+                .map(
+                    (schema) =>
+                        `### Collection: ${schema.collectionName || 'Unknown'}\n\nData Schema:\n\`\`\`json\n${JSON.stringify(schema.fields, null, 2)}\n\`\`\``,
+                )
+                .join('\n\n---\n\n');
+        } else {
+            const schema = schemas[0];
+            schemaInfo = `Data Schema:\n\`\`\`json\n${JSON.stringify(schema.fields, null, 2)}\n\`\`\`\n\n`;
+        }
     } else {
-        const schema = schemas[0];
-        schemaInfo = `Data Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\n\n`;
+        schemaInfo = `No schema information available.\n\n`;
     }
 
-    // Fill the template with actual data
     const filled = template
         .replace('{databaseName}', context.databaseName)
         .replace('{collectionName}', context.collectionName || 'N/A')
@@ -151,23 +154,17 @@ export async function generateQuery(
             // Get all collections in the database
             const collections = await client.listCollections(queryContext.databaseName);
 
-            // Sample documents from each collection (3 documents per collection)
             for (const collection of collections) {
                 const sampleDocs = await client.getSampleDocuments(queryContext.databaseName, collection.name, 3);
 
                 if (sampleDocs.length > 0) {
-                    const schema = generateSchemaDefinition(sampleDocs);
+                    const schema = generateSchemaDefinition(sampleDocs, collection.name);
                     schemas.push(schema);
+                } else {
+                    schemas.push({ collectionName: collection.name, fields: {} });
                 }
             }
-
-            if (schemas.length === 0) {
-                throw new Error(
-                    l10n.t('No collections with documents found in database {db}', { db: queryContext.databaseName }),
-                );
-            }
         } else {
-            // Single collection - sample 10 documents
             if (!queryContext.collectionName) {
                 throw new Error(l10n.t('Collection name is required for single-collection query generation'));
             }
@@ -178,15 +175,7 @@ export async function generateQuery(
                 10,
             );
 
-            if (sampleDocs.length === 0) {
-                throw new Error(
-                    l10n.t('No documents found in collection {collection}', {
-                        collection: queryContext.collectionName,
-                    }),
-                );
-            }
-
-            const schema = generateSchemaDefinition(sampleDocs);
+            const schema = generateSchemaDefinition(sampleDocs, queryContext.collectionName);
             schemas.push(schema);
         }
     } catch (error) {
@@ -235,11 +224,10 @@ export async function generateQuery(
             modelUsed: response.modelUsed,
         };
     } catch {
-        // If JSON parsing fails, return the raw response
-        return {
-            generatedQuery: response.text,
-            explanation: l10n.t('Generated query (manual parsing may be required)'),
-            modelUsed: response.modelUsed,
-        };
+        throw new Error(
+            l10n.t('Failed to parse the response from the language model. LLM output:\n{output}', {
+                output: response.text,
+            }),
+        );
     }
 }

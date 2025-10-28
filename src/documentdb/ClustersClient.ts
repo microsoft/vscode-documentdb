@@ -44,7 +44,7 @@ import {
     type ExplainResult,
     type IndexSpecification,
     type IndexStats,
-} from './llmEnhancedFeatureApis';
+} from './LlmEnhancedFeatureApis';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -685,7 +685,7 @@ export class ClustersClient {
      */
     async getIndexStats(databaseName: string, collectionName: string): Promise<IndexStats[]> {
         if (!this._llmEnhancedFeatureApis) {
-            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
         return this._llmEnhancedFeatureApis.getIndexStats(databaseName, collectionName);
     }
@@ -698,7 +698,7 @@ export class ClustersClient {
      */
     async getCollectionStats(databaseName: string, collectionName: string): Promise<CollectionStats> {
         if (!this._llmEnhancedFeatureApis) {
-            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
         return this._llmEnhancedFeatureApis.getCollectionStats(databaseName, collectionName);
     }
@@ -717,7 +717,7 @@ export class ClustersClient {
         options: ExplainOptions = {},
     ): Promise<ExplainResult> {
         if (!this._llmEnhancedFeatureApis) {
-            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
         return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, options);
     }
@@ -731,7 +731,7 @@ export class ClustersClient {
      */
     async explainAggregate(databaseName: string, collectionName: string, pipeline: Document[]): Promise<ExplainResult> {
         if (!this._llmEnhancedFeatureApis) {
-            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
         return this._llmEnhancedFeatureApis.explainAggregate(databaseName, collectionName, pipeline);
     }
@@ -745,7 +745,7 @@ export class ClustersClient {
      */
     async explainCount(databaseName: string, collectionName: string, filter: Filter<Document> = {}): Promise<Document> {
         if (!this._llmEnhancedFeatureApis) {
-            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
         return this._llmEnhancedFeatureApis.explainCount(databaseName, collectionName, filter);
     }
@@ -764,7 +764,7 @@ export class ClustersClient {
         indexSpec: IndexSpecification,
     ): Promise<CreateIndexResult> {
         if (!this._llmEnhancedFeatureApis) {
-            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
         return this._llmEnhancedFeatureApis.createIndex(databaseName, collectionName, indexSpec);
     }
@@ -778,7 +778,7 @@ export class ClustersClient {
      */
     async dropIndex(databaseName: string, collectionName: string, indexName: string): Promise<DropIndexResult> {
         if (!this._llmEnhancedFeatureApis) {
-            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
         return this._llmEnhancedFeatureApis.dropIndex(databaseName, collectionName, indexName);
     }
@@ -792,7 +792,7 @@ export class ClustersClient {
      */
     async getSampleDocuments(databaseName: string, collectionName: string, limit: number = 10): Promise<Document[]> {
         if (!this._llmEnhancedFeatureApis) {
-            throw new Error('Index Advisor APIs not initialized. Ensure the client is connected.');
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
         return this._llmEnhancedFeatureApis.getSampleDocuments(databaseName, collectionName, limit);
     }

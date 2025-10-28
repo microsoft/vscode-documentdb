@@ -9,7 +9,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import {
     CROSS_COLLECTION_QUERY_PROMPT_TEMPLATE,
-    SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE
+    SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE,
 } from '../commands/llmEnhancedCommands/promptTemplates';
 import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenerationCommands';
 
@@ -108,7 +108,6 @@ export class PromptTemplateService {
 
         if (customTemplatePath) {
             try {
-                // Load custom template from file
                 template = await this.loadTemplateFromFile(customTemplatePath, generationType.toString());
                 void vscode.window.showInformationMessage(
                     l10n.t('Using custom prompt template for {type} query generation: {path}', {
@@ -117,7 +116,6 @@ export class PromptTemplateService {
                     }),
                 );
             } catch (error) {
-                // Log error and fall back to built-in template
                 void vscode.window.showWarningMessage(
                     l10n.t('Failed to load custom prompt template from {path}: {error}. Using built-in template.', {
                         path: customTemplatePath,

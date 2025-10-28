@@ -6,7 +6,6 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
-
 /**
  * Options for sending a message to the language model
  */

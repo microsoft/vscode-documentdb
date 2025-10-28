@@ -26,13 +26,16 @@ interface ArraySummary {
     sawValues: boolean;
 }
 
-export type SchemaDefinition = Record<string, SchemaFieldDefinition>;
+export interface SchemaDefinition {
+    collectionName?: string;
+    fields: Record<string, SchemaFieldDefinition>;
+}
 
 export type SchemaFieldDefinition = string | SchemaObjectDefinition | SchemaArrayDefinition | SchemaUnionDefinition;
 
 export interface SchemaObjectDefinition {
     type: 'object';
-    properties: SchemaDefinition;
+    properties: Record<string, SchemaFieldDefinition>;
 }
 
 export interface SchemaArrayDefinition {
@@ -46,14 +49,21 @@ export interface SchemaUnionDefinition {
     variants: SchemaFieldDefinition[];
 }
 
-export function generateSchemaDefinition(documents: Array<Document>): SchemaDefinition {
+export function generateSchemaDefinition(documents: Array<Document>, collectionName?: string): SchemaDefinition {
     const root = new Map<string, FieldSummary>();
 
     for (const doc of documents) {
         recordDocument(root, doc);
     }
 
-    return convertProperties(root);
+    const fields = convertProperties(root);
+
+    const schema: SchemaDefinition = { fields };
+    if (collectionName) {
+        schema.collectionName = collectionName;
+    }
+
+    return schema;
 }
 
 function recordDocument(target: Map<string, FieldSummary>, doc: Document): void {
@@ -210,8 +220,8 @@ function createArraySummary(): ArraySummary {
     };
 }
 
-function convertProperties(properties: Map<string, FieldSummary>): SchemaDefinition {
-    const result: SchemaDefinition = {};
+function convertProperties(properties: Map<string, FieldSummary>): Record<string, SchemaFieldDefinition> {
+    const result: Record<string, SchemaFieldDefinition> = {};
 
     for (const key of Array.from(properties.keys()).sort((a, b) => a.localeCompare(b))) {
         result[key] = convertSummary(properties.get(key) as FieldSummary);

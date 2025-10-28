@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { l10n } from 'vscode';
+
 /**
  * Preferred language model for index optimization
  */
@@ -412,7 +414,6 @@ User request: "Find documents with tags array containing 'featured' and status i
 Now generate the query based on the user's request and the provided collection schema.
 `;
 
-
 /**
  * Gets query type specific configuration (guidelines and output schema)
  * @param queryType The type of query
@@ -511,19 +512,6 @@ export function getQueryTypeConfig(queryType: string): { guidelines: string; out
             };
 
         default:
-            // Default to Find query
-            return {
-                guidelines: `- Generate appropriate query parameters based on the request
-- Use valid MongoDB query syntax
-- All object fields should be valid JSON strings`,
-                outputSchema: `\`\`\`json
-{
-  "explanation": "<Clear explanation of what the query does and why this approach was chosen>",
-  "command": {
-    "<field>": "<value>"
-  }
-}
-\`\`\``,
-            };
+            throw new Error(l10n.t('Unsupported query type: {queryType}', { queryType }));
     }
 }
