@@ -4,25 +4,32 @@
 
 This package provides the Extension API for integrating with the VS Code DocumentDB extension.
 
+## API Versioning
+
+- **v0.3.0 (Latest)**: The current and only supported version. It requires the extension context for provider registration and enforces a one-provider-per-extension rule.
+- **v0.2.0 (Deprecated)**: This version is deprecated and will be removed in a future release. New integrations should not use it.
+
 ## Installation
 
 ```bash
-npm install --save-dev @<to be published>
+npm install --save-dev vscode-documentdb-api-experimental-beta
 ```
 
-## Usage
+## Usage (v0.3.0)
 
 ```typescript
+import * as vscode from 'vscode';
 import {
   getDocumentDBExtensionApi,
-  MigrationProvider,
-  MigrationProviderPickItem,
-  ActionsOptions,
-} from '@microsoft/vscode-documentdb-api';
+  type DocumentDBExtensionApiV030, // Import the v0.3.0 API interface
+  type MigrationProvider,
+  type MigrationProviderPickItem,
+  type ActionsOptions,
+} from 'vscode-documentdb-api-experimental-beta';
 
 export async function activate(context: vscode.ExtensionContext) {
-  // Get the DocumentDB extension API
-  const api = await getDocumentDBExtensionApi(context, '0.1.0');
+  // Get the DocumentDB extension API and cast it to the v0.3.0 type
+  const api = (await getDocumentDBExtensionApi(context, '0.3.0')) as DocumentDBExtensionApiV030;
 
   // Create your migration provider
   const myProvider: MigrationProvider = {
@@ -67,8 +74,9 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   };
 
-  // Register your provider
-  api.migration.registerProvider(myProvider);
+  // Register your provider using the extension context.
+  // Note: Each extension can only register one provider.
+  api.migration.registerProvider(context, myProvider);
 }
 ```
 
@@ -90,25 +98,25 @@ A migration provider must implement the following interface:
 
 **Required Methods:**
 
-- `getAvailableActions(options?: ActionsOptions)`: Returns a list of actions the user can choose from
-- `executeAction(id?: string)`: Executes the selected action or a default action
+- `getAvailableActions(options?: ActionsOptions)`: Returns a list of actions the user can choose from.
+- `executeAction(id?: string)`: Executes the selected action or a default action.
 
 **Optional Properties:**
 
-- `requiresAuthentication`: Indicates if authentication is required for the default operation (when no custom actions are provided)
+- `requiresAuthentication`: Indicates if authentication is required for the default operation (when no custom actions are provided).
 
 **Optional Methods:**
 
-- `getLearnMoreUrl()`: Returns a URL for more information about the provider
+- `getLearnMoreUrl()`: Returns a URL for more information about the provider.
 
 ### Workflow
 
 The migration provider workflow follows these steps:
 
-1. **Get Available Actions**: The system calls `getAvailableActions()` to retrieve a list of possible operations
-2. **User Selection**: If actions are returned, they are presented to the user for selection
-3. **Execute Action**: The system calls `executeAction()` with the selected action's ID
-4. **Default Execution**: If `getAvailableActions()` returns an empty array, `executeAction()` is called immediately without parameters
+1.  **Get Available Actions**: The system calls `getAvailableActions()` to retrieve a list of possible operations.
+2.  **User Selection**: If actions are returned, they are presented to the user for selection.
+3.  **Execute Action**: The system calls `executeAction()` with the selected action's ID.
+4.  **Default Execution**: If `getAvailableActions()` returns an empty array, `executeAction()` is called immediately without parameters.
 
 ### Supporting Interfaces
 
