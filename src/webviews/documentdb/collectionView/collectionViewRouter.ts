@@ -339,7 +339,7 @@ export const collectionsViewRouter = router({
             }),
         )
         // handle generation request
-        .mutation(async ({ input, ctx }) => {
+        .query(async ({ input, ctx }) => {
             const generationCtx = ctx as RouterContext;
 
             const result = await callWithTelemetryAndErrorHandling(
@@ -377,9 +377,14 @@ export const collectionsViewRouter = router({
                             skip?: number;
                             limit?: number;
                         };
-                    } catch {
+                    } catch (error) {
+                        // Add error details to telemetry
+                        context.telemetry.properties.parseError = error instanceof Error ? error.name : 'UnknownError';
+                        context.telemetry.properties.parseErrorMessage =
+                            error instanceof Error ? error.message : String(error);
+
                         throw new Error(
-                            l10n.t('Failed to parse generated query. The AI returned an invalid response.'),
+                            l10n.t('Failed to parse generated query. Query generation provided an invalid response.'),
                         );
                     }
 
