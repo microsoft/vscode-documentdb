@@ -36,6 +36,23 @@ export interface TipsCardProps {
     onCopy?: () => void;
 }
 
+/**
+ * Card component for displaying performance tips with carousel navigation.
+ *
+ * **Important**: When using this card with animation libraries (e.g., @fluentui/react-motion-components-preview),
+ * wrap it in a `<div>` to ensure proper ref forwarding:
+ *
+ * ```tsx
+ * <CollapseRelaxed visible={isVisible}>
+ *     <div>
+ *         <TipsCard title="..." tips={[...]} {...props} />
+ *     </div>
+ * </CollapseRelaxed>
+ * ```
+ *
+ * This is required because TipsCard is not a ForwardRefComponent and motion components
+ * need to attach refs for animations. The wrapper div provides the necessary ref target.
+ */
 export const TipsCard = ({ title, tips, onDismiss }: TipsCardProps): JSX.Element => {
     const [currentIndex, setCurrentIndex] = useState(0);
 

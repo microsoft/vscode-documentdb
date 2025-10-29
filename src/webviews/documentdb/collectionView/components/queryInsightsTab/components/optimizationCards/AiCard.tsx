@@ -31,6 +31,23 @@ export interface AiCardProps {
     onCopy?: () => void;
 }
 
+/**
+ * AI-themed card component for displaying optimization recommendations.
+ *
+ * **Important**: When using this card with animation libraries (e.g., @fluentui/react-motion-components-preview),
+ * wrap it in a `<div>` to ensure proper ref forwarding:
+ *
+ * ```tsx
+ * <CollapseRelaxed visible={isVisible}>
+ *     <div>
+ *         <AiCard title="..." {...props} />
+ *     </div>
+ * </CollapseRelaxed>
+ * ```
+ *
+ * This is required because AiCard is not a ForwardRefComponent and motion components
+ * need to attach refs for animations. The wrapper div provides the necessary ref target.
+ */
 export const AiCard = ({ title, titleChildren, children, onCopy }: AiCardProps): JSX.Element => {
     return (
         <Card>

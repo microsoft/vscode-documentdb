@@ -18,6 +18,7 @@ import {
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useState } from 'react';
+import { AnimatedCardList } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
@@ -163,24 +164,25 @@ export const QueryInsightsMain = (): JSX.Element => {
                     </MetricsRow>
 
                     {/* Optimization Opportunities */}
-                    <div>
-                        <Text
-                            weight="semibold"
-                            size={400}
-                            className="optimizationTitle"
-                            style={{ marginBottom: '12px', display: 'block' }}
-                        >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <Text size={400} weight="semibold" style={{ display: 'block' }}>
                             {l10n.t('Optimization Opportunities')}
                         </Text>
 
-                        {stageState < 2 ? (
+                        {/* Skeleton - shown only in stage 1 */}
+                        {stageState === 1 && (
                             <Skeleton>
+                                <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ width: '60%' }} />
                             </Skeleton>
-                        ) : (
-                            <CollapseRelaxed visible={stageState === 2}>
+                        )}
+
+                        {/* GetPerformanceInsightsCard with CollapseRelaxed animation
+                            Note: Wrapped in div for proper ref forwarding to motion component */}
+                        <CollapseRelaxed visible={stageState === 2}>
+                            <div>
                                 <GetPerformanceInsightsCard
                                     bodyText={l10n.t(
                                         'Your query is performing optimally for the current dataset size. However, as data grows, consider adding an index.',
@@ -196,216 +198,213 @@ export const QueryInsightsMain = (): JSX.Element => {
                                         setStageState(2);
                                     }}
                                 />
-                            </CollapseRelaxed>
-                        )}
+                            </div>
+                        </CollapseRelaxed>
 
-                        {stageState === 3 && (
-                            <>
-                                {/* Suggestion Card: Create Index */}
-                                <CollapseRelaxed visible={showSuggestion1}>
-                                    <AiCard
-                                        title={l10n.t('Create Index')}
-                                        titleChildren={
-                                            <Badge appearance="tint" shape="rounded" color="danger" size="small">
-                                                {l10n.t('HIGH PRIORITY')}
-                                            </Badge>
-                                        }
-                                        onCopy={() => {
-                                            /* TODO: Implement copy functionality */
+                        {/* AnimatedCardList for AI suggestions and tips */}
+                        <AnimatedCardList>
+                            {stageState === 3 && showSuggestion1 && (
+                                <AiCard
+                                    key="create-index"
+                                    title={l10n.t('Create Index')}
+                                    titleChildren={
+                                        <Badge appearance="tint" shape="rounded" color="danger" size="small">
+                                            {l10n.t('HIGH PRIORITY')}
+                                        </Badge>
+                                    }
+                                    onCopy={() => {
+                                        /* TODO: Implement copy functionality */
+                                    }}
+                                >
+                                    <Text
+                                        size={300}
+                                        style={{
+                                            display: 'block',
+                                            marginBottom: '12px',
+                                        }}
+                                    >
+                                        {l10n.t(
+                                            'The query performs a COLLSCAN examining 10,000 documents to return only 2, indicating poor selectivity without an index.',
+                                        )}
+                                    </Text>
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <Label size="small">{l10n.t('Recommended Index')}</Label>
+                                        <div style={{ marginTop: '4px' }}>
+                                            <Popover
+                                                positioning="below-start"
+                                                withArrow
+                                                openOnHover
+                                                mouseLeaveDelay={0}
+                                            >
+                                                <PopoverTrigger disableButtonEnhancement>
+                                                    <Button appearance="secondary" size="small">
+                                                        {'{ user_id: 1 }'}
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverSurface style={{ padding: '16px', maxWidth: '400px' }}>
+                                                    <Text
+                                                        size={300}
+                                                        weight="semibold"
+                                                        style={{ display: 'block', marginBottom: '8px' }}
+                                                    >
+                                                        {l10n.t('Index Details')}
+                                                    </Text>
+                                                    <Text size={200}>
+                                                        {l10n.t(
+                                                            'An index on user_id would allow direct lookup of matching documents.',
+                                                        )}
+                                                    </Text>
+                                                </PopoverSurface>
+                                            </Popover>
+                                        </div>
+                                    </div>
+                                    <Text
+                                        size={200}
+                                        style={{
+                                            color: tokens.colorNeutralForeground3,
+                                            display: 'block',
+                                            marginBottom: '12px',
+                                        }}
+                                    >
+                                        {l10n.t(
+                                            'Risks: Additional write and storage overhead for maintaining a new index.',
+                                        )}
+                                    </Text>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <Button appearance="primary" size="small">
+                                            {l10n.t('Apply')}
+                                        </Button>
+                                        <Button appearance="subtle" size="small">
+                                            {l10n.t('Learn More')}
+                                        </Button>
+                                    </div>
+                                </AiCard>
+                            )}
+
+                            {stageState === 3 && showSuggestion2 && (
+                                <AiCard
+                                    key="no-index-changes"
+                                    title={l10n.t('No Index Changes Recommended')}
+                                    onCopy={() => {
+                                        /* TODO: Implement copy functionality */
+                                    }}
+                                >
+                                    <Text size={300} style={{ display: 'block', marginBottom: '8px' }}>
+                                        {l10n.t(
+                                            'The query performs a COLLSCAN examining 50 documents to return 28 (boolean filter selectivity ~56%). A boolean field with over half the collection matching offers low selectivity, so an index on flag alone would not significantly reduce I/O.',
+                                        )}
+                                    </Text>
+                                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                        {l10n.t(
+                                            'Execution time is already only 0.02 ms on a 50-document collection, so optimization benefit is negligible.',
+                                        )}
+                                    </Text>
+                                </AiCard>
+                            )}
+
+                            {stageState === 3 && showSuggestion3 && (
+                                <AiCard
+                                    key="execution-plan"
+                                    title={l10n.t('Understanding Your Query Execution Plan')}
+                                    onCopy={() => {
+                                        /* TODO: Implement copy functionality */
+                                    }}
+                                >
+                                    <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
+                                        {l10n.t(
+                                            'Your current query uses a COLLSCAN (collection scan) strategy, which means MongoDB examines all 10,000 documents in the collection to find the 2 matching documents. This is highly inefficient with a selectivity of only 0.02%.',
+                                        )}
+                                    </Text>
+                                    <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
+                                        {l10n.t(
+                                            'With the recommended index on user_id, the execution plan would change to:',
+                                        )}
+                                    </Text>
+                                    <div
+                                        style={{
+                                            padding: '12px',
+                                            backgroundColor: tokens.colorNeutralBackground2,
+                                            borderRadius: tokens.borderRadiusMedium,
+                                            marginBottom: '12px',
                                         }}
                                     >
                                         <Text
                                             size={300}
                                             style={{
                                                 display: 'block',
-                                                marginBottom: '12px',
+                                                fontFamily: 'monospace',
+                                                marginBottom: '4px',
                                             }}
                                         >
-                                            {l10n.t(
-                                                'The query performs a COLLSCAN examining 10,000 documents to return only 2, indicating poor selectivity without an index.',
-                                            )}
+                                            <strong>IXSCAN</strong> {l10n.t('(Index Scan on user_id)')}
                                         </Text>
-                                        <div style={{ marginBottom: '12px' }}>
-                                            <Label size="small">{l10n.t('Recommended Index')}</Label>
-                                            <div style={{ marginTop: '4px' }}>
-                                                <Popover
-                                                    positioning="below-start"
-                                                    withArrow
-                                                    openOnHover
-                                                    mouseLeaveDelay={0}
-                                                >
-                                                    <PopoverTrigger disableButtonEnhancement>
-                                                        <Button appearance="secondary" size="small">
-                                                            {'{ user_id: 1 }'}
-                                                        </Button>
-                                                    </PopoverTrigger>
-                                                    <PopoverSurface style={{ padding: '16px', maxWidth: '400px' }}>
-                                                        <Text
-                                                            size={300}
-                                                            weight="semibold"
-                                                            style={{ display: 'block', marginBottom: '8px' }}
-                                                        >
-                                                            {l10n.t('Index Details')}
-                                                        </Text>
-                                                        <Text size={200}>
-                                                            {l10n.t(
-                                                                'An index on user_id would allow direct lookup of matching documents.',
-                                                            )}
-                                                        </Text>
-                                                    </PopoverSurface>
-                                                </Popover>
-                                            </div>
-                                        </div>
                                         <Text
                                             size={200}
                                             style={{
-                                                color: tokens.colorNeutralForeground3,
                                                 display: 'block',
-                                                marginBottom: '12px',
+                                                color: tokens.colorNeutralForeground3,
+                                                marginLeft: '16px',
+                                                marginBottom: '8px',
                                             }}
                                         >
                                             {l10n.t(
-                                                'Risks: Additional write and storage overhead for maintaining a new index.',
+                                                'Scan the index to find matching user_id values (~2 index entries)',
                                             )}
                                         </Text>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <Button appearance="primary" size="small">
-                                                {l10n.t('Apply')}
-                                            </Button>
-                                            <Button appearance="subtle" size="small">
-                                                {l10n.t('Learn More')}
-                                            </Button>
-                                        </div>
-                                    </AiCard>
-                                </CollapseRelaxed>
-
-                                {/* No Recommendations Mock */}
-                                <CollapseRelaxed visible={showSuggestion2}>
-                                    <AiCard
-                                        title={l10n.t('No Index Changes Recommended')}
-                                        onCopy={() => {
-                                            /* TODO: Implement copy functionality */
-                                        }}
-                                    >
-                                        <Text size={300} style={{ display: 'block', marginBottom: '8px' }}>
-                                            {l10n.t(
-                                                'The query performs a COLLSCAN examining 50 documents to return 28 (boolean filter selectivity ~56%). A boolean field with over half the collection matching offers low selectivity, so an index on flag alone would not significantly reduce I/O.',
-                                            )}
-                                        </Text>
-                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                            {l10n.t(
-                                                'Execution time is already only 0.02 ms on a 50-document collection, so optimization benefit is negligible.',
-                                            )}
-                                        </Text>
-                                    </AiCard>
-                                </CollapseRelaxed>
-
-                                {/* Execution Plan Explanation Card */}
-                                <CollapseRelaxed visible={showSuggestion3}>
-                                    <AiCard
-                                        title={l10n.t('Understanding Your Query Execution Plan')}
-                                        onCopy={() => {
-                                            /* TODO: Implement copy functionality */
-                                        }}
-                                    >
-                                        <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
-                                            {l10n.t(
-                                                'Your current query uses a COLLSCAN (collection scan) strategy, which means MongoDB examines all 10,000 documents in the collection to find the 2 matching documents. This is highly inefficient with a selectivity of only 0.02%.',
-                                            )}
-                                        </Text>
-                                        <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
-                                            {l10n.t(
-                                                'With the recommended index on user_id, the execution plan would change to:',
-                                            )}
-                                        </Text>
-                                        <div
+                                        <Text
+                                            size={300}
                                             style={{
-                                                padding: '12px',
-                                                backgroundColor: tokens.colorNeutralBackground2,
-                                                borderRadius: tokens.borderRadiusMedium,
-                                                marginBottom: '12px',
+                                                display: 'block',
+                                                fontFamily: 'monospace',
+                                                marginBottom: '4px',
                                             }}
                                         >
-                                            <Text
-                                                size={300}
-                                                style={{
-                                                    display: 'block',
-                                                    fontFamily: 'monospace',
-                                                    marginBottom: '4px',
-                                                }}
-                                            >
-                                                <strong>IXSCAN</strong> {l10n.t('(Index Scan on user_id)')}
-                                            </Text>
-                                            <Text
-                                                size={200}
-                                                style={{
-                                                    display: 'block',
-                                                    color: tokens.colorNeutralForeground3,
-                                                    marginLeft: '16px',
-                                                    marginBottom: '8px',
-                                                }}
-                                            >
-                                                {l10n.t(
-                                                    'Scan the index to find matching user_id values (~2 index entries)',
-                                                )}
-                                            </Text>
-                                            <Text
-                                                size={300}
-                                                style={{
-                                                    display: 'block',
-                                                    fontFamily: 'monospace',
-                                                    marginBottom: '4px',
-                                                }}
-                                            >
-                                                <strong>FETCH</strong> {l10n.t('(Document Retrieval)')}
-                                            </Text>
-                                            <Text
-                                                size={200}
-                                                style={{
-                                                    display: 'block',
-                                                    color: tokens.colorNeutralForeground3,
-                                                    marginLeft: '16px',
-                                                    marginBottom: '8px',
-                                                }}
-                                            >
-                                                {l10n.t('Retrieve only the matching documents (~2 documents)')}
-                                            </Text>
-                                            <Text
-                                                size={300}
-                                                style={{
-                                                    display: 'block',
-                                                    fontFamily: 'monospace',
-                                                    marginBottom: '4px',
-                                                }}
-                                            >
-                                                <strong>PROJECTION</strong> {l10n.t('(Field Selection)')}
-                                            </Text>
-                                            <Text
-                                                size={200}
-                                                style={{
-                                                    display: 'block',
-                                                    color: tokens.colorNeutralForeground3,
-                                                    marginLeft: '16px',
-                                                }}
-                                            >
-                                                {l10n.t('Return only the requested fields')}
-                                            </Text>
-                                        </div>
-                                    </AiCard>
-                                </CollapseRelaxed>
-                            </>
-                        )}
+                                            <strong>FETCH</strong> {l10n.t('(Document Retrieval)')}
+                                        </Text>
+                                        <Text
+                                            size={200}
+                                            style={{
+                                                display: 'block',
+                                                color: tokens.colorNeutralForeground3,
+                                                marginLeft: '16px',
+                                                marginBottom: '8px',
+                                            }}
+                                        >
+                                            {l10n.t('Retrieve only the matching documents (~2 documents)')}
+                                        </Text>
+                                        <Text
+                                            size={300}
+                                            style={{
+                                                display: 'block',
+                                                fontFamily: 'monospace',
+                                                marginBottom: '4px',
+                                            }}
+                                        >
+                                            <strong>PROJECTION</strong> {l10n.t('(Field Selection)')}
+                                        </Text>
+                                        <Text
+                                            size={200}
+                                            style={{
+                                                display: 'block',
+                                                color: tokens.colorNeutralForeground3,
+                                                marginLeft: '16px',
+                                            }}
+                                        >
+                                            {l10n.t('Return only the requested fields')}
+                                        </Text>
+                                    </div>
+                                </AiCard>
+                            )}
 
-                        {/* Performance Tips Carousel - Always Last */}
-                        {showTipsCard && !isTipsCardDismissed && (
-                            <CollapseRelaxed visible>
+                            {showTipsCard && !isTipsCardDismissed && (
                                 <TipsCard
+                                    key="performance-tips"
                                     title={l10n.t('DocumentDB Performance Tips')}
                                     tips={performanceTips}
                                     onDismiss={handleDismissTips}
                                 />
-                            </CollapseRelaxed>
-                        )}
+                            )}
+                        </AnimatedCardList>
                     </div>
 
                     {/* Query Plan Summary - Mobile Only */}

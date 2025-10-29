@@ -42,6 +42,23 @@ export interface GetPerformanceInsightsCardProps {
     onCancel: () => void;
 }
 
+/**
+ * Branded card component for prompting users to get AI-powered performance insights.
+ *
+ * **Important**: When using this card with animation libraries (e.g., @fluentui/react-motion-components-preview),
+ * wrap it in a `<div>` to ensure proper ref forwarding:
+ *
+ * ```tsx
+ * <CollapseRelaxed visible={isVisible}>
+ *     <div>
+ *         <GetPerformanceInsightsCard bodyText="..." {...props} />
+ *     </div>
+ * </CollapseRelaxed>
+ * ```
+ *
+ * This is required because GetPerformanceInsightsCard is not a ForwardRefComponent and motion components
+ * need to attach refs for animations. The wrapper div provides the necessary ref target.
+ */
 export const GetPerformanceInsightsCard = ({
     bodyText,
     recommendation,
