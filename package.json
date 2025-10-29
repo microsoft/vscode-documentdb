@@ -962,7 +962,8 @@
   "x-documentdbApi": {
     "registeredClients": [
       "vscode-cosmosdb",
-      "vscode-mongo-migration"
+      "vscode-mongo-migration",
+      "ms-azurecosmosdbtools.vscode-mongo-migration"
     ]
   }
 }
