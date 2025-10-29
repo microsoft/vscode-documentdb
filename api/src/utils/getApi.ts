@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { type DocumentDBExtensionApi } from '../extensionApi';
+import { type DocumentDBExtensionApi, type DocumentDBExtensionApiV030 } from '../extensionApi';
 
 // The actual extension ID based on the package.json
 const DOCUMENTDB_EXTENSION_ID = 'ms-azuretools.vscode-documentdb';
@@ -33,25 +33,32 @@ function isValidPackageJson(packageJson: unknown): packageJson is DocumentDBApiC
  * experimental phase ends. Contributors wishing to join in this phase are asked to reach out to us.
  *
  * @param context The calling extension context
- * @param apiVersionRange The required API version (not checked in this simple implementation)
+ * @param apiVersionRange The required API version ('0.2.0' or '0.3.0')
  * @returns The DocumentDB extension API
  * @throws Error if the extension is not installed or calling extension is not whitelisted
  *
  * @example
  * ```typescript
- * const api = await getDocumentDBExtensionApi(context, '0.1.0');
+ * // For API v0.2.0
+ * const api = await getDocumentDBExtensionApi(context, '0.2.0');
  * api.migration.registerProvider(myProvider);
+ *
+ * // For API v0.3.0 (requires extension context)
+ * const api = await getDocumentDBExtensionApi(context, '0.3.0') as DocumentDBExtensionApiV030;
+ * api.migration.registerProvider(context, myProvider);
  * ```
  */
 export async function getDocumentDBExtensionApi(
-    _context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     apiVersionRange: string,
-): Promise<DocumentDBExtensionApi> {
+): Promise<DocumentDBExtensionApi | DocumentDBExtensionApiV030> {
     // Get the calling extension's ID from the context
-    const callingExtensionId = _context.extension.id;
+    const callingExtensionId = context.extension.id;
 
     // Get the DocumentDB extension to access its package.json configuration
-    const extension = vscode.extensions.getExtension<DocumentDBExtensionApi>(DOCUMENTDB_EXTENSION_ID);
+    const extension = vscode.extensions.getExtension<DocumentDBExtensionApi | DocumentDBExtensionApiV030>(
+        DOCUMENTDB_EXTENSION_ID,
+    );
     if (!extension) {
         throw new Error(`Extension '${DOCUMENTDB_EXTENSION_ID}' is not installed.`);
     }

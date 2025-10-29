@@ -45,6 +45,7 @@
   "An element with the following id already exists: {id}": "An element with the following id already exists: {id}",
   "An error has occurred. Check output window for more details.": "An error has occurred. Check output window for more details.",
   "An item with id \"{0}\" already exists for workspace \"{1}\".": "An item with id \"{0}\" already exists for workspace \"{1}\".",
+  "API v0.3.0: Registered new migration provider: \"{providerId}\" - \"{providerLabel}\" from extension \"{extensionId}\"": "API v0.3.0: Registered new migration provider: \"{providerId}\" - \"{providerLabel}\" from extension \"{extensionId}\"",
   "API version \"{0}\" for extension id \"{1}\" is no longer supported. Minimum version is \"{2}\".": "API version \"{0}\" for extension id \"{1}\" is no longer supported. Minimum version is \"{2}\".",
   "API: Registered new migration provider: \"{providerId}\" - \"{providerLabel}\"": "API: Registered new migration provider: \"{providerId}\" - \"{providerLabel}\"",
   "Applying Azure discovery filters…": "Applying Azure discovery filters…",
