@@ -104,7 +104,7 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                     throw new Error(l10n.t('No credentials found for the selected cluster.'));
                 }
 
-                // TODO: Include a dialog box for users to approove sharing credentials with a 3rd-party extension
+                // TODO: Include a dialog box for users to approve sharing credentials with a 3rd-party extension
                 // This should be done when the provider is used, each time the action states it "requiredAuthentication".
                 // We should allow whitelisting extensions trusted by the user to avoid repeated prompts.
                 // This could be done on our own but available for the user to edit in settings.
