@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type apiUtils } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { type DocumentDBExtensionApi, type DocumentDBExtensionApiV030 } from '../extensionApi';
 
@@ -56,9 +57,7 @@ export async function getDocumentDBExtensionApi(
     const callingExtensionId = context.extension.id;
 
     // Get the DocumentDB extension to access its package.json configuration
-    const extension = vscode.extensions.getExtension<DocumentDBExtensionApi | DocumentDBExtensionApiV030>(
-        DOCUMENTDB_EXTENSION_ID,
-    );
+    const extension = vscode.extensions.getExtension<apiUtils.AzureExtensionApiProvider>(DOCUMENTDB_EXTENSION_ID);
     if (!extension) {
         throw new Error(`Extension '${DOCUMENTDB_EXTENSION_ID}' is not installed.`);
     }
@@ -85,16 +84,20 @@ export async function getDocumentDBExtensionApi(
         await extension.activate();
     }
 
-    const api = extension.exports;
+    const exportedApis = extension.exports;
 
-    if (!api) {
-        throw new Error(`Extension '${DOCUMENTDB_EXTENSION_ID}' does not export an API.`);
+    if (!exportedApis) {
+        throw new Error(`Extension '${DOCUMENTDB_EXTENSION_ID}' does not export any API.`);
     }
+
+    const selectedApi = exportedApis.getApi<DocumentDBExtensionApi | DocumentDBExtensionApiV030>(apiVersionRange, {
+        extensionId: callingExtensionId,
+    });
 
     // Simple version check (you can enhance this later)
-    if (api.apiVersion !== apiVersionRange) {
-        console.warn(`API version mismatch. Expected ${apiVersionRange}, got ${api.apiVersion}`);
+    if (selectedApi.apiVersion !== apiVersionRange) {
+        console.warn(`API version mismatch. Expected ${apiVersionRange}, got ${selectedApi.apiVersion}`);
     }
 
-    return api;
+    return selectedApi;
 }
