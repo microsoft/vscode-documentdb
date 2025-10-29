@@ -104,12 +104,16 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                     throw new Error(l10n.t('No credentials found for the selected cluster.'));
                 }
 
-                const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
-                parsedCS.username = CredentialCache.getConnectionUser(node.cluster.id) ?? '';
-                parsedCS.password = CredentialCache.getConnectionPassword(node.cluster.id) ?? '';
+                // TODO: Include a dialog box for users to approove sharing credentials with a 3rd-party extension
+                // This should be done when the provider is used, each time the action states it "requiredAuthentication".
+                // We should allow whitelisting extensions trusted by the user to avoid repeated prompts.
+                // This could be done on our own but available for the user to edit in settings.
+                const parsedCS_WithCredentials = new DocumentDBConnectionString(credentials.connectionString);
+                parsedCS_WithCredentials.username = CredentialCache.getConnectionUser(node.cluster.id) ?? '';
+                parsedCS_WithCredentials.password = CredentialCache.getConnectionPassword(node.cluster.id) ?? '';
 
                 const options = {
-                    connectionString: parsedCS.toString(),
+                    connectionString: parsedCS_WithCredentials.toString(),
                     extendedProperties: {
                         clusterId: node.cluster.id,
                     },
