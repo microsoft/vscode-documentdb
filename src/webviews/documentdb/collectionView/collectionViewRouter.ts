@@ -339,7 +339,7 @@ export const collectionsViewRouter = router({
             }),
         )
         // handle generation request
-        .mutation(async ({ input, ctx }) => {
+        .query(async ({ input, ctx }) => {
             const generationCtx = ctx as RouterContext;
 
             const result = await callWithTelemetryAndErrorHandling(
