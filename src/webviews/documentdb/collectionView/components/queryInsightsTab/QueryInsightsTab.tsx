@@ -43,6 +43,7 @@ interface StageDetails {
 export const QueryInsightsMain = (): JSX.Element => {
     const [stageState, setStageState] = useState<1 | 2 | 3>(1);
     const [isLoadingAI, setIsLoadingAI] = useState(false);
+    const [aiInsightsRequested, setAiInsightsRequested] = useState(false); // One-way flag: once true, stays true
     const [showSuggestion1, setShowSuggestion1] = useState(false);
     const [showSuggestion2, setShowSuggestion2] = useState(false);
     const [showSuggestion3, setShowSuggestion3] = useState(false);
@@ -98,6 +99,7 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     const handleGetAISuggestions = () => {
         setIsLoadingAI(true);
+        setAiInsightsRequested(true); // Set one-way flag to prevent button from reappearing
         setIsTipsCardDismissed(false);
         // Show tips card after 5 seconds
         const tipsTimer = setTimeout(() => {
@@ -164,14 +166,14 @@ export const QueryInsightsMain = (): JSX.Element => {
                     </MetricsRow>
 
                     {/* Optimization Opportunities */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <Text size={400} weight="semibold" style={{ display: 'block' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <Text size={400} weight="semibold" className="cardSpacing" style={{ display: 'block' }}>
                             {l10n.t('Optimization Opportunities')}
                         </Text>
 
                         {/* Skeleton - shown only in stage 1 */}
                         {stageState === 1 && (
-                            <Skeleton>
+                            <Skeleton className="cardSpacing">
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
@@ -180,15 +182,17 @@ export const QueryInsightsMain = (): JSX.Element => {
                         )}
 
                         {/* GetPerformanceInsightsCard with CollapseRelaxed animation
-                            Note: Wrapped in div for proper ref forwarding to motion component */}
+                            Note: Wrapped in div for proper ref forwarding to motion component.
+                            cardSpacing class is applied to avoid layout shifts - when CollapseRelaxed
+                            collapses content to 0 height, CSS gap would still create spacing. */}
                         <CollapseRelaxed visible={stageState === 2}>
-                            <div>
+                            <div className="cardSpacing">
                                 <GetPerformanceInsightsCard
                                     bodyText={l10n.t(
                                         'Your query is performing optimally for the current dataset size. However, as data grows, consider adding an index.',
                                     )}
                                     recommendation={l10n.t('Recommended: Create index on user_id')}
-                                    isLoading={isLoadingAI}
+                                    isLoading={isLoadingAI || aiInsightsRequested}
                                     onGetInsights={handleGetAISuggestions}
                                     onLearnMore={() => {
                                         /* TODO: Implement learn more functionality */

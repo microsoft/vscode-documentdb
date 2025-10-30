@@ -1,0 +1,11 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+// Utility class for card spacing in animated/collapsible contexts
+// Applied to wrapper divs to avoid layout shifts from CSS gap
+// when using collapse animations (e.g., with CollapseRelaxed)
+.cardSpacing {
+    margin-bottom: 16px;
+}

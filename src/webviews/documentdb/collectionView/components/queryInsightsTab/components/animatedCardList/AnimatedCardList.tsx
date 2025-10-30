@@ -5,6 +5,7 @@
 
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import { type JSX, type ReactElement, type ReactNode, useEffect, useRef, useState } from 'react';
+import './AnimatedCardList.scss';
 
 interface AnimatedCardListProps {
     /**
@@ -213,15 +214,20 @@ export const AnimatedCardList = ({
     );
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
             {orderedCards.map((card) => (
                 <CollapseRelaxed key={card.key} visible={card.visible}>
                     {/* Wrapper div required for motion animations:
                         Custom card components (AiCard, TipsCard, GetPerformanceInsightsCard)
                         are not ForwardRefComponents, so they cannot receive refs directly.
                         Motion components need to attach refs for animations, so we wrap
-                        each card in a div that can accept the ref. */}
-                    <div>{card.element}</div>
+                        each card in a div that can accept the ref.
+
+                        Note: cardSpacing class is applied here instead of using gap on the parent
+                        to avoid layout shifts. When CollapseRelaxed collapses content to 0 height,
+                        CSS gap still creates spacing between flex items. By applying margin to
+                        the child, the margin collapses along with the content. */}
+                    <div className="cardSpacing">{card.element}</div>
                 </CollapseRelaxed>
             ))}
         </div>
