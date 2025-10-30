@@ -405,6 +405,7 @@
   "Provider \"{0}\" does not have resource type \"{1}\".": "Provider \"{0}\" does not have resource type \"{1}\".",
   "Query generation completed successfully": "Query generation completed successfully",
   "Query generation failed": "Query generation failed",
+  "Query generation failed with the error: {0}": "Query generation failed with the error: {0}",
   "Query generation is using model \"{actualModel}\" instead of preferred \"{preferredModel}\". Results may vary.": "Query generation is using model \"{actualModel}\" instead of preferred \"{preferredModel}\". Results may vary.",
   "Query generation started: type={type}, targetQueryType={targetQueryType}": "Query generation started: type={type}, targetQueryType={targetQueryType}",
   "Received response from model: {modelUsed} [{durationMs}ms]": "Received response from model: {modelUsed} [{durationMs}ms]",
