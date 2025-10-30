@@ -9,6 +9,7 @@ import {
     CommandType,
     detectCommandType,
     optimizeQuery,
+    sanitizeExplainResult,
     type QueryOptimizationContext,
 } from '../../src/commands/llmEnhancedCommands/optimizeCommands';
 import { ClustersClient } from '../../src/documentdb/ClustersClient';
@@ -622,11 +623,14 @@ async function measureQueryPerformance(
         const avgExecutionTime = executionTimes.reduce((sum, time) => sum + time, 0) / executionTimes.length;
         // progress?.(`Average execution time: ${avgExecutionTime.toFixed(2)}ms`);
 
+        // Sanitize explain result to remove constant values while preserving field names
+        const sanitizedExplainResult = sanitizeExplainResult(explainResult);
+
         return {
             executionTime: avgExecutionTime,
             docsExamined: explainResult?.executionStats?.totalDocsExamined as number | undefined,
             keysExamined: explainResult?.executionStats?.totalKeysExamined as number | undefined,
-            executionPlan: explainResult ? JSON.stringify(explainResult) : undefined,
+            executionPlan: sanitizedExplainResult ? JSON.stringify(sanitizedExplainResult) : undefined,
         };
     } catch (error) {
         throw new Error(`Performance measurement failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -897,7 +901,26 @@ async function restoreOriginalIndexState(
     try {
         if (actionType === 'create') {
             // Restore: drop the created index
-            await dropIndexFromSuggestion(client, databaseName, collectionName, suggestions, progress);
+            // Parse the createIndex command to get the index name
+            const indexSpec = parseCreateIndexCommand(suggestions);
+            if (indexSpec) {
+                // Generate index name if not specified
+                const indexName = indexSpec.name || generateIndexName(indexSpec.key);
+                progress?.(`Dropping created index: ${indexName}`);
+
+                try {
+                    const result = await client.dropIndex(databaseName, collectionName, indexName);
+                    if (result.ok === 1) {
+                        progress?.(`Index dropped successfully: ${indexName}`);
+                    } else {
+                        progress?.(`Note when dropping index: ${result.ok}`);
+                    }
+                } catch (error) {
+                    progress?.(`Error dropping index: ${error instanceof Error ? error.message : String(error)}`);
+                }
+            } else {
+                progress?.(`Warning: Could not parse index specification from suggestions for restoration`);
+            }
         } else if (actionType === 'drop') {
             // Restore: recreate the dropped index from indexStats
             if (indexNameToDrop && indexStats) {

@@ -59,6 +59,175 @@ export interface OptimizationResult {
 }
 
 /**
+ * Recursively removes constant values from query filters while preserving field names and operators
+ * @param obj The object to process
+ * @returns Processed object with constants removed
+ */
+function removeConstantsFromFilter(obj: unknown): unknown {
+    if (obj === null || obj === undefined) {
+        return obj;
+    }
+
+    if (Array.isArray(obj)) {
+        return obj.map((item) => removeConstantsFromFilter(item));
+    }
+
+    if (typeof obj === 'object') {
+        const result: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(obj)) {
+            // Keep MongoDB operators (start with $)
+            if (key.startsWith('$')) {
+                // For operators, recursively process their values
+                if (typeof value === 'object' && value !== null) {
+                    result[key] = removeConstantsFromFilter(value);
+                } else {
+                    // Replace primitive constant values with placeholder
+                    result[key] = '<value>';
+                }
+            } else {
+                // For field names, keep the key but process the value
+                if (typeof value === 'object' && value !== null) {
+                    // Recursively process nested objects (like operators on this field)
+                    result[key] = removeConstantsFromFilter(value);
+                } else {
+                    // Replace constant value with placeholder
+                    result[key] = '<value>';
+                }
+            }
+        }
+
+        return result;
+    }
+
+    // For primitive values at the root level, replace with placeholder
+    return '<value>';
+}
+
+/**
+ * Removes sensitive constant values from explain result while preserving structure and field names
+ * @param explainResult The explain result to sanitize
+ * @returns Sanitized explain result
+ */
+export function sanitizeExplainResult(explainResult: unknown): unknown {
+    if (!explainResult || typeof explainResult !== 'object') {
+        return explainResult;
+    }
+
+    const result = JSON.parse(JSON.stringify(explainResult)) as Record<string, unknown>;
+
+    // Process command field if it exists
+    if ('command' in result) {
+        if (typeof result.command === 'string') {
+            // Command is a string, redact it to avoid exposing query details
+            result.command = '<redacted>';
+        } else if (typeof result.command === 'object' && result.command !== null) {
+            const command = result.command as Record<string, unknown>;
+            if ('filter' in command) {
+                command.filter = removeConstantsFromFilter(command.filter);
+            }
+            result.command = command;
+        }
+    }
+
+    // Process queryPlanner section
+    if ('queryPlanner' in result && typeof result.queryPlanner === 'object' && result.queryPlanner !== null) {
+        const queryPlanner = result.queryPlanner as Record<string, unknown>;
+
+        // Process parsedQuery
+        if ('parsedQuery' in queryPlanner) {
+            queryPlanner.parsedQuery = removeConstantsFromFilter(queryPlanner.parsedQuery);
+        }
+
+        // Process winningPlan
+        if (
+            'winningPlan' in queryPlanner &&
+            typeof queryPlanner.winningPlan === 'object' &&
+            queryPlanner.winningPlan !== null
+        ) {
+            queryPlanner.winningPlan = sanitizeStage(queryPlanner.winningPlan);
+        }
+
+        result.queryPlanner = queryPlanner;
+    }
+
+    // Process rejectedPlans
+    if ('rejectedPlans' in result && Array.isArray(result.rejectedPlans)) {
+        result.rejectedPlans = result.rejectedPlans.map((plan) => sanitizeStage(plan));
+    }
+
+    // Process executionStats section
+    if ('executionStats' in result && typeof result.executionStats === 'object' && result.executionStats !== null) {
+        const executionStats = result.executionStats as Record<string, unknown>;
+
+        // Process executionStages
+        if ('executionStages' in executionStats) {
+            executionStats.executionStages = sanitizeStage(executionStats.executionStages);
+        }
+
+        result.executionStats = executionStats;
+    }
+
+    return result;
+}
+
+/**
+ * Recursively sanitizes execution plan stages
+ * @param stage The stage to sanitize
+ * @returns Sanitized stage
+ */
+function sanitizeStage(stage: unknown): unknown {
+    if (!stage || typeof stage !== 'object') {
+        return stage;
+    }
+
+    if (Array.isArray(stage)) {
+        return stage.map((item) => sanitizeStage(item));
+    }
+
+    const result = { ...stage } as Record<string, unknown>;
+
+    // Process filter field if present
+    if ('filter' in result) {
+        result.filter = removeConstantsFromFilter(result.filter);
+    }
+
+    // Process indexFilterSet field if present (array of filter objects)
+    if ('indexFilterSet' in result && Array.isArray(result.indexFilterSet)) {
+        result.indexFilterSet = result.indexFilterSet.map((filter) => removeConstantsFromFilter(filter));
+    }
+
+    if ('runtimeFilterSet' in result && Array.isArray(result.runtimeFilterSet)) {
+        result.runtimeFilterSet = result.runtimeFilterSet.map((filter) => removeConstantsFromFilter(filter));
+    }
+
+    // Recursively process nested stages
+    if ('inputStage' in result) {
+        result.inputStage = sanitizeStage(result.inputStage);
+    }
+
+    if ('inputStages' in result && Array.isArray(result.inputStages)) {
+        result.inputStages = result.inputStages.map((s) => sanitizeStage(s));
+    }
+
+    if ('shards' in result && Array.isArray(result.shards)) {
+        result.shards = result.shards.map((shard) => {
+            if (typeof shard === 'object' && shard !== null && 'executionStages' in shard) {
+                const shardObj = shard as Record<string, unknown>;
+                return {
+                    ...shardObj,
+                    executionStages: sanitizeStage(shardObj.executionStages),
+                };
+            }
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+            return shard;
+        });
+    }
+
+    return result;
+}
+
+/**
  * Gets the prompt template for a given command type
  * @param commandType The type of command
  * @returns The prompt template string
@@ -117,8 +286,8 @@ async function fillPromptTemplate(
     const filled = template
         .replace('{databaseName}', context.databaseName)
         .replace('{collectionName}', context.collectionName)
-        .replace('{collectionStats}', JSON.stringify(collectionStats, null, 2))
-        .replace('{indexStats}', JSON.stringify(indexes, null, 2))
+        .replace('{collectionStats}', JSON.stringify(collectionStats, null, 2) || 'N/A')
+        .replace('{indexStats}', JSON.stringify(indexes, null, 2) || 'N/A')
         .replace('{executionStats}', executionStats)
         .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2))
         .replace(
@@ -155,7 +324,7 @@ export async function optimizeQuery(
     let clusterInfo: ClusterMetadata;
 
     // Check if we have pre-loaded data
-    const hasPreloadedData = queryContext.executionPlan && queryContext.collectionStats && queryContext.indexStats;
+    const hasPreloadedData = queryContext.executionPlan;
 
     if (hasPreloadedData) {
         // Use pre-loaded data
@@ -221,8 +390,11 @@ export async function optimizeQuery(
         }
     }
 
+    // Sanitize explain result to remove constant values while preserving field names
+    const sanitizedExplainResult = sanitizeExplainResult(explainResult);
+
     // Format execution stats for the prompt
-    const executionStats = JSON.stringify(explainResult, null, 2);
+    const sanitizedExecutionStats = JSON.stringify(sanitizedExplainResult, null, 2);
 
     // Fill the prompt template
     const commandType = queryContext.commandType;
@@ -231,7 +403,7 @@ export async function optimizeQuery(
         queryContext,
         collectionStats,
         indexes,
-        executionStats,
+        sanitizedExecutionStats,
         clusterInfo,
     );
 

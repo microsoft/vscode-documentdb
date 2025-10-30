@@ -111,15 +111,18 @@ function loadSingleTestCase(testCasePath: string, testCaseName: string): TestCas
     const indexStatsPath = path.join(testCasePath, 'indexStats.json');
     const descriptionPath = path.join(testCasePath, 'description.json');
 
+    let collectionStats: unknown;
+    let indexStats: unknown[] | undefined;
+
     // Validate required files exist
     if (!fs.existsSync(executionPlanPath)) {
         throw new Error(`Missing executionPlan.json in ${testCaseName}`);
     }
-    if (!fs.existsSync(collectionStatsPath)) {
-        throw new Error(`Missing collectionStats.json in ${testCaseName}`);
+    if (fs.existsSync(collectionStatsPath)) {
+        collectionStats = JSON.parse(fs.readFileSync(collectionStatsPath, 'utf-8')) as unknown;
     }
-    if (!fs.existsSync(indexStatsPath)) {
-        throw new Error(`Missing indexStats.json in ${testCaseName}`);
+    if (fs.existsSync(indexStatsPath)) {
+        indexStats = JSON.parse(fs.readFileSync(indexStatsPath, 'utf-8')) as unknown[];
     }
     if (!fs.existsSync(descriptionPath)) {
         throw new Error(`Missing description.json in ${testCaseName}`);
@@ -127,9 +130,6 @@ function loadSingleTestCase(testCasePath: string, testCaseName: string): TestCas
 
     // Load and parse JSON files
     const executionPlan = JSON.parse(fs.readFileSync(executionPlanPath, 'utf-8')) as unknown;
-    const collectionStats = JSON.parse(fs.readFileSync(collectionStatsPath, 'utf-8')) as unknown;
-    const indexStats = JSON.parse(fs.readFileSync(indexStatsPath, 'utf-8')) as unknown[];
-
     const description = JSON.parse(fs.readFileSync(descriptionPath, 'utf-8')) as {
         collectionName?: string;
         category?: string;
@@ -223,7 +223,7 @@ function saveResultsAsCSV(results: TestResult[], outputPath: string): void {
         'Suggested Indexes',
         'If Matches Expected',
         'Analysis',
-        'Execution Plan',
+        'Execution Plan (Sanitized)',
         'Updated Execution Plan',
         'Query Performance',
         'Updated Performance',
@@ -281,7 +281,7 @@ function saveResultsAsJSON(results: TestResult[], outputPath: string): void {
         matchesExpected: result.matchesExpected ?? null,
         collectionStats: result.collectionStats ? JSON.parse(result.collectionStats) : null,
         indexStats: result.indexStats ? JSON.parse(result.indexStats) : null,
-        executionPlan: result.executionPlan ? JSON.parse(result.executionPlan) : null,
+        sanitizedExecutionPlan: result.executionPlan ? JSON.parse(result.executionPlan) : null,
         updatedExecutionPlan: result.updatedExecutionPlan ? JSON.parse(result.updatedExecutionPlan) : null,
         queryPerformance: result.queryPerformance ?? null,
         updatedPerformance: result.updatedPerformance ?? null,
