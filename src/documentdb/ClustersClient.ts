@@ -114,10 +114,10 @@ export type InsertDocumentsResult = {
 export class ClustersClient {
     // cache of active/existing clients
     static _clients: Map<string, ClustersClient> = new Map();
-    static _clusterMetadata: Map<string, ClusterMetadata> = new Map();
 
     private _mongoClient: MongoClient;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
+    private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
     /**
      * Use getClient instead of a constructor. Connections/Client are being cached and reused.
@@ -187,10 +187,12 @@ export class ClustersClient {
         // Connect with the configured options
         await this.connect(connectionString, options, credentials.emulatorConfiguration);
 
-        // Collect telemetry (non-blocking)
+        // Start metadata collection and store the promise
+        this._clusterMetadataPromise = getClusterMetadata(this._mongoClient, hosts);
+
+        // Collect telemetry (non-blocking) - reuses the same promise
         void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
-            const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
-            ClustersClient._clusterMetadata.set(this.credentialId, metadata);
+            const metadata: ClusterMetadata = await this._clusterMetadataPromise!;
             context.telemetry.properties = {
                 authmethod: authMethod,
                 ...context.telemetry.properties,
@@ -252,29 +254,18 @@ export class ClustersClient {
     }
 
     /**
-     * Retrieves cluster metadata of `ClustersClient` based on the provided `credentialId`.
+     * Retrieves cluster metadata for this client instance.
      *
-     * @param credentialId - A required string used as a key to get cached cluster metadata.
      * @returns A promise that resolves to cluster metadata.
      */
-    public static async getClusterInfo(credentialId: string): Promise<ClusterMetadata> {
-        if (!ClustersClient._clusterMetadata.has(credentialId)) {
-            // Trigger client initialization which will collect and cache metadata
-            const client = await ClustersClient.getClient(credentialId);
-
-            // If metadata is still not available after client initialization,
-            if (!ClustersClient._clusterMetadata.has(credentialId)) {
-                const credentials = CredentialCache.getCredentials(credentialId);
-                if (!credentials) {
-                    throw new Error(l10n.t('No credentials found for id {credentialId}', { credentialId }));
-                }
-                // Get metadata
-                const hosts = getHostsFromConnectionString(credentials.connectionString);
-                const metadata = await getClusterMetadata(client._mongoClient, hosts);
-                ClustersClient._clusterMetadata.set(credentialId, metadata);
-            }
+    public async getClusterMetadata(): Promise<ClusterMetadata> {
+        if (this._clusterMetadataPromise) {
+            return this._clusterMetadataPromise;
         }
-        return ClustersClient._clusterMetadata.get(credentialId) as ClusterMetadata;
+
+        // This should not happen as the promise is initialized in initClient,
+        // but if it does, we throw an error rather than trying to recover
+        throw new Error(l10n.t('Cluster metadata not initialized. Client may not be properly connected.'));
     }
 
     /**

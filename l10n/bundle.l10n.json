@@ -100,6 +100,7 @@
   "Click here to update credentials": "Click here to update credentials",
   "Click to view resource": "Click to view resource",
   "Close the account management wizard": "Close the account management wizard",
+  "Cluster metadata not initialized. Client may not be properly connected.": "Cluster metadata not initialized. Client may not be properly connected.",
   "Cluster support unknown $(info)": "Cluster support unknown $(info)",
   "Collection name cannot begin with the system. prefix (Reserved for internal use).": "Collection name cannot begin with the system. prefix (Reserved for internal use).",
   "Collection name cannot contain .system.": "Collection name cannot contain .system.",
