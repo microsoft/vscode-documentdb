@@ -1,0 +1,7 @@
+collectionName,query,expectedResult,notes
+a,"Missing Index","No single index exists for the query","db.a.find({user_id: 1234})","db.getCollection('a').createIndex({'user_id':1},{})"
+b,"Missing Index","No single index exists for the query","db.b.find({age: {$gt: 30, $lt: 40}})","db.getCollection('b').createIndex({'age':1},{})"
+c,"Missing Index","Composite index for find","db.c.find({country: 'US', city: 'NY'})","db.getCollection('c').createIndex({'country':1,'city':1},{'storageEngine':{'enableOrderedIndex':true}})"
+d,"Missing Index","Composite index for find and sort","db.d.find({score: {$gt: 42, $lt: 10340}}).sort({timestamp: -1})","db.getCollection('d').createIndex({'score':1,'timestamp':-1},{'name':'score_1_timestamp_-1','storageEngine':{'enableOrderedIndex':true}})"
+f,"Unused Index","Index is not needed on low selectivity field","db.f.find({gender: 'F'})","db.getCollection('f').dropIndex({'gender':1})"
+g,"No Index","Index is not needed on small collection","db.g.find({flag: true})","db.getCollection('g').dropIndex({'flag':1})"

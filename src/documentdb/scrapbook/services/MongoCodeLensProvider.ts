@@ -25,6 +25,15 @@ import { ScrapbookService } from '../ScrapbookService';
  * 3. **Execute Single Command Lens**:
  *    - Appears for each individual MongoDB command found in the scrapbook.
  *    - Invokes execution of the command located at the specified range in the document.
+ *
+ * 4. **Index Advisor Lens**:
+ *    - Generates index optimization suggestions for the query at the specified range.
+ *    - Uses AI to analyze query performance and recommend index improvements.
+ *
+ * 5. **Generate Query Lens**:
+ *    - Generates MongoDB queries from natural language descriptions.
+ *    - Supports both single-collection and cross-collection query generation.
+ *    - Only visible when connected to a database.
  */
 export class MongoCodeLensProvider implements vscode.CodeLensProvider {
     private _onDidChangeEmitter: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
@@ -95,18 +104,45 @@ export class MongoCodeLensProvider implements vscode.CodeLensProvider {
     private createIndividualCommandLenses(commands: { range: vscode.Range }[]): vscode.CodeLens[] {
         const currentCommandInExectution = ScrapbookService.getSingleCommandInExecution();
 
-        return commands.map((cmd) => {
+        const lenses: vscode.CodeLens[] = [];
+
+        commands.forEach((cmd) => {
             const running = currentCommandInExectution && cmd.range.isEqual(currentCommandInExectution.range);
             const title = running ? l10n.t('⏳ Running Command…') : l10n.t('▶️ Run Command');
 
-            return <vscode.CodeLens>{
+            // Run Command lens
+            lenses.push(<vscode.CodeLens>{
                 command: {
                     title,
                     command: 'vscode-documentdb.command.scrapbook.executeCommand',
                     arguments: [cmd.range.start],
                 },
                 range: cmd.range,
-            };
+            });
+
+            // Generate Index Suggestions lens
+            lenses.push(<vscode.CodeLens>{
+                command: {
+                    title: l10n.t('💡 Index Advisor'),
+                    tooltip: l10n.t('Generate index optimization suggestions for this query'),
+                    command: 'vscode-documentdb.command.scrapbook.generateIndexSuggestions',
+                    arguments: [cmd.range.start],
+                },
+                range: cmd.range,
+            });
+
+            // Generate Query lens
+            lenses.push(<vscode.CodeLens>{
+                command: {
+                    title: l10n.t('✨ Generate Query'),
+                    tooltip: l10n.t('Generate MongoDB query from natural language'),
+                    command: 'vscode-documentdb.command.scrapbook.generateQuery',
+                    arguments: [cmd.range.start],
+                },
+                range: cmd.range,
+            });
         });
+
+        return lenses;
     }
 }
