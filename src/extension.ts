@@ -14,7 +14,6 @@ import {
     registerErrorHandler,
     registerUIExtensionVariables,
     TreeElementStateManager,
-    type AzureExtensionApi,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
@@ -24,7 +23,7 @@ import { ext } from './extensionVariables';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
-import { type DocumentDBExtensionApi } from '../api/src';
+import { type DocumentDBExtensionApi, type DocumentDBExtensionApiV030 } from '../api/src';
 import { MigrationService } from './services/migrationServices';
 
 export async function activateInternal(
@@ -72,8 +71,8 @@ export async function activateInternal(
         //registerReportIssueCommand('azureDatabases.reportIssue');
     });
 
-    // Create the DocumentDB Extension API
-    const documentDBApi: DocumentDBExtensionApi = {
+    // Create the DocumentDB Extension API v0.2.0
+    const documentDBApiV2: DocumentDBExtensionApi = {
         apiVersion: '0.2.0',
         migration: {
             registerProvider: (provider) => {
@@ -89,17 +88,31 @@ export async function activateInternal(
         },
     };
 
-    // Return both the DocumentDB API and Azure Extension API
-    return {
-        ...documentDBApi,
-        ...createApiProvider([
-            <AzureExtensionApi>{
-                findTreeItem: () => undefined,
-                pickTreeItem: () => undefined,
-                revealTreeItem: () => undefined,
-                apiVersion: '1.2.0',
+    // Create the DocumentDB Extension API v0.3.0
+    const documentDBApiV3: DocumentDBExtensionApiV030 = {
+        apiVersion: '0.3.0',
+        migration: {
+            registerProvider: (context: vscode.ExtensionContext, provider) => {
+                const extensionId = context.extension.id;
+                MigrationService.registerProviderWithContext(extensionId, provider);
+
+                ext.outputChannel.appendLine(
+                    vscode.l10n.t(
+                        'API v0.3.0: Registered new migration provider: "{providerId}" - "{providerLabel}" from extension "{extensionId}"',
+                        {
+                            providerId: provider.id,
+                            providerLabel: provider.label,
+                            extensionId: extensionId,
+                        },
+                    ),
+                );
             },
-        ]),
+        },
+    };
+
+    // Return DocumentDB Extension API provider supporting multiple versions
+    return {
+        ...createApiProvider([documentDBApiV2, documentDBApiV3]),
     };
 }
 
