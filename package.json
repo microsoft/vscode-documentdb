@@ -940,11 +940,6 @@
             ],
             "description": "Path to a custom prompt template file for single collection query generation. Leave empty to use the built-in template.",
             "default": null
-          },
-          "documentDB.llm.enablePromptCache": {
-            "type": "boolean",
-            "description": "Enable caching of prompt templates. Disable to force reload on every use.",
-            "default": true
           }
         }
       }

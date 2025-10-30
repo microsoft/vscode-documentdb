@@ -324,6 +324,9 @@ export async function generateQuery(
     ext.outputChannel.trace(l10n.t('Parsing language model response...'));
     try {
         const result = JSON.parse(response.text) as { explanation: string; command: Record<string, unknown> };
+        if (result.command === undefined || result.command === null || result.explanation.startsWith('Error:')) {
+            throw new Error(result.explanation);
+        }
 
         ext.outputChannel.trace(l10n.t('Query generation completed successfully'));
         return {

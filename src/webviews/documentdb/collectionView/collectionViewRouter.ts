@@ -358,6 +358,13 @@ export const collectionsViewRouter = router({
 
                     // Generate query with LLM
                     const generationResult = await generateQuery(context, queryContext);
+                    if (generationResult.generatedQuery === undefined) {
+                        const errorExplanation = generationResult.explanation
+                            ? generationResult.explanation.startsWith('Error:') ? generationResult.explanation.slice(6).trim() : generationResult.explanation
+                            : 'No detailed error message provided.';
+                        context.telemetry.properties.generationError = errorExplanation;
+                        throw new Error(l10n.t('Query generation failed with the error: {0}', errorExplanation));
+                    }
 
                     // Parse the generated command
                     // For now we only support find query

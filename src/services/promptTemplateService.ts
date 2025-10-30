@@ -88,20 +88,7 @@ export class PromptTemplateService {
     public static async getQueryGenerationPromptTemplate(generationType: QueryGenerationType): Promise<string> {
         // Get configuration
         const config = vscode.workspace.getConfiguration(this.configSection);
-        const cacheEnabled = config.get<boolean>('enablePromptCache', true);
-
-        // Check if have a cached template
-        if (cacheEnabled) {
-            const cached = this.templateCache.get(generationType);
-            if (cached) {
-                return cached;
-            }
-        }
-
-        // Get the configuration key for this generation type
         const configKey = this.getQueryGenerationConfigKey(generationType);
-
-        // Check if a custom template path is configured
         const customTemplatePath = config.get<string | null>(configKey);
 
         let template: string;
@@ -127,11 +114,6 @@ export class PromptTemplateService {
         } else {
             // Use built-in template
             template = this.getBuiltInQueryGenerationTemplate(generationType);
-        }
-
-        // Cache the template
-        if (cacheEnabled) {
-            this.templateCache.set(generationType, template);
         }
 
         return template;
