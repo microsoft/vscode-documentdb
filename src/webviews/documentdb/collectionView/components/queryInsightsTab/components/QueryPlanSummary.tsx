@@ -11,29 +11,20 @@ import {
     Badge,
     Button,
     Card,
-    Label,
     Menu,
     MenuItem,
     MenuList,
     MenuPopover,
     MenuTrigger,
-    Tab,
-    TabList,
     Text,
     tokens,
 } from '@fluentui/react-components';
-import {
-    DatabaseRegular,
-    DismissRegular,
-    InfoRegular,
-    LayerRegular,
-    MoreHorizontalRegular,
-} from '@fluentui/react-icons';
-import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
+import { MoreHorizontalRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
 import '../queryInsights.scss';
 import './QueryPlanSummary.scss';
+import { StageDetailCard } from './queryPlanSummary/StageDetailCard';
 
 type Stage = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
 
@@ -67,24 +58,10 @@ interface QueryPlanSummaryProps {
     stageDetails: Record<Stage, StageDetails>;
 }
 
-type MockLayout =
-    | 'single'
-    | 'horizontal-tabs'
-    | 'sub-cards'
-    | 'table-view'
-    | 'tree-view'
-    | 'compact-list'
-    | 'expandable-shards'
-    | 'expandable-single';
+type MockLayout = 'expandable-shards' | 'expandable-single';
 
-export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
-    stageState,
-    selectedTab,
-    setSelectedTab,
-    stageDetails,
-}) => {
+export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
     const [mockLayout, setMockLayout] = React.useState<MockLayout>('expandable-single');
-    const [selectedShard, setSelectedShard] = React.useState<string>('merge');
 
     // Mock sharded data based on performance-advisor.md example
     const shardedData: ShardData[] = [
@@ -112,535 +89,6 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
             hasBlockedSort: true,
         },
     ];
-
-    const renderSingleShardView = () => (
-        <div className="queryPlanContent">
-            <div className="queryPlanTabs">
-                <TabList
-                    selectedValue={selectedTab}
-                    onTabSelect={(_, data) => setSelectedTab(data.value as Stage)}
-                    vertical
-                >
-                    <Tab icon={<LayerRegular />} value="IXSCAN">
-                        IXSCAN
-                    </Tab>
-                    <Tab icon={<LayerRegular />} value="FETCH">
-                        FETCH
-                    </Tab>
-                    <Tab icon={<LayerRegular />} value="PROJECTION">
-                        PROJECTION
-                    </Tab>
-                </TabList>
-            </div>
-
-            <div className="queryPlanDetails">
-                {selectedTab !== null ? (
-                    <>
-                        <div className="stageHeader">
-                            <div className="stageHeaderLeft">
-                                <Text weight="semibold" size={400}>
-                                    {l10n.t('Stage Details')}
-                                </Text>
-                                <Badge appearance="tint" shape="rounded">
-                                    {selectedTab}
-                                </Badge>
-                            </div>
-                            <Button
-                                appearance="subtle"
-                                size="small"
-                                icon={<DismissRegular />}
-                                onClick={() => setSelectedTab(null)}
-                            />
-                        </div>
-
-                        <CollapseRelaxed visible={stageState >= 2}>
-                            <div>
-                                {selectedTab === 'IXSCAN' && (
-                                    <>
-                                        <div className="detailsGrid">
-                                            <div className="detailItem">
-                                                <Label size="small">{l10n.t('Index Name')}</Label>
-                                                <Text>{stageDetails.IXSCAN.indexName}</Text>
-                                            </div>
-                                            <div className="detailItem">
-                                                <Label size="small">{l10n.t('Keys Examined')}</Label>
-                                                <Text weight="semibold">{stageDetails.IXSCAN.keysExamined}</Text>
-                                            </div>
-                                            <div className="detailItem">
-                                                <Label size="small">{l10n.t('nReturned')}</Label>
-                                                <Text weight="semibold">{stageDetails.IXSCAN.nReturned}</Text>
-                                            </div>
-                                        </div>
-                                        {stageDetails.IXSCAN.indexBounds && (
-                                            <>
-                                                <Label size="small" className="indexBoundsLabel">
-                                                    {l10n.t('Index Bounds')}
-                                                </Label>
-                                                <div className="codeBlock">{stageDetails.IXSCAN.indexBounds}</div>
-                                            </>
-                                        )}
-                                    </>
-                                )}
-                                {selectedTab === 'FETCH' && (
-                                    <div className="detailsGrid">
-                                        <div className="detailItem">
-                                            <Label size="small">{l10n.t('Docs Examined')}</Label>
-                                            <Text weight="semibold">{stageDetails.FETCH.docsExamined}</Text>
-                                        </div>
-                                        <div className="detailItem">
-                                            <Label size="small">{l10n.t('nReturned')}</Label>
-                                            <Text weight="semibold">{stageDetails.FETCH.nReturned}</Text>
-                                        </div>
-                                    </div>
-                                )}
-                                {selectedTab === 'PROJECTION' && (
-                                    <div className="detailsGrid">
-                                        <div className="detailItem">
-                                            <Label size="small">{l10n.t('nReturned')}</Label>
-                                            <Text weight="semibold">{stageDetails.PROJECTION.nReturned}</Text>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </CollapseRelaxed>
-
-                        {stageState < 2 && (
-                            <Text size={300}>{l10n.t('Run detailed analysis to see stage metrics')}</Text>
-                        )}
-                    </>
-                ) : (
-                    <div className="queryPlanPlaceholder">
-                        <InfoRegular style={{ fontSize: '48px', marginBottom: '12px' }} />
-                        <Text size={400} weight="semibold" style={{ marginBottom: '4px' }}>
-                            {l10n.t('No Stage Selected')}
-                        </Text>
-                        <Text size={300}>{l10n.t('Select a stage to view its details')}</Text>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-
-    // Mock 1: Horizontal Tabs for Each Shard
-    const renderHorizontalTabsView = () => {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <TabList
-                    selectedValue={selectedShard}
-                    onTabSelect={(_, data) => setSelectedShard(data.value as string)}
-                >
-                    <Tab value="merge" icon={<DatabaseRegular />}>
-                        {l10n.t('SHARD_MERGE')}
-                    </Tab>
-                    {shardedData.map((shard) => (
-                        <Tab key={shard.shardName} value={shard.shardName} icon={<DatabaseRegular />}>
-                            {shard.shardName}
-                            {(shard.hasCollscan || shard.hasBlockedSort) && (
-                                <Badge appearance="filled" color="danger" size="small" style={{ marginLeft: '4px' }}>
-                                    !
-                                </Badge>
-                            )}
-                        </Tab>
-                    ))}
-                </TabList>
-
-                <div>
-                    {selectedShard === 'merge' ? (
-                        <div
-                            style={{
-                                padding: '16px',
-                                backgroundColor: tokens.colorNeutralBackground3,
-                                borderRadius: '6px',
-                            }}
-                        >
-                            <Text weight="semibold" size={400} style={{ display: 'block', marginBottom: '12px' }}>
-                                {l10n.t('Merge Stage')}
-                            </Text>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                                <div>
-                                    <Label size="small">{l10n.t('Total Returned')}</Label>
-                                    <Text>50</Text>
-                                </div>
-                                <div>
-                                    <Label size="small">{l10n.t('Shards')}</Label>
-                                    <Text>2</Text>
-                                </div>
-                                <div>
-                                    <Label size="small">{l10n.t('Execution Time')}</Label>
-                                    <Text>1.4 s</Text>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        shardedData
-                            .filter((s) => s.shardName === selectedShard)
-                            .map((shard) => (
-                                <div
-                                    key={shard.shardName}
-                                    style={{
-                                        padding: '16px',
-                                        backgroundColor: tokens.colorNeutralBackground1,
-                                        borderRadius: '6px',
-                                    }}
-                                >
-                                    <div
-                                        style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}
-                                    >
-                                        <Badge appearance="tint">{shard.plan.stage}</Badge>
-                                        {shard.plan.indexName && (
-                                            <Badge appearance="outline">{shard.plan.indexName}</Badge>
-                                        )}
-                                        {shard.hasCollscan && (
-                                            <Badge appearance="filled" color="danger">
-                                                COLLSCAN
-                                            </Badge>
-                                        )}
-                                        {shard.hasBlockedSort && (
-                                            <Badge appearance="filled" color="warning">
-                                                Blocked Sort
-                                            </Badge>
-                                        )}
-                                    </div>
-                                    <div
-                                        style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}
-                                    >
-                                        <div>
-                                            <Label size="small">{l10n.t('Returned')}</Label>
-                                            <Text weight="semibold">{shard.nReturned}</Text>
-                                        </div>
-                                        <div>
-                                            <Label size="small">{l10n.t('Keys')}</Label>
-                                            <Text weight="semibold">{shard.keysExamined}</Text>
-                                        </div>
-                                        <div>
-                                            <Label size="small">{l10n.t('Docs')}</Label>
-                                            <Text weight="semibold">{shard.docsExamined}</Text>
-                                        </div>
-                                        <div>
-                                            <Label size="small">{l10n.t('Time')}</Label>
-                                            <Text weight="semibold">{shard.executionTimeMs} ms</Text>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
-                    )}
-                </div>
-            </div>
-        );
-    };
-
-    // Mock 2: Sub-Cards for Each Shard
-    const renderSubCardsView = () => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Merge Stage Card */}
-            <Card style={{ padding: '16px', backgroundColor: tokens.colorBrandBackground2 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                    <DatabaseRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />
-                    <Text weight="semibold" size={500}>
-                        {l10n.t('SHARD_MERGE')}
-                    </Text>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                    <div>
-                        <div className="baseDataHeader">{l10n.t('Total Returned')}</div>
-                        <div className="baseDataValue" style={{ fontSize: '20px', lineHeight: '28px' }}>
-                            50
-                        </div>
-                    </div>
-                    <div>
-                        <div className="baseDataHeader">{l10n.t('Shards')}</div>
-                        <div className="baseDataValue" style={{ fontSize: '20px', lineHeight: '28px' }}>
-                            2
-                        </div>
-                    </div>
-                    <div>
-                        <div className="baseDataHeader">{l10n.t('Total Time')}</div>
-                        <div className="baseDataValue" style={{ fontSize: '20px', lineHeight: '28px' }}>
-                            1.4 s
-                        </div>
-                    </div>
-                </div>
-            </Card>
-
-            {/* Shard Sub-Cards */}
-            {shardedData.map((shard) => (
-                <Card key={shard.shardName} style={{ padding: '16px' }}>
-                    <div
-                        style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'flex-start',
-                            marginBottom: '12px',
-                        }}
-                    >
-                        <div>
-                            <Text weight="semibold" size={400} style={{ display: 'block', marginBottom: '4px' }}>
-                                {shard.shardName}
-                            </Text>
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                <Badge appearance="tint">{shard.plan.stage}</Badge>
-                                {shard.plan.indexName && <Badge appearance="outline">{shard.plan.indexName}</Badge>}
-                                {shard.hasCollscan && (
-                                    <Badge appearance="filled" color="danger">
-                                        COLLSCAN
-                                    </Badge>
-                                )}
-                                {shard.hasBlockedSort && (
-                                    <Badge appearance="filled" color="warning">
-                                        Blocked Sort
-                                    </Badge>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                        <div>
-                            <div className="baseDataHeader">{l10n.t('Returned')}</div>
-                            <Text weight="semibold">{shard.nReturned}</Text>
-                        </div>
-                        <div>
-                            <div className="baseDataHeader">{l10n.t('Keys Examined')}</div>
-                            <Text weight="semibold">{shard.keysExamined.toLocaleString()}</Text>
-                        </div>
-                        <div>
-                            <div className="baseDataHeader">{l10n.t('Docs Examined')}</div>
-                            <Text weight="semibold">{shard.docsExamined.toLocaleString()}</Text>
-                        </div>
-                        <div>
-                            <div className="baseDataHeader">{l10n.t('Time')}</div>
-                            <Text weight="semibold">{shard.executionTimeMs} ms</Text>
-                        </div>
-                    </div>
-                </Card>
-            ))}
-        </div>
-    );
-
-    // Mock 3: Table View
-    const renderTableView = () => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ padding: '12px', backgroundColor: tokens.colorBrandBackground2, borderRadius: '6px' }}>
-                <Text weight="semibold">{l10n.t('SHARD_MERGE → 50 docs, 1.4s')}</Text>
-            </div>
-
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                    <tr style={{ borderBottom: `1px solid ${tokens.colorNeutralStroke1}` }}>
-                        <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', fontWeight: 600 }}>
-                            {l10n.t('Shard')}
-                        </th>
-                        <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', fontWeight: 600 }}>
-                            {l10n.t('Plan')}
-                        </th>
-                        <th style={{ textAlign: 'right', padding: '8px', fontSize: '12px', fontWeight: 600 }}>
-                            {l10n.t('Returned')}
-                        </th>
-                        <th style={{ textAlign: 'right', padding: '8px', fontSize: '12px', fontWeight: 600 }}>
-                            {l10n.t('Keys')}
-                        </th>
-                        <th style={{ textAlign: 'right', padding: '8px', fontSize: '12px', fontWeight: 600 }}>
-                            {l10n.t('Docs')}
-                        </th>
-                        <th style={{ textAlign: 'right', padding: '8px', fontSize: '12px', fontWeight: 600 }}>
-                            {l10n.t('Time')}
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {shardedData.map((shard) => (
-                        <tr key={shard.shardName} style={{ borderBottom: `1px solid ${tokens.colorNeutralStroke2}` }}>
-                            <td style={{ padding: '12px' }}>
-                                <Text weight="semibold">{shard.shardName}</Text>
-                            </td>
-                            <td style={{ padding: '12px' }}>
-                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                    <Badge appearance="tint" size="small">
-                                        {shard.plan.stage}
-                                    </Badge>
-                                    {shard.plan.indexName && (
-                                        <Badge appearance="outline" size="small">
-                                            {shard.plan.indexName}
-                                        </Badge>
-                                    )}
-                                    {shard.hasCollscan && (
-                                        <Badge appearance="filled" color="danger" size="small">
-                                            SCAN
-                                        </Badge>
-                                    )}
-                                    {shard.hasBlockedSort && (
-                                        <Badge appearance="filled" color="warning" size="small">
-                                            SORT
-                                        </Badge>
-                                    )}
-                                </div>
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'right' }}>
-                                <Text>{shard.nReturned}</Text>
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'right' }}>
-                                <Text>{shard.keysExamined.toLocaleString()}</Text>
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'right' }}>
-                                <Text>{shard.docsExamined.toLocaleString()}</Text>
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'right' }}>
-                                <Text>{shard.executionTimeMs} ms</Text>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
-
-    // Mock 4: Tree/Hierarchical View (inspired by PerformanceTabB)
-    const renderTreeView = () => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {/* Root merge node */}
-            <div
-                style={{
-                    padding: '12px',
-                    backgroundColor: tokens.colorBrandBackground2,
-                    borderLeft: `4px solid ${tokens.colorBrandForeground1}`,
-                    borderRadius: '4px',
-                }}
-            >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <Badge appearance="filled" color="brand">
-                            SHARD_MERGE
-                        </Badge>
-                        <Text size={300} style={{ marginLeft: '8px' }}>
-                            {l10n.t('50 docs, 1.4s')}
-                        </Text>
-                    </div>
-                </div>
-            </div>
-
-            {/* Child shard nodes */}
-            {shardedData.map((shard) => (
-                <div
-                    key={shard.shardName}
-                    style={{
-                        marginLeft: '24px',
-                        padding: '12px',
-                        backgroundColor: tokens.colorNeutralBackground1,
-                        borderLeft: `3px solid ${shard.hasCollscan || shard.hasBlockedSort ? tokens.colorPaletteRedBorder1 : tokens.colorNeutralStroke1}`,
-                        borderRadius: '4px',
-                    }}
-                >
-                    <div
-                        style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'flex-start',
-                            marginBottom: '8px',
-                        }}
-                    >
-                        <div>
-                            <Text weight="semibold" size={400}>
-                                {shard.shardName}
-                            </Text>
-                        </div>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                            {shard.hasCollscan && (
-                                <Badge appearance="filled" color="danger" size="small">
-                                    COLLSCAN
-                                </Badge>
-                            )}
-                            {shard.hasBlockedSort && (
-                                <Badge appearance="filled" color="warning" size="small">
-                                    Blocked Sort
-                                </Badge>
-                            )}
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '16px', fontSize: '13px' }}>
-                        <Text size={300}>
-                            <strong>{shard.plan.stage}</strong>
-                            {shard.plan.indexName && ` (${shard.plan.indexName})`}
-                        </Text>
-                        <Text size={300}>→ {shard.nReturned} docs</Text>
-                        <Text size={300}>Keys: {shard.keysExamined.toLocaleString()}</Text>
-                        <Text size={300}>Docs: {shard.docsExamined.toLocaleString()}</Text>
-                        <Text size={300}>{shard.executionTimeMs}ms</Text>
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-
-    // Mock 5: Compact List View
-    const renderCompactListView = () => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div
-                style={{
-                    padding: '12px',
-                    backgroundColor: tokens.colorBrandBackground2,
-                    borderRadius: '6px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <DatabaseRegular fontSize={20} style={{ color: tokens.colorBrandForeground1 }} />
-                    <div>
-                        <Text weight="semibold" size={400}>
-                            {l10n.t('SHARD_MERGE')}
-                        </Text>
-                        <Text size={200} style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-                            {l10n.t('2 shards, 50 docs, 1.4s')}
-                        </Text>
-                    </div>
-                </div>
-            </div>
-
-            {shardedData.map((shard) => (
-                <div
-                    key={shard.shardName}
-                    style={{
-                        padding: '12px',
-                        backgroundColor: tokens.colorNeutralBackground1,
-                        borderRadius: '6px',
-                        borderLeft: `3px solid ${shard.hasCollscan || shard.hasBlockedSort ? tokens.colorPaletteRedBorder1 : tokens.colorNeutralStroke1}`,
-                    }}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                <Text weight="semibold" size={300}>
-                                    {shard.shardName}
-                                </Text>
-                                <Badge appearance="tint" size="small">
-                                    {shard.plan.stage}
-                                </Badge>
-                                {shard.plan.indexName && (
-                                    <Badge appearance="outline" size="small">
-                                        {shard.plan.indexName}
-                                    </Badge>
-                                )}
-                                {shard.hasCollscan && (
-                                    <Badge appearance="filled" color="danger" size="small">
-                                        SCAN
-                                    </Badge>
-                                )}
-                                {shard.hasBlockedSort && (
-                                    <Badge appearance="filled" color="warning" size="small">
-                                        SORT
-                                    </Badge>
-                                )}
-                            </div>
-                            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                {shard.nReturned} returned · {shard.keysExamined.toLocaleString()} keys ·{' '}
-                                {shard.docsExamined.toLocaleString()} docs · {shard.executionTimeMs}ms
-                            </Text>
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
 
     // Mock 6: Expandable Shards (variation of compact list with stage details)
     const renderExpandableShardsView = () => (
@@ -712,159 +160,57 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                             <AccordionHeader size="small">{l10n.t('Show Stage Details')}</AccordionHeader>
                             <AccordionPanel>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px' }}>
-                                    {/* Mock stage breakdown based on shard plan */}
+                                    {/* Stage breakdown using StageDetailCard */}
                                     {shard.plan.stage === 'FETCH' && shard.plan.indexName && (
                                         <>
-                                            <div
-                                                style={{
-                                                    padding: '8px',
-                                                    backgroundColor: tokens.colorNeutralBackground3,
-                                                    borderRadius: '4px',
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '8px',
-                                                        marginBottom: '4px',
-                                                    }}
-                                                >
-                                                    <Badge appearance="tint" size="small" shape="rounded">
-                                                        IXSCAN
-                                                    </Badge>
-                                                    <Text size={200} weight="semibold">
-                                                        {shard.plan.indexName}
-                                                    </Text>
-                                                </div>
-                                                <div
-                                                    style={{
-                                                        display: 'grid',
-                                                        gridTemplateColumns: 'repeat(2, 1fr)',
-                                                        gap: '8px',
-                                                        marginTop: '4px',
-                                                    }}
-                                                >
-                                                    <Text size={200}>
-                                                        <strong>{l10n.t('Keys:')}</strong>{' '}
-                                                        {shard.keysExamined.toLocaleString()}
-                                                    </Text>
-                                                    <Text size={200}>
-                                                        <strong>{l10n.t('Returned:')}</strong>{' '}
-                                                        {shard.docsExamined.toLocaleString()}
-                                                    </Text>
-                                                </div>
-                                            </div>
-                                            <div
-                                                style={{
-                                                    padding: '8px',
-                                                    backgroundColor: tokens.colorNeutralBackground3,
-                                                    borderRadius: '4px',
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '8px',
-                                                        marginBottom: '4px',
-                                                    }}
-                                                >
-                                                    <Badge appearance="tint" size="small" shape="rounded">
-                                                        FETCH
-                                                    </Badge>
-                                                </div>
-                                                <div
-                                                    style={{
-                                                        display: 'grid',
-                                                        gridTemplateColumns: 'repeat(2, 1fr)',
-                                                        gap: '8px',
-                                                        marginTop: '4px',
-                                                    }}
-                                                >
-                                                    <Text size={200}>
-                                                        <strong>{l10n.t('Docs:')}</strong>{' '}
-                                                        {shard.docsExamined.toLocaleString()}
-                                                    </Text>
-                                                    <Text size={200}>
-                                                        <strong>{l10n.t('Returned:')}</strong> {shard.nReturned}
-                                                    </Text>
-                                                </div>
-                                            </div>
+                                            <StageDetailCard
+                                                stageType="IXSCAN"
+                                                description={`Index: ${shard.plan.indexName}`}
+                                                returned={shard.docsExamined}
+                                                executionTimeMs={shard.executionTimeMs * 0.6}
+                                                timePercentage={60}
+                                                metrics={[
+                                                    {
+                                                        label: l10n.t('Keys Examined'),
+                                                        value: shard.keysExamined.toLocaleString(),
+                                                    },
+                                                ]}
+                                            />
+                                            <StageDetailCard
+                                                stageType="FETCH"
+                                                returned={shard.nReturned}
+                                                executionTimeMs={shard.executionTimeMs * 0.4}
+                                                timePercentage={40}
+                                                metrics={[
+                                                    {
+                                                        label: l10n.t('Docs Examined'),
+                                                        value: shard.docsExamined.toLocaleString(),
+                                                    },
+                                                ]}
+                                            />
                                         </>
                                     )}
                                     {shard.plan.stage === 'SORT' && shard.hasCollscan && (
                                         <>
-                                            <div
-                                                style={{
-                                                    padding: '8px',
-                                                    backgroundColor: tokens.colorNeutralBackground3,
-                                                    borderRadius: '4px',
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '8px',
-                                                        marginBottom: '4px',
-                                                    }}
-                                                >
-                                                    <Badge appearance="tint" size="small" shape="rounded">
-                                                        COLLSCAN
-                                                    </Badge>
-                                                </div>
-                                                <div
-                                                    style={{
-                                                        display: 'grid',
-                                                        gridTemplateColumns: 'repeat(2, 1fr)',
-                                                        gap: '8px',
-                                                        marginTop: '4px',
-                                                    }}
-                                                >
-                                                    <Text size={200}>
-                                                        <strong>{l10n.t('Docs:')}</strong>{' '}
-                                                        {shard.docsExamined.toLocaleString()}
-                                                    </Text>
-                                                    <Text size={200}>
-                                                        <strong>{l10n.t('Returned:')}</strong>{' '}
-                                                        {shard.docsExamined.toLocaleString()}
-                                                    </Text>
-                                                </div>
-                                            </div>
-                                            <div
-                                                style={{
-                                                    padding: '8px',
-                                                    backgroundColor: tokens.colorNeutralBackground3,
-                                                    borderRadius: '4px',
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '8px',
-                                                        marginBottom: '4px',
-                                                    }}
-                                                >
-                                                    <Badge appearance="tint" size="small" shape="rounded">
-                                                        SORT
-                                                    </Badge>
-                                                    <Text size={200}>{l10n.t('In-memory sort')}</Text>
-                                                </div>
-                                                <div
-                                                    style={{
-                                                        display: 'grid',
-                                                        gridTemplateColumns: 'repeat(2, 1fr)',
-                                                        gap: '8px',
-                                                        marginTop: '4px',
-                                                    }}
-                                                >
-                                                    <Text size={200}>
-                                                        <strong>{l10n.t('Returned:')}</strong> {shard.nReturned}
-                                                    </Text>
-                                                </div>
-                                            </div>
+                                            <StageDetailCard
+                                                stageType="COLLSCAN"
+                                                returned={shard.docsExamined}
+                                                executionTimeMs={shard.executionTimeMs * 0.7}
+                                                timePercentage={70}
+                                                metrics={[
+                                                    {
+                                                        label: l10n.t('Docs Examined'),
+                                                        value: shard.docsExamined.toLocaleString(),
+                                                    },
+                                                ]}
+                                            />
+                                            <StageDetailCard
+                                                stageType="SORT"
+                                                description={l10n.t('In-memory sort')}
+                                                returned={shard.nReturned}
+                                                executionTimeMs={shard.executionTimeMs * 0.3}
+                                                timePercentage={30}
+                                            />
                                         </>
                                     )}
                                 </div>
@@ -892,15 +238,18 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                     keysExamined: 100,
                     nReturned: 100,
                     bounds: 'status: ["PENDING", "PENDING"]',
+                    executionTimeMs: 65,
                 },
                 {
                     stage: 'FETCH',
                     docsExamined: 100,
                     nReturned: 100,
+                    executionTimeMs: 45,
                 },
                 {
                     stage: 'PROJECTION',
                     nReturned: 100,
+                    executionTimeMs: 10,
                 },
             ],
         };
@@ -946,70 +295,45 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                             <AccordionHeader size="small">{l10n.t('Show Stage Details')}</AccordionHeader>
                             <AccordionPanel>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px' }}>
-                                    {singleQueryData.stages.map((stage, index) => (
-                                        <div
-                                            key={index}
-                                            style={{
-                                                padding: '8px',
-                                                backgroundColor: tokens.colorNeutralBackground3,
-                                                borderRadius: '4px',
-                                            }}
-                                        >
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '8px',
-                                                    marginBottom: '4px',
-                                                }}
-                                            >
-                                                <Badge appearance="tint" size="small" shape="rounded">
-                                                    {stage.stage}
-                                                </Badge>
-                                                {stage.indexName && (
-                                                    <Text size={200} weight="semibold">
-                                                        {stage.indexName}
-                                                    </Text>
-                                                )}
-                                            </div>
-                                            <div
-                                                style={{
-                                                    display: 'grid',
-                                                    gridTemplateColumns: 'repeat(2, 1fr)',
-                                                    gap: '8px',
-                                                    marginTop: '4px',
-                                                }}
-                                            >
-                                                {stage.keysExamined !== undefined && (
-                                                    <Text size={200}>
-                                                        <strong>{l10n.t('Keys:')}</strong>{' '}
-                                                        {stage.keysExamined.toLocaleString()}
-                                                    </Text>
-                                                )}
-                                                {stage.docsExamined !== undefined && (
-                                                    <Text size={200}>
-                                                        <strong>{l10n.t('Docs:')}</strong>{' '}
-                                                        {stage.docsExamined.toLocaleString()}
-                                                    </Text>
-                                                )}
-                                                <Text size={200}>
-                                                    <strong>{l10n.t('Returned:')}</strong> {stage.nReturned}
-                                                </Text>
-                                            </div>
-                                            {stage.bounds && (
-                                                <Text
-                                                    size={200}
-                                                    style={{
-                                                        marginTop: '4px',
-                                                        fontFamily: 'monospace',
-                                                        color: tokens.colorNeutralForeground3,
-                                                    }}
-                                                >
-                                                    {stage.bounds}
-                                                </Text>
-                                            )}
-                                        </div>
-                                    ))}
+                                    {singleQueryData.stages.map((stage, index) => {
+                                        const metrics: Array<{ label: string; value: string | number }> = [];
+
+                                        if (stage.keysExamined !== undefined) {
+                                            metrics.push({
+                                                label: l10n.t('Keys Examined'),
+                                                value: stage.keysExamined.toLocaleString(),
+                                            });
+                                        }
+                                        if (stage.docsExamined !== undefined) {
+                                            metrics.push({
+                                                label: l10n.t('Docs Examined'),
+                                                value: stage.docsExamined.toLocaleString(),
+                                            });
+                                        }
+                                        if (stage.bounds) {
+                                            metrics.push({
+                                                label: l10n.t('Index Bounds'),
+                                                value: stage.bounds,
+                                            });
+                                        }
+
+                                        // Calculate percentage of total execution time
+                                        const timePercentage = stage.executionTimeMs
+                                            ? (stage.executionTimeMs / singleQueryData.executionTimeMs) * 100
+                                            : undefined;
+
+                                        return (
+                                            <StageDetailCard
+                                                key={index}
+                                                stageType={stage.stage as Stage}
+                                                description={stage.indexName ? `Index: ${stage.indexName}` : undefined}
+                                                returned={stage.nReturned}
+                                                executionTimeMs={stage.executionTimeMs}
+                                                timePercentage={timePercentage}
+                                                metrics={metrics.length > 0 ? metrics : undefined}
+                                            />
+                                        );
+                                    })}
                                 </div>
                             </AccordionPanel>
                         </AccordionItem>
@@ -1035,41 +359,17 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
 
                     <MenuPopover>
                         <MenuList>
-                            <MenuItem onClick={() => setMockLayout('single')}>
-                                {l10n.t('Mock: Single Shard (Current)')}
-                            </MenuItem>
-                            <MenuItem onClick={() => setMockLayout('horizontal-tabs')}>
-                                {l10n.t('Mock 1: Horizontal Tabs')}
-                            </MenuItem>
-                            <MenuItem onClick={() => setMockLayout('sub-cards')}>
-                                {l10n.t('Mock 2: Sub-Cards')}
-                            </MenuItem>
-                            <MenuItem onClick={() => setMockLayout('table-view')}>
-                                {l10n.t('Mock 3: Table View')}
-                            </MenuItem>
-                            <MenuItem onClick={() => setMockLayout('tree-view')}>
-                                {l10n.t('Mock 4: Tree View')}
-                            </MenuItem>
-                            <MenuItem onClick={() => setMockLayout('compact-list')}>
-                                {l10n.t('Mock 5: Compact List')}
-                            </MenuItem>
                             <MenuItem onClick={() => setMockLayout('expandable-shards')}>
-                                {l10n.t('Mock 6: Expandable Shards')}
+                                {l10n.t('Expandable Shards')}
                             </MenuItem>
                             <MenuItem onClick={() => setMockLayout('expandable-single')}>
-                                {l10n.t('Mock 7: Expandable Single')}
+                                {l10n.t('Expandable Single')}
                             </MenuItem>
                         </MenuList>
                     </MenuPopover>
                 </Menu>
             </div>
 
-            {mockLayout === 'single' && renderSingleShardView()}
-            {mockLayout === 'horizontal-tabs' && renderHorizontalTabsView()}
-            {mockLayout === 'sub-cards' && renderSubCardsView()}
-            {mockLayout === 'table-view' && renderTableView()}
-            {mockLayout === 'tree-view' && renderTreeView()}
-            {mockLayout === 'compact-list' && renderCompactListView()}
             {mockLayout === 'expandable-shards' && renderExpandableShardsView()}
             {mockLayout === 'expandable-single' && renderExpandableSingleView()}
         </Card>

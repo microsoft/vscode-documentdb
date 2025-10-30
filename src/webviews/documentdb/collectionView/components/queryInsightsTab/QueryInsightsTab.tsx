@@ -24,6 +24,7 @@ import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
 import { AiCard, GetPerformanceInsightsCard, TipsCard } from './components/optimizationCards';
 import { QueryPlanSummary } from './components/QueryPlanSummary';
+import { StageDetailCardVariations } from './components/queryPlanSummary';
 import { QuickActions } from './components/QuickActions';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
@@ -421,6 +422,9 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                 {/* Right Panel */}
                 <div className="rightPanel">
+                    {/* Stage Detail Card Variations - For Evaluation */}
+                    <StageDetailCardVariations />
+
                     {/* Query Efficiency Analysis */}
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
