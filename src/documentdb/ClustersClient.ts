@@ -186,13 +186,11 @@ export class ClustersClient {
 
         // Connect with the configured options
         await this.connect(connectionString, options, credentials.emulatorConfiguration);
-        const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
-        ClustersClient._clusterMetadata.set(this.credentialId, metadata);
 
         // Collect telemetry (non-blocking)
         void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
             const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
-
+            ClustersClient._clusterMetadata.set(this.credentialId, metadata);
             context.telemetry.properties = {
                 authmethod: authMethod,
                 ...context.telemetry.properties,
@@ -257,12 +255,24 @@ export class ClustersClient {
      * Retrieves cluster metadata of `ClustersClient` based on the provided `credentialId`.
      *
      * @param credentialId - A required string used as a key to get cached cluster metadata.
-     * @returns A promise that resolves to an instance of `ClustersClient`.
+     * @returns A promise that resolves to cluster metadata.
      */
     public static async getClusterInfo(credentialId: string): Promise<ClusterMetadata> {
         if (!ClustersClient._clusterMetadata.has(credentialId)) {
-            // Try to initialize the client to fetch metadata if not already present
-            await ClustersClient.getClient(credentialId);
+            // Trigger client initialization which will collect and cache metadata
+            const client = await ClustersClient.getClient(credentialId);
+
+            // If metadata is still not available after client initialization,
+            if (!ClustersClient._clusterMetadata.has(credentialId)) {
+                const credentials = CredentialCache.getCredentials(credentialId);
+                if (!credentials) {
+                    throw new Error(l10n.t('No credentials found for id {credentialId}', { credentialId }));
+                }
+                // Get metadata
+                const hosts = getHostsFromConnectionString(credentials.connectionString);
+                const metadata = await getClusterMetadata(client._mongoClient, hosts);
+                ClustersClient._clusterMetadata.set(credentialId, metadata);
+            }
         }
         return ClustersClient._clusterMetadata.get(credentialId) as ClusterMetadata;
     }
