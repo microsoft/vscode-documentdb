@@ -4,8 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 // Utility class for card spacing in animated/collapsible contexts
-// Applied to wrapper divs to avoid layout shifts from CSS gap
-// when using collapse animations (e.g., with CollapseRelaxed)
+// Note: This class is used for spacing elements in QueryInsightsTab,
+// but NOT for cards within AnimatedCardList. Cards in AnimatedCardList
+// should apply marginBottom directly to the Card component to ensure
+// proper rendering of borders/shadows during collapse animations.
 .cardSpacing {
     margin-bottom: 16px;
 }

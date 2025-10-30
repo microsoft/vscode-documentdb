@@ -217,17 +217,12 @@ export const AnimatedCardList = ({
         <div style={{ display: 'flex', flexDirection: 'column' }}>
             {orderedCards.map((card) => (
                 <CollapseRelaxed key={card.key} visible={card.visible}>
-                    {/* Wrapper div required for motion animations:
-                        Custom card components (AiCard, TipsCard, GetPerformanceInsightsCard)
-                        are not ForwardRefComponents, so they cannot receive refs directly.
-                        Motion components need to attach refs for animations, so we wrap
-                        each card in a div that can accept the ref.
+                    {/* Card components (AiCard, TipsCard) use Fluent UI Card which supports refs,
+                        so we can pass them directly to CollapseRelaxed without a wrapper div.
 
-                        Note: cardSpacing class is applied here instead of using gap on the parent
-                        to avoid layout shifts. When CollapseRelaxed collapses content to 0 height,
-                        CSS gap still creates spacing between flex items. By applying margin to
-                        the child, the margin collapses along with the content. */}
-                    <div className="cardSpacing">{card.element}</div>
+                        Important: Spacing (marginBottom) is applied directly to the Card components
+                        to ensure visual properties (border, shadow) render immediately during animation. */}
+                    {card.element}
                 </CollapseRelaxed>
             ))}
         </div>

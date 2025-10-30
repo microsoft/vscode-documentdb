@@ -182,27 +182,24 @@ export const QueryInsightsMain = (): JSX.Element => {
                         )}
 
                         {/* GetPerformanceInsightsCard with CollapseRelaxed animation
-                            Note: Wrapped in div for proper ref forwarding to motion component.
-                            cardSpacing class is applied to avoid layout shifts - when CollapseRelaxed
-                            collapses content to 0 height, CSS gap would still create spacing. */}
+                            Note: Component supports ref forwarding and applies its own spacing via className. */}
                         <CollapseRelaxed visible={stageState === 2}>
-                            <div className="cardSpacing">
-                                <GetPerformanceInsightsCard
-                                    bodyText={l10n.t(
-                                        'Your query is performing optimally for the current dataset size. However, as data grows, consider adding an index.',
-                                    )}
-                                    recommendation={l10n.t('Recommended: Create index on user_id')}
-                                    isLoading={isLoadingAI || aiInsightsRequested}
-                                    onGetInsights={handleGetAISuggestions}
-                                    onLearnMore={() => {
-                                        /* TODO: Implement learn more functionality */
-                                    }}
-                                    onCancel={() => {
-                                        setIsLoadingAI(false);
-                                        setStageState(2);
-                                    }}
-                                />
-                            </div>
+                            <GetPerformanceInsightsCard
+                                className="cardSpacing"
+                                bodyText={l10n.t(
+                                    'Your query is performing optimally for the current dataset size. However, as data grows, consider adding an index.',
+                                )}
+                                recommendation={l10n.t('Recommended: Create index on user_id')}
+                                isLoading={isLoadingAI || aiInsightsRequested}
+                                onGetInsights={handleGetAISuggestions}
+                                onLearnMore={() => {
+                                    /* TODO: Implement learn more functionality */
+                                }}
+                                onCancel={() => {
+                                    setIsLoadingAI(false);
+                                    setStageState(2);
+                                }}
+                            />
                         </CollapseRelaxed>
 
                         {/* AnimatedCardList for AI suggestions and tips */}

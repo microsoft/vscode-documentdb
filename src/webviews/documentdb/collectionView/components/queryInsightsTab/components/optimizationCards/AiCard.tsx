@@ -5,7 +5,7 @@
 
 import { Button, Card, CardHeader, Text } from '@fluentui/react-components';
 import { CopyRegular, SparkleRegular } from '@fluentui/react-icons';
-import { type JSX, type ReactNode } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import './AiCard.scss';
 import './optimizationCard.scss';
 
@@ -33,24 +33,22 @@ export interface AiCardProps {
 
 /**
  * AI-themed card component for displaying optimization recommendations.
+ * This component supports ref forwarding for use with animation libraries.
  *
- * **Important**: When using this card with animation libraries (e.g., @fluentui/react-motion-components-preview),
- * wrap it in a `<div>` to ensure proper ref forwarding:
+ * **Usage with animations**: Use directly with animation libraries like @fluentui/react-motion-components-preview:
  *
  * ```tsx
  * <CollapseRelaxed visible={isVisible}>
- *     <div>
- *         <AiCard title="..." {...props} />
- *     </div>
+ *     <AiCard title="..." {...props} />
  * </CollapseRelaxed>
  * ```
  *
- * This is required because AiCard is not a ForwardRefComponent and motion components
- * need to attach refs for animations. The wrapper div provides the necessary ref target.
+ * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
+ * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const AiCard = ({ title, titleChildren, children, onCopy }: AiCardProps): JSX.Element => {
+export const AiCard = forwardRef<HTMLDivElement, AiCardProps>(({ title, titleChildren, children, onCopy }, ref) => {
     return (
-        <Card>
+        <Card ref={ref} style={{ marginBottom: '16px' }}>
             <div className="optimization-card-container">
                 <SparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
@@ -74,4 +72,6 @@ export const AiCard = ({ title, titleChildren, children, onCopy }: AiCardProps):
             </div>
         </Card>
     );
-};
+});
+
+AiCard.displayName = 'AiCard';

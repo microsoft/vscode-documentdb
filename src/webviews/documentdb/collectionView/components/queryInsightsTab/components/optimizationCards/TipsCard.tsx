@@ -5,7 +5,7 @@
 
 import { Button, Card, CardHeader, Text, tokens } from '@fluentui/react-components';
 import { ChevronLeftRegular, ChevronRightRegular, DismissRegular, LightbulbRegular } from '@fluentui/react-icons';
-import { type JSX, useState } from 'react';
+import { forwardRef, useState } from 'react';
 import './optimizationCard.scss';
 import './TipsCard.scss';
 
@@ -38,22 +38,20 @@ export interface TipsCardProps {
 
 /**
  * Card component for displaying performance tips with carousel navigation.
+ * This component supports ref forwarding for use with animation libraries.
  *
- * **Important**: When using this card with animation libraries (e.g., @fluentui/react-motion-components-preview),
- * wrap it in a `<div>` to ensure proper ref forwarding:
+ * **Usage with animations**: Use directly with animation libraries like @fluentui/react-motion-components-preview:
  *
  * ```tsx
  * <CollapseRelaxed visible={isVisible}>
- *     <div>
- *         <TipsCard title="..." tips={[...]} {...props} />
- *     </div>
+ *     <TipsCard title="..." tips={[...]} {...props} />
  * </CollapseRelaxed>
  * ```
  *
- * This is required because TipsCard is not a ForwardRefComponent and motion components
- * need to attach refs for animations. The wrapper div provides the necessary ref target.
+ * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
+ * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const TipsCard = ({ title, tips, onDismiss }: TipsCardProps): JSX.Element => {
+export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips, onDismiss }, ref) => {
     const [currentIndex, setCurrentIndex] = useState(0);
 
     const handleNext = () => {
@@ -65,7 +63,7 @@ export const TipsCard = ({ title, tips, onDismiss }: TipsCardProps): JSX.Element
     };
 
     return (
-        <Card>
+        <Card ref={ref} style={{ marginBottom: '16px' }}>
             <div className="optimization-card-container">
                 <LightbulbRegular
                     className="optimization-card-icon"
@@ -117,4 +115,6 @@ export const TipsCard = ({ title, tips, onDismiss }: TipsCardProps): JSX.Element
             </div>
         </Card>
     );
-};
+});
+
+TipsCard.displayName = 'TipsCard';
