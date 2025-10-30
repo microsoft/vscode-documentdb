@@ -339,7 +339,7 @@ export const collectionsViewRouter = router({
             }),
         )
         // handle generation request
-        .mutation(async ({ input, ctx }) => {
+        .query(async ({ input, ctx }) => {
             const generationCtx = ctx as RouterContext;
 
             const result = await callWithTelemetryAndErrorHandling(
@@ -358,6 +358,13 @@ export const collectionsViewRouter = router({
 
                     // Generate query with LLM
                     const generationResult = await generateQuery(context, queryContext);
+                    if (generationResult.generatedQuery === undefined) {
+                        const errorExplanation = generationResult.explanation
+                            ? generationResult.explanation.startsWith('Error:') ? generationResult.explanation.slice(6).trim() : generationResult.explanation
+                            : 'No detailed error message provided.';
+                        context.telemetry.properties.generationError = errorExplanation;
+                        throw new Error(l10n.t('Query generation failed with the error: {0}', errorExplanation));
+                    }
 
                     // Parse the generated command
                     // For now we only support find query
@@ -377,9 +384,14 @@ export const collectionsViewRouter = router({
                             skip?: number;
                             limit?: number;
                         };
-                    } catch {
+                    } catch (error) {
+                        // Add error details to telemetry
+                        context.telemetry.properties.parseError = error instanceof Error ? error.name : 'UnknownError';
+                        context.telemetry.properties.parseErrorMessage =
+                            error instanceof Error ? error.message : String(error);
+
                         throw new Error(
-                            l10n.t('Failed to parse generated query. The AI returned an invalid response.'),
+                            l10n.t('Failed to parse generated query. Query generation provided an invalid response.'),
                         );
                     }
 
