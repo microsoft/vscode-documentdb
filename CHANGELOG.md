@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.5.2
+
+### New Features & Improvements
+
+- **Updated Migration API for Integrations**: This release introduces API versioning for the DocumentDB extension API and adds support for a new, more robust v0.3.0 API. The changes update documentation, interfaces, and implementation to reflect the new API version, including stricter provider registration and context validation. The migration provider workflow and usage examples have been clarified, and deprecated API versions are documented. Additional improvements include dependency updates, better credential handling, and minor localization and client registration changes. [#321](https://github.com/microsoft/vscode-documentdb/issues/321), [#322](https://github.com/microsoft/vscode-documentdb/pull/322)
+
+## 0.5.1
+
+### Fixes
+
+- **Connection String Parsing**: Resolved an issue where connection strings containing special characters (e.g., `@`) in query parameters, such as those from Azure Cosmos DB (`appName=@myaccount@`), would fail to parse. The connection string parser now properly sanitizes query parameters before parsing, ensuring reliable connections. [#314](https://github.com/microsoft/vscode-documentdb/issues/314), [#316](https://github.com/microsoft/vscode-documentdb/pull/316)
+
 ## 0.5.0
 
 ### New Features & Improvements

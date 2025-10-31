@@ -163,4 +163,387 @@ describe('DocumentDBConnectionString', () => {
             expect(baseUrl.search).toBe(documentDBUrl.search);
         });
     });
+
+    describe('constructor with special characters in query parameters', () => {
+        it('should parse connection string with @ in appName parameter', () => {
+            // This is the exact case from the issue - the base class would fail to parse this
+            const uri =
+                'mongodb://myaccount.a-host.local:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@myaccount@';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['myaccount.a-host.local:10255']);
+            expect(connStr.username).toBe('');
+            expect(connStr.password).toBe('');
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+            expect(connStr.searchParams.get('replicaSet')).toBe('globaldb');
+            expect(connStr.searchParams.get('retrywrites')).toBe('false');
+            expect(connStr.searchParams.get('maxIdleTimeMS')).toBe('120000');
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('appName')).toBe('@myaccount@');
+        });
+
+        it('should parse connection string with multiple @ in different parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?appName=@user@&tag=@prod@';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            expect(connStr.username).toBe('');
+            expect(connStr.password).toBe('');
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('appName')).toBe('@user@');
+            expect(connStr.searchParams.get('tag')).toBe('@prod@');
+        });
+
+        it('should parse connection string with # in query parameters', () => {
+            // Note: # is a fragment identifier in URLs, so anything after # is considered a fragment, not a query param
+            // We encode # to %23 to include it in query parameter values
+            const uri = 'mongodb://host.example.com:27017/?tag=prod%23123&appName=app%231';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('tag')).toBe('prod#123');
+            expect(connStr.searchParams.get('appName')).toBe('app#1');
+        });
+
+        it('should parse connection string with [] in query parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?tag=[prod]&filter=[active]';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('tag')).toBe('[prod]');
+            expect(connStr.searchParams.get('filter')).toBe('[active]');
+        });
+
+        it('should handle connection string without query parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/database';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            expect(connStr.pathname).toBe('/database');
+            expect(connStr.username).toBe('');
+            expect(connStr.password).toBe('');
+        });
+
+        it('should handle connection string with query parameters but no special characters', () => {
+            const uri = 'mongodb://host.example.com:27017/?ssl=true&replicaSet=rs0';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+            expect(connStr.searchParams.get('replicaSet')).toBe('rs0');
+        });
+
+        it('should handle normal connection strings without issues', () => {
+            // Ensure regular, well-formed connection strings work correctly
+            const uri = 'mongodb://localhost:27017/mydb?ssl=true&authSource=admin';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['localhost:27017']);
+            expect(connStr.pathname).toBe('/mydb');
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+            expect(connStr.searchParams.get('authSource')).toBe('admin');
+        });
+
+        it('should handle parameters without values', () => {
+            const uri = 'mongodb://host.example.com:27017/?ssl&replicaSet=rs0';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            expect(connStr.searchParams.has('ssl')).toBe(true);
+            expect(connStr.searchParams.get('replicaSet')).toBe('rs0');
+        });
+    });
+
+    describe('constructor with credentials and special characters in query parameters', () => {
+        it('should parse connection string with credentials and @ in query parameters', () => {
+            const uri = 'mongodb://user:pass@host.example.com:27017/?appName=@myapp@';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            expect(connStr.username).toBe('user');
+            expect(connStr.password).toBe('pass');
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('appName')).toBe('@myapp@');
+        });
+
+        it('should handle credentials with special characters and @ in query parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?appName=@app@';
+            const connStr = new DocumentDBConnectionString(uri);
+
+            // Set username and password using setters
+            connStr.username = 'user@domain';
+            connStr.password = 'p@ss!word#123';
+
+            expect(connStr.username).toBe('user@domain');
+            expect(connStr.password).toBe('p@ss!word#123');
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('appName')).toBe('@app@');
+        });
+
+        it('should encode and decode username with special characters', () => {
+            const uri = 'mongodb://host.example.com:27017/';
+            const connStr = new DocumentDBConnectionString(uri);
+
+            // Test various special characters in username
+            const testUsername = 'user@domain.com';
+            connStr.username = testUsername;
+
+            expect(connStr.username).toBe(testUsername);
+        });
+
+        it('should encode and decode password with special characters', () => {
+            const uri = 'mongodb://host.example.com:27017/';
+            const connStr = new DocumentDBConnectionString(uri);
+
+            // Test various special characters in password
+            const testPassword = 'p@ss:w/ord?#[]';
+            connStr.password = testPassword;
+
+            expect(connStr.password).toBe(testPassword);
+        });
+    });
+
+    describe('username setter and getter', () => {
+        it('should properly encode and decode username', () => {
+            const uri = 'mongodb://host.example.com:27017/';
+            const connStr = new DocumentDBConnectionString(uri);
+
+            const username = 'user@domain.com';
+            connStr.username = username;
+
+            expect(connStr.username).toBe(username);
+        });
+
+        it('should handle empty username', () => {
+            const uri = 'mongodb://host.example.com:27017/';
+            const connStr = new DocumentDBConnectionString(uri);
+
+            connStr.username = '';
+
+            expect(connStr.username).toBe('');
+        });
+
+        it('should handle username with special characters', () => {
+            const uri = 'mongodb://host.example.com:27017/';
+            const connStr = new DocumentDBConnectionString(uri);
+
+            const username = 'user+tag@domain.com';
+            connStr.username = username;
+
+            expect(connStr.username).toBe(username);
+        });
+
+        it('should preserve username through toString and re-parsing', () => {
+            const uri = 'mongodb://initialuser@host.example.com:27017/';
+            const connStr = new DocumentDBConnectionString(uri);
+
+            const newUsername = 'user@domain.com';
+            connStr.username = newUsername;
+            connStr.password = 'somePassword';
+
+            const connectionStringText = connStr.toString();
+            const reparsed = new DocumentDBConnectionString(connectionStringText);
+
+            expect(reparsed.username).toBe(newUsername);
+        });
+    });
+
+    describe('validateUsername', () => {
+        it('should validate normal usernames', () => {
+            expect(DocumentDBConnectionString.validateUsername('user')).toBe(true);
+            expect(DocumentDBConnectionString.validateUsername('user123')).toBe(true);
+        });
+
+        it('should validate usernames with special characters', () => {
+            expect(DocumentDBConnectionString.validateUsername('user@domain')).toBe(true);
+            expect(DocumentDBConnectionString.validateUsername('user+tag')).toBe(true);
+        });
+
+        it('should validate empty username', () => {
+            expect(DocumentDBConnectionString.validateUsername('')).toBe(true);
+        });
+    });
+
+    describe('real-world Azure Cosmos DB connection strings', () => {
+        it('should parse Azure Cosmos DB for MongoDB RU connection string', () => {
+            const uri =
+                'mongodb://myaccount.a-host.local:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@myaccount@';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['myaccount.a-host.local:10255']);
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+            expect(connStr.searchParams.get('replicaSet')).toBe('globaldb');
+            expect(connStr.searchParams.get('retrywrites')).toBe('false');
+        });
+
+        it('should parse Azure Cosmos DB connection string with credentials', () => {
+            const uri = 'mongodb://myaccount.a-host.local:10255/?ssl=true&appName=@myaccount@';
+            const connStr = new DocumentDBConnectionString(uri);
+
+            // Simulate adding credentials after construction
+            connStr.username = 'myaccount';
+            connStr.password = 'someComplexKey123==';
+
+            expect(connStr.username).toBe('myaccount');
+            expect(connStr.password).toBe('someComplexKey123==');
+            expect(connStr.hosts).toEqual(['myaccount.a-host.local:10255']);
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+        });
+
+        it('should handle MongoDB Atlas-style connection strings', () => {
+            const uri = 'mongodb://cluster0.mongodb.net:27017/?retryWrites=true&w=majority&appName=myapp';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['cluster0.mongodb.net:27017']);
+            expect(connStr.searchParams.get('retryWrites')).toBe('true');
+            expect(connStr.searchParams.get('w')).toBe('majority');
+            expect(connStr.searchParams.get('appName')).toBe('myapp');
+        });
+
+        it('should handle connection string with database name and special chars in params', () => {
+            const uri = 'mongodb://host.example.com:27017/mydb?authSource=admin&appName=@myapp@';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            expect(connStr.pathname).toBe('/mydb');
+            expect(connStr.searchParams.get('authSource')).toBe('admin');
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('appName')).toBe('@myapp@');
+        });
+    });
+
+    describe('duplicate query parameter keys', () => {
+        it('should preserve duplicate readPreference parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?readPreference=secondary&readPreference=primary';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host.example.com:27017']);
+            // URLSearchParams.getAll() returns all values for a key
+            const readPreferences = connStr.searchParams.getAll('readPreference');
+            expect(readPreferences).toEqual(['secondary', 'primary']);
+        });
+
+        it('should preserve duplicate tag parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?tag=prod&tag=us-east&tag=critical';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            const tags = connStr.searchParams.getAll('tag');
+            expect(tags).toEqual(['prod', 'us-east', 'critical']);
+        });
+
+        it('should preserve duplicate parameters with special characters', () => {
+            const uri = 'mongodb://host.example.com:27017/?appName=@app1@&appName=@app2@&ssl=true';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            const appNames = connStr.searchParams.getAll('appName');
+            expect(appNames).toEqual(['@app1@', '@app2@']);
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+        });
+
+        it('should maintain order of duplicate parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?a=1&b=2&a=3&c=4&a=5';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            const aValues = connStr.searchParams.getAll('a');
+            expect(aValues).toEqual(['1', '3', '5']);
+            expect(connStr.searchParams.get('b')).toBe('2');
+            expect(connStr.searchParams.get('c')).toBe('4');
+        });
+
+        it('should handle duplicate parameters in toString and re-parsing', () => {
+            const uri = 'mongodb://user:pass@host.example.com:27017/?tag=prod&tag=critical';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const connStrText = connStr.toString();
+
+            // Re-parse the connection string
+            const reparsed = new DocumentDBConnectionString(connStrText);
+            const tags = reparsed.searchParams.getAll('tag');
+
+            // Should preserve all tag values
+            expect(tags).toEqual(['prod', 'critical']);
+        });
+
+        it('should handle mixed duplicate and unique parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?ssl=true&tag=prod&tag=us-east&replicaSet=rs0&tag=critical';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+            expect(connStr.searchParams.get('replicaSet')).toBe('rs0');
+
+            const tags = connStr.searchParams.getAll('tag');
+            expect(tags).toEqual(['prod', 'us-east', 'critical']);
+        });
+    });
+
+    describe('edge cases with special characters in query parameters', () => {
+        it('should handle connection string with only @ in one parameter', () => {
+            const uri = 'mongodb://host.example.com:27017/?tag=@';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('tag')).toBe('@');
+        });
+
+        it('should handle connection string with already encoded parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?appName=%40user%40';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('appName')).toBe('@user@');
+        });
+
+        it('should handle multiple hosts', () => {
+            const uri = 'mongodb://host1:27017,host2:27017,host3:27017/?appName=@app@';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hosts).toEqual(['host1:27017', 'host2:27017', 'host3:27017']);
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('appName')).toBe('@app@');
+        });
+
+        it('should handle SRV connection strings with special chars in params', () => {
+            const uri = 'mongodb+srv://cluster.mongodb.net/?appName=@myapp@';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.isSRV).toBe(true);
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('appName')).toBe('@myapp@');
+        });
+
+        it('should handle mixed special characters in parameters', () => {
+            // Note: # must be encoded as %23, otherwise it's treated as a URL fragment
+            const uri = 'mongodb://host.example.com:27017/?tag1=@user@&tag2=[prod]&tag3=test%231';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            // URLSearchParams.get() returns decoded values
+            expect(connStr.searchParams.get('tag1')).toBe('@user@');
+            expect(connStr.searchParams.get('tag2')).toBe('[prod]');
+            expect(connStr.searchParams.get('tag3')).toBe('test#1');
+        });
+    });
 });

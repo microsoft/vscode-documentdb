@@ -104,66 +104,59 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                     throw new Error(l10n.t('No credentials found for the selected cluster.'));
                 }
 
-                const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
-                parsedCS.username = CredentialCache.getConnectionUser(node.cluster.id) ?? '';
-                parsedCS.password = CredentialCache.getConnectionPassword(node.cluster.id) ?? '';
+                // TODO: Include a dialog box for users to approve sharing credentials with a 3rd-party extension
+                // This should be done when the provider is used, each time the action states it "requiredAuthentication".
+                // We should allow whitelisting extensions trusted by the user to avoid repeated prompts.
+                // This could be done on our own but available for the user to edit in settings.
+                const parsedCS_WithCredentials = new DocumentDBConnectionString(credentials.connectionString);
+                parsedCS_WithCredentials.username = CredentialCache.getConnectionUser(node.cluster.id) ?? '';
+                parsedCS_WithCredentials.password = CredentialCache.getConnectionPassword(node.cluster.id) ?? '';
 
                 const options = {
-                    connectionString: parsedCS.toString(),
+                    connectionString: parsedCS_WithCredentials.toString(),
                     extendedProperties: {
                         clusterId: node.cluster.id,
                     },
                 };
 
                 // Get available actions from the provider
-                const availableActions = await selectedProvider.getAvailableActions(options);
+                const availableActions: (QuickPickItem & {
+                    id: string;
+                    learnMoreUrl?: string;
+                    requiresAuthentication?: boolean;
+                })[] = (await selectedProvider.getAvailableActions(options)).map((action) => ({
+                    id: action.id,
+                    label: action.label,
+                    detail: action.description,
+                    iconPath: action.iconPath,
+                    alwaysShow: action.alwaysShow,
+                    requiresAuthentication: action.requiresAuthentication,
+                }));
 
                 if (availableActions.length === 0) {
                     // No actions available, execute default action
                     await selectedProvider.executeAction(options);
                 } else {
-                    // Create async function to provide better loading UX and debugging experience
-                    const getActionQuickPickItems = async (): Promise<
-                        (QuickPickItem & {
-                            id: string;
-                            learnMoreUrl?: string;
-                            requiresAuthentication?: boolean;
-                        })[]
-                    > => {
-                        // Get available actions from the provider
-                        const actions = await selectedProvider.getAvailableActions(options);
+                    const learnMoreUrl = selectedProvider.getLearnMoreUrl?.();
 
-                        // Extend actions with Learn More option if provider has a learn more URL
-                        const extendedActions: (QuickPickItem & {
-                            id: string;
-                            learnMoreUrl?: string;
-                            requiresAuthentication?: boolean;
-                        })[] = [...actions];
-
-                        const learnMoreUrl = selectedProvider.getLearnMoreUrl?.();
-
-                        if (learnMoreUrl) {
-                            extendedActions.push(
-                                { id: 'separator', label: '', kind: QuickPickItemKind.Separator },
-                                {
-                                    id: 'learnMore',
-                                    label: l10n.t('Learn more…'),
-                                    detail: l10n.t('Learn more about {0}.', selectedProvider.label),
-                                    learnMoreUrl,
-                                    alwaysShow: true,
-                                },
-                            );
-                        }
-
-                        return extendedActions;
-                    };
+                    if (learnMoreUrl) {
+                        availableActions.push(
+                            { id: 'separator', label: '', kind: QuickPickItemKind.Separator },
+                            {
+                                id: 'learnMore',
+                                label: l10n.t('Learn more…'),
+                                detail: l10n.t('Learn more about {0}.', selectedProvider.label),
+                                learnMoreUrl,
+                                alwaysShow: true,
+                            },
+                        );
+                    }
 
                     // Show action picker to user
-                    const selectedAction = await context.ui.showQuickPick(getActionQuickPickItems(), {
+                    const selectedAction = await context.ui.showQuickPick(availableActions, {
                         placeHolder: l10n.t('Choose the migration action…'),
                         stepName: 'selectMigrationAction',
                         suppressPersistence: true,
-                        loadingPlaceHolder: l10n.t('Loading migration actions…'),
                     });
 
                     if (selectedAction.id === 'learnMore') {
