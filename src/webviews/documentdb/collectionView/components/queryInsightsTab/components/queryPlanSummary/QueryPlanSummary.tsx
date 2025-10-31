@@ -22,9 +22,9 @@ import {
 import { ArrowUpFilled, MoreHorizontalRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
-import '../queryInsights.scss';
+import '../../queryInsights.scss';
 import './QueryPlanSummary.scss';
-import { StageDetailCard } from './queryPlanSummary/StageDetailCard';
+import { StageDetailCard } from './StageDetailCard';
 
 type Stage = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
 
@@ -47,6 +47,15 @@ interface ShardData {
         stage: Stage;
         indexName?: string;
     };
+    stages: Array<{
+        stage: Stage;
+        indexName?: string;
+        keysExamined?: number;
+        docsExamined?: number;
+        nReturned?: number;
+        bounds?: string;
+        executionTimeMs: number;
+    }>;
     hasCollscan?: boolean;
     hasBlockedSort?: boolean;
 }
@@ -75,6 +84,21 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
                 stage: 'FETCH',
                 indexName: 'status_1',
             },
+            stages: [
+                {
+                    stage: 'IXSCAN',
+                    indexName: 'status_1',
+                    keysExamined: 6200,
+                    nReturned: 7500,
+                    executionTimeMs: 510,
+                },
+                {
+                    stage: 'FETCH',
+                    docsExamined: 7500,
+                    nReturned: 30,
+                    executionTimeMs: 340,
+                },
+            ],
         },
         {
             shardName: 'shardB',
@@ -85,6 +109,19 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
             plan: {
                 stage: 'SORT',
             },
+            stages: [
+                {
+                    stage: 'COLLSCAN',
+                    docsExamined: 2400,
+                    nReturned: 2400,
+                    executionTimeMs: 385,
+                },
+                {
+                    stage: 'SORT',
+                    nReturned: 20,
+                    executionTimeMs: 165,
+                },
+            ],
             hasCollscan: true,
             hasBlockedSort: true,
         },
@@ -118,35 +155,18 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
                         </Text>
                         {/* Stage flow with badges */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                            {shard.plan.stage === 'FETCH' && shard.plan.indexName ? (
-                                <>
+                            {shard.stages.map((stage, index) => (
+                                <React.Fragment key={index}>
+                                    {index > 0 && <Text size={200}>→</Text>}
                                     <Badge appearance="tint" size="small" shape="rounded">
-                                        IXSCAN
+                                        {stage.stage}
                                     </Badge>
-                                    <Text size={200}>→</Text>
-                                    <Badge appearance="tint" size="small" shape="rounded">
-                                        FETCH
-                                    </Badge>
-                                    <Text size={200}>→</Text>
-                                    <Badge appearance="tint" size="small" shape="rounded">
-                                        PROJECTION
-                                    </Badge>
-                                </>
-                            ) : (
-                                <>
-                                    <Badge appearance="tint" size="small" shape="rounded">
-                                        COLLSCAN
-                                    </Badge>
-                                    <Text size={200}>→</Text>
-                                    <Badge appearance="tint" size="small" shape="rounded">
-                                        SORT
-                                    </Badge>
-                                    <Text size={200}>→</Text>
-                                    <Badge appearance="tint" size="small" shape="rounded">
-                                        PROJECTION
-                                    </Badge>
-                                </>
-                            )}
+                                </React.Fragment>
+                            ))}
+                            <Text size={200}>→</Text>
+                            <Badge appearance="tint" size="small" shape="rounded">
+                                PROJECTION
+                            </Badge>
                         </div>
                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                             {shard.nReturned} returned · {shard.keysExamined.toLocaleString()} keys ·{' '}
@@ -160,61 +180,47 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
                             <AccordionHeader size="small">{l10n.t('Show Stage Details')}</AccordionHeader>
                             <AccordionPanel>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px' }}>
-                                    {/* Stage breakdown using StageDetailCard */}
-                                    {shard.plan.stage === 'FETCH' && shard.plan.indexName && (
-                                        <>
-                                            <StageDetailCard
-                                                stageType="IXSCAN"
-                                                description={`Index: ${shard.plan.indexName}`}
-                                                returned={shard.docsExamined}
-                                                executionTimeMs={shard.executionTimeMs * 0.6}
-                                                metrics={[
-                                                    {
-                                                        label: l10n.t('Keys Examined'),
-                                                        value: shard.keysExamined.toLocaleString(),
-                                                    },
-                                                ]}
-                                            />
-                                            <div className="stage-separator">
-                                                <ArrowUpFilled fontSize={20} />
-                                            </div>
-                                            <StageDetailCard
-                                                stageType="FETCH"
-                                                returned={shard.nReturned}
-                                                executionTimeMs={shard.executionTimeMs * 0.4}
-                                                metrics={[
-                                                    {
-                                                        label: l10n.t('Docs Examined'),
-                                                        value: shard.docsExamined.toLocaleString(),
-                                                    },
-                                                ]}
-                                            />
-                                        </>
-                                    )}
-                                    {shard.plan.stage === 'SORT' && shard.hasCollscan && (
-                                        <>
-                                            <StageDetailCard
-                                                stageType="COLLSCAN"
-                                                returned={shard.docsExamined}
-                                                executionTimeMs={shard.executionTimeMs * 0.7}
-                                                metrics={[
-                                                    {
-                                                        label: l10n.t('Docs Examined'),
-                                                        value: shard.docsExamined.toLocaleString(),
-                                                    },
-                                                ]}
-                                            />
-                                            <div className="stage-separator">
-                                                <ArrowUpFilled fontSize={20} />
-                                            </div>
-                                            <StageDetailCard
-                                                stageType="SORT"
-                                                description={l10n.t('In-memory sort')}
-                                                returned={shard.nReturned}
-                                                executionTimeMs={shard.executionTimeMs * 0.3}
-                                            />
-                                        </>
-                                    )}
+                                    {shard.stages.map((stage, index) => {
+                                        const metrics: Array<{ label: string; value: string | number }> = [];
+
+                                        if (stage.keysExamined !== undefined) {
+                                            metrics.push({
+                                                label: l10n.t('Keys Examined'),
+                                                value: stage.keysExamined.toLocaleString(),
+                                            });
+                                        }
+                                        if (stage.docsExamined !== undefined) {
+                                            metrics.push({
+                                                label: l10n.t('Docs Examined'),
+                                                value: stage.docsExamined.toLocaleString(),
+                                            });
+                                        }
+                                        if (stage.bounds) {
+                                            metrics.push({
+                                                label: l10n.t('Index Bounds'),
+                                                value: stage.bounds,
+                                            });
+                                        }
+
+                                        return (
+                                            <React.Fragment key={index}>
+                                                {index > 0 && (
+                                                    <div className="stage-separator">
+                                                        <ArrowUpFilled fontSize={20} />
+                                                    </div>
+                                                )}
+                                                <StageDetailCard
+                                                    stageType={stage.stage}
+                                                    description={
+                                                        stage.indexName ? `Index: ${stage.indexName}` : undefined
+                                                    }
+                                                    returned={stage.nReturned}
+                                                    executionTimeMs={stage.executionTimeMs}
+                                                    metrics={metrics.length > 0 ? metrics : undefined}
+                                                />
+                                            </React.Fragment>
+                                        );
+                                    })}
                                 </div>
                             </AccordionPanel>
                         </AccordionItem>

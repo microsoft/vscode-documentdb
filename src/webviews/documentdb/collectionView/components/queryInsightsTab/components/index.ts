@@ -5,5 +5,5 @@
 
 export * from './animatedCardList';
 export * from './optimizationCards';
-export * from './QueryPlanSummary';
+export * from './queryPlanSummary';
 export * from './QuickActions';

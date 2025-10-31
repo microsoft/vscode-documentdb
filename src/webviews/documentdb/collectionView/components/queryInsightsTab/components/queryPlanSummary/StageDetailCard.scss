@@ -6,10 +6,8 @@
 @use '../../queryInsights.scss' as *;
 
 .stage-detail-card {
-    padding: 8px 12px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
 
     .stage-detail-card-header {
         display: flex;
@@ -25,113 +23,42 @@
         @extend .baseDataHeader;
     }
 
-    // ==================
-    // v1: Primary row, additional in 2-col grid
-    // ==================
-    .stage-detail-card-primary-row {
-        display: flex;
-        gap: 16px;
-        margin-top: 2px;
+    .cellValue {
+        font-size: 12px;
+        font-weight: 400;
     }
 
-    .stage-detail-card-primary-metric {
-        display: inline;
-    }
-
-    .stage-detail-card-grid-2col {
+    // ==================
+    // Primary metrics: Bordered grid cells
+    // ==================
+    .primary-metrics-bordered-grid {
         display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 4px 12px;
-        margin-top: 4px;
-    }
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 
-    .stage-detail-card-grid-row {
-        display: contents;
+        .primary-metric-grid-cell {
+            display: flex;
+            flex-direction: column;
+
+            .cellLabel {
+                display: inline;
+            }
+        }
     }
 
     // ==================
-    // v2: Single column inline
+    // Optional metrics: Inline badges
     // ==================
-    .stage-detail-card-single-col {
+    .metrics-inline-badges {
         display: flex;
-        flex-direction: column;
-        gap: 4px;
-        margin-top: 2px;
-    }
-
-    .stage-detail-card-inline-metric {
-        display: inline;
-    }
-
-    // ==================
-    // v4: 3-column grid for additional metrics
-    // ==================
-    .stage-detail-card-grid-3col {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        flex-wrap: wrap;
         gap: 6px;
-        margin-top: 4px;
-    }
 
-    .stage-detail-card-grid-item {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
+        .badge-label {
+            color: var(--vscode-descriptionForeground);
+        }
 
-    // ==================
-    // v5: Primary with spacing, compact list below
-    // ==================
-    .stage-detail-card-primary-spaced {
-        display: flex;
-        gap: 24px;
-        margin-top: 2px;
-    }
-
-    .stage-detail-card-compact-list {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        margin-top: 4px;
-    }
-
-    // ==================
-    // v6: Table layout
-    // ==================
-    .stage-detail-card-table {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        margin-top: 2px;
-    }
-
-    .stage-detail-card-table-row {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 12px;
-    }
-}
-
-// Variant-specific adjustments
-.stage-detail-card.variant-v2,
-.stage-detail-card.variant-v5 {
-    .cellLabel {
-        display: inline;
-    }
-}
-
-.stage-detail-card.variant-v3,
-.stage-detail-card.variant-v6,
-.stage-detail-card.variant-v7,
-.stage-detail-card.variant-v8 {
-    .stage-detail-card-grid-2col,
-    .stage-detail-card-table {
-        margin-top: 6px;
-    }
-}
-
-.stage-detail-card.variant-v4 {
-    .stage-detail-card-grid-3col {
-        margin-top: 6px;
+        .badge-value {
+            color: var(--vscode-foreground);
+        }
     }
 }
