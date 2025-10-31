@@ -17,7 +17,7 @@ import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenera
  * Service for loading prompt templates from custom files or built-in templates
  */
 export class PromptTemplateService {
-    private static readonly configSection = 'documentDB.llm';
+    private static readonly configSection = 'documentDB.aiAssistant';
     // private static readonly templateCache: Map<CommandType | QueryGenerationType, string> = new Map();
     private static readonly templateCache: Map<QueryGenerationType, string> = new Map();
 

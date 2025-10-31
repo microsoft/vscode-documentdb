@@ -901,7 +901,7 @@
             "description": "The batch size to be used when querying working with the shell.",
             "default": 50
           },
-          "documentDB.llm.findQueryPromptPath": {
+          "documentDB.aiAssistant.findQueryPromptPath": {
             "type": [
               "string",
               "null"
@@ -909,7 +909,7 @@
             "description": "Path to a custom prompt template file for find query optimization. Leave empty to use the built-in template.",
             "default": null
           },
-          "documentDB.llm.aggregateQueryPromptPath": {
+          "documentDB.aiAssistant.aggregateQueryPromptPath": {
             "type": [
               "string",
               "null"
@@ -917,7 +917,7 @@
             "description": "Path to a custom prompt template file for aggregate query optimization. Leave empty to use the built-in template.",
             "default": null
           },
-          "documentDB.llm.countQueryPromptPath": {
+          "documentDB.aiAssistant.countQueryPromptPath": {
             "type": [
               "string",
               "null"
@@ -925,7 +925,7 @@
             "description": "Path to a custom prompt template file for count query optimization. Leave empty to use the built-in template.",
             "default": null
           },
-          "documentDB.llm.crossCollectionQueryPromptPath": {
+          "documentDB.aiAssistant.crossCollectionQueryPromptPath": {
             "type": [
               "string",
               "null"
@@ -933,7 +933,7 @@
             "description": "Path to a custom prompt template file for cross-collection query generation. Leave empty to use the built-in template.",
             "default": null
           },
-          "documentDB.llm.singleCollectionQueryPromptPath": {
+          "documentDB.aiAssistant.singleCollectionQueryPromptPath": {
             "type": [
               "string",
               "null"
