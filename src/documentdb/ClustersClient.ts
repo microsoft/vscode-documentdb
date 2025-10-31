@@ -35,6 +35,16 @@ import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
+import {
+    llmEnhancedFeatureApis,
+    type CollectionStats,
+    type CreateIndexResult,
+    type DropIndexResult,
+    type ExplainOptions,
+    type ExplainResult,
+    type IndexSpecification,
+    type IndexStats,
+} from './LlmEnhancedFeatureApis';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -106,6 +116,8 @@ export class ClustersClient {
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
+    private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
+    private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
     /**
      * Use getClient instead of a constructor. Connections/Client are being cached and reused.
@@ -175,10 +187,12 @@ export class ClustersClient {
         // Connect with the configured options
         await this.connect(connectionString, options, credentials.emulatorConfiguration);
 
-        // Collect telemetry (non-blocking)
-        void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
-            const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
+        // Start metadata collection and store the promise
+        this._clusterMetadataPromise = getClusterMetadata(this._mongoClient, hosts);
 
+        // Collect telemetry (non-blocking) - reuses the same promise
+        void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
+            const metadata: ClusterMetadata = await this._clusterMetadataPromise!;
             context.telemetry.properties = {
                 authmethod: authMethod,
                 ...context.telemetry.properties,
@@ -194,6 +208,7 @@ export class ClustersClient {
     ): Promise<void> {
         try {
             this._mongoClient = await MongoClient.connect(connectionString, options);
+            this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
         } catch (error) {
             const message = parseError(error).message;
             if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
@@ -230,11 +245,27 @@ export class ClustersClient {
             await client._mongoClient.connect();
         } else {
             client = new ClustersClient(credentialId);
+            // Cluster metadata is set in initClient
             await client.initClient();
             ClustersClient._clients.set(credentialId, client);
         }
 
         return client;
+    }
+
+    /**
+     * Retrieves cluster metadata for this client instance.
+     *
+     * @returns A promise that resolves to cluster metadata.
+     */
+    public async getClusterMetadata(): Promise<ClusterMetadata> {
+        if (this._clusterMetadataPromise) {
+            return this._clusterMetadataPromise;
+        }
+
+        // This should not happen as the promise is initialized in initClient,
+        // but if it does, we throw an error rather than trying to recover
+        throw new Error(l10n.t('Cluster metadata not initialized. Client may not be properly connected.'));
     }
 
     /**
@@ -641,5 +672,129 @@ export class ClustersClient {
                 insertedCount: error instanceof MongoBulkWriteError ? error.insertedCount || 0 : 0,
             };
         }
+    }
+
+    // ==========================================
+    // LLM Enhanced Feature APIs
+    // ==========================================
+
+    /**
+     * Get detailed index statistics for a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @returns Array of index statistics including usage information
+     */
+    async getIndexStats(databaseName: string, collectionName: string): Promise<IndexStats[]> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.getIndexStats(databaseName, collectionName);
+    }
+
+    /**
+     * Get detailed collection statistics
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @returns Collection statistics including size, count, and index information
+     */
+    async getCollectionStats(databaseName: string, collectionName: string): Promise<CollectionStats> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.getCollectionStats(databaseName, collectionName);
+    }
+
+    /**
+     * Explain a find query with full execution statistics
+     * Supports sort, projection, skip, and limit options
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param options - Query options including filter, sort, projection, skip, and limit
+     * @returns Detailed explain result with execution statistics
+     */
+    async explainFind(
+        databaseName: string,
+        collectionName: string,
+        options: ExplainOptions = {},
+    ): Promise<ExplainResult> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, options);
+    }
+
+    /**
+     * Explain an aggregation pipeline with full execution statistics
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param pipeline - Aggregation pipeline stages
+     * @returns Detailed explain result with execution statistics
+     */
+    async explainAggregate(databaseName: string, collectionName: string, pipeline: Document[]): Promise<ExplainResult> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.explainAggregate(databaseName, collectionName, pipeline);
+    }
+
+    /**
+     * Explain a count operation with full execution statistics
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param filter - Query filter for the count operation
+     * @returns Detailed explain result with execution statistics
+     */
+    async explainCount(databaseName: string, collectionName: string, filter: Filter<Document> = {}): Promise<Document> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.explainCount(databaseName, collectionName, filter);
+    }
+
+    /**
+     * Create an index on a collection
+     * Supports both simple and composite indexes with various options
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexSpec - Index specification including key and options
+     * @returns Result of the index creation operation
+     */
+    async createIndex(
+        databaseName: string,
+        collectionName: string,
+        indexSpec: IndexSpecification,
+    ): Promise<CreateIndexResult> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.createIndex(databaseName, collectionName, indexSpec);
+    }
+
+    /**
+     * Drop an index from a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to drop (use "*" to drop all non-_id indexes)
+     * @returns Result of the index drop operation
+     */
+    async dropIndex(databaseName: string, collectionName: string, indexName: string): Promise<DropIndexResult> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.dropIndex(databaseName, collectionName, indexName);
+    }
+
+    /**
+     * Get sample documents from a collection using random sampling
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param limit - Maximum number of documents to sample (default: 10)
+     * @returns Array of sample documents
+     */
+    async getSampleDocuments(databaseName: string, collectionName: string, limit: number = 10): Promise<Document[]> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.getSampleDocuments(databaseName, collectionName, limit);
     }
 }

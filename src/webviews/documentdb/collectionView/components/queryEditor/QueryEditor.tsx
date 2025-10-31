@@ -44,6 +44,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     const [aiPromptHistory, setAiPromptHistory] = useState<string[]>([]);
 
     const schemaAbortControllerRef = useRef<AbortController | null>(null);
+    const aiGenerationAbortControllerRef = useRef<AbortController | null>(null);
     const aiInputRef = useRef<HTMLInputElement | null>(null);
 
     // Refs for Monaco editors
@@ -176,6 +177,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 schemaAbortControllerRef.current.abort();
                 schemaAbortControllerRef.current = null;
             }
+            if (aiGenerationAbortControllerRef.current) {
+                aiGenerationAbortControllerRef.current.abort();
+                aiGenerationAbortControllerRef.current = null;
+            }
         };
     }, []);
 
@@ -253,10 +258,19 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             return; // Don't generate if prompt is empty
         }
 
+        // Cancel any previous AI generation request by marking it as aborted
+        if (aiGenerationAbortControllerRef.current) {
+            aiGenerationAbortControllerRef.current.abort();
+        }
+
+        // Create new AbortController for this request (used for client-side cancellation only)
+        const abortController = new AbortController();
+        aiGenerationAbortControllerRef.current = abortController;
+
         setIsAiActive(true);
 
         try {
-            const result = await trpcClient.mongoClusters.collectionView.generateQuery.mutate({
+            const result = await trpcClient.mongoClusters.collectionView.generateQuery.query({
                 currentQuery: {
                     filter: filterValue,
                     project: projectValue,
@@ -266,6 +280,11 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 },
                 prompt: aiPromptValue,
             });
+
+            // Check if this request was aborted while waiting for response
+            if (abortController.signal.aborted) {
+                return; // Ignore the response if we aborted
+            }
 
             // Update state with generated query
             setFilterValue(result.filter);
@@ -285,13 +304,22 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             // Clear the AI prompt after successful generation
             setAiPromptValue('');
         } catch (error) {
+            // Check if this request was aborted
+            if (abortController.signal.aborted) {
+                return; // Ignore errors from aborted requests
+            }
+
             void trpcClient.common.displayErrorMessage.mutate({
                 message: l10n.t('Error generating query'),
                 modal: false,
                 cause: error instanceof Error ? error.message : String(error),
             });
         } finally {
-            setIsAiActive(false);
+            // Only clear active state if this request wasn't aborted
+            if (!abortController.signal.aborted) {
+                setIsAiActive(false);
+                aiGenerationAbortControllerRef.current = null;
+            }
         }
     };
 
@@ -334,15 +362,26 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 // Execute query on Ctrl+Enter / Cmd+Enter
                                 onExecuteRequest();
                             } else if (event.key === 'Escape') {
-                                // ESC key - hide AI area and reset active state
-                                setIsAiActive(false);
-                                setAiPromptValue(''); // Clear the prompt
-                                setCurrentContext((prev) => ({
-                                    ...prev,
-                                    isAiRowVisible: false,
-                                }));
-                                // Give focus to the filter editor
-                                filterEditorRef.current?.focus();
+                                // ESC key behavior:
+                                // - If AI is active (generation in progress): cancel the request
+                                // - If AI is not active: hide AI row and clear prompt
+                                if (isAiActive) {
+                                    // Cancel the ongoing AI generation
+                                    if (aiGenerationAbortControllerRef.current) {
+                                        aiGenerationAbortControllerRef.current.abort();
+                                        aiGenerationAbortControllerRef.current = null;
+                                    }
+                                    setIsAiActive(false);
+                                } else {
+                                    // Hide AI area and clear prompt
+                                    setAiPromptValue('');
+                                    setCurrentContext((prev) => ({
+                                        ...prev,
+                                        isAiRowVisible: false,
+                                    }));
+                                    // Give focus to the filter editor
+                                    filterEditorRef.current?.focus();
+                                }
                             }
                         }}
                     />

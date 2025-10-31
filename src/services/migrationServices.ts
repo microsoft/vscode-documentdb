@@ -67,13 +67,58 @@ export interface ActionsOptions {
  */
 class MigrationServiceImpl {
     private migrationProviders: Map<string, MigrationProvider> = new Map();
+    private extensionProviders: Map<string, string> = new Map(); // Maps extension ID to provider ID
 
+    /**
+     * Registers a migration provider (API v0.2.0).
+     * This method does not track which extension registered the provider.
+     * Multiple providers can be registered without restrictions.
+     *
+     * @param provider The migration provider to register
+     */
     public registerProvider(provider: MigrationProvider): void {
         this.migrationProviders.set(provider.id, provider);
         this.updateContext();
     }
 
+    /**
+     * Registers a migration provider with extension context validation (API v0.3.0).
+     * This method enforces that each extension can only register one migration provider.
+     * If an extension attempts to register a second provider, an error will be thrown.
+     *
+     * @param extensionId The ID of the extension registering the provider
+     * @param provider The migration provider to register
+     * @throws Error if the extension has already registered a provider
+     */
+    public registerProviderWithContext(extensionId: string, provider: MigrationProvider): void {
+        // Check if this extension already has a provider registered
+        const existingProviderId = this.extensionProviders.get(extensionId);
+        if (existingProviderId) {
+            throw new Error(
+                `Extension '${extensionId}' has already registered a migration provider with ID '${existingProviderId}'. ` +
+                    `Each extension can only register one migration provider.`,
+            );
+        }
+
+        // Register the provider
+        this.migrationProviders.set(provider.id, provider);
+        this.extensionProviders.set(extensionId, provider.id);
+        this.updateContext();
+    }
+
     public unregisterProvider(id: string): boolean {
+        // Remove from both maps
+        const provider = this.migrationProviders.get(id);
+        if (provider) {
+            // Find and remove the extension mapping
+            for (const [extensionId, providerId] of this.extensionProviders.entries()) {
+                if (providerId === id) {
+                    this.extensionProviders.delete(extensionId);
+                    break;
+                }
+            }
+        }
+
         const result = this.migrationProviders.delete(id);
         this.updateContext();
         return result;
