@@ -168,7 +168,6 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
                                                 description={`Index: ${shard.plan.indexName}`}
                                                 returned={shard.docsExamined}
                                                 executionTimeMs={shard.executionTimeMs * 0.6}
-                                                timePercentage={60}
                                                 metrics={[
                                                     {
                                                         label: l10n.t('Keys Examined'),
@@ -180,7 +179,6 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
                                                 stageType="FETCH"
                                                 returned={shard.nReturned}
                                                 executionTimeMs={shard.executionTimeMs * 0.4}
-                                                timePercentage={40}
                                                 metrics={[
                                                     {
                                                         label: l10n.t('Docs Examined'),
@@ -196,7 +194,6 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
                                                 stageType="COLLSCAN"
                                                 returned={shard.docsExamined}
                                                 executionTimeMs={shard.executionTimeMs * 0.7}
-                                                timePercentage={70}
                                                 metrics={[
                                                     {
                                                         label: l10n.t('Docs Examined'),
@@ -209,7 +206,6 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
                                                 description={l10n.t('In-memory sort')}
                                                 returned={shard.nReturned}
                                                 executionTimeMs={shard.executionTimeMs * 0.3}
-                                                timePercentage={30}
                                             />
                                         </>
                                     )}
@@ -317,11 +313,6 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
                                             });
                                         }
 
-                                        // Calculate percentage of total execution time
-                                        const timePercentage = stage.executionTimeMs
-                                            ? (stage.executionTimeMs / singleQueryData.executionTimeMs) * 100
-                                            : undefined;
-
                                         return (
                                             <StageDetailCard
                                                 key={index}
@@ -329,7 +320,6 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = () => {
                                                 description={stage.indexName ? `Index: ${stage.indexName}` : undefined}
                                                 returned={stage.nReturned}
                                                 executionTimeMs={stage.executionTimeMs}
-                                                timePercentage={timePercentage}
                                                 metrics={metrics.length > 0 ? metrics : undefined}
                                             />
                                         );
