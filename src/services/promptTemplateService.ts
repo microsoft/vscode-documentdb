@@ -8,8 +8,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
-    CROSS_COLLECTION_QUERY_PROMPT_TEMPLATE,
-    SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE,
+    getCrossCollectionQueryPromptTemplate,
+    getSingleCollectionQueryPromptTemplate,
 } from '../commands/llmEnhancedCommands/promptTemplates';
 import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenerationCommands';
 
@@ -109,11 +109,11 @@ export class PromptTemplateService {
                         error: error instanceof Error ? error.message : String(error),
                     }),
                 );
-                template = this.getBuiltInQueryGenerationTemplate(generationType);
+                template = await this.getBuiltInQueryGenerationTemplate(generationType);
             }
         } else {
             // Use built-in template
-            template = this.getBuiltInQueryGenerationTemplate(generationType);
+            template = await this.getBuiltInQueryGenerationTemplate(generationType);
         }
 
         return template;
@@ -183,12 +183,12 @@ export class PromptTemplateService {
      * @param generationType The query generation type
      * @returns The built-in template
      */
-    private static getBuiltInQueryGenerationTemplate(generationType: QueryGenerationType): string {
+    private static async getBuiltInQueryGenerationTemplate(generationType: QueryGenerationType): Promise<string> {
         switch (generationType) {
             case QueryGenerationType.CrossCollection:
-                return CROSS_COLLECTION_QUERY_PROMPT_TEMPLATE;
+                return getCrossCollectionQueryPromptTemplate();
             case QueryGenerationType.SingleCollection:
-                return SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE;
+                return getSingleCollectionQueryPromptTemplate();
             default:
                 throw new Error(l10n.t('Unknown query generation type: {type}', { type: generationType }));
         }
