@@ -3,6 +3,33 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/**
+ * Query Insights Tab - UI Mock Implementation
+ *
+ * This component demonstrates the three-stage query insights workflow:
+ * - Stage 1: Initial View (query planner data)
+ * - Stage 2: Detailed Execution Analysis (execution stats)
+ * - Stage 3: AI-Powered Recommendations (opt-in)
+ *
+ * Design document: docs/design-documents/performance-advisor.md
+ *
+ * IMPLEMENTED FEATURES:
+ * - Metrics Row (Execution Time, Documents Returned, Keys Examined, Docs Examined)
+ * - Query Efficiency Analysis Card (Execution Strategy, Index Used, Ratio, Sort, Rating)
+ * - Query Plan Summary (stage flow visualization)
+ * - Optimization Opportunities (AI suggestion cards with animations)
+ * - Performance Tips Card (dismissible educational content)
+ * - Quick Actions (Export and View actions)
+ * - Stage progression with loading states
+ *
+ * PENDING (from design doc, not yet in mock):
+ * - Sharded query support (per-shard breakdown)
+ * - Rejected plans count display
+ * - Detailed per-stage counters
+ * - Issue badges (COLLSCAN, Blocked sort, Inefficient, etc.)
+ * - Integration with actual explain data
+ */
+
 import {
     Badge,
     Button,
@@ -41,6 +68,11 @@ interface StageDetails {
 }
 
 export const QueryInsightsMain = (): JSX.Element => {
+    // Stage management:
+    // Stage 1: Initial View (cheap data + query plan from explain("queryPlanner"))
+    // Stage 2: Detailed Execution Analysis (from explain("executionStats"))
+    // Stage 3: AI-Powered Recommendations (opt-in)
+    // See: docs/design-documents/performance-advisor.md
     const [stageState, setStageState] = useState<1 | 2 | 3>(1);
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [aiInsightsRequested, setAiInsightsRequested] = useState(false); // One-way flag: once true, stays true
@@ -84,11 +116,11 @@ export const QueryInsightsMain = (): JSX.Element => {
         },
     ];
 
-    // Automatically start stage 2 analysis when component mounts
+    // Automatically start Stage 2 analysis when component mounts
     useEffect(() => {
         const timer = setTimeout(() => {
             setStageState(2);
-            // Update metrics when stage 2 starts
+            // Update metrics when Stage 2 starts
             setExecutionTime(2.333);
             setKeysExamined(2);
             setDocsExamined(10000);
@@ -101,11 +133,12 @@ export const QueryInsightsMain = (): JSX.Element => {
         setIsLoadingAI(true);
         setAiInsightsRequested(true); // Set one-way flag to prevent button from reappearing
         setIsTipsCardDismissed(false);
-        // Show tips card after 5 seconds
+        // Show tips card after 1 second (while waiting for AI)
         const tipsTimer = setTimeout(() => {
             setShowTipsCard(true);
         }, 1000);
 
+        // Simulate AI processing delay, then transition to Stage 3
         setTimeout(() => {
             setIsLoadingAI(false);
             setStageState(3);
@@ -171,7 +204,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                             {l10n.t('Optimization Opportunities')}
                         </Text>
 
-                        {/* Skeleton - shown only in stage 1 */}
+                        {/* Skeleton - shown only in Stage 1 */}
                         {stageState === 1 && (
                             <Skeleton className="cardSpacing">
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />

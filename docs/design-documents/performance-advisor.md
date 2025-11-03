@@ -24,16 +24,16 @@ When a user executes a `find` (and other explainable read commands), a **Query I
 
 Populated as soon as the query finishes, using fast signals plus `explain("queryPlanner")`. No full re-execution.
 
-### 2.1. Summary Bar (Top Area)
+### 2.1. Metrics Row (Top Area)
 
-> **Always visible**, independent of the plan visualization. For **sharded** queries, aggregate across shards; for **non-sharded**, show single values.
+> **Always visible**, displayed as individual metric cards. For **sharded** queries, aggregate across shards; for **non-sharded**, show single values.
 
-**Fields (show what’s available; use `n/a` until Stage 2 fills them):**
+**Metrics displayed:**
 
-- **Execution Time (client)** — e.g., `2.1 s`
-- **Documents Returned** — e.g., `100`
-- **Keys Examined** — `n/a`
-- **Docs Examined** — `n/a`
+- **Execution Time** — Shows client timing initially, then server timing from Stage 2 (e.g., `2.1 s` or `180 ms`)
+- **Documents Returned** — Count of documents in result set (e.g., `100`)
+- **Keys Examined** — Shows `n/a` until Stage 2, then actual count (e.g., `100`)
+- **Docs Examined** — Shows `n/a` until Stage 2, then actual count (e.g., `100`)
 
 **Aggregation rules (when sharded):**
 
@@ -42,17 +42,12 @@ Populated as soon as the query finishes, using fast signals plus `explain("query
 - `Documents Returned`: prefer top-level `nReturned` once Stage 2 runs; before that, use the count in **Results**.
 - `Execution Time`: prefer `executionTimeMillis` (Stage 2); otherwise client timing.
 
-**Stage 1 — Non-sharded example**
+**Stage 1 — Metrics display**
 
-- Execution Time (client): `180 ms`
-- Documents Returned: `100`
-- Keys Examined: `n/a`
-- Docs Examined: `n/a`
+All metrics shown in individual metric cards. Initially:
 
-**Stage 1 — Sharded example**
-
-- Execution Time (client): `1.9 s`
-- Documents Returned: `50`
+- Execution Time: Shows client timing (e.g., `180 ms`)
+- Documents Returned: Shows count from results (e.g., `100`)
 - Keys Examined: `n/a`
 - Docs Examined: `n/a`
 
@@ -158,11 +153,25 @@ Built from `explain("queryPlanner")`. This is **fast** and does **not** execute 
 - **How to know if no `FETCH` is expected (index-only/covering)?**
   If the winning path **does not include `FETCH`** and the projection uses only indexed fields, mark **Index-only**. Confirm in Stage 2 (executed plan).
 
-### 2.3. Call to Action
+### 2.3. Query Efficiency Analysis Card
+
+> **PENDING**: This card is implemented in the UI mock but needs data model design.
+
+A summary card displaying high-level query efficiency metrics:
+
+- **Execution Strategy** — The top-level stage type (e.g., `COLLSCAN`, `IXSCAN`, `SHARD_MERGE`)
+- **Index Used** — Name of the index if IXSCAN, otherwise "None"
+- **Examined/Returned Ratio** — Formatted ratio (e.g., `5,000 : 1`)
+- **In-Memory Sort** — Yes/No indicator if SORT stage is present
+- **Performance Rating** — Visual rating (Good/Fair/Poor) with description based on efficiency metrics
+
+### 2.4. Call to Action
 
 > **[Button] Run Detailed Analysis**
 >
 > _Runs `explain("executionStats")` to populate examined counts, timing, and per-stage stats._
+>
+> **Note**: In the current implementation, Stage 2 analysis starts automatically after Stage 1 completes.
 
 ---
 
@@ -170,29 +179,33 @@ Built from `explain("queryPlanner")`. This is **fast** and does **not** execute 
 
 Built from `explain("executionStats")`. Executes the winning plan to completion (respecting `limit/skip`) and returns **authoritative runtime metrics**.
 
-### 3.1. Summary Bar (now authoritative)
+### 3.1. Metrics Row (now authoritative)
 
-Replace `n/a` with real values and recompute the ratio.
+Replace `n/a` with real values from `executionStats`.
 
-**Stage 2 — Non-sharded example**
+**Stage 2 — Metrics display**
 
-- **Execution Time:** `120 ms`
-- **Documents Returned (nReturned):** `100`
-- **Keys Examined:** `100`
-- **Docs Examined:** `100`
-- **DocsExamined / Returned:** `1 : 1`
-- **Plan Type:** `IXSCAN { status: 1 }`
+All metrics updated with authoritative server data:
 
-**Stage 2 — Sharded example**
+- **Execution Time:** Server-reported `executionTimeMillis` (e.g., `120 ms`)
+- **Documents Returned:** From `nReturned` (e.g., `100`)
+- **Keys Examined:** From `totalKeysExamined` (e.g., `100`)
+- **Docs Examined:** From `totalDocsExamined` (e.g., `100`)
 
-- **Execution Time:** `1.4 s`
-- **Documents Returned (nReturned):** `50`
-- **Keys Examined (Σ):** `8,140`
-- **Docs Examined (Σ):** `9,900`
-- **DocsExamined / Returned:** `198 : 1` **(warn)**
-- **Plan Type:** `SHARD_MERGE + per-shard OR`
+### 3.2. Query Efficiency Analysis Card (now populated)
 
-### 3.2. Execution details (what we extract)
+The Query Efficiency Analysis card is updated with real execution data:
+
+- **Execution Strategy:** Extracted from top-level stage (e.g., `COLLSCAN`, `IXSCAN`)
+- **Index Used:** From IXSCAN stage's `indexName` or "None"
+- **Examined/Returned Ratio:** Calculated as `DocsExamined : Returned` (e.g., `5,000 : 1`)
+- **In-Memory Sort:** Detected from presence of SORT stage
+- **Performance Rating:** Calculated based on examined/returned ratio:
+  - Good: < 10:1
+  - Fair: 10:1 to 100:1
+  - Poor: > 100:1
+
+### 3.3. Execution details (what we extract)
 
 - **Execution Time** — server-reported `executionTimeMillis` (prefer this over client time).
 - **nReturned** — actual output at the root (and per shard, when available).
@@ -201,7 +214,14 @@ Replace `n/a` with real values and recompute the ratio.
 - **Per-stage counters** — from `executionStages`, including `keysExamined`, `docsExamined`, `nReturned` at each stage.
 - **Sort & memory** — if a `SORT` stage indicates in-memory work or spill, surface it.
 - **Covering** — confirm **no `FETCH`** in the executed path when index-only.
-- **Sharded attribution** — a **per-shard overview** row (keys, docs, returned, time) with badges, plus an aggregated Summary Bar.
+- **Sharded attribution** — a **per-shard overview** row (keys, docs, returned, time) with badges, plus aggregated totals.
+
+**PENDING/EVALUATING**: The following features from the original design are not yet in the UI mock:
+
+- Per-shard breakdown visualization (sharded queries)
+- Rejected plans count display
+- Detailed per-stage counters view (currently shows high-level stage flow)
+- Badges for specific issues (COLLSCAN, Blocked sort, Inefficient, Spilled, Unbounded bounds, Fetch heavy)
 
 ### 3.3. Non-sharded example (executionStats)
 
@@ -318,7 +338,17 @@ Replace `n/a` with real values and recompute the ratio.
 - **How to attribute work in sharded scenarios?**
   Use per-shard `executionStages` to populate a **per-shard overview list** (keys, docs, returned, time) and compute **aggregated totals** for the Summary Bar.
 
-### 3.6. Call to Action
+### 3.6. Quick Actions
+
+> **Added in implementation**: A card with action buttons appears after Stage 2 completes.
+
+**Available actions:**
+
+- **Export Optimization Opportunities** — Export AI suggestions and recommendations
+- **Export Execution Plan Details** — Export the execution statistics
+- **View Raw Explain Output** — Show the raw explain command output
+
+### 3.7. Call to Action
 
 > **[Button] Get AI Suggestions**
 >
@@ -326,7 +356,76 @@ Replace `n/a` with real values and recompute the ratio.
 
 ---
 
-## 4. Tech Background: Paging and Query Scope
+## 4. Stage 3: AI-Powered Recommendations
+
+After Stage 2 completes, users can optionally request AI-powered analysis of their query performance.
+
+### 4.1. Optimization Opportunities Section
+
+The "Optimization Opportunities" section displays AI-generated suggestions as animated cards:
+
+**AI Suggestion Cards** include:
+
+- **Title** — Brief description of the optimization (e.g., "Create Index")
+- **Priority Badge** — Optional badge for high-priority issues (e.g., "HIGH PRIORITY")
+- **Explanation** — Detailed reasoning based on execution stats
+- **Recommended Action** — Specific index definition or query modification
+- **Code Snippet** — Copy-able command (e.g., `createIndex` command)
+- **Risks** — Potential downsides or considerations
+- **Action Buttons** — "Apply", "Copy", "Learn More"
+
+**Example AI Suggestions:**
+
+1. **Create Index** (High Priority)
+   - Identifies COLLSCAN with poor selectivity
+   - Recommends specific index definition
+   - Shows before/after execution plan comparison
+
+2. **No Index Changes Recommended**
+   - Explains when existing strategy is optimal
+   - Provides context on selectivity and performance
+
+3. **Understanding Your Query Execution Plan**
+   - Educational content explaining how the query executes
+   - Visual breakdown of execution stages
+   - Helps users understand the impact of optimizations
+
+### 4.2. Performance Tips Card
+
+An optional educational card with general DocumentDB performance best practices:
+
+- **Use Covered Queries** — Return results from index without fetching documents
+- **Optimize Index Strategy** — Compound index best practices
+- **Limit Returned Fields** — Use projection to reduce data transfer
+- **Monitor Index Usage** — Identify and remove unused indexes
+
+**Interaction:**
+
+- Can be dismissed by user
+- Appears during AI processing to provide context
+- Re-appears if AI suggestions are requested again
+
+### 4.3. Animation and Loading States
+
+**Loading experience:**
+
+- Shows loading indicator on "Get AI Suggestions" button
+- Displays Performance Tips card while waiting
+- Stagger-animates AI suggestion cards (1 second between each)
+- Smooth transitions using CollapseRelaxed animation
+
+### 4.4. Data Sent to AI Service
+
+**PENDING/EVALUATING**: Document the exact data structure sent to AI service, including:
+
+- Query shape (without literal values)
+- Execution statistics
+- Collection schema information
+- Index definitions
+
+---
+
+## 5. Tech Background: Paging and Query Scope
 
 The current paging implementation in the extension relies on `skip` and `limit` to display results in pages. This approach is practical for some scenarios. For instance, the MongoDB RU (Request Unit) implementation has a cursor that expires after 60 seconds, making it risky to maintain a long-lived cursor for paging. Using `skip` and `limit` provides a stateless and reliable way to handle pagination in such environments.
 
@@ -341,22 +440,42 @@ The goal is to ensure that the Query Insights tab always reflects the performanc
 
 ---
 
-## 5. Failure Scenarios
+## 6. Failure Scenarios
 
 If the **API** cannot produce an explain plan for the executed command (e.g., commands that include write stages), show **Not available (`n/a`)** with a brief reason. The Summary Bar still shows **client timing** and **docs returned**; other metrics remain `n/a`.
 
 ---
 
-## Appendix — What the UI renders at a glance
+## 7. Appendix — What the UI renders at a glance
 
-- **Summary Bar (top, always):**
-  Execution Time (client → server), Documents Returned, Keys Examined (Σ), Docs Examined (Σ), Docs/Returned ratio, Plan type, badges.
+**Updated based on implementation:**
+
+- **Metrics Row (top, always):**
+  Individual metric cards for Execution Time, Documents Returned, Keys Examined, Docs Examined
+
+- **Query Efficiency Analysis Card:**
+  Execution Strategy, Index Used, Examined/Returned Ratio, In-Memory Sort, Performance Rating (with visual indicator)
+
+- **Query Plan Summary:**
+  Sequential stage flow (e.g., IXSCAN → FETCH → PROJECTION) with expandable details for each stage
+
+- **Optimization Opportunities:**
+  - GetPerformanceInsightsCard (Stage 2) with loading state
+  - Animated AI suggestion cards (Stage 3)
+  - Performance tips card (dismissible)
+
+- **Quick Actions (Stage 2+):**
+  Export Optimization Opportunities, Export Execution Plan Details, View Raw Explain Output
+
+**PENDING/EVALUATING - Not yet in UI mock:**
 
 - **Per-shard overview list (when sharded):**
   For each shard: plan summary, nReturned, keys, docs, time, badges; sorted by worst efficiency.
 
 - **Per-shard details (expand):**
-  Linear stage list (breadcrumb rail) with per-stage counters. `$or` appears as a single `OR (n)` item with a flyout of clause mini-paths and clause metrics. Optional “View as tree” toggle for complex shapes.
+  Linear stage list (breadcrumb rail) with per-stage counters. `$or` appears as a single `OR (n)` item with a flyout of clause mini-paths and clause metrics. Optional "View as tree" toggle for complex shapes.
 
 - **Badges:**
   `COLLSCAN`, `Blocked sort`, `Inefficient (>100:1)`, `Spilled`, `Unbounded bounds`, `Fetch heavy`, `Index-only` (positive).
+
+- **Rejected plans count** — Not currently displayed in UI
