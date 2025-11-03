@@ -6,7 +6,9 @@
 
 1. Cross-Region Data Sharing from the point of view of our VS Code Extension user
     - Does VS Code GitHub Copilot honor customers' preferences?
-2. How do we classify customer data?
+2. VS Code GitHub Copilot
+    - Does anything in our classification change if a user changes their default model?
+3. How do we classify customer data?
     - the customer vs. their customers?
 
 ### P0: Index Advisor
