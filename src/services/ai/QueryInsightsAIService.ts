@@ -6,22 +6,26 @@
 import { type AIOptimizationResponse } from './types';
 
 /**
- * AI service for query optimization recommendations
+ * AI service for query insights and optimization recommendations
  * Currently a mock implementation with 8-second delay
  *
  * TODO: Replace with actual AI service integration later
  */
-export class QueryOptimizationAIService {
+export class QueryInsightsAIService {
     /**
      * Gets optimization recommendations for a query
      * Currently returns mock data with 8s delay to simulate real AI processing
      *
+     * @param _clusterId - Cluster/connection identifier for accessing client
+     * @param _sessionId - Optional session identifier for accessing cached data
      * @param _query - The MongoDB query (stringified) - not used in mock
      * @param databaseName - Target database name
      * @param collectionName - Target collection name
      * @returns AI optimization recommendations
      */
     public async getOptimizationRecommendations(
+        _clusterId: string,
+        _sessionId: string | undefined,
         _query: string,
         databaseName: string,
         collectionName: string,
@@ -51,17 +55,5 @@ export class QueryOptimizationAIService {
                 '3) no COLLSCAN stage appears in the plan',
             ],
         };
-
-        /* TODO: Actual implementation will call AI service via HTTP/gRPC
-         * This will be implemented later when AI backend is ready:
-         *
-         * const response = await fetch(AI_SERVICE_URL, {
-         *   method: 'POST',
-         *   headers: { 'Content-Type': 'application/json' },
-         *   body: JSON.stringify({ query, databaseName, collectionName })
-         * });
-         *
-         * return await response.json();
-         */
     }
 }

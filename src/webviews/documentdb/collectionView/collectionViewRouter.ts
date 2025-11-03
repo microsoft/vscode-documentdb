@@ -23,7 +23,7 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 import { Views } from '../../../documentdb/Views';
 import { transformAIResponseForUI } from '../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../extensionVariables';
-import { QueryOptimizationAIService } from '../../../services/ai/QueryOptimizationAIService';
+import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 // eslint-disable-next-line import/no-internal-modules
 import basicFindQuerySchema from '../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
@@ -432,17 +432,20 @@ export const collectionsViewRouter = router({
         .input(z.object({})) // Empty - uses sessionId from context
         .query(async ({ ctx }) => {
             const myCtx = ctx as RouterContext;
-            const { clusterId, databaseName, collectionName } = myCtx;
+            const { sessionId, clusterId, databaseName, collectionName } = myCtx;
 
             // For now, we'll use a simple placeholder query
             // TODO: Extract actual query from session's _currentQueryText when ClusterSession is extended
             const queryText = '{ "user_id": 1234 }'; // Placeholder
 
             // Create AI service instance
-            const aiService = new QueryOptimizationAIService();
+            const aiService = new QueryInsightsAIService();
 
             // Call AI service (8s delay expected)
+            // Pass clusterId and sessionId first, followed by remaining parameters
             const aiRecommendations = await aiService.getOptimizationRecommendations(
+                clusterId,
+                sessionId,
                 queryText,
                 databaseName,
                 collectionName,

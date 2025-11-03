@@ -2933,7 +2933,7 @@ src/
 │
 └── services/
     └── ai/                                  # 📁 NEW FOLDER
-        └── QueryOptimizationAIService.ts   # 🆕 NEW: AI service mock (8s delay)
+        └── QueryInsightsAIService.ts   # 🆕 NEW: AI service mock (8s delay)
 
 webviews/
 └── documentdb/
@@ -3022,19 +3022,21 @@ export interface AIAnalysisResponse {
 // ... (all types from design doc)
 ```
 
-Create `src/services/ai/QueryOptimizationAIService.ts`:
+Create `src/services/ai/QueryInsightsAIService.ts`:
 
 ```typescript
 /**
- * AI service for query optimization recommendations
+ * AI service for query insights and optimization recommendations
  * Mock implementation with 8-second delay for realistic testing
  */
-export class QueryOptimizationAIService {
+export class QueryInsightsAIService {
   /**
    * Calls AI service for query optimization recommendations
    * Currently returns mock data with simulated network delay
    */
   public async getOptimizationRecommendations(
+    clusterId: string,
+    sessionId: string | undefined,
     query: string,
     databaseName: string,
     collectionName: string,
@@ -3443,21 +3445,23 @@ private resetCachesIfQueryChanged(query: string) {
 
 **📖 Before starting**: Review Stage 3 section for AI service payload structure and expected response format.
 
-Create `src/services/ai/QueryOptimizationAIService.ts`:
+Create `src/services/ai/QueryInsightsAIService.ts`:
 
 ```typescript
 /**
- * AI service for query optimization recommendations
+ * AI service for query insights and optimization recommendations
  * Currently a mock implementation with 8-second delay
  *
  * TODO: Replace with actual AI service integration later
  */
-export class QueryOptimizationAIService {
+export class QueryInsightsAIService {
   /**
    * Gets optimization recommendations
    * Currently returns mock data with 8s delay to simulate real AI processing
    */
   public async getOptimizationRecommendations(
+    clusterId: string,
+    sessionId: string | undefined,
     query: string,
     databaseName: string,
     collectionName: string,
@@ -3486,14 +3490,27 @@ export class QueryOptimizationAIService {
       ],
     };
 
-    /* TODO: Actual implementation will call AI service via ClustersClient
+    /* TODO: Actual implementation will call AI service via HTTP/gRPC
     // This will be implemented later when AI backend is ready:
-    // const response = await this.clustersClient.callAIService({
-    //   query,
-    //   databaseName,
-    //   collectionName,
+    // Use clusterId to get client access
+    // const client = ClustersClient.getClient(clusterId);
+    //
+    // Use sessionId to access cached query data if available
+    // const session = sessionId ? ClusterSession.getSession(sessionId) : null;
+    //
+    // const response = await fetch(AI_SERVICE_URL, {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({
+    //     query,
+    //     databaseName,
+    //     collectionName,
+    //     clusterId,
+    //     sessionId
+    //   })
     // });
-    // return response;
+    //
+    // return await response.json();
     */
   }
 }
@@ -3754,7 +3771,7 @@ Create React components to consume the three endpoints:
 
 - Test `ExplainPlanAnalyzer` with various explain outputs
 - Test `StagePropertyExtractor` with different stage types
-- Test `QueryOptimizationAIService` with mock responses
+- Test `QueryInsightsAIService` with mock responses
 - Test router transformation functions
 
 **6.2. Integration Tests** ⬜ Not Started
@@ -3842,7 +3859,7 @@ Create React components to consume the three endpoints:
 
 **Phase 1: Foundation & Types**
 
-- 1.1 Create Type Definitions: ⬜ Not Started
+- 1.1 Create Type Definitions: 🔍 In Review
 
 **Phase 2: Explain Plan Analysis**
 
@@ -3854,18 +3871,18 @@ Create React components to consume the three endpoints:
 
 **Phase 3: AI Service Integration**
 
-- 3.1 Create AI Service Client (mock with 8s delay): ⬜ Not Started
+- 3.1 Create AI Service Client (mock with 8s delay): 🔍 In Review
 - 3.2 Extend ClusterSession for AI Integration: ⬜ Not Started
 
 **Phase 4: Router Implementation**
 
-- 4.1 Implement tRPC Endpoints: ⬜ Not Started
-- 4.2 Implement Transformation Functions: ⬜ Not Started
+- 4.1 Implement tRPC Endpoints: ⬜ Not Started (Stage 3: 🔍 In Review)
+- 4.2 Implement Transformation Functions: ⬜ Not Started (Stage 3: 🔍 In Review)
 
 **Phase 5: Frontend Integration**
 
 - 5.1 Update Query Execution Logic: ⬜ Not Started
-- 5.2 Implement Frontend Query Insights Panel: ⬜ Not Started
+- 5.2 Implement Frontend Query Insights Panel: ⬜ Not Started (Stage 3: 🔍 In Review)
 
 **Phase 6: Testing & Validation**
 
