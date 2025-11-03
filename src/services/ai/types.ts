@@ -5,14 +5,14 @@
 
 /**
  * AI Service Types
- * Internal types used by QueryOptimizationAIService
+ * Internal types used by QueryInsightsAIService
  */
 
 /**
  * AI backend request payload
  */
 export interface AIOptimizationRequest {
-    query: string; // The MongoDB query
+    query: string; // The DocumentDB query
     databaseName: string; // Database name
     collectionName: string; // Collection name
 }

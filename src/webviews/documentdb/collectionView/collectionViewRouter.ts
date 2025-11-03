@@ -427,37 +427,34 @@ export const collectionsViewRouter = router({
      *
      * Note: AI service currently returns mock data with 8-second delay
      */
-    getQueryInsightsStage3: publicProcedure
-        .use(trpcToTelemetry)
-        .input(z.object({})) // Empty - uses sessionId from context
-        .query(async ({ ctx }) => {
-            const myCtx = ctx as RouterContext;
-            const { sessionId, clusterId, databaseName, collectionName } = myCtx;
+    getQueryInsightsStage3: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
+        const myCtx = ctx as RouterContext;
+        const { sessionId, clusterId, databaseName, collectionName } = myCtx;
 
-            // For now, we'll use a simple placeholder query
-            // TODO: Extract actual query from session's _currentQueryText when ClusterSession is extended
-            const queryText = '{ "user_id": 1234 }'; // Placeholder
+        // For now, we'll use a simple placeholder query
+        // TODO: Extract actual query from session's _currentQueryText when ClusterSession is extended
+        const queryText = '{ "user_id": 1234 }'; // Placeholder
 
-            // Create AI service instance
-            const aiService = new QueryInsightsAIService();
+        // Create AI service instance
+        const aiService = new QueryInsightsAIService();
 
-            // Call AI service (8s delay expected)
-            // Pass clusterId and sessionId first, followed by remaining parameters
-            const aiRecommendations = await aiService.getOptimizationRecommendations(
-                clusterId,
-                sessionId,
-                queryText,
-                databaseName,
-                collectionName,
-            );
+        // Call AI service (8s delay expected)
+        // Pass clusterId and sessionId first, followed by remaining parameters
+        const aiRecommendations = await aiService.getOptimizationRecommendations(
+            clusterId,
+            sessionId,
+            queryText,
+            databaseName,
+            collectionName,
+        );
 
-            // Transform AI response to UI format with button payloads
-            const transformed = transformAIResponseForUI(aiRecommendations, {
-                clusterId,
-                databaseName,
-                collectionName,
-            });
+        // Transform AI response to UI format with button payloads
+        const transformed = transformAIResponseForUI(aiRecommendations, {
+            clusterId,
+            databaseName,
+            collectionName,
+        });
 
-            return transformed;
-        }),
+        return transformed;
+    }),
 });

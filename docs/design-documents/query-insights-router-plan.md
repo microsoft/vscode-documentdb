@@ -25,7 +25,7 @@ All calls to the router share this context (defined in `collectionViewRouter.ts`
 ```typescript
 export type RouterContext = BaseRouterContext & {
   sessionId: string; // Tied to the query and results set
-  clusterId: string; // Identifies the MongoDB cluster/connection
+  clusterId: string; // Identifies the DocumentDB cluster/connection
   databaseName: string; // Target database
   collectionName: string; // Target collection
 };
@@ -1750,7 +1750,7 @@ export class ClusterSession {
       nReturned: 2
     }
   ],
-  rawExecutionStats: { /* full MongoDB explain output */ }
+  rawExecutionStats: { /* full DocumentDB explain output */ }
 }
 ```
 
@@ -1806,7 +1806,7 @@ z.object({
 
 ```typescript
 {
-  query: string; // The MongoDB query
+  query: string; // The DocumentDB query
   databaseName: string; // Database name
   collectionName: string; // Collection name
 }
@@ -2680,7 +2680,7 @@ The existing `resetCachesIfQueryChanged` method in ClusterSession compares query
 - ✅ **No duplicate session management** - Reuses existing ClusterSession infrastructure
 - ✅ **Automatic cache invalidation** - Query change detection already implemented
 - ✅ **Consistent lifecycle** - Tied to collection view session
-- ✅ **Access to MongoDB client** - Direct access via `getClient()`
+- ✅ **Access to DocumentDB client** - Direct access via `getClient()`
 - ✅ **Schema integration** - AI can leverage tracked schema data
 - ✅ **Memory efficient** - Single session object per collection view
 - ✅ **Prevents inconsistencies** - All stages use same query from ClusterSession
@@ -2835,7 +2835,7 @@ export interface ActionButton {
 ## Testing Strategy
 
 1. **Unit Tests**: Test transformation logic for AI response
-2. **Integration Tests**: Test each stage endpoint with real MongoDB connection
+2. **Integration Tests**: Test each stage endpoint with real DocumentDB connection
 3. **E2E Tests**: Test full flow from UI to backend and back
 4. **Mock Tests**: Verify mock data matches expected schemas
 
@@ -2949,7 +2949,7 @@ webviews/
 
 - Core DocumentDB client infrastructure
 - `ClusterSession.ts` - Session state management, caching (moved here for better organization)
-- `ClustersClient.ts` - MongoDB client wrapper, low-level operations (moved here)
+- `ClustersClient.ts` - DocumentDB client wrapper, low-level operations (moved here)
 - Over time, will contain specific client extensions and specialized session types
 
 **`src/documentdb/client/QueryInsightsApis.ts` file:**
@@ -3478,7 +3478,7 @@ export class QueryInsightsAIService {
           action: 'create',
           indexSpec: { user_id: 1, status: 1 },
           reason:
-            'A compound index on user_id and status would allow MongoDB to use a single index scan instead of scanning documents after the index lookup.',
+            'A compound index on user_id and status would allow DocumentDB to use a single index scan instead of scanning documents after the index lookup.',
           impact: 'high',
         },
       ],
@@ -3717,7 +3717,7 @@ export function transformAIResponse(aiResponse: any, ctx: RouterContext) {
 }
 
 /**
- * Generates MongoDB index command string
+ * Generates MongoDB shell index command string
  */
 function generateIndexCommand(improvement: any, databaseName: string, collectionName: string): string {
   const indexSpecStr = JSON.stringify(improvement.indexSpec);

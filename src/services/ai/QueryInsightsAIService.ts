@@ -18,7 +18,7 @@ export class QueryInsightsAIService {
      *
      * @param _clusterId - Cluster/connection identifier for accessing client
      * @param _sessionId - Optional session identifier for accessing cached data
-     * @param _query - The MongoDB query (stringified) - not used in mock
+     * @param _query - The DocumentDB query (stringified) - not used in mock
      * @param databaseName - Target database name
      * @param collectionName - Target collection name
      * @returns AI optimization recommendations

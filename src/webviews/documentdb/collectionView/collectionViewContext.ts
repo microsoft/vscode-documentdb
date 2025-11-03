@@ -19,9 +19,9 @@ export type CollectionViewContextType = {
     activeQuery: {
         // The last executed query (used for export, pagination, display)
         queryText: string; // deprecated: use filter instead
-        filter: string; // MongoDB find filter (same as queryText for backward compatibility)
-        project: string; // MongoDB projection
-        sort: string; // MongoDB sort specification
+        filter: string; // MongoDB API find filter (same as queryText for backward compatibility)
+        project: string; // MongoDB API projection
+        sort: string; // MongoDB API sort specification
         skip: number; // Number of documents to skip
         limit: number; // Maximum number of documents to return
         pageNumber: number;

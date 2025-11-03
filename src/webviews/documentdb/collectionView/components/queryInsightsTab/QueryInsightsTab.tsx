@@ -49,7 +49,7 @@ import { AnimatedCardList } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
-import { AiCard, GetPerformanceInsightsCard, TipsCard } from './components/optimizationCards';
+import { AiCard, GetPerformanceInsightsCard, ImprovementCard, TipsCard } from './components/optimizationCards';
 import { QueryPlanSummary } from './components/queryPlanSummary';
 import { QuickActions } from './components/QuickActions';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
@@ -79,6 +79,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [showSuggestion1, setShowSuggestion1] = useState(false);
     const [showSuggestion2, setShowSuggestion2] = useState(false);
     const [showSuggestion3, setShowSuggestion3] = useState(false);
+    const [showImprovementCard, setShowImprovementCard] = useState(false);
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [selectedTab, setSelectedTab] = useState<Stage | null>(null);
@@ -143,9 +144,10 @@ export const QueryInsightsMain = (): JSX.Element => {
             setIsLoadingAI(false);
             setStageState(3);
             // Stagger suggestion animations with 1s delay for each
-            setTimeout(() => setShowSuggestion1(true), 1000);
-            setTimeout(() => setShowSuggestion2(true), 2000);
-            setTimeout(() => setShowSuggestion3(true), 3000);
+            setTimeout(() => setShowImprovementCard(true), 500); // Show new ImprovementCard first
+            setTimeout(() => setShowSuggestion1(true), 1500);
+            setTimeout(() => setShowSuggestion2(true), 2500);
+            setTimeout(() => setShowSuggestion3(true), 3500);
         }, 5000);
 
         return () => clearTimeout(tipsTimer);
@@ -237,6 +239,57 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                         {/* AnimatedCardList for AI suggestions and tips */}
                         <AnimatedCardList>
+                            {stageState === 3 && showImprovementCard && (
+                                <ImprovementCard
+                                    key="improvement-compound-index"
+                                    config={{
+                                        type: 'improvement',
+                                        cardId: 'improvement-1',
+                                        title: l10n.t('Recommendation: Create Compound Index'),
+                                        priority: 'high',
+                                        description: l10n.t(
+                                            'COLLSCAN examined 10,000 docs vs 2 returned (totalKeysExamined: 2). A compound index on { user_id: 1, status: 1 } will eliminate the full scan by supporting both the equality filter and the additional filtering condition.',
+                                        ),
+                                        recommendedIndex: '{ user_id: 1, status: 1 }',
+                                        recommendedIndexDetails: l10n.t(
+                                            'A compound index on user_id and status would allow DocumentDB to use a single index scan instead of scanning documents after the index lookup.',
+                                        ),
+                                        details: l10n.t(
+                                            'Risks: Additional write and storage overhead for maintaining a new index. Index size estimated at ~50MB for current collection size.',
+                                        ),
+                                        mongoShellCommand: 'db.users.createIndex({ user_id: 1, status: 1 })',
+                                        primaryButton: {
+                                            label: l10n.t('Create Index'),
+                                            actionId: 'createIndex',
+                                            payload: {
+                                                clusterId: 'mock-cluster-id',
+                                                databaseName: 'mydb',
+                                                collectionName: 'users',
+                                                action: 'create',
+                                                indexSpec: { user_id: 1, status: 1 },
+                                                mongoShell: 'db.users.createIndex({ user_id: 1, status: 1 })',
+                                            },
+                                        },
+                                        secondaryButton: {
+                                            label: l10n.t('Learn More'),
+                                            actionId: 'learnMore',
+                                            payload: {
+                                                topic: 'compound-indexes',
+                                            },
+                                        },
+                                    }}
+                                    onPrimaryAction={(actionId, payload) => {
+                                        console.log('Primary action:', actionId, payload);
+                                    }}
+                                    onSecondaryAction={(actionId, payload) => {
+                                        console.log('Secondary action:', actionId, payload);
+                                    }}
+                                    onCopy={() => {
+                                        console.log('Copy clicked for improvement card');
+                                    }}
+                                />
+                            )}
+
                             {stageState === 3 && showSuggestion1 && (
                                 <AiCard
                                     key="create-index"
@@ -346,7 +399,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 >
                                     <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
                                         {l10n.t(
-                                            'Your current query uses a COLLSCAN (collection scan) strategy, which means MongoDB examines all 10,000 documents in the collection to find the 2 matching documents. This is highly inefficient with a selectivity of only 0.02%.',
+                                            'Your current query uses a COLLSCAN (collection scan) strategy, which means DocumentDB examines all 10,000 documents in the collection to find the 2 matching documents. This is highly inefficient with a selectivity of only 0.02%.',
                                         )}
                                     </Text>
                                     <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
