@@ -1788,61 +1788,36 @@ z.object({
 
 **Context Requirements**:
 
-- `sessionId`: Used to retrieve query details, execution stats, and collection info
-- `clusterId`: DocumentDB connection for fetching collection/index stats
-- `databaseName` & `collectionName`: Target collection for stats retrieval
+- `sessionId`: Used to retrieve query details from session cache
+- `clusterId`: DocumentDB connection identifier
+- `databaseName` & `collectionName`: Target collection
 
 **Implementation Flow**:
 
 1. Retrieve query details from session cache using `sessionId`
-2. Retrieve execution stats (either from Stage 2 cache or re-run if not available)
-3. Fetch collection stats: `db.collection.stats()`
-4. Fetch index stats: `db.collection.getIndexes()`
-5. Call AI backend with complete payload (may take 10-20 seconds per design doc)
-6. Transform AI response for UI (formatted as animated suggestion cards)
-7. Cache AI recommendations in session
+2. Call AI backend with minimal payload (query, database, collection)
+3. AI backend collects additional data (collection stats, index stats, execution stats) independently
+4. Transform AI response for UI (formatted as animated suggestion cards)
+5. Cache AI recommendations in session
+
+**Note**: The AI backend is responsible for collecting collection statistics, index information, and execution metrics. In future releases, the extension may provide this data directly to reduce backend workload, but this is not in scope for the upcoming release.
 
 **Backend AI Request Payload**:
 
 ```typescript
 {
-  sessionId: string;                            // For traceability
-  query: {                                       // Retrieved from session cache
-    filter: string;
-    project?: string;
-    sort?: string;
-    skip?: number;
-    limit?: number;
-  };
-  collectionName: string;
-  collectionStats: Record<string, unknown>;     // From db.collection.stats()
-  indexStats: Array<Record<string, unknown>>;   // From db.collection.getIndexes()
-  executionStats: Record<string, unknown>;      // From Stage 1 or cached
-  derived: {
-    totalKeysExamined: number | null;
-    totalDocsExamined: number | null;
-    keysToDocsRatio: number | null;
-    usedIndex: string | null;
-  }
+  query: string; // The MongoDB query
+  databaseName: string; // Database name
+  collectionName: string; // Collection name
 }
 ```
 
-**Backend AI Response** (from your interface):
+**Backend AI Response**:
+
+The AI backend returns optimization recommendations. The response schema is defined in the tRPC router and automatically validated.
 
 ```typescript
 interface OptimizationRecommendations {
-  metadata: {
-    collectionName: string;
-    collectionStats: Record<string, unknown>;
-    indexStats: Array<Record<string, unknown>>;
-    executionStats: Record<string, unknown>;
-    derived: {
-      totalKeysExamined: number | null;
-      totalDocsExamined: number | null;
-      keysToDocsRatio: number | null;
-      usedIndex: string | null;
-    };
-  };
   analysis: string;
   improvements: Array<{
     action: 'create' | 'drop' | 'none' | 'modify';
@@ -1857,7 +1832,11 @@ interface OptimizationRecommendations {
 }
 ```
 
-**Router Output Schema** (Transformed for UI):
+**Router Output** (Transformed for UI):
+
+The router transforms the AI response into UI-friendly format with action buttons. Button payloads include all necessary context for performing actions (e.g., `clusterId`, `databaseName`, `collectionName`, plus action-specific data).
+
+Example transformation:
 
 ```typescript
 {
@@ -1883,11 +1862,15 @@ interface OptimizationRecommendations {
     details: string; // Risks or additional considerations
     mongoShellCommand: string; // The mongoShell command to execute
 
-    // Action buttons
+    // Action buttons with complete context for execution
     primaryButton: {
       label: string; // e.g., "Create Index"
       actionId: string; // e.g., "createIndex"
       payload: {
+        // All context needed to perform the action
+        clusterId: string;
+        databaseName: string;
+        collectionName: string;
         action: 'create' | 'drop' | 'modify';
         indexSpec: Record<string, number>;
         indexOptions?: Record<string, unknown>;
@@ -1905,27 +1888,13 @@ interface OptimizationRecommendations {
   }>;
 
   verificationSteps: string; // How to verify improvements
-
-  // Original metadata for debugging
-  metadata: {
-    collectionName: string;
-    collectionStats: Record<string, unknown>;
-    indexStats: Array<Record<string, unknown>>;
-    executionStats: Record<string, unknown>;
-    derived: {
-      totalKeysExamined: number | null;
-      totalDocsExamined: number | null;
-      keysToDocsRatio: number | null;
-      usedIndex: string | null;
-    }
-  }
 }
 ```
 
 ### Transformation Logic
 
 ```typescript
-function transformAIResponseForUI(aiResponse: OptimizationRecommendations) {
+function transformAIResponseForUI(aiResponse: OptimizationRecommendations, context: RouterContext) {
   const analysisCard = {
     type: 'analysis',
     content: aiResponse.analysis,
@@ -1956,6 +1925,10 @@ function transformAIResponseForUI(aiResponse: OptimizationRecommendations) {
         actionId:
           improvement.action === 'create' ? 'createIndex' : improvement.action === 'drop' ? 'dropIndex' : 'modifyIndex',
         payload: {
+          // Include all context needed to execute the action
+          clusterId: context.clusterId,
+          databaseName: context.databaseName,
+          collectionName: context.collectionName,
           action: improvement.action,
           indexSpec: improvement.indexSpec,
           indexOptions: improvement.indexOptions,
@@ -1976,7 +1949,6 @@ function transformAIResponseForUI(aiResponse: OptimizationRecommendations) {
     analysisCard,
     improvementCards,
     verificationSteps: aiResponse.verification,
-    metadata: aiResponse.metadata,
   };
 }
 
