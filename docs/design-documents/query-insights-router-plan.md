@@ -1412,6 +1412,245 @@ z.object({
 
    This approach leverages the library's pre-built analysis rather than manually parsing the execution tree.
 
+5. **Extended Stage Information Extraction** (for Query Plan Overview):
+
+   We can extract stage-specific details for UI display:
+
+   ```typescript
+   import type { Stage } from '@mongodb-js/explain-plan-helper';
+
+   /**
+    * Extended information for a single stage (for UI display)
+    */
+   export interface ExtendedStageInfo {
+     stageId: string;
+     stageName: string;
+     properties: Record<string, string | number | boolean | undefined>;
+   }
+
+   /**
+    * Extracts extended stage information for query plan overview visualization
+    *
+    * @param stage - Stage from ExplainPlan.executionStages
+    * @param stageId - Unique identifier for the stage
+    * @returns Extended information with properties for UI display
+    */
+   function extractExtendedStageInfo(stage: Stage, stageId: string): ExtendedStageInfo {
+     const stageName = stage.stage || stage.shardName || 'UNKNOWN';
+     const properties = extractStageProperties(stageName, stage);
+
+     return {
+       stageId,
+       stageName,
+       properties,
+     };
+   }
+
+   /**
+    * Extracts properties for a specific stage type
+    * Maps stage type to relevant properties for UI display
+    *
+    * Stage-specific properties:
+    * - IXSCAN/EXPRESS_IXSCAN: Index name, multi-key indicator, bounds, keys examined
+    * - PROJECTION: Transform specification
+    * - COLLSCAN: Documents examined, scan direction
+    * - FETCH: Documents examined
+    * - SORT: Sort pattern, memory usage, disk spill indicator
+    * - LIMIT/SKIP: Limit/skip amounts
+    * - TEXT stages: Search string, parsed query
+    * - GEO_NEAR: Key pattern, index info
+    * - COUNT/DISTINCT: Index usage, keys examined
+    * - IDHACK: Keys/docs examined
+    * - SHARDING_FILTER: Chunks skipped
+    * - SHARD_MERGE/SINGLE_SHARD: Shard count
+    * - DELETE/UPDATE: Documents modified
+    */
+   function extractStageProperties(
+     stageName: string,
+     stage: Stage,
+   ): Record<string, string | number | boolean | undefined> {
+     switch (stageName) {
+       case 'IXSCAN':
+       case 'EXPRESS_IXSCAN':
+         return {
+           'Index Name': stage.indexName,
+           'Multi Key Index': stage.isMultiKey,
+           'Index Bounds': stage.indexBounds ? JSON.stringify(stage.indexBounds) : undefined,
+           'Keys Examined': stage.keysExamined,
+         };
+
+       case 'PROJECTION':
+       case 'PROJECTION_SIMPLE':
+       case 'PROJECTION_DEFAULT':
+       case 'PROJECTION_COVERED':
+         return {
+           'Transform by': stage.transformBy ? JSON.stringify(stage.transformBy) : undefined,
+         };
+
+       case 'COLLSCAN':
+         return {
+           'Documents Examined': stage.docsExamined,
+           Direction: stage.direction, // forward or backward
+         };
+
+       case 'FETCH':
+         return {
+           'Documents Examined': stage.docsExamined,
+         };
+
+       case 'SORT':
+       case 'SORT_KEY_GENERATOR':
+         return {
+           'Sort Pattern': stage.sortPattern ? JSON.stringify(stage.sortPattern) : undefined,
+           'Memory Limit': stage.memLimit,
+           'Memory Usage': stage.memUsage,
+           'Spilled to Disk': stage.usedDisk,
+         };
+
+       case 'LIMIT':
+         return {
+           'Limit Amount': stage.limitAmount,
+         };
+
+       case 'SKIP':
+         return {
+           'Skip Amount': stage.skipAmount,
+         };
+
+       case 'TEXT':
+       case 'TEXT_MATCH':
+       case 'TEXT_OR':
+         return {
+           'Search String': stage.searchString,
+           'Parsed Text Query': stage.parsedTextQuery ? JSON.stringify(stage.parsedTextQuery) : undefined,
+         };
+
+       case 'GEO_NEAR_2D':
+       case 'GEO_NEAR_2DSPHERE':
+         return {
+           'Key Pattern': stage.keyPattern ? JSON.stringify(stage.keyPattern) : undefined,
+           'Index Name': stage.indexName,
+           'Index Version': stage.indexVersion,
+         };
+
+       case 'COUNT':
+       case 'COUNT_SCAN':
+         return {
+           'Index Name': stage.indexName,
+           'Keys Examined': stage.keysExamined,
+         };
+
+       case 'DISTINCT_SCAN':
+         return {
+           'Index Name': stage.indexName,
+           'Index Bounds': stage.indexBounds ? JSON.stringify(stage.indexBounds) : undefined,
+           'Keys Examined': stage.keysExamined,
+         };
+
+       case 'IDHACK':
+         return {
+           'Keys Examined': stage.keysExamined,
+           'Documents Examined': stage.docsExamined,
+         };
+
+       case 'SHARDING_FILTER':
+         return {
+           'Chunks Skipped': stage.chunkSkips,
+         };
+
+       case 'CACHED_PLAN':
+         return {
+           Cached: true,
+         };
+
+       case 'SUBPLAN':
+         return {
+           'Subplan Type': stage.subplanType,
+         };
+
+       case 'SHARD_MERGE':
+       case 'SINGLE_SHARD':
+         return {
+           'Shard Count': stage.shards?.length,
+         };
+
+       case 'BATCHED_DELETE':
+         return {
+           'Batch Size': stage.batchSize,
+           'Documents Deleted': stage.nWouldDelete,
+         };
+
+       case 'DELETE':
+       case 'UPDATE':
+         return {
+           'Documents Modified': stage.nWouldModify || stage.nWouldDelete,
+         };
+
+       default:
+         // Unknown stage type - return empty properties
+         return {};
+     }
+   }
+
+   /**
+    * Recursively extracts extended stage info from the execution stage tree
+    * This creates a flat list of all stages with their properties for UI display
+    *
+    * @param executionStages - Root stage from ExplainPlan
+    * @returns Array of ExtendedStageInfo for all stages in the tree
+    */
+   function extractAllExtendedStageInfo(executionStages: Stage | undefined): ExtendedStageInfo[] {
+     if (!executionStages) return [];
+
+     const allStageInfo: ExtendedStageInfo[] = [];
+     let stageIdCounter = 0;
+
+     function traverse(stage: Stage): void {
+       const stageId = `stage-${stageIdCounter++}`;
+       allStageInfo.push(extractExtendedStageInfo(stage, stageId));
+
+       // Traverse child stages (single input)
+       if (stage.inputStage) {
+         traverse(stage.inputStage);
+       }
+
+       // Traverse child stages (multiple inputs, e.g., $or queries)
+       if (stage.inputStages) {
+         stage.inputStages.forEach(traverse);
+       }
+
+       // Traverse shard stages (sharded queries)
+       if (stage.shards) {
+         stage.shards.forEach(traverse);
+       }
+     }
+
+     traverse(executionStages);
+     return allStageInfo;
+   }
+
+   /**
+    * Example usage in Stage 2 analysis:
+    */
+   function analyzeExecutionStatsWithExtendedInfo(explainResult: unknown) {
+     const plan = new ExplainPlan(explainResult);
+
+     // ... existing metrics extraction ...
+
+     // Extract extended stage information for query plan overview
+     const extendedStageInfo = extractAllExtendedStageInfo(plan.executionStages);
+
+     return {
+       // ... existing metrics ...
+       extendedStageInfo, // Add to Stage 2 output for query plan visualization
+     };
+   }
+   ```
+
+   **Purpose**: The `extendedStageInfo` provides rich, stage-specific metadata for the Query Plan Overview UI component. Each stage type has relevant properties extracted (e.g., index names for IXSCAN, document counts for COLLSCAN, memory usage for SORT).
+
+   **UI Usage**: In the Query Plan Overview, each stage can display its properties as key-value pairs, making it easy for users to understand what each stage is doing without inspecting raw JSON.
+
 ### ClusterSession Extensions for Stage 2 (previously labeled as Stage 1)
 
 Add to `ClusterSession` class:
