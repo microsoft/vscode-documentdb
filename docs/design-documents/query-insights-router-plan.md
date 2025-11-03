@@ -60,13 +60,38 @@ User runs query → Stage 1 (immediate) → Stage 2 (on-demand) → Stage 3 (AI 
 
 **Design Goal** (from performance-advisor.md): Populated as soon as the query finishes, using fast signals plus `explain("queryPlanner")`. No full re-execution.
 
-Provides immediate, low-cost metrics and query plan visualization without re-executing the query.
+Provides immediate, low-cost metrics and query plan visualization.
+
+### Paging Limitation and Query Insights
+
+**Current Paging Implementation**:
+The extension currently uses `skip` and `limit` for result paging, which is sufficient for data exploration but problematic for query insights. The `explain` plan with `skip` and `limit` only analyzes the performance of fetching a single page, not the overall query performance.
+
+**Impact on Query Insights**:
+For meaningful performance analysis, insights should reflect the "full query" scope without paging modifiers. However, rebuilding the entire paging system to use cursors is out of scope for the upcoming release.
+
+**Stage 1 Solution**:
+We'll implement a dedicated data collection function in `ClusterSession` that:
+
+1. Detects when a new query is executed (via existing `resetCachesIfQueryChanged` logic)
+2. On first call with a new query, automatically runs `explain("queryPlanner")` **without** `skip` and `limit`
+3. Caches the planner output in `_currentQueryPlannerInfo` for subsequent Stage 1 requests
+4. Returns cached data on subsequent calls until the query changes
+
+This approach:
+
+- ✅ Provides accurate query insights for the full query scope
+- ✅ Runs only once per unique query (cached until query changes)
+- ✅ Doesn't require rebuilding the paging system
+- ✅ Keeps existing `skip`/`limit` paging for the Results view unchanged
+
+**Note**: Optimizing the paging implementation (e.g., cursor-based paging) is planned for a future release but not in scope for query insights MVP.
 
 ### Data Sources
 
 - Query execution timer (client-side)
 - Result set from the query
-- Basic queryPlanner output (obtained via `explain("queryPlanner")` without executionStats)
+- Query planner output from `explain("queryPlanner")` **without skip/limit modifiers**
 
 ### Router Endpoint
 
@@ -118,9 +143,53 @@ z.object({
 
 ### Implementation Notes
 
+**Design Document Alignment**:
+
+1. **Metrics Row** (design doc 2.1): Display individual metric cards
+   - Execution Time: Client-side measurement
+   - Documents Returned: From result set
+   - Keys Examined: Show "n/a" (not available until Stage 2)
+   - Docs Examined: Show "n/a" (not available until Stage 2)
+
+2. **Query Plan Summary** (design doc 2.2): Fast planner-only view
+   - Extract full logical plan tree from `explain("queryPlanner")`
+   - Include rejected plans count
+   - No runtime stats (Stage 2 provides those)
+
+3. **Query Efficiency Analysis Card** (design doc 2.3): Partial data
+   - Execution Strategy: From top-level stage
+   - Index Used: From IXSCAN stage if present
+   - In-Memory Sort: Detect SORT stage
+   - Performance Rating: Not available (requires execution stats from Stage 2)
+
+**Data Collection in ClusterSession**:
+
+When Stage 1 is requested, the `ClusterSession` class handles data collection:
+
+1. **New Query Detection**: The existing `resetCachesIfQueryChanged()` method detects when the query text changes
+
+2. **Automatic explain("queryPlanner") Call**: On the first Stage 1 request after a new query:
+   - Extract the base query (filter, projection, sort) from the current query
+   - **Remove `skip` and `limit` modifiers** to analyze the full query scope (not just one page)
+   - Execute `explain("queryPlanner")` with the clean query
+   - Persist results in `_currentQueryPlannerInfo`
+
+3. **Caching**: Subsequent Stage 1 requests return cached `_currentQueryPlannerInfo` until query changes
+
+4. **Cache Invalidation**: When `resetCachesIfQueryChanged()` detects a query change, `_currentQueryPlannerInfo` is cleared
+
+This approach ensures:
+
+- ✅ Query insights reflect the full query performance (not just one page)
+- ✅ Only one `explain("queryPlanner")` call per unique query
+- ✅ Automatic cache management tied to query lifecycle
+- ✅ Existing `skip`/`limit` paging for Results view remains unchanged
+
+**Technical Details**:
+
 1. **Execution Time**: Measured client-side by the webview before/after query execution
 2. **Documents Returned**: Retrieved from cached results in ClusterSession
-3. **QueryPlanner Info**: Obtained via `explain("queryPlanner")` - no actual query execution needed
+3. **QueryPlanner Info**: Obtained via dedicated method in ClusterSession (strips skip/limit, calls explain)
 4. **Stages List**: Recursively traverse `winningPlan` to extract all stages for UI cards
 
 ### Extracting Data from queryPlanner Output
@@ -206,7 +275,7 @@ interface StageNode {
 }
 
 // Extraction function
-function extractStage0Data(explainOutput: unknown): Stage0QueryPlannerExtraction {
+function extractStage1Data(explainOutput: unknown): Stage1QueryPlannerExtraction {
   const qp = explainOutput.queryPlanner;
 
   return {
@@ -315,20 +384,39 @@ export class ClusterSession {
   }
 
   // NEW: Get query planner info (Stage 1)
+  // This method handles the "clean query" execution for insights (without skip/limit)
   public async getQueryPlannerInfo(databaseName: string, collectionName: string): Promise<unknown> {
     if (this._currentQueryPlannerInfo) {
       return this._currentQueryPlannerInfo;
     }
 
-    // Run explain("queryPlanner") - no execution, just planning
+    // Extract base query components from current query
+    // Note: This assumes the query is stored in a parseable format in ClusterSession
+    const baseQuery = this.extractBaseQuery(); // Returns { filter, projection, sort } without skip/limit
+
+    // Run explain("queryPlanner") with clean query (no skip/limit)
+    // This provides insights for the full query scope, not just one page
     this._currentQueryPlannerInfo = await this._client.explainQuery(
       databaseName,
       collectionName,
-      this._currentQueryText, // or use parsed query params
+      baseQuery,
       'queryPlanner',
     );
 
     return this._currentQueryPlannerInfo;
+  }
+
+  // NEW: Extract base query without paging modifiers
+  private extractBaseQuery(): { filter?: unknown; projection?: unknown; sort?: unknown } {
+    // Implementation extracts filter, projection, sort from current query
+    // Strips skip and limit for accurate full-query analysis
+    // Details depend on how query is stored in ClusterSession
+    return {
+      filter: this._currentFilter,
+      projection: this._currentProjection,
+      sort: this._currentSort,
+      // skip and limit intentionally omitted
+    };
   }
 
   // NEW: Store query metadata
@@ -1471,11 +1559,14 @@ async function executeQuery(queryParams) {
   return results;
 }
 
-// When user requests insights
-async function loadStage0Insights() {
+// When user requests insights (Stage 1 loads automatically)
+async function loadStage1Insights() {
   // sessionId is automatically available in RouterContext
   // ClusterSession already has the query and results cached
-  const insights = await trpc.getQueryInsightsStage0.query({});
+  // On first call with new query, this triggers explain("queryPlanner") without skip/limit
+  const insights = await trpc.getQueryInsightsStage1.query({});
+  // Display metrics row with initial values
+  // Show query plan summary
   return insights;
 }
 ```
@@ -1659,9 +1750,11 @@ const PERFORMANCE_THRESHOLDS = {
 Create a new types file: `src/webviews/documentdb/collectionView/types/queryInsights.ts`
 
 ```typescript
-export interface QueryInsightsStage0Response {
+export interface QueryInsightsStage1Response {
   executionTime: number;
   documentsReturned: number;
+  keysExamined: null; // Not available in Stage 1
+  docsExamined: null; // Not available in Stage 1
   queryPlannerInfo: {
     winningPlan: WinningPlan;
     rejectedPlans: unknown[];
@@ -1671,9 +1764,15 @@ export interface QueryInsightsStage0Response {
     plannerVersion: number;
   };
   stages: StageInfo[];
+  efficiencyAnalysis: {
+    executionStrategy: string;
+    indexUsed: string | null;
+    hasInMemorySort: boolean;
+    // Performance rating not available in Stage 1
+  };
 }
 
-export interface QueryInsightsStage1Response {
+export interface QueryInsightsStage2Response {
   executionTimeMs: number;
   totalKeysExamined: number;
   totalDocsExamined: number;
@@ -1685,15 +1784,34 @@ export interface QueryInsightsStage1Response {
   usedIndexNames: string[];
   hadInMemorySort: boolean;
   hadCollectionScan: boolean;
-  performanceRating: PerformanceRating;
+  isCoveringQuery: boolean;
+  concerns: string[];
+  efficiencyAnalysis: {
+    executionStrategy: string;
+    indexUsed: string | null;
+    examinedReturnedRatio: string;
+    hasInMemorySort: boolean;
+    performanceRating: PerformanceRating;
+  };
   stages: DetailedStageInfo[];
   rawExecutionStats: Record<string, unknown>;
 }
 
-export interface QueryInsightsStage2Response {
+export interface QueryInsightsStage3Response {
   analysisCard: AnalysisCard;
   improvementCards: ImprovementCard[];
+  performanceTips?: {
+    tips: Array<{
+      title: string;
+      description: string;
+    }>;
+    dismissible: boolean;
+  };
   verificationSteps: string;
+  animation: {
+    staggerDelay: number;
+    showTipsDuringLoading: boolean;
+  };
   metadata: OptimizationMetadata;
 }
 
@@ -1811,26 +1929,31 @@ export interface ActionButton {
 1. ✅ Review and approve this plan
 2. Extend `ClusterSession` class (`src/documentdb/ClusterSession.ts`):
    - Add private properties for explain plans and AI recommendations caching
-   - Implement `getQueryPlannerInfo()`, `getExecutionStats()` methods
+   - Implement `getQueryPlannerInfo()` with skip/limit stripping (Stage 1)
+   - Implement `extractBaseQuery()` helper to remove paging modifiers
+   - Implement `getExecutionStats()` (Stage 2)
    - Implement `setQueryMetadata()`, `getQueryMetadata()` methods
-   - Implement `cacheAIRecommendations()`, `getCachedAIRecommendations()` methods
+   - Implement `cacheAIRecommendations()`, `getCachedAIRecommendations()` (Stage 3)
    - Update `resetCachesIfQueryChanged()` to clear new caches
 3. Extend `ClustersClient` class:
-   - Add `explainQuery()` method to execute explain commands
-   - Add `getCollectionStats()` and `getIndexStats()` methods (if not present)
+   - Add `explainQuery()` method to execute explain commands (Stage 1)
+   - Add `getCollectionStats()` and `getIndexStats()` methods (Stage 3)
 4. Create TypeScript types file (`src/webviews/documentdb/collectionView/types/queryInsights.ts`)
 5. Implement router endpoints in `collectionViewRouter.ts`:
-   - `getQueryInsightsStage0` (uses ClusterSession)
-   - `getQueryInsightsStage1` (uses ClusterSession)
-   - `getQueryInsightsStage2` (uses ClusterSession)
+   - `getQueryInsightsStage1` (Initial Performance View - uses ClusterSession)
+   - `getQueryInsightsStage2` (Detailed Execution Analysis - uses ClusterSession)
+   - `getQueryInsightsStage3` (AI Recommendations - uses ClusterSession)
    - `storeQueryMetadata` mutation (stores in ClusterSession)
 6. Update query execution logic in webview:
    - Measure execution time around query execution
    - Call `storeQueryMetadata` after each query with timing data
-7. Update frontend to consume new endpoints (empty input schemas)
-8. Test with UI components
-9. Iterate on data structures based on UI feedback
-10. Implement real DocumentDB integration (explain commands)
-11. Connect AI backend
-12. Implement action handlers
-13. Add telemetry and monitoring
+7. Update frontend to consume new endpoints (empty input schemas, sessionId in context)
+8. Test with UI components using mock data
+9. Iterate on data structures based on UI feedback and design doc alignment
+10. Implement real DocumentDB integration:
+    - Stage 1: `explain("queryPlanner")` with skip/limit stripped
+    - Stage 2: `explain("executionStats")`
+    - Performance rating algorithm (design doc 3.2 thresholds)
+11. Connect AI backend (Stage 3)
+12. Implement action handlers (createIndex, dropIndex, copy, learnMore)
+13. Add telemetry and monitoring for all three stages
