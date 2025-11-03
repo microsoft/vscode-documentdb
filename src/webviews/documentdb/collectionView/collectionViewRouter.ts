@@ -457,4 +457,32 @@ export const collectionsViewRouter = router({
 
         return transformed;
     }),
+
+    /**
+     * Execute a recommendation action (create index, drop index, learn more, etc.)
+     *
+     * Takes actionId and payload from the button click and routes to appropriate handler
+     * in QueryInsightsAIService
+     */
+    executeRecommendation: publicProcedure
+        .use(trpcToTelemetry)
+        .input(
+            z.object({
+                actionId: z.string(),
+                payload: z.unknown(),
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            const myCtx = ctx as RouterContext;
+            const { sessionId, clusterId } = myCtx;
+            const { actionId, payload } = input;
+
+            // Create AI service instance
+            const aiService = new QueryInsightsAIService();
+
+            // Execute the recommendation action
+            const result = await aiService.executeRecommendation(clusterId, sessionId, actionId, payload);
+
+            return result;
+        }),
 });

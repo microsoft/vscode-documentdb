@@ -58,12 +58,13 @@ function createImprovementCard(
     context: TransformationContext,
 ): ImprovementCard {
     const actionVerb = getActionVerb(improvement.action);
+    const cardTitle = getCardTitle(improvement.action);
     const indexSpecStr = JSON.stringify(improvement.indexSpec, null, 2);
 
     return {
         type: 'improvement',
         cardId: `improvement-${index}`,
-        title: `Recommendation: ${actionVerb} Index`,
+        title: cardTitle,
         priority: improvement.priority,
         description: improvement.justification,
         recommendedIndex: indexSpecStr,
@@ -106,6 +107,22 @@ function getActionVerb(action: string): string {
             return 'Modify';
         default:
             return 'No Action';
+    }
+}
+
+/**
+ * Gets the card title based on the action type
+ */
+function getCardTitle(action: string): string {
+    switch (action) {
+        case 'create':
+            return 'Recommendation: Create Index';
+        case 'drop':
+            return 'Recommendation: Drop Index';
+        case 'modify':
+            return 'Recommendation: Modify Index';
+        default:
+            return 'Query Performance Insight';
     }
 }
 

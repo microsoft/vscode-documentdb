@@ -30,21 +30,15 @@
  * - Integration with actual explain data
  */
 
-import {
-    Badge,
-    Button,
-    Label,
-    Popover,
-    PopoverSurface,
-    PopoverTrigger,
-    Skeleton,
-    SkeletonItem,
-    Text,
-    tokens,
-} from '@fluentui/react-components';
+import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useState } from 'react';
+import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import {
+    type ImprovementCard as ImprovementCardConfig,
+    type QueryInsightsStage3Response,
+} from '../../types/queryInsights';
 import { AnimatedCardList } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
@@ -73,16 +67,27 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Stage 2: Detailed Execution Analysis (from explain("executionStats"))
     // Stage 3: AI-Powered Recommendations (opt-in)
     // See: docs/design-documents/performance-advisor.md
+    const { trpcClient } = useTrpcClient();
     const [stageState, setStageState] = useState<1 | 2 | 3>(1);
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [aiInsightsRequested, setAiInsightsRequested] = useState(false); // One-way flag: once true, stays true
-    const [showSuggestion1, setShowSuggestion1] = useState(false);
-    const [showSuggestion2, setShowSuggestion2] = useState(false);
-    const [showSuggestion3, setShowSuggestion3] = useState(false);
-    const [showImprovementCard, setShowImprovementCard] = useState(false);
+    const [aiData, setAiData] = useState<QueryInsightsStage3Response | null>(null);
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [selectedTab, setSelectedTab] = useState<Stage | null>(null);
+
+    // Debug logging for state changes
+    useEffect(() => {
+        console.log('stageState changed to:', stageState);
+    }, [stageState]);
+
+    useEffect(() => {
+        console.log('aiData changed:', aiData);
+        if (aiData) {
+            console.log('  - improvementCards count:', aiData.improvementCards.length);
+            console.log('  - improvementCards:', aiData.improvementCards);
+        }
+    }, [aiData]);
 
     // Metric values
     const [executionTime, setExecutionTime] = useState<number | null>(23433235);
@@ -134,23 +139,75 @@ export const QueryInsightsMain = (): JSX.Element => {
         setIsLoadingAI(true);
         setAiInsightsRequested(true); // Set one-way flag to prevent button from reappearing
         setIsTipsCardDismissed(false);
+
         // Show tips card after 1 second (while waiting for AI)
         const tipsTimer = setTimeout(() => {
             setShowTipsCard(true);
         }, 1000);
 
-        // Simulate AI processing delay, then transition to Stage 3
-        setTimeout(() => {
-            setIsLoadingAI(false);
-            setStageState(3);
-            // Stagger suggestion animations with 1s delay for each
-            setTimeout(() => setShowImprovementCard(true), 500); // Show new ImprovementCard first
-            setTimeout(() => setShowSuggestion1(true), 1500);
-            setTimeout(() => setShowSuggestion2(true), 2500);
-            setTimeout(() => setShowSuggestion3(true), 3500);
-        }, 5000);
+        // Call the tRPC endpoint (8 second delay expected from AI service)
+        void trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
+            .query()
+            .then((response) => {
+                console.log('AI response received:', response);
+                console.log('Number of improvement cards:', response.improvementCards.length);
+                console.log('Improvement cards:', response.improvementCards);
+
+                setAiData(response as QueryInsightsStage3Response);
+                setIsLoadingAI(false);
+                setStageState(3);
+            })
+            .catch((error: unknown) => {
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Error getting AI recommendations'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+                setIsLoadingAI(false);
+            });
 
         return () => clearTimeout(tipsTimer);
+    };
+
+    const handleCancelAI = () => {
+        setIsLoadingAI(false);
+        setStageState(2);
+        setAiInsightsRequested(false); // Allow requesting again after cancel
+    };
+
+    const handlePrimaryAction = (actionId: string, payload: unknown) => {
+        void trpcClient.mongoClusters.collectionView.executeRecommendation
+            .mutate({ actionId, payload })
+            .then((result) => {
+                if (result.success && result.message) {
+                    // TODO: Show success message to user
+                    console.log('Success:', result.message);
+                }
+            })
+            .catch((error: unknown) => {
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Error executing recommendation'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+            });
+    };
+
+    const handleSecondaryAction = (actionId: string, payload: unknown) => {
+        void trpcClient.mongoClusters.collectionView.executeRecommendation
+            .mutate({ actionId, payload })
+            .then((result) => {
+                if (result.success && result.message) {
+                    console.log('Success:', result.message);
+                }
+            })
+            .catch((error: unknown) => {
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Error executing action'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+            });
     };
 
     const handleDismissTips = () => {
@@ -230,259 +287,100 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 onLearnMore={() => {
                                     /* TODO: Implement learn more functionality */
                                 }}
-                                onCancel={() => {
-                                    setIsLoadingAI(false);
-                                    setStageState(2);
-                                }}
+                                onCancel={handleCancelAI}
                             />
                         </CollapseRelaxed>
 
                         {/* AnimatedCardList for AI suggestions and tips */}
                         <AnimatedCardList>
-                            {stageState === 3 && showImprovementCard && (
-                                <ImprovementCard
-                                    key="improvement-compound-index"
-                                    config={{
-                                        type: 'improvement',
-                                        cardId: 'improvement-1',
-                                        title: l10n.t('Recommendation: Create Compound Index'),
-                                        priority: 'high',
-                                        description: l10n.t(
-                                            'COLLSCAN examined 10,000 docs vs 2 returned (totalKeysExamined: 2). A compound index on { user_id: 1, status: 1 } will eliminate the full scan by supporting both the equality filter and the additional filtering condition.',
-                                        ),
-                                        recommendedIndex: '{ user_id: 1, status: 1 }',
-                                        recommendedIndexDetails: l10n.t(
-                                            'A compound index on user_id and status would allow DocumentDB to use a single index scan instead of scanning documents after the index lookup.',
-                                        ),
-                                        details: l10n.t(
-                                            'Risks: Additional write and storage overhead for maintaining a new index. Index size estimated at ~50MB for current collection size.',
-                                        ),
-                                        mongoShellCommand: 'db.users.createIndex({ user_id: 1, status: 1 })',
-                                        primaryButton: {
-                                            label: l10n.t('Create Index'),
-                                            actionId: 'createIndex',
-                                            payload: {
-                                                clusterId: 'mock-cluster-id',
-                                                databaseName: 'mydb',
-                                                collectionName: 'users',
-                                                action: 'create',
-                                                indexSpec: { user_id: 1, status: 1 },
-                                                mongoShell: 'db.users.createIndex({ user_id: 1, status: 1 })',
-                                            },
-                                        },
-                                        secondaryButton: {
-                                            label: l10n.t('Learn More'),
-                                            actionId: 'learnMore',
-                                            payload: {
-                                                topic: 'compound-indexes',
-                                            },
-                                        },
-                                    }}
-                                    onPrimaryAction={(actionId, payload) => {
-                                        console.log('Primary action:', actionId, payload);
-                                    }}
-                                    onSecondaryAction={(actionId, payload) => {
-                                        console.log('Secondary action:', actionId, payload);
-                                    }}
+                            {/* Analysis Card (if AI data available) */}
+                            {stageState === 3 && aiData && aiData.analysisCard && (
+                                <AiCard
+                                    key="analysis-card"
+                                    title={l10n.t('Query Performance Analysis')}
                                     onCopy={() => {
-                                        console.log('Copy clicked for improvement card');
+                                        void navigator.clipboard.writeText(aiData.analysisCard.content);
                                     }}
-                                />
+                                >
+                                    <Text size={300}>{aiData.analysisCard.content}</Text>
+                                </AiCard>
                             )}
 
-                            {stageState === 3 && showSuggestion1 && (
-                                <AiCard
-                                    key="create-index"
-                                    title={l10n.t('Create Index')}
-                                    titleChildren={
-                                        <Badge appearance="tint" shape="rounded" color="danger" size="small">
-                                            {l10n.t('HIGH PRIORITY')}
-                                        </Badge>
+                            {/* Improvement Cards (dynamic from AI response) */}
+                            {stageState === 3 &&
+                                aiData &&
+                                (() => {
+                                    console.log('=== IMPROVEMENT CARDS RENDERING ===');
+                                    console.log('stageState:', stageState);
+                                    console.log('aiData:', aiData);
+                                    console.log('aiData.improvementCards:', aiData.improvementCards);
+                                    console.log('Number of cards to render:', aiData.improvementCards.length);
+
+                                    if (!aiData.improvementCards || aiData.improvementCards.length === 0) {
+                                        console.log('SKIPPING: no improvement cards');
+                                        return null;
                                     }
-                                    onCopy={() => {
-                                        /* TODO: Implement copy functionality */
-                                    }}
-                                >
-                                    <Text
-                                        size={300}
-                                        style={{
-                                            display: 'block',
-                                            marginBottom: '12px',
-                                        }}
-                                    >
-                                        {l10n.t(
-                                            'The query performs a COLLSCAN examining 10,000 documents to return only 2, indicating poor selectivity without an index.',
-                                        )}
-                                    </Text>
-                                    <div style={{ marginBottom: '12px' }}>
-                                        <Label size="small">{l10n.t('Recommended Index')}</Label>
-                                        <div style={{ marginTop: '4px' }}>
-                                            <Popover
-                                                positioning="below-start"
-                                                withArrow
-                                                openOnHover
-                                                mouseLeaveDelay={0}
-                                            >
-                                                <PopoverTrigger disableButtonEnhancement>
-                                                    <Button appearance="secondary" size="small">
-                                                        {'{ user_id: 1 }'}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverSurface style={{ padding: '16px', maxWidth: '400px' }}>
-                                                    <Text
-                                                        size={300}
-                                                        weight="semibold"
-                                                        style={{ display: 'block', marginBottom: '8px' }}
-                                                    >
-                                                        {l10n.t('Index Details')}
-                                                    </Text>
-                                                    <Text size={200}>
-                                                        {l10n.t(
-                                                            'An index on user_id would allow direct lookup of matching documents.',
-                                                        )}
-                                                    </Text>
-                                                </PopoverSurface>
-                                            </Popover>
-                                        </div>
-                                    </div>
-                                    <Text
-                                        size={200}
-                                        style={{
-                                            color: tokens.colorNeutralForeground3,
-                                            display: 'block',
-                                            marginBottom: '12px',
-                                        }}
-                                    >
-                                        {l10n.t(
-                                            'Risks: Additional write and storage overhead for maintaining a new index.',
-                                        )}
-                                    </Text>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <Button appearance="primary" size="small">
-                                            {l10n.t('Apply')}
-                                        </Button>
-                                        <Button appearance="subtle" size="small">
-                                            {l10n.t('Learn More')}
-                                        </Button>
-                                    </div>
-                                </AiCard>
-                            )}
 
-                            {stageState === 3 && showSuggestion2 && (
-                                <AiCard
-                                    key="no-index-changes"
-                                    title={l10n.t('No Index Changes Recommended')}
-                                    onCopy={() => {
-                                        /* TODO: Implement copy functionality */
-                                    }}
-                                >
-                                    <Text size={300} style={{ display: 'block', marginBottom: '8px' }}>
-                                        {l10n.t(
-                                            'The query performs a COLLSCAN examining 50 documents to return 28 (boolean filter selectivity ~56%). A boolean field with over half the collection matching offers low selectivity, so an index on flag alone would not significantly reduce I/O.',
-                                        )}
-                                    </Text>
-                                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                        {l10n.t(
-                                            'Execution time is already only 0.02 ms on a 50-document collection, so optimization benefit is negligible.',
-                                        )}
-                                    </Text>
-                                </AiCard>
-                            )}
+                                    console.log(`RENDERING ${aiData.improvementCards.length} improvement cards...`);
 
-                            {stageState === 3 && showSuggestion3 && (
-                                <AiCard
-                                    key="execution-plan"
-                                    title={l10n.t('Understanding Your Query Execution Plan')}
-                                    onCopy={() => {
-                                        /* TODO: Implement copy functionality */
-                                    }}
-                                >
-                                    <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
-                                        {l10n.t(
-                                            'Your current query uses a COLLSCAN (collection scan) strategy, which means DocumentDB examines all 10,000 documents in the collection to find the 2 matching documents. This is highly inefficient with a selectivity of only 0.02%.',
-                                        )}
-                                    </Text>
-                                    <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
-                                        {l10n.t(
-                                            'With the recommended index on user_id, the execution plan would change to:',
-                                        )}
-                                    </Text>
-                                    <div
-                                        style={{
-                                            padding: '12px',
-                                            backgroundColor: tokens.colorNeutralBackground2,
-                                            borderRadius: tokens.borderRadiusMedium,
-                                            marginBottom: '12px',
-                                        }}
-                                    >
-                                        <Text
-                                            size={300}
-                                            style={{
-                                                display: 'block',
-                                                fontFamily: 'monospace',
-                                                marginBottom: '4px',
-                                            }}
-                                        >
-                                            <strong>IXSCAN</strong> {l10n.t('(Index Scan on user_id)')}
-                                        </Text>
-                                        <Text
-                                            size={200}
-                                            style={{
-                                                display: 'block',
-                                                color: tokens.colorNeutralForeground3,
-                                                marginLeft: '16px',
-                                                marginBottom: '8px',
-                                            }}
-                                        >
-                                            {l10n.t(
-                                                'Scan the index to find matching user_id values (~2 index entries)',
+                                    // Use Fragment to properly spread children
+                                    return (
+                                        <>
+                                            {aiData.improvementCards.map(
+                                                (card: ImprovementCardConfig, index: number) => {
+                                                    console.log(
+                                                        `Card ${index + 1}/${aiData.improvementCards.length}:`,
+                                                        card.cardId,
+                                                        'actionId:',
+                                                        card.primaryButton.actionId,
+                                                    );
+
+                                                    // For cards with actionable recommendations (create, drop, modify), use ImprovementCard
+                                                    if (
+                                                        card.primaryButton.actionId === 'createIndex' ||
+                                                        card.primaryButton.actionId === 'dropIndex' ||
+                                                        card.primaryButton.actionId === 'modifyIndex'
+                                                    ) {
+                                                        console.log(
+                                                            `  -> Rendering as ImprovementCard (actionId: ${card.primaryButton.actionId})`,
+                                                        );
+                                                        return (
+                                                            <ImprovementCard
+                                                                key={card.cardId}
+                                                                config={card}
+                                                                onPrimaryAction={handlePrimaryAction}
+                                                                onSecondaryAction={handleSecondaryAction}
+                                                                onCopy={() => {
+                                                                    void navigator.clipboard.writeText(
+                                                                        card.mongoShellCommand,
+                                                                    );
+                                                                }}
+                                                            />
+                                                        );
+                                                    }
+
+                                                    // For informational cards (no action), use AiCard with simplified content
+                                                    console.log(
+                                                        `  -> Rendering as AiCard (actionId: ${card.primaryButton.actionId})`,
+                                                    );
+                                                    return (
+                                                        <AiCard
+                                                            key={card.cardId || `card-${index}`}
+                                                            title={card.title}
+                                                            onCopy={() => {
+                                                                void navigator.clipboard.writeText(card.description);
+                                                            }}
+                                                        >
+                                                            <Text size={300}>{card.description}</Text>
+                                                        </AiCard>
+                                                    );
+                                                },
                                             )}
-                                        </Text>
-                                        <Text
-                                            size={300}
-                                            style={{
-                                                display: 'block',
-                                                fontFamily: 'monospace',
-                                                marginBottom: '4px',
-                                            }}
-                                        >
-                                            <strong>FETCH</strong> {l10n.t('(Document Retrieval)')}
-                                        </Text>
-                                        <Text
-                                            size={200}
-                                            style={{
-                                                display: 'block',
-                                                color: tokens.colorNeutralForeground3,
-                                                marginLeft: '16px',
-                                                marginBottom: '8px',
-                                            }}
-                                        >
-                                            {l10n.t('Retrieve only the matching documents (~2 documents)')}
-                                        </Text>
-                                        <Text
-                                            size={300}
-                                            style={{
-                                                display: 'block',
-                                                fontFamily: 'monospace',
-                                                marginBottom: '4px',
-                                            }}
-                                        >
-                                            <strong>PROJECTION</strong> {l10n.t('(Field Selection)')}
-                                        </Text>
-                                        <Text
-                                            size={200}
-                                            style={{
-                                                display: 'block',
-                                                color: tokens.colorNeutralForeground3,
-                                                marginLeft: '16px',
-                                            }}
-                                        >
-                                            {l10n.t('Return only the requested fields')}
-                                        </Text>
-                                    </div>
-                                </AiCard>
-                            )}
+                                        </>
+                                    );
+                                })()}
 
+                            {/* Performance Tips Card */}
                             {showTipsCard && !isTipsCardDismissed && (
                                 <TipsCard
                                     key="performance-tips"
