@@ -1033,7 +1033,7 @@ Instead of adding methods directly to `ClustersClient`, we should create explain
 3. Implement methods with proper error handling and type safety
 4. Use MongoDB driver's native APIs consistently
 
-**Implementation Location**: `src/documentdb/QueryInsightsApis.ts` (new file)
+**Implementation Location**: `src/documentdb/client/QueryInsightsApis.ts` (new file)
 
 ```typescript
 import { type Document, type Filter, type MongoClient, type Sort } from 'mongodb';
@@ -2215,7 +2215,7 @@ The extensions to `ClusterSession` are documented in each stage section:
 
 All methods leverage the existing cache invalidation mechanism via `resetCachesIfQueryChanged()`.
 
-**QueryInsightsApis Class** (new file: `src/documentdb/QueryInsightsApis.ts`):
+**QueryInsightsApis Class** (new file: `src/documentdb/client/QueryInsightsApis.ts`):
 
 Following the `LlmEnhancedFeatureApis.ts` pattern, explain-related functionality is implemented in a dedicated class:
 
@@ -2910,36 +2910,1059 @@ export interface ActionButton {
 
 ---
 
-## Next Steps
+## Implementation Plan
 
-1. ✅ Review and approve this plan
-2. Extend `ClusterSession` class (`src/documentdb/ClusterSession.ts`):
-   - Add private properties for explain plans and AI recommendations caching
-   - Implement `getQueryPlannerInfo()` with skip/limit stripping (Stage 1)
-   - Implement `extractBaseQuery()` helper to remove paging modifiers
-   - Implement `getExecutionStats()` (Stage 2)
-   - Implement `setQueryMetadata()`, `getQueryMetadata()` methods
-   - Implement `cacheAIRecommendations()`, `getCachedAIRecommendations()` (Stage 3)
-   - Update `resetCachesIfQueryChanged()` to clear new caches
-3. Extend `ClustersClient` class:
-   - Add `explainQuery()` method to execute explain commands (Stage 1)
-   - Add `getCollectionStats()` and `getIndexStats()` methods (Stage 3)
-4. Create TypeScript types file (`src/webviews/documentdb/collectionView/types/queryInsights.ts`)
-5. Implement router endpoints in `collectionViewRouter.ts`:
-   - `getQueryInsightsStage1` (Initial Performance View - uses ClusterSession)
-   - `getQueryInsightsStage2` (Detailed Execution Analysis - uses ClusterSession)
-   - `getQueryInsightsStage3` (AI Recommendations - uses ClusterSession)
-   - `storeQueryMetadata` mutation (stores in ClusterSession)
-6. Update query execution logic in webview:
-   - Measure execution time around query execution
-   - Call `storeQueryMetadata` after each query with timing data
-7. Update frontend to consume new endpoints (empty input schemas, sessionId in context)
-8. Test with UI components using mock data
-9. Iterate on data structures based on UI feedback and design doc alignment
-10. Implement real DocumentDB integration:
-    - Stage 1: `explain("queryPlanner")` with skip/limit stripped
-    - Stage 2: `explain("executionStats")`
-    - Performance rating algorithm (design doc 3.2 thresholds)
-11. Connect AI backend (Stage 3)
-12. Implement action handlers (createIndex, dropIndex, copy, learnMore)
-13. Add telemetry and monitoring for all three stages
+### File Structure
+
+This section outlines where new code will be placed following the project's architectural patterns:
+
+#### Backend Files (Extension Host)
+
+```
+src/
+├── documentdb/
+│   ├── client/                              # 📁 NEW FOLDER
+│   │   ├── ClusterSession.ts               # ✏️ MODIFY: Add query insights caching
+│   │   ├── ClustersClient.ts               # ✏️ MODIFY: No changes needed
+│   │   └── QueryInsightsApis.ts                # 🆕 NEW: Explain query execution (follows LlmEnhancedFeatureApis pattern)
+│   │
+│   └── queryInsights/                       # 📁 NEW FOLDER
+│       ├── ExplainPlanAnalyzer.ts          # 🆕 NEW: Explain plan parsing & analysis
+│       ├── StagePropertyExtractor.ts       # 🆕 NEW: Extended stage info extraction
+│       └── transformations.ts              # 🆕 NEW: Router response transformations
+│
+└── services/
+    └── ai/                                  # 📁 NEW FOLDER
+        └── QueryOptimizationAIService.ts   # 🆕 NEW: AI service mock (8s delay)
+
+webviews/
+└── documentdb/
+    └── collectionView/
+        ├── collectionViewRouter.ts         # ✏️ MODIFY: Add 3 tRPC endpoints
+        └── types/
+            └── queryInsights.ts            # 🆕 NEW: Frontend-facing types
+```
+
+#### Architectural Guidelines
+
+**`src/documentdb/client/` folder:**
+
+- Core DocumentDB client infrastructure
+- `ClusterSession.ts` - Session state management, caching (moved here for better organization)
+- `ClustersClient.ts` - MongoDB client wrapper, low-level operations (moved here)
+- Over time, will contain specific client extensions and specialized session types
+
+**`src/documentdb/client/QueryInsightsApis.ts` file:**
+
+- Follows the `LlmEnhancedFeatureApis.ts` pattern
+- Contains `explainFind()` method for executing explain commands
+- Takes `MongoClient` in constructor
+- Provides proper TypeScript interfaces for explain operations
+- **See "Implementation Details" section (search for "QueryInsightsApis Class") for full implementation**
+
+**`src/documentdb/queryInsights/` folder:**
+
+- Query analysis logic (explain plan parsing, metrics extraction)
+- Transformation functions for router responses
+- Backend types are generic - no webview-specific terminology
+
+**`src/services/ai/` folder:**
+
+- AI service integration
+- Mock implementation with 8-second delay for realistic testing
+- Returns mock data structure matching current webview expectations
+
+**`webviews/.../types/` folder:**
+
+- Frontend-facing TypeScript types
+- Shared between router and React components
+- tRPC infers types from router, so these are mainly for UI components
+
+---
+
+### Implementation Steps
+
+#### Phase 1: Foundation & Types
+
+**1.1. Create Type Definitions** ⬜ Not Started
+
+**📖 Before starting**: Review the entire design document, especially:
+
+- Section on "DocumentDB Explain Plan Parsing" for type requirements
+- Stage 1, 2, and 3 data structure specifications
+- Frontend type expectations in each stage section
+
+Create `src/webviews/documentdb/collectionView/types/queryInsights.ts`:
+
+```typescript
+// Frontend-facing types for UI consumption
+export interface QueryInsightsResponse {
+  performance: PerformanceOverview;
+  queryPlan?: QueryPlanSummary;
+  executionDetails?: ExecutionDetails;
+  stageBreakdown?: StageInfo[];
+  recommendations?: string[];
+  aiAnalysis?: AIAnalysisResponse;
+}
+
+export interface PerformanceOverview {
+  executionTimeMs: number;
+  documentsReturned: number;
+  docsExamined?: number;
+  keysExamined?: number;
+  rating?: 'excellent' | 'good' | 'fair' | 'poor';
+}
+
+export interface AIAnalysisResponse {
+  analysisCard: AnalysisCard;
+  improvementCards: ImprovementCard[];
+  verificationSteps: VerificationStep[];
+}
+
+// ... (all types from design doc)
+```
+
+Create `src/services/ai/QueryOptimizationAIService.ts`:
+
+```typescript
+/**
+ * AI service for query optimization recommendations
+ * Mock implementation with 8-second delay for realistic testing
+ */
+export class QueryOptimizationAIService {
+  /**
+   * Calls AI service for query optimization recommendations
+   * Currently returns mock data with simulated network delay
+   */
+  public async getOptimizationRecommendations(
+    query: string,
+    databaseName: string,
+    collectionName: string,
+  ): Promise<AIOptimizationResponse> {
+    // Simulate 8-second AI processing time
+    await new Promise((resolve) => setTimeout(resolve, 8000));
+
+    // Return mock data matching current webview expectations
+    return {
+      analysis: 'Your query performs a full collection scan after the index lookup...',
+      improvements: [
+        {
+          action: 'create',
+          indexSpec: { user_id: 1, status: 1 },
+          reason: 'Compound index would improve query performance',
+          impact: 'high',
+        },
+      ],
+      verification: ['Run explain() to verify index usage', 'Check docsExamined equals documentsReturned'],
+    };
+  }
+}
+
+interface AIOptimizationResponse {
+  analysis: string;
+  improvements: AIIndexRecommendation[];
+  verification: string[];
+}
+
+interface AIIndexRecommendation {
+  action: 'create' | 'drop' | 'modify';
+  indexSpec: Record<string, 1 | -1>;
+  reason: string;
+  impact: 'high' | 'medium' | 'low';
+}
+```
+
+---
+
+#### Phase 2: Explain Plan Analysis (Stages 1 & 2)
+
+**2.1. Install Dependencies** ⬜ Not Started
+
+**📖 Before starting**: Review the "DocumentDB Explain Plan Parsing with @mongodb-js/explain-plan-helper" section for library overview and usage patterns.
+
+```bash
+npm install @mongodb-js/explain-plan-helper
+```
+
+**2.2. Create ExplainPlanAnalyzer** ⬜ Not Started
+
+**📖 Before starting**: Review the entire design document, especially:
+
+- "DocumentDB Explain Plan Parsing" section for ExplainPlan API usage
+- Stage 1 and Stage 2 sections for expected output formats
+- Performance rating algorithm in Stage 2 section
+
+Create `src/documentdb/queryInsights/ExplainPlanAnalyzer.ts`:
+
+```typescript
+import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
+import type { Document } from 'mongodb';
+
+export class ExplainPlanAnalyzer {
+  /**
+   * Analyzes explain("queryPlanner") output
+   */
+  public static analyzeQueryPlanner(explainResult: Document) {
+    const explainPlan = new ExplainPlan(explainResult);
+
+    // Extract metrics using helper methods
+    const usedIndexes = explainPlan.usedIndexes;
+    const isCollectionScan = explainPlan.isCollectionScan;
+    const isCovered = explainPlan.isCovered;
+    const hasInMemorySort = explainPlan.inMemorySort;
+
+    // Build response structure
+    return {
+      usedIndexes,
+      isCollectionScan,
+      isCovered,
+      hasInMemorySort,
+      rawPlan: explainResult,
+    };
+  }
+
+  /**
+   * Analyzes explain("executionStats") output
+   */
+  public static analyzeExecutionStats(explainResult: Document) {
+    const explainPlan = new ExplainPlan(explainResult);
+
+    // Extract execution metrics
+    const executionTimeMillis = explainPlan.executionTimeMillis;
+    const totalDocsExamined = explainPlan.totalDocsExamined;
+    const totalKeysExamined = explainPlan.totalKeysExamined;
+    const nReturned = explainPlan.nReturned;
+
+    // Calculate efficiency ratio
+    const efficiencyRatio = this.calculateEfficiencyRatio(nReturned, totalDocsExamined);
+
+    // Build response structure
+    return {
+      executionTimeMillis,
+      totalDocsExamined,
+      totalKeysExamined,
+      nReturned,
+      efficiencyRatio,
+      performanceRating: this.calculatePerformanceRating(
+        executionTimeMillis,
+        efficiencyRatio,
+        explainPlan.inMemorySort,
+      ),
+      rawStats: explainResult,
+    };
+  }
+
+  /**
+   * Calculates performance rating based on metrics
+   */
+  private static calculatePerformanceRating(
+    executionTimeMs: number,
+    efficiencyRatio: number,
+    hasInMemorySort: boolean,
+  ): 'excellent' | 'good' | 'fair' | 'poor' {
+    // Implementation based on design doc Section 3.2 thresholds
+    if (efficiencyRatio >= 0.5 && !hasInMemorySort && executionTimeMs < 100) {
+      return 'excellent';
+    } else if (efficiencyRatio >= 0.1 && executionTimeMs < 500) {
+      return 'good';
+    } else if (efficiencyRatio >= 0.01) {
+      return 'fair';
+    }
+    return 'poor';
+  }
+
+  private static calculateEfficiencyRatio(returned: number, examined: number): number {
+    if (examined === 0) return 1;
+    return returned / examined;
+  }
+}
+```
+
+**2.3. Create StagePropertyExtractor** ⬜ Not Started
+
+**📖 Before starting**: Review Stage 2 section for "Extended Stage Information Extraction" - contains complete switch-case implementation for 20+ stage types.
+
+Create `src/documentdb/queryInsights/StagePropertyExtractor.ts`:
+
+```typescript
+import type { Document } from 'mongodb';
+import type { ExtendedStageInfo } from '../../webviews/documentdb/collectionView/types/queryInsights';
+
+export class StagePropertyExtractor {
+  /**
+   * Extracts extended properties for all stages in execution plan
+   */
+  public static extractAllExtendedStageInfo(executionStages: Document): ExtendedStageInfo[] {
+    const stageInfoList: ExtendedStageInfo[] = [];
+
+    this.traverseStages(executionStages, stageInfoList);
+
+    return stageInfoList;
+  }
+
+  /**
+   * Recursively traverses execution stages and extracts properties
+   */
+  private static traverseStages(stage: Document, accumulator: ExtendedStageInfo[]): void {
+    if (!stage || !stage.stage) return;
+
+    const properties = this.extractStageProperties(stage);
+
+    accumulator.push({
+      stageName: stage.stage,
+      properties,
+    });
+
+    // Recurse into child stages
+    if (stage.inputStage) {
+      this.traverseStages(stage.inputStage, accumulator);
+    }
+    if (stage.inputStages) {
+      stage.inputStages.forEach((childStage: Document) => {
+        this.traverseStages(childStage, accumulator);
+      });
+    }
+  }
+
+  /**
+   * Extracts stage-specific properties based on stage type
+   */
+  private static extractStageProperties(stage: Document): Record<string, string | number> {
+    const stageName = stage.stage;
+    const properties: Record<string, string | number> = {};
+
+    switch (stageName) {
+      case 'IXSCAN':
+        if (stage.keyPattern) properties['Key Pattern'] = JSON.stringify(stage.keyPattern);
+        if (stage.indexName) properties['Index Name'] = stage.indexName;
+        if (stage.isMultiKey !== undefined) properties['Multi Key'] = stage.isMultiKey ? 'Yes' : 'No';
+        if (stage.direction) properties['Direction'] = stage.direction;
+        if (stage.indexBounds) properties['Index Bounds'] = JSON.stringify(stage.indexBounds);
+        break;
+
+      case 'COLLSCAN':
+        if (stage.direction) properties['Direction'] = stage.direction;
+        if (stage.filter) properties['Filter'] = JSON.stringify(stage.filter);
+        break;
+
+      case 'FETCH':
+        if (stage.filter) properties['Filter'] = JSON.stringify(stage.filter);
+        break;
+
+      case 'SORT':
+        if (stage.sortPattern) properties['Sort Pattern'] = JSON.stringify(stage.sortPattern);
+        if (stage.memLimit !== undefined) properties['Memory Limit'] = `${stage.memLimit} bytes`;
+        if (stage.type) properties['Type'] = stage.type;
+        break;
+
+      // ... (add remaining 15+ stage types from design doc)
+    }
+
+    return properties;
+  }
+}
+```
+
+**2.4. Extend ClustersClient** ⬜ Not Started
+
+**📖 Before starting**: Review "Implementation Details" section - search for "QueryInsightsApis Class" for the complete implementation pattern.
+
+**NOTE**: ClustersClient does NOT need `explainQuery()` method. Instead, create `QueryInsightsApis.ts` following the `LlmEnhancedFeatureApis` pattern.
+
+Create `src/documentdb/client/QueryInsightsApis.ts`:
+
+```typescript
+import type { MongoClient, Document } from 'mongodb';
+
+/**
+ * Query insights APIs for explain command execution
+ * Follows the LlmEnhancedFeatureApis.ts pattern
+ */
+export class QueryInsightsApis {
+  constructor(private readonly client: MongoClient) {}
+
+  /**
+   * Executes explain command on a find query
+   */
+  public async explainFind(
+    databaseName: string,
+    collectionName: string,
+    filter: Document,
+    options: {
+      verbosity: 'queryPlanner' | 'executionStats' | 'allPlansExecution';
+      sort?: Document;
+      projection?: Document;
+      skip?: number;
+      limit?: number;
+    },
+  ): Promise<Document> {
+    const db = this.client.db(databaseName);
+    const collection = db.collection(collectionName);
+
+    const cursor = collection.find(filter);
+
+    if (options.sort) cursor.sort(options.sort);
+    if (options.projection) cursor.project(options.projection);
+    if (options.skip) cursor.skip(options.skip);
+    if (options.limit) cursor.limit(options.limit);
+
+    return cursor.explain(options.verbosity);
+  }
+}
+```
+
+**See "Implementation Details" section for full QueryInsightsApis implementation and ClusterSession integration.**
+
+**2.5. Extend ClusterSession for Caching** ⬜ Not Started
+
+**📖 Before starting**: Review "Implementation Details" section - search for "ClusterSession Extensions for Stage 1" and "Stage 2" for complete implementation patterns including QueryInsightsApis integration.
+
+Modify `src/documentdb/client/ClusterSession.ts`:
+
+```typescript
+import { QueryInsightsApis } from './QueryInsightsApis';
+
+// Add to ClusterSession class:
+
+private _queryInsightsApis: QueryInsightsApis;
+private _queryPlannerCache?: { result: Document; timestamp: number };
+private _executionStatsCache?: { result: Document; timestamp: number };
+private _aiRecommendationsCache?: unknown;
+
+// In constructor or initialization:
+constructor() {
+  // ... existing code ...
+  this._queryInsightsApis = new QueryInsightsApis(this._client._mongoClient);
+}
+
+/**
+ * Gets query planner info - uses explain("queryPlanner")
+ */
+public async getQueryPlannerInfo(
+  databaseName: string,
+  collectionName: string,
+): Promise<Document> {
+  // Check cache (no sessionId needed - this instance IS the session)
+  if (this._queryPlannerCache) {
+    return this._queryPlannerCache.result;
+  }
+
+  // Get query from current session
+  const query = this.getCurrentQuery(); // You may need to add this helper
+
+  // Execute explain("queryPlanner") using QueryInsightsApis
+  const explainResult = await this._queryInsightsApis.explainFind(
+    databaseName,
+    collectionName,
+    query,
+    { verbosity: 'queryPlanner' },
+  );
+
+  // Cache result
+  this._queryPlannerCache = {
+    result: explainResult,
+    timestamp: Date.now(),
+  };
+
+  return explainResult;
+}
+
+/**
+ * Gets execution statistics - uses explain("executionStats")
+ */
+public async getExecutionStats(
+  databaseName: string,
+  collectionName: string,
+): Promise<Document> {
+  // Check cache
+  if (this._executionStatsCache) {
+    return this._executionStatsCache.result;
+  }
+
+  // Get query from current session
+  const query = this.getCurrentQuery();
+
+  // Execute explain("executionStats") using QueryInsightsApis - this re-runs the query
+  const explainResult = await this._queryInsightsApis.explainFind(
+    databaseName,
+    collectionName,
+    query,
+    { verbosity: 'executionStats' },
+  );
+
+  // Cache result
+  this._executionStatsCache = {
+    result: explainResult,
+    timestamp: Date.now(),
+  };
+
+  return explainResult;
+}
+
+/**
+ * Caches AI recommendations
+ */
+public cacheAIRecommendations(recommendations: unknown): void {
+  this._aiRecommendationsCache = recommendations;
+}
+
+/**
+ * Gets cached AI recommendations
+ */
+public getCachedAIRecommendations(): unknown | undefined {
+  return this._aiRecommendationsCache;
+}
+
+/**
+ * Clears all query insights caches
+ * Called automatically by resetCachesIfQueryChanged()
+ */
+private clearQueryInsightsCaches(): void {
+  this._queryPlannerCache = undefined;
+  this._executionStatsCache = undefined;
+  this._aiRecommendationsCache = undefined;
+}
+
+// Update existing resetCachesIfQueryChanged() to call clearQueryInsightsCaches()
+private resetCachesIfQueryChanged(query: string) {
+  if (this._currentQueryText !== query.trim()) {
+    // Clear all caches including query insights
+    this.clearQueryInsightsCaches();
+    // ... existing cache clearing code ...
+  }
+}
+```
+
+**See "ClusterSession Integration" and "ClusterSession Extensions for Stage 1" sections for complete implementation details.**
+
+---
+
+#### Phase 3: AI Service Integration
+
+**3.1. Create AI Service Client** ⬜ Not Started
+
+**📖 Before starting**: Review Stage 3 section for AI service payload structure and expected response format.
+
+Create `src/services/ai/QueryOptimizationAIService.ts`:
+
+```typescript
+/**
+ * AI service for query optimization recommendations
+ * Currently a mock implementation with 8-second delay
+ *
+ * TODO: Replace with actual AI service integration later
+ */
+export class QueryOptimizationAIService {
+  /**
+   * Gets optimization recommendations
+   * Currently returns mock data with 8s delay to simulate real AI processing
+   */
+  public async getOptimizationRecommendations(
+    query: string,
+    databaseName: string,
+    collectionName: string,
+  ): Promise<unknown> {
+    // Simulate 8-second AI processing time
+    await new Promise((resolve) => setTimeout(resolve, 8000));
+
+    // Return mock data matching current webview expectations
+    return {
+      analysis:
+        'Your query performs a full collection scan after the index lookup, examining 10,000 documents to return only 2. This indicates the index is not selective enough or additional filtering is happening after the index stage.',
+      improvements: [
+        {
+          action: 'create',
+          indexSpec: { user_id: 1, status: 1 },
+          reason:
+            'A compound index on user_id and status would allow MongoDB to use a single index scan instead of scanning documents after the index lookup.',
+          impact: 'high',
+        },
+      ],
+      verification: [
+        'After creating the index, run the same query and verify that:',
+        '1) docsExamined equals documentsReturned',
+        "2) the execution plan shows IXSCAN using 'user_id_1_status_1'",
+        '3) no COLLSCAN stage appears in the plan',
+      ],
+    };
+
+    /* TODO: Actual implementation will call AI service via ClustersClient
+    // This will be implemented later when AI backend is ready:
+    // const response = await this.clustersClient.callAIService({
+    //   query,
+    //   databaseName,
+    //   collectionName,
+    // });
+    // return response;
+    */
+  }
+}
+```
+
+**3.2. Extend ClusterSession for AI Integration** ⬜ Not Started
+
+**📖 Before starting**: Review Stage 3 and "ClusterSession Extensions for Stage 3" sections for AI integration patterns.
+
+Modify `src/documentdb/client/ClusterSession.ts`:
+
+```typescript
+/**
+ * Gets AI optimization recommendations
+ */
+public async getAIRecommendations(
+  query: string,
+  databaseName: string,
+  collectionName: string,
+): Promise<unknown> {
+  // Check cache first (no sessionId needed - this instance IS the session)
+  const cached = this.getCachedAIRecommendations();
+  if (cached) {
+    return cached;
+  }
+
+  // Call AI service with minimal payload
+  // Note: AI backend will independently collect additional data
+  const recommendations = await this.aiService.getOptimizationRecommendations(
+    query,
+    databaseName,
+    collectionName,
+  );
+
+  // Cache recommendations
+  this.cacheAIRecommendations(recommendations);
+
+  return recommendations;
+}
+```
+
+---
+
+#### Phase 4: Router Implementation
+
+**4.1. Implement tRPC Endpoints** ⬜ Not Started
+
+**📖 Before starting**: Review entire design document, especially:
+
+- Stage 1, 2, and 3 sections for endpoint behavior
+- "Router Context" section for available context fields
+- "Router File Structure" section for patterns
+- Note: Frontend-facing endpoint names use "Stage1", "Stage2", "Stage3" terminology
+
+Modify `webviews/documentdb/collectionView/collectionViewRouter.ts`:
+
+````typescript
+// Add to router:
+
+/**
+ * Query Insights Stage 1 - Initial Performance View
+ * Returns fast metrics using explain("queryPlanner")
+ */
+getQueryInsightsStage1: protectedProcedure
+  .input(z.object({})) // Empty - uses sessionId from context
+  .query(async ({ ctx }) => {
+    const { sessionId, clusterId, databaseName, collectionName } = ctx;
+
+    const clusterSession = await getClusterSession(clusterId);
+
+    // Get query planner data (cached or execute explain)
+    // No sessionId parameter needed - ClusterSession instance IS the session
+    const explainResult = await clusterSession.getQueryPlannerInfo(
+      databaseName,
+      collectionName,
+    );
+
+    // Analyze and transform
+    const analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(explainResult);
+    return transformStage1Response(analyzed);
+  }),
+
+/**
+ * Query Insights Stage 2 - Detailed Execution Analysis
+ * Returns authoritative metrics using explain("executionStats")
+ */
+getQueryInsightsStage2: protectedProcedure
+  .input(z.object({})) // Empty - uses sessionId from context
+  .query(async ({ ctx }) => {
+    const { sessionId, clusterId, databaseName, collectionName } = ctx;
+
+    const clusterSession = await getClusterSession(clusterId);
+
+    // Get execution stats (cached or execute explain)
+    // No sessionId parameter needed - ClusterSession instance IS the session
+    const explainResult = await clusterSession.getExecutionStats(
+      databaseName,
+      collectionName,
+    );
+
+    // Analyze and transform
+    const analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(explainResult);
+
+    // Extract extended stage info
+    const executionStages = explainResult.executionStats?.executionStages;
+    if (executionStages) {
+      analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
+    }
+
+    return transformStage2Response(analyzed);
+  }),
+
+/**
+ * Query Insights Stage 3 - AI-Powered Optimization Recommendations
+ * Returns actionable suggestions from AI service (8s delay)
+ */
+getQueryInsightsStage3: protectedProcedure
+  .input(z.object({})) // Empty - uses sessionId from context
+  .query(async ({ ctx }) => {
+    const { sessionId, clusterId, databaseName, collectionName } = ctx;
+
+    const clusterSession = await getClusterSession(clusterId);
+
+    // Get current query from session
+    const query = clusterSession.getCurrentQuery();
+
+    // Get AI recommendations (cached or call AI service with 8s delay)
+    // No sessionId parameter needed - ClusterSession instance IS the session
+    const aiRecommendations = await clusterSession.getAIRecommendations(
+      JSON.stringify(query),
+      databaseName,
+      collectionName,
+    );
+
+    // Transform to UI format (with button payloads)
+    return transformStage3Response(aiRecommendations, ctx);
+  }),
+```**4.2. Implement Transformation Functions** ⬜ Not Started
+
+Create `src/documentdb/queryInsights/transformations.ts`:
+
+```typescript
+import type { RouterContext } from '../../../webviews/documentdb/collectionView/collectionViewRouter';
+
+/**
+ * Transforms query planner data to frontend response format
+ */
+export function transformQueryPlannerResponse(analyzed: unknown) {
+  // Implementation based on design doc
+  return analyzed;
+}
+
+/**
+ * Transforms execution stats data to frontend response format
+ */
+export function transformExecutionStatsResponse(analyzed: unknown) {
+  // Implementation based on design doc
+  return analyzed;
+}
+
+/**
+ * Transforms AI response to frontend format with button payloads
+ */
+export function transformAIResponse(aiResponse: any, ctx: RouterContext) {
+  const { clusterId, databaseName, collectionName } = ctx;
+
+  // Build improvement cards with complete button payloads
+  const improvementCards = aiResponse.improvements.map((improvement: any) => {
+    return {
+      title: `${improvement.action} Index`,
+      description: improvement.reason,
+      impact: improvement.impact,
+      primaryButton: {
+        label: improvement.action === 'create' ? 'Create Index' : 'Drop Index',
+        action: improvement.action === 'create' ? 'createIndex' : 'dropIndex',
+        payload: {
+          clusterId,
+          databaseName,
+          collectionName,
+          indexSpec: improvement.indexSpec,
+        },
+      },
+      secondaryButton: {
+        label: 'Copy Command',
+        action: 'copyCommand',
+        payload: {
+          command: generateIndexCommand(improvement, databaseName, collectionName),
+        },
+      },
+    };
+  });
+
+  return {
+    analysisCard: {
+      title: 'Query Analysis',
+      content: aiResponse.analysis,
+    },
+    improvementCards,
+    verificationSteps: aiResponse.verification.map((step: string, index: number) => ({
+      step: index + 1,
+      description: step,
+    })),
+  };
+}
+
+/**
+ * Generates MongoDB index command string
+ */
+function generateIndexCommand(improvement: any, databaseName: string, collectionName: string): string {
+  const indexSpecStr = JSON.stringify(improvement.indexSpec);
+
+  if (improvement.action === 'create') {
+    return `db.getSiblingDB('${databaseName}').${collectionName}.createIndex(${indexSpecStr})`;
+  } else {
+    return `db.getSiblingDB('${databaseName}').${collectionName}.dropIndex(${indexSpecStr})`;
+  }
+}
+````
+
+---
+
+#### Phase 5: Frontend Integration
+
+**5.1. Update Query Execution Logic** ⬜ Not Started
+
+**📖 Before starting**: Review "Query Execution Integration" section for server-side metadata tracking approach.
+
+Update webview query execution to handle metadata server-side:
+
+```typescript
+// In query execution handler:
+const results = await executeQuery(query);
+
+// No need to call storeQueryMetadata - handled server-side
+// ClusterSession automatically tracks query execution metadata
+```
+
+**Note**: Query metadata (execution time, document count) will be tracked server-side in ClusterSession during query execution. No explicit mutation endpoint needed.
+
+**5.2. Implement Frontend Query Insights Panel** ⬜ Not Started
+
+**📖 Before starting**: Review Stage 1, 2, and 3 sections for UI component requirements and interaction patterns.
+
+Create React components to consume the three endpoints:
+
+- Stage 1 performance view panel (calls `getQueryInsightsStage1`)
+- Stage 2 detailed execution analysis panel (calls `getQueryInsightsStage2`)
+- Stage 3 AI recommendations panel (calls `getQueryInsightsStage3` - 8s delay expected)
+- Button handlers for create/drop index, copy command, learn more
+
+---
+
+#### Phase 6: Testing & Validation
+
+**6.1. Unit Tests** ⬜ Not Started
+
+**📖 Before starting**: Review entire design document for edge cases and test scenarios mentioned in each stage section.
+
+- Test `ExplainPlanAnalyzer` with various explain outputs
+- Test `StagePropertyExtractor` with different stage types
+- Test `QueryOptimizationAIService` with mock responses
+- Test router transformation functions
+
+**6.2. Integration Tests** ⬜ Not Started
+
+**📖 Before starting**: Review "Implementation Details", "ClusterSession Integration", and router sections for integration patterns.
+
+- Test full Stage 1 flow (query → explain → transform → UI)
+- Test full Stage 2 flow with execution stats
+- Test full Stage 3 flow with AI service
+- Test caching behavior in ClusterSession
+
+**6.3. End-to-End Tests** ⬜ Not Started
+
+**📖 Before starting**: Review all three stage sections for end-to-end behavior and performance expectations.
+
+- Test with real DocumentDB/MongoDB instance
+- Test performance rating algorithm accuracy
+- Test AI service integration
+- Test error handling and edge cases
+
+---
+
+#### Phase 7: Production Hardening
+
+**7.1. Error Handling** ⬜ Not Started
+
+**📖 Before starting**: Review "Additional Considerations" section for error handling strategies for each stage.
+
+- Add try-catch blocks for all explain operations
+- Handle AI service timeouts and errors
+- Add user-friendly error messages
+- Implement retry logic with exponential backoff
+
+**7.2. Telemetry** ⬜ Not Started
+
+**📖 Before starting**: Review entire design document for telemetry requirements and success/failure metrics.
+
+- Add telemetry for Stage 1/2/3 success/failure
+- Track AI service response times
+- Monitor cache hit rates
+- Track user interactions with recommendations
+
+**7.3. Performance Optimization** ⬜ Not Started
+
+**📖 Before starting**: Review "Session Management and Caching Strategy" and "Performance and Best Practices" sections.
+
+- Optimize ClusterSession cache memory usage
+- Add cache TTL and eviction policies
+- Optimize explain plan parsing performance
+- Add lazy loading for Stage 2/3 data
+
+**7.4. Security** ⬜ Not Started
+
+**📖 Before starting**: Review "Security Guidelines" and button payload sections for security requirements.
+
+- Validate action payloads before execution
+- Sanitize query strings sent to AI service
+- Add rate limiting for AI service calls
+- Validate index specifications before creation
+
+---
+
+### Status Tracking
+
+#### Legend
+
+- ⬜ Not Started
+- 🔄 In Progress
+- ✅ Complete
+- ⚠️ Blocked
+
+#### Progress Summary
+
+| Phase                     | Status         | Progress |
+| ------------------------- | -------------- | -------- |
+| 1. Foundation & Types     | ⬜ Not Started | 0/1      |
+| 2. Explain Plan Analysis  | ⬜ Not Started | 0/5      |
+| 3. AI Service Integration | ⬜ Not Started | 0/2      |
+| 4. Router Implementation  | ⬜ Not Started | 0/2      |
+| 5. Frontend Integration   | ⬜ Not Started | 0/2      |
+| 6. Testing & Validation   | ⬜ Not Started | 0/3      |
+| 7. Production Hardening   | ⬜ Not Started | 0/4      |
+
+#### Detailed Status
+
+**Phase 1: Foundation & Types**
+
+- 1.1 Create Type Definitions: ⬜ Not Started
+
+**Phase 2: Explain Plan Analysis**
+
+- 2.1 Install Dependencies: ⬜ Not Started
+- 2.2 Create ExplainPlanAnalyzer: ⬜ Not Started
+- 2.3 Create StagePropertyExtractor: ⬜ Not Started
+- 2.4 Extend ClustersClient: ⬜ Not Started
+- 2.5 Extend ClusterSession for Caching: ⬜ Not Started
+
+**Phase 3: AI Service Integration**
+
+- 3.1 Create AI Service Client (mock with 8s delay): ⬜ Not Started
+- 3.2 Extend ClusterSession for AI Integration: ⬜ Not Started
+
+**Phase 4: Router Implementation**
+
+- 4.1 Implement tRPC Endpoints: ⬜ Not Started
+- 4.2 Implement Transformation Functions: ⬜ Not Started
+
+**Phase 5: Frontend Integration**
+
+- 5.1 Update Query Execution Logic: ⬜ Not Started
+- 5.2 Implement Frontend Query Insights Panel: ⬜ Not Started
+
+**Phase 6: Testing & Validation**
+
+- 6.1 Unit Tests: ⬜ Not Started
+- 6.2 Integration Tests: ⬜ Not Started
+- 6.3 End-to-End Tests: ⬜ Not Started
+
+**Phase 7: Production Hardening**
+
+- 7.1 Error Handling: ⬜ Not Started
+- 7.2 Telemetry: ⬜ Not Started
+- 7.3 Performance Optimization: ⬜ Not Started
+- 7.4 Security: ⬜ Not Started
+
+---
+
+### Dependencies Between Steps
+
+```
+1.1 (Types) → 2.2, 2.3, 2.5, 3.1, 4.1, 4.2
+2.1 (Dependencies) → 2.2, 2.3
+2.2 (ExplainPlanAnalyzer) → 2.5, 4.1
+2.3 (StagePropertyExtractor) → 4.1
+2.4 (QueryInsightsApis) → 2.5
+2.5 (ClusterSession) → 4.1
+3.1 (AI Service Mock) → 3.2
+3.2 (AI in ClusterSession) → 4.1
+4.1 (Router Endpoints - Stage1/2/3) → 5.1, 5.2
+4.2 (Transformations - Stage1/2/3) → 4.1
+5.1 (Query Execution) → 5.2
+5.2 (Frontend Panel - Stage1/2/3 UI) → 6.2, 6.3
+```
+
+**Note**: Frontend-facing functions use "Stage1", "Stage2", "Stage3" terminology for clarity.
+
+---
+
+### Recommended Parallel Work Streams
+
+**Stream 1: Backend Foundation (Can work in parallel)**
+
+- 1.1 Create Type Definitions (frontend types + AI service types)
+- 2.1 Install Dependencies (@mongodb-js/explain-plan-helper)
+
+**Stream 2: Explain Plan Analysis (After Stream 1 complete)**
+
+- 2.2 Create ExplainPlanAnalyzer
+- 2.3 Create StagePropertyExtractor
+- 2.4 Create QueryInsightsApis (follows LlmEnhancedFeatureApis pattern - NOT in ClustersClient)
+
+**Stream 3: Caching Layer (After Stream 2 complete)**
+
+- 2.5 Extend ClusterSession for Caching (moved to client/ folder, uses QueryInsightsApis)
+
+**Stream 4: AI Integration (Can start after 1.1, parallel to Stream 2)**
+
+- 3.1 Create AI Service Mock (8-second delay, returns webview mock data)
+- 3.2 Extend ClusterSession for AI Integration
+
+**Stream 5: Transformations (Can work parallel to Streams 2-4)**
+
+- 4.2 Implement Transformation Functions (transformStage1/2/3Response - separate file in queryInsights/)
+
+**Stream 6: Router (After Streams 3, 4, and 5 complete)**
+
+- 4.1 Implement tRPC Endpoints (getQueryInsightsStage1/Stage2/Stage3 - no storeQueryMetadata)
+
+**Stream 7: Frontend (After Stream 6 complete)**
+
+- 5.1 Update Query Execution Logic (server-side metadata tracking)
+- 5.2 Implement Frontend Query Insights Panel (Stage 1/2/3 UI components)
+
+**Stream 8: Quality Assurance (Can start incrementally)**
+
+- 6.1 Unit Tests (as each component completes)
+- 6.2 Integration Tests (after Stream 6)
+- 6.3 End-to-End Tests (after Stream 7)
+
+**Stream 9: Hardening (Final phase)**
+
+- 7.1-7.4 All production hardening tasks
+
+---
+
+## Key Simplifications Summary
+
+1. **File Organization**: Moved `ClusterSession` and `ClustersClient` to `src/documentdb/client/` folder for better organization and future extensibility
+2. **QueryInsightsApis Pattern**: Created `QueryInsightsApis.ts` following `LlmEnhancedFeatureApis` pattern - explain functionality is NOT in ClustersClient
+3. **No Backend Cache Types**: Use simple Map structures with inline types
+4. **No Collection/Index Stats Methods**: Not needed for MVP - AI backend handles data collection
+5. **No storeQueryMetadata Endpoint**: Query metadata tracked server-side automatically
+6. **Transformation Functions**: Separate file (`transformations.ts`) with Stage1/2/3 terminology
+7. **AI Service**: Mock implementation with 8s delay, actual integration commented out for future
+8. **Frontend-Facing Terminology**: Router endpoints and transformation functions use "Stage1", "Stage2", "Stage3" naming
+9. **Backend Generic Types**: Backend code avoids webview-specific terminology
+10. **Review Reminders**: Each implementation step includes 📖 reminder to review relevant design document sections
+
+---
+
+**Important**: Before implementing any step, always review the entire design document. Each section contains critical implementation details, patterns, and architectural decisions that inform the implementation.
