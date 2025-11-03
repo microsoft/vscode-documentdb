@@ -54,6 +54,573 @@ User runs query → Stage 1 (immediate) → Stage 2 (on-demand) → Stage 3 (AI 
 
 ---
 
+## DocumentDB Explain Plan Parsing with @mongodb-js/explain-plan-helper
+
+### Overview
+
+For robust parsing of DocumentDB explain plans, we use the [`@mongodb-js/explain-plan-helper`](https://www.npmjs.com/package/@mongodb-js/explain-plan-helper) package. This battle-tested library is maintained by MongoDB and used in MongoDB Compass, providing reliable parsing across different MongoDB versions and platforms including DocumentDB.
+
+### Why Use This Library?
+
+1. **Handles MongoDB Version Differences**: The explain format has evolved across MongoDB versions. This library normalizes these differences automatically.
+2. **Comprehensive Edge Case Coverage**:
+   - Sharded queries with per-shard execution stats
+   - Multiple input stages (e.g., `$or` queries)
+   - Nested and recursive stage structures
+   - Different verbosity levels (`queryPlanner`, `executionStats`, `allPlansExecution`)
+3. **Type Safety**: Provides TypeScript definitions for all explain structures
+4. **Battle-Tested**: Used in production by MongoDB Compass
+5. **Convenience Methods**: Pre-built helpers for common checks:
+   - `isCollectionScan` - Detects full collection scans
+   - `isIndexScan` - Detects index usage
+   - `isCovered` - Detects covered queries (index-only, no FETCH)
+   - `inMemorySort` - Detects in-memory sorting
+
+### Installation
+
+```bash
+npm install @mongodb-js/explain-plan-helper
+```
+
+### Core API
+
+The package exports two main classes:
+
+#### 1. ExplainPlan Class
+
+The main entry point for parsing explain output:
+
+```typescript
+import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
+
+// Parse explain output
+const explainPlan = new ExplainPlan(explainResult);
+
+// High-level metrics (available with executionStats verbosity)
+const executionTimeMillis = explainPlan.executionTimeMillis; // Server execution time
+const nReturned = explainPlan.nReturned; // Documents returned
+const totalKeysExamined = explainPlan.totalKeysExamined; // Keys scanned
+const totalDocsExamined = explainPlan.totalDocsExamined; // Documents examined
+
+// Query characteristics (boolean flags)
+const isCollectionScan = explainPlan.isCollectionScan; // Full collection scan?
+const isIndexScan = explainPlan.isIndexScan; // Uses index?
+const isCoveredQuery = explainPlan.isCovered; // Index-only (no FETCH)?
+const inMemorySort = explainPlan.inMemorySort; // In-memory sort?
+
+// Metadata
+const namespace = explainPlan.namespace; // "database.collection"
+
+// Execution stage tree (detailed stage-by-stage breakdown)
+const executionStages = explainPlan.executionStages; // Stage object (tree root)
+```
+
+#### 2. Stage Interface
+
+Represents individual execution stages in a tree structure:
+
+```typescript
+interface Stage {
+  // Stage identification
+  stage: string; // Stage type (IXSCAN, FETCH, SORT, COLLSCAN, etc.)
+  name: string; // Human-readable name
+
+  // Execution metrics
+  nReturned: number; // Documents returned by this stage
+  executionTimeMillis?: number; // Time spent in this stage
+  executionTimeMillisEstimate?: number; // Estimated time
+
+  // Stage-specific properties
+  indexName?: string; // For IXSCAN stages
+  indexBounds?: any; // Index bounds used
+  keysExamined?: number; // Keys examined (IXSCAN)
+  docsExamined?: number; // Documents examined (FETCH, COLLSCAN)
+
+  // Child stages (tree structure)
+  inputStage?: Stage; // Single input stage
+  inputStages?: Stage[]; // Multiple input stages (e.g., for $or queries)
+  shards?: Stage[]; // For sharded queries
+
+  // Shard information
+  shardName?: string; // Shard identifier
+  isShard: boolean; // Whether this represents a shard
+}
+```
+
+### Usage Examples
+
+#### Basic Usage (Stage 1 - queryPlanner)
+
+```typescript
+import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
+
+const explainPlan = new ExplainPlan(queryPlannerResult);
+
+// Check query characteristics
+const usesIndex = explainPlan.isIndexScan;
+const hasInMemorySort = explainPlan.inMemorySort;
+const namespace = explainPlan.namespace;
+```
+
+#### Detailed Analysis (Stage 2 - executionStats)
+
+```typescript
+const explainPlan = new ExplainPlan(executionStatsResult);
+
+// Get execution metrics
+const metrics = {
+  executionTimeMs: explainPlan.executionTimeMillis,
+  totalKeysExamined: explainPlan.totalKeysExamined,
+  totalDocsExamined: explainPlan.totalDocsExamined,
+  documentsReturned: explainPlan.nReturned,
+
+  // Efficiency calculation
+  efficiency: explainPlan.totalDocsExamined / explainPlan.nReturned,
+
+  // Query characteristics
+  hadCollectionScan: explainPlan.isCollectionScan,
+  hadInMemorySort: explainPlan.inMemorySort,
+  isCoveredQuery: explainPlan.isCovered,
+};
+```
+
+#### Traversing Stage Trees
+
+```typescript
+function extractStageInfo(explainResult: unknown): StageInfo[] {
+  const explainPlan = new ExplainPlan(explainResult);
+  const stages: StageInfo[] = [];
+
+  function traverseStage(stage: Stage | undefined): void {
+    if (!stage) return;
+
+    stages.push({
+      stage: stage.stage,
+      name: stage.name,
+      nReturned: stage.nReturned,
+      executionTimeMs: stage.executionTimeMillis ?? stage.executionTimeMillisEstimate,
+      indexName: stage.indexName,
+      keysExamined: stage.keysExamined,
+      docsExamined: stage.docsExamined,
+    });
+
+    // Traverse child stages recursively
+    if (stage.inputStage) {
+      traverseStage(stage.inputStage);
+    }
+
+    if (stage.inputStages) {
+      stage.inputStages.forEach(traverseStage);
+    }
+
+    if (stage.shards) {
+      stage.shards.forEach(traverseStage);
+    }
+  }
+
+  traverseStage(explainPlan.executionStages);
+  return stages;
+}
+```
+
+#### Handling Sharded Queries
+
+```typescript
+const explainPlan = new ExplainPlan(shardedExplainResult);
+
+// Check if query is sharded
+const isSharded = explainPlan.executionStages?.shards !== undefined;
+
+if (isSharded) {
+  const shards = explainPlan.executionStages.shards;
+
+  shards.forEach((shard) => {
+    console.log(`Shard: ${shard.shardName}`);
+    console.log(`  Keys examined: ${shard.totalKeysExamined}`);
+    console.log(`  Docs examined: ${shard.totalDocsExamined}`);
+    console.log(`  Docs returned: ${shard.nReturned}`);
+  });
+}
+```
+
+### Platform Compatibility
+
+The library works with any MongoDB-compatible explain output, including:
+
+- MongoDB (all versions)
+- DocumentDB (uses `explainVersion: 2`)
+- Azure Cosmos DB for MongoDB
+
+**DocumentDB Detection** (optional):
+
+```typescript
+function isDocumentDB(explainOutput: any): boolean {
+  return explainOutput.explainVersion === 2;
+}
+```
+
+---
+
+## Infrastructure: Explain Plan Utilities
+
+### Purpose
+
+Before implementing the router endpoints (Stages 1, 2, 3), we need a set of reusable utility functions for extracting data from explain plans. These utilities will:
+
+1. **Enable Independent Testing**: Test data extraction with various explain plans without instantiating the full extension environment
+2. **Provide Consistent Parsing**: Centralize explain plan parsing logic using `@mongodb-js/explain-plan-helper`
+3. **Support Incremental Development**: Start with basic extraction for Stage 1, expand as we implement Stages 2 and 3
+4. **Handle Edge Cases**: Manage sharded queries, missing fields, and platform differences in one place
+
+### Implementation Location
+
+**File**: `src/documentdb/utils/explainPlanUtils.ts` (new file)
+
+This utility module will be expanded as we progress through stage implementations.
+
+### Initial Utility Functions
+
+#### 1. Basic Explain Plan Parser
+
+```typescript
+import { ExplainPlan, type Stage } from '@mongodb-js/explain-plan-helper';
+
+/**
+ * Parses explain output and provides convenient access to explain data
+ */
+export class ExplainPlanParser {
+  private readonly explainPlan: ExplainPlan;
+
+  constructor(explainOutput: unknown) {
+    this.explainPlan = new ExplainPlan(explainOutput);
+  }
+
+  // High-level metrics
+  getExecutionTimeMs(): number | undefined {
+    return this.explainPlan.executionTimeMillis;
+  }
+
+  getDocumentsReturned(): number {
+    return this.explainPlan.nReturned;
+  }
+
+  getTotalKeysExamined(): number {
+    return this.explainPlan.totalKeysExamined;
+  }
+
+  getTotalDocsExamined(): number {
+    return this.explainPlan.totalDocsExamined;
+  }
+
+  getNamespace(): string {
+    return this.explainPlan.namespace;
+  }
+
+  // Query characteristics
+  isCollectionScan(): boolean {
+    return this.explainPlan.isCollectionScan;
+  }
+
+  isIndexScan(): boolean {
+    return this.explainPlan.isIndexScan;
+  }
+
+  isCoveredQuery(): boolean {
+    return this.explainPlan.isCovered;
+  }
+
+  hasInMemorySort(): boolean {
+    return this.explainPlan.inMemorySort;
+  }
+
+  // Stage tree access
+  getExecutionStages(): Stage | undefined {
+    return this.explainPlan.executionStages;
+  }
+
+  // Platform detection
+  isSharded(): boolean {
+    return this.explainPlan.executionStages?.shards !== undefined;
+  }
+}
+```
+
+#### 2. Stage Tree Traversal Utilities
+
+```typescript
+/**
+ * Flattens the stage tree into a linear array for UI display
+ */
+export function flattenStageTree(rootStage: Stage | undefined): StageInfo[] {
+  if (!rootStage) return [];
+
+  const stages: StageInfo[] = [];
+
+  function traverse(stage: Stage): void {
+    stages.push({
+      stage: stage.stage,
+      name: stage.name,
+      nReturned: stage.nReturned,
+      executionTimeMs: stage.executionTimeMillis ?? stage.executionTimeMillisEstimate,
+      indexName: stage.indexName,
+      keysExamined: stage.keysExamined,
+      docsExamined: stage.docsExamined,
+    });
+
+    // Traverse children
+    if (stage.inputStage) {
+      traverse(stage.inputStage);
+    }
+
+    if (stage.inputStages) {
+      stage.inputStages.forEach(traverse);
+    }
+
+    if (stage.shards) {
+      stage.shards.forEach(traverse);
+    }
+  }
+
+  traverse(rootStage);
+  return stages;
+}
+
+/**
+ * Information extracted from a single stage
+ */
+export interface StageInfo {
+  stage: string;
+  name: string;
+  nReturned: number;
+  executionTimeMs?: number;
+  indexName?: string;
+  keysExamined?: number;
+  docsExamined?: number;
+}
+```
+
+#### 3. Index Detection Utilities
+
+```typescript
+/**
+ * Finds all indexes used in the query plan
+ */
+export function findUsedIndexes(rootStage: Stage | undefined): string[] {
+  if (!rootStage) return [];
+
+  const indexes = new Set<string>();
+
+  function traverse(stage: Stage): void {
+    if (stage.stage === 'IXSCAN' && stage.indexName) {
+      indexes.add(stage.indexName);
+    }
+
+    if (stage.inputStage) traverse(stage.inputStage);
+    if (stage.inputStages) stage.inputStages.forEach(traverse);
+    if (stage.shards) stage.shards.forEach(traverse);
+  }
+
+  traverse(rootStage);
+  return Array.from(indexes);
+}
+
+/**
+ * Checks if the query uses a specific index
+ */
+export function usesIndex(rootStage: Stage | undefined, indexName: string): boolean {
+  return findUsedIndexes(rootStage).includes(indexName);
+}
+```
+
+#### 4. Efficiency Calculation Utilities
+
+```typescript
+/**
+ * Calculates the examined-to-returned ratio (efficiency indicator)
+ */
+export function calculateExaminedToReturnedRatio(docsExamined: number, docsReturned: number): number {
+  if (docsReturned === 0) return docsExamined > 0 ? Infinity : 0;
+  return docsExamined / docsReturned;
+}
+
+/**
+ * Calculates index selectivity (keys examined / docs examined)
+ */
+export function calculateIndexSelectivity(keysExamined: number, docsExamined: number): number | null {
+  if (docsExamined === 0) return null;
+  return keysExamined / docsExamined;
+}
+
+/**
+ * Rates query performance based on efficiency metrics
+ */
+export function calculatePerformanceRating(metrics: {
+  examinedToReturnedRatio: number;
+  hadCollectionScan: boolean;
+  hadInMemorySort: boolean;
+  indexUsed: boolean;
+}): {
+  score: 'excellent' | 'good' | 'fair' | 'poor';
+  concerns: string[];
+} {
+  const concerns: string[] = [];
+  let score: 'excellent' | 'good' | 'fair' | 'poor' = 'excellent';
+
+  // Check examined/returned ratio
+  if (metrics.examinedToReturnedRatio > 100) {
+    concerns.push('High examined-to-returned ratio indicates inefficient query');
+    score = 'poor';
+  } else if (metrics.examinedToReturnedRatio > 10) {
+    concerns.push('Moderate examined-to-returned ratio');
+    score = score === 'excellent' ? 'fair' : score;
+  }
+
+  // Check for collection scan
+  if (metrics.hadCollectionScan) {
+    concerns.push('Full collection scan performed');
+    score = 'poor';
+  }
+
+  // Check for in-memory sort
+  if (metrics.hadInMemorySort) {
+    concerns.push('In-memory sort required (consider adding index)');
+    if (score === 'excellent') score = 'fair';
+  }
+
+  // Check index usage
+  if (!metrics.indexUsed && !metrics.hadCollectionScan) {
+    concerns.push('No index used for filtering');
+    if (score === 'excellent') score = 'good';
+  }
+
+  return { score, concerns };
+}
+```
+
+#### 5. Sharded Query Utilities
+
+```typescript
+/**
+ * Aggregates metrics across shards
+ */
+export function aggregateShardMetrics(rootStage: Stage | undefined): {
+  totalKeysExamined: number;
+  totalDocsExamined: number;
+  totalReturned: number;
+  shardCount: number;
+} {
+  if (!rootStage?.shards) {
+    return {
+      totalKeysExamined: 0,
+      totalDocsExamined: 0,
+      totalReturned: 0,
+      shardCount: 0,
+    };
+  }
+
+  return rootStage.shards.reduce(
+    (acc, shard) => ({
+      totalKeysExamined: acc.totalKeysExamined + (shard.keysExamined ?? 0),
+      totalDocsExamined: acc.totalDocsExamined + (shard.docsExamined ?? 0),
+      totalReturned: acc.totalReturned + shard.nReturned,
+      shardCount: acc.shardCount + 1,
+    }),
+    { totalKeysExamined: 0, totalDocsExamined: 0, totalReturned: 0, shardCount: 0 },
+  );
+}
+```
+
+### Testing Strategy
+
+These utilities can be tested independently with mock explain outputs:
+
+```typescript
+// Example test structure
+describe('ExplainPlanUtils', () => {
+  describe('ExplainPlanParser', () => {
+    it('should parse queryPlanner output', () => {
+      const mockExplain = {
+        queryPlanner: {
+          /* ... */
+        },
+        // No executionStats
+      };
+
+      const parser = new ExplainPlanParser(mockExplain);
+      expect(parser.getNamespace()).toBe('testdb.testcoll');
+    });
+
+    it('should parse executionStats output', () => {
+      const mockExplain = {
+        queryPlanner: {
+          /* ... */
+        },
+        executionStats: {
+          /* ... */
+        },
+      };
+
+      const parser = new ExplainPlanParser(mockExplain);
+      expect(parser.getExecutionTimeMs()).toBe(120);
+      expect(parser.getTotalDocsExamined()).toBe(1000);
+    });
+  });
+
+  describe('Stage Tree Utilities', () => {
+    it('should flatten nested stage tree', () => {
+      const mockStage: Stage = {
+        stage: 'FETCH',
+        inputStage: {
+          stage: 'IXSCAN',
+          indexName: 'user_id_1',
+        },
+      };
+
+      const flattened = flattenStageTree(mockStage);
+      expect(flattened).toHaveLength(2);
+      expect(flattened[0].stage).toBe('FETCH');
+      expect(flattened[1].stage).toBe('IXSCAN');
+    });
+  });
+
+  describe('Efficiency Calculations', () => {
+    it('should calculate examined-to-returned ratio', () => {
+      const ratio = calculateExaminedToReturnedRatio(1000, 10);
+      expect(ratio).toBe(100);
+    });
+
+    it('should rate performance as poor for high ratio', () => {
+      const rating = calculatePerformanceRating({
+        examinedToReturnedRatio: 500,
+        hadCollectionScan: true,
+        hadInMemorySort: false,
+        indexUsed: false,
+      });
+
+      expect(rating.score).toBe('poor');
+      expect(rating.concerns).toContain('Full collection scan performed');
+    });
+  });
+});
+```
+
+### Expansion Plan
+
+As we implement each stage, we'll add more utilities to this module:
+
+- **Stage 1**: Basic parsing, index detection, stage tree flattening
+- **Stage 2**: Performance rating, efficiency calculations, execution strategy determination
+- **Stage 3**: Query shape extraction for AI, collection stats integration
+
+This modular approach allows us to:
+
+1. Test utilities in isolation with various explain plan formats
+2. Reuse utilities across different parts of the codebase
+3. Maintain a single source of truth for explain plan parsing logic
+4. Easily add support for new explain plan features
+
+---
+
 ## Stage 1: Initial Performance View (Cheap Data + Query Plan)
 
 ### Purpose
@@ -341,6 +908,8 @@ function flattenStageTree(stage: any, depth = 0): StageNode[] {
 }
 ```
 
+**Note**: The above extraction functions are simplified examples. In the actual implementation, we use the utilities from `src/documentdb/utils/explainPlanUtils.ts` which leverage `@mongodb-js/explain-plan-helper` for robust parsing (see Infrastructure section above).
+
 #### Platform Detection Strategy
 
 DocumentDB explain output uses `explainVersion: 2`:
@@ -361,11 +930,23 @@ function detectDocumentDBPlatform(explainOutput: any): 'documentdb' | 'unknown' 
 Add to `ClusterSession` class:
 
 ```typescript
+import { QueryInsightsApis } from './QueryInsightsApis';
+
 export class ClusterSession {
   // Existing properties...
   private _currentQueryPlannerInfo?: unknown;
   private _currentExecutionTime?: number;
   private _currentDocumentsReturned?: number;
+
+  // NEW: Query Insights API instance
+  private _queryInsightsApis: QueryInsightsApis;
+
+  constructor(/* existing parameters */) {
+    // Existing initialization...
+
+    // Initialize Query Insights APIs (follows LlmEnhancedFeatureApis pattern)
+    this._queryInsightsApis = new QueryInsightsApis(this._client._mongoClient);
+  }
 
   // Update resetCachesIfQueryChanged to clear explain caches
   private resetCachesIfQueryChanged(query: string) {
@@ -396,10 +977,16 @@ export class ClusterSession {
 
     // Run explain("queryPlanner") with clean query (no skip/limit)
     // This provides insights for the full query scope, not just one page
-    this._currentQueryPlannerInfo = await this._client.explainQuery(
+    // Using QueryInsightsApis (follows LlmEnhancedFeatureApis pattern)
+    this._currentQueryPlannerInfo = await this._queryInsightsApis.explainFind(
       databaseName,
       collectionName,
-      baseQuery,
+      {
+        filter: baseQuery.filter,
+        sort: baseQuery.sort,
+        projection: baseQuery.projection,
+        // Intentionally omit skip and limit for full query insights
+      },
       'queryPlanner',
     );
 
@@ -437,50 +1024,164 @@ export class ClusterSession {
 
 ### ClustersClient Extensions for Stage 1
 
-Add to `ClustersClient` class:
+**Architecture Pattern**: Follow the `LlmEnhancedFeatureApis.ts` approach
+
+Instead of adding methods directly to `ClustersClient`, we should create explain-related functionality following the pattern established in `src/documentdb/LlmEnhancedFeatureApis.ts`. This class demonstrates the proper way to extend cluster functionality:
+
+1. Create a dedicated class that accepts `MongoClient` in the constructor
+2. Define TypeScript interfaces for all input options and output types
+3. Implement methods with proper error handling and type safety
+4. Use MongoDB driver's native APIs consistently
+
+**Implementation Location**: `src/documentdb/QueryInsightsApis.ts` (new file)
 
 ```typescript
-export class ClustersClient {
-  // NEW: Execute explain command
-  public async explainQuery(
+import { type Document, type Filter, type MongoClient, type Sort } from 'mongodb';
+
+/**
+ * Options for explain operations on find queries
+ */
+export interface ExplainFindOptions {
+  // Query filter
+  filter?: Filter<Document>;
+  // Sort specification
+  sort?: Sort;
+  // Projection specification
+  projection?: Document;
+  // Number of documents to skip (omit for Stage 1 insights)
+  skip?: number;
+  // Maximum number of documents to return (omit for Stage 1 insights)
+  limit?: number;
+}
+
+/**
+ * Explain verbosity levels
+ */
+export type ExplainVerbosity = 'queryPlanner' | 'executionStats' | 'allPlansExecution';
+
+/**
+ * Explain result from MongoDB/DocumentDB
+ */
+export interface ExplainResult {
+  // Query planner information
+  queryPlanner: {
+    // MongoDB/DocumentDB version
+    mongodbVersion?: string;
+    // Namespace (database.collection)
+    namespace: string;
+    // Whether index filter was set
+    indexFilterSet: boolean;
+    // Parsed query
+    parsedQuery?: Document;
+    // Winning plan
+    winningPlan: Document;
+    // Rejected plans
+    rejectedPlans?: Document[];
+  };
+  // Execution statistics (only with executionStats or allPlansExecution)
+  executionStats?: {
+    // Execution success status
+    executionSuccess: boolean;
+    // Number of documents returned
+    nReturned: number;
+    // Execution time in milliseconds
+    executionTimeMillis: number;
+    // Total number of keys examined
+    totalKeysExamined: number;
+    // Total number of documents examined
+    totalDocsExamined: number;
+    // Detailed execution stages
+    executionStages: Document;
+  };
+  // Server information
+  serverInfo?: {
+    host: string;
+    port: number;
+    version: string;
+  };
+  // DocumentDB platform indicator
+  explainVersion?: number;
+  // Operation status
+  ok: number;
+}
+
+/**
+ * Query Insights APIs for explain operations
+ * Follows the architecture pattern established in LlmEnhancedFeatureApis.ts
+ */
+export class QueryInsightsApis {
+  constructor(private readonly mongoClient: MongoClient) {}
+
+  /**
+   * Explain a find query with specified verbosity
+   * @param databaseName - Name of the database
+   * @param collectionName - Name of the collection
+   * @param options - Query options including filter, sort, projection, skip, and limit
+   * @param verbosity - Explain verbosity level (queryPlanner, executionStats, or allPlansExecution)
+   * @returns Detailed explain result
+   */
+  async explainFind(
     databaseName: string,
     collectionName: string,
-    queryOrParams: string | FindQueryParams,
-    verbosity: 'queryPlanner' | 'executionStats' | 'allPlansExecution',
-  ): Promise<unknown> {
-    const db = this._mongoClient.db(databaseName);
-    const collection = db.collection(collectionName);
+    options: ExplainFindOptions = {},
+    verbosity: ExplainVerbosity = 'queryPlanner',
+  ): Promise<ExplainResult> {
+    const db = this.mongoClient.db(databaseName);
 
-    // Build explain command based on input type
-    let explainResult;
+    const { filter = {}, sort, projection, skip, limit } = options;
 
-    if (typeof queryOrParams === 'string') {
-      // Legacy string query (deprecated path)
-      const filter = JSON.parse(queryOrParams);
-      explainResult = await collection.find(filter).explain(verbosity);
-    } else {
-      // Modern FindQueryParams approach
-      const cursor = collection.find(JSON.parse(queryOrParams.filter || '{}'));
+    const findCmd: Document = {
+      find: collectionName,
+      filter,
+    };
 
-      if (queryOrParams.project) {
-        cursor.project(JSON.parse(queryOrParams.project));
-      }
-      if (queryOrParams.sort) {
-        cursor.sort(JSON.parse(queryOrParams.sort));
-      }
-      if (queryOrParams.skip) {
-        cursor.skip(queryOrParams.skip);
-      }
-      if (queryOrParams.limit) {
-        cursor.limit(queryOrParams.limit);
-      }
-
-      explainResult = await cursor.explain(verbosity);
+    // Add optional fields if they are defined
+    if (sort !== undefined) {
+      findCmd.sort = sort;
     }
 
-    return explainResult;
+    if (projection !== undefined) {
+      findCmd.projection = projection;
+    }
+
+    if (skip !== undefined && skip >= 0) {
+      findCmd.skip = skip;
+    }
+
+    if (limit !== undefined && limit >= 0) {
+      findCmd.limit = limit;
+    }
+
+    const command: Document = {
+      explain: findCmd,
+      verbosity,
+    };
+
+    const explainResult = await db.command(command);
+
+    return explainResult as ExplainResult;
   }
 }
+```
+
+**Usage in ClusterSession**:
+
+```typescript
+// In ClusterSession constructor or initialization
+this._queryInsightsApis = new QueryInsightsApis(this._client._mongoClient);
+
+// When calling explain for Stage 1 (without skip/limit)
+const explainResult = await this._queryInsightsApis.explainFind(
+  databaseName,
+  collectionName,
+  {
+    filter: baseQuery.filter,
+    sort: baseQuery.sort,
+    projection: baseQuery.projection,
+    // Intentionally omit skip and limit for full query insights
+  },
+  'queryPlanner',
+);
 ```
 
 ### Mock Data Structure
@@ -677,7 +1378,41 @@ z.object({
 
 3. **Stages Extraction**: Recursively traverse `executionStats.executionStages` tree
 
-### ClusterSession Extensions for Stage 1
+4. **Using @mongodb-js/explain-plan-helper for Stage 2**:
+
+   ```typescript
+   import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
+
+   function analyzeExecutionStats(explainResult: unknown) {
+     const plan = new ExplainPlan(explainResult);
+
+     // Get high-level metrics directly
+     const metrics = {
+       executionTimeMs: plan.executionTimeMillis,
+       totalKeysExamined: plan.totalKeysExamined,
+       totalDocsExamined: plan.totalDocsExamined,
+       documentsReturned: plan.nReturned,
+
+       // Derived metrics
+       examinedToReturnedRatio: plan.totalDocsExamined / plan.nReturned,
+
+       // Query characteristics
+       hadCollectionScan: plan.isCollectionScan,
+       hadInMemorySort: plan.inMemorySort,
+       indexUsed: plan.isIndexScan,
+       isCoveredQuery: plan.isCovered,
+     };
+
+     // Calculate performance rating using the metrics
+     const performanceRating = calculatePerformanceRating(metrics);
+
+     return { ...metrics, performanceRating };
+   }
+   ```
+
+   This approach leverages the library's pre-built analysis rather than manually parsing the execution tree.
+
+### ClusterSession Extensions for Stage 2 (previously labeled as Stage 1)
 
 Add to `ClusterSession` class:
 
@@ -709,11 +1444,20 @@ export class ClusterSession {
       return this._currentExecutionStats;
     }
 
+    // Extract base query without paging modifiers
+    const baseQuery = this.extractBaseQuery();
+
     // Run explain("executionStats") - actually executes the query
-    this._currentExecutionStats = await this._client.explainQuery(
+    // Using QueryInsightsApis (follows LlmEnhancedFeatureApis pattern)
+    this._currentExecutionStats = await this._queryInsightsApis.explainFind(
       databaseName,
       collectionName,
-      this._currentQueryText, // or use parsed query params
+      {
+        filter: baseQuery.filter,
+        sort: baseQuery.sort,
+        projection: baseQuery.projection,
+        // Intentionally omit skip and limit for full query insights
+      },
       'executionStats',
     );
 
@@ -722,7 +1466,7 @@ export class ClusterSession {
 }
 ```
 
-**Note**: The `ClustersClient.explainQuery()` method added in Stage 1 is reused here with different verbosity level (`executionStats` instead of `queryPlanner`).
+**Note**: The `QueryInsightsApis.explainFind()` method added in Stage 1 is reused here with different verbosity level (`executionStats` instead of `queryPlanner`).
 
 ### Mock Data Structure
 
@@ -1113,28 +1857,48 @@ export class ClusterSession {
 }
 ```
 
-### ClustersClient Extensions for Stage 3
+### Using LlmEnhancedFeatureApis for Stage 3 Collection Stats
 
-Add to `ClustersClient` class:
+For Stage 3, we need collection and index statistics to send to the AI service. These methods already exist in `LlmEnhancedFeatureApis.ts`:
+
+**Collection Statistics**: Use `llmEnhancedFeatureApis.getCollectionStats()`
 
 ```typescript
-export class ClustersClient {
-  // NEW: Get collection statistics
-  public async getCollectionStats(databaseName: string, collectionName: string): Promise<Record<string, unknown>> {
-    const db = this._mongoClient.db(databaseName);
-    const stats = await db.command({ collStats: collectionName });
-    return stats;
-  }
+// In ClusterSession or router handler
+const collectionStats = await this._llmEnhancedFeatureApis.getCollectionStats(databaseName, collectionName);
 
-  // NEW: Get index statistics
-  public async getIndexStats(databaseName: string, collectionName: string): Promise<Array<Record<string, unknown>>> {
-    const db = this._mongoClient.db(databaseName);
-    const collection = db.collection(collectionName);
-    const indexes = await collection.indexes();
-    return indexes;
-  }
-}
+// Returns CollectionStats interface:
+// {
+//   ns: string;
+//   count: number;
+//   size: number;
+//   avgObjSize: number;
+//   storageSize: number;
+//   nindexes: number;
+//   totalIndexSize: number;
+//   indexSizes: Record<string, number>;
+// }
 ```
+
+**Index Statistics**: Use `llmEnhancedFeatureApis.getIndexStats()`
+
+```typescript
+// In ClusterSession or router handler
+const indexStats = await this._llmEnhancedFeatureApis.getIndexStats(databaseName, collectionName);
+
+// Returns IndexStats[] interface:
+// Array<{
+//   name: string;
+//   key: Record<string, number | string>;
+//   host: string;
+//   accesses: {
+//     ops: number;
+//     since: Date;
+//   };
+// }>
+```
+
+**Note**: No new methods need to be added to ClustersClient for Stage 3. The required functionality already exists in `LlmEnhancedFeatureApis.ts`.
 
 ### Transformation Logic for AI Response
 
@@ -1234,18 +1998,29 @@ The existing `resetCachesIfQueryChanged()` method in ClusterSession already inva
 
 The extensions to `ClusterSession` are documented in each stage section:
 
-- **Stage 1**: Adds `getQueryPlannerInfo()`, `setQueryMetadata()`, `getQueryMetadata()`
+- **Stage 1**: Adds `getQueryPlannerInfo()`, `setQueryMetadata()`, `getQueryMetadata()`, and initializes `QueryInsightsApis`
 - **Stage 2**: Adds `getExecutionStats()`
 - **Stage 3**: Adds `cacheAIRecommendations()`, `getCachedAIRecommendations()`
 
 All methods leverage the existing cache invalidation mechanism via `resetCachesIfQueryChanged()`.
 
-**ClustersClient Extensions Summary**:
+**QueryInsightsApis Class** (new file: `src/documentdb/QueryInsightsApis.ts`):
 
-The extensions to `ClustersClient` are documented in stage sections:
+Following the `LlmEnhancedFeatureApis.ts` pattern, explain-related functionality is implemented in a dedicated class:
 
-- **Stage 1**: Adds `explainQuery()` method
-- **Stage 3**: Adds `getCollectionStats()`, `getIndexStats()`
+- Takes `MongoClient` in constructor
+- Implements `explainFind()` with proper TypeScript interfaces
+- Supports all explain verbosity levels: 'queryPlanner', 'executionStats', 'allPlansExecution'
+- Handles filter, sort, projection, skip, and limit parameters
+- Returns properly typed `ExplainResult` interface
+
+**Benefits of This Architecture**:
+
+1. ✅ **Consistent with existing patterns** (follows `LlmEnhancedFeatureApis.ts`)
+2. ✅ **Type safety** with TypeScript interfaces for all inputs/outputs
+3. ✅ **Separation of concerns** (explain logic separate from ClusterSession)
+4. ✅ **Testability** (QueryInsightsApis can be unit tested independently)
+5. ✅ **Reusability** across different contexts if needed
 
 **Benefits of Using ClusterSession**:
 
