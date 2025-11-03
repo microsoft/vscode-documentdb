@@ -1,5 +1,44 @@
 # Index Advisor Data Flow - Privacy Review Documentation
 
+## Open Questions
+
+### General
+
+1. Cross-Region Data Sharing from the point of view of our VS Code Extension user
+    - Does VS Code GitHub Copilot honor customers' preferences?
+2. How do we classify customer data?
+    - the customer vs. their customers?
+
+### P0: Index Advisor
+
+1. `Metadata`: Is this PII? OII?
+    - Database name
+    - Collection name
+    - Collection statistics (names, counts, sizes)
+    - Index statistics (names, keys (field names), usage stats)
+        - Index name can be based on a field name, keys are based on field names:
+        - __Risk:__ in case of __ISVs__, this is data of __their__ customers
+    - Sanitized execution plan (structure only)
+    - Cluster metadata (Azure type, API version)
+2. `Anonymized Query`: Can we process it with AI? Can we send it to GitHub Copilot?
+    1. Contains field names, but not values
+
+### Natural Language 2 Query
+1. `Collection Schema`: Can we process it with AI? Can we send it to GitHub Copilot?
+    1. Field Names (`address.street`)
+        - __Risk:__ `person.xyzPreferences` can expose unlawful data collection
+    2. Data Types (`address.street` is a `string`)
+    3. Value ranges
+        - `min/max` for numbers
+            - __Risk:__ `salary` --> min/max exposes salary ranges
+        - `min/max length` for strings
+        - `true/false counts` for boolean
+            - __Risk:__ `sensitiveFieldName`: 100% true --> might reveal information
+2. `The NL Query String`: Can we process it with AI? Can we send it to GitHub Copilot?
+    - __Risk:__ Query can contain sensitive information... `SSN`, etc.
+3. `Current Query`: Can we process it with AI? Can we send it to GitHub Copilot?
+    - __Risk:__ Query can contain sensitive information... `SSN`, etc.
+
 ## Overview
 
 This document describes the data flow for the MongoDB Index Advisor feature, with emphasis on customer data handling and privacy considerations. The Index Advisor feature uses GitHub Copilot's language models to analyze query execution plans and provide index optimization recommendations.
@@ -10,6 +49,8 @@ The Index Advisor supports two operational modes:
 
 1. **Standard Mode**: Fetches data from the database in real-time
 2. **Preload Mode**: Uses pre-provided execution plan and statistics
+
+Both modes share the same execution flow once the data has been collected locally.
 
 ### Data Flow Diagram - Standard Mode
 
@@ -26,7 +67,7 @@ The Index Advisor supports two operational modes:
 │  - Collection name                                      │
 │  - Query object (filter, sort, projection, etc.)        │
 │  - Command type (Find/Aggregate/Count)                  │
-│  - Cluster ID (for database connection)                 │
+│  - Cluster ID (for 'live' database connection)          │
 └────────┬────────────────────────────────────────────────┘
          │
          v
@@ -50,7 +91,7 @@ The Index Advisor supports two operational modes:
          │
          v
 ┌─────────────────────────────────────────────────────────┐
-│  Data Sent to LLM (GitHub Copilot)                      │
+│  Data Sent to LLM (GitHub Copilot in VS Code)           │
 │  + Database name (metadata)                             │
 │  + Collection name (metadata)                           │
 │  + Collection statistics (counts, sizes)                │
