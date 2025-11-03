@@ -1,0 +1,18 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+// Shared properties for all optimization cards
+.optimization-card {
+    // Icon sizing (used by all cards)
+    &-icon {
+        font-size: 40px;
+    }
+
+    // Container layout (used by all cards)
+    &-container {
+        display: flex;
+        gap: 16px;
+    }
+}

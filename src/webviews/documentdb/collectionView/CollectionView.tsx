@@ -17,10 +17,12 @@ import {
     DefaultCollectionViewContext,
     Views,
 } from './collectionViewContext';
-import { DataViewPanelJSON } from './components/DataViewPanelJSON';
-import { DataViewPanelTable } from './components/DataViewPanelTable';
-import { DataViewPanelTree } from './components/DataViewPanelTree';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
+import { QueryInsightsMain } from './components/queryInsightsTab/QueryInsightsTab';
+import { QueryInsightsMainMock } from './components/queryInsightsTabMock/QueryInsightsTab';
+import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
+import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
+import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
 import { ToolbarDocumentManipulation } from './components/toolbar/ToolbarDocumentManipulation';
 import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
@@ -73,6 +75,11 @@ export const CollectionView = (): JSX.Element => {
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
+
+    // Track which tab is currently active
+    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_performance_main' | 'tab_performance_mock'>(
+        'tab_result',
+    );
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
@@ -447,45 +454,64 @@ export const CollectionView = (): JSX.Element => {
                     }}
                 />
 
-                <TabList selectedValue="tab_result" style={{ marginTop: '-10px' }}>
+                <TabList
+                    selectedValue={selectedTab}
+                    onTabSelect={(_event, data) => {
+                        setSelectedTab(data.value as 'tab_result' | 'tab_performance_main' | 'tab_performance_mock');
+                    }}
+                    style={{ marginTop: '-10px' }}
+                >
                     <Tab id="tab.results" value="tab_result">
                         Results
                     </Tab>
+                    <Tab id="tab.performance.main" value="tab_performance_main">
+                        Query Insights
+                    </Tab>
+                    <Tab id="tab.performance.mock" value="tab_performance_mock">
+                        Query Insights Mock
+                    </Tab>
                 </TabList>
 
-                <div className="resultsActionBar">
-                    <ToolbarViewNavigation />
-                    <ToolbarDocumentManipulation
-                        onDeleteClick={handleDeleteDocumentRequest}
-                        onEditClick={handleEditDocumentRequest}
-                        onViewClick={handleViewDocumentRequest}
-                        onAddClick={handleAddDocumentRequest}
-                    />
-                    <ViewSwitcher onViewChanged={handleViewChanged} />
-                </div>
+                {selectedTab === 'tab_result' && (
+                    <>
+                        <div className="resultsActionBar">
+                            <ToolbarViewNavigation />
+                            <ToolbarDocumentManipulation
+                                onDeleteClick={handleDeleteDocumentRequest}
+                                onEditClick={handleEditDocumentRequest}
+                                onViewClick={handleViewDocumentRequest}
+                                onAddClick={handleAddDocumentRequest}
+                            />
+                            <ViewSwitcher onViewChanged={handleViewChanged} />
+                        </div>
 
-                <div className="resultsDisplayArea" id="resultsDisplayAreaId">
-                    {
-                        {
-                            'Table View': (
-                                <DataViewPanelTable
-                                    liveHeaders={currentQueryResults?.tableHeaders ?? []}
-                                    liveData={currentQueryResults?.tableData ?? []}
-                                    handleStepIn={handleStepInRequest}
-                                />
-                            ),
-                            'Tree View': <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />,
-                            'JSON View': <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />,
-                            default: <div>error '{currentContext.currentView}'</div>,
-                        }[currentContext.currentView] // switch-statement
-                    }
-                </div>
+                        <div className="resultsDisplayArea" id="resultsDisplayAreaId">
+                            {
+                                {
+                                    'Table View': (
+                                        <DataViewPanelTable
+                                            liveHeaders={currentQueryResults?.tableHeaders ?? []}
+                                            liveData={currentQueryResults?.tableData ?? []}
+                                            handleStepIn={handleStepInRequest}
+                                        />
+                                    ),
+                                    'Tree View': <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />,
+                                    'JSON View': <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />,
+                                    default: <div>error '{currentContext.currentView}'</div>,
+                                }[currentContext.currentView] // switch-statement
+                            }
+                        </div>
 
-                {currentContext.currentView === Views.TABLE && (
-                    <div className="toolbarTableNavigation">
-                        <ToolbarTableNavigation />
-                    </div>
+                        {currentContext.currentView === Views.TABLE && (
+                            <div className="toolbarTableNavigation">
+                                <ToolbarTableNavigation />
+                            </div>
+                        )}
+                    </>
                 )}
+
+                {selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
+                {selectedTab === 'tab_performance_mock' && <QueryInsightsMainMock />}
             </div>
         </CollectionViewContext.Provider>
     );
