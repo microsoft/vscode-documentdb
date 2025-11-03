@@ -3,8 +3,5 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export * from './AIRecommendationsPanel';
-export * from './animatedCardList';
-export * from './optimizationCards';
-export * from './queryPlanSummary';
-export * from './QuickActions';
+export * from './QueryOptimizationAIService';
+export * from './types';

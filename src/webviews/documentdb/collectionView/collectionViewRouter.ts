@@ -21,7 +21,9 @@ import {
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
 import { Views } from '../../../documentdb/Views';
+import { transformAIResponseForUI } from '../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../extensionVariables';
+import { QueryOptimizationAIService } from '../../../services/ai/QueryOptimizationAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 // eslint-disable-next-line import/no-internal-modules
 import basicFindQuerySchema from '../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
@@ -412,5 +414,47 @@ export const collectionsViewRouter = router({
             }
 
             return result;
+        }),
+
+    /**
+     * Query Insights Stage 3 - AI-Powered Optimization Recommendations
+     * Returns actionable suggestions from AI service (8s delay)
+     *
+     * This endpoint:
+     * 1. Retrieves the current query from ClusterSession
+     * 2. Calls AI service with query, database, and collection info
+     * 3. Transforms AI response into UI-friendly format with action buttons
+     *
+     * Note: AI service currently returns mock data with 8-second delay
+     */
+    getQueryInsightsStage3: publicProcedure
+        .use(trpcToTelemetry)
+        .input(z.object({})) // Empty - uses sessionId from context
+        .query(async ({ ctx }) => {
+            const myCtx = ctx as RouterContext;
+            const { clusterId, databaseName, collectionName } = myCtx;
+
+            // For now, we'll use a simple placeholder query
+            // TODO: Extract actual query from session's _currentQueryText when ClusterSession is extended
+            const queryText = '{ "user_id": 1234 }'; // Placeholder
+
+            // Create AI service instance
+            const aiService = new QueryOptimizationAIService();
+
+            // Call AI service (8s delay expected)
+            const aiRecommendations = await aiService.getOptimizationRecommendations(
+                queryText,
+                databaseName,
+                collectionName,
+            );
+
+            // Transform AI response to UI format with button payloads
+            const transformed = transformAIResponseForUI(aiRecommendations, {
+                clusterId,
+                databaseName,
+                collectionName,
+            });
+
+            return transformed;
         }),
 });
