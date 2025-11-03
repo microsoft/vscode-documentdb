@@ -23,6 +23,26 @@ export enum CommandType {
 }
 
 /**
+ * Query object structure
+ * NOTE: For now we only support find queries here
+ */
+export interface QueryObject {
+    // Filter criteria
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    filter?: any;
+    // Sort specification
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sort?: any;
+    // Projection specification
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    projection?: any;
+    // Number of documents to skip
+    skip?: number;
+    // Maximum number of documents to return
+    limit?: number;
+}
+
+/**
  * Context information needed for query optimization
  */
 export interface QueryOptimizationContext {
@@ -33,7 +53,11 @@ export interface QueryOptimizationContext {
     // Collection name
     collectionName: string;
     // The query or pipeline to optimize
+    // Will be removed in later version
+    // Currently remains for aggregate and count commands
     query?: string;
+    // The query object for find operations
+    queryObject?: QueryObject;
     // The detected command type
     commandType: CommandType;
     // Pre-loaded execution plan
@@ -282,6 +306,38 @@ async function fillPromptTemplate(
     // Get the template for this command type
     const template = await getPromptTemplate(templateType);
 
+    // Note: Query information is currently not passed to the prompt
+    // This may be re-enabled in the future if needed
+    // if (templateType === CommandType.Find && context.queryObject) {
+    //     // Format query object as structured information
+    //     const queryParts: string[] = [];
+    //
+    //     if (context.queryObject.filter) {
+    //         queryParts.push(`**Filter**: \`\`\`json\n${JSON.stringify(context.queryObject.filter, null, 2)}\n\`\`\``);
+    //     }
+    //
+    //     if (context.queryObject.sort) {
+    //         queryParts.push(`**Sort**: \`\`\`json\n${JSON.stringify(context.queryObject.sort, null, 2)}\n\`\`\``);
+    //     }
+    //
+    //     if (context.queryObject.projection) {
+    //         queryParts.push(`**Projection**: \`\`\`json\n${JSON.stringify(context.queryObject.projection, null, 2)}\n\`\`\``);
+    //     }
+    //
+    //     if (context.queryObject.skip !== undefined) {
+    //         queryParts.push(`**Skip**: ${context.queryObject.skip}`);
+    //     }
+    //
+    //     if (context.queryObject.limit !== undefined) {
+    //         queryParts.push(`**Limit**: ${context.queryObject.limit}`);
+    //     }
+    //
+    //     queryInfo = queryParts.join('\n\n');
+    // } else if (context.query) {
+    //     // Fallback to string query for backward compatibility
+    //     queryInfo = context.query;
+    // }
+
     // Fill the template with actual data
     const filled = template
         .replace('{databaseName}', context.databaseName)
@@ -339,16 +395,34 @@ export async function optimizeQuery(
         if (!queryContext.clusterId) {
             throw new Error(l10n.t('clusterId is required when not using pre-loaded data'));
         }
-        if (!queryContext.query) {
-            throw new Error(l10n.t('query is required when not using pre-loaded data'));
+
+        // Check if we have queryObject or need to parse query string
+        if (!queryContext.queryObject && !queryContext.query) {
+            throw new Error(l10n.t('query or queryObject is required when not using pre-loaded data'));
         }
 
         // Get the MongoDB client
         const client = await ClustersClient.getClient(queryContext.clusterId);
         clusterInfo = await client.getClusterMetadata();
 
-        // Parse the query to extract filter, sort, projection, etc.
-        const parsedQuery = parseQueryString(queryContext.query, queryContext.commandType);
+        // Prepare query options based on input format
+        let explainOptions: QueryObject | undefined;
+        let parsedQuery: {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            filter?: any;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            pipeline?: any[];
+            explainOptions?: QueryObject;
+        } | undefined;
+
+        if (queryContext.queryObject) {
+            // Use queryObject directly for find operations
+            explainOptions = queryContext.queryObject;
+        } else if (queryContext.query) {
+            // Parse the query string for backward compatibility
+            parsedQuery = parseQueryString(queryContext.query, queryContext.commandType);
+            explainOptions = parsedQuery.explainOptions;
+        }
 
         // Gather information needed for optimization
         try {
@@ -357,7 +431,7 @@ export async function optimizeQuery(
                 const explainData = await client.explainFind(
                     queryContext.databaseName,
                     queryContext.collectionName,
-                    parsedQuery.explainOptions,
+                    explainOptions,
                 );
                 explainResult = explainData;
             } else if (queryContext.commandType === CommandType.Aggregate) {
@@ -365,7 +439,7 @@ export async function optimizeQuery(
                     queryContext.databaseName,
                     queryContext.collectionName,
                     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                    parsedQuery.pipeline || [],
+                    parsedQuery?.pipeline || [],
                 );
                 explainResult = explainData;
             } else if (queryContext.commandType === CommandType.Count) {
@@ -373,7 +447,7 @@ export async function optimizeQuery(
                     queryContext.databaseName,
                     queryContext.collectionName,
                     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                    parsedQuery.filter || {},
+                    parsedQuery?.filter || {},
                 );
             }
 
