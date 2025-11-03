@@ -6,4 +6,5 @@
 export * from './AiCard';
 export * from './custom';
 export * from './ImprovementCard';
+export * from './MarkdownCard';
 export * from './TipsCard';

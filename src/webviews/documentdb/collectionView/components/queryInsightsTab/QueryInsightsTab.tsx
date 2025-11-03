@@ -43,7 +43,13 @@ import { AnimatedCardList } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
-import { AiCard, GetPerformanceInsightsCard, ImprovementCard, TipsCard } from './components/optimizationCards';
+import {
+    AiCard,
+    GetPerformanceInsightsCard,
+    ImprovementCard,
+    MarkdownCard,
+    TipsCard,
+} from './components/optimizationCards';
 import { QueryPlanSummary } from './components/queryPlanSummary';
 import { QuickActions } from './components/QuickActions';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
@@ -387,6 +393,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     title={l10n.t('DocumentDB Performance Tips')}
                                     tips={performanceTips}
                                     onDismiss={handleDismissTips}
+                                />
+                            )}
+
+                            {/* Educational Markdown Card - Understanding Query Execution */}
+                            {stageState === 3 && aiData && aiData.educationalContent && (
+                                <MarkdownCard
+                                    key="understanding-execution"
+                                    title={l10n.t('Understanding Your Query Execution Plan')}
+                                    content={aiData.educationalContent}
+                                    onCopy={() => {
+                                        void navigator.clipboard.writeText(aiData.educationalContent || '');
+                                    }}
                                 />
                             )}
                         </AnimatedCardList>

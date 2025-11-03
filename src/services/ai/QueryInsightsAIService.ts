@@ -73,6 +73,57 @@ export class QueryInsightsAIService {
                 "2) the execution plan shows IXSCAN using 'user_id_1_status_1'",
                 '3) no COLLSCAN stage appears in the plan',
             ],
+            educationalContent: `## How DocumentDB Executes Your Query
+
+Your query goes through multiple stages to retrieve data:
+
+\`\`\`javascript
+db.${collectionName}.find({ user_id: 1234, status: "active" })
+\`\`\`
+
+### Current Execution Strategy (COLLSCAN)
+
+**Stage 1: COLLSCAN** - Collection Scan
+- Examines **all 10,000 documents** in the collection
+- Filters for \`user_id: 1234\`
+- Returns 2 matching documents
+
+**Stage 2: FILTER** - Additional filtering
+- Applies \`status: "active"\` filter
+- Further reduces the result set
+
+**Efficiency**: Only 0.02% - examining 10,000 docs to return 2
+
+### With Recommended Index
+
+Creating an index on \`{ user_id: 1, status: 1 }\` changes the execution plan:
+
+**Stage 1: IXSCAN** - Index Scan
+- Scans **only ~2 index entries** directly
+- Uses the compound index for both conditions
+
+**Stage 2: FETCH** - Document Retrieval
+- Retrieves **only the 2 matching documents**
+- No unnecessary reads
+
+**Stage 3: PROJECTION** - Field Selection
+- Returns requested fields
+
+**Efficiency**: 100% - examining 2 docs to return 2
+
+### Key Performance Metrics
+
+- **docsExamined**: Documents read from disk
+- **keysExamined**: Index entries scanned
+- **documentsReturned**: Final result count
+
+**Ideal ratio**: docsExamined ≈ documentsReturned
+
+### Learn More
+
+- [Index Strategies](https://docs.mongodb.com/manual/applications/indexes/)
+- [Query Performance](https://docs.mongodb.com/manual/tutorial/optimize-query-performance-with-indexes-and-projections/)
+`,
         };
     }
 

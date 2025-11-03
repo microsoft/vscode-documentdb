@@ -24,6 +24,7 @@ export interface AIOptimizationResponse {
     analysis: string;
     improvements: AIIndexRecommendation[];
     verification: string[];
+    educationalContent?: string; // Optional markdown content for educational cards
 }
 
 /**

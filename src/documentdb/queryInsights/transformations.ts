@@ -46,6 +46,7 @@ export function transformAIResponseForUI(
         analysisCard,
         improvementCards,
         verificationSteps,
+        educationalContent: aiResponse.educationalContent,
     };
 }
 

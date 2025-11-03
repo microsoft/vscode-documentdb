@@ -61,6 +61,7 @@ export interface QueryInsightsStage3Response {
     analysisCard: AnalysisCard;
     improvementCards: ImprovementCard[];
     verificationSteps: string; // How to verify improvements
+    educationalContent?: string; // Optional markdown content for educational cards
     metadata?: OptimizationMetadata;
 }
 
