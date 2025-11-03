@@ -117,7 +117,7 @@ export class ClustersClient {
 
     private _mongoClient: MongoClient;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
-    private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
+    private _clustersMetadataPromise: Map<string, Promise<ClusterMetadata>> = new Map();
 
     /**
      * Use getClient instead of a constructor. Connections/Client are being cached and reused.
