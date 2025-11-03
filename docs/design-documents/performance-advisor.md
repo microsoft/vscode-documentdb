@@ -34,7 +34,6 @@ Populated as soon as the query finishes, using fast signals plus `explain("query
 - **Documents Returned** — e.g., `100`
 - **Keys Examined** — `n/a`
 - **Docs Examined** — `n/a`
-- **DocsExamined / Returned** — `n/a`
 
 **Aggregation rules (when sharded):**
 
@@ -49,14 +48,13 @@ Populated as soon as the query finishes, using fast signals plus `explain("query
 - Documents Returned: `100`
 - Keys Examined: `n/a`
 - Docs Examined: `n/a`
-- Docs/Returned: `n/a`
 
 **Stage 1 — Sharded example**
 
 - Execution Time (client): `1.9 s`
 - Documents Returned: `50`
-- Keys/Docs Examined: `n/a`
-- Docs/Returned: `n/a`
+- Keys Examined: `n/a`
+- Docs Examined: `n/a`
 
 ### 2.2. Query Plan Summary (Planner-only)
 
@@ -65,8 +63,7 @@ Built from `explain("queryPlanner")`. This is **fast** and does **not** execute 
 #### What we show (planner-only)
 
 - **Winning Plan** — the **full logical plan tree** chosen by the planner (not just a single stage).
-- **Rejected Plans** — a count and brief summaries.
-- **Index Bounds (chips)** — key ranges the access path will scan.
+- **Rejected Plans** — a count, if exists
 - **Targeting (sharded)** — which shards are listed in `shards[]`.
 - **Execution Time (client)** — end-to-end as measured by the client (the planner has no server timing).
 
@@ -97,12 +94,8 @@ Built from `explain("queryPlanner")`. This is **fast** and does **not** execute 
 
 **UI from this plan**
 
-- **Winning Plan:** `IXSCAN(status_1) → FETCH → PROJECTION`
+- **Winning Plan:** `IXSCAN → FETCH → PROJECTION`
 - **Rejected Plans:** `1 other plan considered` (`COLLSCAN`)
-- **Index Bounds (chip):** `status:["PENDING","PENDING"]`
-- **Index likely used?** **Yes** — winning path contains `IXSCAN` with a concrete index and bounds.
-- **Sort path?** No `SORT` stage visible → no in-memory sort expected in this planner view.
-- **Index-only expected?** **No** — `FETCH` is present, so full documents will be read.
 
 #### Sharded example (planner-only)
 
@@ -144,23 +137,17 @@ Built from `explain("queryPlanner")`. This is **fast** and does **not** execute 
 - **Targeting:** `shards[] = [shardA, shardB]`
 - **Merge Summary:** top node `SHARD_MERGE` (results will be merged).
 - **Per-shard Winning Plans:**
-  - **shardA:** `IXSCAN(status_1) → FETCH` (bounds chip `["PENDING","PENDING"]`)
+  - **shardA:** `IXSCAN → FETCH`
   - **shardB:** `COLLSCAN` **(badge)**
 - **Rejected Plans:** `0`
-- **Index likely used?** Partially — **yes** on shardA, **no** on shardB.
-- **Sort path?** No `SORT` visible at planner stage.
-- **Index-only expected?** **No** — shardA includes `FETCH`; shardB is a scan.
 
-#### Answers to common UI questions (planner-only)
+#### Answers to common UI questions (planner-only) (these are actualy relevant to stage 2)
 
 - **Is “Winning Plan” the whole plan or just `IXSCAN`?**
   It’s the **whole plan tree** chosen by the planner. Render it as a sequential spine; `IXSCAN` is the access stage within that plan.
 
 - **How many plans were considered? Do we know why rejected?**
   The planner returns a **list/count of `rejectedPlans`** (summaries only). No per-plan runtime stats or explicit rejection reasons in planner-only mode.
-
-- **How to detect that an index will likely be used?**
-  The winning path contains **`IXSCAN`** with `indexName` and **bounded** `indexBounds`. Show a “Uses index” indicator and a bounds chip. If the plan is `COLLSCAN`, flag it.
 
 - **Are the index bounds good or bad?**
   **Good bounds** are narrow and specific, minimizing the keys scanned. An equality match like `status: ["PENDING", "PENDING"]` is very efficient. **Bad bounds** are wide or unbounded, forcing a large index scan. For example, `status: ["[MinKey", "MaxKey"]` means the entire index is scanned, which offers no filtering advantage and is often a sign that the index is only being used for sorting. Flag this as **Unbounded bounds**.
@@ -314,7 +301,7 @@ Replace `n/a` with real values and recompute the ratio.
 ### 3.5. Answers to common UI questions (executionStats)
 
 - **Is the winning plan still the whole plan?**
-  Yes. `executionStages` is the executed **plan tree** with per-stage counters. Render as the same sequential spine (plus optional tree toggle).
+  Yes. `executionStages` is the executed **plan tree** with per-stage counters. Render as the same sequential spine (plus optional details toggle).
 
 - **How many plans were considered? Do we know why rejected?**
   `executionStats` covers the **winning plan** only. Use Stage 1’s `rejectedPlans` to show candidate count. If you ever run `allPlansExecution`, you can show per-candidate runtime stats; otherwise there’s **no rejection reason** here.
