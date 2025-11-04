@@ -3,8 +3,5 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export * from './AiCard';
-export * from './custom';
-export * from './ImprovementCard';
-export * from './MarkdownCard';
-export * from './TipsCard';
+export * from './QueryInsightsAIService';
+export * from './types';
