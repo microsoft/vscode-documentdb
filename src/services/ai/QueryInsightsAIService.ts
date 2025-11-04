@@ -91,10 +91,12 @@ export class QueryInsightsAIService {
                 educationalContent: parsedJson.educationalContent,
             };
         } catch (error) {
-            throw new Error(l10n.t('Error parsing index advisor response: {0}', error));
+            const errorMessage = error instanceof Error ? error.message : "Not an error instance";
+            throw new Error(
+                l10n.t('Failed to parse AI optimization response. {0}', errorMessage),
+            );
         }
     }
-
 
     /**
      * Executes a recommendation action (create index, drop index, learn more, etc.)

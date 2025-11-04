@@ -346,7 +346,9 @@ async function fillPromptTemplate(
         .replace('{indexStats}', JSON.stringify(indexes, null, 2) || 'N/A')
         .replace('{executionStats}', executionStats)
         .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2))
-        .replace('{AzureClusterType}', clusterInfo.domainInfo_isAzure === 'true' ? JSON.stringify(clusterInfo.domainInfo_api, null, 2) : 'N/A',
+        .replace(
+            '{AzureClusterType}',
+            clusterInfo.domainInfo_isAzure === 'true' ? JSON.stringify(clusterInfo.domainInfo_api, null, 2) : 'N/A',
         );
     // .replace('{query}', context.query || 'N/A');
     return filled;
@@ -400,13 +402,15 @@ export async function optimizeQuery(
 
         // Prepare query options based on input format
         let explainOptions: QueryObject | undefined;
-        let parsedQuery: {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            filter?: any;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            pipeline?: any[];
-            explainOptions?: QueryObject;
-        } | undefined;
+        let parsedQuery:
+            | {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  filter?: any;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  pipeline?: any[];
+                  explainOptions?: QueryObject;
+              }
+            | undefined;
 
         if (queryContext.queryObject) {
             // Use queryObject directly for find operations

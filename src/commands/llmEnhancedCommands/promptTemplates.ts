@@ -41,7 +41,31 @@ Follow these strict instructions (must obey):
 2. **Do not hallucinate** — only use facts present in the sections Collection_Stats, Indexes_Stats, Execution_Stats. If a required metric is absent, set the corresponding field to \`null\` in \`metadata\`.
 3. **No internal reasoning / chain-of-thought** — never output your step-by-step internal thoughts. Give concise, evidence-based conclusions only.
 4. **Analysis length limit** — the \`analysis\` field must be a Markdown-formatted string and contain **no more than 6 sentences**. Be concise.
-5. **Educational content** — the \`educationalContent\` field must be a Markdown-formatted string containing **5-6 sentences** that explain your understanding of the provided execution plan, including what stages were used, whether indexes were utilized, and key performance metrics observed.
+5. **Educational content with fixed template** — the \`educationalContent\` field must be a Markdown-formatted string that follows this exact structure:
+
+   ### Query Execution Overview
+   [2-3 sentences providing a high-level summary of the query execution flow and strategy]
+
+   ### Execution Stages Breakdown
+   [Detailed explanation of each stage in the execution plan. For each stage mentioned in executionStats, explain:
+   - What the stage does (e.g., COLLSCAN scans all documents, IXSCAN uses an index, FETCH retrieves full documents, SORT performs sorting, PROJECTION filters fields)
+   - Key metrics for that stage (documents/keys examined, documents returned)
+   - Why this stage was necessary
+   Use bullet points or numbered list for clarity. Be specific about the stage names from the actual execution plan.]
+
+   ### Index Usage Analysis
+   [2-3 sentences explaining which indexes were used (if any), why they were chosen, or why a collection scan occurred. Mention the specific index name and key pattern if applicable.]
+
+   ### Performance Metrics
+   [Analyze key performance indicators using bullet points:
+   - **Documents Examined vs Returned**: [specific numbers and efficiency ratio]
+   - **Keys Examined**: [number for index scans, if applicable]
+   - **Inefficiencies Detected**: [list any issues like in-memory sorts, excessive document fetches, blocking operations, etc.]
+   Keep each bullet point concise but specific with actual metrics from the execution plan.]
+
+   ### Key Findings
+   [1-2 sentences summarizing the most critical performance bottlenecks or optimization opportunities identified]
+
 6. **Runnable shell commands** — any index changes you recommend must be provided as **mongosh/mongo shell** commands (runnable). Use \`db.getCollection("{collectionName}")\` to reference the collection (replace \`{collectionName}\` with the actual name from \`collectionStats\`).
 7. **Justify every index command** — each \`create\`/\`drop\` recommendation must include a one-sentence justification that references concrete fields/metrics from \`executionStats\` or \`indexStats\`.
 8. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
@@ -81,7 +105,7 @@ Output JSON schema (required shape; **adhere exactly**):
       "usedIndex": "<indexKeyPattern or 'COLLSCAN' or null>"
     }
   },
-  "educationalContent": "<markdown string, 5-6 sentences explaining your understanding of the execution plan>",
+  "educationalContent": "<markdown string following the fixed template with sections: Query Execution Overview, Execution Stages Breakdown, Index Usage Analysis, Performance Metrics, Key Findings>",
   "analysis": "<markdown string, <=6 sentences>",
   "improvements": [
     {
@@ -105,7 +129,7 @@ Output JSON schema (required shape; **adhere exactly**):
 Additional rules for the JSON:
 - \`metadata.collectionName\` must be filled from \`{collectionStats.ns}\` or a suitable field; if not available set to \`null\`.
 - \`derived.totalKeysExamined\`, \`derived.totalDocsExamined\`, and \`derived.keysToDocsRatio\` should be filled from \`executionStats\` if present, otherwise \`null\`. \`keysToDocsRatio\` = \`totalKeysExamined / max(1, totalDocsExamined)\`.
-- \`educationalContent\` must be exactly **5-6 sentences** explaining what you observed in the execution plan (stages used, index usage, performance characteristics).
+- \`educationalContent\` must be a Markdown string following the fixed template structure with five sections: **Query Execution Overview**, **Execution Stages Breakdown**, **Index Usage Analysis**, **Performance Metrics**, and **Key Findings**. Use proper markdown headings (###) and write detailed, specific explanations. For the Execution Stages Breakdown section, analyze each stage from the execution plan individually with its specific metrics.
 - \`analysis\` must be human-readable, in Markdown (you may use bold or a short bullet), and **no more than 6 sentences**.
 - \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
 - \`verification\` must be an **array** with the **same length as improvements**. Each element is a Markdown string containing \`\`\`javascript code blocks\`\`\` with verification commands for the corresponding improvement. If \`improvements\` is empty, \`verification\` must be \`[]\`.
@@ -132,7 +156,31 @@ Follow these strict instructions (must obey):
 2. **Do not hallucinate** — only use facts present in the sections Collection_Stats, Indexes_Stats, Execution_Stats. If a required metric is absent, set the corresponding field to \`null\` in \`metadata\`.
 3. **No internal reasoning / chain-of-thought** — never output your step-by-step internal thoughts. Give concise, evidence-based conclusions only.
 4. **Analysis length limit** — the \`analysis\` field must be a Markdown-formatted string and contain **no more than 6 sentences**. Be concise.
-5. **Educational Content** — the \`educationalContent\` field must be a Markdown-formatted string containing **5-6 sentences** that explain your understanding of the provided execution plan, including what stages were used, whether indexes were utilized, and key performance metrics observed.
+5. **Educational content with fixed template** — the \`educationalContent\` field must be a Markdown-formatted string that follows this exact structure:
+
+   ### Query Execution Overview
+   [2-3 sentences providing a high-level summary of the aggregation pipeline execution flow and strategy]
+
+   ### Execution Stages Breakdown
+   [Detailed explanation of each stage in the execution plan. For each stage mentioned in executionStats, explain:
+   - What the stage does (e.g., $MATCH filters documents, $GROUP aggregates data, $SORT orders results, $PROJECT reshapes documents, COLLSCAN/IXSCAN for initial data access)
+   - Key metrics for that stage (documents examined/returned, memory usage if applicable)
+   - Why this stage was necessary in the pipeline
+   Use bullet points or numbered list for clarity. Be specific about the stage names from the actual execution plan.]
+
+   ### Index Usage Analysis
+   [2-3 sentences explaining which indexes were used in early pipeline stages (if any), why they were chosen, or why a collection scan occurred. Mention the specific index name and key pattern if applicable.]
+
+   ### Performance Metrics
+   [Analyze key performance indicators using bullet points:
+   - **Pipeline Efficiency**: [documents processed at each stage vs final results]
+   - **Index Effectiveness**: [how well indexes reduced the working set in early stages]
+   - **Blocking Operations**: [list any inefficiencies like large in-memory sorts, blocking stages, memory-intensive operations, etc.]
+   Keep each bullet point concise but specific with actual metrics from the execution plan.]
+
+   ### Key Findings
+   [1-2 sentences summarizing the most critical performance bottlenecks or optimization opportunities identified]
+
 6. **Runnable shell commands** — any index changes you recommend must be provided as **mongosh/mongo shell** commands (runnable). Use \`db.getCollection("{collectionName}")\` to reference the collection (replace \`{collectionName}\` with the actual name from \`collectionStats\`).
 7. **Justify every index command** — each \`create\`/\`drop\` recommendation must include a one-sentence justification that references concrete fields/metrics from \`executionStats\` or \`indexStats\`.
 8. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
@@ -188,7 +236,7 @@ Output JSON schema (required shape; adhere exactly):
       "usedIndex": "<indexKeyPattern or 'COLLSCAN' or null>"
     }
   },
-  "educationalContent": "<markdown string, 5-6 sentences explaining your understanding of the execution plan>",
+  "educationalContent": "<markdown string following the fixed template with sections: Query Execution Overview, Execution Stages Breakdown, Index Usage Analysis, Performance Metrics, Key Findings>",
   "analysis": "<markdown string, <=6 sentences>",
   "improvements": [
     {
@@ -211,7 +259,7 @@ Output JSON schema (required shape; adhere exactly):
 Additional rules for the JSON:
 - \`metadata.collectionName\` must be filled from \`{collectionStats.ns}\` or a suitable field; if not available set to \`null\`.
 - \`derived.totalKeysExamined\`, \`derived.totalDocsExamined\`, and \`derived.keysToDocsRatio\` should be filled from \`executionStats\` if present, otherwise \`null\`. \`keysToDocsRatio\` = \`totalKeysExamined / max(1, totalDocsExamined)\`.
-- \`educationalContent\` must be exactly **5-6 sentences** explaining what you observed in the execution plan (stages used, index usage, performance characteristics).
+- \`educationalContent\` must be a Markdown string following the fixed template structure with five sections: **Query Execution Overview**, **Execution Stages Breakdown**, **Index Usage Analysis**, **Performance Metrics**, and **Key Findings**. Use proper markdown headings (###) and write detailed, specific explanations. For the Execution Stages Breakdown section, analyze each pipeline stage from the execution plan individually with its specific metrics and purpose.
 - \`analysis\` must be human-readable, in Markdown (you may use bold or a short bullet), and **no more than 6 sentences**.
 - \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
 - \`verification\` must be an **array** with the **same length as improvements**. Each element is a Markdown string containing \`\`\`javascript code blocks\`\`\` with verification commands for the corresponding improvement. If \`improvements\` is empty, \`verification\` must be \`[]\`.
@@ -237,7 +285,31 @@ Follow these strict instructions (must obey):
 2. **Do not hallucinate** — only use facts present in the sections Query, Collection_Stats, Indexes_Stats, Execution_Stats, Cluster_Type. If a required metric is absent, set the corresponding field to \`null\` in \`metadata\`.
 3. **No internal reasoning / chain-of-thought** — never output your step-by-step internal thoughts. Give concise, evidence-based conclusions only.
 4. **Analysis length limit** — the \`analysis\` field must be a Markdown-formatted string and contain **no more than 6 sentences**. Be concise.
-5. **Educational content** — the \`educationalContent\` field must be a Markdown-formatted string containing **5-6 sentences** that explain your understanding of the provided execution plan, including what stages were used, whether indexes were utilized, and key performance metrics observed.
+5. **Educational content with fixed template** — the \`educationalContent\` field must be a Markdown-formatted string that follows this exact structure:
+
+   ### Query Execution Overview
+   [2-3 sentences providing a high-level summary of the count operation execution flow and strategy]
+
+   ### Execution Stages Breakdown
+   [Detailed explanation of each stage in the execution plan. For each stage mentioned in executionStats, explain:
+   - What the stage does (e.g., COUNT_SCAN uses index for counting, COLLSCAN scans all documents, IXSCAN uses index scan, FETCH retrieves documents)
+   - Key metrics for that stage (documents/keys examined, count result)
+   - Why this stage was necessary for the count operation
+   Use bullet points or numbered list for clarity. Be specific about the stage names from the actual execution plan.]
+
+   ### Index Usage Analysis
+   [2-3 sentences explaining which indexes were used for the count operation (if any), why they were chosen, or why a collection scan occurred. Mention the specific index name and key pattern if applicable. Note whether the count could be satisfied by index-only scan.]
+
+   ### Performance Metrics
+   [Analyze key performance indicators using bullet points:
+   - **Documents Examined**: [total number examined for the count operation]
+   - **Index-Only Count**: [whether count was satisfied without fetching documents]
+   - **Operation Efficiency**: [ratio of documents examined vs collection size, scan type used]
+   Keep each bullet point concise but specific with actual metrics from the execution plan.]
+
+   ### Key Findings
+   [1-2 sentences summarizing the most critical performance bottlenecks or optimization opportunities identified]
+
 6. **Runnable shell commands** — any index changes you recommend must be provided as **mongosh/mongo shell** commands (runnable). Use \`db.getCollection("{collectionName}")\` to reference the collection (replace \`{collectionName}\` with the actual name from \`collectionStats\`).
 7. **Justify every index command** — each \`create\`/\`drop\` recommendation must include a one-sentence justification that references concrete fields/metrics from \`executionStats\` or \`indexStats\`.
 8. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
@@ -271,7 +343,7 @@ Output JSON schema (required shape; adhere exactly):
       "usedIndex": "<indexKeyPattern or 'COLLSCAN' or null>"
     }
   },
-  "educationalContent": "<markdown string, 5-6 sentences explaining your understanding of the execution plan>",
+  "educationalContent": "<markdown string following the fixed template with sections: Query Execution Overview, Execution Stages Breakdown, Index Usage Analysis, Performance Metrics, Key Findings>",
   "analysis": "<markdown string, <=6 sentences>",
   "improvements": [
     {
@@ -294,7 +366,7 @@ Output JSON schema (required shape; adhere exactly):
 Additional rules for the JSON:
 - \`metadata.collectionName\` must be filled from \`{collectionStats.ns}\` or a suitable field; if not available set to \`null\`.
 - \`derived.totalKeysExamined\`, \`derived.totalDocsExamined\`, and \`derived.keysToDocsRatio\` should be filled from \`executionStats\` if present, otherwise \`null\`. \`keysToDocsRatio\` = \`totalKeysExamined / max(1, totalDocsExamined)\`.
-- \`educationalContent\` must be exactly **5-6 sentences** explaining what you observed in the execution plan (stages used, index usage, performance characteristics).
+- \`educationalContent\` must be a Markdown string following the fixed template structure with five sections: **Query Execution Overview**, **Execution Stages Breakdown**, **Index Usage Analysis**, **Performance Metrics**, and **Key Findings**. Use proper markdown headings (###) and write detailed, specific explanations. For the Execution Stages Breakdown section, analyze each stage from the execution plan individually with its specific metrics and purpose in the count operation.
 - \`analysis\` must be human-readable, in Markdown (you may use bold or a short bullet), and **no more than 6 sentences**.
 - \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
 - \`verification\` must be an **array** with the **same length as improvements**. Each element is a Markdown string containing \`\`\`javascript code blocks\`\`\` with verification commands for the corresponding improvement. If \`improvements\` is empty, \`verification\` must be \`[]\`.
