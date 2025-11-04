@@ -418,14 +418,12 @@ export const collectionsViewRouter = router({
 
     /**
      * Query Insights Stage 3 - AI-Powered Optimization Recommendations
-     * Returns actionable suggestions from AI service (8s delay)
+     * Returns actionable suggestions from AI service
      *
      * This endpoint:
      * 1. Retrieves the current query from ClusterSession
      * 2. Calls AI service with query, database, and collection info
      * 3. Transforms AI response into UI-friendly format with action buttons
-     *
-     * Note: AI service currently returns mock data with 8-second delay
      */
     getQueryInsightsStage3: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
         const myCtx = ctx as RouterContext;
@@ -438,10 +436,8 @@ export const collectionsViewRouter = router({
         // Create AI service instance
         const aiService = new QueryInsightsAIService();
 
-        // Call AI service (8s delay expected)
-        // Pass clusterId and sessionId first, followed by remaining parameters
+        // Call AI service
         const aiRecommendations = await aiService.getOptimizationRecommendations(
-            clusterId,
             sessionId,
             queryText,
             databaseName,

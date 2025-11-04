@@ -6,7 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
 import { CopilotService } from '../../services/copilotService';
@@ -46,8 +46,8 @@ export interface QueryObject {
  * Context information needed for query optimization
  */
 export interface QueryOptimizationContext {
-    // The cluster/connection ID
-    clusterId?: string;
+    // The session ID
+    sessionId: string;
     // Database name
     databaseName: string;
     // Collection name
@@ -375,7 +375,14 @@ export async function optimizeQuery(
     let explainResult: unknown;
     let collectionStats: CollectionStats;
     let indexes: Array<IndexStats>;
-    let clusterInfo: ClusterMetadata;
+
+    // TODO: allow null sessionId for testing framework
+    if (!queryContext.sessionId) {
+        throw new Error(l10n.t('sessionId is required for query optimization'));
+    }
+    const session = ClusterSession.getSession(queryContext.sessionId);
+    const client = session.getClient();
+    const clusterInfo = await client.getClusterMetadata();
 
     // Check if we have pre-loaded data
     const hasPreloadedData = queryContext.executionPlan;
@@ -385,25 +392,11 @@ export async function optimizeQuery(
         explainResult = queryContext.executionPlan;
         collectionStats = queryContext.collectionStats!;
         indexes = queryContext.indexStats!;
-
-        // For pre-loaded data, create a minimal cluster info
-        clusterInfo = {
-            domainInfo_isAzure: 'false',
-            domainInfo_api: 'N/A',
-        };
     } else {
-        if (!queryContext.clusterId) {
-            throw new Error(l10n.t('clusterId is required when not using pre-loaded data'));
-        }
-
         // Check if we have queryObject or need to parse query string
         if (!queryContext.queryObject && !queryContext.query) {
             throw new Error(l10n.t('query or queryObject is required when not using pre-loaded data'));
         }
-
-        // Get the MongoDB client
-        const client = await ClustersClient.getClient(queryContext.clusterId);
-        clusterInfo = await client.getClusterMetadata();
 
         // Prepare query options based on input format
         let explainOptions: QueryObject | undefined;
