@@ -456,7 +456,7 @@ export const QueryInsightsMainMock = (): JSX.Element => {
                                                 </div>
                                                 <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>
                                                     {l10n.t(
-                                                        'Your current query uses a COLLSCAN (collection scan) strategy, which means MongoDB examines all 10,000 documents in the collection to find the 2 matching documents. This is highly inefficient with a selectivity of only 0.02%.',
+                                                        'Your current query uses a COLLSCAN (collection scan) strategy, which means DocumentDB examines all 10,000 documents in the collection to find the 2 matching documents. This is highly inefficient with a selectivity of only 0.02%.',
                                                     )}
                                                 </Text>
                                                 <Text size={300} style={{ display: 'block', marginBottom: '12px' }}>

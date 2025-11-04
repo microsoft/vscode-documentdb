@@ -21,7 +21,9 @@ import {
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
 import { Views } from '../../../documentdb/Views';
+import { transformAIResponseForUI } from '../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../extensionVariables';
+import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 // eslint-disable-next-line import/no-internal-modules
 import basicFindQuerySchema from '../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
@@ -410,6 +412,76 @@ export const collectionsViewRouter = router({
             if (!result) {
                 throw new Error(l10n.t('Query generation failed'));
             }
+
+            return result;
+        }),
+
+    /**
+     * Query Insights Stage 3 - AI-Powered Optimization Recommendations
+     * Returns actionable suggestions from AI service (8s delay)
+     *
+     * This endpoint:
+     * 1. Retrieves the current query from ClusterSession
+     * 2. Calls AI service with query, database, and collection info
+     * 3. Transforms AI response into UI-friendly format with action buttons
+     *
+     * Note: AI service currently returns mock data with 8-second delay
+     */
+    getQueryInsightsStage3: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
+        const myCtx = ctx as RouterContext;
+        const { sessionId, clusterId, databaseName, collectionName } = myCtx;
+
+        // For now, we'll use a simple placeholder query
+        // TODO: Extract actual query from session's _currentQueryText when ClusterSession is extended
+        const queryText = '{ "user_id": 1234 }'; // Placeholder
+
+        // Create AI service instance
+        const aiService = new QueryInsightsAIService();
+
+        // Call AI service (8s delay expected)
+        // Pass clusterId and sessionId first, followed by remaining parameters
+        const aiRecommendations = await aiService.getOptimizationRecommendations(
+            clusterId,
+            sessionId,
+            queryText,
+            databaseName,
+            collectionName,
+        );
+
+        // Transform AI response to UI format with button payloads
+        const transformed = transformAIResponseForUI(aiRecommendations, {
+            clusterId,
+            databaseName,
+            collectionName,
+        });
+
+        return transformed;
+    }),
+
+    /**
+     * Execute a recommendation action (create index, drop index, learn more, etc.)
+     *
+     * Takes actionId and payload from the button click and routes to appropriate handler
+     * in QueryInsightsAIService
+     */
+    executeRecommendation: publicProcedure
+        .use(trpcToTelemetry)
+        .input(
+            z.object({
+                actionId: z.string(),
+                payload: z.unknown(),
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            const myCtx = ctx as RouterContext;
+            const { sessionId, clusterId } = myCtx;
+            const { actionId, payload } = input;
+
+            // Create AI service instance
+            const aiService = new QueryInsightsAIService();
+
+            // Execute the recommendation action
+            const result = await aiService.executeRecommendation(clusterId, sessionId, actionId, payload);
 
             return result;
         }),
