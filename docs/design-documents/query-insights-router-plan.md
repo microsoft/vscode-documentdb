@@ -3785,30 +3785,1056 @@ function generateIndexCommand(improvement: any, databaseName: string, collection
 
 **5.1. Update Query Execution Logic** ⬜ Not Started
 
-**📖 Before starting**: Review "Query Execution Integration" section for server-side metadata tracking approach.
+**📖 Before starting**: Review "Query Execution Integration" section and Stage 1 implementation notes for server-side metadata tracking approach.
 
-Update webview query execution to handle metadata server-side:
+**Goal**: Orchestrate non-blocking Stage 1 data prefetch after query execution completes, and provide placeholder for query state indicator.
 
-```typescript
-// In query execution handler:
-const results = await executeQuery(query);
+**Implementation Location**: `src/webviews/documentdb/collectionView/CollectionView.tsx`
 
-// No need to call storeQueryMetadata - handled server-side
-// ClusterSession automatically tracks query execution metadata
+**Architecture Overview**:
+
+```
+Query Execution → Results Return → Non-Blocking Stage 1 Prefetch → Cache Population
+                       ↓                                                    ↓
+                  Show Results                                    Ready for Query Insights Tab
+                       ↓                                                    ↓
+                  User switches to Query Insights Tab          ← Data already cached (fast)
 ```
 
-**Note**: Query metadata (execution time, document count) will be tracked server-side in ClusterSession during query execution. No explicit mutation endpoint needed.
+**5.1.1. Non-Blocking Stage 1 Prefetch After Query Execution** ⬜ Not Started
 
-**5.2. Implement Frontend Query Insights Panel** ⬜ Not Started
+**Implementation Steps**:
 
-**📖 Before starting**: Review Stage 1, 2, and 3 sections for UI component requirements and interaction patterns.
+1. **Trigger Stage 1 Prefetch After Query Results Return**:
 
-Create React components to consume the three endpoints:
+   ```typescript
+   // In CollectionView.tsx (or query execution handler):
+   const handleQueryExecution = async (query: string) => {
+     // Execute query and show results
+     const results = await trpcClient.mongoClusters.collectionView.runFindQuery.query({
+       query,
+       skip: currentPage * pageSize,
+       limit: pageSize,
+     });
 
-- Stage 1 performance view panel (calls `getQueryInsightsStage1`)
-- Stage 2 detailed execution analysis panel (calls `getQueryInsightsStage2`)
-- Stage 3 AI recommendations panel (calls `getQueryInsightsStage3` - 8s delay expected)
-- Button handlers for create/drop index, copy command, learn more
+     // Update results view
+     setQueryResults(results);
+
+     // Non-blocking Stage 1 prefetch to populate ClusterSession cache
+     // DO NOT await - this runs in background
+     void prefetchQueryInsights();
+
+     return results; // Don't block on insights
+   };
+
+   const prefetchQueryInsights = () => {
+     void trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+       .query()
+       .then((stage1Data) => {
+         // Stage 1 data is now cached in ClusterSession
+         // Update indicator that insights are ready
+         setQueryInsightsReady(true);
+       })
+       .catch((error) => {
+         // Silent fail - user can still request insights manually via tab
+         console.warn('Stage 1 prefetch failed:', error);
+         setQueryInsightsReady(false);
+       });
+   };
+   ```
+
+2. **Server-Side Execution Time Tracking**:
+
+   No explicit mutation needed. The ClusterSession already tracks execution time during `runFindQueryWithCache()`:
+
+   ```typescript
+   // In ClusterSession.runFindQueryWithCache() (already implemented):
+   const startTime = performance.now();
+   const results = await this._client.runFindQuery(/* ... */);
+   const endTime = performance.now();
+   this._lastExecutionTimeMs = endTime - startTime; // Cached until query changes
+   ```
+
+**Behavior**:
+
+- ✅ Query results display immediately (not blocked by insights prefetch)
+- ✅ Stage 1 data fetched in background after results return
+- ✅ ClusterSession cache populated before user navigates to Query Insights tab
+- ✅ Silent failure if prefetch fails - user can still manually request insights
+- ✅ Execution time tracked server-side automatically (not affected by network latency)
+
+---
+
+**5.1.2. Add Placeholder for Query State Indicator** ⬜ Not Started
+
+**Goal**: Provide UI state management for showing when query insights are ready (future enhancement: asterisk/badge on tab).
+
+**Implementation**:
+
+```typescript
+// In CollectionView.tsx:
+const [queryInsightsReady, setQueryInsightsReady] = useState(false);
+
+// Reset when query changes:
+useEffect(() => {
+  setQueryInsightsReady(false);
+}, [currentQuery]);
+
+// TODO: Use queryInsightsReady to add visual indicator on Query Insights tab
+// Examples:
+// - Asterisk badge: "Query Insights *"
+// - Dot indicator: "Query Insights •"
+// - Color change: Tab text color changes when ready
+```
+
+**Future Enhancement Placeholder**:
+
+```typescript
+// In Tab component (when implemented):
+<Tab
+  label={queryInsightsReady ? 'Query Insights *' : 'Query Insights'}
+  active={activeTab === 'queryInsights'}
+  onClick={() => setActiveTab('queryInsights')}
+/>
+```
+
+**Behavior**:
+
+- ✅ State management ready for visual indicators
+- ✅ Automatically resets when query changes
+- ✅ Can be enhanced later without changing architecture
+
+---
+
+**5.2. Implement Frontend Query Insights Panel** ⬜ Not Started (Stage 3 UI: 🔍 In Review)
+
+**📖 Before starting**: Review Stage 1, 2, and 3 sections for UI component requirements, data flow patterns, and caching behavior.
+
+**Goal**: Implement progressive data loading in Query Insights tab with proper caching and tab-switching behavior.
+
+**Implementation Location**: `src/webviews/documentdb/collectionView/QueryInsightsTab.tsx` (new file or section in CollectionView.tsx)
+
+**Architecture Overview**:
+
+```
+User Activates Query Insights Tab
+          ↓
+    Fetch Stage 1 (cached from prefetch - fast)
+          ↓
+    Display Stage 1 Data (basic metrics + query plan)
+          ↓
+    Auto-start Stage 2 Fetch (executionStats - ~2s)
+          ↓
+    Update UI with Stage 2 Data (detailed metrics + performance rating)
+          ↓
+    User Clicks "Get Performance Insights" Button
+          ↓
+    Fetch Stage 3 (AI recommendations - ~8s)
+          ↓
+    Display AI Recommendations
+
+    Tab Switches → Fetches Continue in Background → Return to Tab → Data Already Loaded
+```
+
+**5.2.1. Stage 1: Initial View on Tab Activation** ⬜ Not Started
+
+**Goal**: Load and display Stage 1 data when user activates Query Insights tab.
+
+**⚠️ Architecture Note**: Due to component unmounting on tab switch (see 5.2.3), state must be stored in parent CollectionView.tsx.
+
+**Implementation** (see 5.2.3 for full parent state structure):
+
+```typescript
+// In QueryInsightsTab.tsx:
+interface QueryInsightsMainProps {
+  queryInsightsState: QueryInsightsState;
+  setQueryInsightsState: React.Dispatch<React.SetStateAction<QueryInsightsState>>;
+}
+
+export const QueryInsightsMain = ({
+  queryInsightsState,
+  setQueryInsightsState,
+}: QueryInsightsMainProps): JSX.Element => {
+  const { trpcClient } = useTrpcClient();
+
+  // Stage 1: Load on mount (only if not already loading/loaded)
+  useEffect(() => {
+    if (!queryInsightsState.stage1Data && !queryInsightsState.stage1Loading && !queryInsightsState.stage1Promise) {
+      setQueryInsightsState((prev) => ({ ...prev, stage1Loading: true }));
+
+      const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+        .query()
+        .then((data) => {
+          setQueryInsightsState((prev) => ({
+            ...prev,
+            stage1Data: data,
+            stage1Loading: false,
+            stage1Promise: null,
+          }));
+          return data;
+        })
+        .catch((error) => {
+          void trpcClient.common.displayErrorMessage.mutate({
+            message: l10n.t('Failed to load query insights'),
+            modal: false,
+            cause: error instanceof Error ? error.message : String(error),
+          });
+          setQueryInsightsState((prev) => ({
+            ...prev,
+            stage1Error: error instanceof Error ? error.message : String(error),
+            stage1Loading: false,
+            stage1Promise: null,
+          }));
+          throw error;
+        });
+
+      setQueryInsightsState((prev) => ({ ...prev, stage1Promise: promise }));
+    }
+  }, []); // Empty deps - only run on mount
+
+  // ... rest of component
+};
+```
+
+**Behavior**:
+
+- ✅ Loads Stage 1 data immediately when Query Insights tab is activated (component mounts)
+- ✅ Data likely already cached from prefetch (fast response from ClusterSession cache)
+- ✅ If promise already exists in parent state, doesn't start duplicate request
+- ✅ Parent state preserves data/loading state when component unmounts (tab switch)
+- ✅ Loading state shows skeleton UI while fetching
+
+---
+
+**5.2.2. Stage 2: Automatic Progression After Stage 1** ⬜ Not Started
+
+**Goal**: Automatically start Stage 2 fetch after Stage 1 completes to populate detailed metrics.
+
+**⚠️ Architecture Note**: State stored in parent, promise tracked to prevent duplicates.
+
+**Implementation**:
+
+```typescript
+// In QueryInsightsTab.tsx (continuation):
+
+// Stage 2: Auto-start after Stage 1 completes
+useEffect(() => {
+  if (
+    queryInsightsState.stage1Data &&
+    !queryInsightsState.stage2Data &&
+    !queryInsightsState.stage2Loading &&
+    !queryInsightsState.stage2Promise
+  ) {
+    setQueryInsightsState((prev) => ({ ...prev, stage2Loading: true }));
+
+    const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
+      .query()
+      .then((data) => {
+        setQueryInsightsState((prev) => ({
+          ...prev,
+          stage2Data: data,
+          stage2Loading: false,
+          stage2Promise: null,
+        }));
+        return data;
+      })
+      .catch((error) => {
+        void trpcClient.common.displayErrorMessage.mutate({
+          message: l10n.t('Failed to load detailed execution analysis'),
+          modal: false,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        setQueryInsightsState((prev) => ({
+          ...prev,
+          stage2Error: error instanceof Error ? error.message : String(error),
+          stage2Loading: false,
+          stage2Promise: null,
+        }));
+        throw error;
+      });
+
+    setQueryInsightsState((prev) => ({ ...prev, stage2Promise: promise }));
+  }
+}, [queryInsightsState.stage1Data]);
+```
+
+**Behavior**:
+
+- ✅ Automatically starts after Stage 1 completes
+- ✅ Runs explain("executionStats") which executes the query
+- ✅ Updates parent state with execution metrics (survives component unmount)
+- ✅ Does NOT abort if user switches tabs (promise continues, stored in parent)
+- ✅ Results available immediately when user returns to tab
+
+---
+
+**5.2.3. Tab Switching Behavior (No Abort)** ⬜ Not Started
+
+**Goal**: Ensure ongoing fetches continue when user switches tabs, and data is preserved across tab switches.
+
+**⚠️ Critical Architecture Decision: Component Unmounting**
+
+Looking at the current `CollectionView.tsx` implementation:
+
+```typescript
+{selectedTab === 'tab_result' && (
+    // Results tab content
+)}
+{selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
+{selectedTab === 'tab_performance_mock' && <QueryInsightsMainMock />}
+```
+
+**This means components ARE UNMOUNTED when switching tabs.** All component-local state (useState) is lost.
+
+**Solution: Lift State to Parent (CollectionView.tsx)**
+
+To preserve query insights data across tab switches, we need to:
+
+1. **Store query insights state in CollectionView.tsx** (parent component)
+2. **Pass state down to QueryInsightsTab via props**
+3. **Store in-flight promises in parent state to prevent abort**
+
+**Implementation**:
+
+```typescript
+// In CollectionView.tsx (parent component):
+
+// Query Insights State (lifted to parent to survive tab unmounting)
+interface QueryInsightsState {
+  stage1Data: QueryInsightsStage1Response | null;
+  stage1Loading: boolean;
+  stage1Error: string | null;
+  stage1Promise: Promise<QueryInsightsStage1Response> | null; // Track in-flight request
+
+  stage2Data: QueryInsightsStage2Response | null;
+  stage2Loading: boolean;
+  stage2Error: string | null;
+  stage2Promise: Promise<QueryInsightsStage2Response> | null;
+
+  stage3Data: QueryInsightsStage3Response | null;
+  stage3Loading: boolean;
+  stage3Error: string | null;
+  stage3Promise: Promise<QueryInsightsStage3Response> | null;
+}
+
+const [queryInsightsState, setQueryInsightsState] = useState<QueryInsightsState>({
+  stage1Data: null,
+  stage1Loading: false,
+  stage1Error: null,
+  stage1Promise: null,
+
+  stage2Data: null,
+  stage2Loading: false,
+  stage2Error: null,
+  stage2Promise: null,
+
+  stage3Data: null,
+  stage3Loading: false,
+  stage3Error: null,
+  stage3Promise: null,
+});
+
+// Reset query insights when query execution starts
+// Note: Query execution already triggers when currentContext.activeQuery changes
+useEffect(() => {
+  // Reset all query insights state - user is executing a new query
+  setQueryInsightsState({
+    stage1Data: null,
+    stage1Loading: false,
+    stage1Error: null,
+    stage1Promise: null,
+
+    stage2Data: null,
+    stage2Loading: false,
+    stage2Error: null,
+    stage2Promise: null,
+
+    stage3Data: null,
+    stage3Loading: false,
+    stage3Error: null,
+    stage3Promise: null,
+  });
+}, [currentContext.activeQuery]); // Reset whenever query executes (even if same query text)
+
+// Pass state and updater functions to QueryInsightsTab
+{selectedTab === 'tab_performance_main' && (
+  <QueryInsightsMain
+    queryInsightsState={queryInsightsState}
+    setQueryInsightsState={setQueryInsightsState}
+  />
+)}
+```
+
+**In QueryInsightsTab.tsx (child component):**
+
+```typescript
+interface QueryInsightsMainProps {
+  queryInsightsState: QueryInsightsState;
+  setQueryInsightsState: React.Dispatch<React.SetStateAction<QueryInsightsState>>;
+}
+
+export const QueryInsightsMain = ({
+  queryInsightsState,
+  setQueryInsightsState
+}: QueryInsightsMainProps): JSX.Element => {
+  const { trpcClient } = useTrpcClient();
+
+  // Stage 1: Load when tab activates (only if not already loading/loaded)
+  useEffect(() => {
+    if (!queryInsightsState.stage1Data &&
+        !queryInsightsState.stage1Loading &&
+        !queryInsightsState.stage1Promise) {
+
+      // Mark as loading
+      setQueryInsightsState(prev => ({ ...prev, stage1Loading: true }));
+
+      // Create promise and store it
+      const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+        .query()
+        .then((data) => {
+          setQueryInsightsState(prev => ({
+            ...prev,
+            stage1Data: data,
+            stage1Loading: false,
+            stage1Promise: null,
+          }));
+          return data;
+        })
+        .catch((error) => {
+          void trpcClient.common.displayErrorMessage.mutate({
+            message: l10n.t('Failed to load query insights'),
+            modal: false,
+            cause: error instanceof Error ? error.message : String(error),
+          });
+          setQueryInsightsState(prev => ({
+            ...prev,
+            stage1Error: error instanceof Error ? error.message : String(error),
+            stage1Loading: false,
+            stage1Promise: null,
+          }));
+          throw error;
+        });
+
+      // Store promise reference
+      setQueryInsightsState(prev => ({ ...prev, stage1Promise: promise }));
+    }
+  }, []); // Empty deps - only run on mount
+
+  // Stage 2: Auto-start after Stage 1 completes
+  useEffect(() => {
+    if (queryInsightsState.stage1Data &&
+        !queryInsightsState.stage2Data &&
+        !queryInsightsState.stage2Loading &&
+        !queryInsightsState.stage2Promise) {
+
+      setQueryInsightsState(prev => ({ ...prev, stage2Loading: true }));
+
+      const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
+        .query()
+        .then((data) => {
+          setQueryInsightsState(prev => ({
+            ...prev,
+            stage2Data: data,
+            stage2Loading: false,
+            stage2Promise: null,
+          }));
+          return data;
+        })
+        .catch((error) => {
+          void trpcClient.common.displayErrorMessage.mutate({
+            message: l10n.t('Failed to load detailed execution analysis'),
+            modal: false,
+            cause: error instanceof Error ? error.message : String(error),
+          });
+          setQueryInsightsState(prev => ({
+            ...prev,
+            stage2Error: error instanceof Error ? error.message : String(error),
+            stage2Loading: false,
+            stage2Promise: null,
+          }));
+          throw error;
+        });
+
+      setQueryInsightsState(prev => ({ ...prev, stage2Promise: promise }));
+    }
+  }, [queryInsightsState.stage1Data]);
+
+  // Render with queryInsightsState data
+  return (
+    <div className="queryInsightsPanel">
+      {queryInsightsState.stage1Loading && <SkeletonUI />}
+      {queryInsightsState.stage1Data && (
+        <MetricsRow data={queryInsightsState.stage1Data} />
+      )}
+      {/* ... rest of UI */}
+    </div>
+  );
+};
+```
+
+**Behavior with This Architecture**:
+
+- ✅ **Tab Switch Away**: Component unmounts, but state persists in parent
+- ✅ **In-Flight Requests**: Promise stored in parent state, continues executing
+- ✅ **Tab Switch Back**: Component remounts, immediately has access to parent state
+- ✅ **Request Completes While Away**: State update happens in parent, visible when returning
+- ✅ **Query Change**: Parent detects change and resets all query insights state
+
+**Key Architecture Points**:
+
+- **Parent State Storage**: CollectionView.tsx owns query insights state
+- **Promise Tracking**: Store promise references to prevent duplicate requests
+- **Component Unmounting**: QueryInsightsTab can unmount without losing data
+- **Automatic Recovery**: When remounting, component checks parent state before fetching---
+
+**5.2.4. Stage 3: AI Recommendations (User-Initiated)** ⬜ Not Started
+
+**Goal**: Allow user to request AI recommendations on demand with ~8s loading delay.
+
+**Implementation**:
+
+```typescript
+const [stage3Data, setStage3Data] = useState<QueryInsightsStage3Response | null>(null);
+const [stage3Loading, setStage3Loading] = useState(false);
+const [stage3Error, setStage3Error] = useState<string | null>(null);
+
+const handleGetAIRecommendations = () => {
+  setStage3Loading(true);
+  setStage3Error(null);
+
+  void trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
+    .query()
+    .then((data) => {
+      setStage3Data(data);
+      setStage3Loading(false);
+    })
+    .catch((error) => {
+      void trpcClient.common.displayErrorMessage.mutate({
+        message: l10n.t('Failed to get AI recommendations'),
+        modal: false,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+      setStage3Error(error instanceof Error ? error.message : String(error));
+      setStage3Loading(false);
+    });
+};
+```
+
+**UI Integration**:
+
+```typescript
+// In QueryInsightsTab.tsx:
+{!stage3Data && !stage3Loading && (
+  <VSCodeButton onClick={handleGetAIRecommendations}>
+    {l10n.t('Get Performance Insights')}
+  </VSCodeButton>
+)}
+
+{stage3Loading && (
+  <div className="ai-loading-state">
+    <VSCodeProgressRing />
+    <span>{l10n.t('Analyzing query performance...')}</span>
+  </div>
+)}
+
+{stage3Data && (
+  <AIRecommendationsSection recommendations={stage3Data} />
+)}
+```
+
+**Behavior**:
+
+- ✅ User must click button to trigger AI analysis
+- ✅ Shows loading state for ~8 seconds (AI service delay)
+- ✅ Continues even if user switches tabs
+- ✅ Results persist in component state
+- ✅ Button hidden after recommendations loaded
+
+---
+
+**5.2.5. Two-Level Caching Strategy** ⬜ Not Started
+
+**Goal**: Document and validate the two-level caching architecture with component unmounting considerations.
+
+**Caching Levels**:
+
+1. **Backend Cache (ClusterSession)**:
+
+   ```typescript
+   // In ClusterSession:
+   private _queryPlannerCache?: { result: Document; timestamp: number };
+   private _executionStatsCache?: { result: Document; timestamp: number };
+   private _aiRecommendationsCache?: { result: unknown; timestamp: number };
+   private _lastExecutionTimeMs?: number;
+
+   // Cleared when query text changes in resetCachesIfQueryChanged()
+   ```
+
+2. **Frontend Cache (Parent Component State - CollectionView.tsx)**:
+
+   ````typescript
+   // ⚠️ CRITICAL: Must be in parent (CollectionView.tsx) not child (QueryInsightsTab.tsx)
+   // Because QueryInsightsTab unmounts on tab switch
+
+   interface QueryInsightsState {
+     stage1Data: QueryInsightsStage1Response | null;
+     stage1Loading: boolean;
+     stage1Promise: Promise<QueryInsightsStage1Response> | null;
+
+     stage2Data: QueryInsightsStage2Response | null;
+     stage2Loading: boolean;
+     stage2Promise: Promise<QueryInsightsStage2Response> | null;
+
+     stage3Data: QueryInsightsStage3Response | null;
+     stage3Loading: boolean;
+     stage3Promise: Promise<QueryInsightsStage3Response> | null;
+   }
+
+   const [queryInsightsState, setQueryInsightsState] = useState<QueryInsightsState>({...});
+
+   // Reset when query executes (even if same query text)
+   useEffect(() => {
+     setQueryInsightsState({ /* reset all fields */ });
+   }, [currentContext.activeQuery]);
+   ```**Cache Invalidation Flow**:
+   ````
+
+```typescript
+// In CollectionView.tsx:
+useEffect(() => {
+  const currentQueryId = JSON.stringify({
+    filter: currentContext.activeQuery.filter,
+    project: currentContext.activeQuery.project,
+    sort: currentContext.activeQuery.sort,
+  });
+
+  // Query changed - reset all query insights state
+  if (queryInsightsState.queryIdentifier !== currentQueryId) {
+    setQueryInsightsState({
+      stage1Data: null,
+      stage1Loading: false,
+      stage1Promise: null,
+
+      stage2Data: null,
+      stage2Loading: false,
+      stage2Promise: null,
+
+      stage3Data: null,
+      stage3Loading: false,
+      stage3Promise: null,
+    });
+}, [currentContext.activeQuery]); // Reset whenever query executes (even if same query text)
+
+// Backend cache automatically cleared by ClusterSession.resetCachesIfQueryChanged()
+```
+
+**Why Promise Tracking is Critical**:
+
+```typescript
+// Scenario: User switches tabs during Stage 1 fetch
+// 1. User on Query Insights tab → Stage 1 request starts
+// 2. User switches to Results tab → QueryInsightsTab unmounts
+// 3. Stage 1 request completes while user on Results tab
+// 4. State update happens in parent CollectionView.tsx
+// 5. User returns to Query Insights tab → QueryInsightsTab remounts
+// 6. Component checks parent state, sees stage1Data exists, doesn't re-fetch
+// 7. If no stage1Data but stage1Promise exists → wait for existing promise
+
+// Without promise tracking:
+if (!stage1Data && !stage1Loading) {
+  startStage1Fetch(); // ❌ Could start duplicate request if promise in flight
+}
+
+// With promise tracking:
+if (!stage1Data && !stage1Loading && !stage1Promise) {
+  startStage1Fetch(); // ✅ Only starts if no request in progress
+}
+```
+
+**Key Behaviors**:
+
+- ✅ **Tab Switch Away → Component Unmounts**: State persists in parent CollectionView.tsx
+- ✅ **In-Flight Request**: Promise stored in parent, continues executing even when component unmounted
+- ✅ **Tab Switch Back → Component Remounts**: Immediately accesses parent state, no re-fetch needed
+- ✅ **Request Completes While Away**: State update happens in parent, visible when returning
+- ✅ **Query Execution**: Parent resets all query insights state (even if same query text re-executed)
+- ✅ **Duplicate Prevention**: Promise tracking prevents multiple simultaneous requests
+
+**Testing Scenarios**:
+
+1. **Basic Flow**: Run query → Switch to Query Insights → Verify Stage 1 shows cached data
+2. **Tab Switch During Load**: Activate Query Insights → Immediately switch to Results → Wait 2s → Return → Verify Stage 1 data visible
+3. **Complete Stage 2 → Switch**: Complete Stage 2 → Switch to Results → Return → Verify Stage 2 data still visible
+4. **AI During Tab Switch**: Request Stage 3 → Switch tabs during 8s delay → Return → Verify AI results show
+5. **Query Re-execution Reset**: Complete all stages → Re-execute same query → Switch to Query Insights → Verify all state reset, new data fetched
+6. **Duplicate Prevention**: Partially load Stage 1 → Switch away → Return before completion → Verify no duplicate request
+
+---
+
+**5.2.6. UI Component Integration with Real Data** ⬜ Not Started
+
+**Goal**: Connect existing UI components to real Stage 1/2/3 data instead of mock values.
+
+**⚠️ Architecture Note**: Components receive data via props from parent CollectionView.tsx state.
+
+**Implementation**:
+
+```typescript
+// In QueryInsightsTab.tsx:
+const [stage1Data, setStage1Data] = useState<QueryInsightsStage1Response | null>(null);
+const [stage1Loading, setStage1Loading] = useState(false);
+
+useEffect(() => {
+  // Fetch Stage 1 data when tab becomes active
+  if (isQueryInsightsTabActive && !stage1Data) {
+    setStage1Loading(true);
+
+    void trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+      .query()
+      .then((data) => {
+        setStage1Data(data);
+        setStage1Loading(false);
+      })
+      .catch((error) => {
+        // Show error to user
+        void trpcClient.common.displayErrorMessage.mutate({
+          message: l10n.t('Failed to load query insights'),
+          modal: false,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        setStage1Loading(false);
+      });
+  }
+}, [isQueryInsightsTabActive]);
+```
+
+**Behavior**:
+
+- ✅ Loads Stage 1 data immediately when Query Insights tab is activated
+- ✅ Data likely already cached from prefetch (fast response)
+- ✅ If not cached, ClusterSession fetches from cache or generates new explain
+- ✅ Stage 1 data persists in component state (no re-fetch on tab switch)
+
+**5.2.2. Stage 2: Automatic Progression After Stage 1**
+
+```typescript
+const [stage2Data, setStage2Data] = useState<QueryInsightsStage2Response | null>(null);
+const [stage2Loading, setStage2Loading] = useState(false);
+
+useEffect(() => {
+  // Start Stage 2 fetch immediately after Stage 1 completes
+  if (stage1Data && !stage2Data && !stage2Loading) {
+    setStage2Loading(true);
+
+    void trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
+      .query()
+      .then((data) => {
+        setStage2Data(data);
+        setStage2Loading(false);
+      })
+      .catch((error) => {
+        void trpcClient.common.displayErrorMessage.mutate({
+          message: l10n.t('Failed to load detailed execution analysis'),
+          modal: false,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        setStage2Loading(false);
+      });
+  }
+}, [stage1Data]);
+```
+
+**Behavior**:
+
+- ✅ Automatically starts after Stage 1 completes
+- ✅ Runs explain("executionStats") which executes the query
+- ✅ Updates UI with execution metrics (keysExamined, docsExamined, performance rating)
+- ✅ Does NOT abort if user switches tabs (fetch continues in background)
+
+**5.2.3. Tab Switching Behavior**
+
+```typescript
+// In CollectionView.tsx (tab management):
+const [activeTab, setActiveTab] = useState<'results' | 'queryInsights' | 'schema'>('results');
+
+const handleTabChange = (newTab: string) => {
+  setActiveTab(newTab);
+  // DO NOT abort ongoing Stage 1/2/3 fetches
+  // Fetches complete in background, results cached in component state
+};
+
+useEffect(() => {
+  if (activeTab === 'queryInsights') {
+    // Tab activated - trigger Stage 1 fetch if needed (see 5.2.1)
+  }
+  // When switching away, fetches continue in background
+}, [activeTab]);
+```
+
+**Behavior**:
+
+- ✅ Fetches continue even when user switches to Results or other tabs
+- ✅ When user returns to Query Insights tab, data is already loaded
+- ✅ No need to re-fetch - component state preserves all Stage 1/2/3 data
+- ✅ ClusterSession cache ensures consistent data if fetch completes after tab switch
+
+**5.2.4. Stage 3: AI Recommendations (User-Initiated)**
+
+```typescript
+const [stage3Data, setStage3Data] = useState<QueryInsightsStage3Response | null>(null);
+const [stage3Loading, setStage3Loading] = useState(false);
+
+const handleGetAIRecommendations = () => {
+  setStage3Loading(true);
+
+  void trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
+    .query()
+    .then((data) => {
+      setStage3Data(data);
+      setStage3Loading(false);
+    })
+    .catch((error) => {
+      void trpcClient.common.displayErrorMessage.mutate({
+        message: l10n.t('Failed to get AI recommendations'),
+        modal: false,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+      setStage3Loading(false);
+    });
+};
+```
+
+**Behavior**:
+
+- ✅ User clicks "Get Performance Insights" button
+- ✅ Shows loading state for ~8 seconds (AI service delay)
+- ✅ Continues even if user switches tabs
+- ✅ Results persist in component state
+
+**5.2.5. Caching Strategy Summary**
+
+The caching happens at **two levels**:
+
+1. **Backend Cache (ClusterSession)**:
+   - Query planner info cached in `_queryPlannerCache`
+   - Execution stats cached in `_executionStatsCache`
+   - Cleared when query text changes
+   - Survives tab switches
+
+2. **Frontend Cache (Component State)**:
+   - `stage1Data`, `stage2Data`, `stage3Data` in React state
+   - Survives tab switches within same session
+   - Cleared when query changes (new execution → new sessionId → new data)
+
+**Key Behavior**:
+
+- ✅ If user switches tabs and returns, frontend state provides instant display
+- ✅ If component unmounts and remounts (page navigation), backend cache prevents redundant explain calls
+- ✅ If query changes, both caches reset automatically
+
+**5.2.6. UI Component Integration**
+
+Update existing mock components to use real data:
+
+```typescript
+// Replace mock values with stage1Data/stage2Data:
+<TimeMetric
+  label={l10n.t('Execution Time')}
+  valueMs={stage1Data?.executionTime ?? null}
+/>
+<CountMetric
+  label={l10n.t('Documents Returned')}
+  value={stage1Data?.documentsReturned ?? null}
+/>
+<CountMetric
+  label={l10n.t('Keys Examined')}
+  value={stage2Data?.executionStats.totalKeysExamined ?? null}
+/>
+<CountMetric
+  label={l10n.t('Docs Examined')}
+  value={stage2Data?.executionStats.totalDocsExamined ?? null}
+/>
+
+// Query Efficiency Analysis:
+<GenericCell
+  label={l10n.t('Execution Strategy')}
+  value={stage2Data?.efficiencyAnalysis.executionStrategy}
+  placeholder="skeleton"
+/>
+<PerformanceRatingCell
+  label={l10n.t('Performance Rating')}
+  rating={stage2Data?.efficiencyAnalysis.performanceRating?.rating}
+  description={stage2Data?.efficiencyAnalysis.performanceRating?.message}
+  visible={!!stage2Data}
+/>
+
+// AI Recommendations:
+{stage3Data?.improvementCards.map(card => (
+  <ImprovementCard
+    key={card.cardId}
+    config={card}
+    onPrimaryAction={handlePrimaryAction}
+    onSecondaryAction={handleSecondaryAction}
+  />
+))}
+```
+
+```typescript
+// In QueryInsightsTab.tsx - Replace mock values with real data:
+
+// 1. Metrics Row (Stage 1 + Stage 2 data)
+<TimeMetric
+  label={l10n.t('Execution Time')}
+  valueMs={stage1Data?.executionTime ?? null}
+  loading={stage1Loading}
+/>
+<CountMetric
+  label={l10n.t('Documents Returned')}
+  value={stage1Data?.documentsReturned ?? null}
+  loading={stage1Loading}
+/>
+<CountMetric
+  label={l10n.t('Keys Examined')}
+  value={stage2Data?.executionStats.totalKeysExamined ?? null}
+  loading={stage2Loading}
+  placeholder={!stage2Data ? 'n/a' : undefined}
+/>
+<CountMetric
+  label={l10n.t('Docs Examined')}
+  value={stage2Data?.executionStats.totalDocsExamined ?? null}
+  loading={stage2Loading}
+  placeholder={!stage2Data ? 'n/a' : undefined}
+/>
+
+// 2. Query Plan Overview (Stage 1 data)
+<QueryPlanOverview
+  stages={stage1Data?.queryPlan.stages ?? []}
+  loading={stage1Loading}
+/>
+
+// 3. Query Efficiency Analysis (Stage 2 data)
+<QueryEfficiencyAnalysis
+  executionStrategy={stage2Data?.efficiencyAnalysis.executionStrategy}
+  indexUsed={stage2Data?.efficiencyAnalysis.indexUsed}
+  performanceRating={stage2Data?.efficiencyAnalysis.performanceRating?.rating}
+  ratingMessage={stage2Data?.efficiencyAnalysis.performanceRating?.message}
+  loading={stage2Loading}
+  visible={!!stage2Data}
+/>
+
+// 4. AI Recommendations (Stage 3 data)
+{stage3Data && (
+  <AIRecommendationsSection>
+    <AnalysisCard content={stage3Data.analysisCard} />
+
+    {stage3Data.improvementCards.map((card) => (
+      <ImprovementCard
+        key={card.cardId}
+        config={card}
+        onPrimaryAction={handlePrimaryAction}
+        onSecondaryAction={handleSecondaryAction}
+      />
+    ))}
+
+    <VerificationSteps steps={stage3Data.verificationSteps} />
+  </AIRecommendationsSection>
+)}
+
+// 5. Action Handlers
+const handlePrimaryAction = (payload: ActionPayload) => {
+  if (payload.action === 'createIndex') {
+    void trpcClient.mongoClusters.collectionView.createIndex.mutate({
+      indexSpec: payload.indexSpec,
+    });
+  } else if (payload.action === 'dropIndex') {
+    void trpcClient.mongoClusters.collectionView.dropIndex.mutate({
+      indexSpec: payload.indexSpec,
+    });
+  }
+};
+
+const handleSecondaryAction = (payload: ActionPayload) => {
+  if (payload.action === 'copyCommand') {
+    void navigator.clipboard.writeText(payload.command);
+  } else if (payload.action === 'learnMore') {
+    void vscode.env.openExternal(vscode.Uri.parse(payload.url));
+  }
+};
+```
+
+**Conditional Rendering Logic**:
+
+```typescript
+// Stage 1: Always visible when tab is active
+{stage1Loading && <SkeletonMetricsRow />}
+{stage1Data && <MetricsRow data={stage1Data} />}
+{stage1Error && <ErrorMessage message={stage1Error} />}
+
+// Stage 2: Shows "n/a" placeholders until loaded
+{!stage2Data && !stage2Loading && <MetricsRow showPlaceholders />}
+{stage2Loading && <SkeletonEfficiencyAnalysis />}
+{stage2Data && <EfficiencyAnalysis data={stage2Data} />}
+
+// Stage 3: Shows button until loaded
+{!stage3Data && !stage3Loading && <GetInsightsButton onClick={handleGetAIRecommendations} />}
+{stage3Loading && <AILoadingState />}
+{stage3Data && <AIRecommendations data={stage3Data} />}
+```
+
+**Testing Checklist for UI Integration**:
+
+- [ ] Metrics show skeleton/loading states correctly
+- [ ] Stage 1 data populates immediately when available
+- [ ] Stage 2 metrics show "n/a" until loaded, then update
+- [ ] Performance rating appears only after Stage 2 completes
+- [ ] Query plan stages display correctly from Stage 1 data
+- [ ] AI recommendations button triggers Stage 3 fetch
+- [ ] AI loading state shows for ~8 seconds
+- [ ] Improvement cards render with correct button payloads
+- [ ] Primary actions (create/drop index) execute correctly
+- [ ] Secondary actions (copy command, learn more) work correctly
+- [ ] Tab switches don't interrupt data display
+- [ ] Error states show user-friendly messages
+
+---
+
+**Phase 5 Implementation Summary**:
+
+```
+5.1 Query Execution Logic:
+  ├─ 5.1.1 Non-blocking Stage 1 prefetch after results return
+  └─ 5.1.2 Placeholder for query state indicator (future: asterisk on tab)
+
+5.2 Frontend Query Insights Panel:
+  ├─ 5.2.1 Stage 1: Load on tab activation (cached from prefetch)
+  ├─ 5.2.2 Stage 2: Auto-start after Stage 1, populate detailed metrics
+  ├─ 5.2.3 Tab switching: No abort, preserve data in component state
+  ├─ 5.2.4 Stage 3: User-initiated, ~8s AI loading delay
+  ├─ 5.2.5 Two-level caching: ClusterSession + Component State
+  └─ 5.2.6 UI components: Replace mocks with real data
+```
+
+**Key Implementation Principles**:
+
+1. ✅ **Non-blocking**: Query results never wait for insights
+2. ✅ **Progressive**: Stage 1 → Stage 2 → Stage 3 (each builds on previous)
+3. ✅ **Cached**: Two-level caching prevents redundant fetches
+4. ✅ **Resilient**: Fetches continue in background during tab switches
+5. ✅ **User-Controlled**: Stage 3 AI analysis only on user request
+6. ✅ **Automatic**: Stage 2 starts automatically after Stage 1
+
+---
+
+**Testing Checklist**:
+
+- [ ] Stage 1 loads when Query Insights tab is activated
+- [ ] Stage 2 starts automatically after Stage 1 completes
+- [ ] Switching to Results tab doesn't abort ongoing fetches
+- [ ] Returning to Query Insights tab shows cached data
+- [ ] Changing query clears both frontend and backend caches
+- [ ] Stage 3 AI recommendations show after ~8s delay
+- [ ] All loading states display skeleton/spinner appropriately
+- [ ] Error states show user-friendly messages
 
 ---
 
@@ -3898,9 +4924,9 @@ Create React components to consume the three endpoints:
 | ------------------------- | -------------- | -------- |
 | 1. Foundation & Types     | ✅ Complete    | 1/1      |
 | 2. Explain Plan Analysis  | ✅ Complete    | 5/5      |
-| 3. AI Service Integration | ⬜ Not Started | 0/2      |
+| 3. AI Service Integration | ✅ Complete    | 1/1      |
 | 4. Router Implementation  | ✅ Complete    | 2/2      |
-| 5. Frontend Integration   | ⬜ Not Started | 0/2      |
+| 5. Frontend Integration   | ⬜ Not Started | 0/8      |
 | 6. Testing & Validation   | ⬜ Not Started | 0/3      |
 | 7. Production Hardening   | ⬜ Not Started | 0/4      |
 
@@ -3920,8 +4946,8 @@ Create React components to consume the three endpoints:
 
 **Phase 3: AI Service Integration**
 
-- 3.1 Create AI Service Client (mock with 8s delay): 🔍 In Review
-- 3.2 Extend ClusterSession for AI Integration: ⬜ Not Started
+- 3.1 Create AI Service Client (mock with 8s delay): ✅ Complete
+- 3.2 Extend ClusterSession for AI Integration: ⬜ Not Started (Deferred - not needed for Stage 3 endpoint)
 
 **Phase 4: Router Implementation**
 
@@ -3931,7 +4957,15 @@ Create React components to consume the three endpoints:
 **Phase 5: Frontend Integration**
 
 - 5.1 Update Query Execution Logic: ⬜ Not Started
-- 5.2 Implement Frontend Query Insights Panel: ⬜ Not Started (Stage 3: 🔍 In Review)
+  - 5.1.1 Non-blocking Stage 1 Prefetch After Query Execution: ⬜ Not Started
+  - 5.1.2 Add Placeholder for Query State Indicator: ⬜ Not Started
+- 5.2 Implement Frontend Query Insights Panel: ⬜ Not Started (Stage 3 UI: 🔍 In Review)
+  - 5.2.1 Stage 1: Initial View on Tab Activation: ⬜ Not Started
+  - 5.2.2 Stage 2: Automatic Progression After Stage 1: ⬜ Not Started
+  - 5.2.3 Tab Switching Behavior (No Abort): ⬜ Not Started
+  - 5.2.4 Stage 3: AI Recommendations (User-Initiated): ⬜ Not Started
+  - 5.2.5 Two-Level Caching Strategy: ⬜ Not Started
+  - 5.2.6 UI Component Integration with Real Data: ⬜ Not Started
 
 **Phase 6: Testing & Validation**
 
