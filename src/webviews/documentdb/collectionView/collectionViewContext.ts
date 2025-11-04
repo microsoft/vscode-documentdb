@@ -4,12 +4,46 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createContext } from 'react';
+import {
+    type QueryInsightsStage1Response,
+    type QueryInsightsStage2Response,
+    type QueryInsightsStage3Response,
+} from './types/queryInsights';
 
 export enum Views {
     TABLE = 'Table View',
     TREE = 'Tree View',
     JSON = 'JSON View',
 }
+
+/**
+ * Query Insights State - Tracks the three-stage progressive loading of query insights
+ * - Stage 1: Query planner data (lightweight, from explain("queryPlanner"))
+ * - Stage 2: Execution statistics (from explain("executionStats"))
+ * - Stage 3: AI-powered recommendations (opt-in, requires external AI service call)
+ *
+ * Promise tracking prevents duplicate requests during rapid tab switching.
+ */
+export interface QueryInsightsState {
+    stage1Data: QueryInsightsStage1Response | null;
+    stage1Loading: boolean;
+    stage1Error: string | null;
+    stage1Promise: Promise<QueryInsightsStage1Response> | null;
+
+    stage2Data: QueryInsightsStage2Response | null;
+    stage2Loading: boolean;
+    stage2Error: string | null;
+    stage2Promise: Promise<QueryInsightsStage2Response> | null;
+
+    stage3Data: QueryInsightsStage3Response | null;
+    stage3Loading: boolean;
+    stage3Error: string | null;
+    stage3Promise: Promise<QueryInsightsStage3Response> | null;
+}
+
+export type TableViewState = {
+    currentPath: string[];
+};
 
 export type CollectionViewContextType = {
     isLoading: boolean; // this is a concious decision to use 'isLoading' instead of <Suspense> tags. It's not only the data display component that is supposed to react to the lading state but also some input fields, buttons, etc.
@@ -50,10 +84,7 @@ export type CollectionViewContextType = {
         setJsonSchema(schema: object): Promise<void>; //monacoEditor.languages.json.DiagnosticsOptions, but we don't want to import monacoEditor here
     };
     isAiRowVisible: boolean; // Controls visibility of the AI prompt row in QueryEditor
-};
-
-export type TableViewState = {
-    currentPath: string[];
+    queryInsights: QueryInsightsState; // Query insights state for progressive loading
 };
 
 export const DefaultCollectionViewContext: CollectionViewContextType = {
@@ -81,6 +112,22 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
         selectedDocumentIndexes: [],
     },
     isAiRowVisible: false,
+    queryInsights: {
+        stage1Data: null,
+        stage1Loading: false,
+        stage1Error: null,
+        stage1Promise: null,
+
+        stage2Data: null,
+        stage2Loading: false,
+        stage2Error: null,
+        stage2Promise: null,
+
+        stage3Data: null,
+        stage3Loading: false,
+        stage3Error: null,
+        stage3Promise: null,
+    },
 };
 
 export const CollectionViewContext = createContext<

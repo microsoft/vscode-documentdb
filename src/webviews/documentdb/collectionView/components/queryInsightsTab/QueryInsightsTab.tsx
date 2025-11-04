@@ -33,8 +33,9 @@
 import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useEffect, useState } from 'react';
+import { type JSX, useContext, useEffect, useState } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import { CollectionViewContext } from '../../collectionViewContext';
 import {
     type ImprovementCard as ImprovementCardConfig,
     type QueryInsightsStage3Response,
@@ -67,13 +68,44 @@ interface StageDetails {
     indexBounds?: string;
 }
 
-export const QueryInsightsMain = (): JSX.Element => {
+interface QueryInsightsMainProps {
+    currentQuery: {
+        filter: string;
+        project?: string;
+        sort?: string;
+    };
+}
+
+export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX.Element => {
     // Stage management:
     // Stage 1: Initial View (cheap data + query plan from explain("queryPlanner"))
     // Stage 2: Detailed Execution Analysis (from explain("executionStats"))
     // Stage 3: AI-Powered Recommendations (opt-in)
     // See: docs/design-documents/performance-advisor.md
     const { trpcClient } = useTrpcClient();
+    const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
+    const { queryInsights: queryInsightsState } = currentContext;
+
+    /**
+     * Helper to update queryInsights state within the CollectionViewContext.
+     * Mimics React's setState API with support for both direct values and updater functions.
+     *
+     * Instead of writing:
+     *   setCurrentContext(prev => ({ ...prev, queryInsights: { ...prev.queryInsights, stage1Loading: true } }))
+     *
+     * You can write:
+     *   setQueryInsightsStateHelper(prev => ({ ...prev, stage1Loading: true }))
+     */
+    const setQueryInsightsStateHelper = (
+        updater:
+            | typeof currentContext.queryInsights
+            | ((prev: typeof currentContext.queryInsights) => typeof currentContext.queryInsights),
+    ): void => {
+        setCurrentContext((prev) => ({
+            ...prev,
+            queryInsights: typeof updater === 'function' ? updater(prev.queryInsights) : updater,
+        }));
+    };
     const [stageState, setStageState] = useState<1 | 2 | 3>(1);
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [aiInsightsRequested, setAiInsightsRequested] = useState(false); // One-way flag: once true, stays true
@@ -81,6 +113,90 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [selectedTab, setSelectedTab] = useState<Stage | null>(null);
+
+    // Stage 1: Load on mount (only if not already loading/loaded/in-flight)
+    useEffect(() => {
+        if (!queryInsightsState.stage1Data && !queryInsightsState.stage1Loading && !queryInsightsState.stage1Promise) {
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Loading: true }));
+
+            const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+                .query({
+                    filter: currentQuery.filter,
+                    project: currentQuery.project,
+                    sort: currentQuery.sort,
+                })
+                .then((data) => {
+                    setQueryInsightsStateHelper((prev) => ({
+                        ...prev,
+                        stage1Data: data,
+                        stage1Loading: false,
+                        stage1Promise: null,
+                    }));
+                    return data;
+                })
+                .catch((error) => {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: l10n.t('Failed to load query insights'),
+                        modal: false,
+                        cause: error instanceof Error ? error.message : String(error),
+                    });
+                    setQueryInsightsStateHelper((prev) => ({
+                        ...prev,
+                        stage1Error: error instanceof Error ? error.message : String(error),
+                        stage1Loading: false,
+                        stage1Promise: null,
+                    }));
+                    throw error;
+                });
+
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Promise: promise }));
+        }
+    }, []); // Empty deps - only run on mount
+
+    // Stage 2: Auto-start after Stage 1 completes
+    useEffect(() => {
+        if (
+            queryInsightsState.stage1Data &&
+            !queryInsightsState.stage2Data &&
+            !queryInsightsState.stage2Loading &&
+            !queryInsightsState.stage2Promise
+        ) {
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Loading: true }));
+
+            const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
+                .query({
+                    filter: currentQuery.filter,
+                    project: currentQuery.project,
+                    sort: currentQuery.sort,
+                })
+                .then((data) => {
+                    setQueryInsightsStateHelper((prev) => ({
+                        ...prev,
+                        stage2Data: data,
+                        stage2Loading: false,
+                        stage2Promise: null,
+                    }));
+                    setStageState(2); // Update visual stage indicator
+                    return data;
+                })
+                .catch((error) => {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: l10n.t('Failed to load detailed execution analysis'),
+                        modal: false,
+                        cause: error instanceof Error ? error.message : String(error),
+                    });
+                    setQueryInsightsStateHelper((prev) => ({
+                        ...prev,
+                        stage2Error: error instanceof Error ? error.message : String(error),
+                        stage2Loading: false,
+                        stage2Promise: null,
+                    }));
+                    throw error;
+                });
+
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Promise: promise }));
+        }
+    }, [queryInsightsState.stage1Data]);
 
     // Debug logging for state changes
     useEffect(() => {
