@@ -21,7 +21,7 @@ import {
     Text,
     tokens,
 } from '@fluentui/react-components';
-import { MoreHorizontalRegular } from '@fluentui/react-icons';
+import { ArrowUpFilled, MoreHorizontalRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
 import {
@@ -245,16 +245,22 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                             }
 
                                             return (
-                                                <StageDetailCard
-                                                    key={index}
-                                                    stageType={stage.stage as StageType}
-                                                    description={
-                                                        stage.indexName ? `Index: ${stage.indexName}` : undefined
-                                                    }
-                                                    returned={stage.nReturned}
-                                                    executionTimeMs={stage.executionTimeMs}
-                                                    metrics={metrics.length > 0 ? metrics : undefined}
-                                                />
+                                                <React.Fragment key={index}>
+                                                    {index > 0 && (
+                                                        <div className="stage-separator">
+                                                            <ArrowUpFilled fontSize={20} />
+                                                        </div>
+                                                    )}
+                                                    <StageDetailCard
+                                                        stageType={stage.stage as StageType}
+                                                        description={
+                                                            stage.indexName ? `Index: ${stage.indexName}` : undefined
+                                                        }
+                                                        returned={stage.nReturned}
+                                                        executionTimeMs={stage.executionTimeMs}
+                                                        metrics={metrics.length > 0 ? metrics : undefined}
+                                                    />
+                                                </React.Fragment>
                                             );
                                         })}
                                     </div>
@@ -327,14 +333,20 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                     }
 
                                     return (
-                                        <StageDetailCard
-                                            key={index}
-                                            stageType={stage.stage as StageType}
-                                            description={stage.indexName ? `Index: ${stage.indexName}` : undefined}
-                                            returned={stage.nReturned}
-                                            executionTimeMs={stage.executionTimeMs}
-                                            metrics={metrics.length > 0 ? metrics : undefined}
-                                        />
+                                        <React.Fragment key={index}>
+                                            {index > 0 && (
+                                                <div className="stage-separator">
+                                                    <ArrowUpFilled fontSize={20} />
+                                                </div>
+                                            )}
+                                            <StageDetailCard
+                                                stageType={stage.stage as StageType}
+                                                description={stage.indexName ? `Index: ${stage.indexName}` : undefined}
+                                                returned={stage.nReturned}
+                                                executionTimeMs={stage.executionTimeMs}
+                                                metrics={metrics.length > 0 ? metrics : undefined}
+                                            />
+                                        </React.Fragment>
                                     );
                                 })}
                             </div>
@@ -465,30 +477,24 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                     value: stage.docsExamined.toLocaleString(),
                                                 });
                                             }
-                                            if (stage.nReturned !== undefined) {
-                                                metrics.push({
-                                                    label: l10n.t('Documents Returned'),
-                                                    value: stage.nReturned.toLocaleString(),
-                                                });
-                                            }
-                                            if (stage.executionTimeMs !== undefined) {
-                                                metrics.push({
-                                                    label: l10n.t('Execution Time'),
-                                                    value: `${stage.executionTimeMs.toFixed(2)}ms`,
-                                                });
-                                            }
 
                                             return (
-                                                <StageDetailCard
-                                                    key={index}
-                                                    stageType={stage.stage as StageType}
-                                                    description={
-                                                        stage.indexName ? `Index: ${stage.indexName}` : undefined
-                                                    }
-                                                    returned={stage.nReturned}
-                                                    executionTimeMs={stage.executionTimeMs}
-                                                    metrics={metrics.length > 0 ? metrics : undefined}
-                                                />
+                                                <React.Fragment key={index}>
+                                                    {index > 0 && (
+                                                        <div className="stage-separator">
+                                                            <ArrowUpFilled fontSize={20} />
+                                                        </div>
+                                                    )}
+                                                    <StageDetailCard
+                                                        stageType={stage.stage as StageType}
+                                                        description={
+                                                            stage.indexName ? `Index: ${stage.indexName}` : undefined
+                                                        }
+                                                        returned={stage.nReturned}
+                                                        executionTimeMs={stage.executionTimeMs}
+                                                        metrics={metrics.length > 0 ? metrics : undefined}
+                                                    />
+                                                </React.Fragment>
                                             );
                                         })}
                                     </div>

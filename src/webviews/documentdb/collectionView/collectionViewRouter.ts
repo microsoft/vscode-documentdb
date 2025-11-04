@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { type JSONSchema } from 'vscode-json-languageservice';
 import { z } from 'zod';
@@ -43,6 +45,45 @@ export type RouterContext = BaseRouterContext & {
     databaseName: string;
     collectionName: string;
 };
+
+/**
+ * Debug helper: Read debug override file for Query Insights testing
+ * Looks for files in resources/debug/ directory
+ * Returns the raw MongoDB explain response if file exists and is valid, otherwise null
+ *
+ * To activate: Remove the "_comment" field from the JSON file
+ */
+function readQueryInsightsDebugFile(filename: string): Document | null {
+    try {
+        const debugFilePath = path.join(ext.context.extensionPath, 'resources', 'debug', filename);
+
+        if (!fs.existsSync(debugFilePath)) {
+            return null;
+        }
+
+        const content = fs.readFileSync(debugFilePath, 'utf8').trim();
+
+        if (!content) {
+            return null;
+        }
+
+        const parsed = JSON.parse(content) as Document & { _debug_active?: boolean };
+
+        // Check if debug mode is explicitly activated
+        if (!parsed._debug_active) {
+            return null;
+        }
+
+        ext.outputChannel.appendLine(`🐛 Query Insights Debug: Using override data from ${filename}`);
+
+        return parsed;
+    } catch (error) {
+        ext.outputChannel.appendLine(
+            `⚠️ Query Insights Debug: Failed to read ${filename}: ${(error as Error).message}`,
+        );
+        return null;
+    }
+}
 
 // Helper function to find the collection node based on context
 async function findCollectionNodeInTree(
@@ -447,6 +488,15 @@ export const collectionsViewRouter = router({
             const myCtx = ctx as RouterContext;
             const { sessionId, databaseName, collectionName } = myCtx;
 
+            // Check for debug override file first
+            const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
+            if (debugData) {
+                // Use debug data - analyze it the same way as real data
+                const analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(debugData);
+                // Use a default execution time for debug mode
+                return transformStage1Response(analyzed, 2.5);
+            }
+
             // Get ClusterSession
             const session: ClusterSession = ClusterSession.getSession(sessionId);
 
@@ -496,6 +546,14 @@ export const collectionsViewRouter = router({
         .query(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
             const { sessionId, databaseName, collectionName } = myCtx;
+
+            // Check for debug override file first
+            const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
+            if (debugData) {
+                // Use debug data - analyze it the same way as real data
+                const analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
+                return transformStage2Response(analyzed);
+            }
 
             // Get ClusterSession
             const session: ClusterSession = ClusterSession.getSession(sessionId);
