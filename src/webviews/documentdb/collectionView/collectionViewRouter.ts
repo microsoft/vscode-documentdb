@@ -21,7 +21,12 @@ import {
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
 import { Views } from '../../../documentdb/Views';
-import { transformAIResponseForUI } from '../../../documentdb/queryInsights/transformations';
+import { ExplainPlanAnalyzer } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
+import {
+    transformAIResponseForUI,
+    transformStage1Response,
+    transformStage2Response,
+} from '../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
@@ -414,6 +419,104 @@ export const collectionsViewRouter = router({
             }
 
             return result;
+        }),
+
+    /**
+     * Query Insights Stage 1 - Initial Performance View
+     * Returns fast metrics using explain("queryPlanner")
+     *
+     * This endpoint:
+     * 1. Retrieves execution time from ClusterSession (tracked during query execution)
+     * 2. Retrieves cached query planner info from ClusterSession
+     * 3. Uses ExplainPlanAnalyzer to parse the explain output
+     * 4. Transforms the analysis into UI-friendly format
+     *
+     * Note: This uses queryPlanner verbosity (no query re-execution)
+     * Documents returned is NOT available in Stage 1 - only in Stage 2 with executionStats
+     */
+    getQueryInsightsStage1: publicProcedure
+        .use(trpcToTelemetry)
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+            }),
+        )
+        .query(async ({ input, ctx }) => {
+            const myCtx = ctx as RouterContext;
+            const { sessionId, databaseName, collectionName } = myCtx;
+
+            // Get ClusterSession
+            const session: ClusterSession = ClusterSession.getSession(sessionId);
+
+            // Get execution time from session (tracked during last query execution)
+            const executionTime = session.getLastExecutionTimeMs();
+
+            // Parse query parameters
+            const filter = JSON.parse(input.filter) as Document;
+            const sort = input.sort ? (JSON.parse(input.sort) as Document) : undefined;
+            const projection = input.project ? (JSON.parse(input.project) as Document) : undefined;
+
+            // Get query planner info (cached or fetch) without skip/limit for full query insights
+            const queryPlannerResult = await session.getQueryPlannerInfo(databaseName, collectionName, filter, {
+                sort,
+                projection,
+                // Intentionally omit skip/limit for full query insights
+            });
+
+            // Analyze with ExplainPlanAnalyzer
+            const analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult);
+
+            // Transform to UI format
+            // Note: documentsReturned is not available in Stage 1 (explain queryPlanner doesn't execute the query)
+            return transformStage1Response(analyzed, executionTime);
+        }),
+
+    /**
+     * Query Insights Stage 2 - Detailed Execution Analysis
+     * Returns authoritative metrics using explain("executionStats")
+     *
+     * This endpoint:
+     * 1. Retrieves cached execution stats from ClusterSession
+     * 2. Uses ExplainPlanAnalyzer to parse and rate performance
+     * 3. Transforms the analysis into UI-friendly format with performance rating
+     *
+     * Note: This executes the query with executionStats verbosity
+     */
+    getQueryInsightsStage2: publicProcedure
+        .use(trpcToTelemetry)
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+            }),
+        )
+        .query(async ({ input, ctx }) => {
+            const myCtx = ctx as RouterContext;
+            const { sessionId, databaseName, collectionName } = myCtx;
+
+            // Get ClusterSession
+            const session: ClusterSession = ClusterSession.getSession(sessionId);
+
+            // Parse query parameters
+            const filter = JSON.parse(input.filter) as Document;
+            const sort = input.sort ? (JSON.parse(input.sort) as Document) : undefined;
+            const projection = input.project ? (JSON.parse(input.project) as Document) : undefined;
+
+            // Get execution stats (cached or fetch) without skip/limit for full query insights
+            const executionStatsResult = await session.getExecutionStats(databaseName, collectionName, filter, {
+                sort,
+                projection,
+                // Intentionally omit skip/limit for full query insights
+            });
+
+            // Analyze with ExplainPlanAnalyzer
+            const analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
+
+            // Transform to UI format
+            return transformStage2Response(analyzed);
         }),
 
     /**

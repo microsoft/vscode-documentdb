@@ -74,6 +74,12 @@ export class ClusterSession {
     private _aiRecommendationsCache?: { result: unknown; timestamp: number };
 
     /**
+     * Last query execution time in milliseconds
+     * Measured server-side during runFindQueryWithCache execution
+     */
+    private _lastExecutionTimeMs?: number;
+
+    /**
      * This is a basic approach for now, we can improve this later.
      * It's important to react to an updated query and to invalidate local caches if the query has changed.
      * @param query
@@ -87,6 +93,7 @@ export class ClusterSession {
         // the query text has changed, caches are now invalid and have to be purged
         this._currentJsonSchema = {};
         this._currentRawDocuments = [];
+        this._lastExecutionTimeMs = undefined;
 
         // Clear query insights caches
         this.clearQueryInsightsCaches();
@@ -176,11 +183,14 @@ export class ClusterSession {
             limit: dbLimit,
         };
 
+        // Track execution time for query insights
+        const startTime = performance.now();
         const documents: WithId<Document>[] = await this._client.runFindQuery(
             databaseName,
             collectionName,
             paginatedQueryParams,
         );
+        this._lastExecutionTimeMs = performance.now() - startTime;
 
         // Cache the results and update schema
         this._currentRawDocuments = documents;
@@ -378,6 +388,16 @@ export class ClusterSession {
         };
 
         return explainResult;
+    }
+
+    /**
+     * Gets the last query execution time in milliseconds
+     * This is tracked during runFindQueryWithCache execution
+     *
+     * @returns Execution time in milliseconds, or 0 if no query has been executed yet
+     */
+    public getLastExecutionTimeMs(): number {
+        return this._lastExecutionTimeMs ?? 0;
     }
 
     /**

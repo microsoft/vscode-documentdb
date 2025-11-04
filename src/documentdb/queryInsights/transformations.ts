@@ -3,11 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type Document } from 'mongodb';
 import { type AIIndexRecommendation, type AIOptimizationResponse } from '../../services/ai/types';
 import {
     type ImprovementCard,
+    type QueryInsightsStage1Response,
+    type QueryInsightsStage2Response,
     type QueryInsightsStage3Response,
+    type StageInfo,
 } from '../../webviews/documentdb/collectionView/types/queryInsights';
+import { type ExecutionStatsAnalysis, type QueryPlannerAnalysis } from './ExplainPlanAnalyzer';
 
 /**
  * Context from the router containing connection and collection info
@@ -159,4 +164,191 @@ function generateIndexExplanation(improvement: AIIndexRecommendation): string {
         default:
             return 'No index changes needed at this time.';
     }
+}
+
+/**
+ * Transforms query planner analysis to Stage 1 response format
+ *
+ * @param analyzed - Query planner analysis from ExplainPlanAnalyzer
+ * @param executionTime - Execution time in milliseconds (from ClusterSession)
+ * @returns Stage 1 response ready for UI
+ *
+ * @remarks
+ * Stage 1 uses explain("queryPlanner") which does NOT execute the query.
+ * Therefore, documentsReturned is not available and will show as 0.
+ * The actual document count is only available in Stage 2 with explain("executionStats").
+ */
+export function transformStage1Response(
+    analyzed: QueryPlannerAnalysis,
+    executionTime: number,
+): QueryInsightsStage1Response {
+    // Extract stages from the raw plan
+    const stages = extractStagesFromDocument(analyzed.rawPlan);
+
+    // Determine execution strategy
+    let executionStrategy = 'Unknown';
+    if (analyzed.isCovered) {
+        executionStrategy = 'Covered Query (Index Only)';
+    } else if (analyzed.usedIndexes.length > 0) {
+        executionStrategy = 'Index Scan + Fetch';
+    } else if (analyzed.isCollectionScan) {
+        executionStrategy = 'Collection Scan';
+    }
+
+    return {
+        executionTime,
+        documentsReturned: 0, // Not available in queryPlanner mode - only in executionStats (Stage 2)
+        stages,
+        efficiencyAnalysis: {
+            executionStrategy,
+            indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
+            hasInMemorySort: analyzed.hasInMemorySort,
+        },
+    };
+}
+
+/**
+ * Transforms execution stats analysis to Stage 2 response format
+ *
+ * @param analyzed - Execution stats analysis from ExplainPlanAnalyzer
+ * @returns Stage 2 response ready for UI
+ */
+export function transformStage2Response(analyzed: ExecutionStatsAnalysis): QueryInsightsStage2Response {
+    // Extract stages from the raw stats
+    const stages = extractStagesFromDocument(analyzed.rawStats);
+
+    // Calculate examined-to-returned ratio (inverse of efficiency ratio)
+    const examinedToReturnedRatio = analyzed.nReturned > 0 ? analyzed.totalDocsExamined / analyzed.nReturned : Infinity;
+
+    // Calculate keys-to-docs ratio
+    const keysToDocsRatio =
+        analyzed.totalDocsExamined > 0 ? analyzed.totalKeysExamined / analyzed.totalDocsExamined : null;
+
+    // Determine execution strategy
+    let executionStrategy = 'Unknown';
+    if (analyzed.isCovered) {
+        executionStrategy = 'Covered Query (Index Only)';
+    } else if (analyzed.usedIndexes.length > 0 && analyzed.isCollectionScan) {
+        executionStrategy = 'Index Scan + Collection Scan';
+    } else if (analyzed.usedIndexes.length > 0) {
+        executionStrategy = 'Index Scan + Fetch';
+    } else if (analyzed.isCollectionScan) {
+        executionStrategy = 'Collection Scan';
+    }
+
+    // Build top-level concerns array
+    const concerns: string[] = [];
+    if (analyzed.isCollectionScan) {
+        concerns.push('Collection scan detected - query examines all documents');
+    }
+    if (analyzed.hasInMemorySort) {
+        concerns.push('In-memory sort required - memory intensive operation');
+    }
+    if (examinedToReturnedRatio > 100) {
+        concerns.push(
+            `High selectivity issue: examining ${examinedToReturnedRatio.toFixed(0)}x more documents than returned`,
+        );
+    }
+
+    // Format examined-to-returned ratio for display
+    const examinedReturnedRatioFormatted = formatRatioForDisplay(examinedToReturnedRatio);
+
+    return {
+        executionTimeMs: analyzed.executionTimeMillis,
+        totalKeysExamined: analyzed.totalKeysExamined,
+        totalDocsExamined: analyzed.totalDocsExamined,
+        documentsReturned: analyzed.nReturned,
+        examinedToReturnedRatio,
+        keysToDocsRatio,
+        executionStrategy,
+        indexUsed: analyzed.usedIndexes.length > 0,
+        usedIndexNames: analyzed.usedIndexes,
+        hadInMemorySort: analyzed.hasInMemorySort,
+        hadCollectionScan: analyzed.isCollectionScan,
+        isCoveringQuery: analyzed.isCovered,
+        concerns,
+        efficiencyAnalysis: {
+            executionStrategy,
+            indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
+            examinedReturnedRatio: examinedReturnedRatioFormatted,
+            hasInMemorySort: analyzed.hasInMemorySort,
+            performanceRating: analyzed.performanceRating,
+        },
+        stages: stages.map((stage) => ({
+            ...stage,
+            // Stage 2 has access to execution metrics
+        })),
+        rawExecutionStats: analyzed.rawStats,
+    };
+}
+
+/**
+ * Extracts stages from explain result document for UI display
+ * Recursively traverses the stage tree and flattens it
+ *
+ * @param explainResult - Raw explain output document
+ * @returns Array of stage info for UI
+ */
+function extractStagesFromDocument(explainResult: Document): StageInfo[] {
+    const stages: StageInfo[] = [];
+
+    // Try to get execution stages first (from executionStats), fall back to query planner
+    const executionStages =
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (explainResult.executionStats?.executionStages as Document | undefined) ||
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (explainResult.queryPlanner?.winningPlan as Document | undefined);
+
+    if (!executionStages) {
+        return stages;
+    }
+
+    // Recursively traverse stages
+    function traverseStage(stage: Document): void {
+        const stageName: string = (stage.stage as string | undefined) || 'UNKNOWN';
+
+        stages.push({
+            stage: stageName,
+            name: (stage.name as string | undefined) || stageName,
+            nReturned: (stage.nReturned as number | undefined) ?? 0,
+            executionTimeMs:
+                (stage.executionTimeMillis as number | undefined) ??
+                (stage.executionTimeMillisEstimate as number | undefined),
+            indexName: stage.indexName as string | undefined,
+            keysExamined: stage.keysExamined as number | undefined,
+            docsExamined: stage.docsExamined as number | undefined,
+        });
+
+        // Traverse child stages
+        if (stage.inputStage) {
+            traverseStage(stage.inputStage as Document);
+        }
+
+        if (stage.inputStages && Array.isArray(stage.inputStages)) {
+            stage.inputStages.forEach((s: Document) => traverseStage(s));
+        }
+
+        if (stage.shards && Array.isArray(stage.shards)) {
+            stage.shards.forEach((s: Document) => traverseStage(s));
+        }
+    }
+
+    traverseStage(executionStages);
+    return stages;
+}
+
+/**
+ * Formats the examined-to-returned ratio for display
+ *
+ * @param ratio - Raw ratio value
+ * @returns Formatted string (e.g., "50:1", "1:1", "∞")
+ */
+function formatRatioForDisplay(ratio: number): string {
+    if (!isFinite(ratio)) {
+        return '∞';
+    }
+    if (ratio < 1) {
+        return '1:1';
+    }
+    return `${Math.round(ratio)}:1`;
 }

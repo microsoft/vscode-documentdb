@@ -752,8 +752,8 @@ If advanced users need the raw plan, they can access it in Stage 2's `rawExecuti
 **Design Document Alignment**:
 
 1. **Metrics Row** (design doc 2.1): Display individual metric cards
-   - Execution Time: Client-side measurement
-   - Documents Returned: From result set
+   - Execution Time: Tracked by ClusterSession during query execution
+   - Documents Returned: Show "n/a" (not available until Stage 2 with executionStats)
    - Keys Examined: Show "n/a" (not available until Stage 2)
    - Docs Examined: Show "n/a" (not available until Stage 2)
 
@@ -772,31 +772,47 @@ If advanced users need the raw plan, they can access it in Stage 2's `rawExecuti
 
 When Stage 1 is requested, the `ClusterSession` class handles data collection:
 
-1. **New Query Detection**: The existing `resetCachesIfQueryChanged()` method detects when the query text changes
+1. **Execution Time Tracking**: ClusterSession automatically tracks query execution time during `runFindQueryWithCache()`:
+   - Measures time before/after calling `_client.runFindQuery()`
+   - Stores in `_lastExecutionTimeMs` private property
+   - Available via `getLastExecutionTimeMs()` method
+   - Reset when query changes (in `resetCachesIfQueryChanged()`)
 
-2. **Automatic explain("queryPlanner") Call**: On the first Stage 1 request after a new query:
-   - Extract the base query (filter, projection, sort) from the current query
+2. **New Query Detection**: The existing `resetCachesIfQueryChanged()` method detects when the query text changes
+
+3. **Automatic explain("queryPlanner") Call**: On the first Stage 1 request after a new query:
+   - Extract the base query (filter, projection, sort) from the request parameters
    - **Remove `skip` and `limit` modifiers** to analyze the full query scope (not just one page)
    - Execute `explain("queryPlanner")` with the clean query
-   - Persist results in `_currentQueryPlannerInfo`
+   - Persist results in `_queryPlannerCache`
 
-3. **Caching**: Subsequent Stage 1 requests return cached `_currentQueryPlannerInfo` until query changes
+4. **Caching**: Subsequent Stage 1 requests return cached `_queryPlannerCache` until query changes
 
-4. **Cache Invalidation**: When `resetCachesIfQueryChanged()` detects a query change, `_currentQueryPlannerInfo` is cleared
+5. **Cache Invalidation**: When `resetCachesIfQueryChanged()` detects a query change, all caches are cleared
 
 This approach ensures:
 
 - ✅ Query insights reflect the full query performance (not just one page)
 - ✅ Only one `explain("queryPlanner")` call per unique query
 - ✅ Automatic cache management tied to query lifecycle
+- ✅ Execution time tracked server-side (consistent, not affected by network latency)
 - ✅ Existing `skip`/`limit` paging for Results view remains unchanged
 
 **Technical Details**:
 
-1. **Execution Time**: Measured client-side by the webview before/after query execution
-2. **Documents Returned**: Retrieved from cached results in ClusterSession
-3. **QueryPlanner Info**: Obtained via dedicated method in ClusterSession (strips skip/limit, calls explain)
+1. **Execution Time**: Measured server-side by ClusterSession during `runFindQueryWithCache()` execution
+2. **Documents Returned**: **NOT AVAILABLE in Stage 1** - `explain("queryPlanner")` does not execute the query, so document count is unknown. This metric shows as 0 in Stage 1 and becomes available in Stage 2 with `explain("executionStats")`.
+3. **QueryPlanner Info**: Obtained via ClusterSession's `getQueryPlannerInfo()` method (strips skip/limit, calls explain)
 4. **Stages List**: Recursively traverse `winningPlan` to extract all stages for UI cards
+
+**Why Documents Returned is Not Available in Stage 1**:
+
+The `explain("queryPlanner")` command analyzes the query plan but **does not execute the query**. Therefore:
+
+- ✅ Stage 1 is fast (no query execution)
+- ❌ No document count available (would require query execution)
+- ✅ Shows 0 as placeholder in Stage 1 UI
+- ✅ Stage 2 provides actual count via `explain("executionStats")` which executes the winning plan
 
 ### Extracting Data from queryPlanner Output
 
@@ -3883,10 +3899,8 @@ Create React components to consume the three endpoints:
 | 1. Foundation & Types     | ✅ Complete    | 1/1      |
 | 2. Explain Plan Analysis  | ✅ Complete    | 5/5      |
 | 3. AI Service Integration | ⬜ Not Started | 0/2      |
-| 4. Router Implementation  | ⬜ Not Started | 0/2      |
+| 4. Router Implementation  | ✅ Complete    | 2/2      |
 | 5. Frontend Integration   | ⬜ Not Started | 0/2      |
-| 6. Testing & Validation   | ⬜ Not Started | 0/3      |
-| 7. Production Hardening   | ⬜ Not Started | 0/4      |
 | 6. Testing & Validation   | ⬜ Not Started | 0/3      |
 | 7. Production Hardening   | ⬜ Not Started | 0/4      |
 
@@ -3911,8 +3925,8 @@ Create React components to consume the three endpoints:
 
 **Phase 4: Router Implementation**
 
-- 4.1 Implement tRPC Endpoints: ⬜ Not Started (Stage 3: 🔍 In Review)
-- 4.2 Implement Transformation Functions: ⬜ Not Started (Stage 3: 🔍 In Review)
+- 4.1 Implement tRPC Endpoints: ✅ Complete
+- 4.2 Implement Transformation Functions: ✅ Complete
 
 **Phase 5: Frontend Integration**
 
