@@ -57,17 +57,6 @@ import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/su
 import './queryInsights.scss';
 import './QueryInsightsTab.scss';
 
-type Stage = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
-
-interface StageDetails {
-    stage: Stage;
-    indexName?: string;
-    keysExamined?: number;
-    docsExamined?: number;
-    nReturned?: number;
-    indexBounds?: string;
-}
-
 interface QueryInsightsMainProps {
     currentQuery: {
         filter: string;
@@ -107,14 +96,24 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
         }));
     };
 
-    // Visual stage state based on actual data availability
-    const stageState: 1 | 2 | 3 = queryInsightsState.stage3Data ? 3 : queryInsightsState.stage2Data ? 2 : 1;
+    /**
+     * Visual stage state based on actual data availability OR error state.
+     * We progress to the next stage even if there's an error, so users can see what failed.
+     * Stage 1: Default state, waiting for or showing Stage 1 data
+     * Stage 2: Stage 1 completed (success or error), Stage 2 in progress or completed
+     * Stage 3: Stage 2 completed (success or error), Stage 3 in progress or completed
+     */
+    const stageState: 1 | 2 | 3 =
+        queryInsightsState.stage3Data || queryInsightsState.stage3Error
+            ? 3
+            : queryInsightsState.stage2Data || queryInsightsState.stage2Error
+              ? 2
+              : 1;
 
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [aiInsightsRequested, setAiInsightsRequested] = useState(false); // One-way flag: once true, stays true
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
-    const [selectedTab, setSelectedTab] = useState<Stage | null>(null);
 
     // Stage 1: Load on mount (only if not already loading/loaded/in-flight)
     useEffect(() => {
@@ -326,34 +325,6 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
         setShowTipsCard(false);
     };
 
-    const stageDetails: Record<Stage, StageDetails> = {
-        IXSCAN: {
-            stage: 'IXSCAN',
-            indexName: 'user_id_1',
-            keysExamined: stageState >= 2 ? 2 : undefined,
-            nReturned: stageState >= 2 ? 2 : undefined,
-            indexBounds: 'user_id: [1234, 1234]',
-        },
-        FETCH: {
-            stage: 'FETCH',
-            docsExamined: stageState >= 2 ? 10000 : undefined,
-            nReturned: stageState >= 2 ? 2 : undefined,
-        },
-        PROJECTION: {
-            stage: 'PROJECTION',
-            nReturned: stageState >= 2 ? 2 : undefined,
-        },
-        SORT: {
-            stage: 'SORT',
-            nReturned: stageState >= 2 ? 2 : undefined,
-        },
-        COLLSCAN: {
-            stage: 'COLLSCAN',
-            docsExamined: stageState >= 2 ? 10000 : undefined,
-            nReturned: stageState >= 2 ? 10000 : undefined,
-        },
-    };
-
     return (
         <div className="container">
             {/* Content Area */}
@@ -537,10 +508,10 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                     {/* Query Plan Summary - Mobile Only */}
                     <div className="queryPlanWrapper">
                         <QueryPlanSummary
-                            stageState={stageState}
-                            selectedTab={selectedTab}
-                            setSelectedTab={setSelectedTab}
-                            stageDetails={stageDetails}
+                            stage1Data={queryInsightsState.stage1Data}
+                            stage2Data={queryInsightsState.stage2Data}
+                            stage1Loading={stageState === 1 && !queryInsightsState.stage1Data}
+                            stage2Loading={stageState >= 2 && !queryInsightsState.stage2Data}
                         />
                     </div>
                 </div>
@@ -591,10 +562,10 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                     {/* Query Plan Summary - Desktop Only */}
                     <div className="queryPlanInPanel">
                         <QueryPlanSummary
-                            stageState={stageState}
-                            selectedTab={selectedTab}
-                            setSelectedTab={setSelectedTab}
-                            stageDetails={stageDetails}
+                            stage1Data={queryInsightsState.stage1Data}
+                            stage2Data={queryInsightsState.stage2Data}
+                            stage1Loading={stageState === 1 && !queryInsightsState.stage1Data}
+                            stage2Loading={stageState >= 2 && !queryInsightsState.stage2Data}
                         />
                     </div>
 
