@@ -34,6 +34,7 @@ import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
+import { QueryInsightsApis } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import {
     llmEnhancedFeatureApis,
@@ -117,6 +118,7 @@ export class ClustersClient {
 
     private _mongoClient: MongoClient;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
+    private _queryInsightsApis: QueryInsightsApis | null = null;
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
     /**
@@ -209,6 +211,7 @@ export class ClustersClient {
         try {
             this._mongoClient = await MongoClient.connect(connectionString, options);
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
+            this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
             const message = parseError(error).message;
             if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
@@ -303,6 +306,17 @@ export class ClustersClient {
 
     public getCredentials(): CachedClusterCredentials | undefined {
         return CredentialCache.getCredentials(this.credentialId) as CachedClusterCredentials | undefined;
+    }
+
+    /**
+     * Gets the Query Insights APIs instance for explain operations
+     * @returns QueryInsightsApis instance or throws if not initialized
+     */
+    public get queryInsightsApis(): QueryInsightsApis {
+        if (!this._queryInsightsApis) {
+            throw new Error(l10n.t('Query Insights APIs not initialized. Client may not be properly connected.'));
+        }
+        return this._queryInsightsApis;
     }
 
     async listDatabases(): Promise<DatabaseItemModel[]> {

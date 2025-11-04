@@ -9,6 +9,139 @@
  */
 
 // ============================================================================
+// Stage 1: Initial Performance View Types
+// ============================================================================
+
+/**
+ * Response from Stage 1 - Initial performance view with query planner data
+ * Stage 1 provides immediate metrics using queryPlanner verbosity (no execution)
+ */
+export interface QueryInsightsStage1Response {
+    executionTime: number; // Client-side measurement in milliseconds
+    documentsReturned: number;
+    // Note: keysExamined and docsExamined not available until Stage 2 (executionStats)
+    stages: StageInfo[];
+    efficiencyAnalysis: {
+        executionStrategy: string;
+        indexUsed: string | null;
+        hasInMemorySort: boolean;
+        // Performance rating not available in Stage 1 (requires execution metrics)
+    };
+}
+
+/**
+ * Information extracted from a single stage (basic)
+ */
+export interface StageInfo {
+    stage: string;
+    name: string;
+    nReturned: number;
+    executionTimeMs?: number;
+    indexName?: string;
+    keysExamined?: number;
+    docsExamined?: number;
+}
+
+// ============================================================================
+// Stage 2: Detailed Execution Analysis Types
+// ============================================================================
+
+/**
+ * Response from Stage 2 - Detailed execution statistics
+ *
+ * @remarks
+ * This response contains two `concerns` arrays that serve different purposes:
+ * 1. Top-level `concerns: string[]` - Query-level warnings about performance issues
+ *    (e.g., "Collection scan detected", "In-memory sort required")
+ * 2. `efficiencyAnalysis.performanceRating.concerns: string[]` - Rating-specific concerns
+ *    (e.g., "Very low selectivity", "Needs index optimization")
+ *
+ * The `examinedToReturnedRatio` appears in two forms:
+ * - Top-level `examinedToReturnedRatio: number` - Raw ratio for calculations (e.g., 50.5)
+ * - `efficiencyAnalysis.examinedReturnedRatio: string` - Formatted for display (e.g., "50:1")
+ */
+export interface QueryInsightsStage2Response {
+    executionTimeMs: number;
+    totalKeysExamined: number;
+    totalDocsExamined: number;
+    documentsReturned: number;
+    /** Raw ratio for calculations (e.g., 50.5 means 50.5 docs examined per doc returned) */
+    examinedToReturnedRatio: number;
+    keysToDocsRatio: number | null;
+    executionStrategy: string;
+    indexUsed: boolean;
+    usedIndexNames: string[];
+    hadInMemorySort: boolean;
+    hadCollectionScan: boolean;
+    isCoveringQuery: boolean;
+    /** Top-level query warnings (collection scan, in-memory sort, etc.) */
+    concerns: string[];
+    efficiencyAnalysis: {
+        executionStrategy: string;
+        indexUsed: string | null;
+        /** Formatted ratio for display (e.g., "50:1") */
+        examinedReturnedRatio: string;
+        hasInMemorySort: boolean;
+        /** Performance rating with detailed reasons and rating-specific concerns */
+        performanceRating: PerformanceRating;
+    };
+    stages: DetailedStageInfo[];
+    extendedStageInfo?: ExtendedStageInfo[];
+    rawExecutionStats: Record<string, unknown>;
+}
+
+/**
+ * Diagnostic detail about query performance
+ */
+export interface PerformanceDiagnostic {
+    type: 'positive' | 'negative' | 'neutral';
+    message: string;
+}
+
+/**
+ * Performance rating with score and detailed diagnostics
+ *
+ * @remarks
+ * Diagnostics always include consistent assessments:
+ * - Efficiency ratio (positive/neutral/negative based on returned/examined ratio)
+ * - Execution time (positive/neutral/negative based on milliseconds)
+ * - Index usage (positive if indexed, negative if collection scan, neutral otherwise)
+ * - Sort strategy (positive if no in-memory sort, negative if in-memory sort required)
+ *
+ * UI can render diagnostics with icons:
+ * - positive: ✓ (green checkmark)
+ * - neutral: ● (gray dot)
+ * - negative: ⚠ (yellow/red warning)
+ */
+export interface PerformanceRating {
+    score: 'excellent' | 'good' | 'fair' | 'poor';
+    /** Diagnostic messages explaining the rating, categorized by type */
+    diagnostics: PerformanceDiagnostic[];
+}
+
+/**
+ * Detailed stage information with execution metrics
+ */
+export interface DetailedStageInfo extends StageInfo {
+    works?: number;
+    advanced?: number;
+    needTime?: number;
+    needYield?: number;
+    saveState?: number;
+    restoreState?: number;
+    isEOF?: boolean;
+}
+
+/**
+ * Extended information for a single stage (for UI display)
+ */
+export interface ExtendedStageInfo {
+    stageId?: string;
+    stageName: string;
+    properties: Record<string, string | number | boolean | undefined>;
+}
+
+// ============================================================================
 // Stage 3: AI-Powered Recommendations Types
 // ============================================================================
 
@@ -60,8 +193,19 @@ export interface ActionButton {
 export interface QueryInsightsStage3Response {
     analysisCard: AnalysisCard;
     improvementCards: ImprovementCard[];
+    performanceTips?: {
+        tips: Array<{
+            title: string;
+            description: string;
+        }>;
+        dismissible: boolean;
+    };
     verificationSteps: string; // How to verify improvements
     educationalContent?: string; // Optional markdown content for educational cards
+    animation?: {
+        staggerDelay: number;
+        showTipsDuringLoading: boolean;
+    };
     metadata?: OptimizationMetadata;
 }
 

@@ -158,6 +158,7 @@
     "@microsoft/vscode-azext-utils": "~3.3.1",
     "@microsoft/vscode-azureresources-api": "~2.5.0",
     "@monaco-editor/react": "~4.7.0",
+    "@mongodb-js/explain-plan-helper": "1.4.24",
     "@trpc/client": "~11.4.3",
     "@trpc/server": "~11.4.3",
     "@vscode/l10n": "~0.0.18",

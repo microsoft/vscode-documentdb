@@ -59,6 +59,21 @@ export class ClusterSession {
     private _currentRawDocuments: WithId<Document>[] = [];
 
     /**
+     * Query Insights caching
+     * Note: QueryInsightsApis instance is accessed via this._client.queryInsightsApis
+     *
+     * Timestamps are included for potential future features:
+     * - Time-based cache invalidation (e.g., expire after N seconds)
+     * - Diagnostics (show when explain was collected)
+     * - Performance monitoring
+     *
+     * Currently, cache invalidation is purely query-based via resetCachesIfQueryChanged()
+     */
+    private _queryPlannerCache?: { result: Document; timestamp: number };
+    private _executionStatsCache?: { result: Document; timestamp: number };
+    private _aiRecommendationsCache?: { result: unknown; timestamp: number };
+
+    /**
      * This is a basic approach for now, we can improve this later.
      * It's important to react to an updated query and to invalidate local caches if the query has changed.
      * @param query
@@ -73,7 +88,20 @@ export class ClusterSession {
         this._currentJsonSchema = {};
         this._currentRawDocuments = [];
 
+        // Clear query insights caches
+        this.clearQueryInsightsCaches();
+
         this._currentQueryText = query.trim();
+    }
+
+    /**
+     * Clears all query insights caches
+     * Called automatically by resetCachesIfQueryChanged()
+     */
+    private clearQueryInsightsCaches(): void {
+        this._queryPlannerCache = undefined;
+        this._executionStatsCache = undefined;
+        this._aiRecommendationsCache = undefined;
     }
 
     /**
@@ -252,6 +280,163 @@ export class ClusterSession {
     public getCurrentSchema(): JSONSchema {
         return this._currentJsonSchema;
     }
+
+    // ============================================================================
+    // Query Insights Methods
+    // ============================================================================
+
+    /**
+     * Gets query planner information - uses explain("queryPlanner")
+     * Caches the result until the query changes
+     *
+     * Note: This method intentionally excludes skip/limit to get insights for the full query scope,
+     * not just a single page. For page-specific explain plans, use client.queryInsightsApis.explainFind() directly.
+     *
+     * @param databaseName - Database name
+     * @param collectionName - Collection name
+     * @param filter - Query filter
+     * @param options - Query options (sort, projection, skip, limit)
+     * @returns Explain output from queryPlanner verbosity
+     */
+    public async getQueryPlannerInfo(
+        databaseName: string,
+        collectionName: string,
+        filter: Document,
+        options?: {
+            sort?: Document;
+            projection?: Document;
+            skip?: number;
+            limit?: number;
+        },
+    ): Promise<Document> {
+        // Check cache
+        if (this._queryPlannerCache) {
+            return this._queryPlannerCache.result;
+        }
+
+        // Execute explain("queryPlanner") using QueryInsightsApis from ClustersClient
+        const explainResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
+            verbosity: 'queryPlanner',
+            sort: options?.sort,
+            projection: options?.projection,
+            skip: options?.skip,
+            limit: options?.limit,
+        });
+
+        // Cache result
+        this._queryPlannerCache = {
+            result: explainResult,
+            timestamp: Date.now(),
+        };
+
+        return explainResult;
+    }
+
+    /**
+     * Gets execution statistics - uses explain("executionStats")
+     * Re-runs the query with execution stats and caches the result
+     *
+     * Note: This method intentionally excludes skip/limit to get insights for the full query scope,
+     * not just a single page. For page-specific explain plans, use client.queryInsightsApis.explainFind() directly.
+     *
+     * @param databaseName - Database name
+     * @param collectionName - Collection name
+     * @param filter - Query filter
+     * @param options - Query options (sort, projection, skip, limit)
+     * @returns Explain output with executionStats
+     */
+    public async getExecutionStats(
+        databaseName: string,
+        collectionName: string,
+        filter: Document,
+        options?: {
+            sort?: Document;
+            projection?: Document;
+            skip?: number;
+            limit?: number;
+        },
+    ): Promise<Document> {
+        // Check cache
+        if (this._executionStatsCache) {
+            return this._executionStatsCache.result;
+        }
+
+        // Execute explain("executionStats") using QueryInsightsApis from ClustersClient
+        // This re-runs the query to get authoritative execution metrics
+        const explainResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
+            verbosity: 'executionStats',
+            sort: options?.sort,
+            projection: options?.projection,
+            skip: options?.skip,
+            limit: options?.limit,
+        });
+
+        // Cache result
+        this._executionStatsCache = {
+            result: explainResult,
+            timestamp: Date.now(),
+        };
+
+        return explainResult;
+    }
+
+    /**
+     * Gets AI-powered query optimization recommendations
+     * Caches the result until the query changes
+     *
+     * This method follows the same pattern as getQueryPlannerInfo() and getExecutionStats():
+     * - Check cache first
+     * - If not cached, call the AI service via ClustersClient
+     * - Cache the result with timestamp
+     * - Return typed recommendations
+     *
+     * @param _databaseName - Database name (unused in mock, will be used in Phase 3)
+     * @param _collectionName - Collection name (unused in mock, will be used in Phase 3)
+     * @param _filter - Query filter (unused in mock, will be used in Phase 3)
+     * @param _executionStats - Execution statistics from Stage 2 (unused in mock, will be used in Phase 3)
+     * @returns AI recommendations for query optimization
+     *
+     * @remarks
+     * This method will be implemented in Phase 3. The AI service is accessed via
+     * this._client.queryInsightsAIService (similar to queryInsightsApis pattern).
+     */
+    public getAIRecommendations(
+        _databaseName: string,
+        _collectionName: string,
+        _filter: Document,
+        _executionStats: Document,
+    ): unknown {
+        // Check cache
+        if (this._aiRecommendationsCache) {
+            return this._aiRecommendationsCache.result;
+        }
+
+        // TODO: Phase 3 implementation
+        // const recommendations = await this._client.queryInsightsAIService.generateRecommendations(
+        //     databaseName,
+        //     collectionName,
+        //     filter,
+        //     executionStats
+        // );
+
+        // Temporary mock implementation
+        const recommendations = {
+            analysis: 'AI recommendations not yet implemented',
+            suggestions: [],
+        };
+
+        // Cache result
+        this._aiRecommendationsCache = {
+            result: recommendations,
+            timestamp: Date.now(),
+        };
+
+        return recommendations;
+    }
+
+    // ============================================================================
+    // Static Session Management Methods
+    // ============================================================================
 
     /**
      * Initializes a new session for the MongoDB vCore cluster.
