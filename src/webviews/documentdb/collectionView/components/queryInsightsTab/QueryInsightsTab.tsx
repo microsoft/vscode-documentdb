@@ -106,10 +106,12 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
             queryInsights: typeof updater === 'function' ? updater(prev.queryInsights) : updater,
         }));
     };
-    const [stageState, setStageState] = useState<1 | 2 | 3>(1);
+
+    // Visual stage state based on actual data availability
+    const stageState: 1 | 2 | 3 = queryInsightsState.stage3Data ? 3 : queryInsightsState.stage2Data ? 2 : 1;
+
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [aiInsightsRequested, setAiInsightsRequested] = useState(false); // One-way flag: once true, stays true
-    const [aiData, setAiData] = useState<QueryInsightsStage3Response | null>(null);
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [selectedTab, setSelectedTab] = useState<Stage | null>(null);
@@ -176,7 +178,6 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                         stage2Loading: false,
                         stage2Promise: null,
                     }));
-                    setStageState(2); // Update visual stage indicator
                     return data;
                 })
                 .catch((error) => {
@@ -204,18 +205,18 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
     }, [stageState]);
 
     useEffect(() => {
-        console.log('aiData changed:', aiData);
-        if (aiData) {
-            console.log('  - improvementCards count:', aiData.improvementCards.length);
-            console.log('  - improvementCards:', aiData.improvementCards);
+        console.log('stage3Data changed:', queryInsightsState.stage3Data);
+        if (queryInsightsState.stage3Data) {
+            console.log('  - improvementCards count:', queryInsightsState.stage3Data.improvementCards.length);
+            console.log('  - improvementCards:', queryInsightsState.stage3Data.improvementCards);
         }
-    }, [aiData]);
+    }, [queryInsightsState.stage3Data]);
 
-    // Metric values
-    const [executionTime, setExecutionTime] = useState<number | null>(23433235);
-    const [docsReturned] = useState<number | null>(2);
-    const [keysExamined, setKeysExamined] = useState<number | null>(null);
-    const [docsExamined, setDocsExamined] = useState<number | null>(null);
+    // Derived metric values from Stage 1 and Stage 2 data
+    const executionTime = queryInsightsState.stage1Data?.executionTime ?? null;
+    const docsReturned = queryInsightsState.stage2Data?.documentsReturned ?? null;
+    const keysExamined = queryInsightsState.stage2Data?.totalKeysExamined ?? null;
+    const docsExamined = queryInsightsState.stage2Data?.totalDocsExamined ?? null;
 
     const performanceTips = [
         {
@@ -244,19 +245,6 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
         },
     ];
 
-    // Automatically start Stage 2 analysis when component mounts
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setStageState(2);
-            // Update metrics when Stage 2 starts
-            setExecutionTime(2.333);
-            setKeysExamined(2);
-            setDocsExamined(10000);
-        }, 4000);
-
-        return () => clearTimeout(timer);
-    }, []);
-
     const handleGetAISuggestions = () => {
         setIsLoadingAI(true);
         setAiInsightsRequested(true); // Set one-way flag to prevent button from reappearing
@@ -275,9 +263,11 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                 console.log('Number of improvement cards:', response.improvementCards.length);
                 console.log('Improvement cards:', response.improvementCards);
 
-                setAiData(response as QueryInsightsStage3Response);
+                setQueryInsightsStateHelper((prev) => ({
+                    ...prev,
+                    stage3Data: response as QueryInsightsStage3Response,
+                }));
                 setIsLoadingAI(false);
-                setStageState(3);
             })
             .catch((error: unknown) => {
                 void trpcClient.common.displayErrorMessage.mutate({
@@ -293,7 +283,6 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
 
     const handleCancelAI = () => {
         setIsLoadingAI(false);
-        setStageState(2);
         setAiInsightsRequested(false); // Allow requesting again after cancel
     };
 
@@ -416,42 +405,57 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                         {/* AnimatedCardList for AI suggestions and tips */}
                         <AnimatedCardList>
                             {/* Analysis Card (if AI data available) */}
-                            {stageState === 3 && aiData && aiData.analysisCard && (
-                                <AiCard
-                                    key="analysis-card"
-                                    title={l10n.t('Query Performance Analysis')}
-                                    onCopy={() => {
-                                        void navigator.clipboard.writeText(aiData.analysisCard.content);
-                                    }}
-                                >
-                                    <Text size={300}>{aiData.analysisCard.content}</Text>
-                                </AiCard>
-                            )}
+                            {stageState === 3 &&
+                                queryInsightsState.stage3Data &&
+                                queryInsightsState.stage3Data.analysisCard && (
+                                    <AiCard
+                                        key="analysis-card"
+                                        title={l10n.t('Query Performance Analysis')}
+                                        onCopy={() => {
+                                            void navigator.clipboard.writeText(
+                                                queryInsightsState.stage3Data?.analysisCard.content ?? '',
+                                            );
+                                        }}
+                                    >
+                                        <Text size={300}>{queryInsightsState.stage3Data?.analysisCard.content}</Text>
+                                    </AiCard>
+                                )}
 
                             {/* Improvement Cards (dynamic from AI response) */}
                             {stageState === 3 &&
-                                aiData &&
+                                queryInsightsState.stage3Data &&
                                 (() => {
                                     console.log('=== IMPROVEMENT CARDS RENDERING ===');
                                     console.log('stageState:', stageState);
-                                    console.log('aiData:', aiData);
-                                    console.log('aiData.improvementCards:', aiData.improvementCards);
-                                    console.log('Number of cards to render:', aiData.improvementCards.length);
+                                    console.log('queryInsightsState.stage3Data:', queryInsightsState.stage3Data);
+                                    console.log(
+                                        'queryInsightsState.stage3Data.improvementCards:',
+                                        queryInsightsState.stage3Data.improvementCards,
+                                    );
+                                    console.log(
+                                        'Number of cards to render:',
+                                        queryInsightsState.stage3Data.improvementCards.length,
+                                    );
 
-                                    if (!aiData.improvementCards || aiData.improvementCards.length === 0) {
+                                    if (
+                                        !queryInsightsState.stage3Data.improvementCards ||
+                                        queryInsightsState.stage3Data.improvementCards.length === 0
+                                    ) {
                                         console.log('SKIPPING: no improvement cards');
                                         return null;
                                     }
 
-                                    console.log(`RENDERING ${aiData.improvementCards.length} improvement cards...`);
+                                    console.log(
+                                        `RENDERING ${queryInsightsState.stage3Data.improvementCards.length} improvement cards...`,
+                                    );
 
                                     // Use Fragment to properly spread children
                                     return (
                                         <>
-                                            {aiData.improvementCards.map(
+                                            {queryInsightsState.stage3Data?.improvementCards.map(
                                                 (card: ImprovementCardConfig, index: number) => {
                                                     console.log(
-                                                        `Card ${index + 1}/${aiData.improvementCards.length}:`,
+                                                        `Card ${index + 1}/${queryInsightsState.stage3Data?.improvementCards.length}:`,
                                                         card.cardId,
                                                         'actionId:',
                                                         card.primaryButton.actionId,
@@ -513,16 +517,20 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                             )}
 
                             {/* Educational Markdown Card - Understanding Query Execution */}
-                            {stageState === 3 && aiData && aiData.educationalContent && (
-                                <MarkdownCard
-                                    key="understanding-execution"
-                                    title={l10n.t('Understanding Your Query Execution Plan')}
-                                    content={aiData.educationalContent}
-                                    onCopy={() => {
-                                        void navigator.clipboard.writeText(aiData.educationalContent || '');
-                                    }}
-                                />
-                            )}
+                            {stageState === 3 &&
+                                queryInsightsState.stage3Data &&
+                                queryInsightsState.stage3Data.educationalContent && (
+                                    <MarkdownCard
+                                        key="understanding-execution"
+                                        title={l10n.t('Understanding Your Query Execution Plan')}
+                                        content={queryInsightsState.stage3Data.educationalContent}
+                                        onCopy={() => {
+                                            void navigator.clipboard.writeText(
+                                                queryInsightsState.stage3Data?.educationalContent ?? '',
+                                            );
+                                        }}
+                                    />
+                                )}
                         </AnimatedCardList>
                     </div>
 
@@ -543,29 +551,40 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Execution Strategy')}
-                            value={stageState >= 2 ? 'COLLSCAN' : undefined}
+                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
-                            value={stageState >= 2 ? l10n.t('None') : undefined}
+                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed ?? l10n.t('None')}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Examined/Returned Ratio')}
-                            value={stageState >= 2 ? '5,000 : 1' : undefined}
+                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={stageState >= 2 ? l10n.t('No') : undefined}
+                            value={
+                                queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
+                                    ? l10n.t('Yes')
+                                    : queryInsightsState.stage2Data
+                                      ? l10n.t('No')
+                                      : undefined
+                            }
                             placeholder="skeleton"
                         />
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
-                            rating={stageState >= 2 ? 'poor' : undefined}
-                            description={l10n.t('Only 0.02% of examined documents were returned')}
-                            visible={stageState >= 2}
+                            rating={queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score}
+                            description={
+                                queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
+                                    .filter((d) => d.type === 'negative')
+                                    .map((d) => d.message)
+                                    .join('. ') || undefined
+                            }
+                            visible={!!queryInsightsState.stage2Data}
                         />
                     </SummaryCard>
 

@@ -512,6 +512,9 @@ export const collectionsViewRouter = router({
                 // Intentionally omit skip/limit for full query insights
             });
 
+            // TODO: Remove this delay after testing - simulates slower Stage 2 execution
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+
             // Analyze with ExplainPlanAnalyzer
             const analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
 
