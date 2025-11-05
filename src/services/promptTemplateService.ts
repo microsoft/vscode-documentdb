@@ -7,8 +7,12 @@ import * as l10n from '@vscode/l10n';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { CommandType } from '../commands/llmEnhancedCommands/indexAdvisorCommands';
 import {
+    AGGREGATE_QUERY_PROMPT_TEMPLATE,
+    COUNT_QUERY_PROMPT_TEMPLATE,
     CROSS_COLLECTION_QUERY_PROMPT_TEMPLATE,
+    FIND_QUERY_PROMPT_TEMPLATE,
     SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE,
 } from '../commands/llmEnhancedCommands/promptTemplates';
 import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenerationCommands';
@@ -18,67 +22,66 @@ import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenera
  */
 export class PromptTemplateService {
     private static readonly configSection = 'documentDB.aiAssistant';
-    // private static readonly templateCache: Map<CommandType | QueryGenerationType, string> = new Map();
-    private static readonly templateCache: Map<QueryGenerationType, string> = new Map();
+    private static readonly templateCache: Map<CommandType | QueryGenerationType, string> = new Map();
 
-    // /**
-    //  * Gets the prompt template for index advisor
-    //  * @param commandType The type of command (find, aggregate, or count)
-    //  * @returns The prompt template string
-    //  */
-    // public static async getIndexAdvisorPromptTemplate(commandType: CommandType): Promise<string> {
-    //     // Get configuration
-    //     const config = vscode.workspace.getConfiguration(this.configSection);
-    //     const cacheEnabled = config.get<boolean>('enablePromptCache', true);
+    /**
+     * Gets the prompt template for index advisor
+     * @param commandType The type of command (find, aggregate, or count)
+     * @returns The prompt template string
+     */
+    public static async getIndexAdvisorPromptTemplate(commandType: CommandType): Promise<string> {
+        // Get configuration
+        const config = vscode.workspace.getConfiguration(this.configSection);
+        const cacheEnabled = config.get<boolean>('enablePromptCache', true);
 
-    //     // Check if have a cached template
-    //     if (cacheEnabled) {
-    //         const cached = this.templateCache.get(commandType);
-    //         if (cached) {
-    //             return cached;
-    //         }
-    //     }
+        // Check if have a cached template
+        if (cacheEnabled) {
+            const cached = this.templateCache.get(commandType);
+            if (cached) {
+                return cached;
+            }
+        }
 
-    //     // Get the configuration key for this command type
-    //     const configKey = this.getIndexAdvisorConfigKey(commandType);
+        // Get the configuration key for this command type
+        const configKey = this.getIndexAdvisorConfigKey(commandType);
 
-    //     // Check if a custom template path is configured
-    //     const customTemplatePath = config.get<string | null>(configKey);
+        // Check if a custom template path is configured
+        const customTemplatePath = config.get<string | null>(configKey);
 
-    //     let template: string;
+        let template: string;
 
-    //     if (customTemplatePath) {
-    //         try {
-    //             // Load custom template from file
-    //             template = await this.loadTemplateFromFile(customTemplatePath, commandType.toString());
-    //             void vscode.window.showInformationMessage(
-    //                 l10n.t('Using custom prompt template for {type} query: {path}', {
-    //                     type: commandType,
-    //                     path: customTemplatePath,
-    //                 }),
-    //             );
-    //         } catch (error) {
-    //             // Log error and fall back to built-in template
-    //             void vscode.window.showWarningMessage(
-    //                 l10n.t('Failed to load custom prompt template from {path}: {error}. Using built-in template.', {
-    //                     path: customTemplatePath,
-    //                     error: error instanceof Error ? error.message : String(error),
-    //                 }),
-    //             );
-    //             template = this.getBuiltInIndexAdvisorTemplate(commandType);
-    //         }
-    //     } else {
-    //         // Use built-in template
-    //         template = this.getBuiltInIndexAdvisorTemplate(commandType);
-    //     }
+        if (customTemplatePath) {
+            try {
+                // Load custom template from file
+                template = await this.loadTemplateFromFile(customTemplatePath, commandType.toString());
+                void vscode.window.showInformationMessage(
+                    l10n.t('Using custom prompt template for {type} query: {path}', {
+                        type: commandType,
+                        path: customTemplatePath,
+                    }),
+                );
+            } catch (error) {
+                // Log error and fall back to built-in template
+                void vscode.window.showWarningMessage(
+                    l10n.t('Failed to load custom prompt template from {path}: {error}. Using built-in template.', {
+                        path: customTemplatePath,
+                        error: error instanceof Error ? error.message : String(error),
+                    }),
+                );
+                template = this.getBuiltInIndexAdvisorTemplate(commandType);
+            }
+        } else {
+            // Use built-in template
+            template = this.getBuiltInIndexAdvisorTemplate(commandType);
+        }
 
-    //     // Cache the template (if caching is enabled)
-    //     if (cacheEnabled) {
-    //         this.templateCache.set(commandType, template);
-    //     }
+        // Cache the template (if caching is enabled)
+        if (cacheEnabled) {
+            this.templateCache.set(commandType, template);
+        }
 
-    //     return template;
-    // }
+        return template;
+    }
 
     /**
      * Gets the prompt template for query generation
@@ -126,23 +129,23 @@ export class PromptTemplateService {
         this.templateCache.clear();
     }
 
-    // /**
-    //  * Gets the configuration key for a command type
-    //  * @param commandType The command type
-    //  * @returns The configuration key
-    //  */
-    // private static getIndexAdvisorConfigKey(commandType: CommandType): string {
-    //     switch (commandType) {
-    //         case CommandType.Find:
-    //             return 'findQueryPromptPath';
-    //         case CommandType.Aggregate:
-    //             return 'aggregateQueryPromptPath';
-    //         case CommandType.Count:
-    //             return 'countQueryPromptPath';
-    //         default:
-    //             throw new Error(l10n.t('Unknown command type: {type}', { type: commandType }));
-    //     }
-    // }
+    /**
+     * Gets the configuration key for a command type
+     * @param commandType The command type
+     * @returns The configuration key
+     */
+    private static getIndexAdvisorConfigKey(commandType: CommandType): string {
+        switch (commandType) {
+            case CommandType.Find:
+                return 'findQueryPromptPath';
+            case CommandType.Aggregate:
+                return 'aggregateQueryPromptPath';
+            case CommandType.Count:
+                return 'countQueryPromptPath';
+            default:
+                throw new Error(l10n.t('Unknown command type: {type}', { type: commandType }));
+        }
+    }
 
     /**
      * Gets the configuration key for a query generation type
@@ -160,23 +163,23 @@ export class PromptTemplateService {
         }
     }
 
-    // /**
-    //  * Gets the built-in prompt template for a command type
-    //  * @param commandType The command type
-    //  * @returns The built-in template
-    //  */
-    // private static getBuiltInIndexAdvisorTemplate(commandType: CommandType): string {
-    //     switch (commandType) {
-    //         case CommandType.Find:
-    //             return FIND_QUERY_PROMPT_TEMPLATE;
-    //         case CommandType.Aggregate:
-    //             return AGGREGATE_QUERY_PROMPT_TEMPLATE;
-    //         case CommandType.Count:
-    //             return COUNT_QUERY_PROMPT_TEMPLATE;
-    //         default:
-    //             throw new Error(l10n.t('Unknown command type: {type}', { type: commandType }));
-    //     }
-    // }
+    /**
+     * Gets the built-in prompt template for a command type
+     * @param commandType The command type
+     * @returns The built-in template
+     */
+    private static getBuiltInIndexAdvisorTemplate(commandType: CommandType): string {
+        switch (commandType) {
+            case CommandType.Find:
+                return FIND_QUERY_PROMPT_TEMPLATE;
+            case CommandType.Aggregate:
+                return AGGREGATE_QUERY_PROMPT_TEMPLATE;
+            case CommandType.Count:
+                return COUNT_QUERY_PROMPT_TEMPLATE;
+            default:
+                throw new Error(l10n.t('Unknown command type: {type}', { type: commandType }));
+        }
+    }
 
     /**
      * Gets the built-in prompt template for a query generation type
