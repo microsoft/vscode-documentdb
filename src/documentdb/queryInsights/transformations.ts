@@ -394,19 +394,19 @@ function extractStagesFromDocument(explainResult: Document): StageInfo[] {
 }
 
 /**
- * Formats the examined-to-returned ratio for display
+ * Formats a ratio for display in the UI
  *
- * @param ratio - Raw ratio value
- * @returns Formatted string (e.g., "50:1", "1:1", "∞")
+ * @param ratio - The numeric ratio (e.g., 50.5)
+ * @returns Formatted string (e.g., "50 : 1", "1 : 1", "∞")
  */
 function formatRatioForDisplay(ratio: number): string {
     if (!isFinite(ratio)) {
         return '∞';
     }
     if (ratio < 1) {
-        return '1:1';
+        return '1 : 1';
     }
-    return `${Math.round(ratio)}:1`;
+    return `${Math.round(ratio)} : 1`;
 }
 
 /**

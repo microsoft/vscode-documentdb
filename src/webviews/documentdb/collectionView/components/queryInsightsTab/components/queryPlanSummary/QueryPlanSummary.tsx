@@ -90,11 +90,13 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                         style={{
                                             backgroundColor: tokens.colorNeutralBackground1,
                                             borderRadius: '6px',
-                                            borderLeft: `3px solid ${
-                                                shard.hasCollscan || shard.hasBlockedSort
-                                                    ? tokens.colorStatusWarningBorder1
-                                                    : tokens.colorStatusSuccessBorder1
-                                            }`,
+                                            borderLeft: `3px solid ${tokens.colorNeutralStroke1}`,
+                                            // disabled for now as we need to add more ux around performance hints
+                                            // borderLeft: `3px solid ${
+                                            //     shard.hasCollscan || shard.hasBlockedSort
+                                            //         ? tokens.colorStatusWarningBorder1
+                                            //         : tokens.colorStatusSuccessBorder1
+                                            // }`,
                                         }}
                                     >
                                         {/* Shard Summary (always visible) */}
@@ -214,7 +216,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                             style={{
                                 backgroundColor: tokens.colorNeutralBackground1,
                                 borderRadius: '6px',
-                                borderLeft: `3px solid ${tokens.colorStatusSuccessBorder1}`,
+                                borderLeft: `3px solid ${tokens.colorNeutralStroke1}`,
                             }}
                         >
                             {/* Summary (always visible from Stage 1) */}

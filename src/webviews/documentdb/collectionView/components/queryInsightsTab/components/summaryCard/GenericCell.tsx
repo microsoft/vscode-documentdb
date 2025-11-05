@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Text } from '@fluentui/react-components';
 import * as React from 'react';
 import { CellBase } from './CellBase';
+import './GenericCell.scss';
 
 /**
  * Generic cell for simple string/number values in a SummaryCard.
@@ -66,7 +66,8 @@ export interface GenericCellProps {
 
 export const GenericCell: React.FC<GenericCellProps> = ({ label, value, placeholder = 'skeleton' }) => {
     // Convert value to React node if it exists
-    const displayValue = value !== null && value !== undefined ? <Text>{String(value)}</Text> : undefined;
+    const displayValue =
+        value !== null && value !== undefined ? <span className="cellValue">{String(value)}</span> : undefined;
 
     return <CellBase label={label} value={displayValue} placeholder={placeholder} span="single" />;
 };

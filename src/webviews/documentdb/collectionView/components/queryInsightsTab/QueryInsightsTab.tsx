@@ -534,7 +534,7 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                             placeholder="skeleton"
                         />
                         <GenericCell
-                            label={l10n.t('Examined/Returned Ratio')}
+                            label={l10n.t('Examined-to-Returned Ratio')}
                             value={queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio}
                             placeholder="skeleton"
                         />
