@@ -11,7 +11,10 @@ import { type Document } from 'mongodb';
  */
 export interface PerformanceDiagnostic {
     type: 'positive' | 'negative' | 'neutral';
+    /** Short message for badge text (e.g., "Low efficiency ratio") */
     message: string;
+    /** Detailed explanation shown in tooltip (e.g., "You return 2% of examined documents. This is bad because...") */
+    details: string;
 }
 
 /**
@@ -146,22 +149,26 @@ export class ExplainPlanAnalyzer {
         if (efficiencyRatio >= 0.5) {
             diagnostics.push({
                 type: 'positive',
-                message: `High efficiency ratio: ${(efficiencyRatio * 100).toFixed(1)}% of examined documents returned`,
+                message: 'High efficiency ratio',
+                details: `You return ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis indicates excellent query selectivity and optimal index usage.`,
             });
         } else if (efficiencyRatio >= 0.1) {
             diagnostics.push({
                 type: 'neutral',
-                message: `Moderate efficiency ratio: ${(efficiencyRatio * 100).toFixed(1)}% of examined documents returned`,
+                message: 'Moderate efficiency ratio',
+                details: `You return ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis is acceptable but could be improved with better index coverage or more selective filters.`,
             });
         } else if (efficiencyRatio >= 0.01) {
             diagnostics.push({
                 type: 'negative',
-                message: `Low efficiency ratio: ${(efficiencyRatio * 100).toFixed(1)}% of examined documents returned`,
+                message: 'Low efficiency ratio',
+                details: `You return only ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis indicates poor query selectivity - the database examines many documents that don't match your query criteria.\n\nConsider adding more selective indexes or refining your query filters.`,
             });
         } else {
             diagnostics.push({
                 type: 'negative',
-                message: `Very low efficiency ratio: ${(efficiencyRatio * 100).toFixed(2)}% of examined documents returned`,
+                message: 'Very low efficiency ratio',
+                details: `You return only ${(efficiencyRatio * 100).toFixed(2)}% of examined documents.\n\nThis is extremely inefficient - the database examines thousands of documents for each result returned.\n\nThis severely impacts performance and should be addressed with better indexing strategies.`,
             });
         }
 
@@ -169,22 +176,26 @@ export class ExplainPlanAnalyzer {
         if (executionTimeMs < 100) {
             diagnostics.push({
                 type: 'positive',
-                message: `Fast execution time: ${executionTimeMs.toFixed(1)}ms`,
+                message: 'Fast execution',
+                details: `Query completed in ${executionTimeMs.toFixed(1)}ms.\n\nThis is excellent performance and provides a responsive user experience.`,
             });
         } else if (executionTimeMs < 500) {
             diagnostics.push({
                 type: 'neutral',
-                message: `Acceptable execution time: ${executionTimeMs.toFixed(1)}ms`,
+                message: 'Acceptable execution time',
+                details: `Query completed in ${executionTimeMs.toFixed(1)}ms.\n\nThis is acceptable for most use cases, though optimization could improve responsiveness.`,
             });
         } else if (executionTimeMs < 2000) {
             diagnostics.push({
                 type: 'negative',
-                message: `Slow execution time: ${executionTimeMs.toFixed(1)}ms`,
+                message: 'Slow execution',
+                details: `Query took ${executionTimeMs.toFixed(1)}ms to complete.\n\nThis may impact user experience.\n\nConsider adding indexes or optimizing your query structure.`,
             });
         } else {
             diagnostics.push({
                 type: 'negative',
-                message: `Very slow execution time: ${(executionTimeMs / 1000).toFixed(2)}s`,
+                message: 'Very slow execution',
+                details: `Query took ${(executionTimeMs / 1000).toFixed(2)}s to complete.\n\nThis significantly impacts performance and user experience.\n\nImmediate optimization is recommended.`,
             });
         }
 
@@ -192,17 +203,23 @@ export class ExplainPlanAnalyzer {
         if (isIndexScan) {
             diagnostics.push({
                 type: 'positive',
-                message: 'Query uses index',
+                message: 'Index used',
+                details:
+                    'Your query uses an index.\n\nThis allows the database to efficiently locate matching documents without scanning the entire collection.',
             });
         } else if (isCollectionScan) {
             diagnostics.push({
                 type: 'negative',
-                message: 'Full collection scan - consider adding an index',
+                message: 'Full collection scan',
+                details:
+                    'Your query performs a full collection scan, examining every document in the collection.\n\nThis is inefficient and slow, especially for large collections.\n\nAdd an index on the queried fields to improve performance.',
             });
         } else {
             diagnostics.push({
                 type: 'neutral',
                 message: 'No index used',
+                details:
+                    'Your query does not use an index.\n\nWhile not necessarily a problem for small collections, adding appropriate indexes can significantly improve query performance.',
             });
         }
 
@@ -210,12 +227,16 @@ export class ExplainPlanAnalyzer {
         if (hasInMemorySort) {
             diagnostics.push({
                 type: 'negative',
-                message: 'In-memory sort required - consider adding index for sort fields',
+                message: 'In-memory sort required',
+                details:
+                    'Your query requires sorting data in memory, which is limited by available RAM and can fail for large result sets.\n\nConsider adding a compound index that includes your sort fields to enable index-based sorting.',
             });
         } else {
             diagnostics.push({
                 type: 'positive',
-                message: 'No in-memory sort required',
+                message: 'Efficient sorting',
+                details:
+                    'Your query uses index-based sorting or does not require sorting.\n\nThis avoids memory constraints and improves performance.',
             });
         }
 

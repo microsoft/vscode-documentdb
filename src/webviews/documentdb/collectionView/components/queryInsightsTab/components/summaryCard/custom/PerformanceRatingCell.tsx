@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Text, tokens } from '@fluentui/react-components';
+import { Badge, Text, tokens, Tooltip } from '@fluentui/react-components';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
@@ -94,11 +94,38 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                     </Text>
                     {/* Second row, first column: empty */}
                     {diagnostics && diagnostics.length > 0 && <div />}
-                    {/* Second row, second column: descriptions */}
+                    {/* Second row, second column: diagnostic badges with tooltips */}
                     {diagnostics && diagnostics.length > 0 && (
-                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                            {diagnostics.map((d) => d.message).join('. ')}
-                        </Text>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {diagnostics.map((diagnostic, index) => (
+                                <Tooltip
+                                    key={index}
+                                    content={{
+                                        children: (
+                                            <div style={{ padding: '8px' }}>
+                                                <div
+                                                    style={{ fontWeight: 600, marginBottom: '12px', fontSize: '16px' }}
+                                                >
+                                                    {diagnostic.message}
+                                                </div>
+                                                <div style={{ whiteSpace: 'pre-line' }}>{diagnostic.details}</div>
+                                            </div>
+                                        ),
+                                    }}
+                                    relationship="description"
+                                    withArrow
+                                >
+                                    <Badge
+                                        appearance="tint"
+                                        color={diagnostic.type === 'positive' ? 'success' : 'informative'}
+                                        size="small"
+                                        shape="rounded"
+                                    >
+                                        {diagnostic.message}
+                                    </Badge>
+                                </Tooltip>
+                            ))}
+                        </div>
                     )}
                 </div>
             </CollapseRelaxed>

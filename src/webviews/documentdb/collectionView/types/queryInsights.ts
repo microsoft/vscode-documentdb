@@ -116,7 +116,10 @@ export interface QueryInsightsStage2Response {
  */
 export interface PerformanceDiagnostic {
     type: 'positive' | 'negative' | 'neutral';
+    /** Short message for badge text (e.g., "Low efficiency ratio") */
     message: string;
+    /** Detailed explanation shown in tooltip (e.g., "You return 2% of examined documents. This is bad because...") */
+    details: string;
 }
 
 /**
