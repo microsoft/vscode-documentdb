@@ -3490,7 +3490,7 @@ export class StagePropertyExtractor {
 
 #### Phase 3: AI Service Integration
 
-**3.1. Create AI Service Client** ⬜ Not Started
+**3.1. Create AI Service Client** ✅ Complete
 
 **📖 Before starting**: Review Stage 3 section for AI service payload structure and expected response format.
 
@@ -3605,7 +3605,7 @@ public async getAIRecommendations(
 
 #### Phase 4: Router Implementation
 
-**4.1. Implement tRPC Endpoints** ⬜ Not Started
+**4.1. Implement tRPC Endpoints** ✅ Complete
 
 **📖 Before starting**: Review entire design document, especially:
 
@@ -3697,7 +3697,7 @@ getQueryInsightsStage3: protectedProcedure
     // Transform to UI format (with button payloads)
     return transformStage3Response(aiRecommendations, ctx);
   }),
-```**4.2. Implement Transformation Functions** ⬜ Not Started
+```**4.2. Implement Transformation Functions** ✅ Complete
 
 Create `src/documentdb/queryInsights/transformations.ts`:
 
@@ -3783,7 +3783,7 @@ function generateIndexCommand(improvement: any, databaseName: string, collection
 
 #### Phase 5: Frontend Integration
 
-**5.1. Update Query Execution Logic** ⬜ Not Started
+**5.1. Update Query Execution Logic** 🔄 In Progress
 
 **📖 Before starting**: Review "Query Execution Integration" section and Stage 1 implementation notes for server-side metadata tracking approach.
 
@@ -3801,7 +3801,7 @@ Query Execution → Results Return → Non-Blocking Stage 1 Prefetch → Cache P
                   User switches to Query Insights Tab          ← Data already cached (fast)
 ```
 
-**5.1.1. Non-Blocking Stage 1 Prefetch After Query Execution** ⬜ Not Started
+**5.1.1. Non-Blocking Stage 1 Prefetch After Query Execution** ✅ Complete
 
 **Implementation Steps**:
 
@@ -3906,7 +3906,7 @@ useEffect(() => {
 
 ---
 
-**5.2. Implement Frontend Query Insights Panel** ⬜ Not Started (Stage 3 UI: 🔍 In Review)
+**5.2. Implement Frontend Query Insights Panel** ✅ Complete
 
 **📖 Before starting**: Review Stage 1, 2, and 3 sections for UI component requirements, data flow patterns, and caching behavior.
 
@@ -3936,7 +3936,7 @@ User Activates Query Insights Tab
     Tab Switches → Fetches Continue in Background → Return to Tab → Data Already Loaded
 ```
 
-**5.2.1. Stage 1: Initial View on Tab Activation** ⬜ Not Started
+**5.2.1. Stage 1: Initial View on Tab Activation** ✅ Complete
 
 **Goal**: Load and display Stage 1 data when user activates Query Insights tab.
 
@@ -4006,7 +4006,7 @@ export const QueryInsightsMain = ({
 
 ---
 
-**5.2.2. Stage 2: Automatic Progression After Stage 1** ⬜ Not Started
+**5.2.2. Stage 2: Automatic Progression After Stage 1** ✅ Complete
 
 **Goal**: Automatically start Stage 2 fetch after Stage 1 completes to populate detailed metrics.
 
@@ -4068,7 +4068,7 @@ useEffect(() => {
 
 ---
 
-**5.2.3. Tab Switching Behavior (No Abort)** ⬜ Not Started
+**5.2.3. Tab Switching Behavior (No Abort)** ✅ Complete
 
 **Goal**: Ensure ongoing fetches continue when user switches tabs, and data is preserved across tab switches.
 
@@ -4287,7 +4287,7 @@ export const QueryInsightsMain = ({
 - **Component Unmounting**: QueryInsightsTab can unmount without losing data
 - **Automatic Recovery**: When remounting, component checks parent state before fetching---
 
-**5.2.4. Stage 3: AI Recommendations (User-Initiated)** ⬜ Not Started
+**5.2.4. Stage 3: AI Recommendations (User-Initiated)** ✅ Complete
 
 **Goal**: Allow user to request AI recommendations on demand with ~8s loading delay.
 
@@ -4352,7 +4352,7 @@ const handleGetAIRecommendations = () => {
 
 ---
 
-**5.2.5. Two-Level Caching Strategy** ⬜ Not Started
+**5.2.5. Two-Level Caching Strategy** ✅ Complete
 
 **Goal**: Document and validate the two-level caching architecture with component unmounting considerations.
 
@@ -4471,7 +4471,7 @@ if (!stage1Data && !stage1Loading && !stage1Promise) {
 
 ---
 
-**5.2.6. UI Component Integration with Real Data** ⬜ Not Started
+**5.2.6. UI Component Integration with Real Data** ✅ Complete
 
 **Goal**: Connect existing UI components to real Stage 1/2/3 data instead of mock values.
 
@@ -4926,7 +4926,7 @@ const handleSecondaryAction = (payload: ActionPayload) => {
 | 2. Explain Plan Analysis  | ✅ Complete    | 5/5      |
 | 3. AI Service Integration | ✅ Complete    | 1/1      |
 | 4. Router Implementation  | ✅ Complete    | 2/2      |
-| 5. Frontend Integration   | ⬜ Not Started | 0/8      |
+| 5. Frontend Integration   | 🔄 In Progress | 5/6      |
 | 6. Testing & Validation   | ⬜ Not Started | 0/3      |
 | 7. Production Hardening   | ⬜ Not Started | 0/4      |
 
@@ -4956,16 +4956,16 @@ const handleSecondaryAction = (payload: ActionPayload) => {
 
 **Phase 5: Frontend Integration**
 
-- 5.1 Update Query Execution Logic: ⬜ Not Started
-  - 5.1.1 Non-blocking Stage 1 Prefetch After Query Execution: ⬜ Not Started
+- 5.1 Update Query Execution Logic: 🔄 In Progress
+  - 5.1.1 Non-blocking Stage 1 Prefetch After Query Execution: ✅ Complete
   - 5.1.2 Add Placeholder for Query State Indicator: ⬜ Not Started
-- 5.2 Implement Frontend Query Insights Panel: ⬜ Not Started (Stage 3 UI: 🔍 In Review)
-  - 5.2.1 Stage 1: Initial View on Tab Activation: ⬜ Not Started
-  - 5.2.2 Stage 2: Automatic Progression After Stage 1: ⬜ Not Started
-  - 5.2.3 Tab Switching Behavior (No Abort): ⬜ Not Started
-  - 5.2.4 Stage 3: AI Recommendations (User-Initiated): ⬜ Not Started
-  - 5.2.5 Two-Level Caching Strategy: ⬜ Not Started
-  - 5.2.6 UI Component Integration with Real Data: ⬜ Not Started
+- 5.2 Implement Frontend Query Insights Panel: ✅ Complete
+  - 5.2.1 Stage 1: Initial View on Tab Activation: ✅ Complete
+  - 5.2.2 Stage 2: Automatic Progression After Stage 1: ✅ Complete
+  - 5.2.3 Tab Switching Behavior (No Abort): ✅ Complete
+  - 5.2.4 Stage 3: AI Recommendations (User-Initiated): ✅ Complete
+  - 5.2.5 Two-Level Caching Strategy: ✅ Complete
+  - 5.2.6 UI Component Integration with Real Data: ✅ Complete
 
 **Phase 6: Testing & Validation**
 
