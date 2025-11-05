@@ -213,7 +213,9 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
     }, [queryInsightsState.stage3Data]);
 
     // Derived metric values from Stage 1 and Stage 2 data
-    const executionTime = queryInsightsState.stage1Data?.executionTime ?? null;
+    // Use server-side execution time from stage2 (executionStats) when available, otherwise use stage1 (client-measured)
+    const executionTime =
+        queryInsightsState.stage2Data?.executionTimeMs ?? queryInsightsState.stage1Data?.executionTime ?? null;
     const docsReturned = queryInsightsState.stage2Data?.documentsReturned ?? null;
     const keysExamined = queryInsightsState.stage2Data?.totalKeysExamined ?? null;
     const docsExamined = queryInsightsState.stage2Data?.totalDocsExamined ?? null;

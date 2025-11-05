@@ -248,7 +248,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                             {/* Summary (always visible from Stage 1) */}
                             <div style={{ padding: '12px' }}>
                                 <Text weight="semibold" size={400} style={{ display: 'block', marginBottom: '8px' }}>
-                                    {l10n.t('Query Execution Plan')}
+                                    {l10n.t('Your Cluster')}
                                 </Text>
                                 {/* Stage flow with badges */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
