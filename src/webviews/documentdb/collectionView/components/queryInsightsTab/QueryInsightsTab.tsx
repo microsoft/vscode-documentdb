@@ -527,7 +527,10 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
-                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed ?? l10n.t('None')}
+                            value={
+                                queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed ||
+                                (queryInsightsState.stage2Data ? l10n.t('None') : undefined)
+                            }
                             placeholder="skeleton"
                         />
                         <GenericCell
@@ -549,11 +552,8 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
                             rating={queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score}
-                            description={
+                            diagnostics={
                                 queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
-                                    .filter((d) => d.type === 'negative')
-                                    .map((d) => d.message)
-                                    .join('. ') || undefined
                             }
                             visible={!!queryInsightsState.stage2Data}
                         />

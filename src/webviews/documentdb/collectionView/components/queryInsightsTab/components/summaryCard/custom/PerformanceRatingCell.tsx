@@ -7,6 +7,7 @@ import { Text, tokens } from '@fluentui/react-components';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
+import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
 import './PerformanceRatingCell.scss';
 
@@ -19,8 +20,8 @@ export interface PerformanceRatingCellProps {
     /** The performance rating level */
     rating: PerformanceRating | null | undefined;
 
-    /** Optional description text shown below the rating */
-    description?: string;
+    /** Array of diagnostic messages explaining the rating */
+    diagnostics?: PerformanceDiagnostic[];
 
     /** Whether the rating content is visible (for animation) */
     visible?: boolean;
@@ -35,7 +36,10 @@ export interface PerformanceRatingCellProps {
  * <PerformanceRatingCell
  *   label={l10n.t('Performance Rating')}
  *   rating="poor"
- *   description={l10n.t('Only 0.02% of examined documents were returned')}
+ *   diagnostics={[
+ *     { type: 'negative', message: 'Collection scan detected' },
+ *     { type: 'positive', message: 'Fast execution time' }
+ *   ]}
  *   visible={stageState >= 2}
  * />
  * ```
@@ -43,7 +47,7 @@ export interface PerformanceRatingCellProps {
 export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     label,
     rating,
-    description,
+    diagnostics,
     visible = true,
 }) => {
     const getRatingColor = (rating: PerformanceRating): string => {
@@ -75,16 +79,27 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     const customContent =
         rating !== null && rating !== undefined ? (
             <CollapseRelaxed visible={visible}>
-                <div className="efficiencyIndicator">
-                    <div className="efficiencyDot" style={{ backgroundColor: getRatingColor(rating) }} />
-                    <div style={{ flex: 1 }}>
-                        <Text weight="semibold">{getRatingText(rating)}</Text>
-                        {description && (
-                            <Text size={200} style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-                                {description}
-                            </Text>
-                        )}
-                    </div>
+                <div
+                    className="efficiencyIndicator"
+                    style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '8px' }}
+                >
+                    {/* First row, first column: dot */}
+                    <div
+                        className="efficiencyDot"
+                        style={{ backgroundColor: getRatingColor(rating), alignSelf: 'center' }}
+                    />
+                    {/* First row, second column: rating text */}
+                    <Text weight="semibold" style={{ alignSelf: 'center' }}>
+                        {getRatingText(rating)}
+                    </Text>
+                    {/* Second row, first column: empty */}
+                    {diagnostics && diagnostics.length > 0 && <div />}
+                    {/* Second row, second column: descriptions */}
+                    {diagnostics && diagnostics.length > 0 && (
+                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                            {diagnostics.map((d) => d.message).join('. ')}
+                        </Text>
+                    )}
                 </div>
             </CollapseRelaxed>
         ) : undefined;
