@@ -661,4 +661,37 @@ export const collectionsViewRouter = router({
 
             return result;
         }),
+
+    /**
+     * View Raw Explain Output
+     * Opens the raw explain plan output in a new VS Code document
+     */
+    viewRawExplainOutput: publicProcedure.use(trpcToTelemetry).mutation(async ({ ctx }) => {
+        const myCtx = ctx as RouterContext;
+        const { sessionId, databaseName, collectionName } = myCtx;
+
+        // Get ClusterSession
+        const session: ClusterSession = ClusterSession.getSession(sessionId);
+
+        // Get the cached execution stats (raw explain output)
+        const rawExplainOutput = session.getRawExplainOutput(databaseName, collectionName);
+
+        if (!rawExplainOutput) {
+            throw new Error('No explain output available. Please run a query first.');
+        }
+
+        // Pretty-print the JSON
+        const prettyJson = JSON.stringify(rawExplainOutput, null, 4);
+
+        // Open in a new untitled document with .json extension
+        const vscode = await import('vscode');
+        const doc = await vscode.workspace.openTextDocument({
+            content: prettyJson,
+            language: 'json',
+        });
+
+        await vscode.window.showTextDocument(doc);
+
+        return { success: true };
+    }),
 });

@@ -52,7 +52,6 @@ import {
     TipsCard,
 } from './components/optimizationCards';
 import { QueryPlanSummary } from './components/queryPlanSummary';
-import { QuickActions } from './components/QuickActions';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
 import './QueryInsightsTab.scss';
@@ -570,15 +569,15 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
                     </div>
 
                     {/* Quick Actions - Desktop Only */}
-                    <div className="quickActionsInPanel">
+                    {/* <div className="quickActionsInPanel">
                         <QuickActions stageState={stageState} />
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* Quick Actions - Mobile Only (appears last) */}
-                <div className="quickActionsWrapper">
+                {/* <div className="quickActionsWrapper">
                     <QuickActions stageState={stageState} />
-                </div>
+                </div> */}
             </div>
         </div>
     );

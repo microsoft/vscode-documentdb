@@ -9,15 +9,17 @@ import {
     AccordionItem,
     AccordionPanel,
     Badge,
+    Button,
     Card,
     Skeleton,
     SkeletonItem,
     Text,
     tokens,
 } from '@fluentui/react-components';
-import { ArrowUpFilled } from '@fluentui/react-icons';
+import { ArrowUpFilled, EyeRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
+import { useTrpcClient } from '../../../../../../api/webview-client/useTrpcClient';
 import {
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
@@ -39,6 +41,20 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
     stage1Loading,
     stage2Loading,
 }) => {
+    const { trpcClient } = useTrpcClient();
+
+    const handleViewRawExplain = async () => {
+        try {
+            await trpcClient.mongoClusters.collectionView.viewRawExplainOutput.mutate();
+        } catch (error) {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Failed to open raw execution stats'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
+            });
+        }
+    };
+
     return (
         <Card className="planSection">
             <div
@@ -47,6 +63,16 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                 <Text size={400} weight="semibold">
                     {l10n.t('Query Plan Summary')}
                 </Text>
+                {stage2Data && (
+                    <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={<EyeRegular />}
+                        onClick={() => void handleViewRawExplain()}
+                    >
+                        {l10n.t('View Raw Execution Stats')}
+                    </Button>
+                )}
             </div>
 
             {/* Show skeleton if Stage 1 is loading or no data yet */}

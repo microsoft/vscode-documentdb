@@ -401,6 +401,24 @@ export class ClusterSession {
     }
 
     /**
+     * Gets the raw explain output from the most recent execution stats call
+     * Used for displaying the complete explain plan in JSON format
+     *
+     * @param _databaseName - Database name (for future use)
+     * @param _collectionName - Collection name (for future use)
+     * @returns Raw explain output document, or null if not available
+     */
+    public getRawExplainOutput(_databaseName: string, _collectionName: string): Document | null {
+        // If we have cached execution stats, return it
+        if (this._executionStatsCache) {
+            return this._executionStatsCache.result;
+        }
+
+        // No cached data available
+        return null;
+    }
+
+    /**
      * Gets AI-powered query optimization recommendations
      * Caches the result until the query changes
      *

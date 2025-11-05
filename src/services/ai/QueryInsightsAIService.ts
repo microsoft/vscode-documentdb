@@ -91,10 +91,8 @@ export class QueryInsightsAIService {
                 educationalContent: parsedJson.educationalContent,
             };
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Not an error instance";
-            throw new Error(
-                l10n.t('Failed to parse AI optimization response. {0}', errorMessage),
-            );
+            const errorMessage = error instanceof Error ? error.message : 'Not an error instance';
+            throw new Error(l10n.t('Failed to parse AI optimization response. {0}', errorMessage));
         }
     }
 
