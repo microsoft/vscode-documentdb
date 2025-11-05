@@ -231,6 +231,7 @@
   "Error: {0}": "Error: {0}",
   "Error: {error}": "Error: {error}",
   "Errors found in document {path}. Please fix these.": "Errors found in document {path}. Please fix these.",
+  "Examined-to-Returned Ratio": "Examined-to-Returned Ratio",
   "Examined/Returned Ratio": "Examined/Returned Ratio",
   "Excellent": "Excellent",
   "Execute the find query": "Execute the find query",
