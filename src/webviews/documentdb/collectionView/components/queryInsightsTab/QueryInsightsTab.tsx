@@ -33,8 +33,9 @@
 import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useEffect, useState } from 'react';
+import { type JSX, useContext, useEffect, useState } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import { CollectionViewContext } from '../../collectionViewContext';
 import {
     type ImprovementCard as ImprovementCardConfig,
     type QueryInsightsStage3Response,
@@ -56,31 +57,146 @@ import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/su
 import './queryInsights.scss';
 import './QueryInsightsTab.scss';
 
-type Stage = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
-
-interface StageDetails {
-    stage: Stage;
-    indexName?: string;
-    keysExamined?: number;
-    docsExamined?: number;
-    nReturned?: number;
-    indexBounds?: string;
+interface QueryInsightsMainProps {
+    currentQuery: {
+        filter: string;
+        project?: string;
+        sort?: string;
+    };
 }
 
-export const QueryInsightsMain = (): JSX.Element => {
+export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX.Element => {
     // Stage management:
     // Stage 1: Initial View (cheap data + query plan from explain("queryPlanner"))
     // Stage 2: Detailed Execution Analysis (from explain("executionStats"))
     // Stage 3: AI-Powered Recommendations (opt-in)
     // See: docs/design-documents/performance-advisor.md
     const { trpcClient } = useTrpcClient();
-    const [stageState, setStageState] = useState<1 | 2 | 3>(1);
+    const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
+    const { queryInsights: queryInsightsState } = currentContext;
+
+    /**
+     * Helper to update queryInsights state within the CollectionViewContext.
+     * Mimics React's setState API with support for both direct values and updater functions.
+     *
+     * Instead of writing:
+     *   setCurrentContext(prev => ({ ...prev, queryInsights: { ...prev.queryInsights, stage1Loading: true } }))
+     *
+     * You can write:
+     *   setQueryInsightsStateHelper(prev => ({ ...prev, stage1Loading: true }))
+     */
+    const setQueryInsightsStateHelper = (
+        updater:
+            | typeof currentContext.queryInsights
+            | ((prev: typeof currentContext.queryInsights) => typeof currentContext.queryInsights),
+    ): void => {
+        setCurrentContext((prev) => ({
+            ...prev,
+            queryInsights: typeof updater === 'function' ? updater(prev.queryInsights) : updater,
+        }));
+    };
+
+    /**
+     * Visual stage state based on actual data availability OR error state.
+     * We progress to the next stage even if there's an error, so users can see what failed.
+     * Stage 1: Default state, waiting for or showing Stage 1 data
+     * Stage 2: Stage 1 completed (success or error), Stage 2 in progress or completed
+     * Stage 3: Stage 2 completed (success or error), Stage 3 in progress or completed
+     */
+    const stageState: 1 | 2 | 3 =
+        queryInsightsState.stage3Data || queryInsightsState.stage3Error
+            ? 3
+            : queryInsightsState.stage2Data || queryInsightsState.stage2Error
+              ? 2
+              : 1;
+
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [aiInsightsRequested, setAiInsightsRequested] = useState(false); // One-way flag: once true, stays true
-    const [aiData, setAiData] = useState<QueryInsightsStage3Response | null>(null);
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
-    const [selectedTab, setSelectedTab] = useState<Stage | null>(null);
+
+    // Stage 1: Load on mount (only if not already loading/loaded/in-flight)
+    useEffect(() => {
+        if (!queryInsightsState.stage1Data && !queryInsightsState.stage1Loading && !queryInsightsState.stage1Promise) {
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Loading: true }));
+
+            const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+                .query({
+                    filter: currentQuery.filter,
+                    project: currentQuery.project,
+                    sort: currentQuery.sort,
+                })
+                .then((data) => {
+                    setQueryInsightsStateHelper((prev) => ({
+                        ...prev,
+                        stage1Data: data,
+                        stage1Loading: false,
+                        stage1Promise: null,
+                    }));
+                    return data;
+                })
+                .catch((error) => {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: l10n.t('Failed to load query insights'),
+                        modal: false,
+                        cause: error instanceof Error ? error.message : String(error),
+                    });
+                    setQueryInsightsStateHelper((prev) => ({
+                        ...prev,
+                        stage1Error: error instanceof Error ? error.message : String(error),
+                        stage1Loading: false,
+                        stage1Promise: null,
+                    }));
+                    throw error;
+                });
+
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Promise: promise }));
+        }
+    }, []); // Empty deps - only run on mount
+
+    // Stage 2: Auto-start after Stage 1 completes
+    useEffect(() => {
+        if (
+            queryInsightsState.stage1Data &&
+            !queryInsightsState.stage2Data &&
+            !queryInsightsState.stage2Loading &&
+            !queryInsightsState.stage2Promise
+        ) {
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Loading: true }));
+
+            const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
+                .query({
+                    filter: currentQuery.filter,
+                    project: currentQuery.project,
+                    sort: currentQuery.sort,
+                })
+                .then((data) => {
+                    setQueryInsightsStateHelper((prev) => ({
+                        ...prev,
+                        stage2Data: data,
+                        stage2Loading: false,
+                        stage2Promise: null,
+                    }));
+                    return data;
+                })
+                .catch((error) => {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: l10n.t('Failed to load detailed execution analysis'),
+                        modal: false,
+                        cause: error instanceof Error ? error.message : String(error),
+                    });
+                    setQueryInsightsStateHelper((prev) => ({
+                        ...prev,
+                        stage2Error: error instanceof Error ? error.message : String(error),
+                        stage2Loading: false,
+                        stage2Promise: null,
+                    }));
+                    throw error;
+                });
+
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Promise: promise }));
+        }
+    }, [queryInsightsState.stage1Data]);
 
     // Debug logging for state changes
     useEffect(() => {
@@ -88,18 +204,18 @@ export const QueryInsightsMain = (): JSX.Element => {
     }, [stageState]);
 
     useEffect(() => {
-        console.log('aiData changed:', aiData);
-        if (aiData) {
-            console.log('  - improvementCards count:', aiData.improvementCards.length);
-            console.log('  - improvementCards:', aiData.improvementCards);
+        console.log('stage3Data changed:', queryInsightsState.stage3Data);
+        if (queryInsightsState.stage3Data) {
+            console.log('  - improvementCards count:', queryInsightsState.stage3Data.improvementCards.length);
+            console.log('  - improvementCards:', queryInsightsState.stage3Data.improvementCards);
         }
-    }, [aiData]);
+    }, [queryInsightsState.stage3Data]);
 
-    // Metric values
-    const [executionTime, setExecutionTime] = useState<number | null>(23433235);
-    const [docsReturned] = useState<number | null>(2);
-    const [keysExamined, setKeysExamined] = useState<number | null>(null);
-    const [docsExamined, setDocsExamined] = useState<number | null>(null);
+    // Derived metric values from Stage 1 and Stage 2 data
+    const executionTime = queryInsightsState.stage1Data?.executionTime ?? null;
+    const docsReturned = queryInsightsState.stage2Data?.documentsReturned ?? null;
+    const keysExamined = queryInsightsState.stage2Data?.totalKeysExamined ?? null;
+    const docsExamined = queryInsightsState.stage2Data?.totalDocsExamined ?? null;
 
     const performanceTips = [
         {
@@ -128,19 +244,6 @@ export const QueryInsightsMain = (): JSX.Element => {
         },
     ];
 
-    // Automatically start Stage 2 analysis when component mounts
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setStageState(2);
-            // Update metrics when Stage 2 starts
-            setExecutionTime(2.333);
-            setKeysExamined(2);
-            setDocsExamined(10000);
-        }, 4000);
-
-        return () => clearTimeout(timer);
-    }, []);
-
     const handleGetAISuggestions = () => {
         setIsLoadingAI(true);
         setAiInsightsRequested(true); // Set one-way flag to prevent button from reappearing
@@ -159,9 +262,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                 console.log('Number of improvement cards:', response.improvementCards.length);
                 console.log('Improvement cards:', response.improvementCards);
 
-                setAiData(response as QueryInsightsStage3Response);
+                setQueryInsightsStateHelper((prev) => ({
+                    ...prev,
+                    stage3Data: response as QueryInsightsStage3Response,
+                }));
                 setIsLoadingAI(false);
-                setStageState(3);
             })
             .catch((error: unknown) => {
                 void trpcClient.common.displayErrorMessage.mutate({
@@ -177,7 +282,6 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     const handleCancelAI = () => {
         setIsLoadingAI(false);
-        setStageState(2);
         setAiInsightsRequested(false); // Allow requesting again after cancel
     };
 
@@ -219,34 +323,6 @@ export const QueryInsightsMain = (): JSX.Element => {
     const handleDismissTips = () => {
         setIsTipsCardDismissed(true);
         setShowTipsCard(false);
-    };
-
-    const stageDetails: Record<Stage, StageDetails> = {
-        IXSCAN: {
-            stage: 'IXSCAN',
-            indexName: 'user_id_1',
-            keysExamined: stageState >= 2 ? 2 : undefined,
-            nReturned: stageState >= 2 ? 2 : undefined,
-            indexBounds: 'user_id: [1234, 1234]',
-        },
-        FETCH: {
-            stage: 'FETCH',
-            docsExamined: stageState >= 2 ? 10000 : undefined,
-            nReturned: stageState >= 2 ? 2 : undefined,
-        },
-        PROJECTION: {
-            stage: 'PROJECTION',
-            nReturned: stageState >= 2 ? 2 : undefined,
-        },
-        SORT: {
-            stage: 'SORT',
-            nReturned: stageState >= 2 ? 2 : undefined,
-        },
-        COLLSCAN: {
-            stage: 'COLLSCAN',
-            docsExamined: stageState >= 2 ? 10000 : undefined,
-            nReturned: stageState >= 2 ? 10000 : undefined,
-        },
     };
 
     return (
@@ -300,42 +376,57 @@ export const QueryInsightsMain = (): JSX.Element => {
                         {/* AnimatedCardList for AI suggestions and tips */}
                         <AnimatedCardList>
                             {/* Analysis Card (if AI data available) */}
-                            {stageState === 3 && aiData && aiData.analysisCard && (
-                                <AiCard
-                                    key="analysis-card"
-                                    title={l10n.t('Query Performance Analysis')}
-                                    onCopy={() => {
-                                        void navigator.clipboard.writeText(aiData.analysisCard.content);
-                                    }}
-                                >
-                                    <Text size={300}>{aiData.analysisCard.content}</Text>
-                                </AiCard>
-                            )}
+                            {stageState === 3 &&
+                                queryInsightsState.stage3Data &&
+                                queryInsightsState.stage3Data.analysisCard && (
+                                    <AiCard
+                                        key="analysis-card"
+                                        title={l10n.t('Query Performance Analysis')}
+                                        onCopy={() => {
+                                            void navigator.clipboard.writeText(
+                                                queryInsightsState.stage3Data?.analysisCard.content ?? '',
+                                            );
+                                        }}
+                                    >
+                                        <Text size={300}>{queryInsightsState.stage3Data?.analysisCard.content}</Text>
+                                    </AiCard>
+                                )}
 
                             {/* Improvement Cards (dynamic from AI response) */}
                             {stageState === 3 &&
-                                aiData &&
+                                queryInsightsState.stage3Data &&
                                 (() => {
                                     console.log('=== IMPROVEMENT CARDS RENDERING ===');
                                     console.log('stageState:', stageState);
-                                    console.log('aiData:', aiData);
-                                    console.log('aiData.improvementCards:', aiData.improvementCards);
-                                    console.log('Number of cards to render:', aiData.improvementCards.length);
+                                    console.log('queryInsightsState.stage3Data:', queryInsightsState.stage3Data);
+                                    console.log(
+                                        'queryInsightsState.stage3Data.improvementCards:',
+                                        queryInsightsState.stage3Data.improvementCards,
+                                    );
+                                    console.log(
+                                        'Number of cards to render:',
+                                        queryInsightsState.stage3Data.improvementCards.length,
+                                    );
 
-                                    if (!aiData.improvementCards || aiData.improvementCards.length === 0) {
+                                    if (
+                                        !queryInsightsState.stage3Data.improvementCards ||
+                                        queryInsightsState.stage3Data.improvementCards.length === 0
+                                    ) {
                                         console.log('SKIPPING: no improvement cards');
                                         return null;
                                     }
 
-                                    console.log(`RENDERING ${aiData.improvementCards.length} improvement cards...`);
+                                    console.log(
+                                        `RENDERING ${queryInsightsState.stage3Data.improvementCards.length} improvement cards...`,
+                                    );
 
                                     // Use Fragment to properly spread children
                                     return (
                                         <>
-                                            {aiData.improvementCards.map(
+                                            {queryInsightsState.stage3Data?.improvementCards.map(
                                                 (card: ImprovementCardConfig, index: number) => {
                                                     console.log(
-                                                        `Card ${index + 1}/${aiData.improvementCards.length}:`,
+                                                        `Card ${index + 1}/${queryInsightsState.stage3Data?.improvementCards.length}:`,
                                                         card.cardId,
                                                         'actionId:',
                                                         card.primaryButton.actionId,
@@ -397,26 +488,30 @@ export const QueryInsightsMain = (): JSX.Element => {
                             )}
 
                             {/* Educational Markdown Card - Understanding Query Execution */}
-                            {stageState === 3 && aiData && aiData.educationalContent && (
-                                <MarkdownCard
-                                    key="understanding-execution"
-                                    title={l10n.t('Understanding Your Query Execution Plan')}
-                                    content={aiData.educationalContent}
-                                    onCopy={() => {
-                                        void navigator.clipboard.writeText(aiData.educationalContent || '');
-                                    }}
-                                />
-                            )}
+                            {stageState === 3 &&
+                                queryInsightsState.stage3Data &&
+                                queryInsightsState.stage3Data.educationalContent && (
+                                    <MarkdownCard
+                                        key="understanding-execution"
+                                        title={l10n.t('Understanding Your Query Execution Plan')}
+                                        content={queryInsightsState.stage3Data.educationalContent}
+                                        onCopy={() => {
+                                            void navigator.clipboard.writeText(
+                                                queryInsightsState.stage3Data?.educationalContent ?? '',
+                                            );
+                                        }}
+                                    />
+                                )}
                         </AnimatedCardList>
                     </div>
 
                     {/* Query Plan Summary - Mobile Only */}
                     <div className="queryPlanWrapper">
                         <QueryPlanSummary
-                            stageState={stageState}
-                            selectedTab={selectedTab}
-                            setSelectedTab={setSelectedTab}
-                            stageDetails={stageDetails}
+                            stage1Data={queryInsightsState.stage1Data}
+                            stage2Data={queryInsightsState.stage2Data}
+                            stage1Loading={stageState === 1 && !queryInsightsState.stage1Data}
+                            stage2Loading={stageState >= 2 && !queryInsightsState.stage2Data}
                         />
                     </div>
                 </div>
@@ -427,39 +522,50 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Execution Strategy')}
-                            value={stageState >= 2 ? 'COLLSCAN' : undefined}
+                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
-                            value={stageState >= 2 ? l10n.t('None') : undefined}
+                            value={
+                                queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed ||
+                                (queryInsightsState.stage2Data ? l10n.t('None') : undefined)
+                            }
                             placeholder="skeleton"
                         />
                         <GenericCell
-                            label={l10n.t('Examined/Returned Ratio')}
-                            value={stageState >= 2 ? '5,000 : 1' : undefined}
+                            label={l10n.t('Examined-to-Returned Ratio')}
+                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={stageState >= 2 ? l10n.t('No') : undefined}
+                            value={
+                                queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
+                                    ? l10n.t('Yes')
+                                    : queryInsightsState.stage2Data
+                                      ? l10n.t('No')
+                                      : undefined
+                            }
                             placeholder="skeleton"
                         />
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
-                            rating={stageState >= 2 ? 'poor' : undefined}
-                            description={l10n.t('Only 0.02% of examined documents were returned')}
-                            visible={stageState >= 2}
+                            rating={queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score}
+                            diagnostics={
+                                queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
+                            }
+                            visible={!!queryInsightsState.stage2Data}
                         />
                     </SummaryCard>
 
                     {/* Query Plan Summary - Desktop Only */}
                     <div className="queryPlanInPanel">
                         <QueryPlanSummary
-                            stageState={stageState}
-                            selectedTab={selectedTab}
-                            setSelectedTab={setSelectedTab}
-                            stageDetails={stageDetails}
+                            stage1Data={queryInsightsState.stage1Data}
+                            stage2Data={queryInsightsState.stage2Data}
+                            stage1Loading={stageState === 1 && !queryInsightsState.stage1Data}
+                            stage2Loading={stageState >= 2 && !queryInsightsState.stage2Data}
                         />
                     </div>
 

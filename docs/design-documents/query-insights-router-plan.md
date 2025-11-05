@@ -4,6 +4,8 @@
 
 This document outlines the plan for implementing three-stage query insights in the `collectionViewRouter.ts` file. The implementation will support progressive data loading for query performance analysis and AI-powered optimization recommendations.
 
+> **📝 Document Update Note**: This document originally contained multiple versions of the performance rating algorithm that evolved during the design process. These have been consolidated into a single authoritative version in the **"Performance Rating Thresholds"** section. The final implementation uses **efficiency ratio** (returned/examined, where higher is better) rather than the inverse metric used in early iterations.
+
 ---
 
 ## Architecture Overview
@@ -436,7 +438,16 @@ export function usesIndex(rootStage: Stage | undefined, indexName: string): bool
 
 ```typescript
 /**
- * Calculates the examined-to-returned ratio (efficiency indicator)
+ * Calculates the examined-to-returned ratio (inverse of efficiency ratio)
+ * Higher values indicate inefficiency - the query examines many documents to return few
+ *
+ * Note: The performance rating algorithm uses efficiencyRatio (returned/examined) instead,
+ * which is more intuitive (higher = better). This function is kept for backwards compatibility
+ * and specific use cases where the inverse ratio is more meaningful.
+ *
+ * @param docsExamined - Number of documents examined
+ * @param docsReturned - Number of documents returned
+ * @returns Examined-to-returned ratio (where lower is better)
  */
 export function calculateExaminedToReturnedRatio(docsExamined: number, docsReturned: number): number {
   if (docsReturned === 0) return docsExamined > 0 ? Infinity : 0;
@@ -452,48 +463,67 @@ export function calculateIndexSelectivity(keysExamined: number, docsExamined: nu
 }
 
 /**
- * Rates query performance based on efficiency metrics
+ * Calculates performance rating based on execution metrics
+ *
+ * This is the authoritative implementation used in ExplainPlanAnalyzer.ts.
+ * See src/documentdb/queryInsights/ExplainPlanAnalyzer.ts for the actual code.
+ *
+ * Rating criteria:
+ * - Excellent: High efficiency (>=50%), indexed, no in-memory sort, fast (<100ms)
+ * - Good: Moderate efficiency (>=10%), indexed or fast (<500ms)
+ * - Fair: Low efficiency (>=1%)
+ * - Poor: Very low efficiency (<1%) or collection scan with low efficiency
+ *
+ * @param executionTimeMs - Execution time in milliseconds
+ * @param efficiencyRatio - Ratio of documents returned to documents examined (0.0 to 1.0+)
+ * @param hasInMemorySort - Whether query performs in-memory sorting
+ * @param isIndexScan - Whether query uses index scan
+ * @param isCollectionScan - Whether query performs collection scan
+ * @returns Performance rating
  */
-export function calculatePerformanceRating(metrics: {
-  examinedToReturnedRatio: number;
-  hadCollectionScan: boolean;
-  hadInMemorySort: boolean;
-  indexUsed: boolean;
-}): {
-  score: 'excellent' | 'good' | 'fair' | 'poor';
-  concerns: string[];
-} {
-  const concerns: string[] = [];
-  let score: 'excellent' | 'good' | 'fair' | 'poor' = 'excellent';
-
-  // Check examined/returned ratio
-  if (metrics.examinedToReturnedRatio > 100) {
-    concerns.push('High examined-to-returned ratio indicates inefficient query');
-    score = 'poor';
-  } else if (metrics.examinedToReturnedRatio > 10) {
-    concerns.push('Moderate examined-to-returned ratio');
-    score = score === 'excellent' ? 'fair' : score;
+export function calculatePerformanceRating(
+  executionTimeMs: number,
+  efficiencyRatio: number,
+  hasInMemorySort: boolean,
+  isIndexScan: boolean,
+  isCollectionScan: boolean,
+): 'excellent' | 'good' | 'fair' | 'poor' {
+  // Poor: Collection scan with very low efficiency
+  if (isCollectionScan && efficiencyRatio < 0.01) {
+    return 'poor';
   }
 
-  // Check for collection scan
-  if (metrics.hadCollectionScan) {
-    concerns.push('Full collection scan performed');
-    score = 'poor';
+  // Excellent: High efficiency, uses index, no blocking sort, fast execution
+  if (efficiencyRatio >= 0.5 && isIndexScan && !hasInMemorySort && executionTimeMs < 100) {
+    return 'excellent';
   }
 
-  // Check for in-memory sort
-  if (metrics.hadInMemorySort) {
-    concerns.push('In-memory sort required (consider adding index)');
-    if (score === 'excellent') score = 'fair';
+  // Good: Moderate efficiency with index usage or fast execution
+  if (efficiencyRatio >= 0.1 && (isIndexScan || executionTimeMs < 500)) {
+    return 'good';
   }
 
-  // Check index usage
-  if (!metrics.indexUsed && !metrics.hadCollectionScan) {
-    concerns.push('No index used for filtering');
-    if (score === 'excellent') score = 'good';
+  // Fair: Low efficiency but acceptable
+  if (efficiencyRatio >= 0.01) {
+    return 'fair';
   }
 
-  return { score, concerns };
+  return 'poor';
+}
+
+/**
+ * Calculates the efficiency ratio (documents returned / documents examined)
+ * A ratio close to 1.0 indicates high efficiency - the query examines only the documents it returns
+ *
+ * @param returned - Number of documents returned
+ * @param examined - Number of documents examined
+ * @returns Efficiency ratio (0.0 to 1.0+, where higher is better)
+ */
+export function calculateEfficiencyRatio(returned: number, examined: number): number {
+  if (examined === 0) {
+    return returned === 0 ? 1.0 : 0.0;
+  }
+  return returned / examined;
 }
 ```
 
@@ -684,37 +714,46 @@ z.object({
 
 ```typescript
 {
-  executionTime: number;           // Milliseconds (client-side measurement)
-  documentsReturned: number;       // Count of documents in result set
-  queryPlannerInfo: {
-    winningPlan: {
-      stage: string;                // e.g., "FETCH", "IXSCAN", "COLLSCAN"
-      inputStage?: {
-        stage: string;
-        indexName?: string;
-      };
-    };
-    rejectedPlans: Array<unknown>;  // Plans considered but not used
-    namespace: string;               // database.collection
-    indexFilterSet: boolean;         // Whether index filters are applied
-    parsedQuery: Record<string, unknown>; // Query shape
-    plannerVersion: number;
-  };
-  stages: Array<{                   // Flattened stage hierarchy
-    stage: string;                   // "IXSCAN" | "FETCH" | "PROJECTION" | "SORT" | "COLLSCAN"
-    indexName?: string;              // For IXSCAN stages
-    indexBounds?: string;            // Stringified bounds
+  executionTime: number; // Milliseconds (client-side measurement)
+  documentsReturned: number; // Count of documents in result set
+  // Note: keysExamined and docsExamined not available until Stage 2
+  stages: Array<{
+    // Flattened stage hierarchy for UI display
+    stage: string; // "IXSCAN" | "FETCH" | "PROJECTION" | "SORT" | "COLLSCAN"
+    name: string; // Human-readable stage name
+    nReturned: number; // Documents returned by this stage
+    indexName?: string; // For IXSCAN stages
+    indexBounds?: string; // Stringified bounds for IXSCAN
+    keysExamined?: number; // Keys examined (if available)
+    docsExamined?: number; // Docs examined (if available)
   }>;
+  efficiencyAnalysis: {
+    executionStrategy: string; // e.g., "Index Scan", "Collection Scan"
+    indexUsed: string | null; // Index name or null
+    hasInMemorySort: boolean; // Whether SORT stage detected
+    // performanceRating not available in Stage 1 (requires execution metrics)
+  }
 }
 ```
+
+**Design Rationale**:
+
+The `stages` array provides all necessary information for UI visualization without including the raw `queryPlannerInfo.winningPlan` structure. This approach:
+
+- ✅ **Reduces payload size**: Eliminates ~5-10KB of raw MongoDB metadata not used by UI
+- ✅ **Simplifies frontend**: UI consumes flat array instead of nested tree
+- ✅ **Maintains flexibility**: Can add fields to `stages` array as needed
+- ✅ **Performance**: Smaller JSON payloads improve network performance
+
+If advanced users need the raw plan, they can access it in Stage 2's `rawExecutionStats` which includes the complete explain output.
 
 ### Implementation Notes
 
 **Design Document Alignment**:
 
 1. **Metrics Row** (design doc 2.1): Display individual metric cards
-   - Execution Time: Client-side measurement
-   - Documents Returned: From result set
+   - Execution Time: Tracked by ClusterSession during query execution
+   - Documents Returned: Show "n/a" (not available until Stage 2 with executionStats)
    - Keys Examined: Show "n/a" (not available until Stage 2)
    - Docs Examined: Show "n/a" (not available until Stage 2)
 
@@ -733,31 +772,47 @@ z.object({
 
 When Stage 1 is requested, the `ClusterSession` class handles data collection:
 
-1. **New Query Detection**: The existing `resetCachesIfQueryChanged()` method detects when the query text changes
+1. **Execution Time Tracking**: ClusterSession automatically tracks query execution time during `runFindQueryWithCache()`:
+   - Measures time before/after calling `_client.runFindQuery()`
+   - Stores in `_lastExecutionTimeMs` private property
+   - Available via `getLastExecutionTimeMs()` method
+   - Reset when query changes (in `resetCachesIfQueryChanged()`)
 
-2. **Automatic explain("queryPlanner") Call**: On the first Stage 1 request after a new query:
-   - Extract the base query (filter, projection, sort) from the current query
+2. **New Query Detection**: The existing `resetCachesIfQueryChanged()` method detects when the query text changes
+
+3. **Automatic explain("queryPlanner") Call**: On the first Stage 1 request after a new query:
+   - Extract the base query (filter, projection, sort) from the request parameters
    - **Remove `skip` and `limit` modifiers** to analyze the full query scope (not just one page)
    - Execute `explain("queryPlanner")` with the clean query
-   - Persist results in `_currentQueryPlannerInfo`
+   - Persist results in `_queryPlannerCache`
 
-3. **Caching**: Subsequent Stage 1 requests return cached `_currentQueryPlannerInfo` until query changes
+4. **Caching**: Subsequent Stage 1 requests return cached `_queryPlannerCache` until query changes
 
-4. **Cache Invalidation**: When `resetCachesIfQueryChanged()` detects a query change, `_currentQueryPlannerInfo` is cleared
+5. **Cache Invalidation**: When `resetCachesIfQueryChanged()` detects a query change, all caches are cleared
 
 This approach ensures:
 
 - ✅ Query insights reflect the full query performance (not just one page)
 - ✅ Only one `explain("queryPlanner")` call per unique query
 - ✅ Automatic cache management tied to query lifecycle
+- ✅ Execution time tracked server-side (consistent, not affected by network latency)
 - ✅ Existing `skip`/`limit` paging for Results view remains unchanged
 
 **Technical Details**:
 
-1. **Execution Time**: Measured client-side by the webview before/after query execution
-2. **Documents Returned**: Retrieved from cached results in ClusterSession
-3. **QueryPlanner Info**: Obtained via dedicated method in ClusterSession (strips skip/limit, calls explain)
+1. **Execution Time**: Measured server-side by ClusterSession during `runFindQueryWithCache()` execution
+2. **Documents Returned**: **NOT AVAILABLE in Stage 1** - `explain("queryPlanner")` does not execute the query, so document count is unknown. This metric shows as 0 in Stage 1 and becomes available in Stage 2 with `explain("executionStats")`.
+3. **QueryPlanner Info**: Obtained via ClusterSession's `getQueryPlannerInfo()` method (strips skip/limit, calls explain)
 4. **Stages List**: Recursively traverse `winningPlan` to extract all stages for UI cards
+
+**Why Documents Returned is Not Available in Stage 1**:
+
+The `explain("queryPlanner")` command analyzes the query plan but **does not execute the query**. Therefore:
+
+- ✅ Stage 1 is fast (no query execution)
+- ❌ No document count available (would require query execution)
+- ✅ Shows 0 as placeholder in Stage 1 UI
+- ✅ Stage 2 provides actual count via `explain("executionStats")` which executes the winning plan
 
 ### Extracting Data from queryPlanner Output
 
@@ -927,25 +982,23 @@ function detectDocumentDBPlatform(explainOutput: any): 'documentdb' | 'unknown' 
 
 ### ClusterSession Extensions for Stage 1
 
+**Important**: ClusterSession uses QueryInsightsApis but doesn't instantiate it. The QueryInsightsApis instance is provided by ClustersClient (see "ClustersClient Extensions" section below).
+
 Add to `ClusterSession` class:
 
 ```typescript
-import { QueryInsightsApis } from './QueryInsightsApis';
-
 export class ClusterSession {
   // Existing properties...
   private _currentQueryPlannerInfo?: unknown;
   private _currentExecutionTime?: number;
   private _currentDocumentsReturned?: number;
 
-  // NEW: Query Insights API instance
-  private _queryInsightsApis: QueryInsightsApis;
+  // Query Insights APIs are accessed via this._client.queryInsightsApis
+  // (instantiated in ClustersClient, not here)
 
   constructor(/* existing parameters */) {
     // Existing initialization...
-
-    // Initialize Query Insights APIs (follows LlmEnhancedFeatureApis pattern)
-    this._queryInsightsApis = new QueryInsightsApis(this._client._mongoClient);
+    // No QueryInsightsApis instantiation here - that's ClustersClient's responsibility
   }
 
   // Update resetCachesIfQueryChanged to clear explain caches
@@ -977,17 +1030,17 @@ export class ClusterSession {
 
     // Run explain("queryPlanner") with clean query (no skip/limit)
     // This provides insights for the full query scope, not just one page
-    // Using QueryInsightsApis (follows LlmEnhancedFeatureApis pattern)
-    this._currentQueryPlannerInfo = await this._queryInsightsApis.explainFind(
+    // Access QueryInsightsApis through ClustersClient
+    this._currentQueryPlannerInfo = await this._client.queryInsightsApis.explainFind(
       databaseName,
       collectionName,
+      baseQuery.filter,
       {
-        filter: baseQuery.filter,
+        verbosity: 'queryPlanner',
         sort: baseQuery.sort,
         projection: baseQuery.projection,
         // Intentionally omit skip and limit for full query insights
       },
-      'queryPlanner',
     );
 
     return this._currentQueryPlannerInfo;
@@ -1024,16 +1077,46 @@ export class ClusterSession {
 
 ### ClustersClient Extensions for Stage 1
 
-**Architecture Pattern**: Follow the `LlmEnhancedFeatureApis.ts` approach
+**Architecture Pattern**: Follow the `LlmEnhancedFeatureApis.ts` pattern
 
-Instead of adding methods directly to `ClustersClient`, we should create explain-related functionality following the pattern established in `src/documentdb/LlmEnhancedFeatureApis.ts`. This class demonstrates the proper way to extend cluster functionality:
+QueryInsightsApis is instantiated in `ClustersClient`, similar to how `llmEnhancedFeatureApis` is instantiated. This follows the established pattern:
 
-1. Create a dedicated class that accepts `MongoClient` in the constructor
-2. Define TypeScript interfaces for all input options and output types
-3. Implement methods with proper error handling and type safety
-4. Use MongoDB driver's native APIs consistently
+1. ClustersClient owns the MongoClient instance
+2. Feature-specific API classes (like QueryInsightsApis) are instantiated in ClustersClient
+3. These APIs are exposed as public properties for use by ClusterSession and other consumers
 
-**Implementation Location**: `src/documentdb/client/QueryInsightsApis.ts` (new file)
+**Implementation in ClustersClient**:
+
+```typescript
+import { QueryInsightsApis } from './QueryInsightsApis';
+
+export class ClustersClient {
+  private readonly _mongoClient: MongoClient;
+
+  // Existing feature APIs
+  public readonly llmEnhancedFeatureApis: ReturnType<typeof llmEnhancedFeatureApis>;
+
+  // NEW: Query Insights APIs
+  public readonly queryInsightsApis: QueryInsightsApis;
+
+  constructor(/* existing parameters */) {
+    // Existing initialization...
+    this._mongoClient = new MongoClient(/* ... */);
+
+    // Initialize feature APIs
+    this.llmEnhancedFeatureApis = llmEnhancedFeatureApis(this._mongoClient);
+
+    // NEW: Initialize Query Insights APIs
+    this.queryInsightsApis = new QueryInsightsApis(this._mongoClient);
+  }
+
+  // ... rest of the class
+}
+```
+
+**QueryInsightsApis Implementation**: `src/documentdb/QueryInsightsApis.ts` (already exists, no changes needed)
+
+The QueryInsightsApis class already follows the correct pattern:
 
 ```typescript
 import { type Document, type Filter, type MongoClient, type Sort } from 'mongodb';
@@ -1187,29 +1270,34 @@ const explainResult = await this._queryInsightsApis.explainFind(
 ### Mock Data Structure
 
 ```typescript
-// Example mock response
+// Example mock response (Stage 1)
 {
-  executionTime: 23.433235,  // ms
+  executionTime: 23.433235,  // ms (client-side measurement)
   documentsReturned: 2,
-  queryPlannerInfo: {
-    winningPlan: {
-      stage: "FETCH",
-      inputStage: {
-        stage: "IXSCAN",
-        indexName: "user_id_1"
-      }
-    },
-    rejectedPlans: [],
-    namespace: "mydb.users",
-    indexFilterSet: false,
-    parsedQuery: { user_id: { $eq: 1234 } },
-    plannerVersion: 1
-  },
   stages: [
-    { stage: "IXSCAN", indexName: "user_id_1", indexBounds: "user_id: [1234, 1234]" },
-    { stage: "FETCH" },
-    { stage: "PROJECTION" }
-  ]
+    {
+      stage: "IXSCAN",
+      name: "Index Scan",
+      nReturned: 2,
+      indexName: "user_id_1",
+      indexBounds: "user_id: [1234, 1234]"
+    },
+    {
+      stage: "FETCH",
+      name: "Fetch",
+      nReturned: 2
+    },
+    {
+      stage: "PROJECTION",
+      name: "Projection",
+      nReturned: 2
+    }
+  ],
+  efficiencyAnalysis: {
+    executionStrategy: "Index Scan + Fetch",
+    indexUsed: "user_id_1",
+    hasInMemorySort: false
+  }
 }
 ```
 
@@ -1338,43 +1426,66 @@ z.object({
    - "Collection Scan": COLLSCAN stage present
    - "In-Memory Sort": SORT stage with `isBlocking: true`
 
-2. **Performance Rating Algorithm** (from design doc 3.2):
+2. **Performance Rating Algorithm**:
+
+   The performance rating uses the **efficiency ratio** (returned/examined) where higher values indicate better performance. This is the authoritative algorithm implemented in `src/documentdb/queryInsights/ExplainPlanAnalyzer.ts`.
 
    ```typescript
-   function calculatePerformanceRating(stats) {
-     const concerns = [];
-     let score = 'excellent';
-
-     // Check examined/returned ratio
-     if (stats.examinedToReturnedRatio > 100) {
-       concerns.push('High examined-to-returned ratio indicates inefficient query');
-       score = 'poor';
-     } else if (stats.examinedToReturnedRatio > 10) {
-       concerns.push('Moderate examined-to-returned ratio');
-       score = downgradeTo('fair');
+   /**
+    * Rating criteria:
+    * - Excellent: High efficiency (>=50%), indexed, no in-memory sort, fast (<100ms)
+    * - Good: Moderate efficiency (>=10%), indexed or fast (<500ms)
+    * - Fair: Low efficiency (>=1%)
+    * - Poor: Very low efficiency (<1%) or collection scan with low efficiency
+    */
+   function calculatePerformanceRating(
+     executionTimeMs: number,
+     efficiencyRatio: number,
+     hasInMemorySort: boolean,
+     isIndexScan: boolean,
+     isCollectionScan: boolean,
+   ): 'excellent' | 'good' | 'fair' | 'poor' {
+     // Poor: Collection scan with very low efficiency
+     if (isCollectionScan && efficiencyRatio < 0.01) {
+       return 'poor';
      }
 
-     // Check for collection scan
-     if (stats.hadCollectionScan) {
-       concerns.push('Full collection scan performed');
-       score = downgradeTo('poor');
+     // Excellent: High efficiency, uses index, no blocking sort, fast execution
+     if (efficiencyRatio >= 0.5 && isIndexScan && !hasInMemorySort && executionTimeMs < 100) {
+       return 'excellent';
      }
 
-     // Check for in-memory sort
-     if (stats.hadInMemorySort) {
-       concerns.push('In-memory sort required (consider adding index)');
-       score = downgradeTo('fair');
+     // Good: Moderate efficiency with index usage or fast execution
+     if (efficiencyRatio >= 0.1 && (isIndexScan || executionTimeMs < 500)) {
+       return 'good';
      }
 
-     // Check index usage
-     if (!stats.indexUsed && !stats.hadCollectionScan) {
-       concerns.push('No index used for filtering');
-       score = downgradeTo('good');
+     // Fair: Low efficiency but acceptable
+     if (efficiencyRatio >= 0.01) {
+       return 'fair';
      }
 
-     return { score, concerns, reasons: [] };
+     return 'poor';
+   }
+
+   function calculateEfficiencyRatio(returned: number, examined: number): number {
+     if (examined === 0) return returned === 0 ? 1.0 : 0.0;
+     return returned / examined;
    }
    ```
+
+   **Key Metrics**:
+   - **Efficiency Ratio**: `returned / examined` (range: 0.0 to 1.0+, higher is better)
+   - **Execution Time**: Server-reported milliseconds
+   - **Index Usage**: Whether any index was used (IXSCAN stage)
+   - **Collection Scan**: Whether full collection scan occurred (COLLSCAN stage)
+   - **In-Memory Sort**: Whether blocking sort happened (SORT stage)
+
+   **Thresholds**:
+   - `efficiencyRatio >= 0.5` (50%+) → Excellent potential
+   - `efficiencyRatio >= 0.1` (10%+) → Good potential
+   - `efficiencyRatio >= 0.01` (1%+) → Fair potential
+   - `efficiencyRatio < 0.01` (<1%) → Poor
 
 3. **Stages Extraction**: Recursively traverse `executionStats.executionStages` tree
 
@@ -2031,40 +2142,136 @@ function generateIndexExplanation(improvement) {
 
 ### ClusterSession Extensions for Stage 3
 
+**Architecture Decision: Option 3 - Service-Specific Cache Methods**
+
+After evaluating multiple caching architecture options, we've chosen to follow the **existing pattern** established by `getQueryPlannerInfo()` and `getExecutionStats()`:
+
+**Rejected Options:**
+
+- ❌ **Option 1**: Self-contained service with internal caching - breaks session lifecycle, can't leverage query-based invalidation
+- ❌ **Option 2**: Generic key/value store - loses type safety, unclear domain semantics
+
+**Selected Option 3: Follow Established Pattern**
+
+ClusterSession exposes typed, domain-specific cache methods that:
+
+- ✅ Are type-safe (no `unknown` in public API)
+- ✅ Integrate with existing `resetCachesIfQueryChanged()` invalidation
+- ✅ Keep services stateless (ClustersClient owns service instances)
+- ✅ Match the architecture of QueryPlanner and ExecutionStats caching
+- ✅ Are easy to test and understand
+
+**Cache Structure with Timestamps:**
+
+All Query Insights caches include timestamps for potential future features:
+
+```typescript
+private _queryPlannerCache?: { result: Document; timestamp: number };
+private _executionStatsCache?: { result: Document; timestamp: number };
+private _aiRecommendationsCache?: { result: unknown; timestamp: number };
+```
+
+**Why timestamps?**
+
+- **Current use**: None - cache invalidation is purely query-based via `resetCachesIfQueryChanged()`
+- **Future use cases**:
+  - Time-based expiration (e.g., "re-run explain if > 5 minutes old")
+  - Performance monitoring (track how long cached data has been reused)
+  - Diagnostics (show users when explain was last collected)
+  - Staleness warnings for production monitoring scenarios
+- **Cost**: Negligible (just a number per cache entry)
+- **Benefit**: Enables future features without breaking changes to cache structure
+
+**Implementation:**
+
 Add to `ClusterSession` class:
 
 ```typescript
 export class ClusterSession {
   // Existing properties...
-  private _currentAIRecommendations?: unknown;
+  /**
+   * Query Insights caching
+   * Note: QueryInsightsApis instance is accessed via this._client.queryInsightsApis
+   *
+   * Timestamps are included for potential future features:
+   * - Time-based cache invalidation (e.g., expire after N seconds)
+   * - Diagnostics (show when explain was collected)
+   * - Performance monitoring
+   *
+   * Currently, cache invalidation is purely query-based via resetCachesIfQueryChanged()
+   */
+  private _queryPlannerCache?: { result: Document; timestamp: number };
+  private _executionStatsCache?: { result: Document; timestamp: number };
+  private _aiRecommendationsCache?: { result: unknown; timestamp: number };
 
-  // Update resetCachesIfQueryChanged to clear AI recommendations
-  private resetCachesIfQueryChanged(query: string) {
-    if (this._currentQueryText.localeCompare(query.trim(), undefined, { sensitivity: 'base' }) === 0) {
-      return;
+  /**
+   * Gets AI-powered query optimization recommendations
+   * Caches the result until the query changes
+   *
+   * This method follows the same pattern as getQueryPlannerInfo() and getExecutionStats():
+   * - Check cache first
+   * - If not cached, call the AI service via ClustersClient
+   * - Cache the result with timestamp
+   * - Return typed recommendations
+   *
+   * @param databaseName - Database name
+   * @param collectionName - Collection name
+   * @param filter - Query filter
+   * @param executionStats - Execution statistics from Stage 2
+   * @returns AI recommendations for query optimization
+   *
+   * @remarks
+   * This method will be implemented in Phase 3. The AI service is accessed via
+   * this._client.queryInsightsAIService (similar to queryInsightsApis pattern).
+   */
+  public async getAIRecommendations(
+    databaseName: string,
+    collectionName: string,
+    filter: Document,
+    executionStats: Document,
+  ): Promise<AIRecommendation[]> {
+    // Check cache
+    if (this._aiRecommendationsCache) {
+      return this._aiRecommendationsCache.result as AIRecommendation[];
     }
 
-    // Clear all caches including AI recommendations
-    this._currentJsonSchema = {};
-    this._currentRawDocuments = [];
-    this._currentQueryPlannerInfo = undefined;
-    this._currentExecutionStats = undefined;
-    this._currentAIRecommendations = undefined;
-    this._currentExecutionTime = undefined;
-    this._currentDocumentsReturned = undefined;
+    // Call AI service via ClustersClient (following QueryInsightsApis pattern)
+    const recommendations = await this._client.queryInsightsAIService.generateRecommendations(
+      databaseName,
+      collectionName,
+      filter,
+      executionStats,
+    );
 
-    this._currentQueryText = query.trim();
+    // Cache result with timestamp
+    this._aiRecommendationsCache = {
+      result: recommendations,
+      timestamp: Date.now(),
+    };
+
+    return recommendations;
   }
 
-  // NEW: Cache AI recommendations
-  public cacheAIRecommendations(recommendations: unknown): void {
-    this._currentAIRecommendations = recommendations;
+  // Update clearQueryInsightsCaches to include AI recommendations
+  private clearQueryInsightsCaches(): void {
+    this._queryPlannerCache = undefined;
+    this._executionStatsCache = undefined;
+    this._aiRecommendationsCache = undefined;
   }
+}
+```
 
-  // NEW: Get cached AI recommendations
-  public getCachedAIRecommendations(): unknown | undefined {
-    return this._currentAIRecommendations;
-  }
+**Type Definitions:**
+
+```typescript
+interface AIRecommendation {
+  type: 'index' | 'query' | 'schema';
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  impact: string;
+  implementation?: string;
+  verification?: string;
 }
 ```
 
@@ -2700,34 +2907,113 @@ The existing `resetCachesIfQueryChanged` method in ClusterSession compares query
 
 ### Performance Rating Thresholds
 
+The performance rating algorithm uses **efficiency ratio** (documents returned ÷ documents examined) where higher values indicate better performance. This approach is more intuitive than the inverse ratio.
+
+**Rating Criteria** (from `ExplainPlanAnalyzer.ts`):
+
 ```typescript
-const PERFORMANCE_THRESHOLDS = {
+/**
+ * Excellent: efficiencyRatio >= 0.5 (50%+)
+ *   AND isIndexScan = true
+ *   AND hasInMemorySort = false
+ *   AND executionTimeMs < 100
+ *
+ * Good: efficiencyRatio >= 0.1 (10%+)
+ *   AND (isIndexScan = true OR executionTimeMs < 500)
+ *
+ * Fair: efficiencyRatio >= 0.01 (1%+)
+ *
+ * Poor: efficiencyRatio < 0.01 (<1%)
+ *   OR (isCollectionScan = true AND efficiencyRatio < 0.01)
+ */
+const PERFORMANCE_RATING_CRITERIA = {
   EXCELLENT: {
-    maxExaminedToReturnedRatio: 2,
-    requiresIndex: true,
-    allowsInMemorySort: false,
-    allowsCollectionScan: false,
+    minEfficiencyRatio: 0.5, // At least 50% of examined docs are returned
+    requiresIndex: true, // Must use index
+    allowsInMemorySort: false, // No blocking sorts
+    maxExecutionTimeMs: 100, // Fast execution
   },
   GOOD: {
-    maxExaminedToReturnedRatio: 10,
-    requiresIndex: true,
-    allowsInMemorySort: true,
-    allowsCollectionScan: false,
+    minEfficiencyRatio: 0.1, // At least 10% of examined docs are returned
+    requiresIndexOrFast: true, // Must use index OR execute quickly
+    maxExecutionTimeMsIfNoIndex: 500,
   },
   FAIR: {
-    maxExaminedToReturnedRatio: 100,
-    requiresIndex: false,
-    allowsInMemorySort: true,
-    allowsCollectionScan: false,
+    minEfficiencyRatio: 0.01, // At least 1% of examined docs are returned
   },
   POOR: {
-    maxExaminedToReturnedRatio: Infinity,
-    requiresIndex: false,
-    allowsInMemorySort: true,
-    allowsCollectionScan: true,
+    // Everything below fair threshold
+    // OR collection scan with very low efficiency
   },
 };
 ```
+
+**Why Efficiency Ratio (not Examined-to-Returned)?**
+
+The efficiency ratio (returned ÷ examined) is preferred because:
+
+- **Intuitive**: Higher values = better performance (like a percentage)
+- **Bounded**: Ranges from 0.0 to 1.0 for most queries (can exceed 1.0 with projections)
+- **Readable**: "50% efficiency" is clearer than "examined/returned ratio of 2"
+
+The inverse metric (examined ÷ returned) was used in early design iterations but replaced for clarity.
+
+#### Performance Diagnostics Structure
+
+The `PerformanceRating` interface uses a **typed diagnostics array** instead of separate reasons/concerns arrays:
+
+```typescript
+interface PerformanceDiagnostic {
+  type: 'positive' | 'negative' | 'neutral';
+  message: string;
+}
+
+interface PerformanceRating {
+  score: 'excellent' | 'good' | 'fair' | 'poor';
+  diagnostics: PerformanceDiagnostic[];
+}
+```
+
+**Key Characteristics:**
+
+- **Consistent Assessments**: Every rating includes exactly 4 diagnostic messages:
+  1. **Efficiency Ratio** - Percentage of examined documents returned
+  2. **Execution Time** - Query runtime with appropriate units
+  3. **Index Usage** - Whether indexes are used effectively
+  4. **Sort Strategy** - Whether in-memory sorting is required
+
+- **Typed Messages**: Each diagnostic has a semantic type:
+  - `positive` - Good performance characteristics (fast execution, index usage)
+  - `negative` - Performance concerns (slow execution, collection scans, memory sorts)
+  - `neutral` - Informational metrics (moderate ratios, average performance)
+
+- **UI-Friendly**: The type field enables clear visual representation:
+  - ✓ (positive) - Green checkmark or success icon
+  - ⚠ (negative) - Yellow/red warning icon
+  - ● (neutral) - Gray/blue informational icon
+
+**Example Output:**
+
+```typescript
+{
+  score: 'good',
+  diagnostics: [
+    { type: 'neutral', message: 'Moderate efficiency ratio: 15.2% of examined documents returned' },
+    { type: 'positive', message: 'Fast execution time: 85.3ms' },
+    { type: 'positive', message: 'Query uses index' },
+    { type: 'negative', message: 'In-memory sort required - consider adding index for sort fields' }
+  ]
+}
+```
+
+**Why Single Diagnostics Array?**
+
+Originally the design included separate `reasons[]` (positive attributes) and `concerns[]` (negative attributes) arrays. These were consolidated into a single typed array because:
+
+1. **Semantic Clarity**: The `type` field makes the intent explicit without relying on array names
+2. **Consistent Ordering**: Always presents diagnostics in the same order (efficiency, time, index, sort)
+3. **Type Safety**: TypeScript enforces that every diagnostic has a valid type
+4. **Simpler Implementation**: Single array reduces duplication and simplifies transformation logic
 
 ---
 
@@ -2945,20 +3231,58 @@ webviews/
 
 #### Architectural Guidelines
 
-**`src/documentdb/client/` folder:**
+**Current Structure** (for upcoming release):
 
-- Core DocumentDB client infrastructure
-- `ClusterSession.ts` - Session state management, caching (moved here for better organization)
-- `ClustersClient.ts` - DocumentDB client wrapper, low-level operations (moved here)
-- Over time, will contain specific client extensions and specialized session types
+All files remain in `src/documentdb/` for minimal disruption:
 
-**`src/documentdb/client/QueryInsightsApis.ts` file:**
+- `ClustersClient.ts` - DocumentDB client wrapper with QueryInsightsApis instance
+- `ClusterSession.ts` - Session state management, caching, uses client.queryInsightsApis
+- `QueryInsightsApis.ts` - Explain command execution (follows LlmEnhancedFeatureApis pattern)
 
-- Follows the `LlmEnhancedFeatureApis.ts` pattern
-- Contains `explainFind()` method for executing explain commands
-- Takes `MongoClient` in constructor
-- Provides proper TypeScript interfaces for explain operations
-- **See "Implementation Details" section (search for "QueryInsightsApis Class") for full implementation**
+**QueryInsightsApis Integration Pattern**:
+
+Following the `LlmEnhancedFeatureApis` pattern:
+
+1. **Instantiation**: QueryInsightsApis is created in `ClustersClient` constructor
+2. **Exposure**: Available as `client.queryInsightsApis` public property
+3. **Usage**: ClusterSession accesses via `this._client.queryInsightsApis`
+4. **Ownership**: ClustersClient owns MongoClient, QueryInsightsApis wraps it
+
+```typescript
+// In ClustersClient.ts
+export class ClustersClient {
+  private readonly _mongoClient: MongoClient;
+  public readonly queryInsightsApis: QueryInsightsApis;
+
+  constructor() {
+    this._mongoClient = new MongoClient(/* ... */);
+    this.queryInsightsApis = new QueryInsightsApis(this._mongoClient);
+  }
+}
+
+// In ClusterSession.ts
+export class ClusterSession {
+  constructor(private readonly _client: ClustersClient) {}
+
+  async getQueryPlannerInfo() {
+    // Access via client property, not local instance
+    return await this._client.queryInsightsApis.explainFind(/* ... */);
+  }
+}
+```
+
+**Future Structure** (post-release refactoring):
+
+A `src/documentdb/client/` subfolder may be created to organize client-related code:
+
+- `client/ClustersClient.ts` - Main client class
+- `client/ClusterSession.ts` - Session management
+- `client/QueryInsightsApis.ts` - Query insights APIs
+- `client/CredentialCache.ts` - Credential management
+
+This refactoring is deferred to avoid widespread import changes during the current release cycle.
+
+**Other Folders** (unchanged):
 
 **`src/documentdb/queryInsights/` folder:**
 
@@ -2972,7 +3296,7 @@ webviews/
 - Mock implementation with 8-second delay for realistic testing
 - Returns mock data structure matching current webview expectations
 
-**`webviews/.../types/` folder:**
+**`src/webviews/.../types/` folder:**
 
 - Frontend-facing TypeScript types
 - Shared between router and React components
@@ -2984,207 +3308,104 @@ webviews/
 
 #### Phase 1: Foundation & Types
 
-**1.1. Create Type Definitions** ⬜ Not Started
+**1.1. Create Type Definitions** ✅ Complete
 
-**📖 Before starting**: Review the entire design document, especially:
+**Status**: Types created and refined. Stage 1 and Stage 2 response types implemented in `src/webviews/documentdb/collectionView/types/queryInsights.ts`.
 
-- Section on "DocumentDB Explain Plan Parsing" for type requirements
-- Stage 1, 2, and 3 data structure specifications
-- Frontend type expectations in each stage section
+**Completed Updates**:
 
-Create `src/webviews/documentdb/collectionView/types/queryInsights.ts`:
+- ✅ Removed unnecessary null fields from Stage 1 response (`keysExamined`, `docsExamined`)
+- ✅ Removed `queryPlannerInfo` from Stage 1 (data duplicated in `stages` array)
+- ✅ Simplified response structure for better performance and clarity
+- ✅ Added comprehensive JSDoc comments for all types
+- ✅ Implemented `PerformanceDiagnostic` interface with typed diagnostics (positive/negative/neutral)
+- ✅ Updated `PerformanceRating` to use `diagnostics[]` instead of separate `reasons[]`/`concerns[]` arrays
 
-```typescript
-// Frontend-facing types for UI consumption
-export interface QueryInsightsResponse {
-  performance: PerformanceOverview;
-  queryPlan?: QueryPlanSummary;
-  executionDetails?: ExecutionDetails;
-  stageBreakdown?: StageInfo[];
-  recommendations?: string[];
-  aiAnalysis?: AIAnalysisResponse;
-}
-
-export interface PerformanceOverview {
-  executionTimeMs: number;
-  documentsReturned: number;
-  docsExamined?: number;
-  keysExamined?: number;
-  rating?: 'excellent' | 'good' | 'fair' | 'poor';
-}
-
-export interface AIAnalysisResponse {
-  analysisCard: AnalysisCard;
-  improvementCards: ImprovementCard[];
-  verificationSteps: VerificationStep[];
-}
-
-// ... (all types from design doc)
-```
-
-Create `src/services/ai/QueryInsightsAIService.ts`:
-
-```typescript
-/**
- * AI service for query insights and optimization recommendations
- * Mock implementation with 8-second delay for realistic testing
- */
-export class QueryInsightsAIService {
-  /**
-   * Calls AI service for query optimization recommendations
-   * Currently returns mock data with simulated network delay
-   */
-  public async getOptimizationRecommendations(
-    clusterId: string,
-    sessionId: string | undefined,
-    query: string,
-    databaseName: string,
-    collectionName: string,
-  ): Promise<AIOptimizationResponse> {
-    // Simulate 8-second AI processing time
-    await new Promise((resolve) => setTimeout(resolve, 8000));
-
-    // Return mock data matching current webview expectations
-    return {
-      analysis: 'Your query performs a full collection scan after the index lookup...',
-      improvements: [
-        {
-          action: 'create',
-          indexSpec: { user_id: 1, status: 1 },
-          reason: 'Compound index would improve query performance',
-          impact: 'high',
-        },
-      ],
-      verification: ['Run explain() to verify index usage', 'Check docsExamined equals documentsReturned'],
-    };
-  }
-}
-
-interface AIOptimizationResponse {
-  analysis: string;
-  improvements: AIIndexRecommendation[];
-  verification: string[];
-}
-
-interface AIIndexRecommendation {
-  action: 'create' | 'drop' | 'modify';
-  indexSpec: Record<string, 1 | -1>;
-  reason: string;
-  impact: 'high' | 'medium' | 'low';
-}
-```
+**Implementation**: See `src/webviews/documentdb/collectionView/types/queryInsights.ts`
 
 ---
 
 #### Phase 2: Explain Plan Analysis (Stages 1 & 2)
 
-**2.1. Install Dependencies** ⬜ Not Started
+**2.1. Install Dependencies** ✅ Complete
 
-**📖 Before starting**: Review the "DocumentDB Explain Plan Parsing with @mongodb-js/explain-plan-helper" section for library overview and usage patterns.
+`@mongodb-js/explain-plan-helper` v1.x installed successfully.
 
 ```bash
 npm install @mongodb-js/explain-plan-helper
 ```
 
-**2.2. Create ExplainPlanAnalyzer** ⬜ Not Started
+**2.2. Create ExplainPlanAnalyzer** ✅ Complete
 
 **📖 Before starting**: Review the entire design document, especially:
 
 - "DocumentDB Explain Plan Parsing" section for ExplainPlan API usage
 - Stage 1 and Stage 2 sections for expected output formats
-- Performance rating algorithm in Stage 2 section
+- **Performance Rating Algorithm** section (consolidated, authoritative version)
 
-Create `src/documentdb/queryInsights/ExplainPlanAnalyzer.ts`:
+The `ExplainPlanAnalyzer` class provides analysis for both `queryPlanner` and `executionStats` verbosity levels.
 
-```typescript
-import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
-import type { Document } from 'mongodb';
+**Key Implementation Notes**:
 
-export class ExplainPlanAnalyzer {
-  /**
-   * Analyzes explain("queryPlanner") output
-   */
-  public static analyzeQueryPlanner(explainResult: Document) {
-    const explainPlan = new ExplainPlan(explainResult);
+1. **Performance Rating**: Uses the consolidated algorithm from the "Performance Rating Thresholds" section
+   - Based on **efficiency ratio** (returned/examined, range 0.0-1.0+, higher is better)
+   - Considers: execution time, index usage, collection scan, in-memory sort
+   - See `src/documentdb/queryInsights/ExplainPlanAnalyzer.ts` for implementation
 
-    // Extract metrics using helper methods
-    const usedIndexes = explainPlan.usedIndexes;
-    const isCollectionScan = explainPlan.isCollectionScan;
-    const isCovered = explainPlan.isCovered;
-    const hasInMemorySort = explainPlan.inMemorySort;
+2. **Efficiency Calculation**:
 
-    // Build response structure
-    return {
-      usedIndexes,
-      isCollectionScan,
-      isCovered,
-      hasInMemorySort,
-      rawPlan: explainResult,
-    };
-  }
+   ```typescript
+   efficiencyRatio = returned / examined; // Higher is better
+   // vs the inverse:
+   examinedToReturnedRatio = examined / returned; // Lower is better (deprecated approach)
+   ```
 
-  /**
-   * Analyzes explain("executionStats") output
-   */
-  public static analyzeExecutionStats(explainResult: Document) {
-    const explainPlan = new ExplainPlan(explainResult);
+3. **Library Integration**: Uses `@mongodb-js/explain-plan-helper` for robust parsing across MongoDB versions
 
-    // Extract execution metrics
-    const executionTimeMillis = explainPlan.executionTimeMillis;
-    const totalDocsExamined = explainPlan.totalDocsExamined;
-    const totalKeysExamined = explainPlan.totalKeysExamined;
-    const nReturned = explainPlan.nReturned;
+**Implementation**: See `src/documentdb/queryInsights/ExplainPlanAnalyzer.ts`
 
-    // Calculate efficiency ratio
-    const efficiencyRatio = this.calculateEfficiencyRatio(nReturned, totalDocsExamined);
+**2.3. Create StagePropertyExtractor** ✅ Complete
 
-    // Build response structure
-    return {
-      executionTimeMillis,
-      totalDocsExamined,
-      totalKeysExamined,
-      nReturned,
-      efficiencyRatio,
-      performanceRating: this.calculatePerformanceRating(
-        executionTimeMillis,
-        efficiencyRatio,
-        explainPlan.inMemorySort,
-      ),
-      rawStats: explainResult,
-    };
-  }
+**Status**: Implemented with support for 20+ MongoDB stage types.
 
-  /**
-   * Calculates performance rating based on metrics
-   */
-  private static calculatePerformanceRating(
-    executionTimeMs: number,
-    efficiencyRatio: number,
-    hasInMemorySort: boolean,
-  ): 'excellent' | 'good' | 'fair' | 'poor' {
-    // Implementation based on design doc Section 3.2 thresholds
-    if (efficiencyRatio >= 0.5 && !hasInMemorySort && executionTimeMs < 100) {
-      return 'excellent';
-    } else if (efficiencyRatio >= 0.1 && executionTimeMs < 500) {
-      return 'good';
-    } else if (efficiencyRatio >= 0.01) {
-      return 'fair';
-    }
-    return 'poor';
-  }
+**Implementation**: `src/documentdb/queryInsights/StagePropertyExtractor.ts`
 
-  private static calculateEfficiencyRatio(returned: number, examined: number): number {
-    if (examined === 0) return 1;
-    return returned / examined;
-  }
-}
-```
+**Key Features**:
 
-**2.3. Create StagePropertyExtractor** ⬜ Not Started
+- Recursive stage tree traversal
+- Extracts stage-specific properties (index names, bounds, memory usage, etc.)
+- Handles complex structures (inputStage, inputStages[], shards[])
+- Returns flattened list of ExtendedStageInfo for UI display
 
-**📖 Before starting**: Review Stage 2 section for "Extended Stage Information Extraction" - contains complete switch-case implementation for 20+ stage types.
+**2.4. Create QueryInsightsApis and Integrate with ClustersClient** ✅ Complete
 
-Create `src/documentdb/queryInsights/StagePropertyExtractor.ts`:
+**Status**: Implemented following LlmEnhancedFeatureApis pattern and integrated into ClustersClient.
+
+**Implementation**: `src/documentdb/client/QueryInsightsApis.ts`
+
+**Architecture** (corrected from original plan):
+
+- ✅ QueryInsightsApis instantiated in `ClustersClient` constructor
+- ✅ Exposed as public property: `client.queryInsightsApis`
+- ✅ ClusterSession accesses via `this._client.queryInsightsApis.explainFind()`
+- ✅ Follows the same pattern as `llmEnhancedFeatureApis`
+
+**Location Update**: Moved to `src/documentdb/client/` subfolder to begin the client code organization transition.
+
+**2.5. Extend ClusterSession for Caching** ✅ Complete
+
+**Status**: Caching methods implemented. Architecture updated to use ClustersClient's QueryInsightsApis instance.
+
+**Implementation**: `src/documentdb/ClusterSession.ts`
+
+**Methods Added**:
+
+- `getQueryPlannerInfo()` - Gets/caches queryPlanner explain results
+- `getExecutionStats()` - Gets/caches executionStats explain results
+- `cacheAIRecommendations()` / `getCachedAIRecommendations()` - AI recommendation caching
+- `clearQueryInsightsCaches()` - Cache invalidation (called by `resetCachesIfQueryChanged()`)
+
+**Architecture Note**: Uses `this._client.queryInsightsApis` instead of local instance (corrected from initial plan).
 
 ```typescript
 import type { Document } from 'mongodb';
@@ -3265,183 +3486,11 @@ export class StagePropertyExtractor {
 }
 ```
 
-**2.4. Extend ClustersClient** ⬜ Not Started
-
-**📖 Before starting**: Review "Implementation Details" section - search for "QueryInsightsApis Class" for the complete implementation pattern.
-
-**NOTE**: ClustersClient does NOT need `explainQuery()` method. Instead, create `QueryInsightsApis.ts` following the `LlmEnhancedFeatureApis` pattern.
-
-Create `src/documentdb/client/QueryInsightsApis.ts`:
-
-```typescript
-import type { MongoClient, Document } from 'mongodb';
-
-/**
- * Query insights APIs for explain command execution
- * Follows the LlmEnhancedFeatureApis.ts pattern
- */
-export class QueryInsightsApis {
-  constructor(private readonly client: MongoClient) {}
-
-  /**
-   * Executes explain command on a find query
-   */
-  public async explainFind(
-    databaseName: string,
-    collectionName: string,
-    filter: Document,
-    options: {
-      verbosity: 'queryPlanner' | 'executionStats' | 'allPlansExecution';
-      sort?: Document;
-      projection?: Document;
-      skip?: number;
-      limit?: number;
-    },
-  ): Promise<Document> {
-    const db = this.client.db(databaseName);
-    const collection = db.collection(collectionName);
-
-    const cursor = collection.find(filter);
-
-    if (options.sort) cursor.sort(options.sort);
-    if (options.projection) cursor.project(options.projection);
-    if (options.skip) cursor.skip(options.skip);
-    if (options.limit) cursor.limit(options.limit);
-
-    return cursor.explain(options.verbosity);
-  }
-}
-```
-
-**See "Implementation Details" section for full QueryInsightsApis implementation and ClusterSession integration.**
-
-**2.5. Extend ClusterSession for Caching** ⬜ Not Started
-
-**📖 Before starting**: Review "Implementation Details" section - search for "ClusterSession Extensions for Stage 1" and "Stage 2" for complete implementation patterns including QueryInsightsApis integration.
-
-Modify `src/documentdb/client/ClusterSession.ts`:
-
-```typescript
-import { QueryInsightsApis } from './QueryInsightsApis';
-
-// Add to ClusterSession class:
-
-private _queryInsightsApis: QueryInsightsApis;
-private _queryPlannerCache?: { result: Document; timestamp: number };
-private _executionStatsCache?: { result: Document; timestamp: number };
-private _aiRecommendationsCache?: unknown;
-
-// In constructor or initialization:
-constructor() {
-  // ... existing code ...
-  this._queryInsightsApis = new QueryInsightsApis(this._client._mongoClient);
-}
-
-/**
- * Gets query planner info - uses explain("queryPlanner")
- */
-public async getQueryPlannerInfo(
-  databaseName: string,
-  collectionName: string,
-): Promise<Document> {
-  // Check cache (no sessionId needed - this instance IS the session)
-  if (this._queryPlannerCache) {
-    return this._queryPlannerCache.result;
-  }
-
-  // Get query from current session
-  const query = this.getCurrentQuery(); // You may need to add this helper
-
-  // Execute explain("queryPlanner") using QueryInsightsApis
-  const explainResult = await this._queryInsightsApis.explainFind(
-    databaseName,
-    collectionName,
-    query,
-    { verbosity: 'queryPlanner' },
-  );
-
-  // Cache result
-  this._queryPlannerCache = {
-    result: explainResult,
-    timestamp: Date.now(),
-  };
-
-  return explainResult;
-}
-
-/**
- * Gets execution statistics - uses explain("executionStats")
- */
-public async getExecutionStats(
-  databaseName: string,
-  collectionName: string,
-): Promise<Document> {
-  // Check cache
-  if (this._executionStatsCache) {
-    return this._executionStatsCache.result;
-  }
-
-  // Get query from current session
-  const query = this.getCurrentQuery();
-
-  // Execute explain("executionStats") using QueryInsightsApis - this re-runs the query
-  const explainResult = await this._queryInsightsApis.explainFind(
-    databaseName,
-    collectionName,
-    query,
-    { verbosity: 'executionStats' },
-  );
-
-  // Cache result
-  this._executionStatsCache = {
-    result: explainResult,
-    timestamp: Date.now(),
-  };
-
-  return explainResult;
-}
-
-/**
- * Caches AI recommendations
- */
-public cacheAIRecommendations(recommendations: unknown): void {
-  this._aiRecommendationsCache = recommendations;
-}
-
-/**
- * Gets cached AI recommendations
- */
-public getCachedAIRecommendations(): unknown | undefined {
-  return this._aiRecommendationsCache;
-}
-
-/**
- * Clears all query insights caches
- * Called automatically by resetCachesIfQueryChanged()
- */
-private clearQueryInsightsCaches(): void {
-  this._queryPlannerCache = undefined;
-  this._executionStatsCache = undefined;
-  this._aiRecommendationsCache = undefined;
-}
-
-// Update existing resetCachesIfQueryChanged() to call clearQueryInsightsCaches()
-private resetCachesIfQueryChanged(query: string) {
-  if (this._currentQueryText !== query.trim()) {
-    // Clear all caches including query insights
-    this.clearQueryInsightsCaches();
-    // ... existing cache clearing code ...
-  }
-}
-```
-
-**See "ClusterSession Integration" and "ClusterSession Extensions for Stage 1" sections for complete implementation details.**
-
 ---
 
 #### Phase 3: AI Service Integration
 
-**3.1. Create AI Service Client** ⬜ Not Started
+**3.1. Create AI Service Client** ✅ Complete
 
 **📖 Before starting**: Review Stage 3 section for AI service payload structure and expected response format.
 
@@ -3556,7 +3605,7 @@ public async getAIRecommendations(
 
 #### Phase 4: Router Implementation
 
-**4.1. Implement tRPC Endpoints** ⬜ Not Started
+**4.1. Implement tRPC Endpoints** ✅ Complete
 
 **📖 Before starting**: Review entire design document, especially:
 
@@ -3648,7 +3697,7 @@ getQueryInsightsStage3: protectedProcedure
     // Transform to UI format (with button payloads)
     return transformStage3Response(aiRecommendations, ctx);
   }),
-```**4.2. Implement Transformation Functions** ⬜ Not Started
+```**4.2. Implement Transformation Functions** ✅ Complete
 
 Create `src/documentdb/queryInsights/transformations.ts`:
 
@@ -3734,32 +3783,1058 @@ function generateIndexCommand(improvement: any, databaseName: string, collection
 
 #### Phase 5: Frontend Integration
 
-**5.1. Update Query Execution Logic** ⬜ Not Started
+**5.1. Update Query Execution Logic** 🔄 In Progress
 
-**📖 Before starting**: Review "Query Execution Integration" section for server-side metadata tracking approach.
+**📖 Before starting**: Review "Query Execution Integration" section and Stage 1 implementation notes for server-side metadata tracking approach.
 
-Update webview query execution to handle metadata server-side:
+**Goal**: Orchestrate non-blocking Stage 1 data prefetch after query execution completes, and provide placeholder for query state indicator.
 
-```typescript
-// In query execution handler:
-const results = await executeQuery(query);
+**Implementation Location**: `src/webviews/documentdb/collectionView/CollectionView.tsx`
 
-// No need to call storeQueryMetadata - handled server-side
-// ClusterSession automatically tracks query execution metadata
+**Architecture Overview**:
+
+```
+Query Execution → Results Return → Non-Blocking Stage 1 Prefetch → Cache Population
+                       ↓                                                    ↓
+                  Show Results                                    Ready for Query Insights Tab
+                       ↓                                                    ↓
+                  User switches to Query Insights Tab          ← Data already cached (fast)
 ```
 
-**Note**: Query metadata (execution time, document count) will be tracked server-side in ClusterSession during query execution. No explicit mutation endpoint needed.
+**5.1.1. Non-Blocking Stage 1 Prefetch After Query Execution** ✅ Complete
 
-**5.2. Implement Frontend Query Insights Panel** ⬜ Not Started
+**Implementation Steps**:
 
-**📖 Before starting**: Review Stage 1, 2, and 3 sections for UI component requirements and interaction patterns.
+1. **Trigger Stage 1 Prefetch After Query Results Return**:
 
-Create React components to consume the three endpoints:
+   ```typescript
+   // In CollectionView.tsx (or query execution handler):
+   const handleQueryExecution = async (query: string) => {
+     // Execute query and show results
+     const results = await trpcClient.mongoClusters.collectionView.runFindQuery.query({
+       query,
+       skip: currentPage * pageSize,
+       limit: pageSize,
+     });
 
-- Stage 1 performance view panel (calls `getQueryInsightsStage1`)
-- Stage 2 detailed execution analysis panel (calls `getQueryInsightsStage2`)
-- Stage 3 AI recommendations panel (calls `getQueryInsightsStage3` - 8s delay expected)
-- Button handlers for create/drop index, copy command, learn more
+     // Update results view
+     setQueryResults(results);
+
+     // Non-blocking Stage 1 prefetch to populate ClusterSession cache
+     // DO NOT await - this runs in background
+     void prefetchQueryInsights();
+
+     return results; // Don't block on insights
+   };
+
+   const prefetchQueryInsights = () => {
+     void trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+       .query()
+       .then((stage1Data) => {
+         // Stage 1 data is now cached in ClusterSession
+         // Update indicator that insights are ready
+         setQueryInsightsReady(true);
+       })
+       .catch((error) => {
+         // Silent fail - user can still request insights manually via tab
+         console.warn('Stage 1 prefetch failed:', error);
+         setQueryInsightsReady(false);
+       });
+   };
+   ```
+
+2. **Server-Side Execution Time Tracking**:
+
+   No explicit mutation needed. The ClusterSession already tracks execution time during `runFindQueryWithCache()`:
+
+   ```typescript
+   // In ClusterSession.runFindQueryWithCache() (already implemented):
+   const startTime = performance.now();
+   const results = await this._client.runFindQuery(/* ... */);
+   const endTime = performance.now();
+   this._lastExecutionTimeMs = endTime - startTime; // Cached until query changes
+   ```
+
+**Behavior**:
+
+- ✅ Query results display immediately (not blocked by insights prefetch)
+- ✅ Stage 1 data fetched in background after results return
+- ✅ ClusterSession cache populated before user navigates to Query Insights tab
+- ✅ Silent failure if prefetch fails - user can still manually request insights
+- ✅ Execution time tracked server-side automatically (not affected by network latency)
+
+---
+
+**5.1.2. Add Placeholder for Query State Indicator** ⬜ Not Started
+
+**Goal**: Provide UI state management for showing when query insights are ready (future enhancement: asterisk/badge on tab).
+
+**Implementation**:
+
+```typescript
+// In CollectionView.tsx:
+const [queryInsightsReady, setQueryInsightsReady] = useState(false);
+
+// Reset when query changes:
+useEffect(() => {
+  setQueryInsightsReady(false);
+}, [currentQuery]);
+
+// TODO: Use queryInsightsReady to add visual indicator on Query Insights tab
+// Examples:
+// - Asterisk badge: "Query Insights *"
+// - Dot indicator: "Query Insights •"
+// - Color change: Tab text color changes when ready
+```
+
+**Future Enhancement Placeholder**:
+
+```typescript
+// In Tab component (when implemented):
+<Tab
+  label={queryInsightsReady ? 'Query Insights *' : 'Query Insights'}
+  active={activeTab === 'queryInsights'}
+  onClick={() => setActiveTab('queryInsights')}
+/>
+```
+
+**Behavior**:
+
+- ✅ State management ready for visual indicators
+- ✅ Automatically resets when query changes
+- ✅ Can be enhanced later without changing architecture
+
+---
+
+**5.2. Implement Frontend Query Insights Panel** ✅ Complete
+
+**📖 Before starting**: Review Stage 1, 2, and 3 sections for UI component requirements, data flow patterns, and caching behavior.
+
+**Goal**: Implement progressive data loading in Query Insights tab with proper caching and tab-switching behavior.
+
+**Implementation Location**: `src/webviews/documentdb/collectionView/QueryInsightsTab.tsx` (new file or section in CollectionView.tsx)
+
+**Architecture Overview**:
+
+```
+User Activates Query Insights Tab
+          ↓
+    Fetch Stage 1 (cached from prefetch - fast)
+          ↓
+    Display Stage 1 Data (basic metrics + query plan)
+          ↓
+    Auto-start Stage 2 Fetch (executionStats - ~2s)
+          ↓
+    Update UI with Stage 2 Data (detailed metrics + performance rating)
+          ↓
+    User Clicks "Get Performance Insights" Button
+          ↓
+    Fetch Stage 3 (AI recommendations - ~8s)
+          ↓
+    Display AI Recommendations
+
+    Tab Switches → Fetches Continue in Background → Return to Tab → Data Already Loaded
+```
+
+**5.2.1. Stage 1: Initial View on Tab Activation** ✅ Complete
+
+**Goal**: Load and display Stage 1 data when user activates Query Insights tab.
+
+**⚠️ Architecture Note**: Due to component unmounting on tab switch (see 5.2.3), state must be stored in parent CollectionView.tsx.
+
+**Implementation** (see 5.2.3 for full parent state structure):
+
+```typescript
+// In QueryInsightsTab.tsx:
+interface QueryInsightsMainProps {
+  queryInsightsState: QueryInsightsState;
+  setQueryInsightsState: React.Dispatch<React.SetStateAction<QueryInsightsState>>;
+}
+
+export const QueryInsightsMain = ({
+  queryInsightsState,
+  setQueryInsightsState,
+}: QueryInsightsMainProps): JSX.Element => {
+  const { trpcClient } = useTrpcClient();
+
+  // Stage 1: Load on mount (only if not already loading/loaded)
+  useEffect(() => {
+    if (!queryInsightsState.stage1Data && !queryInsightsState.stage1Loading && !queryInsightsState.stage1Promise) {
+      setQueryInsightsState((prev) => ({ ...prev, stage1Loading: true }));
+
+      const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+        .query()
+        .then((data) => {
+          setQueryInsightsState((prev) => ({
+            ...prev,
+            stage1Data: data,
+            stage1Loading: false,
+            stage1Promise: null,
+          }));
+          return data;
+        })
+        .catch((error) => {
+          void trpcClient.common.displayErrorMessage.mutate({
+            message: l10n.t('Failed to load query insights'),
+            modal: false,
+            cause: error instanceof Error ? error.message : String(error),
+          });
+          setQueryInsightsState((prev) => ({
+            ...prev,
+            stage1Error: error instanceof Error ? error.message : String(error),
+            stage1Loading: false,
+            stage1Promise: null,
+          }));
+          throw error;
+        });
+
+      setQueryInsightsState((prev) => ({ ...prev, stage1Promise: promise }));
+    }
+  }, []); // Empty deps - only run on mount
+
+  // ... rest of component
+};
+```
+
+**Behavior**:
+
+- ✅ Loads Stage 1 data immediately when Query Insights tab is activated (component mounts)
+- ✅ Data likely already cached from prefetch (fast response from ClusterSession cache)
+- ✅ If promise already exists in parent state, doesn't start duplicate request
+- ✅ Parent state preserves data/loading state when component unmounts (tab switch)
+- ✅ Loading state shows skeleton UI while fetching
+
+---
+
+**5.2.2. Stage 2: Automatic Progression After Stage 1** ✅ Complete
+
+**Goal**: Automatically start Stage 2 fetch after Stage 1 completes to populate detailed metrics.
+
+**⚠️ Architecture Note**: State stored in parent, promise tracked to prevent duplicates.
+
+**Implementation**:
+
+```typescript
+// In QueryInsightsTab.tsx (continuation):
+
+// Stage 2: Auto-start after Stage 1 completes
+useEffect(() => {
+  if (
+    queryInsightsState.stage1Data &&
+    !queryInsightsState.stage2Data &&
+    !queryInsightsState.stage2Loading &&
+    !queryInsightsState.stage2Promise
+  ) {
+    setQueryInsightsState((prev) => ({ ...prev, stage2Loading: true }));
+
+    const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
+      .query()
+      .then((data) => {
+        setQueryInsightsState((prev) => ({
+          ...prev,
+          stage2Data: data,
+          stage2Loading: false,
+          stage2Promise: null,
+        }));
+        return data;
+      })
+      .catch((error) => {
+        void trpcClient.common.displayErrorMessage.mutate({
+          message: l10n.t('Failed to load detailed execution analysis'),
+          modal: false,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        setQueryInsightsState((prev) => ({
+          ...prev,
+          stage2Error: error instanceof Error ? error.message : String(error),
+          stage2Loading: false,
+          stage2Promise: null,
+        }));
+        throw error;
+      });
+
+    setQueryInsightsState((prev) => ({ ...prev, stage2Promise: promise }));
+  }
+}, [queryInsightsState.stage1Data]);
+```
+
+**Behavior**:
+
+- ✅ Automatically starts after Stage 1 completes
+- ✅ Runs explain("executionStats") which executes the query
+- ✅ Updates parent state with execution metrics (survives component unmount)
+- ✅ Does NOT abort if user switches tabs (promise continues, stored in parent)
+- ✅ Results available immediately when user returns to tab
+
+---
+
+**5.2.3. Tab Switching Behavior (No Abort)** ✅ Complete
+
+**Goal**: Ensure ongoing fetches continue when user switches tabs, and data is preserved across tab switches.
+
+**⚠️ Critical Architecture Decision: Component Unmounting**
+
+Looking at the current `CollectionView.tsx` implementation:
+
+```typescript
+{selectedTab === 'tab_result' && (
+    // Results tab content
+)}
+{selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
+{selectedTab === 'tab_performance_mock' && <QueryInsightsMainMock />}
+```
+
+**This means components ARE UNMOUNTED when switching tabs.** All component-local state (useState) is lost.
+
+**Solution: Lift State to Parent (CollectionView.tsx)**
+
+To preserve query insights data across tab switches, we need to:
+
+1. **Store query insights state in CollectionView.tsx** (parent component)
+2. **Pass state down to QueryInsightsTab via props**
+3. **Store in-flight promises in parent state to prevent abort**
+
+**Implementation**:
+
+```typescript
+// In CollectionView.tsx (parent component):
+
+// Query Insights State (lifted to parent to survive tab unmounting)
+interface QueryInsightsState {
+  stage1Data: QueryInsightsStage1Response | null;
+  stage1Loading: boolean;
+  stage1Error: string | null;
+  stage1Promise: Promise<QueryInsightsStage1Response> | null; // Track in-flight request
+
+  stage2Data: QueryInsightsStage2Response | null;
+  stage2Loading: boolean;
+  stage2Error: string | null;
+  stage2Promise: Promise<QueryInsightsStage2Response> | null;
+
+  stage3Data: QueryInsightsStage3Response | null;
+  stage3Loading: boolean;
+  stage3Error: string | null;
+  stage3Promise: Promise<QueryInsightsStage3Response> | null;
+}
+
+const [queryInsightsState, setQueryInsightsState] = useState<QueryInsightsState>({
+  stage1Data: null,
+  stage1Loading: false,
+  stage1Error: null,
+  stage1Promise: null,
+
+  stage2Data: null,
+  stage2Loading: false,
+  stage2Error: null,
+  stage2Promise: null,
+
+  stage3Data: null,
+  stage3Loading: false,
+  stage3Error: null,
+  stage3Promise: null,
+});
+
+// Reset query insights when query execution starts
+// Note: Query execution already triggers when currentContext.activeQuery changes
+useEffect(() => {
+  // Reset all query insights state - user is executing a new query
+  setQueryInsightsState({
+    stage1Data: null,
+    stage1Loading: false,
+    stage1Error: null,
+    stage1Promise: null,
+
+    stage2Data: null,
+    stage2Loading: false,
+    stage2Error: null,
+    stage2Promise: null,
+
+    stage3Data: null,
+    stage3Loading: false,
+    stage3Error: null,
+    stage3Promise: null,
+  });
+}, [currentContext.activeQuery]); // Reset whenever query executes (even if same query text)
+
+// Pass state and updater functions to QueryInsightsTab
+{selectedTab === 'tab_performance_main' && (
+  <QueryInsightsMain
+    queryInsightsState={queryInsightsState}
+    setQueryInsightsState={setQueryInsightsState}
+  />
+)}
+```
+
+**In QueryInsightsTab.tsx (child component):**
+
+```typescript
+interface QueryInsightsMainProps {
+  queryInsightsState: QueryInsightsState;
+  setQueryInsightsState: React.Dispatch<React.SetStateAction<QueryInsightsState>>;
+}
+
+export const QueryInsightsMain = ({
+  queryInsightsState,
+  setQueryInsightsState
+}: QueryInsightsMainProps): JSX.Element => {
+  const { trpcClient } = useTrpcClient();
+
+  // Stage 1: Load when tab activates (only if not already loading/loaded)
+  useEffect(() => {
+    if (!queryInsightsState.stage1Data &&
+        !queryInsightsState.stage1Loading &&
+        !queryInsightsState.stage1Promise) {
+
+      // Mark as loading
+      setQueryInsightsState(prev => ({ ...prev, stage1Loading: true }));
+
+      // Create promise and store it
+      const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+        .query()
+        .then((data) => {
+          setQueryInsightsState(prev => ({
+            ...prev,
+            stage1Data: data,
+            stage1Loading: false,
+            stage1Promise: null,
+          }));
+          return data;
+        })
+        .catch((error) => {
+          void trpcClient.common.displayErrorMessage.mutate({
+            message: l10n.t('Failed to load query insights'),
+            modal: false,
+            cause: error instanceof Error ? error.message : String(error),
+          });
+          setQueryInsightsState(prev => ({
+            ...prev,
+            stage1Error: error instanceof Error ? error.message : String(error),
+            stage1Loading: false,
+            stage1Promise: null,
+          }));
+          throw error;
+        });
+
+      // Store promise reference
+      setQueryInsightsState(prev => ({ ...prev, stage1Promise: promise }));
+    }
+  }, []); // Empty deps - only run on mount
+
+  // Stage 2: Auto-start after Stage 1 completes
+  useEffect(() => {
+    if (queryInsightsState.stage1Data &&
+        !queryInsightsState.stage2Data &&
+        !queryInsightsState.stage2Loading &&
+        !queryInsightsState.stage2Promise) {
+
+      setQueryInsightsState(prev => ({ ...prev, stage2Loading: true }));
+
+      const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
+        .query()
+        .then((data) => {
+          setQueryInsightsState(prev => ({
+            ...prev,
+            stage2Data: data,
+            stage2Loading: false,
+            stage2Promise: null,
+          }));
+          return data;
+        })
+        .catch((error) => {
+          void trpcClient.common.displayErrorMessage.mutate({
+            message: l10n.t('Failed to load detailed execution analysis'),
+            modal: false,
+            cause: error instanceof Error ? error.message : String(error),
+          });
+          setQueryInsightsState(prev => ({
+            ...prev,
+            stage2Error: error instanceof Error ? error.message : String(error),
+            stage2Loading: false,
+            stage2Promise: null,
+          }));
+          throw error;
+        });
+
+      setQueryInsightsState(prev => ({ ...prev, stage2Promise: promise }));
+    }
+  }, [queryInsightsState.stage1Data]);
+
+  // Render with queryInsightsState data
+  return (
+    <div className="queryInsightsPanel">
+      {queryInsightsState.stage1Loading && <SkeletonUI />}
+      {queryInsightsState.stage1Data && (
+        <MetricsRow data={queryInsightsState.stage1Data} />
+      )}
+      {/* ... rest of UI */}
+    </div>
+  );
+};
+```
+
+**Behavior with This Architecture**:
+
+- ✅ **Tab Switch Away**: Component unmounts, but state persists in parent
+- ✅ **In-Flight Requests**: Promise stored in parent state, continues executing
+- ✅ **Tab Switch Back**: Component remounts, immediately has access to parent state
+- ✅ **Request Completes While Away**: State update happens in parent, visible when returning
+- ✅ **Query Change**: Parent detects change and resets all query insights state
+
+**Key Architecture Points**:
+
+- **Parent State Storage**: CollectionView.tsx owns query insights state
+- **Promise Tracking**: Store promise references to prevent duplicate requests
+- **Component Unmounting**: QueryInsightsTab can unmount without losing data
+- **Automatic Recovery**: When remounting, component checks parent state before fetching---
+
+**5.2.4. Stage 3: AI Recommendations (User-Initiated)** ✅ Complete
+
+**Goal**: Allow user to request AI recommendations on demand with ~8s loading delay.
+
+**Implementation**:
+
+```typescript
+const [stage3Data, setStage3Data] = useState<QueryInsightsStage3Response | null>(null);
+const [stage3Loading, setStage3Loading] = useState(false);
+const [stage3Error, setStage3Error] = useState<string | null>(null);
+
+const handleGetAIRecommendations = () => {
+  setStage3Loading(true);
+  setStage3Error(null);
+
+  void trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
+    .query()
+    .then((data) => {
+      setStage3Data(data);
+      setStage3Loading(false);
+    })
+    .catch((error) => {
+      void trpcClient.common.displayErrorMessage.mutate({
+        message: l10n.t('Failed to get AI recommendations'),
+        modal: false,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+      setStage3Error(error instanceof Error ? error.message : String(error));
+      setStage3Loading(false);
+    });
+};
+```
+
+**UI Integration**:
+
+```typescript
+// In QueryInsightsTab.tsx:
+{!stage3Data && !stage3Loading && (
+  <VSCodeButton onClick={handleGetAIRecommendations}>
+    {l10n.t('Get Performance Insights')}
+  </VSCodeButton>
+)}
+
+{stage3Loading && (
+  <div className="ai-loading-state">
+    <VSCodeProgressRing />
+    <span>{l10n.t('Analyzing query performance...')}</span>
+  </div>
+)}
+
+{stage3Data && (
+  <AIRecommendationsSection recommendations={stage3Data} />
+)}
+```
+
+**Behavior**:
+
+- ✅ User must click button to trigger AI analysis
+- ✅ Shows loading state for ~8 seconds (AI service delay)
+- ✅ Continues even if user switches tabs
+- ✅ Results persist in component state
+- ✅ Button hidden after recommendations loaded
+
+---
+
+**5.2.5. Two-Level Caching Strategy** ✅ Complete
+
+**Goal**: Document and validate the two-level caching architecture with component unmounting considerations.
+
+**Caching Levels**:
+
+1. **Backend Cache (ClusterSession)**:
+
+   ```typescript
+   // In ClusterSession:
+   private _queryPlannerCache?: { result: Document; timestamp: number };
+   private _executionStatsCache?: { result: Document; timestamp: number };
+   private _aiRecommendationsCache?: { result: unknown; timestamp: number };
+   private _lastExecutionTimeMs?: number;
+
+   // Cleared when query text changes in resetCachesIfQueryChanged()
+   ```
+
+2. **Frontend Cache (Parent Component State - CollectionView.tsx)**:
+
+   ````typescript
+   // ⚠️ CRITICAL: Must be in parent (CollectionView.tsx) not child (QueryInsightsTab.tsx)
+   // Because QueryInsightsTab unmounts on tab switch
+
+   interface QueryInsightsState {
+     stage1Data: QueryInsightsStage1Response | null;
+     stage1Loading: boolean;
+     stage1Promise: Promise<QueryInsightsStage1Response> | null;
+
+     stage2Data: QueryInsightsStage2Response | null;
+     stage2Loading: boolean;
+     stage2Promise: Promise<QueryInsightsStage2Response> | null;
+
+     stage3Data: QueryInsightsStage3Response | null;
+     stage3Loading: boolean;
+     stage3Promise: Promise<QueryInsightsStage3Response> | null;
+   }
+
+   const [queryInsightsState, setQueryInsightsState] = useState<QueryInsightsState>({...});
+
+   // Reset when query executes (even if same query text)
+   useEffect(() => {
+     setQueryInsightsState({ /* reset all fields */ });
+   }, [currentContext.activeQuery]);
+   ```**Cache Invalidation Flow**:
+   ````
+
+```typescript
+// In CollectionView.tsx:
+useEffect(() => {
+  const currentQueryId = JSON.stringify({
+    filter: currentContext.activeQuery.filter,
+    project: currentContext.activeQuery.project,
+    sort: currentContext.activeQuery.sort,
+  });
+
+  // Query changed - reset all query insights state
+  if (queryInsightsState.queryIdentifier !== currentQueryId) {
+    setQueryInsightsState({
+      stage1Data: null,
+      stage1Loading: false,
+      stage1Promise: null,
+
+      stage2Data: null,
+      stage2Loading: false,
+      stage2Promise: null,
+
+      stage3Data: null,
+      stage3Loading: false,
+      stage3Promise: null,
+    });
+}, [currentContext.activeQuery]); // Reset whenever query executes (even if same query text)
+
+// Backend cache automatically cleared by ClusterSession.resetCachesIfQueryChanged()
+```
+
+**Why Promise Tracking is Critical**:
+
+```typescript
+// Scenario: User switches tabs during Stage 1 fetch
+// 1. User on Query Insights tab → Stage 1 request starts
+// 2. User switches to Results tab → QueryInsightsTab unmounts
+// 3. Stage 1 request completes while user on Results tab
+// 4. State update happens in parent CollectionView.tsx
+// 5. User returns to Query Insights tab → QueryInsightsTab remounts
+// 6. Component checks parent state, sees stage1Data exists, doesn't re-fetch
+// 7. If no stage1Data but stage1Promise exists → wait for existing promise
+
+// Without promise tracking:
+if (!stage1Data && !stage1Loading) {
+  startStage1Fetch(); // ❌ Could start duplicate request if promise in flight
+}
+
+// With promise tracking:
+if (!stage1Data && !stage1Loading && !stage1Promise) {
+  startStage1Fetch(); // ✅ Only starts if no request in progress
+}
+```
+
+**Key Behaviors**:
+
+- ✅ **Tab Switch Away → Component Unmounts**: State persists in parent CollectionView.tsx
+- ✅ **In-Flight Request**: Promise stored in parent, continues executing even when component unmounted
+- ✅ **Tab Switch Back → Component Remounts**: Immediately accesses parent state, no re-fetch needed
+- ✅ **Request Completes While Away**: State update happens in parent, visible when returning
+- ✅ **Query Execution**: Parent resets all query insights state (even if same query text re-executed)
+- ✅ **Duplicate Prevention**: Promise tracking prevents multiple simultaneous requests
+
+**Testing Scenarios**:
+
+1. **Basic Flow**: Run query → Switch to Query Insights → Verify Stage 1 shows cached data
+2. **Tab Switch During Load**: Activate Query Insights → Immediately switch to Results → Wait 2s → Return → Verify Stage 1 data visible
+3. **Complete Stage 2 → Switch**: Complete Stage 2 → Switch to Results → Return → Verify Stage 2 data still visible
+4. **AI During Tab Switch**: Request Stage 3 → Switch tabs during 8s delay → Return → Verify AI results show
+5. **Query Re-execution Reset**: Complete all stages → Re-execute same query → Switch to Query Insights → Verify all state reset, new data fetched
+6. **Duplicate Prevention**: Partially load Stage 1 → Switch away → Return before completion → Verify no duplicate request
+
+---
+
+**5.2.6. UI Component Integration with Real Data** ✅ Complete
+
+**Goal**: Connect existing UI components to real Stage 1/2/3 data instead of mock values.
+
+**⚠️ Architecture Note**: Components receive data via props from parent CollectionView.tsx state.
+
+**Implementation**:
+
+```typescript
+// In QueryInsightsTab.tsx:
+const [stage1Data, setStage1Data] = useState<QueryInsightsStage1Response | null>(null);
+const [stage1Loading, setStage1Loading] = useState(false);
+
+useEffect(() => {
+  // Fetch Stage 1 data when tab becomes active
+  if (isQueryInsightsTabActive && !stage1Data) {
+    setStage1Loading(true);
+
+    void trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+      .query()
+      .then((data) => {
+        setStage1Data(data);
+        setStage1Loading(false);
+      })
+      .catch((error) => {
+        // Show error to user
+        void trpcClient.common.displayErrorMessage.mutate({
+          message: l10n.t('Failed to load query insights'),
+          modal: false,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        setStage1Loading(false);
+      });
+  }
+}, [isQueryInsightsTabActive]);
+```
+
+**Behavior**:
+
+- ✅ Loads Stage 1 data immediately when Query Insights tab is activated
+- ✅ Data likely already cached from prefetch (fast response)
+- ✅ If not cached, ClusterSession fetches from cache or generates new explain
+- ✅ Stage 1 data persists in component state (no re-fetch on tab switch)
+
+**5.2.2. Stage 2: Automatic Progression After Stage 1**
+
+```typescript
+const [stage2Data, setStage2Data] = useState<QueryInsightsStage2Response | null>(null);
+const [stage2Loading, setStage2Loading] = useState(false);
+
+useEffect(() => {
+  // Start Stage 2 fetch immediately after Stage 1 completes
+  if (stage1Data && !stage2Data && !stage2Loading) {
+    setStage2Loading(true);
+
+    void trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
+      .query()
+      .then((data) => {
+        setStage2Data(data);
+        setStage2Loading(false);
+      })
+      .catch((error) => {
+        void trpcClient.common.displayErrorMessage.mutate({
+          message: l10n.t('Failed to load detailed execution analysis'),
+          modal: false,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        setStage2Loading(false);
+      });
+  }
+}, [stage1Data]);
+```
+
+**Behavior**:
+
+- ✅ Automatically starts after Stage 1 completes
+- ✅ Runs explain("executionStats") which executes the query
+- ✅ Updates UI with execution metrics (keysExamined, docsExamined, performance rating)
+- ✅ Does NOT abort if user switches tabs (fetch continues in background)
+
+**5.2.3. Tab Switching Behavior**
+
+```typescript
+// In CollectionView.tsx (tab management):
+const [activeTab, setActiveTab] = useState<'results' | 'queryInsights' | 'schema'>('results');
+
+const handleTabChange = (newTab: string) => {
+  setActiveTab(newTab);
+  // DO NOT abort ongoing Stage 1/2/3 fetches
+  // Fetches complete in background, results cached in component state
+};
+
+useEffect(() => {
+  if (activeTab === 'queryInsights') {
+    // Tab activated - trigger Stage 1 fetch if needed (see 5.2.1)
+  }
+  // When switching away, fetches continue in background
+}, [activeTab]);
+```
+
+**Behavior**:
+
+- ✅ Fetches continue even when user switches to Results or other tabs
+- ✅ When user returns to Query Insights tab, data is already loaded
+- ✅ No need to re-fetch - component state preserves all Stage 1/2/3 data
+- ✅ ClusterSession cache ensures consistent data if fetch completes after tab switch
+
+**5.2.4. Stage 3: AI Recommendations (User-Initiated)**
+
+```typescript
+const [stage3Data, setStage3Data] = useState<QueryInsightsStage3Response | null>(null);
+const [stage3Loading, setStage3Loading] = useState(false);
+
+const handleGetAIRecommendations = () => {
+  setStage3Loading(true);
+
+  void trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
+    .query()
+    .then((data) => {
+      setStage3Data(data);
+      setStage3Loading(false);
+    })
+    .catch((error) => {
+      void trpcClient.common.displayErrorMessage.mutate({
+        message: l10n.t('Failed to get AI recommendations'),
+        modal: false,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+      setStage3Loading(false);
+    });
+};
+```
+
+**Behavior**:
+
+- ✅ User clicks "Get Performance Insights" button
+- ✅ Shows loading state for ~8 seconds (AI service delay)
+- ✅ Continues even if user switches tabs
+- ✅ Results persist in component state
+
+**5.2.5. Caching Strategy Summary**
+
+The caching happens at **two levels**:
+
+1. **Backend Cache (ClusterSession)**:
+   - Query planner info cached in `_queryPlannerCache`
+   - Execution stats cached in `_executionStatsCache`
+   - Cleared when query text changes
+   - Survives tab switches
+
+2. **Frontend Cache (Component State)**:
+   - `stage1Data`, `stage2Data`, `stage3Data` in React state
+   - Survives tab switches within same session
+   - Cleared when query changes (new execution → new sessionId → new data)
+
+**Key Behavior**:
+
+- ✅ If user switches tabs and returns, frontend state provides instant display
+- ✅ If component unmounts and remounts (page navigation), backend cache prevents redundant explain calls
+- ✅ If query changes, both caches reset automatically
+
+**5.2.6. UI Component Integration**
+
+Update existing mock components to use real data:
+
+```typescript
+// Replace mock values with stage1Data/stage2Data:
+<TimeMetric
+  label={l10n.t('Execution Time')}
+  valueMs={stage1Data?.executionTime ?? null}
+/>
+<CountMetric
+  label={l10n.t('Documents Returned')}
+  value={stage1Data?.documentsReturned ?? null}
+/>
+<CountMetric
+  label={l10n.t('Keys Examined')}
+  value={stage2Data?.executionStats.totalKeysExamined ?? null}
+/>
+<CountMetric
+  label={l10n.t('Docs Examined')}
+  value={stage2Data?.executionStats.totalDocsExamined ?? null}
+/>
+
+// Query Efficiency Analysis:
+<GenericCell
+  label={l10n.t('Execution Strategy')}
+  value={stage2Data?.efficiencyAnalysis.executionStrategy}
+  placeholder="skeleton"
+/>
+<PerformanceRatingCell
+  label={l10n.t('Performance Rating')}
+  rating={stage2Data?.efficiencyAnalysis.performanceRating?.rating}
+  description={stage2Data?.efficiencyAnalysis.performanceRating?.message}
+  visible={!!stage2Data}
+/>
+
+// AI Recommendations:
+{stage3Data?.improvementCards.map(card => (
+  <ImprovementCard
+    key={card.cardId}
+    config={card}
+    onPrimaryAction={handlePrimaryAction}
+    onSecondaryAction={handleSecondaryAction}
+  />
+))}
+```
+
+```typescript
+// In QueryInsightsTab.tsx - Replace mock values with real data:
+
+// 1. Metrics Row (Stage 1 + Stage 2 data)
+<TimeMetric
+  label={l10n.t('Execution Time')}
+  valueMs={stage1Data?.executionTime ?? null}
+  loading={stage1Loading}
+/>
+<CountMetric
+  label={l10n.t('Documents Returned')}
+  value={stage1Data?.documentsReturned ?? null}
+  loading={stage1Loading}
+/>
+<CountMetric
+  label={l10n.t('Keys Examined')}
+  value={stage2Data?.executionStats.totalKeysExamined ?? null}
+  loading={stage2Loading}
+  placeholder={!stage2Data ? 'n/a' : undefined}
+/>
+<CountMetric
+  label={l10n.t('Docs Examined')}
+  value={stage2Data?.executionStats.totalDocsExamined ?? null}
+  loading={stage2Loading}
+  placeholder={!stage2Data ? 'n/a' : undefined}
+/>
+
+// 2. Query Plan Overview (Stage 1 data)
+<QueryPlanOverview
+  stages={stage1Data?.queryPlan.stages ?? []}
+  loading={stage1Loading}
+/>
+
+// 3. Query Efficiency Analysis (Stage 2 data)
+<QueryEfficiencyAnalysis
+  executionStrategy={stage2Data?.efficiencyAnalysis.executionStrategy}
+  indexUsed={stage2Data?.efficiencyAnalysis.indexUsed}
+  performanceRating={stage2Data?.efficiencyAnalysis.performanceRating?.rating}
+  ratingMessage={stage2Data?.efficiencyAnalysis.performanceRating?.message}
+  loading={stage2Loading}
+  visible={!!stage2Data}
+/>
+
+// 4. AI Recommendations (Stage 3 data)
+{stage3Data && (
+  <AIRecommendationsSection>
+    <AnalysisCard content={stage3Data.analysisCard} />
+
+    {stage3Data.improvementCards.map((card) => (
+      <ImprovementCard
+        key={card.cardId}
+        config={card}
+        onPrimaryAction={handlePrimaryAction}
+        onSecondaryAction={handleSecondaryAction}
+      />
+    ))}
+
+    <VerificationSteps steps={stage3Data.verificationSteps} />
+  </AIRecommendationsSection>
+)}
+
+// 5. Action Handlers
+const handlePrimaryAction = (payload: ActionPayload) => {
+  if (payload.action === 'createIndex') {
+    void trpcClient.mongoClusters.collectionView.createIndex.mutate({
+      indexSpec: payload.indexSpec,
+    });
+  } else if (payload.action === 'dropIndex') {
+    void trpcClient.mongoClusters.collectionView.dropIndex.mutate({
+      indexSpec: payload.indexSpec,
+    });
+  }
+};
+
+const handleSecondaryAction = (payload: ActionPayload) => {
+  if (payload.action === 'copyCommand') {
+    void navigator.clipboard.writeText(payload.command);
+  } else if (payload.action === 'learnMore') {
+    void vscode.env.openExternal(vscode.Uri.parse(payload.url));
+  }
+};
+```
+
+**Conditional Rendering Logic**:
+
+```typescript
+// Stage 1: Always visible when tab is active
+{stage1Loading && <SkeletonMetricsRow />}
+{stage1Data && <MetricsRow data={stage1Data} />}
+{stage1Error && <ErrorMessage message={stage1Error} />}
+
+// Stage 2: Shows "n/a" placeholders until loaded
+{!stage2Data && !stage2Loading && <MetricsRow showPlaceholders />}
+{stage2Loading && <SkeletonEfficiencyAnalysis />}
+{stage2Data && <EfficiencyAnalysis data={stage2Data} />}
+
+// Stage 3: Shows button until loaded
+{!stage3Data && !stage3Loading && <GetInsightsButton onClick={handleGetAIRecommendations} />}
+{stage3Loading && <AILoadingState />}
+{stage3Data && <AIRecommendations data={stage3Data} />}
+```
+
+**Testing Checklist for UI Integration**:
+
+- [ ] Metrics show skeleton/loading states correctly
+- [ ] Stage 1 data populates immediately when available
+- [ ] Stage 2 metrics show "n/a" until loaded, then update
+- [ ] Performance rating appears only after Stage 2 completes
+- [ ] Query plan stages display correctly from Stage 1 data
+- [ ] AI recommendations button triggers Stage 3 fetch
+- [ ] AI loading state shows for ~8 seconds
+- [ ] Improvement cards render with correct button payloads
+- [ ] Primary actions (create/drop index) execute correctly
+- [ ] Secondary actions (copy command, learn more) work correctly
+- [ ] Tab switches don't interrupt data display
+- [ ] Error states show user-friendly messages
+
+---
+
+**Phase 5 Implementation Summary**:
+
+```
+5.1 Query Execution Logic:
+  ├─ 5.1.1 Non-blocking Stage 1 prefetch after results return
+  └─ 5.1.2 Placeholder for query state indicator (future: asterisk on tab)
+
+5.2 Frontend Query Insights Panel:
+  ├─ 5.2.1 Stage 1: Load on tab activation (cached from prefetch)
+  ├─ 5.2.2 Stage 2: Auto-start after Stage 1, populate detailed metrics
+  ├─ 5.2.3 Tab switching: No abort, preserve data in component state
+  ├─ 5.2.4 Stage 3: User-initiated, ~8s AI loading delay
+  ├─ 5.2.5 Two-level caching: ClusterSession + Component State
+  └─ 5.2.6 UI components: Replace mocks with real data
+```
+
+**Key Implementation Principles**:
+
+1. ✅ **Non-blocking**: Query results never wait for insights
+2. ✅ **Progressive**: Stage 1 → Stage 2 → Stage 3 (each builds on previous)
+3. ✅ **Cached**: Two-level caching prevents redundant fetches
+4. ✅ **Resilient**: Fetches continue in background during tab switches
+5. ✅ **User-Controlled**: Stage 3 AI analysis only on user request
+6. ✅ **Automatic**: Stage 2 starts automatically after Stage 1
+
+---
+
+**Testing Checklist**:
+
+- [ ] Stage 1 loads when Query Insights tab is activated
+- [ ] Stage 2 starts automatically after Stage 1 completes
+- [ ] Switching to Results tab doesn't abort ongoing fetches
+- [ ] Returning to Query Insights tab shows cached data
+- [ ] Changing query clears both frontend and backend caches
+- [ ] Stage 3 AI recommendations show after ~8s delay
+- [ ] All loading states display skeleton/spinner appropriately
+- [ ] Error states show user-friendly messages
 
 ---
 
@@ -3847,11 +4922,11 @@ Create React components to consume the three endpoints:
 
 | Phase                     | Status         | Progress |
 | ------------------------- | -------------- | -------- |
-| 1. Foundation & Types     | ⬜ Not Started | 0/1      |
-| 2. Explain Plan Analysis  | ⬜ Not Started | 0/5      |
-| 3. AI Service Integration | ⬜ Not Started | 0/2      |
-| 4. Router Implementation  | ⬜ Not Started | 0/2      |
-| 5. Frontend Integration   | ⬜ Not Started | 0/2      |
+| 1. Foundation & Types     | ✅ Complete    | 1/1      |
+| 2. Explain Plan Analysis  | ✅ Complete    | 5/5      |
+| 3. AI Service Integration | ✅ Complete    | 1/1      |
+| 4. Router Implementation  | ✅ Complete    | 2/2      |
+| 5. Frontend Integration   | 🔄 In Progress | 5/6      |
 | 6. Testing & Validation   | ⬜ Not Started | 0/3      |
 | 7. Production Hardening   | ⬜ Not Started | 0/4      |
 
@@ -3859,30 +4934,38 @@ Create React components to consume the three endpoints:
 
 **Phase 1: Foundation & Types**
 
-- 1.1 Create Type Definitions: 🔍 In Review
+- 1.1 Create Type Definitions: ✅ Complete
 
 **Phase 2: Explain Plan Analysis**
 
-- 2.1 Install Dependencies: ⬜ Not Started
-- 2.2 Create ExplainPlanAnalyzer: ⬜ Not Started
-- 2.3 Create StagePropertyExtractor: ⬜ Not Started
-- 2.4 Extend ClustersClient: ⬜ Not Started
-- 2.5 Extend ClusterSession for Caching: ⬜ Not Started
+- 2.1 Install Dependencies: ✅ Complete
+- 2.2 Create ExplainPlanAnalyzer: ✅ Complete
+- 2.3 Create StagePropertyExtractor: ✅ Complete
+- 2.4 Create QueryInsightsApis and Integrate with ClustersClient: ✅ Complete
+- 2.5 Extend ClusterSession for Caching: ✅ Complete
 
 **Phase 3: AI Service Integration**
 
-- 3.1 Create AI Service Client (mock with 8s delay): 🔍 In Review
-- 3.2 Extend ClusterSession for AI Integration: ⬜ Not Started
+- 3.1 Create AI Service Client (mock with 8s delay): ✅ Complete
+- 3.2 Extend ClusterSession for AI Integration: ⬜ Not Started (Deferred - not needed for Stage 3 endpoint)
 
 **Phase 4: Router Implementation**
 
-- 4.1 Implement tRPC Endpoints: ⬜ Not Started (Stage 3: 🔍 In Review)
-- 4.2 Implement Transformation Functions: ⬜ Not Started (Stage 3: 🔍 In Review)
+- 4.1 Implement tRPC Endpoints: ✅ Complete
+- 4.2 Implement Transformation Functions: ✅ Complete
 
 **Phase 5: Frontend Integration**
 
-- 5.1 Update Query Execution Logic: ⬜ Not Started
-- 5.2 Implement Frontend Query Insights Panel: ⬜ Not Started (Stage 3: 🔍 In Review)
+- 5.1 Update Query Execution Logic: 🔄 In Progress
+  - 5.1.1 Non-blocking Stage 1 Prefetch After Query Execution: ✅ Complete
+  - 5.1.2 Add Placeholder for Query State Indicator: ⬜ Not Started
+- 5.2 Implement Frontend Query Insights Panel: ✅ Complete
+  - 5.2.1 Stage 1: Initial View on Tab Activation: ✅ Complete
+  - 5.2.2 Stage 2: Automatic Progression After Stage 1: ✅ Complete
+  - 5.2.3 Tab Switching Behavior (No Abort): ✅ Complete
+  - 5.2.4 Stage 3: AI Recommendations (User-Initiated): ✅ Complete
+  - 5.2.5 Two-Level Caching Strategy: ✅ Complete
+  - 5.2.6 UI Component Integration with Real Data: ✅ Complete
 
 **Phase 6: Testing & Validation**
 

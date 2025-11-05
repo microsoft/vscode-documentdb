@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProgressBar, Tab, TabList } from '@fluentui/react-components';
+import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
@@ -91,6 +91,90 @@ export const CollectionView = (): JSX.Element => {
     }, [currentQueryResults, currentContext]);
 
     /**
+     * Reset query insights when query execution starts
+     * This happens whenever the user executes a query (even if same query text)
+     */
+    useEffect(() => {
+        setCurrentContext((prev) => ({
+            ...prev,
+            queryInsights: {
+                stage1Data: null,
+                stage1Loading: false,
+                stage1Error: null,
+                stage1Promise: null,
+
+                stage2Data: null,
+                stage2Loading: false,
+                stage2Error: null,
+                stage2Promise: null,
+
+                stage3Data: null,
+                stage3Loading: false,
+                stage3Error: null,
+                stage3Promise: null,
+            },
+        }));
+    }, [currentContext.activeQuery]);
+
+    /**
+     * Non-blocking Stage 1 prefetch after query execution
+     * Populates ClusterSession cache so data is ready when user switches to Query Insights tab
+     * Uses promise tracking to prevent duplicate requests
+     */
+    const prefetchQueryInsights = (): void => {
+        // Check if already loading or loaded or in-flight
+        if (
+            currentContext.queryInsights.stage1Data ||
+            currentContext.queryInsights.stage1Loading ||
+            currentContext.queryInsights.stage1Promise
+        ) {
+            return; // Already handled
+        }
+
+        const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1.query({
+            filter: currentContext.activeQuery.filter,
+            project: currentContext.activeQuery.project,
+            sort: currentContext.activeQuery.sort,
+        });
+
+        // Track the promise immediately
+        setCurrentContext((prev) => ({
+            ...prev,
+            queryInsights: {
+                ...prev.queryInsights,
+                stage1Promise: promise,
+            },
+        }));
+
+        // Handle completion
+        void promise
+            .then((stage1Data) => {
+                // Update state with data and clear promise
+                setCurrentContext((prev) => ({
+                    ...prev,
+                    queryInsights: {
+                        ...prev.queryInsights,
+                        stage1Data: stage1Data,
+                        stage1Promise: null,
+                    },
+                }));
+                console.debug('Stage 1 data prefetched:', stage1Data);
+            })
+            .catch((error) => {
+                // Silent fail - user can still request insights manually via tab
+                setCurrentContext((prev) => ({
+                    ...prev,
+                    queryInsights: {
+                        ...prev.queryInsights,
+                        stage1Error: error instanceof Error ? error.message : String(error),
+                        stage1Promise: null,
+                    },
+                }));
+                console.warn('Stage 1 prefetch failed:', error);
+            });
+    };
+
+    /**
      * This is used to run the query. We control it by setting the query configuration
      * in the currentContext state. Whenever the query configuration changes,
      * we run the query.
@@ -120,6 +204,10 @@ export const CollectionView = (): JSX.Element => {
 
                 // 3. Load the data for the current view
                 getDataForView(currentContext.currentView);
+
+                // 4. Non-blocking Stage 1 prefetch to populate cache
+                //    This runs in background and doesn't block results display
+                prefetchQueryInsights();
 
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })
@@ -465,7 +553,12 @@ export const CollectionView = (): JSX.Element => {
                         Results
                     </Tab>
                     <Tab id="tab.performance.main" value="tab_performance_main">
-                        Query Insights
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            Query Insights
+                            <Badge appearance="tint" size="small" shape="rounded" color="brand">
+                                PREVIEW
+                            </Badge>
+                        </div>
                     </Tab>
                     <Tab id="tab.performance.mock" value="tab_performance_mock">
                         Query Insights Mock
@@ -510,7 +603,15 @@ export const CollectionView = (): JSX.Element => {
                     </>
                 )}
 
-                {selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
+                {selectedTab === 'tab_performance_main' && (
+                    <QueryInsightsMain
+                        currentQuery={{
+                            filter: currentContext.activeQuery.filter,
+                            project: currentContext.activeQuery.project,
+                            sort: currentContext.activeQuery.sort,
+                        }}
+                    />
+                )}
                 {selectedTab === 'tab_performance_mock' && <QueryInsightsMainMock />}
             </div>
         </CollectionViewContext.Provider>

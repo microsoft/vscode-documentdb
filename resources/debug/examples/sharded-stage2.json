@@ -1,0 +1,244 @@
+{
+  "_debug_active": false,
+  "_instructions": "Set _debug_active to true to activate this override. This file contains a MongoDB explain('executionStats') response for a SHARDED collection.",
+
+  "queryPlanner": {
+    "mongosPlannerVersion": 1,
+    "winningPlan": {
+      "stage": "SHARD_MERGE",
+      "shards": [
+        {
+          "shardName": "shard-01",
+          "connectionString": "shard-01/mongo1:27017,mongo2:27017",
+          "serverInfo": {
+            "host": "mongo1",
+            "port": 27017,
+            "version": "6.0.0"
+          },
+          "plannerVersion": 1,
+          "namespace": "mydb.orders",
+          "indexFilterSet": false,
+          "parsedQuery": {
+            "status": { "$eq": "PENDING" }
+          },
+          "winningPlan": {
+            "stage": "PROJECTION",
+            "transformBy": {
+              "_id": 1,
+              "status": 1,
+              "total": 1
+            },
+            "inputStage": {
+              "stage": "FETCH",
+              "inputStage": {
+                "stage": "IXSCAN",
+                "keyPattern": {
+                  "status": 1
+                },
+                "indexName": "status_1",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "status": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": false,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "status": ["[\"PENDING\", \"PENDING\"]"]
+                }
+              }
+            }
+          }
+        },
+        {
+          "shardName": "shard-02",
+          "connectionString": "shard-02/mongo3:27017,mongo4:27017",
+          "serverInfo": {
+            "host": "mongo3",
+            "port": 27017,
+            "version": "6.0.0"
+          },
+          "plannerVersion": 1,
+          "namespace": "mydb.orders",
+          "indexFilterSet": false,
+          "parsedQuery": {
+            "status": { "$eq": "PENDING" }
+          },
+          "winningPlan": {
+            "stage": "PROJECTION",
+            "transformBy": {
+              "_id": 1,
+              "status": 1,
+              "total": 1
+            },
+            "inputStage": {
+              "stage": "SORT",
+              "sortPattern": {
+                "createdAt": -1
+              },
+              "memLimit": 104857600,
+              "type": "simple",
+              "inputStage": {
+                "stage": "COLLSCAN",
+                "direction": "forward"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "executionStats": {
+    "executionSuccess": true,
+    "nReturned": 50,
+    "executionTimeMillis": 1400,
+    "totalKeysExamined": 6200,
+    "totalDocsExamined": 9900,
+    "executionStages": {
+      "stage": "SHARD_MERGE",
+      "nReturned": 50,
+      "executionTimeMillis": 1400,
+      "totalKeysExamined": 6200,
+      "totalDocsExamined": 9900,
+      "shards": [
+        {
+          "shardName": "shard-01",
+          "executionSuccess": true,
+          "nReturned": 30,
+          "executionTimeMillis": 850,
+          "totalKeysExamined": 6200,
+          "totalDocsExamined": 7500,
+          "executionStages": {
+            "stage": "PROJECTION",
+            "nReturned": 30,
+            "executionTimeMillisEstimate": 840,
+            "works": 6231,
+            "advanced": 30,
+            "needTime": 6200,
+            "needYield": 0,
+            "saveState": 48,
+            "restoreState": 48,
+            "isEOF": 1,
+            "transformBy": {
+              "_id": 1,
+              "status": 1,
+              "total": 1
+            },
+            "inputStage": {
+              "stage": "FETCH",
+              "nReturned": 30,
+              "executionTimeMillisEstimate": 835,
+              "works": 6231,
+              "advanced": 30,
+              "needTime": 6200,
+              "needYield": 0,
+              "saveState": 48,
+              "restoreState": 48,
+              "isEOF": 1,
+              "docsExamined": 7500,
+              "alreadyHasObj": 0,
+              "inputStage": {
+                "stage": "IXSCAN",
+                "nReturned": 7500,
+                "executionTimeMillisEstimate": 510,
+                "works": 6231,
+                "advanced": 7500,
+                "needTime": 0,
+                "needYield": 0,
+                "saveState": 48,
+                "restoreState": 48,
+                "isEOF": 1,
+                "keyPattern": {
+                  "status": 1
+                },
+                "indexName": "status_1",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "status": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": false,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "status": ["[\"PENDING\", \"PENDING\"]"]
+                },
+                "keysExamined": 6200,
+                "seeks": 1,
+                "dupsTested": 0,
+                "dupsDropped": 0
+              }
+            }
+          }
+        },
+        {
+          "shardName": "shard-02",
+          "executionSuccess": true,
+          "nReturned": 20,
+          "executionTimeMillis": 550,
+          "totalKeysExamined": 0,
+          "totalDocsExamined": 2400,
+          "executionStages": {
+            "stage": "PROJECTION",
+            "nReturned": 20,
+            "executionTimeMillisEstimate": 545,
+            "works": 2402,
+            "advanced": 20,
+            "needTime": 2401,
+            "needYield": 0,
+            "saveState": 18,
+            "restoreState": 18,
+            "isEOF": 1,
+            "transformBy": {
+              "_id": 1,
+              "status": 1,
+              "total": 1
+            },
+            "inputStage": {
+              "stage": "SORT",
+              "nReturned": 20,
+              "executionTimeMillisEstimate": 540,
+              "works": 2402,
+              "advanced": 20,
+              "needTime": 2401,
+              "needYield": 0,
+              "saveState": 18,
+              "restoreState": 18,
+              "isEOF": 1,
+              "sortPattern": {
+                "createdAt": -1
+              },
+              "memLimit": 104857600,
+              "type": "simple",
+              "totalDataSizeSorted": 153600,
+              "usedDisk": false,
+              "inputStage": {
+                "stage": "COLLSCAN",
+                "nReturned": 2400,
+                "executionTimeMillisEstimate": 385,
+                "works": 2402,
+                "advanced": 2400,
+                "needTime": 1,
+                "needYield": 0,
+                "saveState": 18,
+                "restoreState": 18,
+                "isEOF": 1,
+                "direction": "forward",
+                "docsExamined": 2400
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "serverInfo": {
+    "host": "mongos",
+    "port": 27017,
+    "version": "6.0.0"
+  },
+  "ok": 1
+}
