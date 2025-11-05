@@ -91,20 +91,28 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                     {stage1Data.isSharded && stage1Data.shards && stage1Data.shards.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {/* Lightweight merge info */}
-                            <Text size={200} style={{ color: tokens.colorNeutralForeground3, paddingLeft: '4px' }}>
-                                {stage2Data && !stage2Loading
-                                    ? l10n.t(
-                                          'SHARD_MERGE · {0} shards · {1} docs · {2}ms',
-                                          stage1Data.shards.length,
-                                          stage2Data.documentsReturned,
-                                          stage2Data.executionTimeMs.toFixed(0),
-                                      )
-                                    : l10n.t(
-                                          'SHARD_MERGE · {0} shards · {1}ms',
-                                          stage1Data.shards.length,
-                                          stage1Data.executionTime.toFixed(0),
-                                      )}
-                            </Text>
+                            <div style={{ paddingLeft: '4px' }}>
+                                {(!stage2Data || stage2Loading) && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                            {l10n.t('SHARD_MERGE · {0} shards', stage1Data.shards.length)}
+                                        </Text>
+                                        <Skeleton>
+                                            <SkeletonItem size={12} style={{ width: '120px' }} />
+                                        </Skeleton>
+                                    </div>
+                                )}
+                                {stage2Data && !stage2Loading && (
+                                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                        {l10n.t(
+                                            'SHARD_MERGE · {0} shards · {1} docs · {2}ms',
+                                            stage1Data.shards.length,
+                                            stage2Data.documentsReturned,
+                                            stage2Data.executionTimeMs.toFixed(0),
+                                        )}
+                                    </Text>
+                                )}
+                            </div>
 
                             {stage1Data.shards.map((shard) => {
                                 // Find matching shard data from stage2 if available
