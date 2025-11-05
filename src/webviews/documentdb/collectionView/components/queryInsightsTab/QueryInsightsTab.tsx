@@ -114,7 +114,9 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
 
-    // Stage 1: Load on mount (only if not already loading/loaded/in-flight)
+    // Stage 1: Load when needed (on mount or after query re-run when tab is active)
+    // When a query is re-run, the queryInsights state is reset in CollectionView.tsx
+    // This effect needs to re-trigger to start loading the new data
     useEffect(() => {
         if (!queryInsightsState.stage1Data && !queryInsightsState.stage1Loading && !queryInsightsState.stage1Promise) {
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Loading: true }));
@@ -151,7 +153,7 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
 
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Promise: promise }));
         }
-    }, []); // Empty deps - only run on mount
+    }, [queryInsightsState.stage1Data, queryInsightsState.stage1Loading, queryInsightsState.stage1Promise]);
 
     // Stage 2: Auto-start after Stage 1 completes
     useEffect(() => {
