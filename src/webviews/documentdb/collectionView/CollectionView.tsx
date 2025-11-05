@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProgressBar, Tab, TabList } from '@fluentui/react-components';
+import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
@@ -553,7 +553,12 @@ export const CollectionView = (): JSX.Element => {
                         Results
                     </Tab>
                     <Tab id="tab.performance.main" value="tab_performance_main">
-                        Query Insights
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            Query Insights
+                            <Badge appearance="tint" size="small" shape="rounded" color="brand">
+                                PREVIEW
+                            </Badge>
+                        </div>
                     </Tab>
                     <Tab id="tab.performance.mock" value="tab_performance_mock">
                         Query Insights Mock

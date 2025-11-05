@@ -23,7 +23,11 @@ import {
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
 import { Views } from '../../../documentdb/Views';
-import { ExplainPlanAnalyzer } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
+import {
+    ExplainPlanAnalyzer,
+    type ExecutionStatsAnalysis,
+    type QueryPlannerAnalysis,
+} from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
 import {
     transformAIResponseForUI,
     transformStage1Response,
@@ -488,39 +492,47 @@ export const collectionsViewRouter = router({
             const myCtx = ctx as RouterContext;
             const { sessionId, databaseName, collectionName } = myCtx;
 
+            let analyzed: QueryPlannerAnalysis;
+            let executionTime: number;
+
             // Check for debug override file first
             const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
             if (debugData) {
                 // Use debug data - analyze it the same way as real data
-                const analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(debugData);
+                analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(debugData);
                 // Use a default execution time for debug mode
-                return transformStage1Response(analyzed, 2.5);
+                executionTime = 2.5;
+            } else {
+                // Get ClusterSession
+                const session: ClusterSession = ClusterSession.getSession(sessionId);
+
+                // Get execution time from session (tracked during last query execution)
+                executionTime = session.getLastExecutionTimeMs();
+
+                // Parse query parameters
+                const filter = JSON.parse(input.filter) as Document;
+                const sort = input.sort ? (JSON.parse(input.sort) as Document) : undefined;
+                const projection = input.project ? (JSON.parse(input.project) as Document) : undefined;
+
+                // Get query planner info (cached or fetch) without skip/limit for full query insights
+                const queryPlannerResult = await session.getQueryPlannerInfo(databaseName, collectionName, filter, {
+                    sort,
+                    projection,
+                    // Intentionally omit skip/limit for full query insights
+                });
+
+                // Analyze with ExplainPlanAnalyzer
+                analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult);
             }
 
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-
-            // Get execution time from session (tracked during last query execution)
-            const executionTime = session.getLastExecutionTimeMs();
-
-            // Parse query parameters
-            const filter = JSON.parse(input.filter) as Document;
-            const sort = input.sort ? (JSON.parse(input.sort) as Document) : undefined;
-            const projection = input.project ? (JSON.parse(input.project) as Document) : undefined;
-
-            // Get query planner info (cached or fetch) without skip/limit for full query insights
-            const queryPlannerResult = await session.getQueryPlannerInfo(databaseName, collectionName, filter, {
-                sort,
-                projection,
-                // Intentionally omit skip/limit for full query insights
-            });
-
-            // Analyze with ExplainPlanAnalyzer
-            const analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult);
-
             // Transform to UI format
-            // Note: documentsReturned is not available in Stage 1 (explain queryPlanner doesn't execute the query)
-            return transformStage1Response(analyzed, executionTime);
+            const transformed = transformStage1Response(analyzed, executionTime);
+
+            // TODO: Remove this delay after testing - simulates slower Stage 1 execution
+            // This delay applies to both live and debug scenarios
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+
+            return transformed;
         }),
 
     /**
@@ -547,37 +559,41 @@ export const collectionsViewRouter = router({
             const myCtx = ctx as RouterContext;
             const { sessionId, databaseName, collectionName } = myCtx;
 
+            let analyzed: ExecutionStatsAnalysis;
+
             // Check for debug override file first
             const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
             if (debugData) {
                 // Use debug data - analyze it the same way as real data
-                const analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
-                return transformStage2Response(analyzed);
+                analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
+            } else {
+                // Get ClusterSession
+                const session: ClusterSession = ClusterSession.getSession(sessionId);
+
+                // Parse query parameters
+                const filter = JSON.parse(input.filter) as Document;
+                const sort = input.sort ? (JSON.parse(input.sort) as Document) : undefined;
+                const projection = input.project ? (JSON.parse(input.project) as Document) : undefined;
+
+                // Get execution stats (cached or fetch) without skip/limit for full query insights
+                const executionStatsResult = await session.getExecutionStats(databaseName, collectionName, filter, {
+                    sort,
+                    projection,
+                    // Intentionally omit skip/limit for full query insights
+                });
+
+                // Analyze with ExplainPlanAnalyzer
+                analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
             }
 
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-
-            // Parse query parameters
-            const filter = JSON.parse(input.filter) as Document;
-            const sort = input.sort ? (JSON.parse(input.sort) as Document) : undefined;
-            const projection = input.project ? (JSON.parse(input.project) as Document) : undefined;
-
-            // Get execution stats (cached or fetch) without skip/limit for full query insights
-            const executionStatsResult = await session.getExecutionStats(databaseName, collectionName, filter, {
-                sort,
-                projection,
-                // Intentionally omit skip/limit for full query insights
-            });
+            // Transform to UI format
+            const transformed = transformStage2Response(analyzed);
 
             // TODO: Remove this delay after testing - simulates slower Stage 2 execution
+            // This delay applies to both live and debug scenarios
             await new Promise((resolve) => setTimeout(resolve, 3000));
 
-            // Analyze with ExplainPlanAnalyzer
-            const analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
-
-            // Transform to UI format
-            return transformStage2Response(analyzed);
+            return transformed;
         }),
 
     /**

@@ -13,23 +13,6 @@
 // ============================================================================
 
 /**
- * Response from Stage 1 - Initial performance view with query planner data
- * Stage 1 provides immediate metrics using queryPlanner verbosity (no execution)
- */
-export interface QueryInsightsStage1Response {
-    executionTime: number; // Client-side measurement in milliseconds
-    documentsReturned: number;
-    // Note: keysExamined and docsExamined not available until Stage 2 (executionStats)
-    stages: StageInfo[];
-    efficiencyAnalysis: {
-        executionStrategy: string;
-        indexUsed: string | null;
-        hasInMemorySort: boolean;
-        // Performance rating not available in Stage 1 (requires execution metrics)
-    };
-}
-
-/**
  * Information extracted from a single stage (basic)
  */
 export interface StageInfo {
@@ -40,6 +23,41 @@ export interface StageInfo {
     indexName?: string;
     keysExamined?: number;
     docsExamined?: number;
+}
+
+/**
+ * Information about a shard in a sharded query
+ */
+export interface ShardInfo {
+    shardName: string;
+    stages: StageInfo[];
+    nReturned?: number;
+    keysExamined?: number;
+    docsExamined?: number;
+    executionTimeMs?: number;
+    hasCollscan?: boolean;
+    hasBlockedSort?: boolean;
+}
+
+/**
+ * Response from Stage 1 - Initial performance view with query planner data
+ * Stage 1 provides immediate metrics using queryPlanner verbosity (no execution)
+ *
+ * @remarks
+ * Stage 1 uses explain("queryPlanner") which does NOT execute the query.
+ */
+export interface QueryInsightsStage1Response {
+    executionTime: number; // Client-side measurement in milliseconds
+    stages: StageInfo[];
+    efficiencyAnalysis: {
+        executionStrategy: string;
+        indexUsed: string | null;
+        hasInMemorySort: boolean;
+        // Performance rating not available in Stage 1 (requires execution metrics)
+    };
+    /** Shard information for sharded collections */
+    shards?: ShardInfo[];
+    isSharded?: boolean;
 }
 
 // ============================================================================
@@ -88,6 +106,9 @@ export interface QueryInsightsStage2Response {
     stages: DetailedStageInfo[];
     extendedStageInfo?: ExtendedStageInfo[];
     rawExecutionStats: Record<string, unknown>;
+    /** Shard information for sharded collections */
+    shards?: ShardInfo[];
+    isSharded?: boolean;
 }
 
 /**
