@@ -153,8 +153,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                 ))}
                                             </div>
 
-                                            {/* Metrics */}
-                                            {stage2Loading && (
+                                            {/* Metrics - show skeleton until Stage 2 data is available */}
+                                            {(!shard2Data || stage2Loading) && (
                                                 <Skeleton>
                                                     <SkeletonItem size={12} style={{ width: '80%' }} />
                                                 </Skeleton>
@@ -261,8 +261,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                         </React.Fragment>
                                     ))}
                                 </div>{' '}
-                                {/* Metrics - Stage 2 data shows detailed counts, otherwise show skeleton or basic info */}
-                                {stage2Loading && (
+                                {/* Metrics - show skeleton until Stage 2 data is available */}
+                                {(!stage2Data || stage2Loading) && (
                                     <Skeleton>
                                         <SkeletonItem size={12} style={{ width: '80%' }} />
                                     </Skeleton>
@@ -273,11 +273,6 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                         {stage2Data.totalKeysExamined.toLocaleString()} keys ·{' '}
                                         {stage2Data.totalDocsExamined.toLocaleString()} docs ·{' '}
                                         {stage2Data.executionTimeMs.toFixed(2)}ms
-                                    </Text>
-                                )}
-                                {!stage2Data && !stage2Loading && (
-                                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                        {l10n.t('Execution time: {0}ms', stage1Data.executionTime.toFixed(2))}
                                     </Text>
                                 )}
                             </div>
