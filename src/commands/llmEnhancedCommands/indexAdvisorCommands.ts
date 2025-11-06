@@ -340,8 +340,8 @@ async function fillPromptTemplate(
     const filled = template
         .replace('{databaseName}', context.databaseName)
         .replace('{collectionName}', context.collectionName)
-        .replace('{collectionStats}', JSON.stringify(collectionStats, null, 2) || 'N/A')
-        .replace('{indexStats}', JSON.stringify(indexes, null, 2) || 'N/A')
+        .replace('{collectionStats}', collectionStats ? JSON.stringify(collectionStats, null, 2) : 'N/A')
+        .replace('{indexStats}', indexes ? JSON.stringify(indexes, null, 2) : 'N/A')
         .replace('{executionStats}', executionStats)
         .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2))
         .replace(
@@ -445,20 +445,6 @@ export async function optimizeQuery(
                     parsedQuery?.filter || {},
                 );
             }
-
-            collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
-            const indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
-            const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
-            // // TODO: handle search indexes for Atlas
-            // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
-            indexes = indexesStats.map((indexStat) => {
-                const indexInfo = indexesInfo.find((idx) => idx.name === indexStat.name);
-                return {
-                    ...indexStat,
-                    ...indexInfo,
-                };
-            });
-            // indexes.push(...searchIndexes);
         } catch (error) {
             throw new Error(
                 l10n.t('Failed to gather query optimization data: {message}', {
@@ -466,6 +452,29 @@ export async function optimizeQuery(
                 }),
             );
         }
+    }
+
+
+
+    try {
+        collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
+        const indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
+        const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
+        // // TODO: handle search indexes for Atlas
+        // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
+        indexes = indexesStats.map((indexStat) => {
+            const indexInfo = indexesInfo.find((idx) => idx.name === indexStat.name);
+            return {
+                ...indexStat,
+                ...indexInfo,
+            };
+        });
+        // indexes.push(...searchIndexes);
+    }
+    catch {
+        // They are not critical errors, we can continue without index stats and collection stats
+        collectionStats = null as unknown as CollectionStats;
+        indexes = null as unknown as Array<IndexStats>;
     }
 
     // Sanitize explain result to remove constant values while preserving field names

@@ -78,6 +78,7 @@ Follow these strict instructions (must obey):
 15. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate \`{collectionStats}\`, \`{indexStats}\`, or \`{executionStats}\`—just include them as-is (and add computed helper fields if needed).
 16. **Do note drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
 17. **Be brave to say no** — if you confirm an index change is not beneficial, or not relates to the query, feel free to return empty improvements.
+18. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), clearly state the limitations at the first line in your analysis.
 
 Thinking / analysis tips (useful signals to form recommendations; don't output these tips themselves):
 - Check **which index(es)** the winning plan used (or whether a COLLSCAN occurred) and whether \`totalKeysExamined\` is much smaller than \`totalDocsExamined\` (indicates good index filtering vs heavy document fetch).
@@ -196,6 +197,7 @@ Follow these strict instructions (must obey):
 14. **Verification array requirement** — the \`verification\` field must be an **array** with **exactly one verification item per improvement item**. Each verification item must be a Markdown string containing \`\`\`javascript code blocks\`\`\` with valid mongosh commands to verify that specific improvement. If \`improvements\` is an empty array, \`verification\` must also be an empty array.
 15. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate \`{collectionStats}\`, \`{indexStats}\`, or \`{executionStats}\`—just include them as-is (and add computed helper fields if needed).
 16. **Be brave to say no** — if you confirm an index change is not beneficial, or not relates to the query, feel free to return empty improvements.
+17. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), clearly state the limitations at the first line in your analysis.
 
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **\\$match priority**: Place match stages early and check if indexes can accelerate filtering.
@@ -329,6 +331,7 @@ Follow these strict instructions (must obey):
 14. **Verification array requirement** — the \`verification\` field must be an **array** with **exactly one verification item per improvement item**. Each verification item must be a Markdown string containing \`\`\`javascript code blocks\`\`\` with valid mongosh commands to verify that specific improvement. If \`improvements\` is an empty array, \`verification\` must also be an empty array.
 15. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate \`{collectionStats}\`, \`{indexStats}\`, or \`{executionStats}\`—just include them as-is (and add computed helper fields if needed).
 16. **Be brave to say no** — if you confirm an index change is not beneficial, or not relates to the query, feel free to return empty improvements.
+17. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), clearly state the limitations at the first line in your analysis.
 
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **Index-only optimization**: The best count performance occurs when all filter fields are indexed, allowing a covered query that avoids document fetches entirely.
