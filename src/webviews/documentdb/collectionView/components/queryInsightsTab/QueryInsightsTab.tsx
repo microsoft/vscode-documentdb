@@ -31,7 +31,7 @@
  */
 
 import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
-import { BrainSparkleRegular, WarningRegular } from '@fluentui/react-icons';
+import { SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useContext, useEffect, useState } from 'react';
@@ -402,6 +402,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     key="query-execution-error"
                                     title={l10n.t('Query Execution Failed')}
                                     icon={<WarningRegular />}
+                                    showAiDisclaimer={false}
                                     content={
                                         queryInsightsState.stage2Data.concerns.join('\n\n') +
                                         '\n\n---\n\n' +
@@ -517,7 +518,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 queryInsightsState.stage3Data.educationalContent && (
                                     <MarkdownCard
                                         key="understanding-execution"
-                                        icon={<BrainSparkleRegular />}
+                                        icon={<SparkleRegular />}
                                         title={l10n.t('Understanding Your Query Execution Plan')}
                                         content={queryInsightsState.stage3Data.educationalContent}
                                         onCopy={() => {

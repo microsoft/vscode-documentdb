@@ -118,7 +118,6 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                     }}
                                     positioning="above-start"
                                     relationship="description"
-                                    withArrow
                                 >
                                     <Badge
                                         appearance="tint"
