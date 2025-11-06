@@ -387,15 +387,21 @@ export class ClustersClient {
     }
 
     async listSearchIndexesForAtlas(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {
-        const collection = this._mongoClient.db(databaseName).collection(collectionName);
-        const searchIndexes = await collection.aggregate([{ $listSearchIndexes: {} }]).toArray();
-        let i = 0; // backup for indexes with no names
-        return searchIndexes.map((index: Document) => ({
-            ...index,
-            name: (index.name as string | undefined) ?? 'search_idx_' + (i++).toString(),
-            type: ((index.type as string | undefined) ?? 'search') as 'traditional' | 'search',
-            fields: index.fields as unknown[] | undefined,
-        }));
+        try {
+            const collection = this._mongoClient.db(databaseName).collection(collectionName);
+            const searchIndexes = await collection.aggregate([{ $listSearchIndexes: {} }]).toArray();
+            let i = 0; // backup for indexes with no names
+            return searchIndexes.map((index: Document) => ({
+                ...index,
+                name: (index.name as string | undefined) ?? 'search_idx_' + (i++).toString(),
+                type: ((index.type as string | undefined) ?? 'search') as 'traditional' | 'search',
+                fields: index.fields as unknown[] | undefined,
+            }));
+        } catch {
+            // $listSearchIndexes not supported on this platform (e.g., non-Atlas deployments)
+            // Return empty array silently
+            return [];
+        }
     }
 
     /**

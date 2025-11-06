@@ -35,8 +35,21 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     async getChildren(): Promise<TreeElement[]> {
         const client: ClustersClient = await ClustersClient.getClient(this.cluster.id);
         const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
-        const searchIndexes = await client.listSearchIndexesForAtlas(this.databaseInfo.name, this.collectionInfo.name);
-        indexes.push(...searchIndexes);
+
+        // Try to get search indexes, but silently fail if not supported by the platform
+        try {
+            const searchIndexes = await client.listSearchIndexesForAtlas(
+                this.databaseInfo.name,
+                this.collectionInfo.name,
+            );
+            indexes.push(...searchIndexes);
+        } catch {
+            // Search indexes not supported on this platform, continue without them
+        }
+
+        // Sort indexes by name
+        indexes.sort((a, b) => a.name.localeCompare(b.name));
+
         return indexes.map((index) => {
             return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
         });
