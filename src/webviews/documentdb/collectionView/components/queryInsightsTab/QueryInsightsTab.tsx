@@ -140,7 +140,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                         stage1Loading: false,
                         stage1Promise: null,
                     }));
-                    throw error;
+                    // Return undefined to satisfy TypeScript without creating unhandled rejection
+                    return undefined as never;
                 });
 
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Promise: promise }));
@@ -186,7 +187,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                         stage2Loading: false,
                         stage2Promise: null,
                     }));
-                    throw error;
+                    // Return undefined to satisfy TypeScript without creating unhandled rejection
+                    return undefined as never;
                 });
 
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Promise: promise }));
