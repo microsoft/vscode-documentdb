@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { type Document, type Filter, type Sort } from 'mongodb';
 import * as vscode from 'vscode';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
@@ -28,14 +29,11 @@ export enum CommandType {
  */
 export interface QueryObject {
     // Filter criteria
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    filter?: any;
+    filter?: Filter<Document>;
     // Sort specification
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    sort?: any;
+    sort?: Sort;
     // Projection specification
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    projection?: any;
+    projection?: Document;
     // Number of documents to skip
     skip?: number;
     // Maximum number of documents to return
@@ -449,7 +447,18 @@ export async function optimizeQuery(
             }
 
             collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
-            indexes = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
+            const indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
+            const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
+            // // TODO: handle search indexes for Atlas
+            // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
+            indexes = indexesStats.map((indexStat) => {
+                const indexInfo = indexesInfo.find((idx) => idx.name === indexStat.name);
+                return {
+                    ...indexStat,
+                    ...indexInfo,
+                };
+            });
+            // indexes.push(...searchIndexes);
         } catch (error) {
             throw new Error(
                 l10n.t('Failed to gather query optimization data: {message}', {
