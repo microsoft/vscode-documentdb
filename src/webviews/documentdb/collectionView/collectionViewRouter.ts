@@ -736,7 +736,7 @@ export const collectionsViewRouter = router({
      * Takes actionId and payload from the button click and routes to appropriate handler
      * in QueryInsightsAIService
      */
-    executeRecommendation: publicProcedure
+    executeQueryInsightsAction: publicProcedure
         .use(trpcToTelemetry)
         .input(
             z.object({
@@ -753,7 +753,7 @@ export const collectionsViewRouter = router({
             const aiService = new QueryInsightsAIService();
 
             // Execute the recommendation action
-            const result = await aiService.executeRecommendation(clusterId, sessionId, actionId, payload);
+            const result = await aiService.executeQueryInsightsAction(clusterId, sessionId, actionId, payload);
 
             return result;
         }),

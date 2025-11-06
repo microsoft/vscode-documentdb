@@ -302,7 +302,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     };
 
     const handlePrimaryAction = (actionId: string, payload: unknown) => {
-        void trpcClient.mongoClusters.collectionView.executeRecommendation
+        void trpcClient.mongoClusters.collectionView.executeQueryInsightsAction
             .mutate({ actionId, payload })
             .then((result) => {
                 if (result.success && result.message) {
@@ -320,7 +320,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     };
 
     const handleSecondaryAction = (actionId: string, payload: unknown) => {
-        void trpcClient.mongoClusters.collectionView.executeRecommendation
+        void trpcClient.mongoClusters.collectionView.executeQueryInsightsAction
             .mutate({ actionId, payload })
             .then((result) => {
                 if (result.success && result.message) {

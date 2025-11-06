@@ -197,7 +197,7 @@ export class QueryInsightsAIService {
      * @param payload - The action-specific payload
      * @returns Success status and optional message
      */
-    public async executeRecommendation(
+    public async executeQueryInsightsAction(
         _clusterId: string,
         sessionId: string | undefined,
         actionId: string,
