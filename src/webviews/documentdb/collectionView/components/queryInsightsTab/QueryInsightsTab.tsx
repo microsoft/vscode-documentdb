@@ -37,10 +37,7 @@ import * as l10n from '@vscode/l10n';
 import { type JSX, useContext, useEffect, useState } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
-import {
-    type ImprovementCard as ImprovementCardConfig,
-    type QueryInsightsStage3Response,
-} from '../../types/queryInsights';
+import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
 import { AnimatedCardList } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
@@ -102,8 +99,6 @@ export const QueryInsightsMain = (): JSX.Element => {
               ? 2
               : 1;
 
-    const [isLoadingAI, setIsLoadingAI] = useState(false);
-    const [aiInsightsRequested, setAiInsightsRequested] = useState(false); // One-way flag: once true, stays true
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [showErrorCard, setShowErrorCard] = useState(false);
@@ -241,9 +236,12 @@ export const QueryInsightsMain = (): JSX.Element => {
     ];
 
     const handleGetAISuggestions = () => {
-        setIsLoadingAI(true);
-        setAiInsightsRequested(true); // Set one-way flag to prevent button from reappearing
         setIsTipsCardDismissed(false);
+
+        // Clear any previous error when retrying
+        if (queryInsightsState.stage3Error) {
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage3Error: null }));
+        }
 
         // Check if Stage 2 has query execution errors
         const hasExecutionError =
@@ -259,8 +257,11 @@ export const QueryInsightsMain = (): JSX.Element => {
             }
         }, 1000);
 
+        // Set loading state in queryInsights context
+        setQueryInsightsStateHelper((prev) => ({ ...prev, stage3Loading: true }));
+
         // Call the tRPC endpoint (10+ second delay expected from AI service)
-        void trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
+        const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
             .query()
             .then((response) => {
                 console.log('AI response received:', response);
@@ -269,25 +270,39 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                 setQueryInsightsStateHelper((prev) => ({
                     ...prev,
-                    stage3Data: response as QueryInsightsStage3Response,
+                    stage3Data: response,
+                    stage3Loading: false,
+                    stage3Promise: null,
                 }));
-                setIsLoadingAI(false);
+                return response;
             })
             .catch((error: unknown) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error getting AI recommendations'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
-                setIsLoadingAI(false);
+                // Error handled here - state updated, no need to propagate
+                setQueryInsightsStateHelper((prev) => ({
+                    ...prev,
+                    stage3Error: error instanceof Error ? error.message : String(error),
+                    stage3Loading: false,
+                    stage3Promise: null,
+                }));
+                // Return undefined to satisfy TypeScript without creating unhandled rejection
+                return undefined as never;
             });
+
+        setQueryInsightsStateHelper((prev) => ({
+            ...prev,
+            stage3Promise: promise,
+        }));
 
         return () => clearTimeout(timer);
     };
 
     const handleCancelAI = () => {
-        setIsLoadingAI(false);
-        setAiInsightsRequested(false); // Allow requesting again after cancel
+        // Cancel the loading state
+        setQueryInsightsStateHelper((prev) => ({
+            ...prev,
+            stage3Loading: false,
+            stage3Promise: null,
+        }));
     };
 
     const handlePrimaryAction = (actionId: string, payload: unknown) => {
@@ -361,14 +376,23 @@ export const QueryInsightsMain = (): JSX.Element => {
                         )}
 
                         {/* GetPerformanceInsightsCard with CollapseRelaxed animation
+                            Shown in Stage 2 when AI insights haven't been requested yet, or when there's an error.
                             Note: Component supports ref forwarding and applies its own spacing via className. */}
-                        <CollapseRelaxed visible={stageState === 2}>
+                        <CollapseRelaxed visible={stageState >= 2 && !queryInsightsState.stage3Data}>
                             <GetPerformanceInsightsCard
                                 className="cardSpacing"
                                 bodyText={l10n.t(
                                     'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
                                 )}
-                                isLoading={isLoadingAI || aiInsightsRequested}
+                                isLoading={queryInsightsState.stage3Loading}
+                                errorMessage={
+                                    queryInsightsState.stage3Error
+                                        ? l10n.t(
+                                              'Failed to get AI recommendations: {0}',
+                                              queryInsightsState.stage3Error,
+                                          )
+                                        : undefined
+                                }
                                 onGetInsights={handleGetAISuggestions}
                                 onLearnMore={() => {
                                     /* TODO: Implement learn more functionality */

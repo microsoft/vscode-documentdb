@@ -3,7 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Card, Spinner, Text, tokens } from '@fluentui/react-components';
+import {
+    Button,
+    Card,
+    MessageBar,
+    MessageBarBody,
+    MessageBarTitle,
+    Spinner,
+    Text,
+    tokens,
+} from '@fluentui/react-components';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { forwardRef } from 'react';
@@ -25,6 +34,11 @@ export interface GetPerformanceInsightsCardProps {
      * Whether the AI is currently loading/analyzing
      */
     isLoading: boolean;
+
+    /**
+     * Optional error message. If provided, shows error state with retry button
+     */
+    errorMessage?: string;
 
     /**
      * Handler for the "Get AI Performance Insights" button
@@ -63,7 +77,7 @@ export interface GetPerformanceInsightsCardProps {
  * spacing classes (e.g., `cardSpacing`) when using in layouts that require spacing.
  */
 export const GetPerformanceInsightsCard = forwardRef<HTMLDivElement, GetPerformanceInsightsCardProps>(
-    ({ bodyText, recommendation, isLoading, onGetInsights, onLearnMore, onCancel, className }, ref) => {
+    ({ bodyText, recommendation, isLoading, errorMessage, onGetInsights, onLearnMore, onCancel, className }, ref) => {
         return (
             <Card
                 ref={ref}
@@ -101,21 +115,29 @@ export const GetPerformanceInsightsCard = forwardRef<HTMLDivElement, GetPerforma
                                 {recommendation}
                             </Text>
                         )}
-                        {!isLoading ? (
-                            <div className="get-performance-insights-card-actions">
-                                <Button appearance="primary" icon={<SparkleRegular />} onClick={onGetInsights}>
-                                    {l10n.t('Get AI Performance Insights')}
-                                </Button>
-                                <Button appearance="subtle" onClick={onLearnMore}>
-                                    {l10n.t('Learn more about AI Performance Insights')}
-                                </Button>
-                            </div>
-                        ) : (
+                        {errorMessage && (
+                            <MessageBar intent="info" style={{ marginBottom: '16px' }}>
+                                <MessageBarBody>
+                                    <MessageBarTitle>Error:</MessageBarTitle>
+                                    {errorMessage}
+                                </MessageBarBody>
+                            </MessageBar>
+                        )}
+                        {isLoading ? (
                             <div className="get-performance-insights-card-loading">
                                 <Spinner size="small" />
                                 <Text size={300}>{l10n.t('AI is analyzing...')}</Text>
                                 <Button appearance="subtle" size="small" onClick={onCancel}>
                                     {l10n.t('Cancel')}
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="get-performance-insights-card-actions">
+                                <Button appearance="primary" icon={<SparkleRegular />} onClick={onGetInsights}>
+                                    {errorMessage ? l10n.t('Retry') : l10n.t('Get AI Performance Insights')}
+                                </Button>
+                                <Button appearance="subtle" onClick={onLearnMore}>
+                                    {l10n.t('Learn more about AI Performance Insights')}
                                 </Button>
                             </div>
                         )}

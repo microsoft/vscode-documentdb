@@ -45,6 +45,7 @@ import { generateMongoFindJsonSchema } from '../../../utils/json/mongo/autocompl
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../api/configuration/appRouter';
+import { type QueryInsightsStage3Response } from './types/queryInsights';
 
 export type RouterContext = BaseRouterContext & {
     sessionId: string;
@@ -615,51 +616,51 @@ export const collectionsViewRouter = router({
     }),
 
     /**
-     * Query Insights Stage 3 - AI-Powered Optimization Recommendations
-     * Returns actionable suggestions from AI service
+     * Get Query Insights - Stage 3 (AI-powered recommendations)
+     * Opt-in AI analysis of query performance with actionable suggestions
      *
      * This endpoint:
      * 1. Retrieves the current query from ClusterSession (no parameters needed)
      * 2. Calls AI service with query, database, and collection info
      * 3. Transforms AI response into UI-friendly format with action buttons
      */
-    getQueryInsightsStage3: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
-        const { sessionId, clusterId, databaseName, collectionName } = myCtx;
+    getQueryInsightsStage3: publicProcedure
+        .use(trpcToTelemetry)
+        .query(async ({ ctx }): Promise<QueryInsightsStage3Response> => {
+            const myCtx = ctx as RouterContext;
+            const { sessionId, clusterId, databaseName, collectionName } = myCtx;
 
-        // Get ClusterSession
-        const session: ClusterSession = ClusterSession.getSession(sessionId);
+            // Get ClusterSession
+            const session: ClusterSession = ClusterSession.getSession(sessionId);
 
-        // Get query parameters from session (current query)
-        const queryParams = session.getCurrentFindQueryParams();
+            // Get query parameters from session (current query)
+            const queryParams = session.getCurrentFindQueryParams();
 
-        // Create AI service instance
-        const aiService = new QueryInsightsAIService();
+            // Create AI service instance
+            const aiService = new QueryInsightsAIService();
 
-        // Call AI service
-        const aiRecommendations = await aiService.getOptimizationRecommendations(
-            sessionId,
-            queryParams,
-            databaseName,
-            collectionName,
-        );
+            // Call AI service
+            const aiRecommendations = await aiService.getOptimizationRecommendations(
+                sessionId,
+                queryParams,
+                databaseName,
+                collectionName,
+            );
 
-        // Transform AI response to UI format with button payloads
-        const transformed = transformAIResponseForUI(aiRecommendations, {
-            clusterId,
-            databaseName,
-            collectionName,
-        });
+            // Transform AI response to UI format with button payloads
+            const transformed = transformAIResponseForUI(aiRecommendations, {
+                clusterId,
+                databaseName,
+                collectionName,
+            });
 
-        return transformed;
-    }),
-
-    /**
+            return transformed;
+        }) /**
      * Execute a recommendation action (create index, drop index, learn more, etc.)
      *
      * Takes actionId and payload from the button click and routes to appropriate handler
      * in QueryInsightsAIService
-     */
+     */,
     executeRecommendation: publicProcedure
         .use(trpcToTelemetry)
         .input(

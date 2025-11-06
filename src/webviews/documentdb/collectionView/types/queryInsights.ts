@@ -248,7 +248,7 @@ export interface ImprovementCard {
 export interface ActionButton {
     label: string; // e.g., "Create Index"
     actionId: string; // e.g., "createIndex", "dropIndex", "learnMore"
-    payload: unknown; // Context needed to perform the action
+    payload?: unknown; // Context needed to perform the action (optional for some actions like "learnMore")
 }
 
 /**
