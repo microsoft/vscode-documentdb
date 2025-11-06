@@ -308,19 +308,25 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                     }
 
                                                     // Add stage-specific properties from extendedStageInfo
+                                                    // Arrays are built in the same traversal order, so index-based matching is correct
                                                     const extendedInfo = stage2Data.extendedStageInfo?.[stageIndex];
                                                     if (extendedInfo?.properties) {
                                                         Object.entries(extendedInfo.properties).forEach(
                                                             ([key, value]) => {
                                                                 if (value !== undefined) {
+                                                                    // Convert value to string for display
+                                                                    const displayValue =
+                                                                        typeof value === 'boolean'
+                                                                            ? value
+                                                                                ? 'Yes'
+                                                                                : 'No'
+                                                                            : typeof value === 'object'
+                                                                              ? JSON.stringify(value)
+                                                                              : String(value);
+
                                                                     metrics.push({
                                                                         label: key,
-                                                                        value:
-                                                                            typeof value === 'boolean'
-                                                                                ? value
-                                                                                    ? 'Yes'
-                                                                                    : 'No'
-                                                                                : value,
+                                                                        value: displayValue,
                                                                     });
                                                                 }
                                                             },

@@ -267,6 +267,7 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
             rawExecutionStats: analyzed.rawStats,
             isSharded: true,
             shards: shardedInfo.shards,
+            extendedStageInfo: analyzed.extendedStageInfo, // Pass through extended stage properties for UI
         };
     }
 
@@ -335,6 +336,7 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
             // Stage 2 has access to execution metrics
         })),
         rawExecutionStats: analyzed.rawStats,
+        extendedStageInfo: analyzed.extendedStageInfo, // Pass through extended stage properties for UI
     };
 }
 
