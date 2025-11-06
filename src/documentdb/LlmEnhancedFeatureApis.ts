@@ -72,6 +72,8 @@ export interface DropIndexResult {
     ok: number;
     // Number of indexes after dropping
     nIndexesWas?: number;
+    // Notes or warnings
+    note?: string;
 }
 
 /**
@@ -106,6 +108,7 @@ export interface IndexStats {
     key: Record<string, number | string>;
     // Host information
     host: string;
+
     // Access statistics
     accesses: {
         // Number of times the index has been used
@@ -332,55 +335,92 @@ export class llmEnhancedFeatureApis {
     ): Promise<CreateIndexResult> {
         const db = this.mongoClient.db(databaseName);
 
-        const { key, name, unique, background, sparse, expireAfterSeconds, partialFilterExpression, ...otherOptions } =
-            indexSpec;
+        // Handle two cases:
+        // 1. indexSpec.key exists: {key: {age: 1}, name: "age_1", ...}
+        // 2. indexSpec is the key itself: {age: 1}
+        let indexKey: Record<string, number | string>;
+        let indexOptions: Partial<IndexSpecification> = {};
+
+        if ('key' in indexSpec && indexSpec.key) {
+            const { key, ...options } = indexSpec;
+            indexKey = key;
+            indexOptions = options;
+        } else {
+            indexKey = indexSpec as Record<string, number | string>;
+        }
 
         const indexDefinition: Document = {
-            key,
+            key: indexKey,
         };
 
+        // Generate index name if not provided
+        let indexName = indexOptions.name;
+        if (!indexName) {
+            indexName = Object.entries(indexKey)
+                .map(([field, direction]) => `${field}_${direction}`)
+                .join('_');
+        }
+        indexDefinition.name = indexName;
+
         // Add optional fields only if they are defined
-        if (name !== undefined) {
-            indexDefinition.name = name;
+        if (indexOptions.unique !== undefined) {
+            indexDefinition.unique = indexOptions.unique;
         }
 
-        if (unique !== undefined) {
-            indexDefinition.unique = unique;
+        if (indexOptions.background !== undefined) {
+            indexDefinition.background = indexOptions.background;
         }
 
-        if (background !== undefined) {
-            indexDefinition.background = background;
+        if (indexOptions.sparse !== undefined) {
+            indexDefinition.sparse = indexOptions.sparse;
         }
 
-        if (sparse !== undefined) {
-            indexDefinition.sparse = sparse;
+        if (indexOptions.expireAfterSeconds !== undefined) {
+            indexDefinition.expireAfterSeconds = indexOptions.expireAfterSeconds;
         }
 
-        if (expireAfterSeconds !== undefined) {
-            indexDefinition.expireAfterSeconds = expireAfterSeconds;
+        if (indexOptions.partialFilterExpression !== undefined) {
+            indexDefinition.partialFilterExpression = indexOptions.partialFilterExpression;
         }
 
-        if (partialFilterExpression !== undefined) {
-            indexDefinition.partialFilterExpression = partialFilterExpression;
+        // Add any other options (excluding properties we've already handled above)
+        const handledProps = new Set([
+            'key',
+            'name',
+            'unique',
+            'background',
+            'sparse',
+            'expireAfterSeconds',
+            'partialFilterExpression',
+        ]);
+        for (const [key, value] of Object.entries(indexOptions)) {
+            if (!handledProps.has(key)) {
+                indexDefinition[key] = value;
+            }
         }
-
-        // Add any other options
-        Object.assign(indexDefinition, otherOptions);
 
         const command: Document = {
             createIndexes: collectionName,
             indexes: [indexDefinition],
         };
 
-        const result = await db.command(command);
+        try {
+            const result = await db.command(command);
 
-        return {
-            ok: (result.ok as number) ?? 0,
-            indexName: result.createdCollectionAutomatically !== undefined ? (name ?? 'auto-generated') : undefined,
-            numIndexesAfter: result.numIndexesAfter as number | undefined,
-            numIndexesBefore: result.numIndexesBefore as number | undefined,
-            note: result.note as string | undefined,
-        };
+            return {
+                ok: (result.ok as number) ?? 0,
+                indexName: indexName,
+                numIndexesAfter: result.numIndexesAfter as number | undefined,
+                numIndexesBefore: result.numIndexesBefore as number | undefined,
+                note: result.note as string | undefined,
+            };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return {
+                ok: 0,
+                note: `Index creation failed: ${errorMessage}`,
+            };
+        }
     }
 
     /**
@@ -398,12 +438,20 @@ export class llmEnhancedFeatureApis {
             index: indexName,
         };
 
-        const result = await db.command(command);
+        try {
+            const result = await db.command(command);
 
-        return {
-            ok: (result.ok as number) ?? 0,
-            nIndexesWas: result.nIndexesWas as number | undefined,
-        };
+            return {
+                ok: (result.ok as number) ?? 0,
+                nIndexesWas: result.nIndexesWas as number | undefined,
+            };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return {
+                ok: 0,
+                note: `Index drop failed: ${errorMessage}`,
+            };
+        }
     }
 
     /**
@@ -425,5 +473,64 @@ export class llmEnhancedFeatureApis {
             .toArray();
 
         return sampleDocuments;
+    }
+
+    /**
+     * Modify index visibility in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to modify
+     * @param hidden - Whether to hide (true) or unhide (false) the index
+     * @returns Result of the modify index operation
+     */
+    async modifyIndexVisibility(
+        databaseName: string,
+        collectionName: string,
+        indexName: string,
+        hidden: boolean,
+    ): Promise<Document> {
+        const db = this.mongoClient.db(databaseName);
+
+        const command: Document = {
+            collMod: collectionName,
+            index: {
+                name: indexName,
+                hidden,
+            },
+        };
+
+        try {
+            const result = await db.command(command);
+            return result;
+        } catch (error: unknown) {
+            const action = hidden ? 'hide' : 'unhide';
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return {
+                ok: 0,
+                errmsg: `Failed to ${action} index: ${errorMessage}`,
+            };
+        }
+    }
+
+    /**
+     * Hide an index in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to hide
+     * @returns Result of the hide index operation
+     */
+    async hideIndex(databaseName: string, collectionName: string, indexName: string): Promise<Document> {
+        return this.modifyIndexVisibility(databaseName, collectionName, indexName, true);
+    }
+
+    /**
+     * Unhide an index in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to unhide
+     * @returns Result of the unhide index operation
+     */
+    async unhideIndex(databaseName: string, collectionName: string, indexName: string): Promise<Document> {
+        return this.modifyIndexVisibility(databaseName, collectionName, indexName, false);
     }
 }

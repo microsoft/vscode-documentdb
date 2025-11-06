@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { type Document, type Filter, type Sort } from 'mongodb';
 import * as vscode from 'vscode';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
@@ -28,14 +29,11 @@ export enum CommandType {
  */
 export interface QueryObject {
     // Filter criteria
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    filter?: any;
+    filter?: Filter<Document>;
     // Sort specification
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    sort?: any;
+    sort?: Sort;
     // Projection specification
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    projection?: any;
+    projection?: Document;
     // Number of documents to skip
     skip?: number;
     // Maximum number of documents to return
@@ -342,8 +340,8 @@ async function fillPromptTemplate(
     const filled = template
         .replace('{databaseName}', context.databaseName)
         .replace('{collectionName}', context.collectionName)
-        .replace('{collectionStats}', JSON.stringify(collectionStats, null, 2) || 'N/A')
-        .replace('{indexStats}', JSON.stringify(indexes, null, 2) || 'N/A')
+        .replace('{collectionStats}', collectionStats ? JSON.stringify(collectionStats, null, 2) : 'N/A')
+        .replace('{indexStats}', indexes ? JSON.stringify(indexes, null, 2) : 'N/A')
         .replace('{executionStats}', executionStats)
         .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2))
         .replace(
@@ -447,9 +445,6 @@ export async function optimizeQuery(
                     parsedQuery?.filter || {},
                 );
             }
-
-            collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
-            indexes = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
         } catch (error) {
             throw new Error(
                 l10n.t('Failed to gather query optimization data: {message}', {
@@ -457,6 +452,26 @@ export async function optimizeQuery(
                 }),
             );
         }
+    }
+
+    try {
+        collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
+        const indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
+        const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
+        // // TODO: handle search indexes for Atlas
+        // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
+        indexes = indexesStats.map((indexStat) => {
+            const indexInfo = indexesInfo.find((idx) => idx.name === indexStat.name);
+            return {
+                ...indexStat,
+                ...indexInfo,
+            };
+        });
+        // indexes.push(...searchIndexes);
+    } catch {
+        // They are not critical errors, we can continue without index stats and collection stats
+        collectionStats = null as unknown as CollectionStats;
+        indexes = null as unknown as Array<IndexStats>;
     }
 
     // Sanitize explain result to remove constant values while preserving field names

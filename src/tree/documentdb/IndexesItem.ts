@@ -35,6 +35,8 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     async getChildren(): Promise<TreeElement[]> {
         const client: ClustersClient = await ClustersClient.getClient(this.cluster.id);
         const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
+        const searchIndexes = await client.listSearchIndexesForAtlas(this.databaseInfo.name, this.collectionInfo.name);
+        indexes.push(...searchIndexes);
         return indexes.map((index) => {
             return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
         });

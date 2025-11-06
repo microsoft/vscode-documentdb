@@ -632,8 +632,6 @@ export const collectionsViewRouter = router({
 
         // Get query parameters from session (current query)
         const queryParams = session.getCurrentFindQueryParams();
-        // Use the filter as the query text for AI service
-        const queryText = queryParams.filter ?? '{}';
 
         // Create AI service instance
         const aiService = new QueryInsightsAIService();
@@ -641,7 +639,7 @@ export const collectionsViewRouter = router({
         // Call AI service
         const aiRecommendations = await aiService.getOptimizationRecommendations(
             sessionId,
-            queryText,
+            queryParams,
             databaseName,
             collectionName,
         );

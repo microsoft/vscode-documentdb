@@ -99,10 +99,21 @@ export interface FindQueryParams {
 
 export interface IndexItemModel {
     name: string;
-    key: {
+    type: 'traditional' | 'search';
+    key?: {
         [key: string]: number | string;
     };
     version?: number;
+    unique?: boolean;
+    sparse?: boolean;
+    background?: boolean;
+    hidden?: boolean;
+    expireAfterSeconds?: number;
+    partialFilterExpression?: Document;
+    status?: string;
+    queryable?: boolean;
+    fields?: unknown[];
+    [key: string]: unknown; // Allow additional index properties
 }
 
 // Currently we only return insertedCount, but we can add more fields in the future if needed
@@ -363,10 +374,28 @@ export class ClustersClient {
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
         const indexes = await collection.indexes();
 
-        let i = 0; // backup for indexes with no names
+        let i = 0;
         return indexes.map((index) => {
-            return { name: index.name ?? 'idx_' + (i++).toString(), key: index.key, version: index.v };
+            const { v, ...indexWithoutV } = index;
+            return {
+                ...indexWithoutV,
+                name: index.name ?? 'idx_' + (i++).toString(),
+                version: v,
+                type: 'traditional' as const,
+            };
         });
+    }
+
+    async listSearchIndexesForAtlas(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+        const searchIndexes = await collection.aggregate([{ $listSearchIndexes: {} }]).toArray();
+        let i = 0; // backup for indexes with no names
+        return searchIndexes.map((index: Document) => ({
+            ...index,
+            name: (index.name as string | undefined) ?? 'search_idx_' + (i++).toString(),
+            type: ((index.type as string | undefined) ?? 'search') as 'traditional' | 'search',
+            fields: index.fields as unknown[] | undefined,
+        }));
     }
 
     /**
@@ -810,5 +839,33 @@ export class ClustersClient {
             throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
         return this._llmEnhancedFeatureApis.getSampleDocuments(databaseName, collectionName, limit);
+    }
+
+    /**
+     * Hide an index in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to hide
+     * @returns Result of the hide index operation
+     */
+    async hideIndex(databaseName: string, collectionName: string, indexName: string): Promise<Document> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.hideIndex(databaseName, collectionName, indexName);
+    }
+
+    /**
+     * Unhide an index in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to unhide
+     * @returns Result of the unhide index operation
+     */
+    async unhideIndex(databaseName: string, collectionName: string, indexName: string): Promise<Document> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.unhideIndex(databaseName, collectionName, indexName);
     }
 }
