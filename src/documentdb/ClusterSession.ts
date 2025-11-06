@@ -5,12 +5,13 @@
 
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
-import { ObjectId, type Document, type WithId } from 'mongodb';
+import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
 import { type JSONSchema } from '../utils/json/JSONSchema';
 import { getPropertyNamesAtLevel, updateSchemaWithDocument } from '../utils/json/mongo/SchemaAnalyzer';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
+import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export type TableDataEntry = {
     /**
@@ -32,6 +33,28 @@ export interface TableData {
     path: string[];
     headers: string[];
     data: TableDataEntry[];
+}
+
+/**
+ * Parsed query parameters with BSON objects
+ * This extends FindQueryParams by providing parsed Document objects
+ * in addition to the string representations
+ */
+export interface ParsedFindQueryParams extends FindQueryParams {
+    /**
+     * Parsed filter object with BSON types (UUID, Date, etc.) properly converted
+     */
+    filterObj: Filter<Document>;
+
+    /**
+     * Parsed projection object, or undefined if no projection
+     */
+    projectionObj?: Document;
+
+    /**
+     * Parsed sort object, or undefined if no sort
+     */
+    sortObj?: Document;
 }
 
 export class ClusterSession {
@@ -398,6 +421,108 @@ export class ClusterSession {
      */
     public getLastExecutionTimeMs(): number {
         return this._lastExecutionTimeMs ?? 0;
+    }
+
+    /**
+     * Gets the current query parameters from the session
+     * This returns the query parameters from the last executed query
+     *
+     * @returns Parsed FindQueryParams object containing filter, project, sort, skip, and limit
+     * @throws Error if the current query text cannot be parsed
+     *
+     * @remarks
+     * The current query is tracked internally as a JSON-stringified object and is updated
+     * whenever runFindQueryWithCache is called. This method parses that JSON string and
+     * returns the structured query parameters.
+     */
+    public getCurrentFindQueryParams(): FindQueryParams {
+        if (!this._currentQueryText) {
+            return {
+                filter: '{}',
+                project: '{}',
+                sort: '{}',
+                skip: 0,
+                limit: 0,
+            };
+        }
+
+        try {
+            const parsed = JSON.parse(this._currentQueryText) as {
+                filter?: string;
+                project?: string;
+                sort?: string;
+                skip?: number;
+                limit?: number;
+            };
+
+            return {
+                filter: parsed.filter ?? '{}',
+                project: parsed.project ?? '{}',
+                sort: parsed.sort ?? '{}',
+                skip: parsed.skip ?? 0,
+                limit: parsed.limit ?? 0,
+            };
+        } catch (error) {
+            throw new Error(
+                l10n.t(
+                    'Failed to parse current query text: {0}',
+                    error instanceof Error ? error.message : String(error),
+                ),
+            );
+        }
+    }
+
+    /**
+     * Gets the current query parameters with parsed BSON objects
+     * This returns both the string representations AND the parsed Document objects
+     *
+     * @returns ParsedFindQueryParams object containing string params plus parsed filterObj, projectionObj, sortObj
+     * @throws Error if the current query text cannot be parsed
+     *
+     * @remarks
+     * This method uses the same BSON parsing logic as ClustersClient.runFindQuery():
+     * - filter is parsed with toFilterQueryObj() which handles UUID(), Date(), MinKey(), MaxKey() constructors
+     * - projection and sort are parsed with EJSON.parse()
+     *
+     * Use this method when you need the actual MongoDB Document objects for query execution.
+     * Use getCurrentFindQueryParams() when you only need the string representations.
+     */
+    public getCurrentFindQueryParamsWithObjects(): ParsedFindQueryParams {
+        const stringParams = this.getCurrentFindQueryParams();
+
+        // Parse filter using toFilterQueryObj (handles BSON constructors like UUID, Date, etc.)
+        const filterObj: Filter<Document> = toFilterQueryObj(stringParams.filter ?? '{}');
+
+        // Parse projection if present and not empty
+        let projectionObj: Document | undefined;
+        if (stringParams.project && stringParams.project.trim() !== '{}') {
+            try {
+                projectionObj = EJSON.parse(stringParams.project) as Document;
+            } catch (error) {
+                throw new Error(
+                    l10n.t('Invalid projection syntax: {0}', error instanceof Error ? error.message : String(error)),
+                );
+            }
+        }
+
+        // Parse sort if present and not empty
+        let sortObj: Document | undefined;
+        if (stringParams.sort && stringParams.sort.trim() !== '{}') {
+            try {
+                sortObj = EJSON.parse(stringParams.sort) as Document;
+            } catch (error) {
+                throw new Error(
+                    l10n.t('Invalid sort syntax: {0}', error instanceof Error ? error.message : String(error)),
+                );
+            }
+        }
+
+        return {
+            ...stringParams,
+            filterObj,
+            projectionObj,
+            sortObj,
+        };
     }
 
     /**

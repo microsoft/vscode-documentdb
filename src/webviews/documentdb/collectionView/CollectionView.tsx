@@ -131,11 +131,8 @@ export const CollectionView = (): JSX.Element => {
             return; // Already handled
         }
 
-        const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1.query({
-            filter: currentContext.activeQuery.filter,
-            project: currentContext.activeQuery.project,
-            sort: currentContext.activeQuery.sort,
-        });
+        // Query parameters are now retrieved from ClusterSession - no need to pass them
+        const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1.query();
 
         // Track the promise immediately
         setCurrentContext((prev) => ({
@@ -603,15 +600,7 @@ export const CollectionView = (): JSX.Element => {
                     </>
                 )}
 
-                {selectedTab === 'tab_performance_main' && (
-                    <QueryInsightsMain
-                        currentQuery={{
-                            filter: currentContext.activeQuery.filter,
-                            project: currentContext.activeQuery.project,
-                            sort: currentContext.activeQuery.sort,
-                        }}
-                    />
-                )}
+                {selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
                 {selectedTab === 'tab_performance_mock' && <QueryInsightsMainMock />}
             </div>
         </CollectionViewContext.Provider>

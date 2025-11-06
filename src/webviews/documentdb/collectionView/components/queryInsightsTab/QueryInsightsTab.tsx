@@ -56,15 +56,7 @@ import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/su
 import './queryInsights.scss';
 import './QueryInsightsTab.scss';
 
-interface QueryInsightsMainProps {
-    currentQuery: {
-        filter: string;
-        project?: string;
-        sort?: string;
-    };
-}
-
-export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX.Element => {
+export const QueryInsightsMain = (): JSX.Element => {
     // Stage management:
     // Stage 1: Initial View (cheap data + query plan from explain("queryPlanner"))
     // Stage 2: Detailed Execution Analysis (from explain("executionStats"))
@@ -121,12 +113,9 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
         if (!queryInsightsState.stage1Data && !queryInsightsState.stage1Loading && !queryInsightsState.stage1Promise) {
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Loading: true }));
 
+            // Query parameters are now retrieved from ClusterSession - no need to pass them
             const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
-                .query({
-                    filter: currentQuery.filter,
-                    project: currentQuery.project,
-                    sort: currentQuery.sort,
-                })
+                .query()
                 .then((data) => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
@@ -165,12 +154,9 @@ export const QueryInsightsMain = ({ currentQuery }: QueryInsightsMainProps): JSX
         ) {
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Loading: true }));
 
+            // Query parameters are now retrieved from ClusterSession - no need to pass them
             const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
-                .query({
-                    filter: currentQuery.filter,
-                    project: currentQuery.project,
-                    sort: currentQuery.sort,
-                })
+                .query()
                 .then((data) => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,

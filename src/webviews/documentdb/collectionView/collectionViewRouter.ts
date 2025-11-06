@@ -481,139 +481,128 @@ export const collectionsViewRouter = router({
      * Note: This uses queryPlanner verbosity (no query re-execution)
      * Documents returned is NOT available in Stage 1 - only in Stage 2 with executionStats
      */
-    getQueryInsightsStage1: publicProcedure
-        .use(trpcToTelemetry)
-        .input(
-            z.object({
-                filter: z.string(),
-                project: z.string().optional(),
-                sort: z.string().optional(),
-            }),
-        )
-        .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
-            const { sessionId, databaseName, collectionName } = myCtx;
+    getQueryInsightsStage1: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
+        const myCtx = ctx as RouterContext;
+        const { sessionId, databaseName, collectionName } = myCtx;
 
-            let analyzed: QueryPlannerAnalysis;
-            let executionTime: number;
+        let analyzed: QueryPlannerAnalysis;
+        let executionTime: number;
 
-            // Check for debug override file first
-            const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
-            if (debugData) {
-                // Use debug data - analyze it the same way as real data
-                analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(debugData);
-                // Use a default execution time for debug mode
-                executionTime = 2.5;
-            } else {
-                // Get ClusterSession
-                const session: ClusterSession = ClusterSession.getSession(sessionId);
+        // Check for debug override file first
+        const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
+        if (debugData) {
+            // Use debug data - analyze it the same way as real data
+            analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(debugData);
+            // Use a default execution time for debug mode
+            executionTime = 2.5;
+        } else {
+            // Get ClusterSession
+            const session: ClusterSession = ClusterSession.getSession(sessionId);
 
-                // Get execution time from session (tracked during last query execution)
-                executionTime = session.getLastExecutionTimeMs();
+            // Get execution time from session (tracked during last query execution)
+            executionTime = session.getLastExecutionTimeMs();
 
-                // Parse query parameters
-                const filter = JSON.parse(input.filter) as Document;
-                const sort = input.sort ? (JSON.parse(input.sort) as Document) : undefined;
-                const projection = input.project ? (JSON.parse(input.project) as Document) : undefined;
+            // Get query parameters from session with parsed BSON objects
+            const queryParams = session.getCurrentFindQueryParamsWithObjects();
 
-                // Get query planner info (cached or fetch) without skip/limit for full query insights
-                const queryPlannerResult = await session.getQueryPlannerInfo(databaseName, collectionName, filter, {
-                    sort,
-                    projection,
+            // Get query planner info (cached or fetch) without skip/limit for full query insights
+            const queryPlannerResult = await session.getQueryPlannerInfo(
+                databaseName,
+                collectionName,
+                queryParams.filterObj,
+                {
+                    sort: queryParams.sortObj,
+                    projection: queryParams.projectionObj,
                     // Intentionally omit skip/limit for full query insights
-                });
+                },
+            );
 
-                // Analyze with ExplainPlanAnalyzer
-                analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult);
-            }
+            // Analyze with ExplainPlanAnalyzer
+            analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult);
+        }
 
-            // Transform to UI format
-            const transformed = transformStage1Response(analyzed, executionTime);
+        // Transform to UI format
+        const transformed = transformStage1Response(analyzed, executionTime);
 
-            // TODO: Remove this delay after testing - simulates slower Stage 1 execution
-            // This delay applies to both live and debug scenarios
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+        // TODO: Remove this delay after testing - simulates slower Stage 1 execution
+        // This delay applies to both live and debug scenarios
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
-            return transformed;
-        }),
+        return transformed;
+    }),
 
     /**
      * Query Insights Stage 2 - Detailed Execution Analysis
      * Returns authoritative metrics using explain("executionStats")
      *
      * This endpoint:
-     * 1. Retrieves cached execution stats from ClusterSession
-     * 2. Uses ExplainPlanAnalyzer to parse and rate performance
-     * 3. Transforms the analysis into UI-friendly format with performance rating
+     * 1. Retrieves the current query from ClusterSession (no parameters needed)
+     * 2. Retrieves cached execution stats from ClusterSession
+     * 3. Uses ExplainPlanAnalyzer to parse and rate performance
+     * 4. Transforms the analysis into UI-friendly format with performance rating
      *
      * Note: This executes the query with executionStats verbosity
      */
-    getQueryInsightsStage2: publicProcedure
-        .use(trpcToTelemetry)
-        .input(
-            z.object({
-                filter: z.string(),
-                project: z.string().optional(),
-                sort: z.string().optional(),
-            }),
-        )
-        .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
-            const { sessionId, databaseName, collectionName } = myCtx;
+    getQueryInsightsStage2: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
+        const myCtx = ctx as RouterContext;
+        const { sessionId, databaseName, collectionName } = myCtx;
 
-            let analyzed: ExecutionStatsAnalysis;
-            let explainResult: Document | undefined;
+        let analyzed: ExecutionStatsAnalysis;
+        let explainResult: Document | undefined;
 
-            // Check for debug override file first
-            const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
-            if (debugData) {
-                // Use debug data - analyze it the same way as real data
-                analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
-                explainResult = debugData;
-            } else {
-                // Get ClusterSession
-                const session: ClusterSession = ClusterSession.getSession(sessionId);
+        // Check for debug override file first
+        const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
+        if (debugData) {
+            // Use debug data - analyze it the same way as real data
+            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
+            explainResult = debugData;
+        } else {
+            // Get ClusterSession
+            const session: ClusterSession = ClusterSession.getSession(sessionId);
 
-                // Parse query parameters
-                const filter = JSON.parse(input.filter) as Document;
-                const sort = input.sort ? (JSON.parse(input.sort) as Document) : undefined;
-                const projection = input.project ? (JSON.parse(input.project) as Document) : undefined;
+            // Get query parameters from session with parsed BSON objects
+            const queryParams = session.getCurrentFindQueryParamsWithObjects();
 
-                // Get execution stats (cached or fetch) without skip/limit for full query insights
-                const executionStatsResult = await session.getExecutionStats(databaseName, collectionName, filter, {
-                    sort,
-                    projection,
+            // Get execution stats (cached or fetch) without skip/limit for full query insights
+            const executionStatsResult = await session.getExecutionStats(
+                databaseName,
+                collectionName,
+                queryParams.filterObj,
+                {
+                    sort: queryParams.sortObj,
+                    projection: queryParams.projectionObj,
                     // Intentionally omit skip/limit for full query insights
-                });
+                },
+            );
 
-                // Analyze with ExplainPlanAnalyzer
-                analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
-                explainResult = executionStatsResult;
-            }
+            // Analyze with ExplainPlanAnalyzer
+            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
+            explainResult = executionStatsResult;
+        }
 
-            // Extract extended stage info (as per design document)
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
-            if (executionStages) {
-                analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
-            }
+        // Extract extended stage info (as per design document)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
+        if (executionStages) {
+            analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
+        }
 
-            // Transform to UI format
-            const transformed = transformStage2Response(analyzed);
+        // Transform to UI format
+        const transformed = transformStage2Response(analyzed);
 
-            // TODO: Remove this delay after testing - simulates slower Stage 2 execution
-            // This delay applies to both live and debug scenarios
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+        // TODO: Remove this delay after testing - simulates slower Stage 2 execution
+        // This delay applies to both live and debug scenarios
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
-            return transformed;
-        }),
+        return transformed;
+    }),
 
     /**
      * Query Insights Stage 3 - AI-Powered Optimization Recommendations
      * Returns actionable suggestions from AI service
      *
      * This endpoint:
-     * 1. Retrieves the current query from ClusterSession
+     * 1. Retrieves the current query from ClusterSession (no parameters needed)
      * 2. Calls AI service with query, database, and collection info
      * 3. Transforms AI response into UI-friendly format with action buttons
      */
@@ -621,9 +610,13 @@ export const collectionsViewRouter = router({
         const myCtx = ctx as RouterContext;
         const { sessionId, clusterId, databaseName, collectionName } = myCtx;
 
-        // For now, we'll use a simple placeholder query
-        // TODO: Extract actual query from session's _currentQueryText when ClusterSession is extended
-        const queryText = '{ "user_id": 1234 }'; // Placeholder
+        // Get ClusterSession
+        const session: ClusterSession = ClusterSession.getSession(sessionId);
+
+        // Get query parameters from session (current query)
+        const queryParams = session.getCurrentFindQueryParams();
+        // Use the filter as the query text for AI service
+        const queryText = queryParams.filter ?? '{}';
 
         // Create AI service instance
         const aiService = new QueryInsightsAIService();
