@@ -168,15 +168,20 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
 
                             {/* Action Buttons */}
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                <Button
-                                    appearance="primary"
-                                    size="small"
-                                    onClick={() =>
-                                        onPrimaryAction?.(config.primaryButton.actionId, config.primaryButton.payload)
-                                    }
-                                >
-                                    {config.primaryButton.label}
-                                </Button>
+                                {config.primaryButton && (
+                                    <Button
+                                        appearance="primary"
+                                        size="small"
+                                        onClick={() =>
+                                            onPrimaryAction?.(
+                                                config.primaryButton!.actionId,
+                                                config.primaryButton!.payload,
+                                            )
+                                        }
+                                    >
+                                        {config.primaryButton.label}
+                                    </Button>
+                                )}
                                 {config.secondaryButton && (
                                     <Button
                                         appearance="subtle"

@@ -480,17 +480,13 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                         `Card ${index + 1}/${queryInsightsState.stage3Data?.improvementCards.length}:`,
                                                         card.cardId,
                                                         'actionId:',
-                                                        card.primaryButton.actionId,
+                                                        card.primaryButton?.actionId,
                                                     );
 
-                                                    // For cards with actionable recommendations (create, drop, modify), use ImprovementCard
-                                                    if (
-                                                        card.primaryButton.actionId === 'createIndex' ||
-                                                        card.primaryButton.actionId === 'dropIndex' ||
-                                                        card.primaryButton.actionId === 'modifyIndex'
-                                                    ) {
+                                                    // If any button exists, render ImprovementCard; otherwise render AiCard
+                                                    if (card.primaryButton || card.secondaryButton) {
                                                         console.log(
-                                                            `  -> Rendering as ImprovementCard (actionId: ${card.primaryButton.actionId})`,
+                                                            `  -> Rendering as ImprovementCard (primary: ${card.primaryButton?.actionId}, secondary: ${card.secondaryButton?.actionId})`,
                                                         );
                                                         return (
                                                             <ImprovementCard
@@ -507,10 +503,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                         );
                                                     }
 
-                                                    // For informational cards (no action), use AiCard with simplified content
-                                                    console.log(
-                                                        `  -> Rendering as AiCard (actionId: ${card.primaryButton.actionId})`,
-                                                    );
+                                                    // For informational cards (no buttons), use AiCard with simplified content
+                                                    console.log(`  -> Rendering as AiCard (no buttons)`);
                                                     return (
                                                         <AiCard
                                                             key={card.cardId || `card-${index}`}

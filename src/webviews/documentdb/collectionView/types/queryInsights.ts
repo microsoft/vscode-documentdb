@@ -237,8 +237,8 @@ export interface ImprovementCard {
     details: string; // Risks or additional considerations
     mongoShellCommand: string; // The mongoShell command to execute
 
-    // Action buttons with complete context for execution
-    primaryButton: ActionButton;
+    // Action buttons with complete context for execution (both optional)
+    primaryButton?: ActionButton;
     secondaryButton?: ActionButton;
 }
 
