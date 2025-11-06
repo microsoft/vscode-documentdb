@@ -327,18 +327,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                     const metrics: Array<{ label: string; value: string | number }> =
                                                         [];
 
-                                                    if (stage.keysExamined !== undefined) {
-                                                        metrics.push({
-                                                            label: l10n.t('Keys Examined'),
-                                                            value: stage.keysExamined.toLocaleString(),
-                                                        });
-                                                    }
-                                                    if (stage.docsExamined !== undefined) {
-                                                        metrics.push({
-                                                            label: l10n.t('Docs Examined'),
-                                                            value: stage.docsExamined.toLocaleString(),
-                                                        });
-                                                    }
+                                                    // Note: keysExamined, docsExamined and so on are added via extendedStageInfo
 
                                                     // Add stage-specific properties from extendedStageInfo
                                                     // Arrays are built in the same traversal order, so index-based matching is correct
@@ -354,15 +343,19 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                                         hasFailed = true;
                                                                     }
 
-                                                                    // Convert value to string for display
-                                                                    const displayValue =
-                                                                        typeof value === 'boolean'
-                                                                            ? value
-                                                                                ? 'Yes'
-                                                                                : 'No'
-                                                                            : typeof value === 'object'
-                                                                              ? JSON.stringify(value)
-                                                                              : String(value);
+                                                                    // Convert value to string for display with proper formatting
+                                                                    let displayValue: string;
+                                                                    if (typeof value === 'boolean') {
+                                                                        displayValue = value ? 'Yes' : 'No';
+                                                                    } else if (typeof value === 'number') {
+                                                                        // Use toLocaleString for numbers to get thousand separators
+                                                                        displayValue = value.toLocaleString();
+                                                                    } else if (typeof value === 'object') {
+                                                                        displayValue = JSON.stringify(value);
+                                                                    } else {
+                                                                        // String values - use as is
+                                                                        displayValue = String(value);
+                                                                    }
 
                                                                     metrics.push({
                                                                         label: key,

@@ -341,7 +341,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <TimeMetric label={l10n.t('Execution Time')} valueMs={executionTime} />
                         <CountMetric label={l10n.t('Documents Returned')} value={docsReturned} />
                         <CountMetric label={l10n.t('Keys Examined')} value={keysExamined} />
-                        <CountMetric label={l10n.t('Docs Examined')} value={docsExamined} />
+                        <CountMetric label={l10n.t('Documents Examined')} value={docsExamined} />
                     </MetricsRow>
 
                     {/* Optimization Opportunities */}
