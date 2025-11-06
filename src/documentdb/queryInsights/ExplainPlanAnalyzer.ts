@@ -5,6 +5,7 @@
 
 import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
 import { type Document } from 'mongodb';
+import { type ExtendedStageInfo } from '../../webviews/documentdb/collectionView/types/queryInsights';
 
 /**
  * Diagnostic detail about query performance
@@ -90,6 +91,10 @@ export class ExplainPlanAnalyzer {
         // Note: isIndexScan is derived from whether indexes are used
         const isIndexScan = usedIndexes.length > 0 && !isCollectionScan;
 
+        // Check if sorting is being performed (either in-memory or index-based)
+        // We detect this by checking if there's a SORT stage in the execution plan
+        const hasSorting = this.detectSortingInPlan(explainResult);
+
         // Build response structure
         return {
             executionTimeMillis,
@@ -106,6 +111,7 @@ export class ExplainPlanAnalyzer {
                 executionTimeMillis,
                 efficiencyRatio,
                 hasInMemorySort,
+                hasSorting,
                 isIndexScan,
                 isCollectionScan,
             ),
@@ -127,11 +133,12 @@ export class ExplainPlanAnalyzer {
      * - Efficiency ratio assessment
      * - Execution time assessment
      * - Index usage assessment
-     * - Sort strategy assessment
+     * - Sort strategy assessment (only when sorting is performed)
      *
      * @param executionTimeMs - Execution time in milliseconds
      * @param efficiencyRatio - Ratio of documents returned to documents examined
      * @param hasInMemorySort - Whether query performs in-memory sorting
+     * @param hasSorting - Whether query performs any sorting (in-memory or index-based)
      * @param isIndexScan - Whether query uses index scan
      * @param isCollectionScan - Whether query performs collection scan
      * @returns Performance rating with score and diagnostics
@@ -140,6 +147,7 @@ export class ExplainPlanAnalyzer {
         executionTimeMs: number,
         efficiencyRatio: number,
         hasInMemorySort: boolean,
+        hasSorting: boolean,
         isIndexScan: boolean,
         isCollectionScan: boolean,
     ): PerformanceRating {
@@ -223,20 +231,29 @@ export class ExplainPlanAnalyzer {
             });
         }
 
-        // 4. Sort Strategy Assessment (always included)
-        if (hasInMemorySort) {
-            diagnostics.push({
-                type: 'negative',
-                message: 'In-memory sort required',
-                details:
-                    'Your query requires sorting data in memory, which is limited by available RAM and can fail for large result sets.\n\nConsider adding a compound index that includes your sort fields to enable index-based sorting.',
-            });
+        // 4. Sort Strategy Assessment (only if sorting is performed)
+        if (hasSorting) {
+            if (hasInMemorySort) {
+                diagnostics.push({
+                    type: 'negative',
+                    message: 'In-memory sort required',
+                    details:
+                        'Your query requires sorting data in memory, which is limited by available RAM and can fail for large result sets.\n\nConsider adding a compound index that includes your sort fields to enable index-based sorting.',
+                });
+            } else {
+                diagnostics.push({
+                    type: 'positive',
+                    message: 'Efficient sorting',
+                    details:
+                        'Your query uses index-based sorting, which is efficient and avoids memory constraints.\n\nThis improves performance by leveraging the natural order of the index.',
+                });
+            }
         } else {
+            // No sorting required - add neutral diagnostic
             diagnostics.push({
-                type: 'positive',
-                message: 'Efficient sorting',
-                details:
-                    'Your query uses index-based sorting or does not require sorting.\n\nThis avoids memory constraints and improves performance.',
+                type: 'neutral',
+                message: 'No sorting required',
+                details: 'Your query does not require sorting, which avoids additional processing overhead.',
             });
         }
 
@@ -275,6 +292,61 @@ export class ExplainPlanAnalyzer {
         }
         return returned / examined;
     }
+
+    /**
+     * Detects if sorting is being performed in the execution plan
+     * Checks for SORT or SORT_KEY_GENERATOR stages in the execution tree
+     *
+     * @param explainResult - Raw explain output document
+     * @returns True if sorting is detected, false otherwise
+     */
+    private static detectSortingInPlan(explainResult: Document): boolean {
+        const executionStats = explainResult.executionStats as Document | undefined;
+        if (!executionStats) {
+            return false;
+        }
+
+        const executionStages = executionStats.executionStages as Document | undefined;
+        if (!executionStages) {
+            return false;
+        }
+
+        // Recursively check for SORT stages
+        const checkStageForSort = (stage: Document): boolean => {
+            const stageName = stage.stage as string | undefined;
+
+            if (stageName === 'SORT' || stageName === 'SORT_KEY_GENERATOR') {
+                return true;
+            }
+
+            // Check child stages
+            if (stage.inputStage) {
+                if (checkStageForSort(stage.inputStage as Document)) {
+                    return true;
+                }
+            }
+
+            if (stage.inputStages && Array.isArray(stage.inputStages)) {
+                for (const childStage of stage.inputStages) {
+                    if (checkStageForSort(childStage as Document)) {
+                        return true;
+                    }
+                }
+            }
+
+            if (stage.shards && Array.isArray(stage.shards)) {
+                for (const shard of stage.shards) {
+                    if (checkStageForSort(shard as Document)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        };
+
+        return checkStageForSort(executionStages);
+    }
 }
 
 /**
@@ -305,4 +377,5 @@ export interface ExecutionStatsAnalysis {
     isIndexScan: boolean;
     performanceRating: PerformanceRating;
     rawStats: Document;
+    extendedStageInfo?: ExtendedStageInfo[];
 }

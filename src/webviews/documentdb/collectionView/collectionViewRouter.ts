@@ -5,6 +5,7 @@
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as fs from 'fs';
+import { type Document } from 'mongodb';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { type JSONSchema } from 'vscode-json-languageservice';
@@ -28,6 +29,7 @@ import {
     type ExecutionStatsAnalysis,
     type QueryPlannerAnalysis,
 } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
+import { StagePropertyExtractor } from '../../../documentdb/queryInsights/StagePropertyExtractor';
 import {
     transformAIResponseForUI,
     transformStage1Response,
@@ -560,12 +562,14 @@ export const collectionsViewRouter = router({
             const { sessionId, databaseName, collectionName } = myCtx;
 
             let analyzed: ExecutionStatsAnalysis;
+            let explainResult: Document | undefined;
 
             // Check for debug override file first
             const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
             if (debugData) {
                 // Use debug data - analyze it the same way as real data
                 analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
+                explainResult = debugData;
             } else {
                 // Get ClusterSession
                 const session: ClusterSession = ClusterSession.getSession(sessionId);
@@ -584,6 +588,14 @@ export const collectionsViewRouter = router({
 
                 // Analyze with ExplainPlanAnalyzer
                 analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
+                explainResult = executionStatsResult;
+            }
+
+            // Extract extended stage info (as per design document)
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
+            if (executionStages) {
+                analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
             }
 
             // Transform to UI format

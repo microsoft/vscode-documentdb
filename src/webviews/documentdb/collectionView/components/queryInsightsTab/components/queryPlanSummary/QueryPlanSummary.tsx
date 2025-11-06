@@ -193,28 +193,19 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                                 padding: '8px',
                                                             }}
                                                         >
-                                                            {shard2Data.stages.map((stage, index) => {
+                                                            {shard2Data.stages.map((stage, stageIndex) => {
                                                                 const metrics: Array<{
                                                                     label: string;
                                                                     value: string | number;
                                                                 }> = [];
 
-                                                                if (stage.keysExamined !== undefined) {
-                                                                    metrics.push({
-                                                                        label: l10n.t('Keys Examined'),
-                                                                        value: stage.keysExamined.toLocaleString(),
-                                                                    });
-                                                                }
-                                                                if (stage.docsExamined !== undefined) {
-                                                                    metrics.push({
-                                                                        label: l10n.t('Docs Examined'),
-                                                                        value: stage.docsExamined.toLocaleString(),
-                                                                    });
-                                                                }
+                                                                // Note: Extended stage info for sharded queries
+                                                                // would require accessing stage2Data.extendedStageInfo
+                                                                // For now, sharded queries don't show extended properties
 
                                                                 return (
-                                                                    <React.Fragment key={index}>
-                                                                        {index > 0 && (
+                                                                    <React.Fragment key={stageIndex}>
+                                                                        {stageIndex > 0 && (
                                                                             <div className="stage-separator">
                                                                                 <ArrowUpFilled fontSize={20} />
                                                                             </div>
@@ -299,7 +290,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                     padding: '8px',
                                                 }}
                                             >
-                                                {stage2Data.stages.map((stage, index) => {
+                                                {stage2Data.stages.map((stage, stageIndex) => {
                                                     const metrics: Array<{ label: string; value: string | number }> =
                                                         [];
 
@@ -316,9 +307,29 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                         });
                                                     }
 
+                                                    // Add stage-specific properties from extendedStageInfo
+                                                    const extendedInfo = stage2Data.extendedStageInfo?.[stageIndex];
+                                                    if (extendedInfo?.properties) {
+                                                        Object.entries(extendedInfo.properties).forEach(
+                                                            ([key, value]) => {
+                                                                if (value !== undefined) {
+                                                                    metrics.push({
+                                                                        label: key,
+                                                                        value:
+                                                                            typeof value === 'boolean'
+                                                                                ? value
+                                                                                    ? 'Yes'
+                                                                                    : 'No'
+                                                                                : value,
+                                                                    });
+                                                                }
+                                                            },
+                                                        );
+                                                    }
+
                                                     return (
-                                                        <React.Fragment key={index}>
-                                                            {index > 0 && (
+                                                        <React.Fragment key={stageIndex}>
+                                                            {stageIndex > 0 && (
                                                                 <div className="stage-separator">
                                                                     <ArrowUpFilled fontSize={20} />
                                                                 </div>

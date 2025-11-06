@@ -6,6 +6,7 @@
 import { type Document } from 'mongodb';
 import { type AIIndexRecommendation, type AIOptimizationResponse } from '../../services/ai/types';
 import {
+    type ExtendedStageInfo,
     type ImprovementCard,
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
@@ -271,7 +272,7 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
     }
 
     // Non-sharded query - extract stages normally
-    const stages = extractStagesFromDocument(analyzed.rawStats);
+    const stages = extractStagesFromDocument(analyzed.rawStats, analyzed.extendedStageInfo);
 
     // Calculate examined-to-returned ratio (inverse of efficiency ratio)
     const examinedToReturnedRatio = analyzed.nReturned > 0 ? analyzed.totalDocsExamined / analyzed.nReturned : Infinity;
@@ -343,9 +344,10 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
  * Recursively traverses the stage tree and flattens it
  *
  * @param explainResult - Raw explain output document
+ * @param extendedStageInfo - Optional extended stage information with properties extracted by StagePropertyExtractor
  * @returns Array of stage info for UI
  */
-function extractStagesFromDocument(explainResult: Document): StageInfo[] {
+function extractStagesFromDocument(explainResult: Document, extendedStageInfo?: ExtendedStageInfo[]): StageInfo[] {
     const stages: StageInfo[] = [];
 
     // Try to get execution stages first (from executionStats), fall back to query planner
@@ -359,9 +361,28 @@ function extractStagesFromDocument(explainResult: Document): StageInfo[] {
         return stages;
     }
 
+    // Create a map of stage names to properties for quick lookup
+    const stagePropertiesMap = new Map<string, Record<string, string | number | boolean | undefined>>();
+    if (extendedStageInfo) {
+        // Build map: for stages with same name, we'll use the first one
+        // In practice, stage names might repeat in different parts of the tree
+        let stageIndex = 0;
+        for (const info of extendedStageInfo) {
+            // Use index as key to maintain order since stage names can repeat
+            stagePropertiesMap.set(`${info.stageName}_${stageIndex}`, info.properties);
+            stageIndex++;
+        }
+    }
+
+    let currentStageIndex = 0;
+
     // Recursively traverse stages
     function traverseStage(stage: Document): void {
         const stageName: string = (stage.stage as string | undefined) || 'UNKNOWN';
+
+        // Try to get properties from extendedStageInfo using index
+        const properties = stagePropertiesMap.get(`${stageName}_${currentStageIndex}`);
+        currentStageIndex++;
 
         stages.push({
             stage: stageName,
@@ -373,6 +394,7 @@ function extractStagesFromDocument(explainResult: Document): StageInfo[] {
             indexName: stage.indexName as string | undefined,
             keysExamined: stage.keysExamined as number | undefined,
             docsExamined: stage.docsExamined as number | undefined,
+            properties: properties && Object.keys(properties).length > 0 ? properties : undefined,
         });
 
         // Traverse child stages
@@ -530,6 +552,7 @@ function extractShardedInfoFromDocument(
 
 /**
  * Extracts stages from a shard's execution plan
+ * Note: Properties are not extracted here - they should come from extendedStageInfo at the router level
  */
 function extractStagesFromShard(shardPlan: Document): StageInfo[] {
     const stages: StageInfo[] = [];
@@ -547,6 +570,8 @@ function extractStagesFromShard(shardPlan: Document): StageInfo[] {
             indexName: stage.indexName as string | undefined,
             keysExamined: stage.keysExamined as number | undefined,
             docsExamined: stage.docsExamined as number | undefined,
+            // Properties are not extracted for sharded queries in this version
+            properties: undefined,
         });
 
         // Traverse child stages
