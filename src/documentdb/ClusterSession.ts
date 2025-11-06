@@ -74,11 +74,37 @@ export class ClusterSession {
     }
 
     /**
-     * Tracks the known JSON schema for the current query
-     * and updates it with everything we see until the query text changes.
+     * Accumulated JSON schema across all pages seen for the current query.
+     * Updates progressively as users navigate through different pages.
+     * Reset when the query or page size changes.
      */
-    private _currentJsonSchema: JSONSchema = {};
-    private _currentQueryText: string = '';
+    private _accumulatedJsonSchema: JSONSchema = {};
+
+    /**
+     * Tracks the highest page number that has been accumulated into the schema.
+     * Users navigate sequentially starting from page 1, so any page ≤ this value
+     * has already been accumulated and should be skipped.
+     * Reset when the query or page size changes.
+     */
+    private _highestPageAccumulated: number = 0;
+
+    /**
+     * Stores the user's original query parameters (filter, project, sort, skip, limit).
+     * This represents what the user actually queried for, independent of pagination.
+     * Used for returning query info to consumers via getCurrentFindQueryParams().
+     */
+    private _currentUserQueryParams: FindQueryParams | null = null;
+
+    /**
+     * The page size used for the current accumulation strategy.
+     * If this changes, we need to reset accumulated data since page boundaries differ.
+     */
+    private _currentPageSize: number | null = null;
+
+    /**
+     * Raw documents from the most recently fetched page.
+     * This is NOT accumulated - it only contains the current page's data.
+     */
     private _currentRawDocuments: WithId<Document>[] = [];
 
     /**
@@ -103,25 +129,66 @@ export class ClusterSession {
     private _lastExecutionTimeMs?: number;
 
     /**
-     * This is a basic approach for now, we can improve this later.
-     * It's important to react to an updated query and to invalidate local caches if the query has changed.
-     * @param query
-     * @returns
+     * Resets internal caches when the user's query changes.
+     * Only compares the semantic query parameters (filter, project, sort)
+     * and the user's original skip/limit, NOT the pagination-derived skip/limit.
+     *
+     * @param userQueryParams - The user's original query parameters
      */
-    private resetCachesIfQueryChanged(query: string) {
-        if (this._currentQueryText.localeCompare(query.trim(), undefined, { sensitivity: 'base' }) === 0) {
-            return;
+    private resetCachesIfUserQueryChanged(userQueryParams: FindQueryParams): void {
+        // Create a stable key from user's query params (not pagination)
+        const userQueryKey = JSON.stringify({
+            filter: userQueryParams.filter || '{}',
+            project: userQueryParams.project || '{}',
+            sort: userQueryParams.sort || '{}',
+            skip: userQueryParams.skip ?? 0,
+            limit: userQueryParams.limit ?? 0,
+        });
+
+        // Check if this is the same query as before
+        if (this._currentUserQueryParams) {
+            const previousQueryKey = JSON.stringify({
+                filter: this._currentUserQueryParams.filter || '{}',
+                project: this._currentUserQueryParams.project || '{}',
+                sort: this._currentUserQueryParams.sort || '{}',
+                skip: this._currentUserQueryParams.skip ?? 0,
+                limit: this._currentUserQueryParams.limit ?? 0,
+            });
+
+            if (previousQueryKey.localeCompare(userQueryKey, undefined, { sensitivity: 'base' }) === 0) {
+                // Same query, no need to reset caches
+                return;
+            }
         }
 
-        // the query text has changed, caches are now invalid and have to be purged
-        this._currentJsonSchema = {};
+        // The user's query has changed, invalidate all caches
+        this._accumulatedJsonSchema = {};
+        this._highestPageAccumulated = 0;
+        this._currentPageSize = null;
         this._currentRawDocuments = [];
         this._lastExecutionTimeMs = undefined;
 
         // Clear query insights caches
         this.clearQueryInsightsCaches();
 
-        this._currentQueryText = query.trim();
+        // Update the stored user query params
+        this._currentUserQueryParams = { ...userQueryParams };
+    }
+
+    /**
+     * Resets accumulated data when the page size changes.
+     * This is necessary because page boundaries differ with different page sizes,
+     * making previously accumulated pages incompatible.
+     *
+     * @param newPageSize - The new page size
+     */
+    private resetAccumulationIfPageSizeChanged(newPageSize: number): void {
+        if (this._currentPageSize !== null && this._currentPageSize !== newPageSize) {
+            // Page size changed, reset accumulation tracking
+            this._accumulatedJsonSchema = {};
+            this._highestPageAccumulated = 0;
+        }
+        this._currentPageSize = newPageSize;
     }
 
     /**
@@ -189,15 +256,11 @@ export class ClusterSession {
             dbLimit = Math.min(pageSize, remainingInWindow);
         }
 
-        // Create cache key from all query parameters to detect any changes
-        const cacheKey = JSON.stringify({
-            filter: queryParams.filter || '{}',
-            project: queryParams.project || '{}',
-            sort: queryParams.sort || '{}',
-            skip: dbSkip,
-            limit: dbLimit,
-        });
-        this.resetCachesIfQueryChanged(cacheKey);
+        // Check if the user's query has changed (not pagination, just the actual query)
+        this.resetCachesIfUserQueryChanged(queryParams);
+
+        // Check if page size has changed (invalidates accumulation strategy)
+        this.resetAccumulationIfPageSizeChanged(pageSize);
 
         // Build final query parameters with computed skip/limit
         const paginatedQueryParams: FindQueryParams = {
@@ -215,40 +278,16 @@ export class ClusterSession {
         );
         this._lastExecutionTimeMs = performance.now() - startTime;
 
-        // Cache the results and update schema
-        this._currentRawDocuments = documents;
-        this._currentRawDocuments.map((doc) => updateSchemaWithDocument(this._currentJsonSchema, doc));
-
-        return documents.length;
-    }
-
-    /**
-     * @deprecated Use runFindQueryWithCache() instead which supports filter, projection, and sort parameters.
-     * This method will be removed in a future version.
-     */
-    public async runQueryWithCache(
-        databaseName: string,
-        collectionName: string,
-        query: string,
-        pageNumber: number,
-        pageSize: number,
-    ) {
-        this.resetCachesIfQueryChanged(query);
-
-        const documents: WithId<Document>[] = await this._client.runQuery(
-            databaseName,
-            collectionName,
-            query,
-            (pageNumber - 1) * pageSize, // converting page number to amount of documents to skip
-            pageSize,
-        );
-
-        // now, here we can do caching, data conversions, schema tracking and everything else we need to do
-        // the client can be simplified and we can move some of the logic here, especially all data conversions
+        // Update current page documents (always replace, not accumulate)
         this._currentRawDocuments = documents;
 
-        // JSON Schema
-        this._currentRawDocuments.map((doc) => updateSchemaWithDocument(this._currentJsonSchema, doc));
+        // Accumulate schema only if this page hasn't been seen before
+        // Since navigation is sequential and starts at page 1, we only need to track
+        // the highest page number accumulated
+        if (pageNumber > this._highestPageAccumulated) {
+            this._currentRawDocuments.map((doc) => updateSchemaWithDocument(this._accumulatedJsonSchema, doc));
+            this._highestPageAccumulated = pageNumber;
+        }
 
         return documents.length;
     }
@@ -303,7 +342,7 @@ export class ClusterSession {
     public getCurrentPageAsTable(path: string[]): TableData {
         const responsePack: TableData = {
             path: path,
-            headers: getPropertyNamesAtLevel(this._currentJsonSchema, path),
+            headers: getPropertyNamesAtLevel(this._accumulatedJsonSchema, path),
             data: getDataAtPath(this._currentRawDocuments, path),
         };
 
@@ -311,7 +350,7 @@ export class ClusterSession {
     }
 
     public getCurrentSchema(): JSONSchema {
-        return this._currentJsonSchema;
+        return this._accumulatedJsonSchema;
     }
 
     // ============================================================================
@@ -425,18 +464,17 @@ export class ClusterSession {
 
     /**
      * Gets the current query parameters from the session
-     * This returns the query parameters from the last executed query
+     * This returns the user's original query parameters (not pagination-derived values)
      *
-     * @returns Parsed FindQueryParams object containing filter, project, sort, skip, and limit
-     * @throws Error if the current query text cannot be parsed
+     * @returns FindQueryParams object containing the user's original filter, project, sort, skip, and limit
      *
      * @remarks
-     * The current query is tracked internally as a JSON-stringified object and is updated
-     * whenever runFindQueryWithCache is called. This method parses that JSON string and
-     * returns the structured query parameters.
+     * Returns the query parameters exactly as provided by the user when calling runFindQueryWithCache().
+     * This does NOT include internal pagination calculations (those are tracked separately in _currentDataCacheKey).
+     * If no query has been executed yet, returns default empty values.
      */
     public getCurrentFindQueryParams(): FindQueryParams {
-        if (!this._currentQueryText) {
+        if (!this._currentUserQueryParams) {
             return {
                 filter: '{}',
                 project: '{}',
@@ -446,30 +484,7 @@ export class ClusterSession {
             };
         }
 
-        try {
-            const parsed = JSON.parse(this._currentQueryText) as {
-                filter?: string;
-                project?: string;
-                sort?: string;
-                skip?: number;
-                limit?: number;
-            };
-
-            return {
-                filter: parsed.filter ?? '{}',
-                project: parsed.project ?? '{}',
-                sort: parsed.sort ?? '{}',
-                skip: parsed.skip ?? 0,
-                limit: parsed.limit ?? 0,
-            };
-        } catch (error) {
-            throw new Error(
-                l10n.t(
-                    'Failed to parse current query text: {0}',
-                    error instanceof Error ? error.message : String(error),
-                ),
-            );
-        }
+        return { ...this._currentUserQueryParams };
     }
 
     /**
