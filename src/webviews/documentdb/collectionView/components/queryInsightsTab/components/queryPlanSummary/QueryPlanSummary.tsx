@@ -16,7 +16,7 @@ import {
     Text,
     tokens,
 } from '@fluentui/react-components';
-import { ArrowUpFilled, EyeRegular } from '@fluentui/react-icons';
+import { ArrowUpFilled, EyeRegular, WarningRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
 import { useTrpcClient } from '../../../../../../api/webview-client/useTrpcClient';
@@ -151,14 +151,27 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                     marginBottom: '8px',
                                                 }}
                                             >
-                                                {[...shard.stages].reverse().map((stage, index) => (
-                                                    <React.Fragment key={index}>
-                                                        {index > 0 && <Text size={200}>→</Text>}
-                                                        <Badge appearance="tint" size="small" shape="rounded">
-                                                            {stage.stage}
-                                                        </Badge>
-                                                    </React.Fragment>
-                                                ))}
+                                                {[...shard.stages].reverse().map((stage, index) => {
+                                                    // Check if this stage has failed (from extended stage info)
+                                                    const stageIndex = [...shard.stages].length - 1 - index; // Original index before reverse
+                                                    const extendedInfo = stage2Data?.extendedStageInfo?.[stageIndex];
+                                                    const hasFailed = extendedInfo?.properties?.['Failed'] === true;
+
+                                                    return (
+                                                        <React.Fragment key={index}>
+                                                            {index > 0 && <Text size={200}>→</Text>}
+                                                            <Badge
+                                                                appearance="tint"
+                                                                size="small"
+                                                                shape="rounded"
+                                                                color={hasFailed ? 'danger' : 'brand'}
+                                                                icon={hasFailed ? <WarningRegular /> : undefined}
+                                                            >
+                                                                {stage.stage}
+                                                            </Badge>
+                                                        </React.Fragment>
+                                                    );
+                                                })}
                                             </div>
 
                                             {/* Metrics - show skeleton until Stage 2 data is available */}
@@ -203,6 +216,12 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                                 // would require accessing stage2Data.extendedStageInfo
                                                                 // For now, sharded queries don't show extended properties
 
+                                                                // Check if stage has failed (from extended info if available)
+                                                                const extendedInfo =
+                                                                    stage2Data?.extendedStageInfo?.[stageIndex];
+                                                                const hasFailed =
+                                                                    extendedInfo?.properties?.['Failed'] === true;
+
                                                                 return (
                                                                     <React.Fragment key={stageIndex}>
                                                                         {stageIndex > 0 && (
@@ -222,6 +241,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                                             metrics={
                                                                                 metrics.length > 0 ? metrics : undefined
                                                                             }
+                                                                            hasFailed={hasFailed}
                                                                         />
                                                                     </React.Fragment>
                                                                 );
@@ -251,14 +271,27 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                 </Text>
                                 {/* Stage flow with badges */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                                    {[...stage1Data.stages].reverse().map((stage, index) => (
-                                        <React.Fragment key={index}>
-                                            {index > 0 && <Text size={200}>→</Text>}
-                                            <Badge appearance="tint" size="small" shape="rounded">
-                                                {stage.stage}
-                                            </Badge>
-                                        </React.Fragment>
-                                    ))}
+                                    {[...stage1Data.stages].reverse().map((stage, index) => {
+                                        // Check if this stage has failed (from extended stage info)
+                                        const stageIndex = [...stage1Data.stages].length - 1 - index; // Original index before reverse
+                                        const extendedInfo = stage2Data?.extendedStageInfo?.[stageIndex];
+                                        const hasFailed = extendedInfo?.properties?.['Failed'] === true;
+
+                                        return (
+                                            <React.Fragment key={index}>
+                                                {index > 0 && <Text size={200}>→</Text>}
+                                                <Badge
+                                                    appearance="tint"
+                                                    size="small"
+                                                    shape="rounded"
+                                                    color={hasFailed ? 'danger' : 'brand'}
+                                                    icon={hasFailed ? <WarningRegular /> : undefined}
+                                                >
+                                                    {stage.stage}
+                                                </Badge>
+                                            </React.Fragment>
+                                        );
+                                    })}
                                 </div>{' '}
                                 {/* Metrics - show skeleton until Stage 2 data is available */}
                                 {(!stage2Data || stage2Loading) && (
@@ -310,10 +343,17 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                     // Add stage-specific properties from extendedStageInfo
                                                     // Arrays are built in the same traversal order, so index-based matching is correct
                                                     const extendedInfo = stage2Data.extendedStageInfo?.[stageIndex];
+                                                    let hasFailed = false;
+
                                                     if (extendedInfo?.properties) {
                                                         Object.entries(extendedInfo.properties).forEach(
                                                             ([key, value]) => {
                                                                 if (value !== undefined) {
+                                                                    // Check if this stage has failed
+                                                                    if (key === 'Failed' && value === true) {
+                                                                        hasFailed = true;
+                                                                    }
+
                                                                     // Convert value to string for display
                                                                     const displayValue =
                                                                         typeof value === 'boolean'
@@ -350,6 +390,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                                 returned={stage.nReturned}
                                                                 executionTimeMs={stage.executionTimeMs}
                                                                 metrics={metrics.length > 0 ? metrics : undefined}
+                                                                hasFailed={hasFailed}
                                                             />
                                                         </React.Fragment>
                                                     );

@@ -112,6 +112,46 @@ export interface QueryInsightsStage2Response {
 }
 
 /**
+ * Error information when query execution fails
+ */
+export interface QueryExecutionError {
+    failed: true;
+    executionSuccess: false;
+    errorMessage: string;
+    errorCode?: number;
+    failedStage?: {
+        stage: string;
+        details?: Record<string, unknown>;
+    };
+    partialStats: {
+        docsExamined: number;
+        executionTimeMs: number;
+    };
+}
+
+/**
+ * Response when query execution fails (alternative to Stage2Response)
+ */
+export interface QueryInsightsErrorResponse {
+    stage: 'execution-error';
+    error: {
+        message: string;
+        code?: number;
+        failedStage?: string;
+        partialStats: {
+            docsExamined: number;
+            executionTimeMs: number;
+        };
+    };
+    // Include partial metrics for context
+    executionTimeMs: number;
+    docsExamined: number;
+    performanceRating: PerformanceRating;
+    // Include raw stats for debugging
+    rawExplainPlan?: Record<string, unknown>;
+}
+
+/**
  * Diagnostic detail about query performance
  */
 export interface PerformanceDiagnostic {

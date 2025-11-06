@@ -15,7 +15,7 @@ import {
     Text,
     tokens,
 } from '@fluentui/react-components';
-import { CopyRegular, SparkleRegular } from '@fluentui/react-icons';
+import { ArrowTrendingSparkleRegular, CopyRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { forwardRef } from 'react';
 import { type ImprovementCard as ImprovementCardConfig } from '../../../../types/queryInsights';
@@ -79,7 +79,7 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
         return (
             <Card ref={ref} style={{ marginBottom: '16px' }}>
                 <div className="optimization-card-container">
-                    <SparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />
+                    <ArrowTrendingSparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
                         <CardHeader
                             header={

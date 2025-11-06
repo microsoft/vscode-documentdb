@@ -31,6 +31,7 @@ import {
 } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
 import { StagePropertyExtractor } from '../../../documentdb/queryInsights/StagePropertyExtractor';
 import {
+    createFailedQueryResponse,
     transformAIResponseForUI,
     transformStage1Response,
     transformStage2Response,
@@ -586,7 +587,21 @@ export const collectionsViewRouter = router({
             analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
         }
 
-        // Transform to UI format
+        // Check for execution error and return error response if found
+        if (analyzed.executionError) {
+            const errorResponse = createFailedQueryResponse(analyzed, explainResult);
+
+            // Ensure minimum execution time for better UX
+            const elapsedTime = performance.now() - startTime;
+            const minimumDuration = 1500; // 1.5 seconds
+            if (elapsedTime < minimumDuration) {
+                await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
+            }
+
+            return errorResponse;
+        }
+
+        // Transform to UI format (normal successful execution path)
         const transformed = transformStage2Response(analyzed);
 
         // Ensure minimum execution time for better UX (avoid jarring instant transitions)

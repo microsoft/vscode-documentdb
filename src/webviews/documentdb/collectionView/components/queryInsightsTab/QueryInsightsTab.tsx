@@ -31,6 +31,7 @@
  */
 
 import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
+import { BrainSparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useContext, useEffect, useState } from 'react';
@@ -105,6 +106,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [aiInsightsRequested, setAiInsightsRequested] = useState(false); // One-way flag: once true, stays true
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
+    const [showErrorCard, setShowErrorCard] = useState(false);
 
     // Stage 1: Load when needed (on mount or after query re-run when tab is active)
     // When a query is re-run, the queryInsights state is reset in CollectionView.tsx
@@ -243,12 +245,21 @@ export const QueryInsightsMain = (): JSX.Element => {
         setAiInsightsRequested(true); // Set one-way flag to prevent button from reappearing
         setIsTipsCardDismissed(false);
 
-        // Show tips card after 1 second (while waiting for AI)
-        const tipsTimer = setTimeout(() => {
-            setShowTipsCard(true);
+        // Check if Stage 2 has query execution errors
+        const hasExecutionError =
+            queryInsightsState.stage2Data?.concerns &&
+            queryInsightsState.stage2Data.concerns.some((concern) => concern.includes('Query Execution Failed'));
+
+        // Show appropriate card after 1 second delay
+        const timer = setTimeout(() => {
+            if (hasExecutionError) {
+                setShowErrorCard(true);
+            } else {
+                setShowTipsCard(true);
+            }
         }, 1000);
 
-        // Call the tRPC endpoint (8 second delay expected from AI service)
+        // Call the tRPC endpoint (10+ second delay expected from AI service)
         void trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
             .query()
             .then((response) => {
@@ -271,7 +282,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 setIsLoadingAI(false);
             });
 
-        return () => clearTimeout(tipsTimer);
+        return () => clearTimeout(timer);
     };
 
     const handleCancelAI = () => {
@@ -385,6 +396,26 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     </AiCard>
                                 )}
 
+                            {/* Error Card - shown when query execution failed */}
+                            {showErrorCard && queryInsightsState.stage2Data?.concerns && (
+                                <MarkdownCard
+                                    key="query-execution-error"
+                                    title={l10n.t('Query Execution Failed')}
+                                    icon={<WarningRegular />}
+                                    content={
+                                        queryInsightsState.stage2Data.concerns.join('\n\n') +
+                                        '\n\n---\n\n' +
+                                        '**Resolving this execution error should take precedence over performance optimization.** ' +
+                                        'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
+                                    }
+                                    onCopy={() => {
+                                        void navigator.clipboard.writeText(
+                                            queryInsightsState.stage2Data?.concerns?.join('\n\n') ?? '',
+                                        );
+                                    }}
+                                />
+                            )}
+
                             {/* Improvement Cards (dynamic from AI response) */}
                             {stageState === 3 &&
                                 queryInsightsState.stage3Data &&
@@ -486,6 +517,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 queryInsightsState.stage3Data.educationalContent && (
                                     <MarkdownCard
                                         key="understanding-execution"
+                                        icon={<BrainSparkleRegular />}
                                         title={l10n.t('Understanding Your Query Execution Plan')}
                                         content={queryInsightsState.stage3Data.educationalContent}
                                         onCopy={() => {

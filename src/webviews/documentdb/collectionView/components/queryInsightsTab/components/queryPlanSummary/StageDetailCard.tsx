@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Card, Text } from '@fluentui/react-components';
+import { Badge, Card, Text, Tooltip } from '@fluentui/react-components';
+import { WarningRegular } from '@fluentui/react-icons';
 import { forwardRef } from 'react';
 import './StageDetailCard.scss';
 
@@ -41,21 +42,15 @@ export interface StageDetailCardProps {
     metrics?: StageMetric[];
 
     /**
+     * Whether this stage has failed
+     */
+    hasFailed?: boolean;
+
+    /**
      * Optional className for styling
      */
     className?: string;
 }
-
-const stageColorMap: Record<
-    StageType,
-    'brand' | 'danger' | 'important' | 'informative' | 'severe' | 'subtle' | 'success' | 'warning'
-> = {
-    IXSCAN: 'brand',
-    FETCH: 'brand',
-    PROJECTION: 'brand',
-    SORT: 'brand',
-    COLLSCAN: 'brand',
-};
 
 /**
  * Stage detail card component for displaying query execution plan stage information.
@@ -63,12 +58,21 @@ const stageColorMap: Record<
  * Supports ref forwarding for use with animation libraries.
  */
 export const StageDetailCard = forwardRef<HTMLDivElement, StageDetailCardProps>(
-    ({ stageType, description, returned, executionTimeMs, metrics, className }, ref) => {
+    ({ stageType, description, returned, executionTimeMs, metrics, hasFailed, className }, ref) => {
+        // Use danger color for failed stages, otherwise use brand color
+        const badgeColor = hasFailed ? 'danger' : 'brand';
+
         return (
             <Card ref={ref} appearance="outline" className={`stage-detail-card${className ? ` ${className}` : ''}`}>
                 {/* Header: Badge + Description */}
                 <div className="stage-detail-card-header">
-                    <Badge appearance="tint" shape="rounded" size="small" color={stageColorMap[stageType]}>
+                    <Badge
+                        appearance="tint"
+                        shape="rounded"
+                        size="small"
+                        color={badgeColor}
+                        icon={hasFailed ? <WarningRegular /> : undefined}
+                    >
                         {stageType}
                     </Badge>
                     {description && (
@@ -99,14 +103,37 @@ export const StageDetailCard = forwardRef<HTMLDivElement, StageDetailCardProps>(
                 {/* Optional metrics: Gray badges */}
                 {metrics && metrics.length > 0 && (
                     <div className="metrics-inline-badges">
-                        {metrics.map((metric, index) => (
-                            <Badge key={index} appearance="outline" size="small" shape="rounded" color="informative">
-                                <span className="badge-label">{metric.label}:&nbsp;</span>
-                                <span className="badge-value">
-                                    {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
-                                </span>
-                            </Badge>
-                        ))}
+                        {metrics.map((metric, index) => {
+                            const valueStr =
+                                typeof metric.value === 'number' ? metric.value.toLocaleString() : String(metric.value);
+
+                            // Truncate long values (over 50 characters)
+                            const maxLength = 50;
+                            const isTruncated = valueStr.length > maxLength;
+                            const displayValue = isTruncated ? valueStr.substring(0, maxLength) + '...' : valueStr;
+
+                            const badgeContent = (
+                                <Badge
+                                    key={index}
+                                    appearance="outline"
+                                    size="small"
+                                    shape="rounded"
+                                    color="informative"
+                                >
+                                    <span className="badge-label">{metric.label}:&nbsp;</span>
+                                    <span className="badge-value">{displayValue}</span>
+                                </Badge>
+                            );
+
+                            // Wrap in tooltip if truncated
+                            return isTruncated ? (
+                                <Tooltip key={index} content={valueStr} relationship="label">
+                                    {badgeContent}
+                                </Tooltip>
+                            ) : (
+                                badgeContent
+                            );
+                        })}
                     </div>
                 )}
             </Card>

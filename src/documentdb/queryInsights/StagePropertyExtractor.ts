@@ -146,10 +146,12 @@ export class StagePropertyExtractor {
                     properties['Sort Pattern'] = JSON.stringify(stage.sortPattern);
                 }
                 if (stage.memLimit !== undefined) {
-                    properties['Memory Limit'] = `${stage.memLimit} bytes`;
+                    const memLimitMB = ((stage.memLimit as number) / (1024 * 1024)).toFixed(1);
+                    properties['Memory Limit'] = `${memLimitMB} MB`;
                 }
                 if (stage.memUsage !== undefined) {
-                    properties['Memory Usage'] = `${stage.memUsage} bytes`;
+                    const memUsageMB = ((stage.memUsage as number) / (1024 * 1024)).toFixed(1);
+                    properties['Memory Usage'] = `${memUsageMB} MB`;
                 }
                 if (stage.usedDisk !== undefined) {
                     properties['Spilled to Disk'] = stage.usedDisk ? 'Yes' : 'No';
