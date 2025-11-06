@@ -219,12 +219,6 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     const performanceTips = [
         {
-            title: l10n.t('Use Covered Queries'),
-            description: l10n.t(
-                'When all queried fields are in an index, DocumentDB can return results directly from the index without fetching documents, significantly improving performance.',
-            ),
-        },
-        {
             title: l10n.t('Optimize Index Strategy'),
             description: l10n.t(
                 'Create compound indexes for queries that filter on multiple fields. Order matters: place equality filters first, then sort fields, then range filters.',
