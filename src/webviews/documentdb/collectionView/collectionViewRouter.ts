@@ -524,10 +524,6 @@ export const collectionsViewRouter = router({
         // Transform to UI format
         const transformed = transformStage1Response(analyzed, executionTime);
 
-        // TODO: Remove this delay after testing - simulates slower Stage 1 execution
-        // This delay applies to both live and debug scenarios
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-
         return transformed;
     }),
 
@@ -546,6 +542,9 @@ export const collectionsViewRouter = router({
     getQueryInsightsStage2: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
         const myCtx = ctx as RouterContext;
         const { sessionId, databaseName, collectionName } = myCtx;
+
+        // Track execution time to ensure minimum duration for better UX
+        const startTime = performance.now();
 
         let analyzed: ExecutionStatsAnalysis;
         let explainResult: Document | undefined;
@@ -590,9 +589,12 @@ export const collectionsViewRouter = router({
         // Transform to UI format
         const transformed = transformStage2Response(analyzed);
 
-        // TODO: Remove this delay after testing - simulates slower Stage 2 execution
-        // This delay applies to both live and debug scenarios
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        // Ensure minimum execution time for better UX (avoid jarring instant transitions)
+        const elapsedTime = performance.now() - startTime;
+        const minimumDuration = 1500; // 1.5 seconds
+        if (elapsedTime < minimumDuration) {
+            await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
+        }
 
         return transformed;
     }),
