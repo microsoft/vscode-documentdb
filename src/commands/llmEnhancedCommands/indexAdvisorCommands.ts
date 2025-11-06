@@ -5,11 +5,12 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { type Document, type Filter, type Sort } from 'mongodb';
+import { type Document, type Filter } from 'mongodb';
 import * as vscode from 'vscode';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
+import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { FALLBACK_MODELS, PREFERRED_MODEL } from './promptTemplates';
@@ -31,7 +32,7 @@ export interface QueryObject {
     // Filter criteria
     filter?: Filter<Document>;
     // Sort specification
-    sort?: Sort;
+    sort?: Document;
     // Projection specification
     projection?: Document;
     // Number of documents to skip
@@ -421,6 +422,7 @@ export async function optimizeQuery(
 
         // Gather information needed for optimization
         try {
+            const explainStart = Date.now();
             // Execute explain based on command type
             if (queryContext.commandType === CommandType.Find) {
                 const explainData = await client.explainFind(
@@ -445,6 +447,13 @@ export async function optimizeQuery(
                     parsedQuery?.filter || {},
                 );
             }
+            const explainDuration = Date.now() - explainStart;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] explain({commandType}) completed in {ms}ms', {
+                    commandType: queryContext.commandType,
+                    ms: explainDuration.toString(),
+                }),
+            );
         } catch (error) {
             throw new Error(
                 l10n.t('Failed to gather query optimization data: {message}', {
@@ -455,9 +464,33 @@ export async function optimizeQuery(
     }
 
     try {
+        const statsStart = Date.now();
         collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
+        const statsDuration = Date.now() - statsStart;
+        ext.outputChannel.trace(
+            l10n.t('[Query Insights AI] getCollectionStats completed in {ms}ms', {
+                ms: statsDuration.toString(),
+            }),
+        );
+
+        const indexesInfoStart = Date.now();
         const indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
+        const indexesInfoDuration = Date.now() - indexesInfoStart;
+        ext.outputChannel.trace(
+            l10n.t('[Query Insights AI] listIndexes completed in {ms}ms', {
+                ms: indexesInfoDuration.toString(),
+            }),
+        );
+
+        const indexesStatsStart = Date.now();
         const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
+        const indexesStatsDuration = Date.now() - indexesStatsStart;
+        ext.outputChannel.trace(
+            l10n.t('[Query Insights AI] getIndexStats completed in {ms}ms', {
+                ms: indexesStatsDuration.toString(),
+            }),
+        );
+
         // // TODO: handle search indexes for Atlas
         // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
         indexes = indexesStats.map((indexStat) => {
@@ -495,10 +528,23 @@ export async function optimizeQuery(
     const preferredModelToUse = queryContext.preferredModel || PREFERRED_MODEL;
     const fallbackModelsToUse = queryContext.fallbackModels || FALLBACK_MODELS;
 
+    const copilotStart = Date.now();
+    ext.outputChannel.trace(
+        l10n.t('[Query Insights AI] Calling Copilot (model: {model})...', {
+            model: preferredModelToUse,
+        }),
+    );
     const response = await CopilotService.sendMessage([vscode.LanguageModelChatMessage.User(promptContent)], {
         preferredModel: preferredModelToUse,
         fallbackModels: fallbackModelsToUse,
     });
+    const copilotDuration = Date.now() - copilotStart;
+    ext.outputChannel.trace(
+        l10n.t('[Query Insights AI] Copilot response received in {ms}ms (model: {model})', {
+            ms: copilotDuration.toString(),
+            model: response.modelUsed,
+        }),
+    );
 
     // Check if the preferred model was used
     if (response.modelUsed !== preferredModelToUse && preferredModelToUse) {

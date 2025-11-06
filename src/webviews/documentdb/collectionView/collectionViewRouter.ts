@@ -487,12 +487,20 @@ export const collectionsViewRouter = router({
         const myCtx = ctx as RouterContext;
         const { sessionId, databaseName, collectionName } = myCtx;
 
+        ext.outputChannel.trace(
+            l10n.t('[Query Insights Stage 1] Started for {db}.{collection}', {
+                db: databaseName,
+                collection: collectionName,
+            }),
+        );
+
         let analyzed: QueryPlannerAnalysis;
         let executionTime: number;
 
         // Check for debug override file first
         const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
         if (debugData) {
+            ext.outputChannel.trace(l10n.t('[Query Insights Stage 1] Using debug data file'));
             // Use debug data - analyze it the same way as real data
             analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(debugData);
             // Use a default execution time for debug mode
@@ -508,6 +516,7 @@ export const collectionsViewRouter = router({
             const queryParams = session.getCurrentFindQueryParamsWithObjects();
 
             // Get query planner info (cached or fetch) without skip/limit for full query insights
+            const queryPlannerStart = Date.now();
             const queryPlannerResult = await session.getQueryPlannerInfo(
                 databaseName,
                 collectionName,
@@ -518,6 +527,12 @@ export const collectionsViewRouter = router({
                     // Intentionally omit skip/limit for full query insights
                 },
             );
+            const queryPlannerDuration = Date.now() - queryPlannerStart;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights Stage 1] explain(queryPlanner) completed in {ms}ms', {
+                    ms: queryPlannerDuration.toString(),
+                }),
+            );
 
             // Analyze with ExplainPlanAnalyzer
             analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult);
@@ -525,6 +540,12 @@ export const collectionsViewRouter = router({
 
         // Transform to UI format
         const transformed = transformStage1Response(analyzed, executionTime);
+        ext.outputChannel.trace(
+            l10n.t('[Query Insights Stage 1] Completed: indexes={idx}, collScan={scan}', {
+                idx: analyzed.usedIndexes.join(', ') || 'none',
+                scan: analyzed.isCollectionScan.toString(),
+            }),
+        );
 
         return transformed;
     }),
@@ -545,6 +566,13 @@ export const collectionsViewRouter = router({
         const myCtx = ctx as RouterContext;
         const { sessionId, databaseName, collectionName } = myCtx;
 
+        ext.outputChannel.trace(
+            l10n.t('[Query Insights Stage 2] Started for {db}.{collection}', {
+                db: databaseName,
+                collection: collectionName,
+            }),
+        );
+
         // Track execution time to ensure minimum duration for better UX
         const startTime = performance.now();
 
@@ -554,6 +582,7 @@ export const collectionsViewRouter = router({
         // Check for debug override file first
         const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
         if (debugData) {
+            ext.outputChannel.trace(l10n.t('[Query Insights Stage 2] Using debug data file'));
             // Use debug data - analyze it the same way as real data
             analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
             explainResult = debugData;
@@ -565,6 +594,7 @@ export const collectionsViewRouter = router({
             const queryParams = session.getCurrentFindQueryParamsWithObjects();
 
             // Get execution stats (cached or fetch) without skip/limit for full query insights
+            const executionStatsStart = Date.now();
             const executionStatsResult = await session.getExecutionStats(
                 databaseName,
                 collectionName,
@@ -574,6 +604,12 @@ export const collectionsViewRouter = router({
                     projection: queryParams.projectionObj,
                     // Intentionally omit skip/limit for full query insights
                 },
+            );
+            const executionStatsDuration = Date.now() - executionStatsStart;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights Stage 2] explain(executionStats) completed in {ms}ms', {
+                    ms: executionStatsDuration.toString(),
+                }),
             );
 
             // Analyze with ExplainPlanAnalyzer
@@ -590,6 +626,11 @@ export const collectionsViewRouter = router({
 
         // Check for execution error and return error response if found
         if (analyzed.executionError) {
+            ext.outputChannel.warn(
+                l10n.t('[Query Insights Stage 2] Query execution failed: {error}', {
+                    error: analyzed.executionError.errorMessage,
+                }),
+            );
             const errorResponse = createFailedQueryResponse(analyzed, explainResult);
 
             // Ensure minimum execution time for better UX
@@ -599,10 +640,12 @@ export const collectionsViewRouter = router({
                 await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
             }
 
+            ext.outputChannel.trace(l10n.t('Query Insights Stage 2 completed with execution error'));
             return errorResponse;
         }
 
         // Transform to UI format (normal successful execution path)
+        ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
         const transformed = transformStage2Response(analyzed);
 
         // Ensure minimum execution time for better UX (avoid jarring instant transitions)
@@ -612,6 +655,17 @@ export const collectionsViewRouter = router({
             await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
         }
 
+        ext.outputChannel.trace(
+            l10n.t(
+                '[Query Insights Stage 2] Completed: execTime={time}ms, returned={ret}, examined={ex}, ratio={ratio}',
+                {
+                    time: analyzed.executionTimeMillis.toString(),
+                    ret: analyzed.nReturned.toString(),
+                    ex: analyzed.totalDocsExamined.toString(),
+                    ratio: analyzed.efficiencyRatio.toFixed(2),
+                },
+            ),
+        );
         return transformed;
     }),
 
@@ -630,6 +684,13 @@ export const collectionsViewRouter = router({
             const myCtx = ctx as RouterContext;
             const { sessionId, clusterId, databaseName, collectionName } = myCtx;
 
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights Stage 3] Started for {db}.{collection}', {
+                    db: databaseName,
+                    collection: collectionName,
+                }),
+            );
+
             // Get ClusterSession
             const session: ClusterSession = ClusterSession.getSession(sessionId);
 
@@ -640,11 +701,18 @@ export const collectionsViewRouter = router({
             const aiService = new QueryInsightsAIService();
 
             // Call AI service
+            const aiServiceStart = Date.now();
             const aiRecommendations = await aiService.getOptimizationRecommendations(
                 sessionId,
                 queryParams,
                 databaseName,
                 collectionName,
+            );
+            const aiServiceDuration = Date.now() - aiServiceStart;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights Stage 3] AI service completed in {ms}ms', {
+                    ms: aiServiceDuration.toString(),
+                }),
             );
 
             // Transform AI response to UI format with button payloads
@@ -653,14 +721,21 @@ export const collectionsViewRouter = router({
                 databaseName,
                 collectionName,
             });
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights Stage 3] Completed: {count} improvement cards generated', {
+                    count: transformed.improvementCards.length.toString(),
+                }),
+            );
 
             return transformed;
-        }) /**
+        }),
+
+    /**
      * Execute a recommendation action (create index, drop index, learn more, etc.)
      *
      * Takes actionId and payload from the button click and routes to appropriate handler
      * in QueryInsightsAIService
-     */,
+     */
     executeRecommendation: publicProcedure
         .use(trpcToTelemetry)
         .input(
