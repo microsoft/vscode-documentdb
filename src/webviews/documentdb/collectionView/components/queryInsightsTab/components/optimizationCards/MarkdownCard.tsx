@@ -20,10 +20,16 @@ const useStyles = makeStyles({
             marginBottom: tokens.spacingVerticalS,
             fontWeight: tokens.fontWeightSemibold,
         },
+        '& h1': {
+            fontSize: tokens.fontSizeBase500,
+        },
         '& h2': {
             fontSize: tokens.fontSizeBase400,
         },
         '& h3': {
+            fontSize: tokens.fontSizeBase300,
+        },
+        '& h4, & h5, & h6': {
             fontSize: tokens.fontSizeBase300,
         },
         '& p': {
@@ -64,6 +70,34 @@ const useStyles = makeStyles({
         '& strong': {
             fontWeight: tokens.fontWeightSemibold,
         },
+        '& em': {
+            fontStyle: 'italic',
+        },
+        '& blockquote': {
+            marginTop: tokens.spacingVerticalS,
+            marginBottom: tokens.spacingVerticalS,
+            paddingLeft: tokens.spacingHorizontalL,
+            borderLeft: `4px solid ${tokens.colorBrandBackground}`,
+            color: tokens.colorNeutralForeground2,
+            fontStyle: 'italic',
+        },
+        '& blockquote p': {
+            marginTop: tokens.spacingVerticalXS,
+            marginBottom: tokens.spacingVerticalXS,
+        },
+        '& hr': {
+            marginTop: tokens.spacingVerticalL,
+            marginBottom: tokens.spacingVerticalL,
+            border: 'none',
+            borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+        },
+        '& a': {
+            color: tokens.colorBrandForeground1,
+            textDecoration: 'none',
+        },
+        '& a:hover': {
+            textDecoration: 'underline',
+        },
     },
 });
 
@@ -102,7 +136,7 @@ interface MarkdownCardProps {
  * **Usage with animations**: Use directly with animation libraries like @fluentui/react-motion-components-preview:
  *
  * ```tsx
- * <CollapseRelaxed visible={isVisible}>
+ *  * <CollapseRelaxed visible={isVisible}>
  *     <MarkdownCard title="..." content="..." {...props} />
  * </CollapseRelaxed>
  * ```
