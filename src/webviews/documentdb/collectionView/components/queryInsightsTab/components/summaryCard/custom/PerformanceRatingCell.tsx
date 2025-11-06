@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, SkeletonItem, Text, tokens, Tooltip } from '@fluentui/react-components';
+import { InfoRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
@@ -115,14 +116,15 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                             </div>
                                         ),
                                     }}
+                                    positioning="above-start"
                                     relationship="description"
-                                    withArrow
                                 >
                                     <Badge
                                         appearance="tint"
                                         color={diagnostic.type === 'positive' ? 'success' : 'informative'}
                                         size="small"
                                         shape="rounded"
+                                        icon={<InfoRegular />}
                                     >
                                         {diagnostic.message}
                                     </Badge>

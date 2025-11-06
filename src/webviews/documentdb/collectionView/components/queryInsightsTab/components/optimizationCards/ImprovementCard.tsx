@@ -15,7 +15,9 @@ import {
     Text,
     tokens,
 } from '@fluentui/react-components';
-import { CopyRegular, SparkleRegular } from '@fluentui/react-icons';
+import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
+// TODO: Copy content feature will be added in the next release
+// import { CopyRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { forwardRef } from 'react';
 import { type ImprovementCard as ImprovementCardConfig } from '../../../../types/queryInsights';
@@ -69,7 +71,8 @@ const priorityColors: Record<'high' | 'medium' | 'low', 'danger' | 'warning' | '
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
 export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
-    ({ config, onCopy, onPrimaryAction, onSecondaryAction }, ref) => {
+    // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
+    ({ config, onCopy: _onCopy, onPrimaryAction, onSecondaryAction }, ref) => {
         const priorityBadgeText = {
             high: l10n.t('HIGH PRIORITY'),
             medium: l10n.t('MEDIUM PRIORITY'),
@@ -78,8 +81,19 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
 
         return (
             <Card ref={ref} style={{ marginBottom: '16px' }}>
+                <Text
+                    size={200}
+                    style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        color: tokens.colorNeutralForeground3,
+                    }}
+                >
+                    {l10n.t('AI responses may be inaccurate.')}
+                </Text>
                 <div className="optimization-card-container">
-                    <SparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />
+                    <ArrowTrendingSparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
                         <CardHeader
                             header={
@@ -97,11 +111,12 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
                                     </Badge>
                                 </div>
                             }
-                            action={
-                                onCopy ? (
-                                    <Button appearance="subtle" icon={<CopyRegular />} size="small" onClick={onCopy} />
-                                ) : undefined
-                            }
+                            // TODO: Copy content feature will be added in the next release
+                            // action={
+                            //     onCopy ? (
+                            //         <Button appearance="subtle" icon={<CopyRegular />} size="small" onClick={onCopy} />
+                            //     ) : undefined
+                            // }
                         />
                         <div style={{ marginTop: '12px' }}>
                             {/* Description */}

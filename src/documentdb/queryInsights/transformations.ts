@@ -13,7 +13,7 @@ import {
     type ShardInfo,
     type StageInfo,
 } from '../../webviews/documentdb/collectionView/types/queryInsights';
-import { type ExecutionStatsAnalysis, type QueryPlannerAnalysis } from './ExplainPlanAnalyzer';
+import { ExplainPlanAnalyzer, type ExecutionStatsAnalysis, type QueryPlannerAnalysis } from './ExplainPlanAnalyzer';
 
 /**
  * Context from the router containing connection and collection info
@@ -347,7 +347,7 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
  * @param explainResult - Raw explain output document
  * @returns Array of stage info for UI
  */
-function extractStagesFromDocument(explainResult: Document): StageInfo[] {
+export function extractStagesFromDocument(explainResult: Document): StageInfo[] {
     const stages: StageInfo[] = [];
 
     // Try to get execution stages first (from executionStats), fall back to query planner
@@ -588,4 +588,144 @@ function buildConcernsForShardedQuery(shards: ShardInfo[], examinedToReturnedRat
     }
 
     return concerns;
+}
+
+/**
+ * Enhances stage info with failure indicators for all failed stages
+ * MongoDB propagates failed:true up the execution tree, so we mark all of them
+ */
+export function enhanceStagesWithFailureIndicators(
+    analyzed: ExecutionStatsAnalysis,
+    explainResult: Document,
+): QueryInsightsStage2Response['extendedStageInfo'] {
+    const enhancedStageInfo = analyzed.extendedStageInfo ? [...analyzed.extendedStageInfo] : [];
+    const failedStageNames = ExplainPlanAnalyzer.extractFailedStageNames(explainResult);
+
+    for (const failedStageName of failedStageNames) {
+        const stageIndex = enhancedStageInfo.findIndex((s) => s.stageName === failedStageName);
+
+        if (stageIndex >= 0) {
+            // Update existing stage entry
+            enhancedStageInfo[stageIndex] = updateStageWithFailureInfo(
+                enhancedStageInfo[stageIndex],
+                failedStageName,
+                analyzed.executionError,
+            );
+        } else {
+            // Create new stage entry
+            enhancedStageInfo.push(createFailedStageEntry(failedStageName, analyzed.executionError));
+        }
+    }
+
+    return enhancedStageInfo;
+}
+
+/**
+ * Updates an existing stage with failure indicators
+ */
+function updateStageWithFailureInfo(
+    stageInfo: { stageName: string; properties: Record<string, string | number | boolean | undefined> },
+    failedStageName: string,
+    executionError: ExecutionStatsAnalysis['executionError'],
+): { stageName: string; properties: Record<string, string | number | boolean | undefined> } {
+    // Convert properties to Map to avoid duplicates
+    const propsMap = new Map<string, string | number | boolean | undefined>(Object.entries(stageInfo.properties));
+
+    // Add failure indicator
+    propsMap.set('Failed', true);
+
+    // Add error details only for root cause stage
+    if (executionError?.failedStage?.stage === failedStageName) {
+        propsMap.set('Error Code', executionError.errorCode || 'N/A');
+        propsMap.set('Error Message', executionError.errorMessage);
+    }
+
+    return {
+        ...stageInfo,
+        properties: Object.fromEntries(propsMap),
+    };
+}
+
+/**
+ * Creates a new stage entry for a failed stage
+ */
+function createFailedStageEntry(
+    failedStageName: string,
+    executionError: ExecutionStatsAnalysis['executionError'],
+): { stageName: string; properties: Record<string, string | number | boolean | undefined> } {
+    const props: Record<string, string | number | boolean | undefined> = {
+        Failed: true,
+    };
+
+    // Add error details only for root cause
+    if (executionError?.failedStage?.stage === failedStageName) {
+        props['Error Code'] = executionError.errorCode || 'N/A';
+        props['Error Message'] = executionError.errorMessage;
+
+        // Add stage-specific details if available
+        const details = executionError.failedStage?.details;
+        if (details) {
+            for (const [key, value] of Object.entries(details)) {
+                if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                    props[key] = value;
+                }
+            }
+        }
+    }
+
+    return {
+        stageName: failedStageName,
+        properties: props,
+    };
+}
+
+/**
+ * Creates a Stage 2 response for a failed query execution
+ */
+export function createFailedQueryResponse(
+    analyzed: ExecutionStatsAnalysis,
+    explainResult: Document,
+): QueryInsightsStage2Response {
+    const examinedToReturnedRatio = analyzed.nReturned > 0 ? analyzed.totalDocsExamined / analyzed.nReturned : Infinity;
+    const keysToDocsRatio =
+        analyzed.totalDocsExamined > 0 ? analyzed.totalKeysExamined / analyzed.totalDocsExamined : null;
+
+    // Extract stages even when query failed - they contain partial execution info
+    const stages = extractStagesFromDocument(analyzed.rawStats);
+
+    // Enhance stage info with failure indicators
+    const enhancedStageInfo = enhanceStagesWithFailureIndicators(analyzed, explainResult);
+
+    return {
+        executionTimeMs: analyzed.executionTimeMillis,
+        totalKeysExamined: analyzed.totalKeysExamined,
+        totalDocsExamined: analyzed.totalDocsExamined,
+        documentsReturned: analyzed.nReturned,
+        examinedToReturnedRatio,
+        keysToDocsRatio,
+        executionStrategy: `Failed: ${analyzed.executionError?.failedStage?.stage || 'Unknown'}`,
+        indexUsed: analyzed.usedIndexes.length > 0,
+        usedIndexNames: analyzed.usedIndexes,
+        hadInMemorySort: analyzed.hasInMemorySort,
+        hadCollectionScan: analyzed.isCollectionScan,
+        isCoveringQuery: analyzed.isCovered,
+        concerns: [
+            `Query Execution Failed: ${analyzed.executionError?.errorMessage}`,
+            `Failed Stage: ${analyzed.executionError?.failedStage?.stage || 'Unknown'}`,
+            `Error Code: ${analyzed.executionError?.errorCode || 'N/A'}`,
+        ],
+        efficiencyAnalysis: {
+            executionStrategy: `Failed at ${analyzed.executionError?.failedStage?.stage || 'Unknown'} stage`,
+            indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
+            examinedReturnedRatio:
+                examinedToReturnedRatio === Infinity
+                    ? 'N/A (query failed)'
+                    : `${Math.round(examinedToReturnedRatio)}:1`,
+            hasInMemorySort: analyzed.hasInMemorySort,
+            performanceRating: analyzed.performanceRating,
+        },
+        stages,
+        rawExecutionStats: analyzed.rawStats,
+        extendedStageInfo: enhancedStageInfo,
+    };
 }

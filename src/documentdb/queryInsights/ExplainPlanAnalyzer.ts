@@ -33,6 +33,54 @@ export interface PerformanceRating {
  */
 export class ExplainPlanAnalyzer {
     /**
+     * Extracts all stage names that have failed:true from the execution tree
+     * MongoDB propagates failed:true up the tree, so we need to mark all of them
+     * @param explainResult - Raw MongoDB explain result
+     * @returns Array of stage names that have failed:true
+     */
+    public static extractFailedStageNames(explainResult: Document): string[] {
+        const failedStages: string[] = [];
+
+        // Get execution stages from the explain result
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
+
+        if (!executionStages) {
+            return failedStages;
+        }
+
+        // Recursively traverse the stage tree
+        function traverseStage(stage: Document): void {
+            const stageName = stage.stage as string | undefined;
+            const failed = stage.failed as boolean | undefined;
+
+            if (stageName && failed === true) {
+                failedStages.push(stageName);
+            }
+
+            // Traverse child stages
+            if (stage.inputStage) {
+                traverseStage(stage.inputStage as Document);
+            }
+
+            if (stage.inputStages && Array.isArray(stage.inputStages)) {
+                for (const inputStage of stage.inputStages) {
+                    traverseStage(inputStage as Document);
+                }
+            }
+
+            if (stage.shards && Array.isArray(stage.shards)) {
+                for (const shard of stage.shards) {
+                    traverseStage(shard as Document);
+                }
+            }
+        }
+
+        traverseStage(executionStages);
+        return failedStages;
+    }
+
+    /**
      * Analyzes explain("queryPlanner") output
      * Provides basic query characteristics without execution metrics
      *
@@ -73,6 +121,10 @@ export class ExplainPlanAnalyzer {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
         const explainPlan = new ExplainPlan(explainResult as any);
 
+        // STEP 1: Check for execution errors FIRST
+        const executionStats = explainResult.executionStats as Document | undefined;
+        const executionError = this.extractExecutionError(executionStats);
+
         // Extract execution metrics
         const executionTimeMillis = explainPlan.executionTimeMillis ?? 0;
         const totalDocsExamined = explainPlan.totalDocsExamined ?? 0;
@@ -107,15 +159,18 @@ export class ExplainPlanAnalyzer {
             isCovered,
             hasInMemorySort,
             isIndexScan,
-            performanceRating: this.calculatePerformanceRating(
-                executionTimeMillis,
-                efficiencyRatio,
-                hasInMemorySort,
-                hasSorting,
-                isIndexScan,
-                isCollectionScan,
-            ),
+            performanceRating: executionError
+                ? this.createFailedQueryRating(executionError)
+                : this.calculatePerformanceRating(
+                      executionTimeMillis,
+                      efficiencyRatio,
+                      hasInMemorySort,
+                      hasSorting,
+                      isIndexScan,
+                      isCollectionScan,
+                  ),
             rawStats: explainResult,
+            executionError,
         };
     }
 
@@ -358,6 +413,197 @@ export class ExplainPlanAnalyzer {
 
         return checkStageForSort(executionStages);
     }
+
+    /**
+     * Extracts execution error information from explain plan
+     * Returns undefined if query executed successfully
+     *
+     * @param executionStats - The executionStats section from explain result
+     * @returns Error information or undefined if successful
+     */
+    private static extractExecutionError(executionStats: Document | undefined): QueryExecutionError | undefined {
+        if (!executionStats) {
+            return undefined;
+        }
+
+        // Check primary indicator
+        const executionSuccess = executionStats.executionSuccess as boolean | undefined;
+        const failed = executionStats.failed as boolean | undefined;
+
+        // Query succeeded
+        if (executionSuccess !== false && failed !== true) {
+            return undefined;
+        }
+
+        // Query failed - extract error details
+        const errorMessage = executionStats.errorMessage as string | undefined;
+        const errorCode = executionStats.errorCode as number | undefined;
+
+        // Find which stage failed
+        const failedStage = this.findFailedStage(executionStats.executionStages as Document | undefined);
+
+        return {
+            failed: true,
+            executionSuccess: false,
+            errorMessage: errorMessage || 'Query execution failed (no error message provided)',
+            errorCode,
+            failedStage,
+            partialStats: {
+                docsExamined: (executionStats.totalDocsExamined as number) ?? 0,
+                executionTimeMs: (executionStats.executionTimeMillis as number) ?? 0,
+            },
+        };
+    }
+
+    /**
+     * Finds the stage where execution failed by traversing the stage tree
+     * Returns the deepest stage with failed: true
+     *
+     * @param executionStages - The executionStages section from executionStats
+     * @returns Information about the failed stage or undefined
+     */
+    private static findFailedStage(
+        executionStages: Document | undefined,
+    ): { stage: string; details?: Record<string, unknown> } | undefined {
+        if (!executionStages) {
+            return undefined;
+        }
+
+        const findFailedInStage = (
+            stage: Document,
+        ): { stage: string; details?: Record<string, unknown> } | undefined => {
+            const stageName = stage.stage as string | undefined;
+            const stageFailed = stage.failed as boolean | undefined;
+
+            if (!stageName) {
+                return undefined;
+            }
+
+            // Check input stages first (depth-first to find root cause)
+            if (stage.inputStage) {
+                const childResult = findFailedInStage(stage.inputStage as Document);
+                if (childResult) {
+                    return childResult; // Return deepest failed stage
+                }
+            }
+
+            if (stage.inputStages && Array.isArray(stage.inputStages)) {
+                for (const inputStage of stage.inputStages) {
+                    const childResult = findFailedInStage(inputStage as Document);
+                    if (childResult) {
+                        return childResult;
+                    }
+                }
+            }
+
+            // If this stage failed and no child failed, this is the root cause
+            if (stageFailed) {
+                return {
+                    stage: stageName,
+                    details: this.extractStageErrorDetails(stageName, stage),
+                };
+            }
+
+            return undefined;
+        };
+
+        return findFailedInStage(executionStages);
+    }
+
+    /**
+     * Extracts relevant error details from a failed stage
+     *
+     * @param stageName - Name of the failed stage
+     * @param stage - The stage document
+     * @returns Relevant details for the failed stage
+     */
+    private static extractStageErrorDetails(stageName: string, stage: Document): Record<string, unknown> | undefined {
+        switch (stageName) {
+            case 'SORT':
+                return {
+                    memLimit: stage.memLimit,
+                    sortPattern: stage.sortPattern,
+                    usedDisk: stage.usedDisk,
+                };
+            case 'GROUP':
+                return {
+                    maxMemoryUsageBytes: stage.maxMemoryUsageBytes,
+                };
+            default:
+                return undefined;
+        }
+    }
+
+    /**
+     * Creates a performance rating for a failed query
+     * This provides clear diagnostics explaining the failure
+     *
+     * @param error - The execution error information
+     * @returns Performance rating with failure diagnostics
+     */
+    private static createFailedQueryRating(error: QueryExecutionError): PerformanceRating {
+        const diagnostics: PerformanceDiagnostic[] = [];
+
+        // Primary diagnostic: Query failed
+        diagnostics.push({
+            type: 'negative',
+            message: 'Query execution failed',
+            details: `${error.errorMessage}\n\nThe query did not complete successfully. Performance metrics shown are partial and measured up to the failure point.`,
+        });
+
+        // Stage-specific diagnostics
+        if (error.failedStage) {
+            const stageDiagnostic = this.createStageFailureDiagnostic(error.failedStage, error.errorCode);
+            if (stageDiagnostic) {
+                diagnostics.push(stageDiagnostic);
+            }
+        }
+
+        return {
+            score: 'poor',
+            diagnostics,
+        };
+    }
+
+    /**
+     * Creates stage-specific diagnostic with actionable guidance
+     *
+     * @param failedStage - Information about the failed stage
+     * @param errorCode - MongoDB error code
+     * @returns Diagnostic with solutions or undefined
+     */
+    private static createStageFailureDiagnostic(
+        failedStage: { stage: string; details?: Record<string, unknown> },
+        errorCode?: number,
+    ): PerformanceDiagnostic | undefined {
+        const { stage, details } = failedStage;
+
+        // Sort memory limit exceeded (Error 292)
+        if (stage === 'SORT' && errorCode === 292) {
+            const memLimit = details?.memLimit as number | undefined;
+            const sortPattern = details?.sortPattern as Document | undefined;
+            const memLimitMB = memLimit ? (memLimit / (1024 * 1024)).toFixed(1) : 'unknown';
+
+            return {
+                type: 'negative',
+                message: 'Sort exceeded memory limit',
+                details:
+                    `The SORT stage exceeded the ${memLimitMB}MB memory limit.\n\n` +
+                    `**Solutions:**\n` +
+                    `1. Add .allowDiskUse(true) to allow disk-based sorting for large result sets\n` +
+                    `2. Create an index matching the sort pattern: ${JSON.stringify(sortPattern)}\n` +
+                    `3. Add filters to reduce the number of documents being sorted\n` +
+                    `4. Increase server memory limit (requires server configuration)`,
+            };
+        }
+
+        // Generic stage failure
+        return {
+            type: 'negative',
+            message: `${stage} stage failed`,
+            details: `The ${stage} stage could not complete execution.\n\nReview the error message and query structure for potential issues.`,
+        };
+    }
 }
 
 /**
@@ -370,6 +616,24 @@ export interface QueryPlannerAnalysis {
     hasInMemorySort: boolean;
     namespace: string;
     rawPlan: Document;
+}
+
+/**
+ * Error information from a failed query execution
+ */
+export interface QueryExecutionError {
+    failed: true;
+    executionSuccess: false;
+    errorMessage: string;
+    errorCode?: number;
+    failedStage?: {
+        stage: string;
+        details?: Record<string, unknown>;
+    };
+    partialStats: {
+        docsExamined: number;
+        executionTimeMs: number;
+    };
 }
 
 /**
@@ -389,4 +653,5 @@ export interface ExecutionStatsAnalysis {
     performanceRating: PerformanceRating;
     rawStats: Document;
     extendedStageInfo?: ExtendedStageInfo[];
+    executionError?: QueryExecutionError;
 }

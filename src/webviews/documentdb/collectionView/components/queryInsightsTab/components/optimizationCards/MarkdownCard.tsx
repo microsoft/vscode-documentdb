@@ -3,8 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Card, CardHeader, makeStyles, Text, tokens } from '@fluentui/react-components';
-import { CopyRegular, SparkleRegular } from '@fluentui/react-icons';
+import { Card, CardHeader, makeStyles, Text, tokens } from '@fluentui/react-components';
+// TODO: Copy content feature will be added in the next release
+// import { Button, CopyRegular } from '@fluentui/react-icons';
+import { SparkleRegular } from '@fluentui/react-icons';
+import * as l10n from '@vscode/l10n';
 import { forwardRef, type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './optimizationCard.scss';
@@ -84,6 +87,12 @@ interface MarkdownCardProps {
      * Optional callback when the copy button is clicked
      */
     onCopy?: () => void;
+
+    /**
+     * Whether to show the AI disclaimer. Default: true
+     * Set to false for non-AI generated content (e.g., error messages)
+     */
+    showAiDisclaimer?: boolean;
 }
 
 /**
@@ -101,35 +110,52 @@ interface MarkdownCardProps {
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(({ title, content, icon, onCopy }, ref) => {
-    const styles = useStyles();
+export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(
+    // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
+    ({ title, content, icon, onCopy: _onCopy, showAiDisclaimer = true }, ref) => {
+        const styles = useStyles();
 
-    return (
-        <Card ref={ref} style={{ marginBottom: '16px' }}>
-            <div className="optimization-card-container">
-                <div className="optimization-card-icon" style={{ flexShrink: 0 }}>
-                    {icon ?? <SparkleRegular />}
-                </div>
-                <div style={{ flex: 1 }}>
-                    <CardHeader
-                        header={
-                            <Text weight="semibold" size={400}>
-                                {title}
-                            </Text>
-                        }
-                        action={
-                            onCopy ? (
-                                <Button appearance="subtle" icon={<CopyRegular />} size="small" onClick={onCopy} />
-                            ) : undefined
-                        }
-                    />
-                    <div className={styles.content}>
-                        <ReactMarkdown>{content}</ReactMarkdown>
+        return (
+            <Card ref={ref} style={{ marginBottom: '16px' }}>
+                {showAiDisclaimer && (
+                    <Text
+                        size={200}
+                        style={{
+                            position: 'absolute',
+                            top: '12px',
+                            right: '12px',
+                            color: tokens.colorNeutralForeground3,
+                        }}
+                    >
+                        {l10n.t('AI responses may be inaccurate.')}
+                    </Text>
+                )}
+                <div className="optimization-card-container">
+                    <div className="optimization-card-icon" style={{ flexShrink: 0 }}>
+                        {icon ?? <SparkleRegular />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <CardHeader
+                            header={
+                                <Text weight="semibold" size={400}>
+                                    {title}
+                                </Text>
+                            }
+                            // TODO: Copy content feature will be added in the next release
+                            // action={
+                            //     onCopy ? (
+                            //         <Button appearance="subtle" icon={<CopyRegular />} size="small" onClick={onCopy} />
+                            //     ) : undefined
+                            // }
+                        />
+                        <div className={styles.content}>
+                            <ReactMarkdown>{content}</ReactMarkdown>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </Card>
-    );
-});
+            </Card>
+        );
+    },
+);
 
 MarkdownCard.displayName = 'MarkdownCard';
