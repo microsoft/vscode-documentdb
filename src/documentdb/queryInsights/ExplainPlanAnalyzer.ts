@@ -121,6 +121,10 @@ export class ExplainPlanAnalyzer {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
         const explainPlan = new ExplainPlan(explainResult as any);
 
+        // Extract query filter from command (for empty query detection)
+        const command = explainResult.command as Document | undefined;
+        const queryFilter = command?.filter as Document | undefined;
+
         // STEP 1: Check for execution errors FIRST
         const executionStats = explainResult.executionStats as Document | undefined;
         const executionError = this.extractExecutionError(executionStats);
@@ -168,6 +172,7 @@ export class ExplainPlanAnalyzer {
                       hasSorting,
                       isIndexScan,
                       isCollectionScan,
+                      queryFilter,
                   ),
             rawStats: explainResult,
             executionError,
@@ -182,12 +187,16 @@ export class ExplainPlanAnalyzer {
      * - Excellent: High efficiency (>=50%), indexed, no in-memory sort, fast (<100ms)
      * - Good: Moderate efficiency (>=10%), indexed or fast (<500ms)
      * - Fair: Low efficiency (>=1%)
-     * - Poor: Very low efficiency (<1%) or collection scan
+     * - Poor: Very low efficiency (<1%) or collection scan (for non-empty queries)
+     *
+     * Special handling for empty queries:
+     * - Collection scans on empty queries (no filter) are treated as neutral, not negative
+     * - Rating is based primarily on execution time and efficiency ratio
      *
      * Diagnostics always include:
      * - Efficiency ratio assessment
      * - Execution time assessment
-     * - Index usage assessment
+     * - Index usage assessment (adjusted for empty queries)
      * - Sort strategy assessment (only when sorting is performed)
      *
      * @param executionTimeMs - Execution time in milliseconds
@@ -196,6 +205,7 @@ export class ExplainPlanAnalyzer {
      * @param hasSorting - Whether query performs any sorting (in-memory or index-based)
      * @param isIndexScan - Whether query uses index scan
      * @param isCollectionScan - Whether query performs collection scan
+     * @param queryFilter - Optional query filter to detect empty queries
      * @returns Performance rating with score and diagnostics
      */
     private static calculatePerformanceRating(
@@ -205,8 +215,12 @@ export class ExplainPlanAnalyzer {
         hasSorting: boolean,
         isIndexScan: boolean,
         isCollectionScan: boolean,
+        queryFilter?: Document,
     ): PerformanceRating {
         const diagnostics: PerformanceDiagnostic[] = [];
+
+        // Check if this is an empty query (no filter criteria)
+        const isEmptyQuery = !queryFilter || Object.keys(queryFilter).length === 0;
 
         // 1. Efficiency Ratio Assessment (always included)
         if (efficiencyRatio >= 0.5) {
@@ -271,12 +285,22 @@ export class ExplainPlanAnalyzer {
                     'Your query uses an index.\n\nThis allows the database to efficiently locate matching documents without scanning the entire collection.',
             });
         } else if (isCollectionScan) {
-            diagnostics.push({
-                type: 'negative',
-                message: 'Full collection scan',
-                details:
-                    'Your query performs a full collection scan, examining every document in the collection.\n\nThis is inefficient and slow, especially for large collections.\n\nAdd an index on the queried fields to improve performance.',
-            });
+            // For empty queries (no filter), collection scan is expected and neutral
+            if (isEmptyQuery) {
+                diagnostics.push({
+                    type: 'neutral',
+                    message: 'Full collection scan',
+                    details:
+                        'Your query performs a full collection scan since no filter criteria are specified.\n\nThis is expected behavior for queries that retrieve all documents. Consider adding filters if you only need a subset of documents.',
+                });
+            } else {
+                diagnostics.push({
+                    type: 'negative',
+                    message: 'Full collection scan',
+                    details:
+                        'Your query performs a full collection scan, examining every document in the collection.\n\nThis is inefficient and slow, especially for large collections.\n\nAdd an index on the queried fields to improve performance.',
+                });
+            }
         } else {
             diagnostics.push({
                 type: 'neutral',
@@ -315,7 +339,20 @@ export class ExplainPlanAnalyzer {
         // Determine overall score based on thresholds
         let score: 'excellent' | 'good' | 'fair' | 'poor';
 
-        if (isCollectionScan && efficiencyRatio < 0.01) {
+        // For empty queries with collection scan, don't penalize - treat as neutral
+        if (isEmptyQuery && isCollectionScan) {
+            // Score based on execution time and efficiency only
+            if (efficiencyRatio >= 0.5 && executionTimeMs < 100) {
+                score = 'excellent';
+            } else if (efficiencyRatio >= 0.1 && executionTimeMs < 500) {
+                score = 'good';
+            } else if (executionTimeMs < 2000) {
+                score = 'fair';
+            } else {
+                score = 'poor';
+            }
+        } else if (isCollectionScan && efficiencyRatio < 0.01) {
+            // Non-empty query with poor efficiency and collection scan
             score = 'poor';
         } else if (efficiencyRatio >= 0.5 && isIndexScan && !hasInMemorySort && executionTimeMs < 100) {
             score = 'excellent';

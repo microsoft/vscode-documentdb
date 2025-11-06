@@ -286,7 +286,6 @@
   "Failed to find commandId on generic tree item.": "Failed to find commandId on generic tree item.",
   "Failed to gather query optimization data: {message}": "Failed to gather query optimization data: {message}",
   "Failed to gather schema information: {message}": "Failed to gather schema information: {message}",
-  "Failed to get AI recommendations: {0}": "Failed to get AI recommendations: {0}",
   "Failed to get optimization recommendations from index advisor.": "Failed to get optimization recommendations from index advisor.",
   "Failed to get public IP": "Failed to get public IP",
   "Failed to initialize Azure management clients": "Failed to initialize Azure management clients",
@@ -697,5 +696,6 @@
   "You need to provide the password for \"{username}\" in order to continue. Your password will not be stored.": "You need to provide the password for \"{username}\" in order to continue. Your password will not be stored.",
   "Your Cluster": "Your Cluster",
   "Your database stores documents with embedded fields, allowing for hierarchical data organization.": "Your database stores documents with embedded fields, allowing for hierarchical data organization.",
+  "Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.": "Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.",
   "Your VS Code window must be reloaded to perform this action.": "Your VS Code window must be reloaded to perform this action."
 }

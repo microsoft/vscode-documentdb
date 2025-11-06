@@ -377,18 +377,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <CollapseRelaxed visible={stageState >= 2 && !queryInsightsState.stage3Data}>
                             <GetPerformanceInsightsCard
                                 className="cardSpacing"
-                                bodyText={l10n.t(
-                                    'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
-                                )}
-                                isLoading={queryInsightsState.stage3Loading}
-                                errorMessage={
-                                    queryInsightsState.stage3Error
+                                bodyText={
+                                    queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score ===
+                                    'excellent'
                                         ? l10n.t(
-                                              'Failed to get AI recommendations: {0}',
-                                              queryInsightsState.stage3Error,
+                                              'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
                                           )
-                                        : undefined
+                                        : l10n.t(
+                                              'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
+                                          )
                                 }
+                                isLoading={queryInsightsState.stage3Loading}
+                                errorMessage={queryInsightsState.stage3Error ?? undefined}
                                 onGetInsights={handleGetAISuggestions}
                                 onLearnMore={() => {
                                     /* TODO: Implement learn more functionality */
