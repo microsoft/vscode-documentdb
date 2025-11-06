@@ -301,6 +301,17 @@ export class ExplainPlanAnalyzer {
      * @returns True if sorting is detected, false otherwise
      */
     private static detectSortingInPlan(explainResult: Document): boolean {
+        // First, check if the command includes a sort specification
+        const command = explainResult.command as Document | undefined;
+        if (command?.sort) {
+            const sortSpec = command.sort as Document;
+            // Check if sort is non-empty (not just {})
+            if (Object.keys(sortSpec).length > 0) {
+                return true;
+            }
+        }
+
+        // Also check for explicit SORT stages (in-memory sort)
         const executionStats = explainResult.executionStats as Document | undefined;
         if (!executionStats) {
             return false;
