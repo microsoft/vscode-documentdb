@@ -42,13 +42,7 @@ import { AnimatedCardList } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
-import {
-    AiCard,
-    GetPerformanceInsightsCard,
-    ImprovementCard,
-    MarkdownCard,
-    TipsCard,
-} from './components/optimizationCards';
+import { GetPerformanceInsightsCard, ImprovementCard, MarkdownCard, TipsCard } from './components/optimizationCards';
 import { QueryPlanSummary } from './components/queryPlanSummary';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
@@ -409,17 +403,17 @@ export const QueryInsightsMain = (): JSX.Element => {
                             {stageState === 3 &&
                                 queryInsightsState.stage3Data &&
                                 queryInsightsState.stage3Data.analysisCard && (
-                                    <AiCard
+                                    <MarkdownCard
                                         key="analysis-card"
+                                        icon={<SparkleRegular />}
                                         title={l10n.t('Query Performance Analysis')}
+                                        content={queryInsightsState.stage3Data.analysisCard.content}
                                         onCopy={() => {
                                             void navigator.clipboard.writeText(
                                                 queryInsightsState.stage3Data?.analysisCard.content ?? '',
                                             );
                                         }}
-                                    >
-                                        <Text size={300}>{queryInsightsState.stage3Data?.analysisCard.content}</Text>
-                                    </AiCard>
+                                    />
                                 )}
 
                             {/* Error Card - shown when query execution failed */}
@@ -503,18 +497,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                         );
                                                     }
 
-                                                    // For informational cards (no buttons), use AiCard with simplified content
-                                                    console.log(`  -> Rendering as AiCard (no buttons)`);
+                                                    // For informational cards (no buttons), use MarkdownCard
+                                                    console.log(`  -> Rendering as MarkdownCard (no buttons)`);
                                                     return (
-                                                        <AiCard
+                                                        <MarkdownCard
                                                             key={card.cardId || `card-${index}`}
+                                                            icon={<SparkleRegular />}
                                                             title={card.title}
+                                                            content={card.description}
                                                             onCopy={() => {
                                                                 void navigator.clipboard.writeText(card.description);
                                                             }}
-                                                        >
-                                                            <Text size={300}>{card.description}</Text>
-                                                        </AiCard>
+                                                        />
                                                     );
                                                 },
                                             )}
