@@ -297,7 +297,6 @@
   "Failed to obtain Entra ID token.": "Failed to obtain Entra ID token.",
   "Failed to open raw execution stats": "Failed to open raw execution stats",
   "Failed to parse AI optimization response. {0}": "Failed to parse AI optimization response. {0}",
-  "Failed to parse current query text: {0}": "Failed to parse current query text: {0}",
   "Failed to parse generated query. Query generation provided an invalid response.": "Failed to parse generated query. Query generation provided an invalid response.",
   "Failed to parse query string: {message}": "Failed to parse query string: {message}",
   "Failed to parse secrets for key {0}:": "Failed to parse secrets for key {0}:",
