@@ -451,6 +451,7 @@
   "Provide Feedback": "Provide Feedback",
   "Provider \"{0}\" does not have resource type \"{1}\".": "Provider \"{0}\" does not have resource type \"{1}\".",
   "Query Efficiency Analysis": "Query Efficiency Analysis",
+  "Query Execution Failed": "Query Execution Failed",
   "Query generation completed successfully": "Query generation completed successfully",
   "Query generation failed": "Query generation failed",
   "Query generation failed with the error: {0}": "Query generation failed with the error: {0}",
