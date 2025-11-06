@@ -248,11 +248,11 @@ export class llmEnhancedFeatureApis {
         };
 
         // Add optional fields if they are defined
-        if (sort !== undefined) {
+        if (sort !== undefined && Object.keys(sort).length > 0) {
             findCmd.sort = sort;
         }
 
-        if (projection !== undefined) {
+        if (projection !== undefined && Object.keys(projection).length > 0) {
             findCmd.projection = projection;
         }
 

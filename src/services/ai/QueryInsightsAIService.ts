@@ -160,11 +160,17 @@ export class QueryInsightsAIService {
             }
 
             if (params.project) {
-                result.projection = JSON.parse(params.project) as Document;
+                const projection = JSON.parse(params.project) as Document;
+                if (Object.keys(projection).length > 0) {
+                    result.projection = projection;
+                }
             }
 
             if (params.sort) {
-                result.sort = JSON.parse(params.sort) as Document;
+                const sort = JSON.parse(params.sort) as Document;
+                if (Object.keys(sort).length > 0) {
+                    result.sort = sort;
+                }
             }
 
             if (params.limit !== undefined) {
