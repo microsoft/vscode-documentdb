@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Text, tokens, Tooltip } from '@fluentui/react-components';
+import { Badge, SkeletonItem, Text, tokens, Tooltip } from '@fluentui/react-components';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
@@ -76,9 +76,12 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         }
     };
 
-    const customContent =
-        rating !== null && rating !== undefined ? (
-            <CollapseRelaxed visible={visible}>
+    const hasRating = rating !== null && rating !== undefined;
+
+    const customContent = (
+        <>
+            {/* Always render CollapseRelaxed to enable animations when visible prop changes */}
+            <CollapseRelaxed visible={hasRating && visible}>
                 <div
                     className="efficiencyIndicator"
                     style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '8px' }}
@@ -86,11 +89,11 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                     {/* First row, first column: dot */}
                     <div
                         className="efficiencyDot"
-                        style={{ backgroundColor: getRatingColor(rating), alignSelf: 'center' }}
+                        style={{ backgroundColor: getRatingColor(rating!), alignSelf: 'center' }}
                     />
                     {/* First row, second column: rating text */}
                     <Text weight="semibold" style={{ alignSelf: 'center' }}>
-                        {getRatingText(rating)}
+                        {getRatingText(rating!)}
                     </Text>
                     {/* Second row, first column: empty */}
                     {diagnostics && diagnostics.length > 0 && <div />}
@@ -129,7 +132,10 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                     )}
                 </div>
             </CollapseRelaxed>
-        ) : undefined;
+            {/* Show skeleton when rating is not available */}
+            {!hasRating && <SkeletonItem size={16} />}
+        </>
+    );
 
-    return <CellBase label={label} value={customContent} placeholder="skeleton" span="full" />;
+    return <CellBase label={label} value={customContent} placeholder="empty" span="full" />;
 };
