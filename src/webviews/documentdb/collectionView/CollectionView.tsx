@@ -19,7 +19,6 @@ import {
 } from './collectionViewContext';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
 import { QueryInsightsMain } from './components/queryInsightsTab/QueryInsightsTab';
-import { QueryInsightsMainMock } from './components/queryInsightsTabMock/QueryInsightsTab';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
 import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
@@ -77,9 +76,7 @@ export const CollectionView = (): JSX.Element => {
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
     // Track which tab is currently active
-    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_performance_main' | 'tab_performance_mock'>(
-        'tab_result',
-    );
+    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_performance_main'>('tab_result');
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
@@ -542,7 +539,7 @@ export const CollectionView = (): JSX.Element => {
                 <TabList
                     selectedValue={selectedTab}
                     onTabSelect={(_event, data) => {
-                        setSelectedTab(data.value as 'tab_result' | 'tab_performance_main' | 'tab_performance_mock');
+                        setSelectedTab(data.value as 'tab_result' | 'tab_performance_main');
                     }}
                     style={{ marginTop: '-10px' }}
                 >
@@ -556,9 +553,6 @@ export const CollectionView = (): JSX.Element => {
                                 PREVIEW
                             </Badge>
                         </div>
-                    </Tab>
-                    <Tab id="tab.performance.mock" value="tab_performance_mock">
-                        Query Insights Mock
                     </Tab>
                 </TabList>
 
@@ -601,7 +595,6 @@ export const CollectionView = (): JSX.Element => {
                 )}
 
                 {selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
-                {selectedTab === 'tab_performance_mock' && <QueryInsightsMainMock />}
             </div>
         </CollectionViewContext.Provider>
     );
