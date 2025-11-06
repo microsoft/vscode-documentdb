@@ -350,9 +350,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                             <GetPerformanceInsightsCard
                                 className="cardSpacing"
                                 bodyText={l10n.t(
-                                    'Your query is performing optimally for the current dataset size. However, as data grows, consider adding an index.',
+                                    'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
                                 )}
-                                recommendation={l10n.t('Recommended: Create index on user_id')}
                                 isLoading={isLoadingAI || aiInsightsRequested}
                                 onGetInsights={handleGetAISuggestions}
                                 onLearnMore={() => {
