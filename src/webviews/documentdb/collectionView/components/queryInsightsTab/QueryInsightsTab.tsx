@@ -109,8 +109,14 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Stage 1: Load when needed (on mount or after query re-run when tab is active)
     // When a query is re-run, the queryInsights state is reset in CollectionView.tsx
     // This effect needs to re-trigger to start loading the new data
+    // IMPORTANT: Wait for query execution to complete (isLoading=false) before fetching insights
     useEffect(() => {
-        if (!queryInsightsState.stage1Data && !queryInsightsState.stage1Loading && !queryInsightsState.stage1Promise) {
+        if (
+            !currentContext.isLoading &&
+            !queryInsightsState.stage1Data &&
+            !queryInsightsState.stage1Loading &&
+            !queryInsightsState.stage1Promise
+        ) {
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Loading: true }));
 
             // Query parameters are now retrieved from ClusterSession - no need to pass them
@@ -142,7 +148,12 @@ export const QueryInsightsMain = (): JSX.Element => {
 
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Promise: promise }));
         }
-    }, [queryInsightsState.stage1Data, queryInsightsState.stage1Loading, queryInsightsState.stage1Promise]);
+    }, [
+        currentContext.isLoading,
+        queryInsightsState.stage1Data,
+        queryInsightsState.stage1Loading,
+        queryInsightsState.stage1Promise,
+    ]);
 
     // Stage 2: Auto-start after Stage 1 completes
     useEffect(() => {
