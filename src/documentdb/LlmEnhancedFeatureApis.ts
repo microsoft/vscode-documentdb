@@ -384,7 +384,16 @@ export class llmEnhancedFeatureApis {
         }
 
         // Add any other options (excluding 'key' which we've already handled)
-        const { key: _key, name, unique, background, sparse, expireAfterSeconds, partialFilterExpression, ...otherOptions } = indexOptions;
+        const {
+            key: _key,
+            name,
+            unique,
+            background,
+            sparse,
+            expireAfterSeconds,
+            partialFilterExpression,
+            ...otherOptions
+        } = indexOptions;
         Object.assign(indexDefinition, otherOptions);
 
         const command: Document = {
@@ -402,8 +411,7 @@ export class llmEnhancedFeatureApis {
                 numIndexesBefore: result.numIndexesBefore as number | undefined,
                 note: result.note as string | undefined,
             };
-        }
-        catch (error: any) {
+        } catch (error: any) {
             return {
                 ok: 0,
                 note: `Index creation failed: ${error.message}`,
@@ -433,8 +441,7 @@ export class llmEnhancedFeatureApis {
                 ok: (result.ok as number) ?? 0,
                 nIndexesWas: result.nIndexesWas as number | undefined,
             };
-        }
-        catch (error: any) {
+        } catch (error: any) {
             return {
                 ok: 0,
                 note: `Index drop failed: ${error.message}`,

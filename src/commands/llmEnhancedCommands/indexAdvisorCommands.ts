@@ -454,8 +454,6 @@ export async function optimizeQuery(
         }
     }
 
-
-
     try {
         collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
         const indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
@@ -470,8 +468,7 @@ export async function optimizeQuery(
             };
         });
         // indexes.push(...searchIndexes);
-    }
-    catch {
+    } catch {
         // They are not critical errors, we can continue without index stats and collection stats
         collectionStats = null as unknown as CollectionStats;
         indexes = null as unknown as Array<IndexStats>;

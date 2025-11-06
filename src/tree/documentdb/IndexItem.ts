@@ -50,10 +50,10 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
                 createGenericElement({
                     contextValue: 'indexField',
                     id: `${this.id}/notSupported`,
-                    label: 'Not supported for now',
+                    label: 'Support coming soon',
                     description: '',
                     iconPath: new vscode.ThemeIcon('combine'),
-                }) as TreeElement
+                }) as TreeElement,
             ];
         }
     }
@@ -174,53 +174,55 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
             md.appendMarkdown('\n```\n\n');
         }
 
-        // Action buttons at the bottom
-        md.appendMarkdown('---\n\n');
-        md.appendMarkdown('**Actions:**\n\n');
+        // // Action buttons at the bottom
+        // md.appendMarkdown('---\n\n');
+        // md.appendMarkdown('**Actions:**\n\n');
 
-        // Create command URIs with encoded arguments
-        const dropIndexArgs = encodeURIComponent(
-            JSON.stringify([
-                {
-                    cluster: this.cluster.id,
-                    databaseInfo: this.databaseInfo.name,
-                    collectionInfo: this.collectionInfo.name,
-                    indexInfo: this.indexInfo.name,
-                },
-            ]),
-        );
+        // // Create command URIs with encoded arguments
+        // const dropIndexArgs = encodeURIComponent(
+        //     JSON.stringify([
+        //         {
+        //             cluster: this.cluster.id,
+        //             databaseInfo: this.databaseInfo.name,
+        //             collectionInfo: this.collectionInfo.name,
+        //             indexInfo: this.indexInfo.name,
+        //         },
+        //     ]),
+        // );
 
-        const hideUnhideArgs = encodeURIComponent(
-            JSON.stringify([
-                {
-                    cluster: this.cluster.id,
-                    databaseInfo: this.databaseInfo.name,
-                    collectionInfo: this.collectionInfo.name,
-                    indexInfo: this.indexInfo.name,
-                },
-            ]),
-        );
+        // const hideUnhideArgs = encodeURIComponent(
+        //     JSON.stringify([
+        //         {
+        //             cluster: this.cluster.id,
+        //             databaseInfo: this.databaseInfo.name,
+        //             collectionInfo: this.collectionInfo.name,
+        //             indexInfo: this.indexInfo.name,
+        //         },
+        //     ]),
+        // );
 
-        // TODO: wire up buttons with actual commands
-        // Drop index button (only if not _id index)
-        if (this.indexInfo.name !== '_id_') {
-            md.appendMarkdown(
-                `[$(trash) Drop Index](command:vscode-documentdb.command.dropIndex?${dropIndexArgs} "Delete this index") &nbsp;&nbsp;`,
-            );
-        }
+        // // TODO: wire up buttons with actual commands
+        // // Drop index button (only if not _id index)
+        // if (this.indexInfo.name !== '_id_') {
+        //     md.appendMarkdown(
+        //         `[$(trash) Drop Index](command:vscode-documentdb.command.dropIndex?${dropIndexArgs} "Delete this index") &nbsp;&nbsp;`,
+        //     );
+        // }
 
-        // Hide/Unhide button
-        if (this.indexInfo.name !== '_id_') {
-            const hideUnhideText = this.indexInfo.hidden ? '$(eye) Unhide Index' : '$(eye-closed) Hide Index';
-            const hideUnhideCommand = this.indexInfo.hidden
-                ? 'vscode-documentdb.command.unhideIndex'
-                : 'vscode-documentdb.command.hideIndex';
-            const hideUnhideTooltip = this.indexInfo.hidden ? 'Make this index visible' : 'Hide this index from queries';
+        // // Hide/Unhide button
+        // if (this.indexInfo.name !== '_id_') {
+        //     const hideUnhideText = this.indexInfo.hidden ? '$(eye) Unhide Index' : '$(eye-closed) Hide Index';
+        //     const hideUnhideCommand = this.indexInfo.hidden
+        //         ? 'vscode-documentdb.command.unhideIndex'
+        //         : 'vscode-documentdb.command.hideIndex';
+        //     const hideUnhideTooltip = this.indexInfo.hidden
+        //         ? 'Make this index visible'
+        //         : 'Hide this index from queries';
 
-            md.appendMarkdown(
-                `[${hideUnhideText}](command:${hideUnhideCommand}?${hideUnhideArgs} "${hideUnhideTooltip}") &nbsp;&nbsp;`,
-            );
-        }
+        //     md.appendMarkdown(
+        //         `[${hideUnhideText}](command:${hideUnhideCommand}?${hideUnhideArgs} "${hideUnhideTooltip}") &nbsp;&nbsp;`,
+        //     );
+        // }
 
         return md;
     }

@@ -376,7 +376,6 @@ export class ClustersClient {
 
         let i = 0;
         return indexes.map((index) => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { v, ...indexWithoutV } = index;
             return {
                 ...indexWithoutV,

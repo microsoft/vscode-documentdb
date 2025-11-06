@@ -12,7 +12,7 @@ import {
     type QueryObject,
     type QueryOptimizationContext,
 } from '../../commands/llmEnhancedCommands/indexAdvisorCommands';
-import { FindQueryParams } from '../../documentdb/ClustersClient';
+import { type FindQueryParams } from '../../documentdb/ClustersClient';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type IndexSpecification } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type AIOptimizationResponse } from './types';
@@ -82,8 +82,7 @@ export class QueryInsightsAIService {
                         queryObject,
                         commandType: CommandType.Find,
                     };
-                }
-                else {
+                } else {
                     // handle string query for temporary compatibility
                     queryContext = {
                         sessionId,
@@ -292,11 +291,7 @@ export class QueryInsightsAIService {
             const session = ClusterSession.getSession(actualSessionId);
             const client = session.getClient();
 
-            const result = await client.createIndex(
-                payload.databaseName,
-                payload.collectionName,
-                payload.indexSpec,
-            );
+            const result = await client.createIndex(payload.databaseName, payload.collectionName, payload.indexSpec);
 
             if (result.ok === 1) {
                 return {
