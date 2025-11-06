@@ -390,11 +390,11 @@ export class ClustersClient {
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
         const searchIndexes = await collection.aggregate([{ $listSearchIndexes: {} }]).toArray();
         let i = 0; // backup for indexes with no names
-        return searchIndexes.map((index) => ({
+        return searchIndexes.map((index: Document) => ({
             ...index,
-            name: index.name ?? 'search_idx_' + (i++).toString(),
-            type: index.type ?? 'search',
-            fields: index.fields,
+            name: (index.name as string | undefined) ?? 'search_idx_' + (i++).toString(),
+            type: ((index.type as string | undefined) ?? 'search') as 'traditional' | 'search',
+            fields: index.fields as unknown[] | undefined,
         }));
     }
 

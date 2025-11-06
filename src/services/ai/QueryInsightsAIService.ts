@@ -419,9 +419,10 @@ export class QueryInsightsAIService {
                     message: l10n.t('Index "{0}" {1} successfully', indexName, actionName),
                 };
             } else {
+                const errmsg = typeof result.errmsg === 'string' ? result.errmsg : 'Unknown error';
                 return {
                     success: false,
-                    message: l10n.t('Failed to modify index: {0}', result.errmsg ?? 'Unknown error'),
+                    message: l10n.t('Failed to modify index: {0}', errmsg),
                 };
             }
         } catch (error) {

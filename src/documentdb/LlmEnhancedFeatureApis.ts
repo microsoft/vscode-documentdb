@@ -383,18 +383,21 @@ export class llmEnhancedFeatureApis {
             indexDefinition.partialFilterExpression = indexOptions.partialFilterExpression;
         }
 
-        // Add any other options (excluding 'key' which we've already handled)
-        const {
-            key: _key,
-            name,
-            unique,
-            background,
-            sparse,
-            expireAfterSeconds,
-            partialFilterExpression,
-            ...otherOptions
-        } = indexOptions;
-        Object.assign(indexDefinition, otherOptions);
+        // Add any other options (excluding properties we've already handled above)
+        const handledProps = new Set([
+            'key',
+            'name',
+            'unique',
+            'background',
+            'sparse',
+            'expireAfterSeconds',
+            'partialFilterExpression',
+        ]);
+        for (const [key, value] of Object.entries(indexOptions)) {
+            if (!handledProps.has(key)) {
+                indexDefinition[key] = value;
+            }
+        }
 
         const command: Document = {
             createIndexes: collectionName,
@@ -411,10 +414,11 @@ export class llmEnhancedFeatureApis {
                 numIndexesBefore: result.numIndexesBefore as number | undefined,
                 note: result.note as string | undefined,
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 ok: 0,
-                note: `Index creation failed: ${error.message}`,
+                note: `Index creation failed: ${errorMessage}`,
             };
         }
     }
@@ -441,10 +445,11 @@ export class llmEnhancedFeatureApis {
                 ok: (result.ok as number) ?? 0,
                 nIndexesWas: result.nIndexesWas as number | undefined,
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 ok: 0,
-                note: `Index drop failed: ${error.message}`,
+                note: `Index drop failed: ${errorMessage}`,
             };
         }
     }
@@ -497,11 +502,12 @@ export class llmEnhancedFeatureApis {
         try {
             const result = await db.command(command);
             return result;
-        } catch (error: any) {
+        } catch (error: unknown) {
             const action = hidden ? 'hide' : 'unhide';
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 ok: 0,
-                errmsg: `Failed to ${action} index: ${error.message}`,
+                errmsg: `Failed to ${action} index: ${errorMessage}`,
             };
         }
     }
