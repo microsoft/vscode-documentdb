@@ -11,7 +11,7 @@ import { type IndexItem } from '../../tree/documentdb/IndexItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
-export async function unhideIndex(context: IActionContext, node: IndexItem): Promise<void> {
+export async function hideIndex(context: IActionContext, node: IndexItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No index selected.'));
     }
@@ -19,24 +19,25 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
     context.telemetry.properties.experience = node.experience.api;
     context.telemetry.properties.indexName = node.indexInfo.name;
 
-    // Check if index is actually hidden
-    if (!node.indexInfo.hidden) {
-        throw new Error(l10n.t('Index "{indexName}" is not hidden.', { indexName: node.indexInfo.name }));
+    // Prevent hiding the _id index
+    if (node.indexInfo.name === '_id_') {
+        throw new Error(l10n.t('The _id index cannot be hidden.'));
     }
 
-    const message = l10n.t(
-        'Unhide index "{indexName}" from collection "{collectionName}"? This will allow the query planner to use this index again.',
-        {
-            indexName: node.indexInfo.name,
-            collectionName: node.collectionInfo.name,
-        },
-    );
-    const successMessage = l10n.t('Index "{indexName}" has been unhidden.', { indexName: node.indexInfo.name });
+    // Check if already hidden
+    if (node.indexInfo.hidden) {
+        throw new Error(l10n.t('Index "{indexName}" is already hidden.', { indexName: node.indexInfo.name }));
+    }
+
+    const indexName = node.indexInfo.name;
+    const collectionName = node.collectionInfo.name;
 
     const confirmed = await getConfirmationAsInSettings(
-        l10n.t('Unhide index "{indexName}"?', { indexName: node.indexInfo.name }),
-        message,
-        node.indexInfo.name,
+        l10n.t('Hide index "{indexName}"?', { indexName }),
+        l10n.t('Hide index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
+            '\n' +
+            l10n.t('This will prevent the query planner from using this index.'),
+        indexName,
     );
 
     if (!confirmed) {
@@ -47,13 +48,13 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
         const client = await ClustersClient.getClient(node.cluster.id);
 
         let success = false;
-        await ext.state.showCreatingChild(node.id, l10n.t('Unhiding index…'), async () => {
-            const result = await client.unhideIndex(node.databaseInfo.name, node.collectionInfo.name, node.indexInfo.name);
+        await ext.state.showCreatingChild(node.id, l10n.t('Hiding index…'), async () => {
+            const result = await client.hideIndex(node.databaseInfo.name, node.collectionInfo.name, node.indexInfo.name);
             success = !!result;
         });
 
         if (success) {
-            showConfirmationAsInSettings(successMessage);
+            showConfirmationAsInSettings(l10n.t('Index "{indexName}" has been hidden.', { indexName }));
         }
     } finally {
         // Refresh parent (collection's indexes folder)

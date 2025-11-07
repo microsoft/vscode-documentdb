@@ -24,16 +24,15 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
         throw new Error(l10n.t('The _id index cannot be deleted.'));
     }
 
-    const message = l10n.t('Delete index "{indexName}" from collection "{collectionName}"?', {
-        indexName: node.indexInfo.name,
-        collectionName: node.collectionInfo.name,
-    });
-    const successMessage = l10n.t('Index "{indexName}" has been deleted.', { indexName: node.indexInfo.name });
+    const indexName = node.indexInfo.name;
+    const collectionName = node.collectionInfo.name;
 
     const confirmed = await getConfirmationAsInSettings(
-        l10n.t('Delete index "{indexName}"?', { indexName: node.indexInfo.name }),
-        message + '\n' + l10n.t('This cannot be undone.'),
-        node.indexInfo.name,
+        l10n.t('Delete index "{indexName}"?', { indexName }),
+        l10n.t('Delete index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
+            '\n' +
+            l10n.t('This cannot be undone.'),
+        indexName,
     );
 
     if (!confirmed) {
@@ -50,7 +49,7 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
         });
 
         if (success) {
-            showConfirmationAsInSettings(successMessage);
+            showConfirmationAsInSettings(l10n.t('Index "{indexName}" has been deleted.', { indexName }));
         }
     } finally {
         // Refresh parent (collection's indexes folder)
