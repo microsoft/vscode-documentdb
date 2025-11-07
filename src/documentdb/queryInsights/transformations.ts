@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
 import { type Document } from 'mongodb';
 import { type AIIndexRecommendation, type AIOptimizationResponse } from '../../services/ai/types';
 import {
@@ -64,9 +65,9 @@ function createImprovementCard(
     index: number,
     context: TransformationContext,
 ): ImprovementCard {
-    const actionVerb = getActionVerb(improvement.action);
     const cardTitle = getCardTitle(improvement.action);
     const indexSpecStr = JSON.stringify(improvement.indexSpec, null, 2);
+    const primaryButtonLabel = getPrimaryButtonLabel(improvement.action, improvement.mongoShell);
 
     return {
         type: 'improvement',
@@ -75,11 +76,12 @@ function createImprovementCard(
         priority: improvement.priority,
         description: improvement.justification,
         recommendedIndex: indexSpecStr,
+        indexName: improvement.indexName,
         recommendedIndexDetails: generateIndexExplanation(improvement),
-        details: improvement.risks || 'Additional write and storage overhead for maintaining a new index.',
+        details: improvement.risks || l10n.t('Additional write and storage overhead for maintaining a new index.'),
         mongoShellCommand: improvement.mongoShell,
         primaryButton: {
-            label: `${actionVerb} Index`,
+            label: primaryButtonLabel,
             actionId: getPrimaryActionId(improvement.action),
             payload: {
                 clusterId: context.clusterId,
@@ -92,7 +94,7 @@ function createImprovementCard(
             },
         },
         secondaryButton: {
-            label: 'Learn More',
+            label: l10n.t('Learn More'),
             actionId: 'learnMore',
             payload: {
                 topic: 'index-optimization',
@@ -102,18 +104,23 @@ function createImprovementCard(
 }
 
 /**
- * Gets the action verb for display
+ * Gets the primary button label based on action and mongoShell command
  */
-function getActionVerb(action: string): string {
+function getPrimaryButtonLabel(action: string, mongoShell: string): string {
     switch (action) {
         case 'create':
-            return 'Create';
+            return l10n.t('Create Index');
         case 'drop':
-            return 'Drop';
+            return l10n.t('Drop Index');
         case 'modify':
-            return 'Modify';
+            if (mongoShell.includes('.hideIndex(')) {
+                return l10n.t('Hide Index');
+            } else if (mongoShell.includes('.unhideIndex(')) {
+                return l10n.t('Unhide Index');
+            }
+            return l10n.t('Modify Index');
         default:
-            return 'No Action';
+            return l10n.t('No Action');
     }
 }
 
@@ -123,13 +130,13 @@ function getActionVerb(action: string): string {
 function getCardTitle(action: string): string {
     switch (action) {
         case 'create':
-            return 'Recommendation: Create Index';
+            return l10n.t('Recommendation: Create Index');
         case 'drop':
-            return 'Recommendation: Drop Index';
+            return l10n.t('Recommendation: Drop Index');
         case 'modify':
-            return 'Recommendation: Modify Index';
+            return l10n.t('Recommendation: Modify Index');
         default:
-            return 'Query Performance Insight';
+            return l10n.t('Query Performance Insight');
     }
 }
 
@@ -157,13 +164,22 @@ function generateIndexExplanation(improvement: AIIndexRecommendation): string {
 
     switch (improvement.action) {
         case 'create':
-            return `An index on ${fields} would allow direct lookup of matching documents and eliminate full collection scans.`;
+            return l10n.t(
+                'An index on {0} would allow direct lookup of matching documents and eliminate full collection scans.',
+                fields,
+            );
         case 'drop':
-            return `This index on ${fields} is not being used and adds unnecessary overhead to write operations.`;
+            return l10n.t(
+                'This index on {0} is not being used and adds unnecessary overhead to write operations.',
+                fields,
+            );
         case 'modify':
-            return `Optimizing the index on ${fields} can improve query performance by better matching the query pattern.`;
+            return l10n.t(
+                'Optimizing the index on {0} can improve query performance by better matching the query pattern.',
+                fields,
+            );
         default:
-            return 'No index changes needed at this time.';
+            return l10n.t('No index changes needed at this time.');
     }
 }
 

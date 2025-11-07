@@ -124,6 +124,7 @@ export class QueryInsightsAIService {
                     action: 'create' | 'drop' | 'none' | 'modify';
                     indexSpec: Record<string, number>;
                     indexOptions?: Record<string, unknown>;
+                    indexName: string;
                     mongoShell: string;
                     justification: string;
                     priority: 'high' | 'medium' | 'low';
