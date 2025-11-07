@@ -18,96 +18,59 @@
     display: flex;
     gap: 20px;
 
+    // Desktop Layout (≥1200px): Two columns side-by-side
     @media (min-width: 1200px) {
         flex-direction: row;
+        align-items: flex-start; // Prevent stretching
     }
 
+    // Mobile Layout (<1200px): Single column, stacked
     @media (max-width: 1199px) {
         flex-direction: column;
     }
 }
 
-.leftPanel {
+// Left column: metrics and optimization (main content area)
+.leftColumn {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    min-height: 0;
+    min-width: 0; // Prevent overflow
 
     @media (min-width: 1200px) {
         flex: 1 1 60%;
-        order: 1;
     }
 
     @media (max-width: 1199px) {
         flex: 1;
-        order: 2;
     }
 }
 
-.rightPanel {
+// Right column: efficiency, query plan, actions (sidebar)
+.rightColumn {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    min-width: 0; // Prevent overflow
 
     @media (min-width: 1200px) {
-        flex: 1 1 40%;
-        order: 2;
+        flex: 0 0 40%;
+        max-width: 500px; // Prevent it from getting too wide
     }
 
     @media (max-width: 1199px) {
         flex: 1;
-        order: 1;
     }
+}
+
+.optimizationSection {
+    display: flex;
+    flex-direction: column;
 }
 
 .optimizationTitle {
     margin-bottom: 12px;
     display: block;
-}
-
-// Responsive wrapper for query plan on desktop (in panel)
-.queryPlanInPanel {
-    @media (min-width: 1200px) {
-        display: block;
-    }
-
-    @media (max-width: 1199px) {
-        display: none;
-    }
-}
-
-// Responsive wrapper for query plan on mobile
-.queryPlanWrapper {
-    @media (min-width: 1200px) {
-        display: none;
-    }
-
-    @media (max-width: 1199px) {
-        display: block;
-    }
-}
-
-// Responsive wrapper for quick actions on desktop (in panel)
-.quickActionsInPanel {
-    @media (min-width: 1200px) {
-        display: block;
-    }
-
-    @media (max-width: 1199px) {
-        display: none;
-    }
-}
-
-// Responsive wrapper for quick actions on mobile
-.quickActionsWrapper {
-    @media (min-width: 1200px) {
-        display: none;
-    }
-
-    @media (max-width: 1199px) {
-        display: block;
-        order: 3;
-    }
 }
 
 // Utility class for card spacing in animated/collapsible contexts

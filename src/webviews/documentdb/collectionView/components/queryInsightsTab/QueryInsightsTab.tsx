@@ -348,10 +348,10 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     return (
         <div className="container">
-            {/* Content Area */}
+            {/* Content Area - Flexbox two-column layout */}
             <div className="contentArea">
-                {/* Left Panel */}
-                <div className="leftPanel">
+                {/* Left Column: Metrics and Optimization */}
+                <div className="leftColumn">
                     {/* Metrics Row */}
                     <MetricsRow>
                         <TimeMetric label={l10n.t('Execution Time')} valueMs={executionTime} />
@@ -361,7 +361,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     </MetricsRow>
 
                     {/* Optimization Opportunities */}
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div className="optimizationSection">
                         <Text size={400} weight="semibold" className="cardSpacing" style={{ display: 'block' }}>
                             {l10n.t('Optimization Opportunities')}
                         </Text>
@@ -549,20 +549,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 )}
                         </AnimatedCardList>
                     </div>
-
-                    {/* Query Plan Summary - Mobile Only */}
-                    <div className="queryPlanWrapper">
-                        <QueryPlanSummary
-                            stage1Data={queryInsightsState.stage1Data}
-                            stage2Data={queryInsightsState.stage2Data}
-                            stage1Loading={stageState === 1 && !queryInsightsState.stage1Data}
-                            stage2Loading={stageState >= 2 && !queryInsightsState.stage2Data}
-                        />
-                    </div>
                 </div>
 
-                {/* Right Panel */}
-                <div className="rightPanel">
+                {/* Right Column: Efficiency Analysis, Query Plan, Quick Actions */}
+                <div className="rightColumn">
                     {/* Query Efficiency Analysis */}
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
@@ -604,26 +594,17 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                     </SummaryCard>
 
-                    {/* Query Plan Summary - Desktop Only */}
-                    <div className="queryPlanInPanel">
-                        <QueryPlanSummary
-                            stage1Data={queryInsightsState.stage1Data}
-                            stage2Data={queryInsightsState.stage2Data}
-                            stage1Loading={stageState === 1 && !queryInsightsState.stage1Data}
-                            stage2Loading={stageState >= 2 && !queryInsightsState.stage2Data}
-                        />
-                    </div>
+                    {/* Query Plan Summary */}
+                    <QueryPlanSummary
+                        stage1Data={queryInsightsState.stage1Data}
+                        stage2Data={queryInsightsState.stage2Data}
+                        stage1Loading={stageState === 1 && !queryInsightsState.stage1Data}
+                        stage2Loading={stageState >= 2 && !queryInsightsState.stage2Data}
+                    />
 
-                    {/* Quick Actions - Desktop Only */}
-                    {/* <div className="quickActionsInPanel">
-                        <QuickActions stageState={stageState} />
-                    </div> */}
+                    {/* Quick Actions */}
+                    {/* <QuickActions stageState={stageState} /> */}
                 </div>
-
-                {/* Quick Actions - Mobile Only (appears last) */}
-                {/* <div className="quickActionsWrapper">
-                    <QuickActions stageState={stageState} />
-                </div> */}
             </div>
         </div>
     );
