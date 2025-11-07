@@ -102,8 +102,21 @@ Thinking / analysis tips (useful signals to form recommendations; don't output t
 - If the input query contains \`sort\`, \`projection\`, or aggregation stages, account for them when recommending index key order and coverage.
 - **Multiple ranges**: When a query includes multiple range predicates (e.g., {"item": "abc", "price": {$gt: 1}, "quantity": {$gt: 2}}), only the first range condition in a compound index can be used for range scanning. To allow both ranges to benefit from indexes, you should generate **two separate improvement items** in the \`improvements\` array: one for { item: 1, price: 1 } and another for { item: 1, quantity: 1 }. This allows the query planner to leverage index intersection for improved performance. Each improvement item should have its own \`mongoShell\` command, \`justification\`, and \`verification\`.
 - If you identify indexes related to the query that have **not been accessed for a long time** or **are not selective**, consider recommending **dropping** them to reduce write and storage overhead.
-- If you identify query is on a **small collection** (e.g., <1000 documents), consider recommending **dropping related indexes** to reduce write and storage overhead.
-- If the **Azure_Cluster_Type** is "vCore" and a **composite index** is being created, include in \`indexOptions\` the setting: \`"storageEngine": { "enableOrderedIndex": true }\`.
+- - **Small collection**: If you identify query is on a **small collection** (e.g., <1000 documents), do not recommend creating new indexes.
+- If the **Azure_Cluster_Type** is "vCore" and an index is being created, include in \`indexOptions\` the setting: \`"storageEngine": { "enableOrderedIndex": true }\`.
+- Consider creating a **composite index** with fields included in query as well as those used in **sort** and **projection** to maximize index utility.
+- **Equality before range**: Always place fields with equality (\`=\`) conditions before range (\`$gt\`, \`$lt\`, \`$in\`, \`$regex\) conditions in a compound index.
+- **Single range limitation**: Only the **first range condition** in a compound index can use the index for range scanning. Any fields defined **after** a range or \`$regex\` condition will **not** be used for index filtering.
+- **Anchored regex**: \`$regex\` patterns starting with \`^\` (anchored) can be optimized as range scans. Treat them as range conditions and place them after equality fields.
+- **Non-anchored regex**: \`$regex\` patterns without \`^\` (non-anchored) cannot use indexes; they perform full scans regardless of position.
+- **Multiple ranges**: When a query includes multiple range predicates (e.g., {"item": "abc", "price": {$gt: 1}, "quantity": {$gt: 2}}), only the first range condition in a compound index can be used for range scanning. A single index such as { item: 1, price: 1, quantity: 1 } will only optimize the first range field (price). To allow both ranges to benefit from indexes, you should generate **two separate improvement items** in the \`improvements\` array: one for { item: 1, price: 1 } and another for { item: 1, quantity: 1 }. This allows the query planner to leverage index intersection for improved performance. Each improvement item should have its own \`mongoShell\` command, \`justification\`, and \`verification\`.
+- When suggesting multiple separate indexes for queries with multiple range predicates, prioritize creating indexes on the range fields with higher selectivity first, as they provide greater filtering efficiency and reduce scanned documents more effectively.
+- **Regex placement**: If a query includes both equality and \`$regex\` predicates, place the \`$regex\` field **last** in the compound index to preserve earlier index utilization.
+- **Sort + range**: If both range and sort exist, align sort direction with index order, and ensure range field appears before sort-only fields.
+- **Explain plan validation**: Verify \`indexBounds\` in \`explain()\` output — \`[MinKey, MaxKey]\` means the field didn't benefit from the index.
+- Prioritize compound indexes with equality fields first, followed by a single range or anchored regex field, and finally any sort or projection fields.
+- Avoid including multiple range or \`$regex\` fields in one compound index; use index intersection instead.
+- If you don't know if a $regex pattern is anchored or not, assume it is anchored but set priority to \`medium\` and **clearly state the uncertainty in the justification**.
 
 Output JSON schema (required shape; **adhere exactly**):
 \`\`\`
@@ -229,21 +242,7 @@ Thinking / analysis tips (for your reasoning; do not output these tips):
 - **Index size and write cost**: Avoid high-cardinality indexes that rarely match queries; prefer selective prefixes or partial indexes.
 - **Projection coverage**: If all projected fields are indexed, prioritize index-only scan opportunities.
 - If you identify indexes related to the query that have **not been accessed for a long time** or **are not selective**, consider recommending **dropping** them to reduce write and storage overhead.
-- If you identify query is on a **small collection** (e.g., <1000 documents), consider recommending **dropping related indexes** to reduce write and storage overhead.
-- If the **Azure_Cluster_Type** is "vCore" and an index is being created, include in \`indexOptions\` the setting: \`"storageEngine": { "enableOrderedIndex": true }\`.
-- Consider creating a **composite index** with fields included in query as well as those used in **sort** and **projection** to maximize index utility.
-- **Equality before range**: Always place fields with equality (\`=\`) conditions before range (\`$gt\`, \`$lt\`, \`$in\`, \`$regex\) conditions in a compound index.
-- **Single range limitation**: Only the **first range condition** in a compound index can use the index for range scanning. Any fields defined **after** a range or \`$regex\` condition will **not** be used for index filtering.
-- **Anchored regex**: \`$regex\` patterns starting with \`^\` (anchored) can be optimized as range scans. Treat them as range conditions and place them after equality fields.
-- **Non-anchored regex**: \`$regex\` patterns without \`^\` (non-anchored) cannot use indexes; they perform full scans regardless of position.
-- **Multiple ranges**: When a query includes multiple range predicates (e.g., {"item": "abc", "price": {$gt: 1}, "quantity": {$gt: 2}}), only the first range condition in a compound index can be used for range scanning. A single index such as { item: 1, price: 1, quantity: 1 } will only optimize the first range field (price). To allow both ranges to benefit from indexes, you should generate **two separate improvement items** in the \`improvements\` array: one for { item: 1, price: 1 } and another for { item: 1, quantity: 1 }. This allows the query planner to leverage index intersection for improved performance. Each improvement item should have its own \`mongoShell\` command, \`justification\`, and \`verification\`.
-- When suggesting multiple separate indexes for queries with multiple range predicates, prioritize creating indexes on the range fields with higher selectivity first, as they provide greater filtering efficiency and reduce scanned documents more effectively.
-- **Regex placement**: If a query includes both equality and \`$regex\` predicates, place the \`$regex\` field **last** in the compound index to preserve earlier index utilization.
-- **Sort + range**: If both range and sort exist, align sort direction with index order, and ensure range field appears before sort-only fields.
-- **Explain plan validation**: Verify \`indexBounds\` in \`explain()\` output — \`[MinKey, MaxKey]\` means the field didn't benefit from the index.
-- Prioritize compound indexes with equality fields first, followed by a single range or anchored regex field, and finally any sort or projection fields.
-- Avoid including multiple range or \`$regex\` fields in one compound index; use index intersection instead.
-- For \`$regex\` queries, prefer rewriting patterns to anchored form (e.g., \`/^abc/\`) when possible.
+- **Small collection**: If you identify query is on a **small collection** (e.g., <1000 documents), do not recommend creating new indexes.
 - **Vector recall rule** — If the **Azure_Cluster_Type** is "vCore" and uses a cosmosSearch with index has \`"kind": "vector-ivf"\`, but the collection contains many documents (over 10k) or the vector dimensionality is high, recommend replacing it with a \`vector-hnsw\` index for better recall and retrieval quality. The recommended creation command format is:
   {
       "createIndexes": "<collection_name>",
@@ -385,7 +384,7 @@ Thinking / analysis tips (for your reasoning; do not output these tips):
 - **Index-only count**: If projected or returned fields are all indexed (e.g., just counting documents matching criteria), prefer a covered plan for index-only count.
 - **Write cost tradeoff**: Avoid over-indexing — recommend only indexes that materially improve count query performance or prevent full collection scans.
 - If you identify indexes related to the query that have **not been accessed for a long time** or **are not selective**, consider recommending **dropping** them to reduce write and storage overhead.
-- If you identify query is on a **small collection** (e.g., <1000 documents), consider recommending **dropping related indexes** to reduce write and storage overhead.
+- - **Small collection**: If you identify query is on a **small collection** (e.g., <1000 documents), do not recommend creating new indexes.
 - If the **Azure_Cluster_Type** is "vCore" and a **composite index** is being created, include in \`indexOptions\` the setting: \`"storageEngine": { "enableOrderedIndex": true }\`.
 Output JSON schema (required shape; adhere exactly):
 \`\`\`
