@@ -3,18 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    Badge,
-    Button,
-    Card,
-    CardHeader,
-    Label,
-    Popover,
-    PopoverSurface,
-    PopoverTrigger,
-    Text,
-    tokens,
-} from '@fluentui/react-components';
+import { Badge, Button, Card, CardHeader, Label, Text, tokens } from '@fluentui/react-components';
 import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
 // TODO: Copy content feature will be added in the next release
 // import { CopyRegular } from '@fluentui/react-icons';
@@ -138,25 +127,14 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
                                         : l10n.t('Index Name')}
                                 </Label>
                                 <div style={{ marginTop: '4px' }}>
-                                    <Popover positioning="below-start" withArrow openOnHover mouseLeaveDelay={0}>
-                                        <PopoverTrigger disableButtonEnhancement>
-                                            <Button appearance="secondary" size="small">
-                                                {config.primaryButton?.actionId === 'createIndex'
-                                                    ? config.recommendedIndex
-                                                    : config.indexName}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverSurface style={{ padding: '16px', maxWidth: '400px' }}>
-                                            <Text
-                                                size={300}
-                                                weight="semibold"
-                                                style={{ display: 'block', marginBottom: '8px' }}
-                                            >
-                                                {l10n.t('Index Details')}
-                                            </Text>
-                                            <Text size={200}>{config.recommendedIndexDetails}</Text>
-                                        </PopoverSurface>
-                                    </Popover>
+                                    <pre className="index-code-block">
+                                        {config.primaryButton?.actionId === 'createIndex'
+                                            ? config.recommendedIndex
+                                            : config.indexName}
+                                    </pre>
+                                    <Text size={200} className="index-details-text">
+                                        {config.recommendedIndexDetails}
+                                    </Text>
                                 </div>
                             </div>
 
