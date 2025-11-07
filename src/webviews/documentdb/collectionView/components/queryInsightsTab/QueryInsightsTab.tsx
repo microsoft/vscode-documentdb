@@ -253,33 +253,51 @@ export const QueryInsightsMain = (): JSX.Element => {
             }
         }, 1000);
 
+        // Generate a unique request key to track if this request is still valid when it returns
+        const requestKey = crypto.randomUUID();
+
         // Set loading state in queryInsights context
-        setQueryInsightsStateHelper((prev) => ({ ...prev, stage3Loading: true }));
+        setQueryInsightsStateHelper((prev) => ({ ...prev, stage3Loading: true, stage3RequestKey: requestKey }));
 
         // Call the tRPC endpoint (10+ second delay expected from AI service)
         const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
-            .query()
+            .query({ requestKey })
             .then((response) => {
                 console.log('AI response received:', response);
                 console.log('Number of improvement cards:', response.improvementCards.length);
                 console.log('Improvement cards:', response.improvementCards);
 
-                setQueryInsightsStateHelper((prev) => ({
-                    ...prev,
-                    stage3Data: response,
-                    stage3Loading: false,
-                    stage3Promise: null,
-                }));
+                // Only update state if this request is still the current one
+                setQueryInsightsStateHelper((prev) => {
+                    if (prev.stage3RequestKey !== requestKey) {
+                        console.log('Ignoring stale AI response (request was cancelled or superseded)');
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        stage3Data: response,
+                        stage3Loading: false,
+                        stage3Promise: null,
+                        stage3RequestKey: null,
+                    };
+                });
                 return response;
             })
             .catch((error: unknown) => {
-                // Error handled here - state updated, no need to propagate
-                setQueryInsightsStateHelper((prev) => ({
-                    ...prev,
-                    stage3Error: error instanceof Error ? error.message : String(error),
-                    stage3Loading: false,
-                    stage3Promise: null,
-                }));
+                // Only update state if this request is still the current one
+                setQueryInsightsStateHelper((prev) => {
+                    if (prev.stage3RequestKey !== requestKey) {
+                        console.log('Ignoring stale AI error (request was cancelled or superseded)');
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        stage3Error: error instanceof Error ? error.message : String(error),
+                        stage3Loading: false,
+                        stage3Promise: null,
+                        stage3RequestKey: null,
+                    };
+                });
                 // Return undefined to satisfy TypeScript without creating unhandled rejection
                 return undefined as never;
             });
@@ -293,11 +311,13 @@ export const QueryInsightsMain = (): JSX.Element => {
     };
 
     const handleCancelAI = () => {
-        // Cancel the loading state
+        // Cancel the loading state and clear the request key
+        // When the promise eventually returns, it will check the key and ignore the result
         setQueryInsightsStateHelper((prev) => ({
             ...prev,
             stage3Loading: false,
             stage3Promise: null,
+            stage3RequestKey: null,
         }));
     };
 

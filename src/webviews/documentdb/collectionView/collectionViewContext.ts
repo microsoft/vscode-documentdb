@@ -39,6 +39,7 @@ export interface QueryInsightsState {
     stage3Loading: boolean;
     stage3Error: string | null;
     stage3Promise: Promise<QueryInsightsStage3Response> | null;
+    stage3RequestKey: string | null; // Unique key to track if the response is still valid
 }
 
 export type TableViewState = {
@@ -127,6 +128,7 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
         stage3Loading: false,
         stage3Error: null,
         stage3Promise: null,
+        stage3RequestKey: null,
     },
 };
 

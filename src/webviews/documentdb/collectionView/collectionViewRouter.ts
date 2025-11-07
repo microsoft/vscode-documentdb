@@ -680,14 +680,17 @@ export const collectionsViewRouter = router({
      */
     getQueryInsightsStage3: publicProcedure
         .use(trpcToTelemetry)
-        .query(async ({ ctx }): Promise<QueryInsightsStage3Response> => {
+        .input(z.object({ requestKey: z.string() }))
+        .query(async ({ input, ctx }): Promise<QueryInsightsStage3Response> => {
             const myCtx = ctx as RouterContext;
             const { sessionId, clusterId, databaseName, collectionName } = myCtx;
+            const { requestKey } = input;
 
             ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 3] Started for {db}.{collection}', {
+                l10n.t('[Query Insights Stage 3] Started for {db}.{collection} (requestKey: {key})', {
                     db: databaseName,
                     collection: collectionName,
+                    key: requestKey,
                 }),
             );
 
@@ -710,8 +713,9 @@ export const collectionsViewRouter = router({
             );
             const aiServiceDuration = Date.now() - aiServiceStart;
             ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 3] AI service completed in {ms}ms', {
+                l10n.t('[Query Insights Stage 3] AI service completed in {ms}ms (requestKey: {key})', {
                     ms: aiServiceDuration.toString(),
+                    key: requestKey,
                 }),
             );
 
@@ -722,8 +726,9 @@ export const collectionsViewRouter = router({
                 collectionName,
             });
             ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 3] Completed: {count} improvement cards generated', {
+                l10n.t('[Query Insights Stage 3] Completed: {count} improvement cards generated (requestKey: {key})', {
                     count: transformed.improvementCards.length.toString(),
+                    key: requestKey,
                 }),
             );
 
