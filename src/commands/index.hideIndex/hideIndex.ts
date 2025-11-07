@@ -21,7 +21,7 @@ export async function hideIndex(context: IActionContext, node: IndexItem): Promi
 
     // Prevent hiding the _id index
     if (node.indexInfo.name === '_id_') {
-        throw new Error(l10n.t('The _id index cannot be hidden.'));
+        throw new Error(l10n.t('The "_id_" index cannot be hidden.'));
     }
 
     // Check if already hidden
@@ -49,7 +49,11 @@ export async function hideIndex(context: IActionContext, node: IndexItem): Promi
 
         let success = false;
         await ext.state.showCreatingChild(node.id, l10n.t('Hiding index…'), async () => {
-            const result = await client.hideIndex(node.databaseInfo.name, node.collectionInfo.name, node.indexInfo.name);
+            const result = await client.hideIndex(
+                node.databaseInfo.name,
+                node.collectionInfo.name,
+                node.indexInfo.name,
+            );
             success = !!result;
         });
 

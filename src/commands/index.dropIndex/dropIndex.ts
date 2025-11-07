@@ -21,7 +21,7 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
 
     // Prevent deleting the _id index
     if (node.indexInfo.name === '_id_') {
-        throw new Error(l10n.t('The _id index cannot be deleted.'));
+        throw new Error(l10n.t('The "_id_" index cannot be deleted.'));
     }
 
     const indexName = node.indexInfo.name;
@@ -44,7 +44,11 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
 
         let success = false;
         await ext.state.showDeleting(node.id, async () => {
-            const result = await client.dropIndex(node.databaseInfo.name, node.collectionInfo.name, node.indexInfo.name);
+            const result = await client.dropIndex(
+                node.databaseInfo.name,
+                node.collectionInfo.name,
+                node.indexInfo.name,
+            );
             success = result.ok === 1;
         });
 

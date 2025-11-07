@@ -423,7 +423,7 @@
         "//": "Unhide Index",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.unhideIndex",
-        "title": "Unhide Index"
+        "title": "Unhide Index…"
       },
       {
         "//": "Delete Index",
