@@ -109,6 +109,7 @@ export const CollectionView = (): JSX.Element => {
                 stage3Loading: false,
                 stage3Error: null,
                 stage3Promise: null,
+                stage3RequestKey: null,
             },
         }));
     }, [currentContext.activeQuery]);

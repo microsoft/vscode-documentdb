@@ -3,12 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Button, Card, CardHeader, Label, Text, tokens } from '@fluentui/react-components';
+import {
+    Badge,
+    Button,
+    Card,
+    CardHeader,
+    Label,
+    MessageBar,
+    MessageBarBody,
+    MessageBarTitle,
+    Spinner,
+    Text,
+    tokens,
+} from '@fluentui/react-components';
 import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
 // TODO: Copy content feature will be added in the next release
 // import { CopyRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { forwardRef } from 'react';
+import { forwardRef, useState } from 'react';
 import { type ImprovementCard as ImprovementCardConfig } from '../../../../types/queryInsights';
 import './AiCard.scss';
 import './optimizationCard.scss';
@@ -26,13 +38,15 @@ export interface ImprovementCardProps {
 
     /**
      * Callback when the primary button is clicked
+     * Returns a Promise with success status and optional message
      */
-    onPrimaryAction?: (actionId: string, payload: unknown) => void;
+    onPrimaryAction?: (actionId: string, payload: unknown) => Promise<{ success: boolean; message?: string }>;
 
     /**
      * Callback when the secondary button is clicked
+     * Returns a Promise with success status and optional message
      */
-    onSecondaryAction?: (actionId: string, payload: unknown) => void;
+    onSecondaryAction?: (actionId: string, payload: unknown) => Promise<{ success: boolean; message?: string }>;
 }
 
 /**
@@ -48,6 +62,9 @@ const priorityColors: Record<'high' | 'medium' | 'low', 'danger' | 'warning' | '
  * Improvement card component for displaying AI-generated optimization recommendations.
  * This component supports ref forwarding for use with animation libraries.
  *
+ * Each card manages its own execution state (loading, error, success) locally,
+ * making it self-contained and independently operable.
+ *
  * **Usage with animations**: Use directly with animation libraries like @fluentui/react-motion-components-preview:
  *
  * ```tsx
@@ -62,6 +79,75 @@ const priorityColors: Record<'high' | 'medium' | 'low', 'danger' | 'warning' | '
 export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
     // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
     ({ config, onCopy: _onCopy, onPrimaryAction, onSecondaryAction }, ref) => {
+        // Separate state for each button - independent execution tracking
+        const [primaryState, setPrimaryState] = useState<{
+            isLoading: boolean;
+            errorMessage?: string;
+            successMessage?: string;
+        }>({ isLoading: false });
+
+        const [secondaryState, setSecondaryState] = useState<{
+            isLoading: boolean;
+            errorMessage?: string;
+            successMessage?: string;
+        }>({ isLoading: false });
+
+        const handlePrimaryClick = async () => {
+            if (!config.primaryButton || !onPrimaryAction) return;
+
+            // Clear previous state, set loading for primary button only
+            setPrimaryState({ isLoading: true });
+
+            try {
+                const result = await onPrimaryAction(config.primaryButton.actionId, config.primaryButton.payload);
+
+                if (result.success) {
+                    setPrimaryState({
+                        isLoading: false,
+                        successMessage: result.message || l10n.t('Action completed successfully'),
+                    });
+                } else {
+                    setPrimaryState({
+                        isLoading: false,
+                        errorMessage: result.message || l10n.t('Action failed'),
+                    });
+                }
+            } catch (error) {
+                setPrimaryState({
+                    isLoading: false,
+                    errorMessage: error instanceof Error ? error.message : l10n.t('An unexpected error occurred'),
+                });
+            }
+        };
+
+        const handleSecondaryClick = async () => {
+            if (!config.secondaryButton || !onSecondaryAction) return;
+
+            // Clear previous state, set loading for secondary button only
+            setSecondaryState({ isLoading: true });
+
+            try {
+                const result = await onSecondaryAction(config.secondaryButton.actionId, config.secondaryButton.payload);
+
+                if (result.success) {
+                    setSecondaryState({
+                        isLoading: false,
+                        successMessage: result.message || l10n.t('Action completed successfully'),
+                    });
+                } else {
+                    setSecondaryState({
+                        isLoading: false,
+                        errorMessage: result.message || l10n.t('Action failed'),
+                    });
+                }
+            } catch (error) {
+                setSecondaryState({
+                    isLoading: false,
+                    errorMessage: error instanceof Error ? error.message : l10n.t('An unexpected error occurred'),
+                });
+            }
+        };
+
         const priorityBadgeText = {
             high: l10n.t('HIGH PRIORITY'),
             medium: l10n.t('MEDIUM PRIORITY'),
@@ -150,34 +236,74 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
                                 {config.details}
                             </Text>
 
+                            {/* Primary Button Error Message Bar */}
+                            {primaryState.errorMessage && (
+                                <MessageBar layout="multiline" intent="warning" style={{ marginBottom: '12px' }}>
+                                    <MessageBarBody>
+                                        <MessageBarTitle>{l10n.t('Error')}</MessageBarTitle>
+                                        {primaryState.errorMessage}
+                                    </MessageBarBody>
+                                </MessageBar>
+                            )}
+
+                            {/* Primary Button Success Message Bar */}
+                            {primaryState.successMessage && (
+                                <MessageBar layout="multiline" intent="success" style={{ marginBottom: '12px' }}>
+                                    <MessageBarBody>{primaryState.successMessage}</MessageBarBody>
+                                </MessageBar>
+                            )}
+
+                            {/* Secondary Button Error Message Bar */}
+                            {secondaryState.errorMessage && (
+                                <MessageBar layout="multiline" intent="warning" style={{ marginBottom: '12px' }}>
+                                    <MessageBarBody>
+                                        <MessageBarTitle>{l10n.t('Error')}</MessageBarTitle>
+                                        {secondaryState.errorMessage}
+                                    </MessageBarBody>
+                                </MessageBar>
+                            )}
+
+                            {/* Secondary Button Success Message Bar */}
+                            {secondaryState.successMessage && (
+                                <MessageBar layout="multiline" intent="success" style={{ marginBottom: '12px' }}>
+                                    <MessageBarBody>{secondaryState.successMessage}</MessageBarBody>
+                                </MessageBar>
+                            )}
+
                             {/* Action Buttons */}
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                 {config.primaryButton && (
                                     <Button
                                         appearance="primary"
                                         size="small"
-                                        onClick={() =>
-                                            onPrimaryAction?.(
-                                                config.primaryButton!.actionId,
-                                                config.primaryButton!.payload,
-                                            )
-                                        }
+                                        disabled={primaryState.isLoading || !!primaryState.successMessage}
+                                        onClick={() => void handlePrimaryClick()}
                                     >
-                                        {config.primaryButton.label}
+                                        {primaryState.isLoading && (
+                                            <Spinner size="tiny" style={{ marginRight: '4px' }} />
+                                        )}
+                                        {primaryState.isLoading
+                                            ? l10n.t('Working...')
+                                            : primaryState.errorMessage
+                                              ? l10n.t('Retry')
+                                              : config.primaryButton.label}
                                     </Button>
                                 )}
                                 {config.secondaryButton && (
                                     <Button
                                         appearance="subtle"
                                         size="small"
-                                        onClick={() =>
-                                            onSecondaryAction?.(
-                                                config.secondaryButton!.actionId,
-                                                config.secondaryButton!.payload,
-                                            )
-                                        }
+                                        disabled={secondaryState.isLoading || !!secondaryState.successMessage}
+                                        onClick={() => void handleSecondaryClick()}
                                     >
-                                        {config.secondaryButton.label}
+                                        {secondaryState.isLoading && (
+                                            <Spinner size="tiny" style={{ marginRight: '4px' }} />
+                                        )}
+                                        {secondaryState.isLoading
+                                            ? l10n.t('Working...')
+                                            : secondaryState.errorMessage
+                                              ? l10n.t('Retry')
+                                              : config.secondaryButton.label}
                                     </Button>
                                 )}
                             </div>

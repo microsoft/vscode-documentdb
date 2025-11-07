@@ -321,39 +321,24 @@ export const QueryInsightsMain = (): JSX.Element => {
         }));
     };
 
-    const handlePrimaryAction = (actionId: string, payload: unknown) => {
-        void trpcClient.mongoClusters.collectionView.executeQueryInsightsAction
-            .mutate({ actionId, payload })
-            .then((result) => {
-                if (result.success && result.message) {
-                    // TODO: Show success message to user
-                    console.log('Success:', result.message);
-                }
-            })
-            .catch((error: unknown) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error executing recommendation'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
-            });
+    const handlePrimaryAction = async (
+        actionId: string,
+        payload: unknown,
+    ): Promise<{ success: boolean; message?: string }> => {
+        return await trpcClient.mongoClusters.collectionView.executeQueryInsightsAction.mutate({
+            actionId,
+            payload,
+        });
     };
 
-    const handleSecondaryAction = (actionId: string, payload: unknown) => {
-        void trpcClient.mongoClusters.collectionView.executeQueryInsightsAction
-            .mutate({ actionId, payload })
-            .then((result) => {
-                if (result.success && result.message) {
-                    console.log('Success:', result.message);
-                }
-            })
-            .catch((error: unknown) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error executing action'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
-            });
+    const handleSecondaryAction = async (
+        actionId: string,
+        payload: unknown,
+    ): Promise<{ success: boolean; message?: string }> => {
+        return await trpcClient.mongoClusters.collectionView.executeQueryInsightsAction.mutate({
+            actionId,
+            payload,
+        });
     };
 
     const handleDismissTips = () => {

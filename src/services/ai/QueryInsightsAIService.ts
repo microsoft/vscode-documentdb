@@ -301,14 +301,20 @@ export class QueryInsightsAIService {
             const result = await client.createIndex(payload.databaseName, payload.collectionName, payload.indexSpec);
 
             if (result.ok === 1) {
+                // Provide positive feedback with additional context from result.note if available
+                const baseMessage = l10n.t('Index "{0}" created successfully', result.indexName ?? 'unnamed');
+                const message =
+                    typeof result.note === 'string' && result.note ? `${baseMessage}. ${result.note}` : baseMessage;
+
                 return {
                     success: true,
-                    message: l10n.t('Index "{0}" created successfully', result.indexName ?? 'unnamed'),
+                    message,
                 };
             } else {
+                const errorMsg = typeof result.note === 'string' ? result.note : 'Unknown error';
                 return {
                     success: false,
-                    message: l10n.t('Failed to create index: {0}', result.note ?? 'Unknown error'),
+                    message: l10n.t('Failed to create index: {0}', errorMsg),
                 };
             }
         } catch (error) {
@@ -351,14 +357,20 @@ export class QueryInsightsAIService {
             const result = await client.dropIndex(payload.databaseName, payload.collectionName, payload.indexName);
 
             if (result.ok === 1) {
+                // Provide positive feedback with additional context from result.note if available
+                const baseMessage = l10n.t('Index "{0}" dropped successfully', payload.indexName);
+                const message =
+                    typeof result.note === 'string' && result.note ? `${baseMessage}. ${result.note}` : baseMessage;
+
                 return {
                     success: true,
-                    message: l10n.t('Index "{0}" dropped successfully', payload.indexName),
+                    message,
                 };
             } else {
+                const errorMsg = typeof result.note === 'string' ? result.note : 'Unknown error';
                 return {
                     success: false,
-                    message: l10n.t('Failed to drop index'),
+                    message: l10n.t('Failed to drop index: {0}', errorMsg),
                 };
             }
         } catch (error) {
@@ -420,13 +432,22 @@ export class QueryInsightsAIService {
             }
 
             if (result.ok === 1) {
-                const actionName = operation;
+                // Provide positive feedback with additional context from result.note if available
+                const baseMessage = l10n.t('Index "{0}" {1} successfully', indexName, operation);
+                const message =
+                    typeof result.note === 'string' && result.note ? `${baseMessage}. ${result.note}` : baseMessage;
+
                 return {
                     success: true,
-                    message: l10n.t('Index "{0}" {1} successfully', indexName, actionName),
+                    message,
                 };
             } else {
-                const errmsg = typeof result.errmsg === 'string' ? result.errmsg : 'Unknown error';
+                const errmsg =
+                    typeof result.errmsg === 'string'
+                        ? result.errmsg
+                        : typeof result.note === 'string'
+                          ? result.note
+                          : 'Unknown error';
                 return {
                     success: false,
                     message: l10n.t('Failed to modify index: {0}', errmsg),
