@@ -28,7 +28,7 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
     const collectionName = node.collectionInfo.name;
 
     const confirmed = await getConfirmationAsInSettings(
-        l10n.t('Delete index "{indexName}"?', { indexName }),
+        l10n.t('Delete index?'),
         l10n.t('Delete index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
             '\n' +
             l10n.t('This cannot be undone.'),
@@ -49,6 +49,13 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
                 node.collectionInfo.name,
                 node.indexInfo.name,
             );
+
+            // Check for errors in the response
+            if (result.ok === 0 || result.note) {
+                const errorMessage = typeof result.note === 'string' ? result.note : l10n.t('Failed to drop index.');
+                throw new Error(errorMessage);
+            }
+
             success = result.ok === 1;
         });
 

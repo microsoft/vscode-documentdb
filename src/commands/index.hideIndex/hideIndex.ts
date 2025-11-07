@@ -33,7 +33,7 @@ export async function hideIndex(context: IActionContext, node: IndexItem): Promi
     const collectionName = node.collectionInfo.name;
 
     const confirmed = await getConfirmationAsInSettings(
-        l10n.t('Hide index "{indexName}"?', { indexName }),
+        l10n.t('Hide index?'),
         l10n.t('Hide index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
             '\n' +
             l10n.t('This will prevent the query planner from using this index.'),
@@ -54,7 +54,15 @@ export async function hideIndex(context: IActionContext, node: IndexItem): Promi
                 node.collectionInfo.name,
                 node.indexInfo.name,
             );
-            success = !!result;
+
+            // Check for errors in the response
+            if (result.ok === 0 || result.errmsg) {
+                const errorMessage =
+                    typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to hide index.');
+                throw new Error(errorMessage);
+            }
+
+            success = result.ok === 1;
         });
 
         if (success) {

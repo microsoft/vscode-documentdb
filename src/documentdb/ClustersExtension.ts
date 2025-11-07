@@ -29,12 +29,12 @@ import { deleteCollection } from '../commands/deleteCollection/deleteCollection'
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
 import { filterProviderContent } from '../commands/discoveryService.filterProviderContent/filterProviderContent';
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
-import { dropIndex } from '../commands/index.dropIndex/dropIndex';
-import { hideIndex } from '../commands/index.hideIndex/hideIndex';
-import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
 import { openHelpAndFeedbackUrl } from '../commands/helpAndFeedback.openUrl/openUrl';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
+import { dropIndex } from '../commands/index.dropIndex/dropIndex';
+import { hideIndex } from '../commands/index.hideIndex/hideIndex';
+import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
 import { newConnection } from '../commands/newConnection/newConnection';

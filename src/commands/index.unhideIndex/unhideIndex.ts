@@ -28,7 +28,7 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
     const collectionName = node.collectionInfo.name;
 
     const confirmed = await getConfirmationAsInSettings(
-        l10n.t('Unhide index "{indexName}"?', { indexName }),
+        l10n.t('Unhide index?'),
         l10n.t('Unhide index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
             '\n' +
             l10n.t('This will allow the query planner to use this index again.'),
@@ -44,8 +44,20 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
 
         let success = false;
         await ext.state.showCreatingChild(node.id, l10n.t('Unhiding index…'), async () => {
-            const result = await client.unhideIndex(node.databaseInfo.name, node.collectionInfo.name, node.indexInfo.name);
-            success = !!result;
+            const result = await client.unhideIndex(
+                node.databaseInfo.name,
+                node.collectionInfo.name,
+                node.indexInfo.name,
+            );
+
+            // Check for errors in the response
+            if (result.ok === 0 || result.errmsg) {
+                const errorMessage =
+                    typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to unhide index.');
+                throw new Error(errorMessage);
+            }
+
+            success = result.ok === 1;
         });
 
         if (success) {
