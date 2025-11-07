@@ -79,6 +79,20 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
             low: l10n.t('LOW PRIORITY'),
         }[config.priority];
 
+        // Function to determine the button label based on mongoShell command
+        const getPrimaryButtonLabel = () => {
+            if (config.primaryButton?.actionId === 'modifyIndex') {
+                const mongoShell = config.mongoShellCommand;
+                if (mongoShell.includes('.hideIndex(')) {
+                    return l10n.t('Hide Index');
+                } else if (mongoShell.includes('.unhideIndex(')) {
+                    return l10n.t('Unhide Index');
+                }
+                return l10n.t('Modify Index');
+            }
+            return config.primaryButton?.label;
+        };
+
         return (
             <Card ref={ref} style={{ marginBottom: '16px' }}>
                 <Text
@@ -132,12 +146,18 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
 
                             {/* Recommended Index Section */}
                             <div style={{ marginBottom: '12px' }}>
-                                <Label size="small">{l10n.t('Recommended Index')}</Label>
+                                <Label size="small">
+                                    {config.primaryButton?.actionId === 'createIndex'
+                                        ? l10n.t('Recommended Index')
+                                        : l10n.t('Index Name')}
+                                </Label>
                                 <div style={{ marginTop: '4px' }}>
                                     <Popover positioning="below-start" withArrow openOnHover mouseLeaveDelay={0}>
                                         <PopoverTrigger disableButtonEnhancement>
                                             <Button appearance="secondary" size="small">
-                                                {config.recommendedIndex}
+                                                {config.primaryButton?.actionId === 'createIndex'
+                                                    ? config.recommendedIndex
+                                                    : config.indexName}
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverSurface style={{ padding: '16px', maxWidth: '400px' }}>
@@ -179,7 +199,7 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
                                             )
                                         }
                                     >
-                                        {config.primaryButton.label}
+                                        {getPrimaryButtonLabel()}
                                     </Button>
                                 )}
                                 {config.secondaryButton && (

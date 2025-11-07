@@ -231,6 +231,7 @@ export interface ImprovementCard {
     // Main content
     description: string; // Justification field from AI
     recommendedIndex: string; // Stringified indexSpec, e.g., "{ user_id: 1 }"
+    indexName: string; // Name of the index to be created/updated/dropped
     recommendedIndexDetails: string; // Additional explanation about the index
 
     // Additional info

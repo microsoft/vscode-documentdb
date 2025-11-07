@@ -75,6 +75,7 @@ function createImprovementCard(
         priority: improvement.priority,
         description: improvement.justification,
         recommendedIndex: indexSpecStr,
+        indexName: improvement.indexName,
         recommendedIndexDetails: generateIndexExplanation(improvement),
         details: improvement.risks || 'Additional write and storage overhead for maintaining a new index.',
         mongoShellCommand: improvement.mongoShell,
