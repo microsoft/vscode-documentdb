@@ -374,8 +374,8 @@ export async function optimizeQuery(
     }
 
     let explainResult: unknown;
-    let collectionStats: CollectionStats;
-    let indexes: Array<IndexStats>;
+    let collectionStats: CollectionStats = null as unknown as CollectionStats;
+    let indexes: Array<IndexStats> = null as unknown as Array<IndexStats>;
 
     // TODO: allow null sessionId for testing framework
     if (!queryContext.sessionId) {
@@ -503,8 +503,9 @@ export async function optimizeQuery(
         // indexes.push(...searchIndexes);
     } catch {
         // They are not critical errors, we can continue without index stats and collection stats
-        collectionStats = null as unknown as CollectionStats;
-        indexes = null as unknown as Array<IndexStats>;
+        collectionStats = collectionStats ? collectionStats : (null as unknown as CollectionStats);
+        // TODO: assign indexesInfo to indexes if we can get index list successfully
+        indexes = indexes ? indexes : (null as unknown as Array<IndexStats>);
     }
 
     // Sanitize explain result to remove constant values while preserving field names
