@@ -297,8 +297,8 @@ export function detectCommandType(command: string): CommandType {
 async function fillPromptTemplate(
     templateType: CommandType,
     context: QueryOptimizationContext,
-    collectionStats: CollectionStats,
-    indexes: Array<IndexStats>,
+    collectionStats: CollectionStats | undefined,
+    indexes: IndexStats[] | undefined,
     executionStats: string,
     clusterInfo: ClusterMetadata,
 ): Promise<string> {
@@ -374,8 +374,8 @@ export async function optimizeQuery(
     }
 
     let explainResult: unknown;
-    let collectionStats: CollectionStats;
-    let indexes: Array<IndexStats>;
+    let collectionStats: CollectionStats | undefined;
+    let indexes: IndexStats[] | undefined;
 
     // TODO: allow null sessionId for testing framework
     if (!queryContext.sessionId) {
@@ -501,10 +501,14 @@ export async function optimizeQuery(
             };
         });
         // indexes.push(...searchIndexes);
-    } catch {
+    } catch (error) {
         // They are not critical errors, we can continue without index stats and collection stats
-        collectionStats = null as unknown as CollectionStats;
-        indexes = null as unknown as Array<IndexStats>;
+        // If the API calls failed, collectionStats and indexes remain undefined (safe to continue)
+        ext.outputChannel.trace(
+            l10n.t('[Query Insights AI] Failed to retrieve collection/index stats (non-critical): {message}', {
+                message: error instanceof Error ? error.message : String(error),
+            }),
+        );
     }
 
     // Sanitize explain result to remove constant values while preserving field names
