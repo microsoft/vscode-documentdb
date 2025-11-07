@@ -105,7 +105,7 @@ Thinking / analysis tips (useful signals to form recommendations; don't output t
 - - **Small collection**: If you identify query is on a **small collection** (e.g., <1000 documents), do not recommend creating new indexes.
 - If the **Azure_Cluster_Type** is "vCore" and an index is being created, include in \`indexOptions\` the setting: \`"storageEngine": { "enableOrderedIndex": true }\`.
 - Consider creating a **composite index** with fields included in query as well as those used in **sort** and **projection** to maximize index utility.
-- **Equality before range**: Always place fields with equality (\`=\`) conditions before range (\`$gt\`, \`$lt\`, \`$in\`, \`$regex\) conditions in a compound index.
+- **Equality before range**: Always place fields with equality (\`=\`) conditions before range (\`$gt\`, \`$lt\`, \`$in\`, \`$regex\`) conditions in a compound index.
 - **Single range limitation**: Only the **first range condition** in a compound index can use the index for range scanning. Any fields defined **after** a range or \`$regex\` condition will **not** be used for index filtering.
 - **Anchored regex**: \`$regex\` patterns starting with \`^\` (anchored) can be optimized as range scans. Treat them as range conditions and place them after equality fields.
 - **Non-anchored regex**: \`$regex\` patterns without \`^\` (non-anchored) cannot use indexes; they perform full scans regardless of position.
