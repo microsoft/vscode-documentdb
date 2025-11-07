@@ -28,6 +28,9 @@ import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
 import { filterProviderContent } from '../commands/discoveryService.filterProviderContent/filterProviderContent';
+import { dropIndex } from '../commands/dropIndex/dropIndex';
+import { hideIndex } from '../commands/hideIndex/hideIndex';
+import { unhideIndex } from '../commands/unhideIndex/unhideIndex';
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
 import { openHelpAndFeedbackUrl } from '../commands/helpAndFeedback.openUrl/openUrl';
@@ -283,6 +286,10 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropCollection', deleteCollection);
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropDatabase', deleteAzureDatabase);
+
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.hideIndex', hideIndex);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.unhideIndex', unhideIndex);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropIndex', dropIndex);
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.createCollection', createCollection);
 

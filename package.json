@@ -414,6 +414,24 @@
         "title": "Delete Database…"
       },
       {
+        "//": "Hide Index",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.hideIndex",
+        "title": "Hide Index…"
+      },
+      {
+        "//": "Unhide Index",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.unhideIndex",
+        "title": "Unhide Index"
+      },
+      {
+        "//": "Delete Index",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.dropIndex",
+        "title": "Delete Index…"
+      },
+      {
         "//": "Create Collection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.createCollection",
@@ -680,6 +698,24 @@
           "group": "3@1"
         },
         {
+          "//": "[Index] Hide Index",
+          "command": "vscode-documentdb.command.hideIndex",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "2@1"
+        },
+        {
+          "//": "[Index] Unhide Index",
+          "command": "vscode-documentdb.command.unhideIndex",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "2@2"
+        },
+        {
+          "//": "[Index] Delete Index",
+          "command": "vscode-documentdb.command.dropIndex",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "3@1"
+        },
+        {
           "//": "[Collection] Launch shell",
           "command": "vscode-documentdb.command.launchShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
@@ -774,6 +810,18 @@
         },
         {
           "command": "vscode-documentdb.command.dropCollection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.hideIndex",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.unhideIndex",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.dropIndex",
           "when": "never"
         },
         {
