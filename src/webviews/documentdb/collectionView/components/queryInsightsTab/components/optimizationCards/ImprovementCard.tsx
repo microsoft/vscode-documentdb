@@ -79,20 +79,6 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
             low: l10n.t('LOW PRIORITY'),
         }[config.priority];
 
-        // Function to determine the button label based on mongoShell command
-        const getPrimaryButtonLabel = () => {
-            if (config.primaryButton?.actionId === 'modifyIndex') {
-                const mongoShell = config.mongoShellCommand;
-                if (mongoShell.includes('.hideIndex(')) {
-                    return l10n.t('Hide Index');
-                } else if (mongoShell.includes('.unhideIndex(')) {
-                    return l10n.t('Unhide Index');
-                }
-                return l10n.t('Modify Index');
-            }
-            return config.primaryButton?.label;
-        };
-
         return (
             <Card ref={ref} style={{ marginBottom: '16px' }}>
                 <Text
@@ -199,7 +185,7 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
                                             )
                                         }
                                     >
-                                        {getPrimaryButtonLabel()}
+                                        {config.primaryButton.label}
                                     </Button>
                                 )}
                                 {config.secondaryButton && (
