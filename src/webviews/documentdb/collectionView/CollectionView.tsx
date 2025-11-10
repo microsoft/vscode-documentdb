@@ -94,23 +94,7 @@ export const CollectionView = (): JSX.Element => {
     useEffect(() => {
         setCurrentContext((prev) => ({
             ...prev,
-            queryInsights: {
-                stage1Data: null,
-                stage1Loading: false,
-                stage1Error: null,
-                stage1Promise: null,
-
-                stage2Data: null,
-                stage2Loading: false,
-                stage2Error: null,
-                stage2Promise: null,
-
-                stage3Data: null,
-                stage3Loading: false,
-                stage3Error: null,
-                stage3Promise: null,
-                stage3RequestKey: null,
-            },
+            queryInsights: DefaultCollectionViewContext.queryInsights,
         }));
     }, [currentContext.activeQuery]);
 
@@ -123,7 +107,8 @@ export const CollectionView = (): JSX.Element => {
         // Check if already loading or loaded or in-flight
         if (
             currentContext.queryInsights.stage1Data ||
-            currentContext.queryInsights.stage1Loading ||
+            (currentContext.queryInsights.currentStage.phase === 1 &&
+                currentContext.queryInsights.currentStage.status === 'loading') ||
             currentContext.queryInsights.stage1Promise
         ) {
             return; // Already handled

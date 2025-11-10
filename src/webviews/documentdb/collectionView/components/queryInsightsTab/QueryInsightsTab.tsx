@@ -63,10 +63,10 @@ export const QueryInsightsMain = (): JSX.Element => {
      * Mimics React's setState API with support for both direct values and updater functions.
      *
      * Instead of writing:
-     *   setCurrentContext(prev => ({ ...prev, queryInsights: { ...prev.queryInsights, stage1Loading: true } }))
+     *   setCurrentContext(prev => ({ ...prev, queryInsights: { ...prev.queryInsights, stage1Data: data } }))
      *
      * You can write:
-     *   setQueryInsightsStateHelper(prev => ({ ...prev, stage1Loading: true }))
+     *   setQueryInsightsStateHelper(prev => ({ ...prev, stage1Data: data }))
      */
     const setQueryInsightsStateHelper = (
         updater:
@@ -80,22 +80,67 @@ export const QueryInsightsMain = (): JSX.Element => {
     };
 
     /**
-     * Visual stage state based on actual data availability OR error state.
-     * We progress to the next stage even if there's an error, so users can see what failed.
-     * Stage 1: Default state, waiting for or showing Stage 1 data
-     * Stage 2: Stage 1 completed (success or error), Stage 2 in progress or completed
-     * Stage 3: Stage 2 completed (success or error), Stage 3 in progress or completed
+     * Use the explicit stage from state instead of deriving it
      */
-    const stageState: 1 | 2 | 3 =
-        queryInsightsState.stage3Data || queryInsightsState.stage3Error
-            ? 3
-            : queryInsightsState.stage2Data || queryInsightsState.stage2Error
-              ? 2
-              : 1;
+    const currentStage = queryInsightsState.currentStage;
 
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [showErrorCard, setShowErrorCard] = useState(false);
+
+    /**
+     * Stage transition helper - handles moving between stages and cleaning up state
+     * Rules:
+     * - Can transition from 1 → 2 → 3
+     * - Can transition from any stage back to 1 (query re-run)
+     * - When transitioning to stage 1, clear all data from stages 2 and 3
+     * - When transitioning to stage 2, clear data from stage 3
+     * - Reset UI-specific flags when transitioning to new phases
+     */
+    const transitionToStage = (phase: 1 | 2 | 3, status: 'loading' | 'success' | 'error' | 'cancelled'): void => {
+        setQueryInsightsStateHelper((prev) => {
+            const newState = { ...prev };
+
+            // Update current stage
+            newState.currentStage = { phase, status };
+
+            // Reset dependent stages when going back to earlier phases
+            if (phase === 1) {
+                // Reset everything when starting fresh
+                newState.stage2Data = null;
+                newState.stage2Error = null;
+                newState.stage2Promise = null;
+
+                newState.stage3Data = null;
+                newState.stage3Error = null;
+                newState.stage3Promise = null;
+                newState.stage3RequestKey = null;
+
+                // Reset UI flags
+                setShowTipsCard(false);
+                setIsTipsCardDismissed(false);
+                setShowErrorCard(false);
+            } else if (phase === 2) {
+                // When entering stage 2, clear stage 3 data
+                newState.stage3Data = null;
+                newState.stage3Error = null;
+                newState.stage3Promise = null;
+                newState.stage3RequestKey = null;
+
+                // Reset UI flags for stage 3
+                setShowTipsCard(false);
+                setIsTipsCardDismissed(false);
+                setShowErrorCard(false);
+            } else if (phase === 3 && status === 'loading') {
+                // Reset UI flags when starting new AI request
+                setShowTipsCard(false);
+                setIsTipsCardDismissed(false);
+                setShowErrorCard(false);
+            }
+
+            return newState;
+        });
+    };
 
     // Stage 1: Load when needed (on mount or after query re-run when tab is active)
     // When a query is re-run, the queryInsights state is reset in CollectionView.tsx
@@ -104,12 +149,11 @@ export const QueryInsightsMain = (): JSX.Element => {
     useEffect(() => {
         if (
             !currentContext.isLoading &&
+            currentStage.phase === 1 &&
+            currentStage.status === 'loading' &&
             !queryInsightsState.stage1Data &&
-            !queryInsightsState.stage1Loading &&
             !queryInsightsState.stage1Promise
         ) {
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Loading: true }));
-
             // Query parameters are now retrieved from ClusterSession - no need to pass them
             const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
                 .query()
@@ -117,9 +161,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage1Data: data,
-                        stage1Loading: false,
                         stage1Promise: null,
                     }));
+                    transitionToStage(1, 'success');
                     return data;
                 })
                 .catch((error) => {
@@ -131,9 +175,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage1Error: error instanceof Error ? error.message : String(error),
-                        stage1Loading: false,
                         stage1Promise: null,
                     }));
+                    transitionToStage(1, 'error');
                     // Return undefined to satisfy TypeScript without creating unhandled rejection
                     return undefined as never;
                 });
@@ -142,20 +186,23 @@ export const QueryInsightsMain = (): JSX.Element => {
         }
     }, [
         currentContext.isLoading,
+        currentStage.phase,
+        currentStage.status,
         queryInsightsState.stage1Data,
-        queryInsightsState.stage1Loading,
         queryInsightsState.stage1Promise,
     ]);
 
-    // Stage 2: Auto-start after Stage 1 completes
+    // Stage 2: Auto-start after Stage 1 completes successfully
     useEffect(() => {
         if (
+            currentStage.phase === 1 &&
+            currentStage.status === 'success' &&
             queryInsightsState.stage1Data &&
             !queryInsightsState.stage2Data &&
-            !queryInsightsState.stage2Loading &&
             !queryInsightsState.stage2Promise
         ) {
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Loading: true }));
+            // Transition to Stage 2 loading
+            transitionToStage(2, 'loading');
 
             // Query parameters are now retrieved from ClusterSession - no need to pass them
             const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
@@ -164,9 +211,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage2Data: data,
-                        stage2Loading: false,
                         stage2Promise: null,
                     }));
+                    transitionToStage(2, 'success');
                     return data;
                 })
                 .catch((error) => {
@@ -178,21 +225,27 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage2Error: error instanceof Error ? error.message : String(error),
-                        stage2Loading: false,
                         stage2Promise: null,
                     }));
+                    transitionToStage(2, 'error');
                     // Return undefined to satisfy TypeScript without creating unhandled rejection
                     return undefined as never;
                 });
 
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Promise: promise }));
         }
-    }, [queryInsightsState.stage1Data]);
+    }, [
+        currentStage.phase,
+        currentStage.status,
+        queryInsightsState.stage1Data,
+        queryInsightsState.stage2Data,
+        queryInsightsState.stage2Promise,
+    ]);
 
     // Debug logging for state changes
     useEffect(() => {
-        console.log('stageState changed to:', stageState);
-    }, [stageState]);
+        console.log('currentStage changed to:', currentStage);
+    }, [currentStage]);
 
     useEffect(() => {
         console.log('stage3Data changed:', queryInsightsState.stage3Data);
@@ -232,12 +285,8 @@ export const QueryInsightsMain = (): JSX.Element => {
     ];
 
     const handleGetAISuggestions = () => {
-        setIsTipsCardDismissed(false);
-
-        // Clear any previous error when retrying
-        if (queryInsightsState.stage3Error) {
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage3Error: null }));
-        }
+        // Transition to Stage 3 loading (this will reset UI flags)
+        transitionToStage(3, 'loading');
 
         // Check if Stage 2 has query execution errors
         const hasExecutionError =
@@ -256,8 +305,8 @@ export const QueryInsightsMain = (): JSX.Element => {
         // Generate a unique request key to track if this request is still valid when it returns
         const requestKey = crypto.randomUUID();
 
-        // Set loading state in queryInsights context
-        setQueryInsightsStateHelper((prev) => ({ ...prev, stage3Loading: true, stage3RequestKey: requestKey }));
+        // Set request key in queryInsights context
+        setQueryInsightsStateHelper((prev) => ({ ...prev, stage3RequestKey: requestKey }));
 
         // Call the tRPC endpoint (10+ second delay expected from AI service)
         const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
@@ -276,11 +325,13 @@ export const QueryInsightsMain = (): JSX.Element => {
                     return {
                         ...prev,
                         stage3Data: response,
-                        stage3Loading: false,
                         stage3Promise: null,
                         stage3RequestKey: null,
                     };
                 });
+
+                // Transition to Stage 3 success
+                transitionToStage(3, 'success');
                 return response;
             })
             .catch((error: unknown) => {
@@ -293,11 +344,13 @@ export const QueryInsightsMain = (): JSX.Element => {
                     return {
                         ...prev,
                         stage3Error: error instanceof Error ? error.message : String(error),
-                        stage3Loading: false,
                         stage3Promise: null,
                         stage3RequestKey: null,
                     };
                 });
+
+                // Transition to Stage 3 error
+                transitionToStage(3, 'error');
                 // Return undefined to satisfy TypeScript without creating unhandled rejection
                 return undefined as never;
             });
@@ -315,10 +368,12 @@ export const QueryInsightsMain = (): JSX.Element => {
         // When the promise eventually returns, it will check the key and ignore the result
         setQueryInsightsStateHelper((prev) => ({
             ...prev,
-            stage3Loading: false,
             stage3Promise: null,
             stage3RequestKey: null,
         }));
+
+        // Transition to Stage 3 cancelled state
+        transitionToStage(3, 'cancelled');
     };
 
     const handlePrimaryAction = async (
@@ -367,7 +422,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         </Text>
 
                         {/* Skeleton - shown only in Stage 1 */}
-                        {stageState === 1 && (
+                        {currentStage.phase === 1 && (
                             <Skeleton className="cardSpacing">
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
@@ -379,7 +434,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         {/* GetPerformanceInsightsCard with CollapseRelaxed animation
                             Shown in Stage 2 when AI insights haven't been requested yet, or when there's an error.
                             Note: Component supports ref forwarding and applies its own spacing via className. */}
-                        <CollapseRelaxed visible={stageState >= 2 && !queryInsightsState.stage3Data}>
+                        <CollapseRelaxed visible={currentStage.phase >= 2 && !queryInsightsState.stage3Data}>
                             <GetPerformanceInsightsCard
                                 className="cardSpacing"
                                 bodyText={
@@ -392,7 +447,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                               'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
                                           )
                                 }
-                                isLoading={queryInsightsState.stage3Loading}
+                                isLoading={currentStage.phase === 3 && currentStage.status === 'loading'}
                                 errorMessage={queryInsightsState.stage3Error ?? undefined}
                                 onGetInsights={handleGetAISuggestions}
                                 onLearnMore={() => {
@@ -405,7 +460,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         {/* AnimatedCardList for AI suggestions and tips */}
                         <AnimatedCardList>
                             {/* Analysis Card (if AI data available) */}
-                            {stageState === 3 &&
+                            {currentStage.phase === 3 &&
                                 queryInsightsState.stage3Data &&
                                 queryInsightsState.stage3Data.analysisCard && (
                                     <MarkdownCard
@@ -443,11 +498,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                             )}
 
                             {/* Improvement Cards (dynamic from AI response) */}
-                            {stageState === 3 &&
+                            {currentStage.phase === 3 &&
                                 queryInsightsState.stage3Data &&
                                 (() => {
                                     console.log('=== IMPROVEMENT CARDS RENDERING ===');
-                                    console.log('stageState:', stageState);
+                                    console.log('currentStage:', currentStage);
                                     console.log('queryInsightsState.stage3Data:', queryInsightsState.stage3Data);
                                     console.log(
                                         'queryInsightsState.stage3Data.improvementCards:',
@@ -532,7 +587,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                             )}
 
                             {/* Educational Markdown Card - Understanding Query Execution */}
-                            {stageState === 3 &&
+                            {currentStage.phase === 3 &&
                                 queryInsightsState.stage3Data &&
                                 queryInsightsState.stage3Data.educationalContent && (
                                     <MarkdownCard
@@ -598,8 +653,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <QueryPlanSummary
                         stage1Data={queryInsightsState.stage1Data}
                         stage2Data={queryInsightsState.stage2Data}
-                        stage1Loading={stageState === 1 && !queryInsightsState.stage1Data}
-                        stage2Loading={stageState >= 2 && !queryInsightsState.stage2Data}
+                        stage1Loading={currentStage.phase === 1 && !queryInsightsState.stage1Data}
+                        stage2Loading={currentStage.phase >= 2 && !queryInsightsState.stage2Data}
                     />
 
                     {/* Quick Actions */}
