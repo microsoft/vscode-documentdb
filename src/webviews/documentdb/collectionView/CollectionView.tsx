@@ -92,6 +92,7 @@ export const CollectionView = (): JSX.Element => {
      * This happens whenever the user executes a query (even if same query text)
      */
     useEffect(() => {
+        console.trace('[CollectionView] 🔄 Resetting query insights to initial state (Stage 1 loading)');
         setCurrentContext((prev) => ({
             ...prev,
             queryInsights: DefaultCollectionViewContext.queryInsights,
