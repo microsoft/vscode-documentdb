@@ -69,6 +69,7 @@ export type CollectionViewContextType = {
         limit: number; // Maximum number of documents to return
         pageNumber: number;
         pageSize: number;
+        executionIntent?: 'initial' | 'refresh' | 'pagination'; // Intent of the query execution
     };
     commands: {
         disableAddDocument: boolean;

@@ -155,11 +155,15 @@ export const collectionsViewRouter = router({
                 limit: z.number().optional(),
                 pageNumber: z.number(),
                 pageSize: z.number(),
+                executionIntent: z.enum(['initial', 'refresh', 'pagination']).optional(),
             }),
         )
         // procedure type
         .query(async ({ input, ctx }) => {
             const myCtx = ctx as RouterContext;
+
+            // Track execution intent for telemetry
+            const executionIntent = input.executionIntent ?? 'pagination';
 
             // run query
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
@@ -175,7 +179,16 @@ export const collectionsViewRouter = router({
                 },
                 input.pageNumber,
                 input.pageSize,
+                executionIntent,
             );
+
+            // Report execution intent for analytics
+            void callWithTelemetryAndErrorHandling('documentDB.query.executionIntent', (telemetryCtx) => {
+                telemetryCtx.errorHandling.suppressDisplay = true;
+                telemetryCtx.telemetry.properties.intent = executionIntent;
+                telemetryCtx.telemetry.properties.pageNumber = input.pageNumber.toString();
+                telemetryCtx.telemetry.measurements.documentCount = size;
+            });
 
             void promptAfterActionEventually(UsageImpact.High);
 

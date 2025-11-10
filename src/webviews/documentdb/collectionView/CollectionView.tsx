@@ -177,6 +177,7 @@ export const CollectionView = (): JSX.Element => {
                 limit: currentContext.activeQuery.limit,
                 pageNumber: currentContext.activeQuery.pageNumber,
                 pageSize: currentContext.activeQuery.pageSize,
+                executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
             .then((_response) => {
                 // 2. This is the time to update the auto-completion data
@@ -504,6 +505,7 @@ export const CollectionView = (): JSX.Element => {
                                 skip: query.skip,
                                 limit: query.limit,
                                 pageNumber: 1,
+                                executionIntent: 'initial',
                             },
                         }));
 

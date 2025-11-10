@@ -34,14 +34,11 @@ import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
 import { SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
-import {
-    type ImprovementCard as ImprovementCardConfig,
-    type QueryInsightsStage3Response,
-} from '../../types/queryInsights';
-import { AnimatedCardList } from './components';
+import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
+import { AnimatedCardList, type AnimatedCardItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
@@ -57,9 +54,6 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Stage 2: Detailed Execution Analysis (from explain("executionStats"))
     // Stage 3: AI-Powered Recommendations (opt-in)
     // See: docs/design-documents/performance-advisor.md
-
-    // Toggle between mock and real AI suggestions for development/testing
-    const USE_MOCK_AI = true; // Set to true to use 5-second client-side mock
 
     const { trpcClient } = useTrpcClient();
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
@@ -432,187 +426,6 @@ export const QueryInsightsMain = (): JSX.Element => {
      * MOCK VERSION: Client-side mock for AI suggestions with 5-second delay
      * This simulates the AI request without calling the backend
      */
-    const handleGetAISuggestionsMock = () => {
-        // Transition to Stage 3 loading (this will reset UI flags)
-        transitionToStage(3, 'loading');
-
-        // Check if Stage 2 has query execution errors
-        const hasExecutionError =
-            queryInsightsState.stage2Data?.concerns &&
-            queryInsightsState.stage2Data.concerns.some((concern) => concern.includes('Query Execution Failed'));
-
-        // Show appropriate card after 1 second delay
-        const timer = setTimeout(() => {
-            if (hasExecutionError) {
-                setShowErrorCard(true);
-            } else {
-                setShowTipsCard(true);
-            }
-        }, 1000);
-
-        // Generate a unique request key to track if this request is still valid when it returns
-        const requestKey = crypto.randomUUID();
-        console.trace(`🚀 [MOCK] Starting new AI request with key: ${requestKey}`);
-
-        // Set request key in queryInsights context
-        setQueryInsightsStateHelper((prev) => {
-            if (prev.stage3RequestKey) {
-                console.trace(`  [MOCK] Superseding previous request key: ${prev.stage3RequestKey}`);
-            }
-            return { ...prev, stage3RequestKey: requestKey };
-        });
-
-        // Simulate a 5-second delay with mock data
-        const promise = new Promise<typeof queryInsightsState.stage3Data>((resolve) => {
-            setTimeout(() => {
-                // Mock response data
-                const mockResponse: NonNullable<typeof queryInsightsState.stage3Data> = {
-                    analysisCard: {
-                        type: 'analysis',
-                        content: `## Query Performance Summary
-
-Your query is using a **collection scan (COLLSCAN)** which examines every document in the collection. This is the least efficient execution strategy.
-
-### Key Findings
-- **${queryInsightsState.stage2Data?.totalDocsExamined ?? 'N/A'} documents examined** to return ${queryInsightsState.stage2Data?.documentsReturned ?? 'N/A'} results
-- **No index used** for this query
-- Examined-to-returned ratio: **${queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio ?? 'N/A'}**
-
-### Impact
-This query will become slower as your collection grows. For optimal performance, consider creating an index on the fields used in your query filter.`,
-                    },
-                    improvementCards: [
-                        {
-                            type: 'improvement',
-                            cardId: 'create-index-status',
-                            title: 'Create Index on status Field',
-                            priority: 'high',
-                            description: `Creating an index on the \`status\` field will dramatically improve query performance by allowing MongoDB to quickly locate matching documents without scanning the entire collection.
-
-**Expected Improvement:**
-- Reduce documents examined from ${queryInsightsState.stage2Data?.totalDocsExamined ?? 'N/A'} to ~${queryInsightsState.stage2Data?.documentsReturned ?? 'N/A'}
-- Faster query execution (estimated 10-100x faster depending on collection size)
-- Lower resource consumption`,
-                            recommendedIndex: '{ status: 1 }',
-                            indexName: 'status_1',
-                            recommendedIndexDetails:
-                                'Single-field ascending index on status field for efficient filtering',
-                            details: `**Risks and Considerations:**
-- Index creation may take time on large collections
-- Indexes consume disk space and memory
-- Write operations (insert/update/delete) will be slightly slower`,
-                            mongoShellCommand: 'db.collection.createIndex({ status: 1 })',
-                            primaryButton: {
-                                label: 'Create Index',
-                                actionId: 'create-index',
-                                payload: {
-                                    indexSpec: { status: 1 },
-                                    indexName: 'status_1',
-                                },
-                            },
-                            secondaryButton: {
-                                label: 'Copy Command',
-                                actionId: 'copy-command',
-                                payload: {
-                                    command: 'db.collection.createIndex({ status: 1 })',
-                                },
-                            },
-                        },
-                        {
-                            type: 'improvement',
-                            cardId: 'info-compound-index',
-                            title: 'Consider Compound Index for Multi-Field Queries',
-                            priority: 'medium',
-                            description: `If your application frequently queries on multiple fields together (e.g., \`status\` and \`createdDate\`), a compound index would be more efficient than multiple single-field indexes.
-
-**Example compound index:**
-\`\`\`javascript
-db.collection.createIndex({ status: 1, createdDate: -1 })
-\`\`\`
-
-**Benefits:**
-- Single index serves multiple query patterns
-- Reduced index storage overhead
-- Better performance for queries filtering on both fields`,
-                            recommendedIndex: '{ status: 1, createdDate: -1 }',
-                            indexName: 'status_1_createdDate_-1',
-                            recommendedIndexDetails: 'Compound index for multi-field query patterns',
-                            details: 'Consider your application query patterns before creating compound indexes',
-                            mongoShellCommand: 'db.collection.createIndex({ status: 1, createdDate: -1 })',
-                        },
-                    ],
-                    verificationSteps: 'Re-run the query and verify that an index is used in the execution plan.',
-                    educationalContent: `## Understanding Collection Scans (COLLSCAN)
-
-A **collection scan** means MongoDB reads every document in your collection to find matching results. Think of it like reading an entire book to find a specific word, instead of using the index at the back.
-
-### Why Collection Scans Happen
-1. **No matching index exists** for your query filter
-2. The query optimizer determines scanning is faster than using a poor index
-3. Query filters are too generic to benefit from indexes
-
-### When Collection Scans Are Acceptable
-- Small collections (< 1,000 documents)
-- Queries that need to examine most documents anyway
-- One-time analytical queries
-
-### When to Add Indexes
-- Collection has > 10,000 documents
-- Query returns a small subset of documents
-- Query runs frequently in production
-
-### Performance Impact by Collection Size
-- **1K docs**: Collection scan is fine (< 10ms)
-- **10K docs**: Consider indexing (10-50ms)
-- **100K docs**: Index strongly recommended (100-500ms)
-- **1M+ docs**: Index is critical (1s+)`,
-                };
-
-                resolve(mockResponse);
-            }, 5000); // 5-second delay
-        });
-
-        void promise.then((response: QueryInsightsStage3Response) => {
-            console.trace(`🎭 [MOCK] AI response received for request key: ${requestKey}`);
-            console.trace('[MOCK] Number of improvement cards:', response.improvementCards.length);
-            console.trace('[MOCK] Improvement cards:', response.improvementCards);
-
-            // Only update state if this request is still the current one
-            let wasAccepted = false;
-            setQueryInsightsStateHelper((prev) => {
-                if (prev.stage3RequestKey !== requestKey) {
-                    console.warn(
-                        `🚫 [MOCK] REJECTED stale AI response - Request key mismatch:`,
-                        `\n  Received: ${requestKey}`,
-                        `\n  Expected: ${prev.stage3RequestKey}`,
-                        `\n  Reason: Request was cancelled or superseded by a newer request`,
-                    );
-                    return prev;
-                }
-                console.trace(`✅ [MOCK] ACCEPTED AI response for request key: ${requestKey}`);
-                wasAccepted = true;
-                return {
-                    ...prev,
-                    stage3Data: response,
-                    stage3Promise: null,
-                    stage3RequestKey: null,
-                };
-            });
-
-            // Only transition to success if the response was accepted
-            if (wasAccepted) {
-                transitionToStage(3, 'success');
-            }
-        });
-
-        setQueryInsightsStateHelper((prev) => ({
-            ...prev,
-            stage3Promise: promise as Promise<QueryInsightsStage3Response>,
-        }));
-
-        return () => clearTimeout(timer);
-    };
-
     const handlePrimaryAction = async (
         actionId: string,
         payload: unknown,
@@ -637,6 +450,133 @@ A **collection scan** means MongoDB reads every document in your collection to f
         setIsTipsCardDismissed(true);
         setShowTipsCard(false);
     };
+
+    // Build the cards array for animated presence
+    const insightCards: AnimatedCardItem[] = [];
+
+    // Include requestKey in card keys to force remount on regeneration
+    const keyPrefix = queryInsightsState.stage3RequestKey ? `${queryInsightsState.stage3RequestKey}-` : '';
+
+    // Analysis Card (if AI data available)
+    if (currentStage.phase === 3 && queryInsightsState.stage3Data?.analysisCard) {
+        console.trace('[AnimatedCardList] ✅ Adding Analysis Card to array');
+        insightCards.push({
+            key: `${keyPrefix}analysis-card`,
+            component: (
+                <MarkdownCard
+                    icon={<SparkleRegular />}
+                    title={l10n.t('Query Performance Analysis')}
+                    content={queryInsightsState.stage3Data.analysisCard.content}
+                    onCopy={() => {
+                        void navigator.clipboard.writeText(queryInsightsState.stage3Data?.analysisCard.content ?? '');
+                    }}
+                />
+            ),
+        });
+    }
+
+    // Error Card - shown when query execution failed
+    if (showErrorCard && queryInsightsState.stage2Data?.concerns) {
+        console.trace('[AnimatedCardList] ✅ Adding Error Card to array');
+        insightCards.push({
+            key: `${keyPrefix}query-execution-error`,
+            component: (
+                <MarkdownCard
+                    title={l10n.t('Query Execution Failed')}
+                    icon={<WarningRegular />}
+                    showAiDisclaimer={false}
+                    content={
+                        queryInsightsState.stage2Data.concerns.join('\n\n') +
+                        '\n\n---\n\n' +
+                        '**Resolving this execution error should take precedence over performance optimization.** ' +
+                        'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
+                    }
+                    onCopy={() => {
+                        void navigator.clipboard.writeText(queryInsightsState.stage2Data?.concerns?.join('\n\n') ?? '');
+                    }}
+                />
+            ),
+        });
+    }
+
+    // Improvement Cards (dynamic from AI response)
+    if (currentStage.phase === 3 && queryInsightsState.stage3Data?.improvementCards) {
+        console.trace('=== IMPROVEMENT CARDS BUILDING ===');
+        console.trace('Number of cards to add:', queryInsightsState.stage3Data.improvementCards.length);
+
+        queryInsightsState.stage3Data.improvementCards.forEach((card: ImprovementCardConfig, index: number) => {
+            console.trace(`Card ${index + 1}:`, card.cardId, 'actionId:', card.primaryButton?.actionId);
+
+            // If any button exists, render ImprovementCard; otherwise render MarkdownCard
+            if (card.primaryButton || card.secondaryButton) {
+                console.trace(
+                    `  -> Adding ImprovementCard (primary: ${card.primaryButton?.actionId}, secondary: ${card.secondaryButton?.actionId})`,
+                );
+                insightCards.push({
+                    key: `${keyPrefix}${card.cardId}`,
+                    component: (
+                        <ImprovementCard
+                            config={card}
+                            onPrimaryAction={handlePrimaryAction}
+                            onSecondaryAction={handleSecondaryAction}
+                            onCopy={() => {
+                                void navigator.clipboard.writeText(card.mongoShellCommand);
+                            }}
+                        />
+                    ),
+                });
+            } else {
+                // For informational cards (no buttons), use MarkdownCard
+                console.trace(`  -> Adding MarkdownCard (no buttons)`);
+                insightCards.push({
+                    key: `${keyPrefix}${card.cardId || `card-${index}`}`,
+                    component: (
+                        <MarkdownCard
+                            icon={<SparkleRegular />}
+                            title={card.title}
+                            content={card.description}
+                            onCopy={() => {
+                                void navigator.clipboard.writeText(card.description);
+                            }}
+                        />
+                    ),
+                });
+            }
+        });
+    }
+
+    // Educational Markdown Card - Understanding Query Execution
+    if (currentStage.phase === 3 && queryInsightsState.stage3Data?.educationalContent) {
+        console.trace('[AnimatedCardList] ✅ Adding Educational Card to array');
+        insightCards.push({
+            key: `${keyPrefix}understanding-execution`,
+            component: (
+                <MarkdownCard
+                    icon={<SparkleRegular />}
+                    title={l10n.t('Understanding Your Query Execution Plan')}
+                    content={queryInsightsState.stage3Data.educationalContent}
+                    onCopy={() => {
+                        void navigator.clipboard.writeText(queryInsightsState.stage3Data?.educationalContent ?? '');
+                    }}
+                />
+            ),
+        });
+    }
+
+    // Performance Tips Card
+    if (showTipsCard && !isTipsCardDismissed) {
+        console.trace('[AnimatedCardList] ✅ Adding Performance Tips Card to array');
+        insightCards.push({
+            key: 'performance-tips',
+            component: (
+                <TipsCard
+                    title={l10n.t('DocumentDB Performance Tips')}
+                    tips={performanceTips}
+                    onDismiss={handleDismissTips}
+                />
+            ),
+        });
+    }
 
     return (
         <div className="container">
@@ -687,7 +627,7 @@ A **collection scan** means MongoDB reads every document in your collection to f
                                 isLoading={currentStage.phase === 3 && currentStage.status === 'loading'}
                                 enabled={currentStage.phase >= 2 && currentStage.status !== 'loading'}
                                 errorMessage={queryInsightsState.stage3Error ?? undefined}
-                                onGetInsights={USE_MOCK_AI ? handleGetAISuggestionsMock : handleGetAISuggestions}
+                                onGetInsights={handleGetAISuggestions}
                                 onLearnMore={() => {
                                     /* TODO: Implement learn more functionality */
                                 }}
@@ -696,166 +636,7 @@ A **collection scan** means MongoDB reads every document in your collection to f
                         </CollapseRelaxed>
 
                         {/* AnimatedCardList for AI suggestions and tips */}
-                        <AnimatedCardList
-                            key={`cards-${queryInsightsState.stage1Data?.executionTime ?? 0}-${queryInsightsState.stage2Data?.executionTimeMs ?? 0}`}
-                        >
-                            {/* Analysis Card (if AI data available) */}
-                            {currentStage.phase === 3 &&
-                                queryInsightsState.stage3Data &&
-                                queryInsightsState.stage3Data.analysisCard &&
-                                (() => {
-                                    console.trace('[AnimatedCardList] ✅ Rendering Analysis Card');
-                                    return (
-                                        <MarkdownCard
-                                            key="analysis-card"
-                                            icon={<SparkleRegular />}
-                                            title={l10n.t('Query Performance Analysis')}
-                                            content={queryInsightsState.stage3Data.analysisCard.content}
-                                            onCopy={() => {
-                                                void navigator.clipboard.writeText(
-                                                    queryInsightsState.stage3Data?.analysisCard.content ?? '',
-                                                );
-                                            }}
-                                        />
-                                    );
-                                })()}
-
-                            {/* Error Card - shown when query execution failed */}
-                            {showErrorCard &&
-                                queryInsightsState.stage2Data?.concerns &&
-                                (() => {
-                                    console.trace('[AnimatedCardList] ✅ Rendering Error Card');
-                                    return (
-                                        <MarkdownCard
-                                            key="query-execution-error"
-                                            title={l10n.t('Query Execution Failed')}
-                                            icon={<WarningRegular />}
-                                            showAiDisclaimer={false}
-                                            content={
-                                                queryInsightsState.stage2Data.concerns.join('\n\n') +
-                                                '\n\n---\n\n' +
-                                                '**Resolving this execution error should take precedence over performance optimization.** ' +
-                                                'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
-                                            }
-                                            onCopy={() => {
-                                                void navigator.clipboard.writeText(
-                                                    queryInsightsState.stage2Data?.concerns?.join('\n\n') ?? '',
-                                                );
-                                            }}
-                                        />
-                                    );
-                                })()}
-
-                            {/* Improvement Cards (dynamic from AI response) */}
-                            {currentStage.phase === 3 &&
-                                queryInsightsState.stage3Data &&
-                                (() => {
-                                    console.trace('=== IMPROVEMENT CARDS RENDERING ===');
-                                    console.trace('currentStage:', currentStage);
-                                    console.trace('queryInsightsState.stage3Data:', queryInsightsState.stage3Data);
-                                    console.trace(
-                                        'queryInsightsState.stage3Data.improvementCards:',
-                                        queryInsightsState.stage3Data.improvementCards,
-                                    );
-                                    console.trace(
-                                        'Number of cards to render:',
-                                        queryInsightsState.stage3Data.improvementCards.length,
-                                    );
-
-                                    if (
-                                        !queryInsightsState.stage3Data.improvementCards ||
-                                        queryInsightsState.stage3Data.improvementCards.length === 0
-                                    ) {
-                                        console.trace('SKIPPING: no improvement cards');
-                                        return null;
-                                    }
-
-                                    console.trace(
-                                        `RENDERING ${queryInsightsState.stage3Data.improvementCards.length} improvement cards...`,
-                                    );
-
-                                    // Return array of cards directly (not wrapped in Fragment)
-                                    // AnimatedCardList expects direct children with keys, not nested Fragments
-                                    return queryInsightsState.stage3Data?.improvementCards.map(
-                                        (card: ImprovementCardConfig, index: number) => {
-                                            console.trace(
-                                                `Card ${index + 1}/${queryInsightsState.stage3Data?.improvementCards.length}:`,
-                                                card.cardId,
-                                                'actionId:',
-                                                card.primaryButton?.actionId,
-                                            );
-
-                                            // If any button exists, render ImprovementCard; otherwise render AiCard
-                                            if (card.primaryButton || card.secondaryButton) {
-                                                console.trace(
-                                                    `  -> Rendering as ImprovementCard (primary: ${card.primaryButton?.actionId}, secondary: ${card.secondaryButton?.actionId})`,
-                                                );
-                                                return (
-                                                    <ImprovementCard
-                                                        key={card.cardId}
-                                                        config={card}
-                                                        onPrimaryAction={handlePrimaryAction}
-                                                        onSecondaryAction={handleSecondaryAction}
-                                                        onCopy={() => {
-                                                            void navigator.clipboard.writeText(card.mongoShellCommand);
-                                                        }}
-                                                    />
-                                                );
-                                            }
-
-                                            // For informational cards (no buttons), use MarkdownCard
-                                            console.trace(`  -> Rendering as MarkdownCard (no buttons)`);
-                                            return (
-                                                <MarkdownCard
-                                                    key={card.cardId || `card-${index}`}
-                                                    icon={<SparkleRegular />}
-                                                    title={card.title}
-                                                    content={card.description}
-                                                    onCopy={() => {
-                                                        void navigator.clipboard.writeText(card.description);
-                                                    }}
-                                                />
-                                            );
-                                        },
-                                    );
-                                })()}
-
-                            {/* Educational Markdown Card - Understanding Query Execution */}
-                            {currentStage.phase === 3 &&
-                                queryInsightsState.stage3Data &&
-                                queryInsightsState.stage3Data.educationalContent &&
-                                (() => {
-                                    console.trace('[AnimatedCardList] ✅ Rendering Educational Card');
-                                    return (
-                                        <MarkdownCard
-                                            key="understanding-execution"
-                                            icon={<SparkleRegular />}
-                                            title={l10n.t('Understanding Your Query Execution Plan')}
-                                            content={queryInsightsState.stage3Data.educationalContent}
-                                            onCopy={() => {
-                                                void navigator.clipboard.writeText(
-                                                    queryInsightsState.stage3Data?.educationalContent ?? '',
-                                                );
-                                            }}
-                                        />
-                                    );
-                                })()}
-
-                            {/* Performance Tips Card */}
-                            {showTipsCard &&
-                                !isTipsCardDismissed &&
-                                (() => {
-                                    console.trace('[AnimatedCardList] ✅ Rendering Performance Tips Card');
-                                    return (
-                                        <TipsCard
-                                            key="performance-tips"
-                                            title={l10n.t('DocumentDB Performance Tips')}
-                                            tips={performanceTips}
-                                            onDismiss={handleDismissTips}
-                                        />
-                                    );
-                                })()}
-                        </AnimatedCardList>
+                        <AnimatedCardList items={insightCards} exitDuration={300} />
                     </div>
                 </div>
 
