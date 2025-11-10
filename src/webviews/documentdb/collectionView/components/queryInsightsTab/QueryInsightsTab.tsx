@@ -304,24 +304,38 @@ export const QueryInsightsMain = (): JSX.Element => {
 
         // Generate a unique request key to track if this request is still valid when it returns
         const requestKey = crypto.randomUUID();
+        console.log(`🚀 Starting new AI request with key: ${requestKey}`);
 
         // Set request key in queryInsights context
-        setQueryInsightsStateHelper((prev) => ({ ...prev, stage3RequestKey: requestKey }));
+        setQueryInsightsStateHelper((prev) => {
+            if (prev.stage3RequestKey) {
+                console.log(`  Superseding previous request key: ${prev.stage3RequestKey}`);
+            }
+            return { ...prev, stage3RequestKey: requestKey };
+        });
 
         // Call the tRPC endpoint (10+ second delay expected from AI service)
         const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
             .query({ requestKey })
             .then((response) => {
-                console.log('AI response received:', response);
+                console.log(`AI response received for request key: ${requestKey}`);
                 console.log('Number of improvement cards:', response.improvementCards.length);
                 console.log('Improvement cards:', response.improvementCards);
 
                 // Only update state if this request is still the current one
+                let wasAccepted = false;
                 setQueryInsightsStateHelper((prev) => {
                     if (prev.stage3RequestKey !== requestKey) {
-                        console.log('Ignoring stale AI response (request was cancelled or superseded)');
+                        console.warn(
+                            `🚫 REJECTED stale AI response - Request key mismatch:`,
+                            `\n  Received: ${requestKey}`,
+                            `\n  Expected: ${prev.stage3RequestKey}`,
+                            `\n  Reason: Request was cancelled or superseded by a newer request`,
+                        );
                         return prev;
                     }
+                    console.log(`✅ ACCEPTED AI response for request key: ${requestKey}`);
+                    wasAccepted = true;
                     return {
                         ...prev,
                         stage3Data: response,
@@ -330,17 +344,27 @@ export const QueryInsightsMain = (): JSX.Element => {
                     };
                 });
 
-                // Transition to Stage 3 success
-                transitionToStage(3, 'success');
+                // Only transition to success if the response was accepted
+                if (wasAccepted) {
+                    transitionToStage(3, 'success');
+                }
                 return response;
             })
             .catch((error: unknown) => {
                 // Only update state if this request is still the current one
+                let wasAccepted = false;
                 setQueryInsightsStateHelper((prev) => {
                     if (prev.stage3RequestKey !== requestKey) {
-                        console.log('Ignoring stale AI error (request was cancelled or superseded)');
+                        console.warn(
+                            `🚫 REJECTED stale AI error - Request key mismatch:`,
+                            `\n  Received: ${requestKey}`,
+                            `\n  Expected: ${prev.stage3RequestKey}`,
+                            `\n  Reason: Request was cancelled or superseded by a newer request`,
+                        );
                         return prev;
                     }
+                    console.log(`✅ ACCEPTED AI error for request key: ${requestKey}`);
+                    wasAccepted = true;
                     return {
                         ...prev,
                         stage3Error: error instanceof Error ? error.message : String(error),
@@ -349,8 +373,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                     };
                 });
 
-                // Transition to Stage 3 error
-                transitionToStage(3, 'error');
+                // Only transition to error if the error was accepted
+                if (wasAccepted) {
+                    transitionToStage(3, 'error');
+                }
                 // Return undefined to satisfy TypeScript without creating unhandled rejection
                 return undefined as never;
             });
@@ -366,11 +392,16 @@ export const QueryInsightsMain = (): JSX.Element => {
     const handleCancelAI = () => {
         // Cancel the loading state and clear the request key
         // When the promise eventually returns, it will check the key and ignore the result
-        setQueryInsightsStateHelper((prev) => ({
-            ...prev,
-            stage3Promise: null,
-            stage3RequestKey: null,
-        }));
+        setQueryInsightsStateHelper((prev) => {
+            if (prev.stage3RequestKey) {
+                console.log(`❌ Cancelling AI request with key: ${prev.stage3RequestKey}`);
+            }
+            return {
+                ...prev,
+                stage3Promise: null,
+                stage3RequestKey: null,
+            };
+        });
 
         // Transition to Stage 3 cancelled state
         transitionToStage(3, 'cancelled');
