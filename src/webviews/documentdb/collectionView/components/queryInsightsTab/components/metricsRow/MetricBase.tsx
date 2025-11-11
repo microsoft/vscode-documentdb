@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
+import { DataUsageRegular } from '@fluentui/react-icons';
 import * as React from 'react';
 import './MetricsRow.scss';
 
@@ -27,15 +28,20 @@ export interface MetricBaseProps {
     /** How to display when value is null/undefined */
     placeholder?: 'skeleton' | 'empty';
 
-    /** Optional tooltip text shown on hover */
-    tooltip?: string;
+    /** Optional tooltip explanation shown on hover */
+    tooltipExplanation?: string;
 }
 
 /**
  * Internal base component for metrics.
  * DO NOT use directly - use TimeMetric, CountMetric, GenericMetric, or create a new specialized metric.
  */
-export const MetricBase: React.FC<MetricBaseProps> = ({ label, value, placeholder = 'skeleton', tooltip }) => {
+export const MetricBase: React.FC<MetricBaseProps> = ({
+    label,
+    value,
+    placeholder = 'skeleton',
+    tooltipExplanation,
+}) => {
     const renderValue = () => {
         if (value === null || value === undefined) {
             if (placeholder === 'skeleton') {
@@ -54,9 +60,31 @@ export const MetricBase: React.FC<MetricBaseProps> = ({ label, value, placeholde
         </Card>
     );
 
-    if (tooltip) {
+    if (tooltipExplanation) {
+        // Format tooltip with similar styling to performance rating badges
+        const valueText =
+            value !== null && value !== undefined && (typeof value === 'string' || typeof value === 'number')
+                ? String(value)
+                : '';
+
         return (
-            <Tooltip content={tooltip} relationship="label">
+            <Tooltip
+                content={{
+                    children: (
+                        <div className="metricTooltip">
+                            <div className="tooltipHeader">{label}</div>
+                            <div className="tooltipContent">{tooltipExplanation}</div>
+                            {valueText && (
+                                <div className="tooltipValue">
+                                    <DataUsageRegular fontSize={24} /> {valueText}
+                                </div>
+                            )}
+                        </div>
+                    ),
+                }}
+                positioning="below"
+                relationship="description"
+            >
                 {content}
             </Tooltip>
         );

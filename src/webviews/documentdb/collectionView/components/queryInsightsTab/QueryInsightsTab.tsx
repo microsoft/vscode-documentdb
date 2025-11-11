@@ -586,10 +586,30 @@ export const QueryInsightsMain = (): JSX.Element => {
                 <div className="leftColumn">
                     {/* Metrics Row */}
                     <MetricsRow>
-                        <TimeMetric label={l10n.t('Execution Time')} valueMs={executionTime} />
-                        <CountMetric label={l10n.t('Documents Returned')} value={docsReturned} />
-                        <CountMetric label={l10n.t('Keys Examined')} value={keysExamined} />
-                        <CountMetric label={l10n.t('Documents Examined')} value={docsExamined} />
+                        <TimeMetric
+                            label={l10n.t('Execution Time')}
+                            valueMs={executionTime}
+                            tooltipExplanation={l10n.t('Total time taken to execute the query on the server')}
+                        />
+                        <CountMetric
+                            label={l10n.t('Documents Returned')}
+                            value={docsReturned}
+                            tooltipExplanation={l10n.t('Number of documents returned by the query')}
+                        />
+                        <CountMetric
+                            label={l10n.t('Keys Examined')}
+                            value={keysExamined}
+                            tooltipExplanation={l10n.t(
+                                'Number of index keys scanned during query execution. Lower is better.',
+                            )}
+                        />
+                        <CountMetric
+                            label={l10n.t('Documents Examined')}
+                            value={docsExamined}
+                            tooltipExplanation={l10n.t(
+                                'Number of documents scanned to find matching results. Should be close to documents returned for optimal performance.',
+                            )}
+                        />
                     </MetricsRow>
 
                     {/* Optimization Opportunities */}

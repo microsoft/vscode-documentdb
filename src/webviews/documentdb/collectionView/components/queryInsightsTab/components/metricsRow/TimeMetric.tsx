@@ -35,9 +35,16 @@ export const TimeMetric: React.FC<TimeMetricProps> = ({
     valueMs,
     decimals = 2,
     placeholder = 'skeleton',
-    tooltip,
+    tooltipExplanation,
 }) => {
     const formattedValue = valueMs !== null && valueMs !== undefined ? formatTime(valueMs, decimals) : undefined;
 
-    return <MetricBase label={label} value={formattedValue} placeholder={placeholder} tooltip={tooltip} />;
+    return (
+        <MetricBase
+            label={label}
+            value={formattedValue}
+            placeholder={placeholder}
+            tooltipExplanation={tooltipExplanation}
+        />
+    );
 };

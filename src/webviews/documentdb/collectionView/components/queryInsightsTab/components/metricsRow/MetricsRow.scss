@@ -42,3 +42,26 @@
         @extend .baseDataValue;
     }
 }
+
+.metricTooltip {
+    padding: 8px;
+
+    .tooltipHeader {
+        font-weight: 600;
+        margin-bottom: 12px;
+        font-size: 16px;
+    }
+
+    .tooltipContent {
+        white-space: pre-line;
+    }
+
+    .tooltipValue {
+        margin-top: 12px;
+        margin-left: -3px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+}

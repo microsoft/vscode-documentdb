@@ -51,12 +51,19 @@ export const CountMetric: React.FC<CountMetricProps> = ({
     compact = false,
     compactThreshold = 1000000,
     placeholder = 'skeleton',
-    tooltip,
+    tooltipExplanation,
 }) => {
     const formattedValue =
         value !== null && value !== undefined
             ? formatCount(value, { useGrouping, compact, threshold: compactThreshold })
             : undefined;
 
-    return <MetricBase label={label} value={formattedValue} placeholder={placeholder} tooltip={tooltip} />;
+    return (
+        <MetricBase
+            label={label}
+            value={formattedValue}
+            placeholder={placeholder}
+            tooltipExplanation={tooltipExplanation}
+        />
+    );
 };
