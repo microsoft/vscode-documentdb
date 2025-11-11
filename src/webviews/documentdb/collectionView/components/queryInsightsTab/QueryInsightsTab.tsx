@@ -649,7 +649,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 errorMessage={queryInsightsState.stage3Error ?? undefined}
                                 onGetInsights={handleGetAISuggestions}
                                 onLearnMore={() => {
-                                    /* TODO: Implement learn more functionality */
+                                    void trpcClient.common.openUrl.mutate({
+                                        url: 'https://learn.microsoft.com/azure/documentdb/index-advisor',
+                                    });
                                 }}
                                 onCancel={handleCancelAI}
                             />
