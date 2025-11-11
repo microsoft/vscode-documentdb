@@ -1,0 +1,67 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+@use '../../queryInsights.scss' as *;
+
+.metricsRow {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+    grid-auto-rows: auto;
+
+    // Default: 1 column
+    grid-template-columns: 1fr;
+
+    // Medium screen: 2 columns
+    @media (min-width: 400px) {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    // Wide screen: 4 columns
+    @media (min-width: 800px) {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.metricCard {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 8px;
+
+    // Reference base styles from queryInsights.scss
+    .dataHeader {
+        @extend .baseDataHeader;
+    }
+
+    .dataValue {
+        @extend .baseDataValue;
+    }
+}
+
+.metricTooltip {
+    padding: 8px;
+
+    .tooltipHeader {
+        font-weight: 600;
+        margin-bottom: 12px;
+        font-size: 16px;
+    }
+
+    .tooltipContent {
+        white-space: pre-line;
+    }
+
+    .tooltipValue {
+        margin-top: 12px;
+        margin-left: -3px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+}

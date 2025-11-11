@@ -4,12 +4,55 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createContext } from 'react';
+import {
+    type QueryInsightsStage1Response,
+    type QueryInsightsStage2Response,
+    type QueryInsightsStage3Response,
+} from './types/queryInsights';
 
 export enum Views {
     TABLE = 'Table View',
     TREE = 'Tree View',
     JSON = 'JSON View',
 }
+
+/**
+ * Query Insights State - Tracks the three-stage progressive loading of query insights
+ * - Stage 1: Query planner data (lightweight, from explain("queryPlanner"))
+ * - Stage 2: Execution statistics (from explain("executionStats"))
+ * - Stage 3: AI-powered recommendations (opt-in, requires external AI service call)
+ *
+ * Promise tracking prevents duplicate requests during rapid tab switching.
+ */
+
+export type QueryInsightsStageStatus = 'loading' | 'success' | 'error' | 'cancelled';
+
+export interface QueryInsightsCurrentStage {
+    phase: 1 | 2 | 3;
+    status: QueryInsightsStageStatus;
+}
+
+export interface QueryInsightsState {
+    // Explicit stage tracking for clear state transitions
+    currentStage: QueryInsightsCurrentStage;
+
+    stage1Data: QueryInsightsStage1Response | null;
+    stage1Error: string | null;
+    stage1Promise: Promise<QueryInsightsStage1Response> | null;
+
+    stage2Data: QueryInsightsStage2Response | null;
+    stage2Error: string | null;
+    stage2Promise: Promise<QueryInsightsStage2Response> | null;
+
+    stage3Data: QueryInsightsStage3Response | null;
+    stage3Error: string | null;
+    stage3Promise: Promise<QueryInsightsStage3Response> | null;
+    stage3RequestKey: string | null; // Unique key to track if the response is still valid
+}
+
+export type TableViewState = {
+    currentPath: string[];
+};
 
 export type CollectionViewContextType = {
     isLoading: boolean; // this is a concious decision to use 'isLoading' instead of <Suspense> tags. It's not only the data display component that is supposed to react to the lading state but also some input fields, buttons, etc.
@@ -19,13 +62,14 @@ export type CollectionViewContextType = {
     activeQuery: {
         // The last executed query (used for export, pagination, display)
         queryText: string; // deprecated: use filter instead
-        filter: string; // MongoDB find filter (same as queryText for backward compatibility)
-        project: string; // MongoDB projection
-        sort: string; // MongoDB sort specification
+        filter: string; // MongoDB API find filter (same as queryText for backward compatibility)
+        project: string; // MongoDB API projection
+        sort: string; // MongoDB API sort specification
         skip: number; // Number of documents to skip
         limit: number; // Maximum number of documents to return
         pageNumber: number;
         pageSize: number;
+        executionIntent?: 'initial' | 'refresh' | 'pagination'; // Intent of the query execution
     };
     commands: {
         disableAddDocument: boolean;
@@ -50,10 +94,7 @@ export type CollectionViewContextType = {
         setJsonSchema(schema: object): Promise<void>; //monacoEditor.languages.json.DiagnosticsOptions, but we don't want to import monacoEditor here
     };
     isAiRowVisible: boolean; // Controls visibility of the AI prompt row in QueryEditor
-};
-
-export type TableViewState = {
-    currentPath: string[];
+    queryInsights: QueryInsightsState; // Query insights state for progressive loading
 };
 
 export const DefaultCollectionViewContext: CollectionViewContextType = {
@@ -81,6 +122,22 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
         selectedDocumentIndexes: [],
     },
     isAiRowVisible: false,
+    queryInsights: {
+        currentStage: { phase: 1, status: 'loading' },
+
+        stage1Data: null,
+        stage1Error: null,
+        stage1Promise: null,
+
+        stage2Data: null,
+        stage2Error: null,
+        stage2Promise: null,
+
+        stage3Data: null,
+        stage3Error: null,
+        stage3Promise: null,
+        stage3RequestKey: null,
+    },
 };
 
 export const CollectionViewContext = createContext<

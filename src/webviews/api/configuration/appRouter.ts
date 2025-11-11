@@ -10,6 +10,7 @@ import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../../DocumentDBExperiences';
+import { openUrl } from '../../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { collectionsViewRouter as collectionViewRouter } from '../../documentdb/collectionView/collectionViewRouter';
@@ -125,6 +126,15 @@ const commonRouter = router({
         )
         .mutation(({ input }) => {
             void openSurvey(input.triggerAction);
+        }),
+    openUrl: publicProcedure
+        .input(
+            z.object({
+                url: z.string(), // URL string to open in default browser
+            }),
+        )
+        .mutation(async ({ input }) => {
+            await openUrl(input.url);
         }),
 });
 

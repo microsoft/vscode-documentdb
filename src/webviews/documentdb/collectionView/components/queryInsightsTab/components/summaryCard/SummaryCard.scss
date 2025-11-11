@@ -1,0 +1,39 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+@use '../../queryInsights.scss' as *;
+
+.summaryCard {
+    flex-shrink: 0;
+}
+
+.summaryGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.summaryCell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+    grid-column: span 1;
+
+    .cellLabel {
+        @extend .baseDataHeader;
+    }
+
+    &.cellSpanFull {
+        grid-column: span 2;
+        margin-top: 4px;
+        align-items: stretch; // Allow children to fill full width
+
+        .cellLabel {
+            margin-bottom: 8px;
+            display: block;
+        }
+    }
+}

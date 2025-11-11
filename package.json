@@ -158,6 +158,7 @@
     "@microsoft/vscode-azext-utils": "~3.3.1",
     "@microsoft/vscode-azureresources-api": "~2.5.0",
     "@monaco-editor/react": "~4.7.0",
+    "@mongodb-js/explain-plan-helper": "1.4.24",
     "@trpc/client": "~11.4.3",
     "@trpc/server": "~11.4.3",
     "@vscode/l10n": "~0.0.18",
@@ -170,6 +171,7 @@
     "mongodb": "~6.17.0",
     "mongodb-connection-string-url": "~3.0.2",
     "react-hotkeys-hook": "~5.1.0",
+    "react-markdown": "^10.1.0",
     "regenerator-runtime": "^0.14.1",
     "semver": "~7.7.2",
     "slickgrid-react": "~5.14.1",
@@ -410,6 +412,24 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.dropDatabase",
         "title": "Delete Database…"
+      },
+      {
+        "//": "Hide Index",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.hideIndex",
+        "title": "Hide Index…"
+      },
+      {
+        "//": "Unhide Index",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.unhideIndex",
+        "title": "Unhide Index…"
+      },
+      {
+        "//": "Delete Index",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.dropIndex",
+        "title": "Delete Index…"
       },
       {
         "//": "Create Collection",
@@ -678,6 +698,24 @@
           "group": "3@1"
         },
         {
+          "//": "[Index] Hide Index",
+          "command": "vscode-documentdb.command.hideIndex",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "2@1"
+        },
+        {
+          "//": "[Index] Unhide Index",
+          "command": "vscode-documentdb.command.unhideIndex",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "2@2"
+        },
+        {
+          "//": "[Index] Delete Index",
+          "command": "vscode-documentdb.command.dropIndex",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "3@1"
+        },
+        {
           "//": "[Collection] Launch shell",
           "command": "vscode-documentdb.command.launchShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
@@ -772,6 +810,18 @@
         },
         {
           "command": "vscode-documentdb.command.dropCollection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.hideIndex",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.unhideIndex",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.dropIndex",
           "when": "never"
         },
         {

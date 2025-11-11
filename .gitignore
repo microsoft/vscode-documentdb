@@ -12,6 +12,7 @@
 
 # Build results
 [Dd]ebug/
+!resources/debug/
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/

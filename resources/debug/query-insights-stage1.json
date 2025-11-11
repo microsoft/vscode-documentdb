@@ -1,0 +1,99 @@
+{
+  "_debug_active": false,
+  "_instructions": "Set _debug_active to true to activate this override. This file contains a MongoDB explain('queryPlanner') response for a SHARDED collection.",
+
+  "queryPlanner": {
+    "mongosPlannerVersion": 1,
+    "winningPlan": {
+      "stage": "SHARD_MERGE",
+      "shards": [
+        {
+          "shardName": "shard-01",
+          "connectionString": "shard-01/mongo1:27017,mongo2:27017",
+          "serverInfo": {
+            "host": "mongo1",
+            "port": 27017,
+            "version": "6.0.0"
+          },
+          "plannerVersion": 1,
+          "namespace": "mydb.orders",
+          "indexFilterSet": false,
+          "parsedQuery": {
+            "status": { "$eq": "PENDING" }
+          },
+          "winningPlan": {
+            "stage": "PROJECTION",
+            "transformBy": {
+              "_id": 1,
+              "status": 1,
+              "total": 1
+            },
+            "inputStage": {
+              "stage": "FETCH",
+              "inputStage": {
+                "stage": "IXSCAN",
+                "keyPattern": {
+                  "status": 1
+                },
+                "indexName": "status_1",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "status": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": false,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "status": ["[\"PENDING\", \"PENDING\"]"]
+                }
+              }
+            }
+          }
+        },
+        {
+          "shardName": "shard-02",
+          "connectionString": "shard-02/mongo3:27017,mongo4:27017",
+          "serverInfo": {
+            "host": "mongo3",
+            "port": 27017,
+            "version": "6.0.0"
+          },
+          "plannerVersion": 1,
+          "namespace": "mydb.orders",
+          "indexFilterSet": false,
+          "parsedQuery": {
+            "status": { "$eq": "PENDING" }
+          },
+          "winningPlan": {
+            "stage": "PROJECTION",
+            "transformBy": {
+              "_id": 1,
+              "status": 1,
+              "total": 1
+            },
+            "inputStage": {
+              "stage": "SORT",
+              "sortPattern": {
+                "createdAt": -1
+              },
+              "memLimit": 104857600,
+              "type": "simple",
+              "inputStage": {
+                "stage": "COLLSCAN",
+                "direction": "forward"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "serverInfo": {
+    "host": "mongos",
+    "port": 27017,
+    "version": "6.0.0"
+  },
+  "ok": 1
+}

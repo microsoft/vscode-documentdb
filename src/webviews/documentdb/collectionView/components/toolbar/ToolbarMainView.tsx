@@ -109,6 +109,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
                 skip: query.skip,
                 limit: query.limit,
                 pageNumber: 1,
+                executionIntent: 'initial',
             },
         }));
 
@@ -131,7 +132,10 @@ const ToolbarQueryOperations = (): JSX.Element => {
         // basically, do not modify the query at all, do not use the input from the editor
         setCurrentContext((prev) => ({
             ...prev,
-            activeQuery: { ...prev.activeQuery },
+            activeQuery: {
+                ...prev.activeQuery,
+                executionIntent: 'refresh',
+            },
         }));
 
         trpcClient.common.reportEvent

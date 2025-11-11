@@ -1,0 +1,71 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.contentArea {
+    padding: 20px 20px 20px 5px;
+    flex: 1;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    display: flex;
+    gap: 20px;
+    flex-direction: column; // Default: mobile/stacked layout
+
+    // Desktop Layout (≥1000px): Two columns side-by-side
+    @media (min-width: 1000px) {
+        flex-direction: row;
+        align-items: flex-start; // Prevent stretching
+    }
+}
+
+// Left column: metrics and optimization (main content area)
+.leftColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0; // Prevent overflow
+    flex: 1; // Default: mobile layout
+
+    @media (min-width: 1000px) {
+        flex: 1 1 60%;
+    }
+}
+
+// Right column: efficiency, query plan, actions (sidebar)
+.rightColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0; // Prevent overflow
+    flex: 1; // Default: mobile layout
+
+    @media (min-width: 1000px) {
+        flex: 0 0 40%;
+        max-width: 500px; // Prevent it from getting too wide
+    }
+}
+
+.optimizationSection {
+    display: flex;
+    flex-direction: column;
+}
+
+.optimizationTitle {
+    margin-bottom: 12px;
+    display: block;
+}
+
+// Utility class for card spacing in animated/collapsible contexts
+// Applied to wrapper divs to avoid layout shifts from CSS gap
+// when using collapse animations (e.g., with CollapseRelaxed)
+.cardSpacing {
+    margin-bottom: 16px;
+}
