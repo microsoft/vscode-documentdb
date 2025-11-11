@@ -13,7 +13,7 @@ import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
 import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
 
-import { ArrowResetRegular, PlaySettingsFilled, PlaySettingsRegular, SendRegular } from '@fluentui/react-icons';
+import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
@@ -429,7 +429,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             // ~100ms debounce period before resize handlers complete and grids re-render.
                             hideScrollbarsTemporarily();
                         }}
-                        icon={isEnhancedQueryMode ? <PlaySettingsFilled /> : <PlaySettingsRegular />}
+                        icon={isEnhancedQueryMode ? <SettingsFilled /> : <SettingsRegular />}
                     ></ToggleButton>
 
                     <Button

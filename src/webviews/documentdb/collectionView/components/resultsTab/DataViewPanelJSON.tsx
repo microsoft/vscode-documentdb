@@ -5,7 +5,7 @@
 
 import { debounce } from 'es-toolkit';
 import * as React from 'react';
-import { MonacoEditor } from '../../../components/MonacoEditor';
+import { MonacoEditor } from '../../../../components/MonacoEditor';
 
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';

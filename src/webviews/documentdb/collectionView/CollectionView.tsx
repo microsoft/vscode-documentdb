@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProgressBar, Tab, TabList } from '@fluentui/react-components';
+import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
@@ -17,10 +17,11 @@ import {
     DefaultCollectionViewContext,
     Views,
 } from './collectionViewContext';
-import { DataViewPanelJSON } from './components/DataViewPanelJSON';
-import { DataViewPanelTable } from './components/DataViewPanelTable';
-import { DataViewPanelTree } from './components/DataViewPanelTree';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
+import { QueryInsightsMain } from './components/queryInsightsTab/QueryInsightsTab';
+import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
+import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
+import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
 import { ToolbarDocumentManipulation } from './components/toolbar/ToolbarDocumentManipulation';
 import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
@@ -74,6 +75,9 @@ export const CollectionView = (): JSX.Element => {
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
+    // Track which tab is currently active
+    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_performance_main'>('tab_result');
+
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
     const currentContextRef = useRef(currentContext);
@@ -82,6 +86,74 @@ export const CollectionView = (): JSX.Element => {
         currentQueryResultsRef.current = currentQueryResults;
         currentContextRef.current = currentContext;
     }, [currentQueryResults, currentContext]);
+
+    /**
+     * Reset query insights when query execution starts
+     * This happens whenever the user executes a query (even if same query text)
+     */
+    useEffect(() => {
+        console.trace('[CollectionView] 🔄 Resetting query insights to initial state (Stage 1 loading)');
+        setCurrentContext((prev) => ({
+            ...prev,
+            queryInsights: DefaultCollectionViewContext.queryInsights,
+        }));
+    }, [currentContext.activeQuery]);
+
+    /**
+     * Non-blocking Stage 1 prefetch after query execution
+     * Populates ClusterSession cache so data is ready when user switches to Query Insights tab
+     * Uses promise tracking to prevent duplicate requests
+     */
+    const prefetchQueryInsights = (): void => {
+        // Check if already loading or loaded or in-flight
+        if (
+            currentContext.queryInsights.stage1Data ||
+            (currentContext.queryInsights.currentStage.phase === 1 &&
+                currentContext.queryInsights.currentStage.status === 'loading') ||
+            currentContext.queryInsights.stage1Promise
+        ) {
+            return; // Already handled
+        }
+
+        // Query parameters are now retrieved from ClusterSession - no need to pass them
+        const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1.query();
+
+        // Track the promise immediately
+        setCurrentContext((prev) => ({
+            ...prev,
+            queryInsights: {
+                ...prev.queryInsights,
+                stage1Promise: promise,
+            },
+        }));
+
+        // Handle completion
+        void promise
+            .then((stage1Data) => {
+                // Update state with data and clear promise
+                setCurrentContext((prev) => ({
+                    ...prev,
+                    queryInsights: {
+                        ...prev.queryInsights,
+                        stage1Data: stage1Data,
+                        stage1Promise: null,
+                    },
+                }));
+                console.debug('Stage 1 data prefetched:', stage1Data);
+            })
+            .catch((error) => {
+                // Silent fail - user can still request insights manually via tab
+                setCurrentContext((prev) => ({
+                    ...prev,
+                    queryInsights: {
+                        ...prev.queryInsights,
+                        stage1Error: error instanceof Error ? error.message : String(error),
+                        stage1Promise: null,
+                    },
+                }));
+                console.warn('Stage 1 prefetch failed:', error);
+            });
+    };
 
     /**
      * This is used to run the query. We control it by setting the query configuration
@@ -105,6 +177,7 @@ export const CollectionView = (): JSX.Element => {
                 limit: currentContext.activeQuery.limit,
                 pageNumber: currentContext.activeQuery.pageNumber,
                 pageSize: currentContext.activeQuery.pageSize,
+                executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
             .then((_response) => {
                 // 2. This is the time to update the auto-completion data
@@ -113,6 +186,10 @@ export const CollectionView = (): JSX.Element => {
 
                 // 3. Load the data for the current view
                 getDataForView(currentContext.currentView);
+
+                // 4. Non-blocking Stage 1 prefetch to populate cache
+                //    This runs in background and doesn't block results display
+                prefetchQueryInsights();
 
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })
@@ -428,6 +505,7 @@ export const CollectionView = (): JSX.Element => {
                                 skip: query.skip,
                                 limit: query.limit,
                                 pageNumber: 1,
+                                executionIntent: 'initial',
                             },
                         }));
 
@@ -447,45 +525,65 @@ export const CollectionView = (): JSX.Element => {
                     }}
                 />
 
-                <TabList selectedValue="tab_result" style={{ marginTop: '-10px' }}>
+                <TabList
+                    selectedValue={selectedTab}
+                    onTabSelect={(_event, data) => {
+                        setSelectedTab(data.value as 'tab_result' | 'tab_performance_main');
+                    }}
+                    style={{ marginTop: '-10px' }}
+                >
                     <Tab id="tab.results" value="tab_result">
                         Results
                     </Tab>
+                    <Tab id="tab.performance.main" value="tab_performance_main">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            Query Insights
+                            <Badge appearance="tint" size="small" shape="rounded" color="brand">
+                                PREVIEW
+                            </Badge>
+                        </div>
+                    </Tab>
                 </TabList>
 
-                <div className="resultsActionBar">
-                    <ToolbarViewNavigation />
-                    <ToolbarDocumentManipulation
-                        onDeleteClick={handleDeleteDocumentRequest}
-                        onEditClick={handleEditDocumentRequest}
-                        onViewClick={handleViewDocumentRequest}
-                        onAddClick={handleAddDocumentRequest}
-                    />
-                    <ViewSwitcher onViewChanged={handleViewChanged} />
-                </div>
+                {selectedTab === 'tab_result' && (
+                    <>
+                        <div className="resultsActionBar">
+                            <ToolbarViewNavigation />
+                            <ToolbarDocumentManipulation
+                                onDeleteClick={handleDeleteDocumentRequest}
+                                onEditClick={handleEditDocumentRequest}
+                                onViewClick={handleViewDocumentRequest}
+                                onAddClick={handleAddDocumentRequest}
+                            />
+                            <ViewSwitcher onViewChanged={handleViewChanged} />
+                        </div>
 
-                <div className="resultsDisplayArea" id="resultsDisplayAreaId">
-                    {
-                        {
-                            'Table View': (
-                                <DataViewPanelTable
-                                    liveHeaders={currentQueryResults?.tableHeaders ?? []}
-                                    liveData={currentQueryResults?.tableData ?? []}
-                                    handleStepIn={handleStepInRequest}
-                                />
-                            ),
-                            'Tree View': <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />,
-                            'JSON View': <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />,
-                            default: <div>error '{currentContext.currentView}'</div>,
-                        }[currentContext.currentView] // switch-statement
-                    }
-                </div>
+                        <div className="resultsDisplayArea" id="resultsDisplayAreaId">
+                            {
+                                {
+                                    'Table View': (
+                                        <DataViewPanelTable
+                                            liveHeaders={currentQueryResults?.tableHeaders ?? []}
+                                            liveData={currentQueryResults?.tableData ?? []}
+                                            handleStepIn={handleStepInRequest}
+                                        />
+                                    ),
+                                    'Tree View': <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />,
+                                    'JSON View': <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />,
+                                    default: <div>error '{currentContext.currentView}'</div>,
+                                }[currentContext.currentView] // switch-statement
+                            }
+                        </div>
 
-                {currentContext.currentView === Views.TABLE && (
-                    <div className="toolbarTableNavigation">
-                        <ToolbarTableNavigation />
-                    </div>
+                        {currentContext.currentView === Views.TABLE && (
+                            <div className="toolbarTableNavigation">
+                                <ToolbarTableNavigation />
+                            </div>
+                        )}
+                    </>
                 )}
+
+                {selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
             </div>
         </CollectionViewContext.Provider>
     );

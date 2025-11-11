@@ -7,7 +7,9 @@
  * LLM Enhanced Feature APIs
  */
 
+import * as l10n from '@vscode/l10n';
 import { type Document, type Filter, type MongoClient, type Sort } from 'mongodb';
+import { ext } from '../extensionVariables';
 
 /**
  * Options for explain operations
@@ -72,6 +74,8 @@ export interface DropIndexResult {
     ok: number;
     // Number of indexes after dropping
     nIndexesWas?: number;
+    // Notes or warnings
+    note?: string;
 }
 
 /**
@@ -106,6 +110,7 @@ export interface IndexStats {
     key: Record<string, number | string>;
     // Host information
     host: string;
+
     // Access statistics
     accesses: {
         // Number of times the index has been used
@@ -235,6 +240,13 @@ export class llmEnhancedFeatureApis {
         collectionName: string,
         options: ExplainOptions = {},
     ): Promise<ExplainResult> {
+        ext.outputChannel.trace(
+            l10n.t('Executing explain(find) for collection: {collection}', {
+                collection: `${databaseName}.${collectionName}`,
+            }),
+        );
+
+        const startTime = Date.now();
         const db = this.mongoClient.db(databaseName);
 
         const { filter = {}, sort, projection, skip, limit } = options;
@@ -245,11 +257,11 @@ export class llmEnhancedFeatureApis {
         };
 
         // Add optional fields if they are defined
-        if (sort !== undefined) {
+        if (sort !== undefined && Object.keys(sort).length > 0) {
             findCmd.sort = sort;
         }
 
-        if (projection !== undefined) {
+        if (projection !== undefined && Object.keys(projection).length > 0) {
             findCmd.projection = projection;
         }
 
@@ -267,6 +279,13 @@ export class llmEnhancedFeatureApis {
         };
 
         const explainResult = await db.command(command);
+        const duration = Date.now() - startTime;
+
+        ext.outputChannel.trace(
+            l10n.t('Explain(find) completed [{durationMs}ms]', {
+                durationMs: duration.toString(),
+            }),
+        );
 
         return explainResult as ExplainResult;
     }
@@ -279,6 +298,14 @@ export class llmEnhancedFeatureApis {
      * @returns Detailed explain result with execution statistics
      */
     async explainAggregate(databaseName: string, collectionName: string, pipeline: Document[]): Promise<ExplainResult> {
+        ext.outputChannel.trace(
+            l10n.t('Executing explain(aggregate) for collection: {collection}, pipeline stages: {stageCount}', {
+                collection: `${databaseName}.${collectionName}`,
+                stageCount: pipeline.length.toString(),
+            }),
+        );
+
+        const startTime = Date.now();
         const db = this.mongoClient.db(databaseName);
 
         const command: Document = {
@@ -291,6 +318,13 @@ export class llmEnhancedFeatureApis {
         };
 
         const explainResult = await db.command(command);
+        const duration = Date.now() - startTime;
+
+        ext.outputChannel.trace(
+            l10n.t('Explain(aggregate) completed [{durationMs}ms]', {
+                durationMs: duration.toString(),
+            }),
+        );
 
         return explainResult as ExplainResult;
     }
@@ -303,6 +337,13 @@ export class llmEnhancedFeatureApis {
      * @returns Detailed explain result with execution statistics
      */
     async explainCount(databaseName: string, collectionName: string, filter: Filter<Document> = {}): Promise<Document> {
+        ext.outputChannel.trace(
+            l10n.t('Executing explain(count) for collection: {collection}', {
+                collection: `${databaseName}.${collectionName}`,
+            }),
+        );
+
+        const startTime = Date.now();
         const db = this.mongoClient.db(databaseName);
 
         const command: Document = {
@@ -314,6 +355,13 @@ export class llmEnhancedFeatureApis {
         };
 
         const explainResult = await db.command(command);
+        const duration = Date.now() - startTime;
+
+        ext.outputChannel.trace(
+            l10n.t('Explain(count) completed [{durationMs}ms]', {
+                durationMs: duration.toString(),
+            }),
+        );
 
         return explainResult;
     }
@@ -332,55 +380,124 @@ export class llmEnhancedFeatureApis {
     ): Promise<CreateIndexResult> {
         const db = this.mongoClient.db(databaseName);
 
-        const { key, name, unique, background, sparse, expireAfterSeconds, partialFilterExpression, ...otherOptions } =
-            indexSpec;
+        // Handle two cases:
+        // 1. indexSpec.key exists: {key: {age: 1}, name: "age_1", ...}
+        // 2. indexSpec is the key itself: {age: 1}
+        let indexKey: Record<string, number | string>;
+        let indexOptions: Partial<IndexSpecification> = {};
+
+        if ('key' in indexSpec && indexSpec.key) {
+            const { key, ...options } = indexSpec;
+            indexKey = key;
+            indexOptions = options;
+        } else {
+            indexKey = indexSpec as Record<string, number | string>;
+        }
 
         const indexDefinition: Document = {
-            key,
+            key: indexKey,
         };
 
+        // Generate index name if not provided
+        let indexName = indexOptions.name;
+        if (!indexName) {
+            indexName = Object.entries(indexKey)
+                .map(([field, direction]) => `${field}_${direction}`)
+                .join('_');
+        }
+        indexDefinition.name = indexName;
+
+        ext.outputChannel.trace(
+            l10n.t('Creating index "{indexName}" on collection: {collection}', {
+                indexName,
+                collection: `${databaseName}.${collectionName}`,
+            }),
+        );
+
         // Add optional fields only if they are defined
-        if (name !== undefined) {
-            indexDefinition.name = name;
+        if (indexOptions.unique !== undefined) {
+            indexDefinition.unique = indexOptions.unique;
         }
 
-        if (unique !== undefined) {
-            indexDefinition.unique = unique;
+        if (indexOptions.background !== undefined) {
+            indexDefinition.background = indexOptions.background;
         }
 
-        if (background !== undefined) {
-            indexDefinition.background = background;
+        if (indexOptions.sparse !== undefined) {
+            indexDefinition.sparse = indexOptions.sparse;
         }
 
-        if (sparse !== undefined) {
-            indexDefinition.sparse = sparse;
+        if (indexOptions.expireAfterSeconds !== undefined) {
+            indexDefinition.expireAfterSeconds = indexOptions.expireAfterSeconds;
         }
 
-        if (expireAfterSeconds !== undefined) {
-            indexDefinition.expireAfterSeconds = expireAfterSeconds;
+        if (indexOptions.partialFilterExpression !== undefined) {
+            indexDefinition.partialFilterExpression = indexOptions.partialFilterExpression;
         }
 
-        if (partialFilterExpression !== undefined) {
-            indexDefinition.partialFilterExpression = partialFilterExpression;
+        // Add any other options (excluding properties we've already handled above)
+        const handledProps = new Set([
+            'key',
+            'name',
+            'unique',
+            'background',
+            'sparse',
+            'expireAfterSeconds',
+            'partialFilterExpression',
+        ]);
+        for (const [key, value] of Object.entries(indexOptions)) {
+            if (!handledProps.has(key)) {
+                indexDefinition[key] = value;
+            }
         }
-
-        // Add any other options
-        Object.assign(indexDefinition, otherOptions);
 
         const command: Document = {
             createIndexes: collectionName,
             indexes: [indexDefinition],
         };
 
-        const result = await db.command(command);
+        const startTime = Date.now();
+        try {
+            const result = await db.command(command);
+            const duration = Date.now() - startTime;
 
-        return {
-            ok: (result.ok as number) ?? 0,
-            indexName: result.createdCollectionAutomatically !== undefined ? (name ?? 'auto-generated') : undefined,
-            numIndexesAfter: result.numIndexesAfter as number | undefined,
-            numIndexesBefore: result.numIndexesBefore as number | undefined,
-            note: result.note as string | undefined,
-        };
+            if (result.ok === 1) {
+                ext.outputChannel.trace(
+                    l10n.t('Index "{indexName}" created successfully [{durationMs}ms]', {
+                        indexName,
+                        durationMs: duration.toString(),
+                    }),
+                );
+            } else {
+                ext.outputChannel.warn(
+                    l10n.t('Index creation completed with warning: {note}', {
+                        note: (result.note as string) ?? 'Unknown status',
+                    }),
+                );
+            }
+
+            return {
+                ok: (result.ok as number) ?? 0,
+                indexName: indexName,
+                numIndexesAfter: result.numIndexesAfter as number | undefined,
+                numIndexesBefore: result.numIndexesBefore as number | undefined,
+                note: result.note as string | undefined,
+            };
+        } catch (error: unknown) {
+            const duration = Date.now() - startTime;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('Index creation failed for "{indexName}": {error} [{durationMs}ms]', {
+                    indexName,
+                    error: errorMessage,
+                    durationMs: duration.toString(),
+                }),
+            );
+            return {
+                ok: 0,
+                note: `Index creation failed: ${errorMessage}`,
+            };
+        }
     }
 
     /**
@@ -391,6 +508,14 @@ export class llmEnhancedFeatureApis {
      * @returns Result of the index drop operation
      */
     async dropIndex(databaseName: string, collectionName: string, indexName: string): Promise<DropIndexResult> {
+        ext.outputChannel.trace(
+            l10n.t('Dropping index "{indexName}" from collection: {collection}', {
+                indexName,
+                collection: `${databaseName}.${collectionName}`,
+            }),
+        );
+
+        const startTime = Date.now();
         const db = this.mongoClient.db(databaseName);
 
         const command: Document = {
@@ -398,12 +523,40 @@ export class llmEnhancedFeatureApis {
             index: indexName,
         };
 
-        const result = await db.command(command);
+        try {
+            const result = await db.command(command);
+            const duration = Date.now() - startTime;
 
-        return {
-            ok: (result.ok as number) ?? 0,
-            nIndexesWas: result.nIndexesWas as number | undefined,
-        };
+            if (result.ok === 1) {
+                ext.outputChannel.trace(
+                    l10n.t('Index "{indexName}" dropped successfully [{durationMs}ms]', {
+                        indexName,
+                        durationMs: duration.toString(),
+                    }),
+                );
+            } else {
+                ext.outputChannel.warn(l10n.t('Index drop completed with warning', {}));
+            }
+
+            return {
+                ok: (result.ok as number) ?? 0,
+                nIndexesWas: result.nIndexesWas as number | undefined,
+            };
+        } catch (error: unknown) {
+            const duration = Date.now() - startTime;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('Index drop failed for "{indexName}": {error} [{durationMs}ms]', {
+                    indexName,
+                    error: errorMessage,
+                    durationMs: duration.toString(),
+                }),
+            );
+            return {
+                ok: 0,
+                note: `Index drop failed: ${errorMessage}`,
+            };
+        }
     }
 
     /**
@@ -425,5 +578,96 @@ export class llmEnhancedFeatureApis {
             .toArray();
 
         return sampleDocuments;
+    }
+
+    /**
+     * Modify index visibility in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to modify
+     * @param hidden - Whether to hide (true) or unhide (false) the index
+     * @returns Result of the modify index operation
+     */
+    async modifyIndexVisibility(
+        databaseName: string,
+        collectionName: string,
+        indexName: string,
+        hidden: boolean,
+    ): Promise<Document> {
+        const action = hidden ? 'hide' : 'unhide';
+        ext.outputChannel.trace(
+            l10n.t('Modifying index visibility ({action}) for "{indexName}" on collection: {collection}', {
+                action,
+                indexName,
+                collection: `${databaseName}.${collectionName}`,
+            }),
+        );
+
+        const startTime = Date.now();
+        const db = this.mongoClient.db(databaseName);
+
+        const command: Document = {
+            collMod: collectionName,
+            index: {
+                name: indexName,
+                hidden,
+            },
+        };
+
+        try {
+            const result = await db.command(command);
+            const duration = Date.now() - startTime;
+
+            if (result.ok === 1) {
+                ext.outputChannel.trace(
+                    l10n.t('Index "{indexName}" {action} successfully [{durationMs}ms]', {
+                        indexName,
+                        action: hidden ? 'hidden' : 'unhidden',
+                        durationMs: duration.toString(),
+                    }),
+                );
+            } else {
+                ext.outputChannel.warn(l10n.t('Index visibility modification completed with warning', {}));
+            }
+
+            return result;
+        } catch (error: unknown) {
+            const duration = Date.now() - startTime;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('Failed to {action} index "{indexName}": {error} [{durationMs}ms]', {
+                    action,
+                    indexName,
+                    error: errorMessage,
+                    durationMs: duration.toString(),
+                }),
+            );
+            return {
+                ok: 0,
+                errmsg: `Failed to ${action} index: ${errorMessage}`,
+            };
+        }
+    }
+
+    /**
+     * Hide an index in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to hide
+     * @returns Result of the hide index operation
+     */
+    async hideIndex(databaseName: string, collectionName: string, indexName: string): Promise<Document> {
+        return this.modifyIndexVisibility(databaseName, collectionName, indexName, true);
+    }
+
+    /**
+     * Unhide an index in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to unhide
+     * @returns Result of the unhide index operation
+     */
+    async unhideIndex(databaseName: string, collectionName: string, indexName: string): Promise<Document> {
+        return this.modifyIndexVisibility(databaseName, collectionName, indexName, false);
     }
 }
