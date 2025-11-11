@@ -535,9 +535,7 @@ export class llmEnhancedFeatureApis {
                     }),
                 );
             } else {
-                ext.outputChannel.warn(
-                    l10n.t('Index drop completed with warning', {}),
-                );
+                ext.outputChannel.warn(l10n.t('Index drop completed with warning', {}));
             }
 
             return {
@@ -629,9 +627,7 @@ export class llmEnhancedFeatureApis {
                     }),
                 );
             } else {
-                ext.outputChannel.warn(
-                    l10n.t('Index visibility modification completed with warning', {}),
-                );
+                ext.outputChannel.warn(l10n.t('Index visibility modification completed with warning', {}));
             }
 
             return result;

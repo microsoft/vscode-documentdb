@@ -281,9 +281,7 @@ export class QueryInsightsAIService {
         try {
             // Validate payload
             if (!this.isCreateIndexPayload(payload)) {
-                ext.outputChannel.warn(
-                    l10n.t('[Query Insights Action] Invalid payload for create index action', {}),
-                );
+                ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for create index action', {}));
                 return {
                     success: false,
                     message: l10n.t('Invalid payload for create index action'),
@@ -373,10 +371,13 @@ export class QueryInsightsAIService {
             }
 
             ext.outputChannel.trace(
-                l10n.t('[Query Insights Action] Executing dropIndex action for "{indexName}" on collection: {collection}', {
-                    indexName: payload.indexName,
-                    collection: `${payload.databaseName}.${payload.collectionName}`,
-                }),
+                l10n.t(
+                    '[Query Insights Action] Executing dropIndex action for "{indexName}" on collection: {collection}',
+                    {
+                        indexName: payload.indexName,
+                        collection: `${payload.databaseName}.${payload.collectionName}`,
+                    },
+                ),
             );
 
             const session = ClusterSession.getSession(actualSessionId);
@@ -428,9 +429,7 @@ export class QueryInsightsAIService {
         try {
             // Validate payload
             if (!this.isModifyIndexPayload(payload)) {
-                ext.outputChannel.warn(
-                    l10n.t('[Query Insights Action] Invalid payload for modify index action', {}),
-                );
+                ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for modify index action', {}));
                 return {
                     success: false,
                     message: l10n.t('Invalid payload for modify index action'),
@@ -465,11 +464,14 @@ export class QueryInsightsAIService {
             }
 
             ext.outputChannel.trace(
-                l10n.t('[Query Insights Action] Executing {operation} action for "{indexName}" on collection: {collection}', {
-                    operation,
-                    indexName,
-                    collection: `${payload.databaseName}.${payload.collectionName}`,
-                }),
+                l10n.t(
+                    '[Query Insights Action] Executing {operation} action for "{indexName}" on collection: {collection}',
+                    {
+                        operation,
+                        indexName,
+                        collection: `${payload.databaseName}.${payload.collectionName}`,
+                    },
+                ),
             );
 
             const session = ClusterSession.getSession(actualSessionId);
