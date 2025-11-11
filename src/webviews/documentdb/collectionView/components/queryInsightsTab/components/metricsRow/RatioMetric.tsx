@@ -60,10 +60,17 @@ export const RatioMetric: React.FC<RatioMetricProps> = ({
     showBar = true,
     barColor = tokens.colorBrandBackground,
     placeholder = 'skeleton',
-    tooltip,
+    tooltipExplanation,
 }) => {
     if (ratio === null || ratio === undefined) {
-        return <MetricBase label={label} value={undefined} placeholder={placeholder} tooltip={tooltip} />;
+        return (
+            <MetricBase
+                label={label}
+                value={undefined}
+                placeholder={placeholder}
+                tooltipExplanation={tooltipExplanation}
+            />
+        );
     }
 
     const formattedValue = formatRatio(ratio, format, decimals);
@@ -96,9 +103,23 @@ export const RatioMetric: React.FC<RatioMetricProps> = ({
             </div>
         );
 
-        return <MetricBase label={label} value={customValueArea} placeholder={placeholder} tooltip={tooltip} />;
+        return (
+            <MetricBase
+                label={label}
+                value={customValueArea}
+                placeholder={placeholder}
+                tooltipExplanation={tooltipExplanation}
+            />
+        );
     }
 
     // Simple text display without bar
-    return <MetricBase label={label} value={formattedValue} placeholder={placeholder} tooltip={tooltip} />;
+    return (
+        <MetricBase
+            label={label}
+            value={formattedValue}
+            placeholder={placeholder}
+            tooltipExplanation={tooltipExplanation}
+        />
+    );
 };
