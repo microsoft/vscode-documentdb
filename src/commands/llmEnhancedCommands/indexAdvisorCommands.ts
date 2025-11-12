@@ -521,7 +521,7 @@ export async function optimizeQuery(
                     ...idx,
                     host: 'unknown',
                     accesses: 'N/A',
-                    key: idx.key!, // Now guaranteed to exist
+                    key: idx.key!,
                 })) as IndexStats[];
         }
     }

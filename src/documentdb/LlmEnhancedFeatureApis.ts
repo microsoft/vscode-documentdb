@@ -119,7 +119,7 @@ export interface IndexStats {
               // Timestamp of last access
               since: Date;
           }
-        | 'N/A';
+        | 'N/A'; // N/A only for fallback when getIndexStats fails and merging with basic index info
 }
 
 /**
