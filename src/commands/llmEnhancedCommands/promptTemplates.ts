@@ -104,7 +104,7 @@ Thinking / analysis tips (useful signals to form recommendations; don't output t
 - Consider **composite indexes** including query, sort, and projection fields; check selectivity first to avoid unnecessary indexes.
 - If the **Azure_Cluster_Type** is "vCore" and an index is being created (and it is **not** a wildcard index), always include in indexOptions the setting: "storageEngine": { "enableOrderedIndex": true }.
 - For \`$or\` queries, prefer a single compound index if branches share leading fields; otherwise, consider separate indexes with intersection.
-- Avoid **duplicate or redundant indexes**; after creating a compound index, suggest drop prefix indexes also.
+- Avoid **duplicate or redundant indexes**; after creating a compound index, also suggest dropping prefix indexes.
 - **Avoid redundant indexes**: If an existing compound index's leading fields (prefix) already satisfy the current query's filter and sort requirements, do not recommend creating a new index. Creating such an index would be redundant and only increase storage and write overhead without improving query performance.
 - Consider **index size and write amplification**; prefer partial or sparse indexes or selective prefixes.
 - **Small collection**: Do not create new indexes on collections with fewer than 1000 documents, as the performance gain is negligible and the index maintenance cost may outweigh the benefit.
