@@ -224,6 +224,16 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
                                 </div>
                             </div>
 
+                            {/* Index Options Section (if available) */}
+                            {config.indexOptions && (
+                                <div style={{ marginBottom: '12px' }}>
+                                    <Label size="small">{l10n.t('Index Options')}</Label>
+                                    <div style={{ marginTop: '4px' }}>
+                                        <pre className="index-code-block">{config.indexOptions}</pre>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Details/Risks */}
                             <Text
                                 size={200}

@@ -233,6 +233,7 @@ export interface ImprovementCard {
     recommendedIndex: string; // Stringified indexSpec, e.g., "{ user_id: 1 }"
     indexName: string; // Name of the index to be created/updated/dropped
     recommendedIndexDetails: string; // Additional explanation about the index
+    indexOptions?: string; // Stringified indexOptions, e.g., "{ unique: true }"
 
     // Additional info
     details: string; // Risks or additional considerations
