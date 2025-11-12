@@ -7,6 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document, type Filter } from 'mongodb';
 import * as vscode from 'vscode';
+import { type IndexItemModel } from '../../documentdb/ClustersClient';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
@@ -495,7 +496,7 @@ export async function optimizeQuery(
         // // TODO: handle search indexes for Atlas
         // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
         indexes = indexesStats.map((indexStat) => {
-            const indexInfo = indexesInfo.find((idx) => idx.name === indexStat.name);
+            const indexInfo = indexesInfo?.find((idx) => idx.name === indexStat.name);
             return {
                 ...indexStat,
                 ...indexInfo,
