@@ -97,7 +97,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: l10n.t('Azure Cosmos DB for MongoDB (vCore)'),
+            label: l10n.t('Azure DocumentDB'),
             iconPath: new vscode.ThemeIcon('azure'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };

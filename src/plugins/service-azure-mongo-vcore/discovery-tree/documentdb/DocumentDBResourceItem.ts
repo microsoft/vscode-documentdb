@@ -13,6 +13,7 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { getThemeAgnosticIconURI } from '../../../../constants';
 import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
@@ -28,16 +29,7 @@ import { nonNullValue } from '../../../../utils/nonNull';
 import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../../utils/clusterHelpers';
 
 export class DocumentDBResourceItem extends ClusterItemBase {
-    iconPath = vscode.Uri.joinPath(
-        ext.context.extensionUri,
-        'resources',
-        'from_node_modules',
-        '@microsoft',
-        'vscode-azext-azureutils',
-        'resources',
-        'azureIcons',
-        'MongoClusters.svg',
-    );
+    iconPath = getThemeAgnosticIconURI('AzureDocumentDb.svg');
 
     constructor(
         readonly subscription: AzureSubscription,

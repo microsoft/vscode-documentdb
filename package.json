@@ -1039,7 +1039,7 @@
           {
             "id": "azure-resources-integration-v0.4.0",
             "title": "5. Use Azure Resources (optional)",
-            "description": "**If you use the Azure Resources extension**, you can access Azure Cosmos DB for MongoDB (RU) and Azure Cosmos DB for MongoDB (vCore) clusters from the Azure Resource View. This **optional integration** helps you work from the Azure environment you already use. [Read more...](https://github.com/microsoft/vscode-documentdb/discussions/251)",
+            "description": "**If you use the Azure Resources extension**, you can access Azure Cosmos DB for MongoDB (RU) and Azure DocumentDB clusters from the Azure Resource View. This **optional integration** helps you work from the Azure environment you already use. [Read more...](https://github.com/microsoft/vscode-documentdb/discussions/251)",
             "media": {
               "image": "resources/walkthroughs/azure-resources.png",
               "altText": "Azure Resources integration"

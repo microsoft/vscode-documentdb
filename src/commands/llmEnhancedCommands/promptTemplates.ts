@@ -317,7 +317,7 @@ The query is executed against a MongoDB collection with the following details:
 ## Query Execution Stats
 - **Execution_Stats**: {executionStats}
 ## Cluster Information
-- **Cluster_Type**: {clusterType}  // e.g., "Azure MongoDB for vCore", "Atlas", "Self-managed"
+- **Cluster_Type**: {clusterType}  // e.g., "Azure DocumentDB", "Atlas", "Self-managed"
 Follow these strict instructions (must obey):
 1. **Single JSON output only** — your response MUST be a single valid JSON object and **nothing else** (no surrounding text, no code fences, no explanation).
 2. **Do not hallucinate** — only use facts present in the sections Query, Collection_Stats, Indexes_Stats, Execution_Stats, Cluster_Type. If a required metric is absent, set the corresponding field to \`null\` in \`metadata\`.
