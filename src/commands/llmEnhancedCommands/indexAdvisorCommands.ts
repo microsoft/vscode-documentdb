@@ -463,6 +463,7 @@ export async function optimizeQuery(
         }
     }
 
+    let indexesInfo;
     try {
         const statsStart = Date.now();
         collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
@@ -474,7 +475,7 @@ export async function optimizeQuery(
         );
 
         const indexesInfoStart = Date.now();
-        const indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
+        indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
         const indexesInfoDuration = Date.now() - indexesInfoStart;
         ext.outputChannel.trace(
             l10n.t('[Query Insights AI] listIndexes completed in {ms}ms', {
@@ -509,6 +510,16 @@ export async function optimizeQuery(
                 message: error instanceof Error ? error.message : String(error),
             }),
         );
+
+        // Use basic index info as fallback if we have it (from successful listIndexes call)
+        if (indexesInfo && indexesInfo.length > 0) {
+            // We have index info but getIndexStats failed, convert to IndexStats format
+            indexes = indexesInfo.map((idx) => ({
+                ...idx,
+                host: 'unknown',
+                accesses: { ops: 0, since: new Date() },
+            })) as IndexStats[];
+        }
     }
 
     // Sanitize explain result to remove constant values while preserving field names
