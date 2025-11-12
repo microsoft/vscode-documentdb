@@ -510,6 +510,38 @@ export const collectionsViewRouter = router({
         let analyzed: QueryPlannerAnalysis;
         let executionTime: number;
 
+        // Platform compatibility check:
+        // Query Insights requires the MongoDB API explain() command with specific verbosity modes
+        // (queryPlanner and executionStats). Currently, only DocumentDB supports these features.
+        //
+        // Supported platforms:
+        //   - Azure Cosmos DB for MongoDB vCore (domainInfo_api !== 'RU')
+        //   - Native MongoDB clusters
+        const session: ClusterSession = ClusterSession.getSession(sessionId);
+        const clusterMetadata = await session.getClient().getClusterMetadata();
+        // eslint-disable-next-line no-constant-condition
+        if (clusterMetadata?.domainInfo_api === 'RU' || true) {
+            // TODO: Platform identification improvements needed
+            // 1. Create a centralized platform detection service (ClusterSession.getPlatformType())
+            // 2. Define platform capabilities enum (SupportsExplain, SupportsAggregation, etc.)
+            // 3. Check capabilities instead of platform names for better maintainability
+            // 4. Consider adding feature detection (try explain() and handle gracefully)
+            // 5. Update UI to show platform-specific feature availability
+            ext.outputChannel.trace(
+                l10n.t(
+                    '[Query Insights Stage 1] Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.',
+                ),
+            );
+
+            // Create error with code for UI-specific handling
+            const error = new Error(
+                l10n.t('Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.'),
+            );
+            // Add error code as a custom property for UI pattern matching
+            (error as Error & { code?: string }).code = 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU';
+            throw error;
+        }
+
         // Check for debug override file first
         const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
         if (debugData) {

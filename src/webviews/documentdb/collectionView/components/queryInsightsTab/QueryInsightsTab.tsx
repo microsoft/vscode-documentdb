@@ -89,10 +89,54 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [showErrorCard, setShowErrorCard] = useState(false);
 
-    // Debug logging for tips card visibility
-    useEffect(() => {
-        console.trace('[TipsCard] State changed:', { showTipsCard, isTipsCardDismissed });
-    }, [showTipsCard, isTipsCardDismissed]);
+    /**
+     * Track which stage errors have been displayed to avoid duplicate toasts
+     * Uses context's displayedErrors array, converted to Set for efficient lookup
+     * Cleared automatically by transitionToStage when entering loading state
+     */
+    const displayedErrors = new Set(queryInsightsState.displayedErrors);
+
+    /**
+     * Centralized error handler for Query Insights stages
+     * Extracts error message and code without displaying
+     */
+    const extractStageError = (error: unknown): { errorMessage: string; errorCode: string | null } => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorCode =
+            error instanceof Error && 'code' in error && typeof error.code === 'string' ? error.code : null;
+
+        return { errorMessage, errorCode };
+    };
+
+    /**
+     * Display error message to user for the given stage
+     * Only displays once per error state to avoid duplicate toasts
+     */
+    const displayStageError = (stage: 1 | 2 | 3, errorMessage: string): void => {
+        const errorKey = `stage${stage}-${errorMessage}`;
+
+        if (displayedErrors.has(errorKey)) {
+            return; // Already displayed this error
+        }
+
+        const stageNames = {
+            1: l10n.t('query insights'),
+            2: l10n.t('detailed execution analysis'),
+            3: l10n.t('AI recommendations'),
+        };
+
+        void trpcClient.common.displayErrorMessage.mutate({
+            message: l10n.t('Failed to load {0}', stageNames[stage]),
+            modal: false,
+            cause: errorMessage,
+        });
+
+        // Add error key to context's displayedErrors array
+        setQueryInsightsStateHelper((prev) => ({
+            ...prev,
+            displayedErrors: [...prev.displayedErrors, errorKey],
+        }));
+    };
 
     /**
      * Stage transition helper - handles moving between stages and cleaning up state
@@ -104,10 +148,16 @@ export const QueryInsightsMain = (): JSX.Element => {
      * - Reset UI-specific flags when transitioning to new phases
      */
     const transitionToStage = (phase: 1 | 2 | 3, status: 'loading' | 'success' | 'error' | 'cancelled'): void => {
-        console.trace(`🔄 Stage transition: ${currentStage.phase}/${currentStage.status} → ${phase}/${status}`);
-
+        console.log(`[Query Insights] Stage ${currentStage.phase}/${currentStage.status} → ${phase}/${status}`);
+        
         setQueryInsightsStateHelper((prev) => {
-            const newState = { ...prev };
+            // Clear displayed errors tracking when entering loading state
+            // This allows error toasts to be shown again if the same error occurs on retry
+            const shouldClearErrors = status === 'loading';
+            const newState = {
+                ...prev,
+                displayedErrors: shouldClearErrors ? [] : prev.displayedErrors,
+            };
 
             // Update current stage
             newState.currentStage = { phase, status };
@@ -117,10 +167,12 @@ export const QueryInsightsMain = (): JSX.Element => {
                 // Reset everything when starting fresh
                 newState.stage2Data = null;
                 newState.stage2Error = null;
+                newState.stage2ErrorCode = null;
                 newState.stage2Promise = null;
 
                 newState.stage3Data = null;
                 newState.stage3Error = null;
+                newState.stage3ErrorCode = null;
                 newState.stage3Promise = null;
                 newState.stage3RequestKey = null;
 
@@ -132,6 +184,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 // When entering stage 2 loading, clear stage 3 data only
                 newState.stage3Data = null;
                 newState.stage3Error = null;
+                newState.stage3ErrorCode = null;
                 newState.stage3Promise = null;
                 newState.stage3RequestKey = null;
 
@@ -148,19 +201,24 @@ export const QueryInsightsMain = (): JSX.Element => {
         });
     };
 
-    // Stage 1: Load when needed (on mount or after query re-run when tab is active)
-    // When a query is re-run, the queryInsights state is reset in CollectionView.tsx
-    // This effect needs to re-trigger to start loading the new data
+    // Stage 1: Load when needed (fallback for when prefetch didn't run or when tab is already active)
+    //
+    // This effect serves multiple purposes:
+    // 1. **Fallback for prefetch failures**: If the background prefetch in CollectionView.tsx fails,
+    //    this ensures data loads when user switches to Query Insights tab
+    // 2. **Query Insights tab already active**: If user is already on this tab when they run a query,
+    //    the prefetch won't help - we need to fetch here
+    // 3. **Cold start**: First time opening the tab with no prior query execution
+    //
+    // Protection against redundant fetch:
+    // - Prefetch now sets currentStage.status to 'success' or 'error' when complete
+    // - This effect only runs when status === 'loading' (initial state after query execution)
+    // - If prefetch succeeded: stage1Data exists → this effect won't run
+    // - If prefetch failed: currentStage.status === 'error' → this effect won't run
+    // - Only runs when: status === 'loading' AND no data AND no in-flight promise
+    //
     // IMPORTANT: Wait for query execution to complete (isLoading=false) before fetching insights
     useEffect(() => {
-        console.trace('[Stage 1 Effect] Triggered with:', {
-            isLoading: currentContext.isLoading,
-            phase: currentStage.phase,
-            status: currentStage.status,
-            hasStage1Data: !!queryInsightsState.stage1Data,
-            hasStage1Promise: !!queryInsightsState.stage1Promise,
-        });
-
         if (
             !currentContext.isLoading &&
             currentStage.phase === 1 &&
@@ -168,7 +226,6 @@ export const QueryInsightsMain = (): JSX.Element => {
             !queryInsightsState.stage1Data &&
             !queryInsightsState.stage1Promise
         ) {
-            console.trace('[Stage 1 Effect] 🚀 Starting Stage 1 data fetch');
             // Query parameters are now retrieved from ClusterSession - no need to pass them
             const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
                 .query()
@@ -182,17 +239,16 @@ export const QueryInsightsMain = (): JSX.Element => {
                     return data;
                 })
                 .catch((error) => {
-                    void trpcClient.common.displayErrorMessage.mutate({
-                        message: l10n.t('Failed to load query insights'),
-                        modal: false,
-                        cause: error instanceof Error ? error.message : String(error),
-                    });
+                    const { errorMessage, errorCode } = extractStageError(error);
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
-                        stage1Error: error instanceof Error ? error.message : String(error),
+                        stage1Error: errorMessage,
+                        stage1ErrorCode: errorCode,
                         stage1Promise: null,
                     }));
                     transitionToStage(1, 'error');
+                    // Display error message since user is actively on this tab
+                    displayStageError(1, errorMessage);
                     // Return undefined to satisfy TypeScript without creating unhandled rejection
                     return undefined as never;
                 });
@@ -206,6 +262,29 @@ export const QueryInsightsMain = (): JSX.Element => {
         queryInsightsState.stage1Data,
         queryInsightsState.stage1Promise,
     ]);
+
+    // Display errors when user switches to Query Insights tab or when error state changes
+    // This handles both mount (switching to tab with existing error) and updates (new errors)
+    useEffect(() => {
+        if (currentStage.status === 'error') {
+            // Display error for the current stage
+            if (currentStage.phase === 1 && queryInsightsState.stage1Error) {
+                displayStageError(1, queryInsightsState.stage1Error);
+            } else if (currentStage.phase === 2 && queryInsightsState.stage2Error) {
+                displayStageError(2, queryInsightsState.stage2Error);
+            } else if (currentStage.phase === 3 && queryInsightsState.stage3Error) {
+                displayStageError(3, queryInsightsState.stage3Error);
+            }
+        }
+    }, [
+        currentStage.status,
+        currentStage.phase,
+        queryInsightsState.stage1Error,
+        queryInsightsState.stage2Error,
+        queryInsightsState.stage3Error,
+        // Note: Don't include displayedErrors as a dependency - it would cause re-runs
+        // when we add errors to the set, leading to duplicate detection issues
+    ]); // React to status/phase changes AND error message changes
 
     // Stage 2: Auto-start after Stage 1 completes successfully
     useEffect(() => {
@@ -232,17 +311,16 @@ export const QueryInsightsMain = (): JSX.Element => {
                     return data;
                 })
                 .catch((error) => {
-                    void trpcClient.common.displayErrorMessage.mutate({
-                        message: l10n.t('Failed to load detailed execution analysis'),
-                        modal: false,
-                        cause: error instanceof Error ? error.message : String(error),
-                    });
+                    const { errorMessage, errorCode } = extractStageError(error);
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
-                        stage2Error: error instanceof Error ? error.message : String(error),
+                        stage2Error: errorMessage,
+                        stage2ErrorCode: errorCode,
                         stage2Promise: null,
                     }));
                     transitionToStage(2, 'error');
+                    // Display error message since user is actively on this tab
+                    displayStageError(2, errorMessage);
                     // Return undefined to satisfy TypeScript without creating unhandled rejection
                     return undefined as never;
                 });
@@ -257,26 +335,37 @@ export const QueryInsightsMain = (): JSX.Element => {
         queryInsightsState.stage2Promise,
     ]);
 
-    // Debug logging for state changes
-    useEffect(() => {
-        console.trace('currentStage changed to:', currentStage);
-    }, [currentStage]);
-
-    useEffect(() => {
-        console.trace('stage3Data changed:', queryInsightsState.stage3Data);
-        if (queryInsightsState.stage3Data) {
-            console.trace('  - improvementCards count:', queryInsightsState.stage3Data.improvementCards.length);
-            console.trace('  - improvementCards:', queryInsightsState.stage3Data.improvementCards);
-        }
-    }, [queryInsightsState.stage3Data]);
-
     // Derived metric values from Stage 1 and Stage 2 data
-    // Use server-side execution time from stage2 (executionStats) when available, otherwise use stage1 (client-measured)
-    const executionTime =
-        queryInsightsState.stage2Data?.executionTimeMs ?? queryInsightsState.stage1Data?.executionTime ?? null;
-    const docsReturned = queryInsightsState.stage2Data?.documentsReturned ?? null;
-    const keysExamined = queryInsightsState.stage2Data?.totalKeysExamined ?? null;
-    const docsExamined = queryInsightsState.stage2Data?.totalDocsExamined ?? null;
+    // Return undefined when loading, null when in error state, or the actual value
+    // - undefined: Shows loading skeleton in metrics
+    // - null: Shows N/A in metrics (error state or unsupported platform)
+    // - number: Shows the formatted value
+    const isLoading = currentStage.status === 'loading';
+    const hasError = currentStage.status === 'error';
+
+    const executionTime = hasError
+        ? null
+        : isLoading
+          ? undefined
+          : (queryInsightsState.stage2Data?.executionTimeMs ?? queryInsightsState.stage1Data?.executionTime ?? null);
+
+    const docsReturned = hasError
+        ? null
+        : isLoading
+          ? undefined
+          : (queryInsightsState.stage2Data?.documentsReturned ?? null);
+
+    const keysExamined = hasError
+        ? null
+        : isLoading
+          ? undefined
+          : (queryInsightsState.stage2Data?.totalKeysExamined ?? null);
+
+    const docsExamined = hasError
+        ? null
+        : isLoading
+          ? undefined
+          : (queryInsightsState.stage2Data?.totalDocsExamined ?? null);
 
     const performanceTips = [
         {
@@ -319,37 +408,24 @@ export const QueryInsightsMain = (): JSX.Element => {
 
         // Generate a unique request key to track if this request is still valid when it returns
         const requestKey = crypto.randomUUID();
-        console.trace(`🚀 Starting new AI request with key: ${requestKey}`);
 
         // Set request key in queryInsights context
-        setQueryInsightsStateHelper((prev) => {
-            if (prev.stage3RequestKey) {
-                console.trace(`  Superseding previous request key: ${prev.stage3RequestKey}`);
-            }
-            return { ...prev, stage3RequestKey: requestKey };
-        });
+        setQueryInsightsStateHelper((prev) => ({
+            ...prev,
+            stage3RequestKey: requestKey,
+        }));
 
         // Call the tRPC endpoint (10+ second delay expected from AI service)
         const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
             .query({ requestKey })
             .then((response) => {
-                console.trace(`AI response received for request key: ${requestKey}`);
-                console.trace('Number of improvement cards:', response.improvementCards.length);
-                console.trace('Improvement cards:', response.improvementCards);
-
                 // Only update state if this request is still the current one
                 let wasAccepted = false;
                 setQueryInsightsStateHelper((prev) => {
                     if (prev.stage3RequestKey !== requestKey) {
-                        console.warn(
-                            `🚫 REJECTED stale AI response - Request key mismatch:`,
-                            `\n  Received: ${requestKey}`,
-                            `\n  Expected: ${prev.stage3RequestKey}`,
-                            `\n  Reason: Request was cancelled or superseded by a newer request`,
-                        );
+                        // Request was cancelled or superseded by a newer request
                         return prev;
                     }
-                    console.trace(`✅ ACCEPTED AI response for request key: ${requestKey}`);
                     wasAccepted = true;
                     return {
                         ...prev,
@@ -366,31 +442,29 @@ export const QueryInsightsMain = (): JSX.Element => {
                 return response;
             })
             .catch((error: unknown) => {
+                const { errorMessage, errorCode } = extractStageError(error);
+
                 // Only update state if this request is still the current one
                 let wasAccepted = false;
                 setQueryInsightsStateHelper((prev) => {
                     if (prev.stage3RequestKey !== requestKey) {
-                        console.warn(
-                            `🚫 REJECTED stale AI error - Request key mismatch:`,
-                            `\n  Received: ${requestKey}`,
-                            `\n  Expected: ${prev.stage3RequestKey}`,
-                            `\n  Reason: Request was cancelled or superseded by a newer request`,
-                        );
+                        // Request was cancelled or superseded by a newer request
                         return prev;
                     }
-                    console.trace(`✅ ACCEPTED AI error for request key: ${requestKey}`);
                     wasAccepted = true;
                     return {
                         ...prev,
-                        stage3Error: error instanceof Error ? error.message : String(error),
+                        stage3Error: errorMessage,
+                        stage3ErrorCode: errorCode,
                         stage3Promise: null,
                         stage3RequestKey: null,
                     };
                 });
 
-                // Only transition to error if the error was accepted
+                // Only transition to error and display message if the error was accepted
                 if (wasAccepted) {
                     transitionToStage(3, 'error');
+                    displayStageError(3, errorMessage);
                 }
                 // Return undefined to satisfy TypeScript without creating unhandled rejection
                 return undefined as never;
@@ -407,16 +481,11 @@ export const QueryInsightsMain = (): JSX.Element => {
     const handleCancelAI = () => {
         // Cancel the loading state and clear the request key
         // When the promise eventually returns, it will check the key and ignore the result
-        setQueryInsightsStateHelper((prev) => {
-            if (prev.stage3RequestKey) {
-                console.trace(`❌ Cancelling AI request with key: ${prev.stage3RequestKey}`);
-            }
-            return {
-                ...prev,
-                stage3Promise: null,
-                stage3RequestKey: null,
-            };
-        });
+        setQueryInsightsStateHelper((prev) => ({
+            ...prev,
+            stage3Promise: null,
+            stage3RequestKey: null,
+        }));
 
         // Transition to Stage 3 cancelled state
         transitionToStage(3, 'cancelled');
@@ -459,7 +528,6 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     // Analysis Card (if AI data available)
     if (currentStage.phase === 3 && queryInsightsState.stage3Data?.analysisCard) {
-        console.trace('[AnimatedCardList] ✅ Adding Analysis Card to array');
         insightCards.push({
             key: `${keyPrefix}analysis-card`,
             component: (
@@ -477,7 +545,6 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     // Error Card - shown when query execution failed
     if (showErrorCard && queryInsightsState.stage2Data?.concerns) {
-        console.trace('[AnimatedCardList] ✅ Adding Error Card to array');
         insightCards.push({
             key: `${keyPrefix}query-execution-error`,
             component: (
@@ -501,17 +568,9 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     // Improvement Cards (dynamic from AI response)
     if (currentStage.phase === 3 && queryInsightsState.stage3Data?.improvementCards) {
-        console.trace('=== IMPROVEMENT CARDS BUILDING ===');
-        console.trace('Number of cards to add:', queryInsightsState.stage3Data.improvementCards.length);
-
         queryInsightsState.stage3Data.improvementCards.forEach((card: ImprovementCardConfig, index: number) => {
-            console.trace(`Card ${index + 1}:`, card.cardId, 'actionId:', card.primaryButton?.actionId);
-
             // If any button exists, render ImprovementCard; otherwise render MarkdownCard
             if (card.primaryButton || card.secondaryButton) {
-                console.trace(
-                    `  -> Adding ImprovementCard (primary: ${card.primaryButton?.actionId}, secondary: ${card.secondaryButton?.actionId})`,
-                );
                 insightCards.push({
                     key: `${keyPrefix}${card.cardId}`,
                     component: (
@@ -527,7 +586,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                 });
             } else {
                 // For informational cards (no buttons), use MarkdownCard
-                console.trace(`  -> Adding MarkdownCard (no buttons)`);
                 insightCards.push({
                     key: `${keyPrefix}${card.cardId || `card-${index}`}`,
                     component: (
@@ -547,7 +605,6 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     // Educational Markdown Card - Understanding Query Execution
     if (currentStage.phase === 3 && queryInsightsState.stage3Data?.educationalContent) {
-        console.trace('[AnimatedCardList] ✅ Adding Educational Card to array');
         insightCards.push({
             key: `${keyPrefix}understanding-execution`,
             component: (
@@ -565,7 +622,6 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     // Performance Tips Card
     if (showTipsCard && !isTipsCardDismissed) {
-        console.trace('[AnimatedCardList] ✅ Adding Performance Tips Card to array');
         insightCards.push({
             key: 'performance-tips',
             component: (
@@ -618,8 +674,27 @@ export const QueryInsightsMain = (): JSX.Element => {
                             {l10n.t('Optimization Opportunities')}
                         </Text>
 
-                        {/* Skeleton - shown only in Stage 1 */}
-                        {currentStage.phase === 1 && (
+                        {/* Error Handling Example:
+                            Use stage1ErrorCode to display platform-specific error messages.
+
+                            Example implementation:
+                            {queryInsightsState.stage1ErrorCode === 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
+                                <MarkdownCard
+                                    title={l10n.t('Query Insights Not Available')}
+                                    icon={<WarningRegular />}
+                                    showAiDisclaimer={false}
+                                    content={l10n.t(
+                                        'Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters. ' +
+                                        'This feature requires the MongoDB explain() command which is only available in vCore clusters. ' +
+                                        '\n\n**Available on:** Azure Cosmos DB for MongoDB vCore, Native MongoDB\n' +
+                                        '**Not available on:** Azure Cosmos DB for MongoDB RU'
+                                    )}
+                                />
+                            )}
+                        */}
+
+                        {/* Skeleton - shown only when Stage 1 is actively loading (not in error state) */}
+                        {currentStage.phase === 1 && currentStage.status === 'loading' && (
                             <Skeleton className="cardSpacing">
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
@@ -668,36 +743,60 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Execution Strategy')}
-                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy}
-                            placeholder="skeleton"
+                            value={
+                                hasError
+                                    ? null // Shows "N/A" - data unavailable due to error
+                                    : currentStage.phase < 2 || currentStage.status === 'loading'
+                                      ? undefined // Shows skeleton - still loading
+                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy ?? null)
+                            }
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
                             value={
-                                queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed ||
-                                (queryInsightsState.stage2Data ? l10n.t('None') : undefined)
+                                hasError
+                                    ? null
+                                    : currentStage.phase < 2 || currentStage.status === 'loading'
+                                      ? undefined
+                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed ||
+                                        (queryInsightsState.stage2Data ? l10n.t('None') : null)
                             }
-                            placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Examined-to-Returned Ratio')}
-                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio}
-                            placeholder="skeleton"
+                            value={
+                                hasError
+                                    ? null
+                                    : currentStage.phase < 2 || currentStage.status === 'loading'
+                                      ? undefined
+                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio ??
+                                        null)
+                            }
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
                             value={
-                                queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
-                                    ? l10n.t('Yes')
-                                    : queryInsightsState.stage2Data
-                                      ? l10n.t('No')
-                                      : undefined
+                                hasError
+                                    ? null
+                                    : currentStage.phase < 2 || currentStage.status === 'loading'
+                                      ? undefined
+                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
+                                        ? l10n.t('Yes')
+                                        : queryInsightsState.stage2Data
+                                          ? l10n.t('No')
+                                          : null
                             }
-                            placeholder="skeleton"
                         />
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
-                            rating={queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score}
+                            rating={
+                                hasError
+                                    ? null // Shows "N/A" - data unavailable due to error
+                                    : currentStage.phase < 2 || currentStage.status === 'loading'
+                                      ? undefined // Shows skeleton - still loading
+                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score ??
+                                        null)
+                            }
                             diagnostics={
                                 queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
                             }
@@ -711,6 +810,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         stage2Data={queryInsightsState.stage2Data}
                         stage1Loading={currentStage.phase === 1 && !queryInsightsState.stage1Data}
                         stage2Loading={currentStage.phase >= 2 && !queryInsightsState.stage2Data}
+                        hasError={hasError}
                     />
 
                     {/* Quick Actions */}

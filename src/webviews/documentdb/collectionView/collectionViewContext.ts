@@ -38,16 +38,22 @@ export interface QueryInsightsState {
 
     stage1Data: QueryInsightsStage1Response | null;
     stage1Error: string | null;
+    stage1ErrorCode: string | null; // Error code for UI pattern matching (e.g., 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU')
     stage1Promise: Promise<QueryInsightsStage1Response> | null;
 
     stage2Data: QueryInsightsStage2Response | null;
     stage2Error: string | null;
+    stage2ErrorCode: string | null; // Error code for UI pattern matching
     stage2Promise: Promise<QueryInsightsStage2Response> | null;
 
     stage3Data: QueryInsightsStage3Response | null;
     stage3Error: string | null;
+    stage3ErrorCode: string | null; // Error code for UI pattern matching
     stage3Promise: Promise<QueryInsightsStage3Response> | null;
     stage3RequestKey: string | null; // Unique key to track if the response is still valid
+
+    // Track which errors have been displayed to the user (to prevent duplicate toasts)
+    displayedErrors: string[]; // Array of error keys that have been shown
 }
 
 export type TableViewState = {
@@ -127,16 +133,21 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
 
         stage1Data: null,
         stage1Error: null,
+        stage1ErrorCode: null,
         stage1Promise: null,
 
         stage2Data: null,
         stage2Error: null,
+        stage2ErrorCode: null,
         stage2Promise: null,
 
         stage3Data: null,
         stage3Error: null,
+        stage3ErrorCode: null,
         stage3Promise: null,
         stage3RequestKey: null,
+
+        displayedErrors: [],
     },
 };
 

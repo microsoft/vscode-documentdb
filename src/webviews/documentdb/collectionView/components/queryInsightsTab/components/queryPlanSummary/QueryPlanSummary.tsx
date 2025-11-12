@@ -33,6 +33,7 @@ interface QueryPlanSummaryProps {
     stage2Data: QueryInsightsStage2Response | null;
     stage1Loading: boolean;
     stage2Loading: boolean;
+    hasError: boolean;
 }
 
 export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
@@ -40,6 +41,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
     stage2Data,
     stage1Loading,
     stage2Loading,
+    hasError,
 }) => {
     const { trpcClient } = useTrpcClient();
 
@@ -76,7 +78,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
             </div>
 
             {/* Show skeleton if Stage 1 is loading or no data yet */}
-            {(stage1Loading || (!stage1Data && !stage2Data)) && (
+            {(stage1Loading || (!stage1Data && !stage2Data)) && !hasError && (
                 <Skeleton>
                     <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                     <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
@@ -84,8 +86,21 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                 </Skeleton>
             )}
 
+            {/* Show N/A when in error state */}
+            {hasError && (
+                <Text
+                    size={300}
+                    style={{
+                        color: tokens.colorNeutralForeground3,
+                        opacity: 0.5,
+                    }}
+                >
+                    {l10n.t('N/A')}
+                </Text>
+            )}
+
             {/* Show real data when Stage 1 is available */}
-            {stage1Data && !stage1Loading && (
+            {stage1Data && !stage1Loading && !hasError && (
                 <>
                     {/* Sharded query view */}
                     {stage1Data.isSharded && stage1Data.shards && stage1Data.shards.length > 0 ? (

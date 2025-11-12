@@ -10,6 +10,11 @@ import './GenericCell.scss';
 /**
  * Generic cell for simple string/number values in a SummaryCard.
  *
+ * Value handling:
+ * - undefined: Shows loading skeleton (data is being fetched)
+ * - null: Shows N/A or custom nullValuePlaceholder (data unavailable/error)
+ * - string/number: Displays the formatted value
+ *
  * Example usage:
  * ```tsx
  * <GenericCell
@@ -19,8 +24,14 @@ import './GenericCell.scss';
  *
  * <GenericCell
  *   label={l10n.t('Index Used')}
- *   value={stageState >= 2 ? 'user_id_1' : undefined}
- *   placeholder="skeleton"
+ *   value={isLoading ? undefined : data?.indexUsed ?? null}
+ * />
+ *
+ * // Custom null placeholder for error states
+ * <GenericCell
+ *   label={l10n.t('Execution Strategy')}
+ *   value={hasError ? null : data?.strategy}
+ *   nullValuePlaceholder={l10n.t('Not available')}
  * />
  * ```
  *
@@ -57,17 +68,40 @@ export interface GenericCellProps {
     /** The label displayed at the top of the cell */
     label: string;
 
-    /** The value to display (will be converted to string) */
+    /** The value to display (will be converted to string)
+     * - undefined: Data is loading
+     * - null: Data is unavailable
+     * - string/number: Value to display
+     */
     value?: string | number | null | undefined;
 
-    /** How to display when value is null/undefined */
-    placeholder?: 'skeleton' | 'empty';
+    /** What to display while data is loading (when value is undefined) */
+    loadingPlaceholder?: 'skeleton' | 'empty';
+
+    /** What to display when value is explicitly null (data unavailable) */
+    nullValuePlaceholder?: string;
 }
 
-export const GenericCell: React.FC<GenericCellProps> = ({ label, value, placeholder = 'skeleton' }) => {
-    // Convert value to React node if it exists
+export const GenericCell: React.FC<GenericCellProps> = ({
+    label,
+    value,
+    loadingPlaceholder = 'skeleton',
+    nullValuePlaceholder = 'N/A',
+}) => {
+    // Preserve null vs undefined distinction
+    // - null → passes null to CellBase (shows nullValuePlaceholder)
+    // - undefined → passes undefined to CellBase (shows skeleton)
+    // - string/number → wraps in span and passes to CellBase
     const displayValue =
-        value !== null && value !== undefined ? <span className="cellValue">{String(value)}</span> : undefined;
+        value === null ? null : value !== undefined ? <span className="cellValue">{String(value)}</span> : undefined;
 
-    return <CellBase label={label} value={displayValue} placeholder={placeholder} span="single" />;
+    return (
+        <CellBase
+            label={label}
+            value={displayValue}
+            loadingPlaceholder={loadingPlaceholder}
+            nullValuePlaceholder={nullValuePlaceholder}
+            span="single"
+        />
+    );
 };
