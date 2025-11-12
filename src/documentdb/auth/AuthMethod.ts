@@ -39,7 +39,7 @@ export const NativeAuthMethod: AuthMethodInfo = {
 
 export const MicrosoftEntraIDAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.MicrosoftEntraID,
-    label: vscode.l10n.t('Entra ID for Azure Cosmos DB for MongoDB (vCore)'),
+    label: vscode.l10n.t('Entra ID for Azure DocumentDB'),
     detail: vscode.l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
     // iconName: 'Microsoft-Entra-ID-BW-icon.svg',
 } as const;

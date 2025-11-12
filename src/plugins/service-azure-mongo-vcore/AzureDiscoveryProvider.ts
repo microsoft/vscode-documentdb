@@ -19,7 +19,7 @@ import { SelectClusterStep } from './discovery-wizard/SelectClusterStep';
 
 export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvider {
     id = 'azure-mongo-vcore-discovery';
-    label = l10n.t('Azure Cosmos DB for MongoDB (vCore)');
+    label = l10n.t('Azure DocumentDB');
     description = l10n.t('Azure Service Discovery');
     iconPath = new ThemeIcon('azure');
 

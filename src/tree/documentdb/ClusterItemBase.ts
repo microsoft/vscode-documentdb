@@ -104,7 +104,7 @@ export abstract class ClusterItemBase
      * Authenticates and connects to the cluster to list all available databases.
      * Here, the MongoDB client is created and cached for future use.
      *
-     * In case of the Azure environment (vCore), we might reach out to Azure to pull
+     * In case of the Azure environment (DocumentDB), we might reach out to Azure to pull
      * the list of users known to the cluster.
      *
      * (These operations can be slow as they involve network and authentication calls.)
