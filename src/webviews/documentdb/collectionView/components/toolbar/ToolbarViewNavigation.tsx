@@ -169,14 +169,14 @@ export const ToolbarViewNavigation = (): JSX.Element => {
                 <Dropdown
                     disabled={currentContext.isLoading}
                     onOptionSelect={(_e, data) => {
-                        setPageSize(parseInt(data.optionText ?? '10'));
+                        setPageSize(parseInt(data.optionText ?? currentContext.activeQuery.pageSize.toString()));
                     }}
                     style={{ minWidth: '100px', maxWidth: '100px' }}
-                    defaultValue="10"
-                    defaultSelectedOptions={['10']}
+                    value={currentContext.activeQuery.pageSize.toString()}
+                    selectedOptions={[currentContext.activeQuery.pageSize.toString()]}
                 >
                     <Option key="10">10</Option>
-                    <Option key="10">50</Option>
+                    <Option key="50">50</Option>
                     <Option key="100">100</Option>
                     <Option key="500">500</Option>
                 </Dropdown>
