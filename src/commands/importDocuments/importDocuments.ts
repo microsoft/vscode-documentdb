@@ -209,7 +209,7 @@ async function parseAndValidateFile(
 /**
  * @param uri - An array of `vscode.Uri` objects representing the file paths to the JSON documents.
  * EJSON is used to read documents that are supposed to be converted into BSON.
- * EJSON supports more datatypes and is specific to MongoDB. This is currently used for MongoDB clusters/vcore.
+ * EJSON supports more datatypes and is specific to MongoDB. This is currently used for MongoDB clusters/DocumentDB.
  * @returns A promise that resolves to an array of parsed documents as unknown objects.
  */
 async function parseAndValidateFileForMongo(uri: vscode.Uri): Promise<{ documents: unknown[]; errors: string[] }> {

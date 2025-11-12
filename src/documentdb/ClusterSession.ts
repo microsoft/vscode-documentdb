@@ -630,7 +630,7 @@ export class ClusterSession {
     // ============================================================================
 
     /**
-     * Initializes a new session for the MongoDB vCore cluster.
+     * Initializes a new session for the MongoDB DocumentDB cluster.
      *
      * @param credentialId - The ID of the credentials used to authenticate the MongoDB client.
      * @returns A promise that resolves to the session ID of the newly created session.

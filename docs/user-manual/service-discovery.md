@@ -24,7 +24,7 @@ This approach allows you to connect to a variety of platforms without needing to
 Currently, the following service discovery plugins are available:
 
 - **[Azure CosmosDB for MongoDB (RU)](./service-discovery-azure-cosmosdb-for-mongodb-ru)**
-- **[Azure CosmosDB for MongoDB (vCore)](./service-discovery-azure-cosmosdb-for-mongodb-vcore)**
+- **[Azure DocumentDB](./service-discovery-azure-cosmosdb-for-mongodb-vcore)**
 - **[Azure VMs (DocumentDB)](./service-discovery-azure-vms)**
 
 We are actively working to integrate more platforms and welcome contributions from the community.
