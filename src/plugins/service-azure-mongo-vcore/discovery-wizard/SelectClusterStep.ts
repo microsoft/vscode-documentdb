@@ -7,23 +7,14 @@ import { uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
-import { Uri, type QuickPickItem } from 'vscode';
+import { type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
-import { ext } from '../../../extensionVariables';
+import { getThemeAgnosticIconURI } from '../../../constants';
 import { createResourceManagementClient } from '../../../utils/azureClients';
 import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
 
 export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
-    iconPath = Uri.joinPath(
-        ext.context.extensionUri,
-        'resources',
-        'from_node_modules',
-        '@microsoft',
-        'vscode-azext-azureutils',
-        'resources',
-        'azureIcons',
-        'MongoClusters.svg',
-    );
+    iconPath = getThemeAgnosticIconURI('AzureDocumentDb.svg');
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         if (
