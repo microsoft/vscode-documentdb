@@ -951,6 +951,17 @@
             "description": "The batch size to be used when querying working with the shell.",
             "default": 50
           },
+          "documentDB.collectionView.defaultPageSize": {
+            "type": "number",
+            "description": "Default page size for loading data in the collection view.",
+            "default": 50,
+            "enum": [
+              10,
+              50,
+              100,
+              500
+            ]
+          },
           "documentDB.aiAssistant.findQueryPromptPath": {
             "type": [
               "string",
