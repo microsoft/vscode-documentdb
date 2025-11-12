@@ -123,6 +123,7 @@
   "Azure discovery filters applied successfully.": "Azure discovery filters applied successfully.",
   "Azure DocumentDB": "Azure DocumentDB",
   "Azure Service Discovery": "Azure Service Discovery",
+  "Azure Service Discovery for Azure DocumentDB": "Azure Service Discovery for Azure DocumentDB",
   "Azure Service Discovery for MongoDB RU": "Azure Service Discovery for MongoDB RU",
   "Azure sign-in completed successfully": "Azure sign-in completed successfully",
   "Azure sign-in failed: {0}": "Azure sign-in failed: {0}",
