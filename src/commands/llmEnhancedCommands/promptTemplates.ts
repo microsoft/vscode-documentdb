@@ -23,6 +23,9 @@ export const FALLBACK_MODELS = ['gpt-4o', 'gpt-4o-mini'];
 export const FIND_QUERY_PROMPT_TEMPLATE = `
 You are an expert MongoDB assistant to provide index suggestions for a find query executed against a MongoDB collection with the following details:
 
+## Original Query
+- **Query**: {origin_query}
+
 ## Cluster Information
 - **Is_Azure_Cluster**: {isAzureCluster}
 - **Azure_Cluster_Type**: {AzureClusterType}

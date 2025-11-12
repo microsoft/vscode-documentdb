@@ -112,12 +112,14 @@ export interface IndexStats {
     host: string;
 
     // Access statistics
-    accesses: {
-        // Number of times the index has been used
-        ops: number;
-        // Timestamp of last access
-        since: Date;
-    };
+    accesses:
+        | {
+              // Number of times the index has been used
+              ops: number;
+              // Timestamp of last access
+              since: Date;
+          }
+        | 'N/A';
 }
 
 /**
