@@ -17,16 +17,12 @@
     overflow-x: hidden;
     display: flex;
     gap: 20px;
+    flex-direction: column; // Default: mobile/stacked layout
 
-    // Desktop Layout (≥1200px): Two columns side-by-side
-    @media (min-width: 1200px) {
+    // Desktop Layout (≥1000px): Two columns side-by-side
+    @media (min-width: 1000px) {
         flex-direction: row;
         align-items: flex-start; // Prevent stretching
-    }
-
-    // Mobile Layout (<1200px): Single column, stacked
-    @media (max-width: 1199px) {
-        flex-direction: column;
     }
 }
 
@@ -36,13 +32,10 @@
     flex-direction: column;
     gap: 20px;
     min-width: 0; // Prevent overflow
+    flex: 1; // Default: mobile layout
 
-    @media (min-width: 1200px) {
+    @media (min-width: 1000px) {
         flex: 1 1 60%;
-    }
-
-    @media (max-width: 1199px) {
-        flex: 1;
     }
 }
 
@@ -52,14 +45,11 @@
     flex-direction: column;
     gap: 20px;
     min-width: 0; // Prevent overflow
+    flex: 1; // Default: mobile layout
 
-    @media (min-width: 1200px) {
+    @media (min-width: 1000px) {
         flex: 0 0 40%;
         max-width: 500px; // Prevent it from getting too wide
-    }
-
-    @media (max-width: 1199px) {
-        flex: 1;
     }
 }
 

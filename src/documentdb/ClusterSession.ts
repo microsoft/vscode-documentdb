@@ -209,6 +209,7 @@ export class ClusterSession {
      * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
      * @param pageNumber - The page number (1-based) for pagination within the result window
      * @param pageSize - The number of documents per page
+     * @param executionIntent - The intent of the query execution ('initial', 'refresh', or 'pagination')
      * @returns The number of documents returned
      *
      * @remarks
@@ -217,6 +218,11 @@ export class ClusterSession {
      * - Pagination navigates within that window (e.g., page 1 with size 10 shows docs 0-9)
      * - If query limit is smaller than pageSize, it takes precedence (e.g., limit: 5 caps pageSize: 10)
      * - If query limit is 0 (no limit), pagination uses pageSize directly
+     *
+     * The executionIntent parameter controls cache behavior:
+     * - 'initial': Clear query insights caches (user clicked "Find Query" button)
+     * - 'refresh': Clear query insights caches (user clicked "Refresh" button)
+     * - 'pagination': Preserve caches (user navigated to a different page)
      *
      * Examples:
      * 1. Query: skip=0, limit=100 | Page 1, size=10 → dbSkip=0, dbLimit=10
@@ -229,6 +235,7 @@ export class ClusterSession {
         queryParams: FindQueryParams,
         pageNumber: number,
         pageSize: number,
+        executionIntent: 'initial' | 'refresh' | 'pagination' = 'pagination',
     ): Promise<number> {
         const querySkip = queryParams.skip ?? 0;
         const queryLimit = queryParams.limit ?? 0;
@@ -261,6 +268,12 @@ export class ClusterSession {
 
         // Check if page size has changed (invalidates accumulation strategy)
         this.resetAccumulationIfPageSizeChanged(pageSize);
+
+        // Force clear query insights caches for initial/refresh operations
+        // This ensures fresh performance data when user explicitly requests it
+        if (executionIntent === 'initial' || executionIntent === 'refresh') {
+            this.clearQueryInsightsCaches();
+        }
 
         // Build final query parameters with computed skip/limit
         const paginatedQueryParams: FindQueryParams = {

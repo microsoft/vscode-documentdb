@@ -92,25 +92,10 @@ export const CollectionView = (): JSX.Element => {
      * This happens whenever the user executes a query (even if same query text)
      */
     useEffect(() => {
+        console.trace('[CollectionView] 🔄 Resetting query insights to initial state (Stage 1 loading)');
         setCurrentContext((prev) => ({
             ...prev,
-            queryInsights: {
-                stage1Data: null,
-                stage1Loading: false,
-                stage1Error: null,
-                stage1Promise: null,
-
-                stage2Data: null,
-                stage2Loading: false,
-                stage2Error: null,
-                stage2Promise: null,
-
-                stage3Data: null,
-                stage3Loading: false,
-                stage3Error: null,
-                stage3Promise: null,
-                stage3RequestKey: null,
-            },
+            queryInsights: DefaultCollectionViewContext.queryInsights,
         }));
     }, [currentContext.activeQuery]);
 
@@ -123,7 +108,8 @@ export const CollectionView = (): JSX.Element => {
         // Check if already loading or loaded or in-flight
         if (
             currentContext.queryInsights.stage1Data ||
-            currentContext.queryInsights.stage1Loading ||
+            (currentContext.queryInsights.currentStage.phase === 1 &&
+                currentContext.queryInsights.currentStage.status === 'loading') ||
             currentContext.queryInsights.stage1Promise
         ) {
             return; // Already handled
@@ -191,6 +177,7 @@ export const CollectionView = (): JSX.Element => {
                 limit: currentContext.activeQuery.limit,
                 pageNumber: currentContext.activeQuery.pageNumber,
                 pageSize: currentContext.activeQuery.pageSize,
+                executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
             .then((_response) => {
                 // 2. This is the time to update the auto-completion data
@@ -518,6 +505,7 @@ export const CollectionView = (): JSX.Element => {
                                 skip: query.skip,
                                 limit: query.limit,
                                 pageNumber: 1,
+                                executionIntent: 'initial',
                             },
                         }));
 

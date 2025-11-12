@@ -24,19 +24,27 @@ export enum Views {
  *
  * Promise tracking prevents duplicate requests during rapid tab switching.
  */
+
+export type QueryInsightsStageStatus = 'loading' | 'success' | 'error' | 'cancelled';
+
+export interface QueryInsightsCurrentStage {
+    phase: 1 | 2 | 3;
+    status: QueryInsightsStageStatus;
+}
+
 export interface QueryInsightsState {
+    // Explicit stage tracking for clear state transitions
+    currentStage: QueryInsightsCurrentStage;
+
     stage1Data: QueryInsightsStage1Response | null;
-    stage1Loading: boolean;
     stage1Error: string | null;
     stage1Promise: Promise<QueryInsightsStage1Response> | null;
 
     stage2Data: QueryInsightsStage2Response | null;
-    stage2Loading: boolean;
     stage2Error: string | null;
     stage2Promise: Promise<QueryInsightsStage2Response> | null;
 
     stage3Data: QueryInsightsStage3Response | null;
-    stage3Loading: boolean;
     stage3Error: string | null;
     stage3Promise: Promise<QueryInsightsStage3Response> | null;
     stage3RequestKey: string | null; // Unique key to track if the response is still valid
@@ -61,6 +69,7 @@ export type CollectionViewContextType = {
         limit: number; // Maximum number of documents to return
         pageNumber: number;
         pageSize: number;
+        executionIntent?: 'initial' | 'refresh' | 'pagination'; // Intent of the query execution
     };
     commands: {
         disableAddDocument: boolean;
@@ -114,18 +123,17 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
     },
     isAiRowVisible: false,
     queryInsights: {
+        currentStage: { phase: 1, status: 'loading' },
+
         stage1Data: null,
-        stage1Loading: false,
         stage1Error: null,
         stage1Promise: null,
 
         stage2Data: null,
-        stage2Loading: false,
         stage2Error: null,
         stage2Promise: null,
 
         stage3Data: null,
-        stage3Loading: false,
         stage3Error: null,
         stage3Promise: null,
         stage3RequestKey: null,

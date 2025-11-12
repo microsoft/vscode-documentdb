@@ -36,6 +36,11 @@ export interface GetPerformanceInsightsCardProps {
     isLoading: boolean;
 
     /**
+     * Whether the card actions are enabled. When false, action buttons are disabled.
+     */
+    enabled?: boolean;
+
+    /**
      * Optional error message. If provided, shows error state with retry button
      */
     errorMessage?: string;
@@ -77,7 +82,20 @@ export interface GetPerformanceInsightsCardProps {
  * spacing classes (e.g., `cardSpacing`) when using in layouts that require spacing.
  */
 export const GetPerformanceInsightsCard = forwardRef<HTMLDivElement, GetPerformanceInsightsCardProps>(
-    ({ bodyText, recommendation, isLoading, errorMessage, onGetInsights, onLearnMore, onCancel, className }, ref) => {
+    (
+        {
+            bodyText,
+            recommendation,
+            isLoading,
+            enabled = true,
+            errorMessage,
+            onGetInsights,
+            onLearnMore,
+            onCancel,
+            className,
+        },
+        ref,
+    ) => {
         return (
             <Card
                 ref={ref}
@@ -133,10 +151,15 @@ export const GetPerformanceInsightsCard = forwardRef<HTMLDivElement, GetPerforma
                             </div>
                         ) : (
                             <div className="get-performance-insights-card-actions">
-                                <Button appearance="primary" icon={<SparkleRegular />} onClick={onGetInsights}>
+                                <Button
+                                    appearance="primary"
+                                    icon={<SparkleRegular />}
+                                    onClick={onGetInsights}
+                                    disabled={!enabled}
+                                >
                                     {errorMessage ? l10n.t('Retry') : l10n.t('Get AI Performance Insights')}
                                 </Button>
-                                <Button appearance="subtle" onClick={onLearnMore}>
+                                <Button appearance="subtle" onClick={onLearnMore} disabled={!enabled}>
                                     {l10n.t('Learn more about AI Performance Insights')}
                                 </Button>
                             </div>

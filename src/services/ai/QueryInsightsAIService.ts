@@ -15,6 +15,7 @@ import {
 import { type FindQueryParams } from '../../documentdb/ClustersClient';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type IndexSpecification } from '../../documentdb/LlmEnhancedFeatureApis';
+import { ext } from '../../extensionVariables';
 import { type AIOptimizationResponse } from './types';
 
 /**
@@ -280,6 +281,7 @@ export class QueryInsightsAIService {
         try {
             // Validate payload
             if (!this.isCreateIndexPayload(payload)) {
+                ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for create index action', {}));
                 return {
                     success: false,
                     message: l10n.t('Invalid payload for create index action'),
@@ -289,11 +291,18 @@ export class QueryInsightsAIService {
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
+                ext.outputChannel.warn(l10n.t('[Query Insights Action] Session ID is required', {}));
                 return {
                     success: false,
                     message: l10n.t('Session ID is required'),
                 };
             }
+
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights Action] Executing createIndex action for collection: {collection}', {
+                    collection: `${payload.databaseName}.${payload.collectionName}`,
+                }),
+            );
 
             const session = ClusterSession.getSession(actualSessionId);
             const client = session.getClient();
@@ -306,12 +315,17 @@ export class QueryInsightsAIService {
                 const message =
                     typeof result.note === 'string' && result.note ? `${baseMessage}. ${result.note}` : baseMessage;
 
+                ext.outputChannel.trace(l10n.t('[Query Insights Action] Create index action completed successfully'));
+
                 return {
                     success: true,
                     message,
                 };
             } else {
                 const errorMsg = typeof result.note === 'string' ? result.note : 'Unknown error';
+                ext.outputChannel.error(
+                    l10n.t('[Query Insights Action] Create index action failed: {error}', { error: errorMsg }),
+                );
                 return {
                     success: false,
                     message: l10n.t('Failed to create index: {0}', errorMsg),
@@ -319,6 +333,9 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('[Query Insights Action] Create index action error: {error}', { error: errorMessage }),
+            );
             return {
                 success: false,
                 message: l10n.t('Error creating index: {0}', errorMessage),
@@ -336,6 +353,7 @@ export class QueryInsightsAIService {
         try {
             // Validate payload
             if (!this.isDropIndexPayload(payload)) {
+                ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for drop index action', {}));
                 return {
                     success: false,
                     message: l10n.t('Invalid payload for drop index action'),
@@ -345,11 +363,22 @@ export class QueryInsightsAIService {
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
+                ext.outputChannel.warn(l10n.t('[Query Insights Action] Session ID is required', {}));
                 return {
                     success: false,
                     message: l10n.t('Session ID is required'),
                 };
             }
+
+            ext.outputChannel.trace(
+                l10n.t(
+                    '[Query Insights Action] Executing dropIndex action for "{indexName}" on collection: {collection}',
+                    {
+                        indexName: payload.indexName,
+                        collection: `${payload.databaseName}.${payload.collectionName}`,
+                    },
+                ),
+            );
 
             const session = ClusterSession.getSession(actualSessionId);
             const client = session.getClient();
@@ -362,12 +391,17 @@ export class QueryInsightsAIService {
                 const message =
                     typeof result.note === 'string' && result.note ? `${baseMessage}. ${result.note}` : baseMessage;
 
+                ext.outputChannel.trace(l10n.t('[Query Insights Action] Drop index action completed successfully'));
+
                 return {
                     success: true,
                     message,
                 };
             } else {
                 const errorMsg = typeof result.note === 'string' ? result.note : 'Unknown error';
+                ext.outputChannel.error(
+                    l10n.t('[Query Insights Action] Drop index action failed: {error}', { error: errorMsg }),
+                );
                 return {
                     success: false,
                     message: l10n.t('Failed to drop index: {0}', errorMsg),
@@ -375,6 +409,9 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('[Query Insights Action] Drop index action error: {error}', { error: errorMessage }),
+            );
             return {
                 success: false,
                 message: l10n.t('Error dropping index: {0}', errorMessage),
@@ -392,6 +429,7 @@ export class QueryInsightsAIService {
         try {
             // Validate payload
             if (!this.isModifyIndexPayload(payload)) {
+                ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for modify index action', {}));
                 return {
                     success: false,
                     message: l10n.t('Invalid payload for modify index action'),
@@ -401,6 +439,11 @@ export class QueryInsightsAIService {
             const parseOperationPattern = /db\.getCollection\(['"]([^'"]+)['"]\)\.(\w+)\((.*)\)/;
             const match = payload.mongoShell.match(parseOperationPattern);
             if (!match || match.length < 3 || (match[2] !== 'hideIndex' && match[2] !== 'unhideIndex')) {
+                ext.outputChannel.warn(
+                    l10n.t('[Query Insights Action] Invalid mongoShell command format: {command}', {
+                        command: payload.mongoShell,
+                    }),
+                );
                 return {
                     success: false,
                     message: l10n.t('Invalid mongoShell command format'),
@@ -413,11 +456,23 @@ export class QueryInsightsAIService {
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
+                ext.outputChannel.warn(l10n.t('[Query Insights Action] Session ID is required', {}));
                 return {
                     success: false,
                     message: l10n.t('Session ID is required'),
                 };
             }
+
+            ext.outputChannel.trace(
+                l10n.t(
+                    '[Query Insights Action] Executing {operation} action for "{indexName}" on collection: {collection}',
+                    {
+                        operation,
+                        indexName,
+                        collection: `${payload.databaseName}.${payload.collectionName}`,
+                    },
+                ),
+            );
 
             const session = ClusterSession.getSession(actualSessionId);
             const client = session.getClient();
@@ -437,6 +492,8 @@ export class QueryInsightsAIService {
                 const message =
                     typeof result.note === 'string' && result.note ? `${baseMessage}. ${result.note}` : baseMessage;
 
+                ext.outputChannel.trace(l10n.t('[Query Insights Action] Modify index action completed successfully'));
+
                 return {
                     success: true,
                     message,
@@ -448,6 +505,9 @@ export class QueryInsightsAIService {
                         : typeof result.note === 'string'
                           ? result.note
                           : 'Unknown error';
+                ext.outputChannel.error(
+                    l10n.t('[Query Insights Action] Modify index action failed: {error}', { error: errmsg }),
+                );
                 return {
                     success: false,
                     message: l10n.t('Failed to modify index: {0}', errmsg),
@@ -455,6 +515,9 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('[Query Insights Action] Modify index action error: {error}', { error: errorMessage }),
+            );
             return {
                 success: false,
                 message: l10n.t('Error modifying index: {0}', errorMessage),

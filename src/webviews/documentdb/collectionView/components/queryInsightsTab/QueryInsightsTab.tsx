@@ -34,11 +34,11 @@ import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
 import { SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
-import { AnimatedCardList } from './components';
+import { AnimatedCardList, type AnimatedCardItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
@@ -54,6 +54,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Stage 2: Detailed Execution Analysis (from explain("executionStats"))
     // Stage 3: AI-Powered Recommendations (opt-in)
     // See: docs/design-documents/performance-advisor.md
+
     const { trpcClient } = useTrpcClient();
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const { queryInsights: queryInsightsState } = currentContext;
@@ -63,10 +64,10 @@ export const QueryInsightsMain = (): JSX.Element => {
      * Mimics React's setState API with support for both direct values and updater functions.
      *
      * Instead of writing:
-     *   setCurrentContext(prev => ({ ...prev, queryInsights: { ...prev.queryInsights, stage1Loading: true } }))
+     *   setCurrentContext(prev => ({ ...prev, queryInsights: { ...prev.queryInsights, stage1Data: data } }))
      *
      * You can write:
-     *   setQueryInsightsStateHelper(prev => ({ ...prev, stage1Loading: true }))
+     *   setQueryInsightsStateHelper(prev => ({ ...prev, stage1Data: data }))
      */
     const setQueryInsightsStateHelper = (
         updater:
@@ -80,36 +81,94 @@ export const QueryInsightsMain = (): JSX.Element => {
     };
 
     /**
-     * Visual stage state based on actual data availability OR error state.
-     * We progress to the next stage even if there's an error, so users can see what failed.
-     * Stage 1: Default state, waiting for or showing Stage 1 data
-     * Stage 2: Stage 1 completed (success or error), Stage 2 in progress or completed
-     * Stage 3: Stage 2 completed (success or error), Stage 3 in progress or completed
+     * Use the explicit stage from state instead of deriving it
      */
-    const stageState: 1 | 2 | 3 =
-        queryInsightsState.stage3Data || queryInsightsState.stage3Error
-            ? 3
-            : queryInsightsState.stage2Data || queryInsightsState.stage2Error
-              ? 2
-              : 1;
+    const currentStage = queryInsightsState.currentStage;
 
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [showErrorCard, setShowErrorCard] = useState(false);
+
+    // Debug logging for tips card visibility
+    useEffect(() => {
+        console.trace('[TipsCard] State changed:', { showTipsCard, isTipsCardDismissed });
+    }, [showTipsCard, isTipsCardDismissed]);
+
+    /**
+     * Stage transition helper - handles moving between stages and cleaning up state
+     * Rules:
+     * - Can transition from 1 → 2 → 3
+     * - Can transition from any stage back to 1 (query re-run)
+     * - When transitioning to stage 1, clear all data from stages 2 and 3
+     * - When transitioning to stage 2, clear data from stage 3
+     * - Reset UI-specific flags when transitioning to new phases
+     */
+    const transitionToStage = (phase: 1 | 2 | 3, status: 'loading' | 'success' | 'error' | 'cancelled'): void => {
+        console.trace(`🔄 Stage transition: ${currentStage.phase}/${currentStage.status} → ${phase}/${status}`);
+
+        setQueryInsightsStateHelper((prev) => {
+            const newState = { ...prev };
+
+            // Update current stage
+            newState.currentStage = { phase, status };
+
+            // Reset dependent stages when going back to earlier phases
+            if (phase === 1) {
+                // Reset everything when starting fresh
+                newState.stage2Data = null;
+                newState.stage2Error = null;
+                newState.stage2Promise = null;
+
+                newState.stage3Data = null;
+                newState.stage3Error = null;
+                newState.stage3Promise = null;
+                newState.stage3RequestKey = null;
+
+                // Reset UI flags
+                setShowTipsCard(false);
+                setIsTipsCardDismissed(false);
+                setShowErrorCard(false);
+            } else if (phase === 2 && status === 'loading') {
+                // When entering stage 2 loading, clear stage 3 data only
+                newState.stage3Data = null;
+                newState.stage3Error = null;
+                newState.stage3Promise = null;
+                newState.stage3RequestKey = null;
+
+                // Don't reset UI flags here - they should persist for the same query session
+                // They will be reset by phase 1 or phase 3 loading transitions
+            } else if (phase === 3 && status === 'loading') {
+                // Reset UI flags when starting new AI request
+                setShowTipsCard(false);
+                setIsTipsCardDismissed(false);
+                setShowErrorCard(false);
+            }
+
+            return newState;
+        });
+    };
 
     // Stage 1: Load when needed (on mount or after query re-run when tab is active)
     // When a query is re-run, the queryInsights state is reset in CollectionView.tsx
     // This effect needs to re-trigger to start loading the new data
     // IMPORTANT: Wait for query execution to complete (isLoading=false) before fetching insights
     useEffect(() => {
+        console.trace('[Stage 1 Effect] Triggered with:', {
+            isLoading: currentContext.isLoading,
+            phase: currentStage.phase,
+            status: currentStage.status,
+            hasStage1Data: !!queryInsightsState.stage1Data,
+            hasStage1Promise: !!queryInsightsState.stage1Promise,
+        });
+
         if (
             !currentContext.isLoading &&
+            currentStage.phase === 1 &&
+            currentStage.status === 'loading' &&
             !queryInsightsState.stage1Data &&
-            !queryInsightsState.stage1Loading &&
             !queryInsightsState.stage1Promise
         ) {
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Loading: true }));
-
+            console.trace('[Stage 1 Effect] 🚀 Starting Stage 1 data fetch');
             // Query parameters are now retrieved from ClusterSession - no need to pass them
             const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
                 .query()
@@ -117,9 +176,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage1Data: data,
-                        stage1Loading: false,
                         stage1Promise: null,
                     }));
+                    transitionToStage(1, 'success');
                     return data;
                 })
                 .catch((error) => {
@@ -131,9 +190,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage1Error: error instanceof Error ? error.message : String(error),
-                        stage1Loading: false,
                         stage1Promise: null,
                     }));
+                    transitionToStage(1, 'error');
                     // Return undefined to satisfy TypeScript without creating unhandled rejection
                     return undefined as never;
                 });
@@ -142,20 +201,23 @@ export const QueryInsightsMain = (): JSX.Element => {
         }
     }, [
         currentContext.isLoading,
+        currentStage.phase,
+        currentStage.status,
         queryInsightsState.stage1Data,
-        queryInsightsState.stage1Loading,
         queryInsightsState.stage1Promise,
     ]);
 
-    // Stage 2: Auto-start after Stage 1 completes
+    // Stage 2: Auto-start after Stage 1 completes successfully
     useEffect(() => {
         if (
+            currentStage.phase === 1 &&
+            currentStage.status === 'success' &&
             queryInsightsState.stage1Data &&
             !queryInsightsState.stage2Data &&
-            !queryInsightsState.stage2Loading &&
             !queryInsightsState.stage2Promise
         ) {
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Loading: true }));
+            // Transition to Stage 2 loading
+            transitionToStage(2, 'loading');
 
             // Query parameters are now retrieved from ClusterSession - no need to pass them
             const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
@@ -164,9 +226,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage2Data: data,
-                        stage2Loading: false,
                         stage2Promise: null,
                     }));
+                    transitionToStage(2, 'success');
                     return data;
                 })
                 .catch((error) => {
@@ -178,27 +240,33 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage2Error: error instanceof Error ? error.message : String(error),
-                        stage2Loading: false,
                         stage2Promise: null,
                     }));
+                    transitionToStage(2, 'error');
                     // Return undefined to satisfy TypeScript without creating unhandled rejection
                     return undefined as never;
                 });
 
             setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Promise: promise }));
         }
-    }, [queryInsightsState.stage1Data]);
+    }, [
+        currentStage.phase,
+        currentStage.status,
+        queryInsightsState.stage1Data,
+        queryInsightsState.stage2Data,
+        queryInsightsState.stage2Promise,
+    ]);
 
     // Debug logging for state changes
     useEffect(() => {
-        console.log('stageState changed to:', stageState);
-    }, [stageState]);
+        console.trace('currentStage changed to:', currentStage);
+    }, [currentStage]);
 
     useEffect(() => {
-        console.log('stage3Data changed:', queryInsightsState.stage3Data);
+        console.trace('stage3Data changed:', queryInsightsState.stage3Data);
         if (queryInsightsState.stage3Data) {
-            console.log('  - improvementCards count:', queryInsightsState.stage3Data.improvementCards.length);
-            console.log('  - improvementCards:', queryInsightsState.stage3Data.improvementCards);
+            console.trace('  - improvementCards count:', queryInsightsState.stage3Data.improvementCards.length);
+            console.trace('  - improvementCards:', queryInsightsState.stage3Data.improvementCards);
         }
     }, [queryInsightsState.stage3Data]);
 
@@ -232,12 +300,8 @@ export const QueryInsightsMain = (): JSX.Element => {
     ];
 
     const handleGetAISuggestions = () => {
-        setIsTipsCardDismissed(false);
-
-        // Clear any previous error when retrying
-        if (queryInsightsState.stage3Error) {
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage3Error: null }));
-        }
+        // Transition to Stage 3 loading (this will reset UI flags)
+        transitionToStage(3, 'loading');
 
         // Check if Stage 2 has query execution errors
         const hasExecutionError =
@@ -255,49 +319,79 @@ export const QueryInsightsMain = (): JSX.Element => {
 
         // Generate a unique request key to track if this request is still valid when it returns
         const requestKey = crypto.randomUUID();
+        console.trace(`🚀 Starting new AI request with key: ${requestKey}`);
 
-        // Set loading state in queryInsights context
-        setQueryInsightsStateHelper((prev) => ({ ...prev, stage3Loading: true, stage3RequestKey: requestKey }));
+        // Set request key in queryInsights context
+        setQueryInsightsStateHelper((prev) => {
+            if (prev.stage3RequestKey) {
+                console.trace(`  Superseding previous request key: ${prev.stage3RequestKey}`);
+            }
+            return { ...prev, stage3RequestKey: requestKey };
+        });
 
         // Call the tRPC endpoint (10+ second delay expected from AI service)
         const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
             .query({ requestKey })
             .then((response) => {
-                console.log('AI response received:', response);
-                console.log('Number of improvement cards:', response.improvementCards.length);
-                console.log('Improvement cards:', response.improvementCards);
+                console.trace(`AI response received for request key: ${requestKey}`);
+                console.trace('Number of improvement cards:', response.improvementCards.length);
+                console.trace('Improvement cards:', response.improvementCards);
 
                 // Only update state if this request is still the current one
+                let wasAccepted = false;
                 setQueryInsightsStateHelper((prev) => {
                     if (prev.stage3RequestKey !== requestKey) {
-                        console.log('Ignoring stale AI response (request was cancelled or superseded)');
+                        console.warn(
+                            `🚫 REJECTED stale AI response - Request key mismatch:`,
+                            `\n  Received: ${requestKey}`,
+                            `\n  Expected: ${prev.stage3RequestKey}`,
+                            `\n  Reason: Request was cancelled or superseded by a newer request`,
+                        );
                         return prev;
                     }
+                    console.trace(`✅ ACCEPTED AI response for request key: ${requestKey}`);
+                    wasAccepted = true;
                     return {
                         ...prev,
                         stage3Data: response,
-                        stage3Loading: false,
                         stage3Promise: null,
                         stage3RequestKey: null,
                     };
                 });
+
+                // Only transition to success if the response was accepted
+                if (wasAccepted) {
+                    transitionToStage(3, 'success');
+                }
                 return response;
             })
             .catch((error: unknown) => {
                 // Only update state if this request is still the current one
+                let wasAccepted = false;
                 setQueryInsightsStateHelper((prev) => {
                     if (prev.stage3RequestKey !== requestKey) {
-                        console.log('Ignoring stale AI error (request was cancelled or superseded)');
+                        console.warn(
+                            `🚫 REJECTED stale AI error - Request key mismatch:`,
+                            `\n  Received: ${requestKey}`,
+                            `\n  Expected: ${prev.stage3RequestKey}`,
+                            `\n  Reason: Request was cancelled or superseded by a newer request`,
+                        );
                         return prev;
                     }
+                    console.trace(`✅ ACCEPTED AI error for request key: ${requestKey}`);
+                    wasAccepted = true;
                     return {
                         ...prev,
                         stage3Error: error instanceof Error ? error.message : String(error),
-                        stage3Loading: false,
                         stage3Promise: null,
                         stage3RequestKey: null,
                     };
                 });
+
+                // Only transition to error if the error was accepted
+                if (wasAccepted) {
+                    transitionToStage(3, 'error');
+                }
                 // Return undefined to satisfy TypeScript without creating unhandled rejection
                 return undefined as never;
             });
@@ -313,14 +407,25 @@ export const QueryInsightsMain = (): JSX.Element => {
     const handleCancelAI = () => {
         // Cancel the loading state and clear the request key
         // When the promise eventually returns, it will check the key and ignore the result
-        setQueryInsightsStateHelper((prev) => ({
-            ...prev,
-            stage3Loading: false,
-            stage3Promise: null,
-            stage3RequestKey: null,
-        }));
+        setQueryInsightsStateHelper((prev) => {
+            if (prev.stage3RequestKey) {
+                console.trace(`❌ Cancelling AI request with key: ${prev.stage3RequestKey}`);
+            }
+            return {
+                ...prev,
+                stage3Promise: null,
+                stage3RequestKey: null,
+            };
+        });
+
+        // Transition to Stage 3 cancelled state
+        transitionToStage(3, 'cancelled');
     };
 
+    /**
+     * MOCK VERSION: Client-side mock for AI suggestions with 5-second delay
+     * This simulates the AI request without calling the backend
+     */
     const handlePrimaryAction = async (
         actionId: string,
         payload: unknown,
@@ -346,6 +451,133 @@ export const QueryInsightsMain = (): JSX.Element => {
         setShowTipsCard(false);
     };
 
+    // Build the cards array for animated presence
+    const insightCards: AnimatedCardItem[] = [];
+
+    // Include requestKey in card keys to force remount on regeneration
+    const keyPrefix = queryInsightsState.stage3RequestKey ? `${queryInsightsState.stage3RequestKey}-` : '';
+
+    // Analysis Card (if AI data available)
+    if (currentStage.phase === 3 && queryInsightsState.stage3Data?.analysisCard) {
+        console.trace('[AnimatedCardList] ✅ Adding Analysis Card to array');
+        insightCards.push({
+            key: `${keyPrefix}analysis-card`,
+            component: (
+                <MarkdownCard
+                    icon={<SparkleRegular />}
+                    title={l10n.t('Query Performance Analysis')}
+                    content={queryInsightsState.stage3Data.analysisCard.content}
+                    onCopy={() => {
+                        void navigator.clipboard.writeText(queryInsightsState.stage3Data?.analysisCard.content ?? '');
+                    }}
+                />
+            ),
+        });
+    }
+
+    // Error Card - shown when query execution failed
+    if (showErrorCard && queryInsightsState.stage2Data?.concerns) {
+        console.trace('[AnimatedCardList] ✅ Adding Error Card to array');
+        insightCards.push({
+            key: `${keyPrefix}query-execution-error`,
+            component: (
+                <MarkdownCard
+                    title={l10n.t('Query Execution Failed')}
+                    icon={<WarningRegular />}
+                    showAiDisclaimer={false}
+                    content={
+                        queryInsightsState.stage2Data.concerns.join('\n\n') +
+                        '\n\n---\n\n' +
+                        '**Resolving this execution error should take precedence over performance optimization.** ' +
+                        'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
+                    }
+                    onCopy={() => {
+                        void navigator.clipboard.writeText(queryInsightsState.stage2Data?.concerns?.join('\n\n') ?? '');
+                    }}
+                />
+            ),
+        });
+    }
+
+    // Improvement Cards (dynamic from AI response)
+    if (currentStage.phase === 3 && queryInsightsState.stage3Data?.improvementCards) {
+        console.trace('=== IMPROVEMENT CARDS BUILDING ===');
+        console.trace('Number of cards to add:', queryInsightsState.stage3Data.improvementCards.length);
+
+        queryInsightsState.stage3Data.improvementCards.forEach((card: ImprovementCardConfig, index: number) => {
+            console.trace(`Card ${index + 1}:`, card.cardId, 'actionId:', card.primaryButton?.actionId);
+
+            // If any button exists, render ImprovementCard; otherwise render MarkdownCard
+            if (card.primaryButton || card.secondaryButton) {
+                console.trace(
+                    `  -> Adding ImprovementCard (primary: ${card.primaryButton?.actionId}, secondary: ${card.secondaryButton?.actionId})`,
+                );
+                insightCards.push({
+                    key: `${keyPrefix}${card.cardId}`,
+                    component: (
+                        <ImprovementCard
+                            config={card}
+                            onPrimaryAction={handlePrimaryAction}
+                            onSecondaryAction={handleSecondaryAction}
+                            onCopy={() => {
+                                void navigator.clipboard.writeText(card.mongoShellCommand);
+                            }}
+                        />
+                    ),
+                });
+            } else {
+                // For informational cards (no buttons), use MarkdownCard
+                console.trace(`  -> Adding MarkdownCard (no buttons)`);
+                insightCards.push({
+                    key: `${keyPrefix}${card.cardId || `card-${index}`}`,
+                    component: (
+                        <MarkdownCard
+                            icon={<SparkleRegular />}
+                            title={card.title}
+                            content={card.description}
+                            onCopy={() => {
+                                void navigator.clipboard.writeText(card.description);
+                            }}
+                        />
+                    ),
+                });
+            }
+        });
+    }
+
+    // Educational Markdown Card - Understanding Query Execution
+    if (currentStage.phase === 3 && queryInsightsState.stage3Data?.educationalContent) {
+        console.trace('[AnimatedCardList] ✅ Adding Educational Card to array');
+        insightCards.push({
+            key: `${keyPrefix}understanding-execution`,
+            component: (
+                <MarkdownCard
+                    icon={<SparkleRegular />}
+                    title={l10n.t('Understanding Your Query Execution Plan')}
+                    content={queryInsightsState.stage3Data.educationalContent}
+                    onCopy={() => {
+                        void navigator.clipboard.writeText(queryInsightsState.stage3Data?.educationalContent ?? '');
+                    }}
+                />
+            ),
+        });
+    }
+
+    // Performance Tips Card
+    if (showTipsCard && !isTipsCardDismissed) {
+        console.trace('[AnimatedCardList] ✅ Adding Performance Tips Card to array');
+        insightCards.push({
+            key: 'performance-tips',
+            component: (
+                <TipsCard
+                    title={l10n.t('DocumentDB Performance Tips')}
+                    tips={performanceTips}
+                    onDismiss={handleDismissTips}
+                />
+            ),
+        });
+    }
+
     return (
         <div className="container">
             {/* Content Area - Flexbox two-column layout */}
@@ -354,10 +586,30 @@ export const QueryInsightsMain = (): JSX.Element => {
                 <div className="leftColumn">
                     {/* Metrics Row */}
                     <MetricsRow>
-                        <TimeMetric label={l10n.t('Execution Time')} valueMs={executionTime} />
-                        <CountMetric label={l10n.t('Documents Returned')} value={docsReturned} />
-                        <CountMetric label={l10n.t('Keys Examined')} value={keysExamined} />
-                        <CountMetric label={l10n.t('Documents Examined')} value={docsExamined} />
+                        <TimeMetric
+                            label={l10n.t('Execution Time')}
+                            valueMs={executionTime}
+                            tooltipExplanation={l10n.t('Total time taken to execute the query on the server')}
+                        />
+                        <CountMetric
+                            label={l10n.t('Documents Returned')}
+                            value={docsReturned}
+                            tooltipExplanation={l10n.t('Number of documents returned by the query')}
+                        />
+                        <CountMetric
+                            label={l10n.t('Keys Examined')}
+                            value={keysExamined}
+                            tooltipExplanation={l10n.t(
+                                'Number of index keys scanned during query execution. Lower is better.',
+                            )}
+                        />
+                        <CountMetric
+                            label={l10n.t('Documents Examined')}
+                            value={docsExamined}
+                            tooltipExplanation={l10n.t(
+                                'Number of documents scanned to find matching results. Should be close to documents returned for optimal performance.',
+                            )}
+                        />
                     </MetricsRow>
 
                     {/* Optimization Opportunities */}
@@ -367,7 +619,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         </Text>
 
                         {/* Skeleton - shown only in Stage 1 */}
-                        {stageState === 1 && (
+                        {currentStage.phase === 1 && (
                             <Skeleton className="cardSpacing">
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
@@ -379,7 +631,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         {/* GetPerformanceInsightsCard with CollapseRelaxed animation
                             Shown in Stage 2 when AI insights haven't been requested yet, or when there's an error.
                             Note: Component supports ref forwarding and applies its own spacing via className. */}
-                        <CollapseRelaxed visible={stageState >= 2 && !queryInsightsState.stage3Data}>
+                        <CollapseRelaxed visible={currentStage.phase >= 2 && !queryInsightsState.stage3Data}>
                             <GetPerformanceInsightsCard
                                 className="cardSpacing"
                                 bodyText={
@@ -392,162 +644,21 @@ export const QueryInsightsMain = (): JSX.Element => {
                                               'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
                                           )
                                 }
-                                isLoading={queryInsightsState.stage3Loading}
+                                isLoading={currentStage.phase === 3 && currentStage.status === 'loading'}
+                                enabled={currentStage.phase >= 2 && currentStage.status !== 'loading'}
                                 errorMessage={queryInsightsState.stage3Error ?? undefined}
                                 onGetInsights={handleGetAISuggestions}
                                 onLearnMore={() => {
-                                    /* TODO: Implement learn more functionality */
+                                    void trpcClient.common.openUrl.mutate({
+                                        url: 'https://learn.microsoft.com/azure/documentdb/index-advisor',
+                                    });
                                 }}
                                 onCancel={handleCancelAI}
                             />
                         </CollapseRelaxed>
 
                         {/* AnimatedCardList for AI suggestions and tips */}
-                        <AnimatedCardList>
-                            {/* Analysis Card (if AI data available) */}
-                            {stageState === 3 &&
-                                queryInsightsState.stage3Data &&
-                                queryInsightsState.stage3Data.analysisCard && (
-                                    <MarkdownCard
-                                        key="analysis-card"
-                                        icon={<SparkleRegular />}
-                                        title={l10n.t('Query Performance Analysis')}
-                                        content={queryInsightsState.stage3Data.analysisCard.content}
-                                        onCopy={() => {
-                                            void navigator.clipboard.writeText(
-                                                queryInsightsState.stage3Data?.analysisCard.content ?? '',
-                                            );
-                                        }}
-                                    />
-                                )}
-
-                            {/* Error Card - shown when query execution failed */}
-                            {showErrorCard && queryInsightsState.stage2Data?.concerns && (
-                                <MarkdownCard
-                                    key="query-execution-error"
-                                    title={l10n.t('Query Execution Failed')}
-                                    icon={<WarningRegular />}
-                                    showAiDisclaimer={false}
-                                    content={
-                                        queryInsightsState.stage2Data.concerns.join('\n\n') +
-                                        '\n\n---\n\n' +
-                                        '**Resolving this execution error should take precedence over performance optimization.** ' +
-                                        'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
-                                    }
-                                    onCopy={() => {
-                                        void navigator.clipboard.writeText(
-                                            queryInsightsState.stage2Data?.concerns?.join('\n\n') ?? '',
-                                        );
-                                    }}
-                                />
-                            )}
-
-                            {/* Improvement Cards (dynamic from AI response) */}
-                            {stageState === 3 &&
-                                queryInsightsState.stage3Data &&
-                                (() => {
-                                    console.log('=== IMPROVEMENT CARDS RENDERING ===');
-                                    console.log('stageState:', stageState);
-                                    console.log('queryInsightsState.stage3Data:', queryInsightsState.stage3Data);
-                                    console.log(
-                                        'queryInsightsState.stage3Data.improvementCards:',
-                                        queryInsightsState.stage3Data.improvementCards,
-                                    );
-                                    console.log(
-                                        'Number of cards to render:',
-                                        queryInsightsState.stage3Data.improvementCards.length,
-                                    );
-
-                                    if (
-                                        !queryInsightsState.stage3Data.improvementCards ||
-                                        queryInsightsState.stage3Data.improvementCards.length === 0
-                                    ) {
-                                        console.log('SKIPPING: no improvement cards');
-                                        return null;
-                                    }
-
-                                    console.log(
-                                        `RENDERING ${queryInsightsState.stage3Data.improvementCards.length} improvement cards...`,
-                                    );
-
-                                    // Use Fragment to properly spread children
-                                    return (
-                                        <>
-                                            {queryInsightsState.stage3Data?.improvementCards.map(
-                                                (card: ImprovementCardConfig, index: number) => {
-                                                    console.log(
-                                                        `Card ${index + 1}/${queryInsightsState.stage3Data?.improvementCards.length}:`,
-                                                        card.cardId,
-                                                        'actionId:',
-                                                        card.primaryButton?.actionId,
-                                                    );
-
-                                                    // If any button exists, render ImprovementCard; otherwise render AiCard
-                                                    if (card.primaryButton || card.secondaryButton) {
-                                                        console.log(
-                                                            `  -> Rendering as ImprovementCard (primary: ${card.primaryButton?.actionId}, secondary: ${card.secondaryButton?.actionId})`,
-                                                        );
-                                                        return (
-                                                            <ImprovementCard
-                                                                key={card.cardId}
-                                                                config={card}
-                                                                onPrimaryAction={handlePrimaryAction}
-                                                                onSecondaryAction={handleSecondaryAction}
-                                                                onCopy={() => {
-                                                                    void navigator.clipboard.writeText(
-                                                                        card.mongoShellCommand,
-                                                                    );
-                                                                }}
-                                                            />
-                                                        );
-                                                    }
-
-                                                    // For informational cards (no buttons), use MarkdownCard
-                                                    console.log(`  -> Rendering as MarkdownCard (no buttons)`);
-                                                    return (
-                                                        <MarkdownCard
-                                                            key={card.cardId || `card-${index}`}
-                                                            icon={<SparkleRegular />}
-                                                            title={card.title}
-                                                            content={card.description}
-                                                            onCopy={() => {
-                                                                void navigator.clipboard.writeText(card.description);
-                                                            }}
-                                                        />
-                                                    );
-                                                },
-                                            )}
-                                        </>
-                                    );
-                                })()}
-
-                            {/* Performance Tips Card */}
-                            {showTipsCard && !isTipsCardDismissed && (
-                                <TipsCard
-                                    key="performance-tips"
-                                    title={l10n.t('DocumentDB Performance Tips')}
-                                    tips={performanceTips}
-                                    onDismiss={handleDismissTips}
-                                />
-                            )}
-
-                            {/* Educational Markdown Card - Understanding Query Execution */}
-                            {stageState === 3 &&
-                                queryInsightsState.stage3Data &&
-                                queryInsightsState.stage3Data.educationalContent && (
-                                    <MarkdownCard
-                                        key="understanding-execution"
-                                        icon={<SparkleRegular />}
-                                        title={l10n.t('Understanding Your Query Execution Plan')}
-                                        content={queryInsightsState.stage3Data.educationalContent}
-                                        onCopy={() => {
-                                            void navigator.clipboard.writeText(
-                                                queryInsightsState.stage3Data?.educationalContent ?? '',
-                                            );
-                                        }}
-                                    />
-                                )}
-                        </AnimatedCardList>
+                        <AnimatedCardList items={insightCards} exitDuration={300} />
                     </div>
                 </div>
 
@@ -598,8 +709,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <QueryPlanSummary
                         stage1Data={queryInsightsState.stage1Data}
                         stage2Data={queryInsightsState.stage2Data}
-                        stage1Loading={stageState === 1 && !queryInsightsState.stage1Data}
-                        stage2Loading={stageState >= 2 && !queryInsightsState.stage2Data}
+                        stage1Loading={currentStage.phase === 1 && !queryInsightsState.stage1Data}
+                        stage2Loading={currentStage.phase >= 2 && !queryInsightsState.stage2Data}
                     />
 
                     {/* Quick Actions */}

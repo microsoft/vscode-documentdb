@@ -4,225 +4,98 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
-import { type JSX, type ReactElement, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import './AnimatedCardList.scss';
 
-interface AnimatedCardListProps {
-    /**
-     * Cards to display. Each child must have a unique key prop.
-     */
-    children: ReactNode;
-
-    /**
-     * Delay in milliseconds between each card animation. Defaults to 1000ms.
-     */
-    animationDelay?: number;
-}
-
-interface CardState {
+export interface AnimatedCardItem {
     key: string;
-    element: ReactElement;
-    visible: boolean;
+    component: ReactNode;
 }
 
-interface AnimationAction {
-    type: 'show' | 'hide';
-    cardKey: string;
-    delay: number; // Delay before this action executes (from previous action)
+interface AnimatedCardListProps {
+    items: AnimatedCardItem[];
+    exitDuration?: number; // Duration of exit animation (ms), default 300
 }
 
-const DEFAULT_ANIMATION_DELAY = 1000;
+interface ItemState {
+    key: string;
+    component: ReactNode;
+    isExiting: boolean;
+}
 
-export const AnimatedCardList = ({
-    children,
-    animationDelay = DEFAULT_ANIMATION_DELAY,
-}: AnimatedCardListProps): JSX.Element => {
-    const [cardStates, setCardStates] = useState<Map<string, CardState>>(new Map());
-    const [animationQueue, setAnimationQueue] = useState<AnimationAction[]>([]);
-    const isInitialRender = useRef(true);
-    const previousKeysRef = useRef<Set<string>>(new Set());
+/**
+ * A container for animated cards. New items appear immediately with collapse animation.
+ * Removed items animate out before being unmounted.
+ */
+export const AnimatedCardList = ({ items, exitDuration = 300 }: AnimatedCardListProps) => {
+    const [displayItems, setDisplayItems] = useState<ItemState[]>([]);
+    const exitTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
-    // Extract children with keys
-    const extractCards = (childrenNodes: ReactNode): CardState[] => {
-        const childArray = Array.isArray(childrenNodes) ? childrenNodes : [childrenNodes];
-        return childArray
-            .filter((child): child is ReactElement => {
-                return child !== null && typeof child === 'object' && 'key' in child;
-            })
-            .map((child) => ({
-                key: child.key as string,
-                element: child,
-                visible: true, // Will be controlled by state
-            }));
-    };
-
-    // Generate animation queue based on state diff
-    const generateAnimationQueue = (
-        currentStates: Map<string, CardState>,
-        targetCards: CardState[],
-    ): AnimationAction[] => {
-        const queue: AnimationAction[] = [];
-        const targetKeys = new Set(targetCards.map((c) => c.key));
-        const currentKeys = new Set(Array.from(currentStates.keys()));
-
-        console.log('[AnimatedCardList] generateAnimationQueue');
-        console.log('  Current keys:', Array.from(currentKeys));
-        console.log('  Target keys:', Array.from(targetKeys));
-
-        // Cards changed (additions/removals)
-        const removedKeys = Array.from(currentKeys).filter((key) => !targetKeys.has(key));
-        const addedKeys = Array.from(targetKeys).filter((key) => !currentKeys.has(key));
-
-        console.log('  Removed keys:', removedKeys);
-        console.log('  Added keys:', addedKeys);
-
-        if (removedKeys.length === 0 && addedKeys.length === 0) {
-            console.log('  → No animation needed');
-            return []; // No changes
-        }
-
-        console.log('  → Animating card changes');
-
-        // Hide removed cards first (top to bottom)
-        removedKeys.forEach((key, index) => {
-            queue.push({ type: 'hide', cardKey: key, delay: index === 0 ? 0 : animationDelay });
-        });
-
-        // Show added cards after removals (top to bottom)
-        addedKeys.forEach((key, index) => {
-            const delay = index === 0 && removedKeys.length > 0 ? animationDelay : index === 0 ? 0 : animationDelay;
-            queue.push({ type: 'show', cardKey: key, delay });
-        });
-
-        return queue;
-    };
-
-    // Main effect: Generate animation queue when children change
     useEffect(() => {
-        const currentCards = extractCards(children);
-        const currentKeys = new Set(currentCards.map((card) => card.key));
+        const newKeys = new Set(items.map((item) => item.key));
+        const currentKeys = new Set(displayItems.map((item) => item.key));
 
-        console.log('[AnimatedCardList] useEffect triggered');
-        console.log('  Current children keys:', Array.from(currentKeys));
-        console.log('  Previous keys:', Array.from(previousKeysRef.current));
+        // Find which items to add and which to remove
+        const toAdd = items.filter((item) => !currentKeys.has(item.key));
+        const toRemove = displayItems.filter((item) => !newKeys.has(item.key) && !item.isExiting);
 
-        // Initial render case
-        if (isInitialRender.current) {
-            isInitialRender.current = false;
-            console.log('[AnimatedCardList] Initial render');
-
-            const initialStates = new Map<string, CardState>();
-
-            // Show all cards immediately without animation
-            currentCards.forEach((card) => {
-                initialStates.set(card.key, { ...card, visible: true });
-            });
-            console.log('  Showing initial cards:', Array.from(initialStates.keys()));
-
-            setCardStates(initialStates);
-            previousKeysRef.current = currentKeys;
+        if (toAdd.length === 0 && toRemove.length === 0) {
             return;
         }
 
-        // Generate new animation queue based on current state vs target state
-        const queue = generateAnimationQueue(cardStates, currentCards);
+        // Build new display list maintaining source order
+        const updated: ItemState[] = [];
+        const displayMap = new Map(displayItems.map((item) => [item.key, item]));
 
-        if (queue.length > 0) {
-            console.log('[AnimatedCardList] Setting animation queue:', queue);
-
-            // Prepare initial state for animations
-            const newStates = new Map(cardStates);
-
-            // Add any new cards that will be shown (set to invisible initially)
-            currentCards.forEach((card) => {
-                if (!newStates.has(card.key)) {
-                    newStates.set(card.key, { ...card, visible: false });
-                }
-            });
-
-            setCardStates(newStates);
-            setAnimationQueue(queue);
-        } else {
-            // No animations needed, just update elements
-            console.log('[AnimatedCardList] No animations needed, updating elements only');
-            const updatedStates = new Map(cardStates);
-            currentCards.forEach((card) => {
-                const existing = updatedStates.get(card.key);
-                if (existing) {
-                    updatedStates.set(card.key, { ...card, visible: existing.visible });
-                }
-            });
-            setCardStates(updatedStates);
+        // First, add all items from source in their original order
+        for (const sourceItem of items) {
+            const existing = displayMap.get(sourceItem.key);
+            if (existing) {
+                // Item already exists, keep it with updated component
+                updated.push({ ...existing, component: sourceItem.component });
+                displayMap.delete(sourceItem.key); // Mark as processed
+            } else {
+                // New item
+                updated.push({ key: sourceItem.key, component: sourceItem.component, isExiting: false });
+            }
         }
 
-        previousKeysRef.current = currentKeys;
-    }, [children, animationDelay]);
+        // Then, handle items that were removed (not in source but still in display)
+        for (const [key, item] of displayMap) {
+            if (!item.isExiting) {
+                // Mark as exiting
+                const exitingItem = { ...item, isExiting: true };
+                updated.push(exitingItem);
 
-    // Queue processor: Execute animation actions one by one
+                // Schedule removal after animation
+                const timer = setTimeout(() => {
+                    setDisplayItems((current) => current.filter((i) => i.key !== key));
+                    exitTimersRef.current.delete(key);
+                }, exitDuration);
+
+                exitTimersRef.current.set(key, timer);
+            } else {
+                // Already exiting, keep it
+                updated.push(item);
+            }
+        }
+
+        setDisplayItems(updated);
+    }, [items, exitDuration]);
+
+    // Cleanup timers on unmount
     useEffect(() => {
-        if (animationQueue.length === 0) return;
-
-        const [nextAction, ...remainingQueue] = animationQueue;
-
-        console.log(`[AnimatedCardList Queue Processor] Processing action:`, nextAction);
-        console.log(`  Remaining queue length: ${remainingQueue.length}`);
-
-        const timeout = setTimeout(() => {
-            console.log(`  Executing ${nextAction.type} for card: ${nextAction.cardKey}`);
-
-            setCardStates((prev) => {
-                const updated = new Map(prev);
-                const card = updated.get(nextAction.cardKey);
-
-                if (card) {
-                    updated.set(nextAction.cardKey, { ...card, visible: nextAction.type === 'show' });
-                } else {
-                    console.warn(`    Card not found in state: ${nextAction.cardKey}`);
-                }
-
-                const visibleCards = Array.from(updated.entries())
-                    .filter(([_, state]) => state.visible)
-                    .map(([key]) => key);
-                console.log(`    Visible cards after ${nextAction.type}:`, visibleCards);
-                console.log(`    All card keys in state:`, Array.from(updated.keys()));
-
-                return updated;
-            });
-
-            // Move to next action
-            setAnimationQueue(remainingQueue);
-        }, nextAction.delay);
-
-        return () => clearTimeout(timeout);
-    }, [animationQueue]);
-
-    // Render cards in order from children
-    const currentCards = extractCards(children);
-
-    const orderedCards = currentCards.map((card) => {
-        const state = cardStates.get(card.key);
-        return state || { ...card, visible: false };
-    });
-
-    console.log('[AnimatedCardList RENDER]');
-    console.log('  currentCards count:', currentCards.length);
-    console.log('  cardStates size:', cardStates.size);
-    console.log('  cardStates keys:', Array.from(cardStates.keys()));
-    console.log(
-        '  ordered cards visible:',
-        orderedCards.filter((c) => c.visible).map((c) => c.key),
-    );
+        return () => {
+            exitTimersRef.current.forEach((timer) => clearTimeout(timer));
+            exitTimersRef.current.clear();
+        };
+    }, []);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {orderedCards.map((card) => (
-                <CollapseRelaxed key={card.key} visible={card.visible}>
-                    {/* Card components (AiCard, TipsCard) use Fluent UI Card which supports refs,
-                        so we can pass them directly to CollapseRelaxed without a wrapper div.
-
-                        Important: Spacing (marginBottom) is applied directly to the Card components
-                        to ensure visual properties (border, shadow) render immediately during animation. */}
-                    {card.element}
+            {displayItems.map((item) => (
+                <CollapseRelaxed key={item.key} visible={!item.isExiting}>
+                    <div>{item.component}</div>
                 </CollapseRelaxed>
             ))}
         </div>
