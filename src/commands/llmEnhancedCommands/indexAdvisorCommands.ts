@@ -463,7 +463,7 @@ export async function optimizeQuery(
         }
     }
 
-    let indexesInfo;
+    let indexesInfo: IndexItemModel[] | undefined;
     try {
         const statsStart = Date.now();
         collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
