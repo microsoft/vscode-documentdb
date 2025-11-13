@@ -286,6 +286,14 @@ export const QueryInsightsMain = (): JSX.Element => {
         return hasMetricsError ? null : showMetricsSkeleton ? undefined : (value ?? null);
     };
 
+    // Helper to compute cell value with custom unavailable value
+    const getCellValue = <T,>(
+        accessor: () => T | null | undefined,
+        unavailableValue: T | null = null,
+    ): T | null | undefined => {
+        return hasMetricsError ? null : showMetricsSkeleton ? undefined : (accessor() ?? unavailableValue);
+    };
+
     const executionTime = getMetricValue(queryInsightsState.stage2Data?.executionTimeMs);
     const docsReturned = getMetricValue(queryInsightsState.stage2Data?.documentsReturned);
     const keysExamined = getMetricValue(queryInsightsState.stage2Data?.totalKeysExamined);
@@ -680,49 +688,33 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Execution Strategy')}
-                            value={
-                                hasMetricsError
-                                    ? null
-                                    : showMetricsSkeleton
-                                      ? undefined
-                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy ?? null)
-                            }
+                            value={getCellValue(
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy,
+                            )}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
-                            value={
-                                hasMetricsError
-                                    ? null
-                                    : showMetricsSkeleton
-                                      ? undefined
-                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed || l10n.t('None')
-                            }
+                            value={getCellValue(
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed,
+                                l10n.t('None'),
+                            )}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Examined-to-Returned Ratio')}
-                            value={
-                                hasMetricsError
-                                    ? null
-                                    : showMetricsSkeleton
-                                      ? undefined
-                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio ??
-                                        null)
-                            }
+                            value={getCellValue(
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio,
+                            )}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={
-                                hasMetricsError
-                                    ? null
-                                    : showMetricsSkeleton
-                                      ? undefined
-                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
-                                        ? l10n.t('Yes')
-                                        : l10n.t('No')
-                            }
+                            value={getCellValue(() =>
+                                queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
+                                    ? l10n.t('Yes')
+                                    : l10n.t('No'),
+                            )}
                             placeholder="skeleton"
                         />
                         <PerformanceRatingCell
