@@ -44,6 +44,19 @@ export interface QueryObject {
 
 /**
  * Context information needed for query optimization
+ *
+ * Usage Modes:
+ * ------------
+ * 1. Standard Mode (Production):
+ *    - Provide: sessionId, databaseName, collectionName, commandType
+ *    - Optional: query or queryObject
+ *    - The function will fetch execution plan and statistics from the database
+ *
+ * 2. Testing Framework Mode:
+ *    - Provide: databaseName, collectionName, commandType, executionPlan, collectionStats, indexStats
+ *    - Optional: sessionId (not needed when all data is preloaded)
+ *    - No database connection is made; all data is used as-is
+ *    - Useful for unit testing without database setup
  */
 export interface QueryOptimizationContext {
     // The session ID (optional when using preloaded data for testing)
@@ -60,11 +73,11 @@ export interface QueryOptimizationContext {
     queryObject?: QueryObject;
     // The detected command type
     commandType: CommandType;
-    // Pre-loaded execution plan
+    // Pre-loaded execution plan (for testing framework mode)
     executionPlan?: unknown;
-    // Pre-loaded collection stats
+    // Pre-loaded collection stats (for testing framework mode)
     collectionStats?: CollectionStats;
-    // Pre-loaded index stat
+    // Pre-loaded index stats (for testing framework mode)
     indexStats?: IndexStats[];
     // Preferred LLM model for optimization
     preferredModel?: string;

@@ -3,8 +3,48 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/**
+ * Index Advisor Testing Framework
+ *
+ * This test suite demonstrates the testing framework integration for the Index Advisor feature.
+ *
+ * Testing Framework Mode:
+ * -----------------------
+ * The Index Advisor can now operate in a "testing framework mode" where it accepts pre-loaded
+ * data instead of requiring a live database connection. This enables:
+ *
+ * 1. **Unit Testing**: Test index optimization logic without database setup
+ * 2. **Faster Tests**: No network calls or database operations
+ * 3. **Deterministic Results**: Fixed test data produces reproducible outcomes
+ * 4. **CI/CD Friendly**: Tests run in environments without database access
+ *
+ * Usage:
+ * ------
+ * To use testing framework mode, provide all three required fields in QueryOptimizationContext:
+ * - executionPlan: The MongoDB explain() output (can contain real or mock data)
+ * - collectionStats: Collection statistics (count, size, avgObjSize, etc.)
+ * - indexStats: Array of index statistics with usage data
+ *
+ * When all three are provided, the sessionId is optional and no database connection is made.
+ *
+ * Example:
+ * --------
+ * const context: QueryOptimizationContext = {
+ *     databaseName: 'testdb',
+ *     collectionName: 'users',
+ *     commandType: CommandType.Find,
+ *     executionPlan: { queryPlanner: {...}, executionStats: {...} },
+ *     collectionStats: { ns: 'testdb.users', count: 10000, ... },
+ *     indexStats: [{ name: 'email_1', key: { email: 1 }, ... }],
+ *     // No sessionId needed!
+ * };
+ *
+ * Note: The optimizeQuery function still requires GitHub Copilot to be available for
+ * generating recommendations. For full integration testing, mock the CopilotService.
+ */
+
 import { sanitizeExplainResult, CommandType, type QueryOptimizationContext } from './indexAdvisorCommands';
-import type { CollectionStats, IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
+import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 
 describe('Index Advisor Tests', () => {
     describe('sanitizeExplainResult', () => {
