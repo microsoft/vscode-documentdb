@@ -46,8 +46,8 @@ export interface QueryObject {
  * Context information needed for query optimization
  */
 export interface QueryOptimizationContext {
-    // The session ID
-    sessionId: string;
+    // The session ID (optional when using preloaded data for testing)
+    sessionId?: string;
     // Database name
     databaseName: string;
     // Collection name
@@ -377,24 +377,39 @@ export async function optimizeQuery(
     let explainResult: unknown;
     let collectionStats: CollectionStats | undefined;
     let indexes: IndexStats[] | undefined;
+    let clusterInfo: ClusterMetadata;
 
-    // TODO: allow null sessionId for testing framework
-    if (!queryContext.sessionId) {
-        throw new Error(l10n.t('sessionId is required for query optimization'));
-    }
-    const session = ClusterSession.getSession(queryContext.sessionId);
-    const client = session.getClient();
-    const clusterInfo = await client.getClusterMetadata();
-
-    // Check if we have pre-loaded data
-    const hasPreloadedData = queryContext.executionPlan;
+    // Check if we have pre-loaded data (testing framework mode)
+    const hasPreloadedData =
+        queryContext.executionPlan !== undefined &&
+        queryContext.collectionStats !== undefined &&
+        queryContext.indexStats !== undefined;
 
     if (hasPreloadedData) {
-        // Use pre-loaded data
+        // Use pre-loaded data for testing without database connection
         explainResult = queryContext.executionPlan;
-        collectionStats = queryContext.collectionStats!;
-        indexes = queryContext.indexStats!;
+        collectionStats = queryContext.collectionStats;
+        indexes = queryContext.indexStats;
+
+        // For pre-loaded data, create a minimal cluster info
+        clusterInfo = {
+            domainInfo_isAzure: 'false',
+            domainInfo_api: 'N/A',
+        };
     } else {
+        // Standard mode: require sessionId and fetch data from database
+        if (!queryContext.sessionId) {
+            throw new Error(
+                l10n.t(
+                    'sessionId is required for query optimization when not using pre-loaded data. For testing, provide executionPlan, collectionStats, and indexStats.',
+                ),
+            );
+        }
+
+        const session = ClusterSession.getSession(queryContext.sessionId);
+        const client = session.getClient();
+        clusterInfo = await client.getClusterMetadata();
+
         // Check if we have queryObject or need to parse query string
         if (!queryContext.queryObject && !queryContext.query) {
             throw new Error(l10n.t('query or queryObject is required when not using pre-loaded data'));
@@ -462,67 +477,68 @@ export async function optimizeQuery(
                 }),
             );
         }
-    }
 
-    let indexesInfo: IndexItemModel[] | undefined;
-    try {
-        const statsStart = Date.now();
-        collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
-        const statsDuration = Date.now() - statsStart;
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] getCollectionStats completed in {ms}ms', {
-                ms: statsDuration.toString(),
-            }),
-        );
+        // Fetch collection stats and indexes from database
+        let indexesInfo: IndexItemModel[] | undefined;
+        try {
+            const statsStart = Date.now();
+            collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
+            const statsDuration = Date.now() - statsStart;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] getCollectionStats completed in {ms}ms', {
+                    ms: statsDuration.toString(),
+                }),
+            );
 
-        const indexesInfoStart = Date.now();
-        indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
-        const indexesInfoDuration = Date.now() - indexesInfoStart;
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] listIndexes completed in {ms}ms', {
-                ms: indexesInfoDuration.toString(),
-            }),
-        );
+            const indexesInfoStart = Date.now();
+            indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
+            const indexesInfoDuration = Date.now() - indexesInfoStart;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] listIndexes completed in {ms}ms', {
+                    ms: indexesInfoDuration.toString(),
+                }),
+            );
 
-        const indexesStatsStart = Date.now();
-        const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
-        const indexesStatsDuration = Date.now() - indexesStatsStart;
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] getIndexStats completed in {ms}ms', {
-                ms: indexesStatsDuration.toString(),
-            }),
-        );
+            const indexesStatsStart = Date.now();
+            const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
+            const indexesStatsDuration = Date.now() - indexesStatsStart;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] getIndexStats completed in {ms}ms', {
+                    ms: indexesStatsDuration.toString(),
+                }),
+            );
 
-        // // TODO: handle search indexes for Atlas
-        // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
-        indexes = indexesStats.map((indexStat) => {
-            const indexInfo = indexesInfo?.find((idx) => idx.name === indexStat.name);
-            return {
-                ...indexStat,
-                ...indexInfo,
-            };
-        });
-        // indexes.push(...searchIndexes);
-    } catch (error) {
-        // They are not critical errors, we can continue without index stats and collection stats
-        // If the API calls failed, collectionStats and indexes remain undefined (safe to continue)
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] Failed to retrieve collection/index stats (non-critical): {message}', {
-                message: error instanceof Error ? error.message : String(error),
-            }),
-        );
+            // // TODO: handle search indexes for Atlas
+            // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
+            indexes = indexesStats.map((indexStat) => {
+                const indexInfo = indexesInfo?.find((idx) => idx.name === indexStat.name);
+                return {
+                    ...indexStat,
+                    ...indexInfo,
+                };
+            });
+            // indexes.push(...searchIndexes);
+        } catch (error) {
+            // They are not critical errors, we can continue without index stats and collection stats
+            // If the API calls failed, collectionStats and indexes remain undefined (safe to continue)
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] Failed to retrieve collection/index stats (non-critical): {message}', {
+                    message: error instanceof Error ? error.message : String(error),
+                }),
+            );
 
-        // Use basic index info as fallback if we have it (from successful listIndexes call)
-        if (indexesInfo && indexesInfo.length > 0) {
-            // We have index info but getIndexStats failed, convert to IndexStats format
-            indexes = indexesInfo
-                .filter((idx) => idx.key !== undefined)
-                .map((idx) => ({
-                    ...idx,
-                    host: 'unknown',
-                    accesses: 'N/A',
-                    key: idx.key!,
-                })) as IndexStats[];
+            // Use basic index info as fallback if we have it (from successful listIndexes call)
+            if (indexesInfo && indexesInfo.length > 0) {
+                // We have index info but getIndexStats failed, convert to IndexStats format
+                indexes = indexesInfo
+                    .filter((idx) => idx.key !== undefined)
+                    .map((idx) => ({
+                        ...idx,
+                        host: 'unknown',
+                        accesses: 'N/A',
+                        key: idx.key!,
+                    })) as IndexStats[];
+            }
         }
     }
 
