@@ -34,7 +34,7 @@ import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
 import { ChatMailRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import { useContext, useEffect, useState, type JSX } from 'react';
+import { useCallback, useContext, useEffect, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
@@ -70,16 +70,19 @@ export const QueryInsightsMain = (): JSX.Element => {
      * You can write:
      *   setQueryInsightsStateHelper(prev => ({ ...prev, stage1Data: data }))
      */
-    const setQueryInsightsStateHelper = (
-        updater:
-            | typeof currentContext.queryInsights
-            | ((prev: typeof currentContext.queryInsights) => typeof currentContext.queryInsights),
-    ): void => {
-        setCurrentContext((prev) => ({
-            ...prev,
-            queryInsights: typeof updater === 'function' ? updater(prev.queryInsights) : updater,
-        }));
-    };
+    const setQueryInsightsStateHelper = useCallback(
+        (
+            updater:
+                | typeof currentContext.queryInsights
+                | ((prev: typeof currentContext.queryInsights) => typeof currentContext.queryInsights),
+        ): void => {
+            setCurrentContext((prev) => ({
+                ...prev,
+                queryInsights: typeof updater === 'function' ? updater(prev.queryInsights) : updater,
+            }));
+        },
+        [setCurrentContext],
+    );
 
     /**
      * Use the explicit stage from state instead of deriving it
@@ -101,31 +104,34 @@ export const QueryInsightsMain = (): JSX.Element => {
      * Display error message to user for the given stage
      * Only displays once per error state to avoid duplicate toasts
      */
-    const displayStageError = (stage: 1 | 2 | 3, errorMessage: string): void => {
-        const errorKey = `stage${stage}-${errorMessage}`;
+    const displayStageError = useCallback(
+        (stage: 1 | 2 | 3, errorMessage: string): void => {
+            const errorKey = `stage${stage}-${errorMessage}`;
 
-        if (displayedErrors.has(errorKey)) {
-            return; // Already displayed this error
-        }
+            if (displayedErrors.has(errorKey)) {
+                return; // Already displayed this error
+            }
 
-        const stageNames = {
-            1: l10n.t('query insights'),
-            2: l10n.t('detailed execution analysis'),
-            3: l10n.t('AI recommendations'),
-        };
+            const stageNames = {
+                1: l10n.t('query insights'),
+                2: l10n.t('detailed execution analysis'),
+                3: l10n.t('AI recommendations'),
+            };
 
-        void trpcClient.common.displayErrorMessage.mutate({
-            message: l10n.t('Failed to load {0}', stageNames[stage]),
-            modal: false,
-            cause: errorMessage,
-        });
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Failed to load {0}', stageNames[stage]),
+                modal: false,
+                cause: errorMessage,
+            });
 
-        // Add error key to context's displayedErrors array
-        setQueryInsightsStateHelper((prev) => ({
-            ...prev,
-            displayedErrors: [...prev.displayedErrors, errorKey],
-        }));
-    };
+            // Add error key to context's displayedErrors array
+            setQueryInsightsStateHelper((prev) => ({
+                ...prev,
+                displayedErrors: [...prev.displayedErrors, errorKey],
+            }));
+        },
+        [displayedErrors, trpcClient, setQueryInsightsStateHelper],
+    );
 
     /**
      * Stage transition helper - handles moving between stages and cleaning up state
@@ -136,59 +142,62 @@ export const QueryInsightsMain = (): JSX.Element => {
      * - When transitioning to stage 2, clear data from stage 3
      * - Reset UI-specific flags when transitioning to new phases
      */
-    const transitionToStage = (phase: 1 | 2 | 3, status: 'loading' | 'success' | 'error' | 'cancelled'): void => {
-        console.log(`[Query Insights] Stage ${currentStage.phase}/${currentStage.status} → ${phase}/${status}`);
+    const transitionToStage = useCallback(
+        (phase: 1 | 2 | 3, status: 'loading' | 'success' | 'error' | 'cancelled'): void => {
+            console.log(`[Query Insights] Stage ${currentStage.phase}/${currentStage.status} → ${phase}/${status}`);
 
-        setQueryInsightsStateHelper((prev) => {
-            // Clear displayed errors tracking when entering loading state
-            // This allows error toasts to be shown again if the same error occurs on retry
-            const shouldClearErrors = status === 'loading';
-            const newState = {
-                ...prev,
-                displayedErrors: shouldClearErrors ? [] : prev.displayedErrors,
-            };
+            setQueryInsightsStateHelper((prev) => {
+                // Clear displayed errors tracking when entering loading state
+                // This allows error toasts to be shown again if the same error occurs on retry
+                const shouldClearErrors = status === 'loading';
+                const newState = {
+                    ...prev,
+                    displayedErrors: shouldClearErrors ? [] : prev.displayedErrors,
+                };
 
-            // Update current stage
-            newState.currentStage = { phase, status };
+                // Update current stage
+                newState.currentStage = { phase, status };
 
-            // Reset dependent stages when going back to earlier phases
-            if (phase === 1) {
-                // Reset everything when starting fresh
-                newState.stage2Data = null;
-                newState.stage2ErrorMessage = null;
-                newState.stage2ErrorCode = null;
-                newState.stage2Promise = null;
+                // Reset dependent stages when going back to earlier phases
+                if (phase === 1) {
+                    // Reset everything when starting fresh
+                    newState.stage2Data = null;
+                    newState.stage2ErrorMessage = null;
+                    newState.stage2ErrorCode = null;
+                    newState.stage2Promise = null;
 
-                newState.stage3Data = null;
-                newState.stage3ErrorMessage = null;
-                newState.stage3ErrorCode = null;
-                newState.stage3Promise = null;
-                newState.stage3RequestKey = null;
+                    newState.stage3Data = null;
+                    newState.stage3ErrorMessage = null;
+                    newState.stage3ErrorCode = null;
+                    newState.stage3Promise = null;
+                    newState.stage3RequestKey = null;
 
-                // Reset UI flags
-                setShowTipsCard(false);
-                setIsTipsCardDismissed(false);
-                setShowErrorCard(false);
-            } else if (phase === 2 && status === 'loading') {
-                // When entering stage 2 loading, clear stage 3 data only
-                newState.stage3Data = null;
-                newState.stage3ErrorMessage = null;
-                newState.stage3ErrorCode = null;
-                newState.stage3Promise = null;
-                newState.stage3RequestKey = null;
+                    // Reset UI flags
+                    setShowTipsCard(false);
+                    setIsTipsCardDismissed(false);
+                    setShowErrorCard(false);
+                } else if (phase === 2 && status === 'loading') {
+                    // When entering stage 2 loading, clear stage 3 data only
+                    newState.stage3Data = null;
+                    newState.stage3ErrorMessage = null;
+                    newState.stage3ErrorCode = null;
+                    newState.stage3Promise = null;
+                    newState.stage3RequestKey = null;
 
-                // Don't reset UI flags here - they should persist for the same query session
-                // They will be reset by phase 1 or phase 3 loading transitions
-            } else if (phase === 3 && status === 'loading') {
-                // Reset UI flags when starting new AI request
-                setShowTipsCard(false);
-                setIsTipsCardDismissed(false);
-                setShowErrorCard(false);
-            }
+                    // Don't reset UI flags here - they should persist for the same query session
+                    // They will be reset by phase 1 or phase 3 loading transitions
+                } else if (phase === 3 && status === 'loading') {
+                    // Reset UI flags when starting new AI request
+                    setShowTipsCard(false);
+                    setIsTipsCardDismissed(false);
+                    setShowErrorCard(false);
+                }
 
-            return newState;
-        });
-    };
+                return newState;
+            });
+        },
+        [currentStage.phase, currentStage.status, setQueryInsightsStateHelper],
+    );
 
     // Stage 1: Load when needed (fallback for when prefetch didn't run or when tab is already active)
     //
@@ -252,6 +261,10 @@ export const QueryInsightsMain = (): JSX.Element => {
         currentStage.status,
         queryInsightsState.stage1Data,
         queryInsightsState.stage1Promise,
+        trpcClient,
+        setQueryInsightsStateHelper,
+        transitionToStage,
+        displayStageError,
     ]);
 
     // Display errors when user switches to Query Insights tab or when error state changes
@@ -274,11 +287,13 @@ export const QueryInsightsMain = (): JSX.Element => {
         currentStage.status,
         currentStage.phase,
         queryInsightsState.stage1ErrorMessage,
+        queryInsightsState.stage1ErrorCode,
         queryInsightsState.stage2ErrorMessage,
+        queryInsightsState.stage2ErrorCode,
         queryInsightsState.stage3ErrorMessage,
-        // Note: Don't include displayedErrors as a dependency - it would cause re-runs
-        // when we add errors to the set, leading to duplicate detection issues
-    ]); // React to status/phase changes AND error message changes
+        queryInsightsState.stage3ErrorCode,
+        displayStageError,
+    ]);
 
     // Stage 2: Auto-start after Stage 1 completes successfully
     useEffect(() => {
@@ -329,6 +344,10 @@ export const QueryInsightsMain = (): JSX.Element => {
         queryInsightsState.stage1Data,
         queryInsightsState.stage2Data,
         queryInsightsState.stage2Promise,
+        trpcClient,
+        setQueryInsightsStateHelper,
+        transitionToStage,
+        displayStageError,
     ]);
 
     // Derived metric values from Stage 1 and Stage 2 data
