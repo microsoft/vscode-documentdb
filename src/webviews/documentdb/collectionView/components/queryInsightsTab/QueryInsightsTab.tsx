@@ -820,7 +820,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         stage2Data={queryInsightsState.stage2Data}
                         stage1Loading={currentStage.phase === 1 && !queryInsightsState.stage1Data}
                         stage2Loading={currentStage.phase >= 2 && !queryInsightsState.stage2Data}
-                        hasError={hasError}
+                        hasError={hasMetricsError}
                     />
 
                     {/* Quick Actions */}
