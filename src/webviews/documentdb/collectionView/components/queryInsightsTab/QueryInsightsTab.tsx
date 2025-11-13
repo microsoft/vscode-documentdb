@@ -94,22 +94,29 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [showErrorCard, setShowErrorCard] = useState(false);
 
     /**
-     * Track which stage errors have been displayed to avoid duplicate toasts
-     * Uses context's displayedErrors array, converted to Set for efficient lookup
-     * Cleared automatically by transitionToStage when entering loading state
-     */
-    const displayedErrors = new Set(queryInsightsState.displayedErrors);
-
-    /**
      * Display error message to user for the given stage
      * Only displays once per error state to avoid duplicate toasts
+     * Uses the setState updater function to read fresh state and update atomically
      */
     const displayStageError = useCallback(
         (stage: 1 | 2 | 3, errorMessage: string): void => {
             const errorKey = `stage${stage}-${errorMessage}`;
 
-            if (displayedErrors.has(errorKey)) {
-                return; // Already displayed this error
+            // Use updater function to check and update state atomically with fresh data
+            let shouldDisplay = false;
+            setQueryInsightsStateHelper((prev) => {
+                if (prev.displayedErrors.includes(errorKey)) {
+                    return prev; // Already displayed this error
+                }
+                shouldDisplay = true;
+                return {
+                    ...prev,
+                    displayedErrors: [...prev.displayedErrors, errorKey],
+                };
+            });
+
+            if (!shouldDisplay) {
+                return;
             }
 
             const stageNames = {
@@ -123,16 +130,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                 modal: false,
                 cause: errorMessage,
             });
-
-            // Add error key to context's displayedErrors array
-            setQueryInsightsStateHelper((prev) => ({
-                ...prev,
-                displayedErrors: [...prev.displayedErrors, errorKey],
-            }));
         },
         [trpcClient, setQueryInsightsStateHelper],
-        // Note: displayedErrors removed from dependencies - we use it from closure for the check,
-        // and the updater function always gets fresh state when modifying
     );
 
     /**
@@ -772,7 +771,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                             value={getCellValue(
                                 () => queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy,
                             )}
-                            placeholder="skeleton"
+                            loadingPlaceholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
@@ -780,14 +779,14 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 () => queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed,
                                 l10n.t('None'),
                             )}
-                            placeholder="skeleton"
+                            loadingPlaceholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Examined-to-Returned Ratio')}
                             value={getCellValue(
                                 () => queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio,
                             )}
-                            placeholder="skeleton"
+                            loadingPlaceholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
@@ -796,7 +795,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     ? l10n.t('Yes')
                                     : l10n.t('No'),
                             )}
-                            placeholder="skeleton"
+                            loadingPlaceholder="skeleton"
                         />
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
