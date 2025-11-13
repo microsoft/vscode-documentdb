@@ -1,7 +1,7 @@
-collectionName,query,expectedResult,notes
-a,"Missing Index","No single index exists for the query","db.a.find({user_id: 1234})","db.getCollection('a').createIndex({'user_id':1},{})"
-b,"Missing Index","No single index exists for the query","db.b.find({age: {$gt: 30, $lt: 40}})","db.getCollection('b').createIndex({'age':1},{})"
-c,"Missing Index","Composite index for find","db.c.find({country: 'US', city: 'NY'})","db.getCollection('c').createIndex({'country':1,'city':1},{'storageEngine':{'enableOrderedIndex':true}})"
-d,"Missing Index","Composite index for find and sort","db.d.find({score: {$gt: 42, $lt: 10340}}).sort({timestamp: -1})","db.getCollection('d').createIndex({'score':1,'timestamp':-1},{'name':'score_1_timestamp_-1','storageEngine':{'enableOrderedIndex':true}})"
-f,"Unused Index","Index is not needed on low selectivity field","db.f.find({gender: 'F'})","db.getCollection('f').dropIndex({'gender':1})"
-g,"No Index","Index is not needed on small collection","db.g.find({flag: true})","db.getCollection('g').dropIndex({'flag':1})"
+Category,Test Case,Tags,Collection,Positive / Negative,Query,Expected Index Advisor Suggestion,Explanation,Current Index,Comment
+Missing Index,Test Case 1,basic;single-field,users,Positive,db.users.find({user_id: 1234}),"db.getCollection('users').createIndex({'user_id':1},{})","No single index exists for the query field user_id",None,Basic single-field index creation test
+Missing Index,Test Case 2,basic;range-query,orders,Positive,"db.orders.find({age: {$gt: 30, $lt: 40}}})","db.getCollection('orders').createIndex({'age':1},{})","No index exists for range query on age field",None,Range query requires index for better performance
+Missing Index,Test Case 3,composite;multiple-fields,locations,Positive,"db.locations.find({country: 'US', city: 'NY'})","db.getCollection('locations').createIndex({'country':1,'city':1},{'storageEngine':{'enableOrderedIndex':true}})","Composite index needed for multi-field query",None,Multi-field query optimization
+Missing Index,Test Case 4,composite;sort,events,Positive,db.events.find({score: {$gt: 42}}).sort({timestamp: -1}),"db.getCollection('events').createIndex({'score':1,'timestamp':-1},{'name':'score_1_timestamp_-1','storageEngine':{'enableOrderedIndex':true}})","Composite index for filter and sort operations",None,Filter with sort requires compound index
+Unused Index,Test Case 5,optimization;low-selectivity,profiles,Negative,db.profiles.find({gender: 'F'}),"db.getCollection('profiles').dropIndex({'gender':1})","Index not needed on low selectivity field","{'gender':1}",Low cardinality field doesn't benefit from index
+No Index Needed,Test Case 6,optimization;small-collection,flags,Negative,db.flags.find({flag: true}),"db.getCollection('flags').dropIndex({'flag':1})","Index not needed on small collection","{'flag':1}",Small collections are better scanned

@@ -21,6 +21,8 @@ export function loadConfig(configPath: string): TestConfig {
 
 /**
  * Loads test cases from a CSV file
+ * Supports the new format with columns: Category, Test Case, Tags, Collection,
+ * Positive/Negative, Query, Expected Index Advisor Suggestion, Explanation, Current Index, Comment
  * @param csvPath Path to the CSV file
  * @returns Array of test cases
  */
@@ -32,13 +34,26 @@ export function loadTestCases(csvPath: string): TestCase[] {
         return [];
     }
 
-    // Parse header
-    const header = lines[0].split(',').map((h) => h.trim());
-    const colNameIdx = header.indexOf('collectionName');
-    const categoryIdx = header.indexOf('category');
-    const scenarioIdx = header.indexOf('scenarioDescription');
-    const expectedIdx = header.indexOf('expectedResult');
-    const queryIdx = header.indexOf('query');
+    // Parse header - support both old and new format
+    const header = lines[0].split(',').map((h) => h.trim().toLowerCase());
+
+    // New format column indices
+    const categoryIdx = header.findIndex((h) => h === 'category');
+    const testCaseIdx = header.findIndex((h) => h === 'test case');
+    const tagsIdx = header.findIndex((h) => h === 'tags');
+    const collectionIdx = header.findIndex((h) => h === 'collection');
+    const testTypeIdx = header.findIndex((h) => h === 'positive / negative' || h === 'positive/negative');
+    const queryIdx = header.findIndex((h) => h === 'query');
+    const expectedIdx = header.findIndex((h) => h === 'expected index advisor suggestion');
+    const explanationIdx = header.findIndex((h) => h === 'explanation');
+    const currentIndexIdx = header.findIndex((h) => h === 'current index');
+    const commentIdx = header.findIndex((h) => h === 'comment');
+
+    // Old format fallback column indices
+    const oldColNameIdx = header.findIndex((h) => h === 'collectionname');
+    const oldScenarioIdx = header.findIndex((h) => h === 'scenariodescription');
+    const oldExpectedIdx = header.findIndex((h) => h === 'expectedresult');
+    const oldNotesIdx = header.findIndex((h) => h === 'notes');
 
     // Parse rows
     const testCases: TestCase[] = [];
@@ -51,17 +66,36 @@ export function loadTestCases(csvPath: string): TestCase[] {
         // Simple CSV parsing (handles quoted fields)
         const values = parseCSVLine(line);
 
-        testCases.push({
-            testCaseName: `test-${i}`,
-            collectionName: values[colNameIdx] || '',
-            category: values[categoryIdx] || '',
-            scenarioDescription: values[scenarioIdx] || '',
-            executionPlan: {},
-            collectionStats: {},
-            indexStats: [],
-            expectedResult: values[expectedIdx] || '',
-            query: values[queryIdx],
-        });
+        // Try new format first
+        if (collectionIdx >= 0 && queryIdx >= 0) {
+            testCases.push({
+                testCaseName: testCaseIdx >= 0 ? values[testCaseIdx] || `test-${i}` : `test-${i}`,
+                collectionName: values[collectionIdx] || '',
+                category: categoryIdx >= 0 ? values[categoryIdx] || '' : '',
+                scenarioDescription: explanationIdx >= 0 ? values[explanationIdx] || '' : '',
+                query: values[queryIdx] || '',
+                expectedResult: expectedIdx >= 0 ? values[expectedIdx] || '' : '',
+                tags: tagsIdx >= 0 ? values[tagsIdx] || '' : undefined,
+                testType: testTypeIdx >= 0 ? values[testTypeIdx] || '' : undefined,
+                explanation: explanationIdx >= 0 ? values[explanationIdx] || '' : undefined,
+                currentIndex: currentIndexIdx >= 0 ? values[currentIndexIdx] || '' : undefined,
+                comment: commentIdx >= 0 ? values[commentIdx] || '' : undefined,
+            });
+        } else if (oldColNameIdx >= 0) {
+            // Fall back to old format
+            testCases.push({
+                testCaseName: `test-${i}`,
+                collectionName: values[oldColNameIdx] || '',
+                category: categoryIdx >= 0 ? values[categoryIdx] || '' : '',
+                scenarioDescription: oldScenarioIdx >= 0 ? values[oldScenarioIdx] || '' : '',
+                executionPlan: {},
+                collectionStats: {},
+                indexStats: [],
+                expectedResult: oldExpectedIdx >= 0 ? values[oldExpectedIdx] || '' : '',
+                query: queryIdx >= 0 ? values[queryIdx] : undefined,
+                notes: oldNotesIdx >= 0 ? values[oldNotesIdx] || '' : undefined,
+            });
+        }
     }
 
     return testCases;
@@ -214,49 +248,55 @@ export function saveResults(results: TestResult[], outputPath: string): void {
  */
 function saveResultsAsCSV(results: TestResult[], outputPath: string): void {
     const header = [
-        'Test Case Name',
-        'Collection Name',
         'Category',
-        'Scenario Description',
+        'Test Case',
+        'Tags',
+        'Collection',
+        'Positive / Negative',
         'Query',
-        'Expected Indexes',
+        'Expected Index Advisor Suggestion',
+        'Explanation',
+        'Current Index',
+        'Comment',
         'Suggested Indexes',
         'If Matches Expected',
         'Analysis',
         'Execution Plan (Sanitized)',
         'Updated Execution Plan',
-        'Query Performance',
-        'Updated Performance',
-        'Performance Improvement',
+        'Query Performance (ms)',
+        'Updated Performance (ms)',
+        'Performance Improvement (%)',
         'Collection Stats',
         'Index Stats',
         'Model Used',
         'Errors',
         'Timestamp',
-        'Notes',
     ];
 
     const rows = results.map((result) => [
-        escapeCSV(result.testCaseName), // Test Case Name
-        escapeCSV(result.collectionName), // Collection Name
         escapeCSV(result.category), // Category
-        escapeCSV(result.scenarioDescription), // Scenario Description
+        escapeCSV(result.testCaseName), // Test Case
+        escapeCSV(result.tags || ''), // Tags
+        escapeCSV(result.collectionName), // Collection
+        escapeCSV(result.testType || ''), // Positive / Negative
         escapeCSV(result.query || ''), // Query
-        escapeCSV(result.expectedResult), // Expected Indexes
+        escapeCSV(result.expectedResult), // Expected Index Advisor Suggestion
+        escapeCSV(result.explanation || result.scenarioDescription), // Explanation
+        escapeCSV(result.currentIndex || ''), // Current Index
+        escapeCSV(result.comment || result.notes || ''), // Comment
         escapeCSV(result.suggestions || ''), // Suggested Indexes
         result.matchesExpected !== undefined ? result.matchesExpected.toString() : '', // If Matches Expected
         escapeCSV(result.analysis || ''), // Analysis
         escapeCSV(result.executionPlan || ''), // Execution Plan
         escapeCSV(result.updatedExecutionPlan || ''), // Updated Execution Plan
-        result.queryPerformance !== undefined ? result.queryPerformance.toString() : '', // Query Performance
-        result.updatedPerformance !== undefined ? result.updatedPerformance.toString() : '', // Updated Performance
+        result.queryPerformance !== undefined ? result.queryPerformance.toFixed(2) : '', // Query Performance
+        result.updatedPerformance !== undefined ? result.updatedPerformance.toFixed(2) : '', // Updated Performance
         result.performanceImprovement !== undefined ? result.performanceImprovement.toFixed(2) : '', // Performance Improvement
         escapeCSV(result.collectionStats || ''), // Collection Stats
         escapeCSV(result.indexStats || ''), // Index Stats
         result.modelUsed || '', // Model Used
         escapeCSV(result.errors || ''), // Errors
         result.timestamp || '', // Timestamp
-        escapeCSV(result.notes || ''), // Notes
     ]);
 
     const csvContent = [header.join(','), ...rows.map((row) => row.join(','))].join('\n');

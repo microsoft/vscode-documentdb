@@ -1,5 +1,5 @@
 {
-  "clusterId": "",
+  "connectionString": "mongodb://username:password@host:port/database?authSource=admin",
   "databaseName": "testDatabase",
   "preferredModel": "gpt-4o",
   "fallbackModels": ["gpt-4o-mini"],

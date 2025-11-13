@@ -247,6 +247,13 @@ export async function runIndexAdvisorTests(context: IActionContext): Promise<voi
                         category: testCase.category,
                         scenarioDescription: testCase.scenarioDescription,
                         expectedResult: testCase.expectedResult,
+                        query: testCase.query,
+                        tags: testCase.tags,
+                        testType: testCase.testType,
+                        explanation: testCase.explanation,
+                        currentIndex: testCase.currentIndex,
+                        comment: testCase.comment,
+                        notes: testCase.notes,
                         errors: error instanceof Error ? error.message : String(error),
                         timestamp: new Date().toISOString(),
                     });
