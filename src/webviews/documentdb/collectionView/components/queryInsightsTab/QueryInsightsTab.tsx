@@ -352,38 +352,47 @@ export const QueryInsightsMain = (): JSX.Element => {
         displayStageError,
     ]);
 
-    // Derived metric values from Stage 1 and Stage 2 data
-    // Return undefined when loading, null when in error state, or the actual value
+    // Debug logging for state changes
+    useEffect(() => {
+        console.trace('currentStage changed to:', currentStage);
+    }, [currentStage]);
+
+    useEffect(() => {
+        console.trace('stage3Data changed:', queryInsightsState.stage3Data);
+        if (queryInsightsState.stage3Data) {
+            console.trace('  - improvementCards count:', queryInsightsState.stage3Data.improvementCards.length);
+            console.trace('  - improvementCards:', queryInsightsState.stage3Data.improvementCards);
+        }
+    }, [queryInsightsState.stage3Data]);
+
+    // Derived metric values from Stage 2 data only
+    // Return undefined when loading, null when in error state or no data, or the actual value
     // - undefined: Shows loading skeleton in metrics
-    // - null: Shows N/A in metrics (error state or unsupported platform)
+    // - null: Shows N/A in metrics (error state, no data, or unsupported platform)
     // - number: Shows the formatted value
-    const isLoading = currentStage.status === 'loading';
-    const hasError = currentStage.status === 'error';
+    //
+    // Show skeleton only when Stage 1 or Stage 2 is loading (not Stage 3)
+    const showMetricsSkeleton = currentStage.status === 'loading' && currentStage.phase < 3;
+    // Show N/A only when Stage 1 or Stage 2 has an error (Stage 3 errors don't affect metrics)
+    const hasMetricsError = currentStage.status === 'error' && currentStage.phase < 3;
 
-    const executionTime = hasError
-        ? null
-        : isLoading
-          ? undefined
-          : (queryInsightsState.stage2Data?.executionTimeMs ?? queryInsightsState.stage1Data?.executionTime ?? null);
+    // Helper to compute metric value based on error/skeleton state
+    const getMetricValue = <T,>(value: T | null | undefined): T | null | undefined => {
+        return hasMetricsError ? null : showMetricsSkeleton ? undefined : (value ?? null);
+    };
 
-    const docsReturned = hasError
-        ? null
-        : isLoading
-          ? undefined
-          : (queryInsightsState.stage2Data?.documentsReturned ?? null);
+    // Helper to compute cell value with custom unavailable value
+    const getCellValue = <T,>(
+        accessor: () => T | null | undefined,
+        unavailableValue: T | null = null,
+    ): T | null | undefined => {
+        return hasMetricsError ? null : showMetricsSkeleton ? undefined : (accessor() ?? unavailableValue);
+    };
 
-    const keysExamined = hasError
-        ? null
-        : isLoading
-          ? undefined
-          : (queryInsightsState.stage2Data?.totalKeysExamined ?? null);
-
-    const docsExamined = hasError
-        ? null
-        : isLoading
-          ? undefined
-          : (queryInsightsState.stage2Data?.totalDocsExamined ?? null);
-
+    const executionTime = getMetricValue(queryInsightsState.stage2Data?.executionTimeMs);
+    const docsReturned = getMetricValue(queryInsightsState.stage2Data?.documentsReturned);
+    const keysExamined = getMetricValue(queryInsightsState.stage2Data?.totalKeysExamined);
+    const docsExamined = getMetricValue(queryInsightsState.stage2Data?.totalDocsExamined);
     const performanceTips = [
         {
             title: l10n.t('Optimize Index Strategy'),
@@ -760,64 +769,48 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Execution Strategy')}
-                            value={
-                                hasError
-                                    ? null // Shows "N/A" - data unavailable due to error
-                                    : currentStage.phase < 2 || currentStage.status === 'loading'
-                                      ? undefined // Shows skeleton - still loading
-                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy ?? null)
-                            }
+                            value={getCellValue(
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy,
+                            )}
+                            placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
-                            value={
-                                hasError
-                                    ? null
-                                    : currentStage.phase < 2 || currentStage.status === 'loading'
-                                      ? undefined
-                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed ||
-                                        (queryInsightsState.stage2Data ? l10n.t('None') : null)
-                            }
+                            value={getCellValue(
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed,
+                                l10n.t('None'),
+                            )}
+                            placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Examined-to-Returned Ratio')}
-                            value={
-                                hasError
-                                    ? null
-                                    : currentStage.phase < 2 || currentStage.status === 'loading'
-                                      ? undefined
-                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio ??
-                                        null)
-                            }
+                            value={getCellValue(
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio,
+                            )}
+                            placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={
-                                hasError
-                                    ? null
-                                    : currentStage.phase < 2 || currentStage.status === 'loading'
-                                      ? undefined
-                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
-                                        ? l10n.t('Yes')
-                                        : queryInsightsState.stage2Data
-                                          ? l10n.t('No')
-                                          : null
-                            }
+                            value={getCellValue(() =>
+                                queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
+                                    ? l10n.t('Yes')
+                                    : l10n.t('No'),
+                            )}
+                            placeholder="skeleton"
                         />
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
                             rating={
-                                hasError
-                                    ? null // Shows "N/A" - data unavailable due to error
-                                    : currentStage.phase < 2 || currentStage.status === 'loading'
-                                      ? undefined // Shows skeleton - still loading
-                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score ??
-                                        null)
+                                hasMetricsError || showMetricsSkeleton
+                                    ? undefined
+                                    : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score
                             }
                             diagnostics={
-                                queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
+                                hasMetricsError || showMetricsSkeleton
+                                    ? undefined
+                                    : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
                             }
-                            visible={!!queryInsightsState.stage2Data}
+                            visible={!hasMetricsError && !showMetricsSkeleton && !!queryInsightsState.stage2Data}
                         />
                     </SummaryCard>
 
