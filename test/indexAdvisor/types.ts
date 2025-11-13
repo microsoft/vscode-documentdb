@@ -55,6 +55,16 @@ export interface TestCase {
     notes?: string;
     // Expected result (Mongo shell command)
     expectedResult: string;
+    // Tags (CSV mode)
+    tags?: string;
+    // Positive/Negative test type (CSV mode)
+    testType?: string;
+    // Explanation (CSV mode)
+    explanation?: string;
+    // Current Index (CSV mode)
+    currentIndex?: string;
+    // Comment (CSV mode)
+    comment?: string;
 }
 
 /**
@@ -112,6 +122,13 @@ export interface TestResult {
 
     // Timestamp
     timestamp?: string;
+
+    // CSV mode additional fields
+    tags?: string;
+    testType?: string;
+    explanation?: string;
+    currentIndex?: string;
+    comment?: string;
 }
 
 /**

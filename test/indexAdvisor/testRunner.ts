@@ -297,6 +297,12 @@ export async function executeTestCase(
         expectedResult: testCase.expectedResult,
         notes: testCase.notes,
         timestamp: new Date().toISOString(),
+        // CSV mode additional fields
+        tags: testCase.tags,
+        testType: testCase.testType,
+        explanation: testCase.explanation,
+        currentIndex: testCase.currentIndex,
+        comment: testCase.comment,
     };
     let queryContext: QueryOptimizationContext;
     let clusterId;
