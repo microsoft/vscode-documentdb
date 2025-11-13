@@ -281,30 +281,15 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Show N/A only when Stage 1 or Stage 2 has an error (Stage 3 errors don't affect metrics)
     const hasMetricsError = currentStage.status === 'error' && currentStage.phase < 3;
 
-    const executionTime = hasMetricsError
-        ? null
-        : showMetricsSkeleton
-          ? undefined
-          : (queryInsightsState.stage2Data?.executionTimeMs ?? null);
+    // Helper to compute metric value based on error/skeleton state
+    const getMetricValue = <T,>(value: T | null | undefined): T | null | undefined => {
+        return hasMetricsError ? null : showMetricsSkeleton ? undefined : (value ?? null);
+    };
 
-    const docsReturned = hasMetricsError
-        ? null
-        : showMetricsSkeleton
-          ? undefined
-          : (queryInsightsState.stage2Data?.documentsReturned ?? null);
-
-    const keysExamined = hasMetricsError
-        ? null
-        : showMetricsSkeleton
-          ? undefined
-          : (queryInsightsState.stage2Data?.totalKeysExamined ?? null);
-
-    const docsExamined = hasMetricsError
-        ? null
-        : showMetricsSkeleton
-          ? undefined
-          : (queryInsightsState.stage2Data?.totalDocsExamined ?? null);
-
+    const executionTime = getMetricValue(queryInsightsState.stage2Data?.executionTimeMs);
+    const docsReturned = getMetricValue(queryInsightsState.stage2Data?.documentsReturned);
+    const keysExamined = getMetricValue(queryInsightsState.stage2Data?.totalKeysExamined);
+    const docsExamined = getMetricValue(queryInsightsState.stage2Data?.totalDocsExamined);
     const performanceTips = [
         {
             title: l10n.t('Optimize Index Strategy'),
