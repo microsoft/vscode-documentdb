@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Extracts error code from a tRPC error by directly accessing depth 3.
+ * Extracts error code from a tRPC error by accessing error.cause.cause.code.
  *
  * TRPCClientError wraps errors in nested structures, and when serialized across
  * process boundaries, Error instances may become plain objects.
