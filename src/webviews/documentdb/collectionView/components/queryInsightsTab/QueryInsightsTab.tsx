@@ -695,40 +695,64 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Execution Strategy')}
-                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy}
+                            value={
+                                hasMetricsError
+                                    ? null
+                                    : showMetricsSkeleton
+                                      ? undefined
+                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy ?? null)
+                            }
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
                             value={
-                                queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed ||
-                                (queryInsightsState.stage2Data ? l10n.t('None') : undefined)
+                                hasMetricsError
+                                    ? null
+                                    : showMetricsSkeleton
+                                      ? undefined
+                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed || l10n.t('None')
                             }
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Examined-to-Returned Ratio')}
-                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio}
+                            value={
+                                hasMetricsError
+                                    ? null
+                                    : showMetricsSkeleton
+                                      ? undefined
+                                      : (queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio ??
+                                        null)
+                            }
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
                             value={
-                                queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
-                                    ? l10n.t('Yes')
-                                    : queryInsightsState.stage2Data
-                                      ? l10n.t('No')
-                                      : undefined
+                                hasMetricsError
+                                    ? null
+                                    : showMetricsSkeleton
+                                      ? undefined
+                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
+                                        ? l10n.t('Yes')
+                                        : l10n.t('No')
                             }
                             placeholder="skeleton"
                         />
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
-                            rating={queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score}
-                            diagnostics={
-                                queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
+                            rating={
+                                hasMetricsError || showMetricsSkeleton
+                                    ? undefined
+                                    : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score
                             }
-                            visible={!!queryInsightsState.stage2Data}
+                            diagnostics={
+                                hasMetricsError || showMetricsSkeleton
+                                    ? undefined
+                                    : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
+                            }
+                            visible={!hasMetricsError && !showMetricsSkeleton && !!queryInsightsState.stage2Data}
                         />
                     </SummaryCard>
 
