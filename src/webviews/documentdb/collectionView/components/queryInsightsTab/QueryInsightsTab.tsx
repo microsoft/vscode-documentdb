@@ -130,7 +130,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                 displayedErrors: [...prev.displayedErrors, errorKey],
             }));
         },
-        [displayedErrors, trpcClient, setQueryInsightsStateHelper],
+        [trpcClient, setQueryInsightsStateHelper],
+        // Note: displayedErrors removed from dependencies - we use it from closure for the check,
+        // and the updater function always gets fresh state when modifying
     );
 
     /**
