@@ -334,17 +334,20 @@ function removeConstantsFromFilter(obj: unknown): unknown
 function sanitizeStage(stage: unknown): unknown
 ```
 
-**Preload Mode Code Pattern:**
+**Preload Mode Code Pattern (Updated Implementation):**
 
 ```typescript
-// Check if we have pre-loaded data
-const hasPreloadedData = queryContext.executionPlan;
+// Check if we have pre-loaded data (testing framework mode)
+const hasPreloadedData =
+    queryContext.executionPlan !== undefined &&
+    queryContext.collectionStats !== undefined &&
+    queryContext.indexStats !== undefined;
 
 if (hasPreloadedData) {
-    // Use pre-loaded data (no database connection needed)
+    // Use pre-loaded data for testing without database connection
     explainResult = queryContext.executionPlan;
-    collectionStats = queryContext.collectionStats!;
-    indexes = queryContext.indexStats!;
+    collectionStats = queryContext.collectionStats;
+    indexes = queryContext.indexStats;
 
     // For pre-loaded data, create a minimal cluster info
     clusterInfo = {
@@ -352,13 +355,22 @@ if (hasPreloadedData) {
         domainInfo_api: 'N/A',
     };
 } else {
-    // Standard mode: fetch from database
-    const client = await ClustersClient.getClient(queryContext.clusterId);
+    // Standard mode: require sessionId and fetch data from database
+    if (!queryContext.sessionId) {
+        throw new Error(
+            'sessionId is required for query optimization when not using pre-loaded data. ' +
+            'For testing, provide executionPlan, collectionStats, and indexStats.'
+        );
+    }
+    
+    const session = ClusterSession.getSession(queryContext.sessionId);
+    const client = session.getClient();
+    clusterInfo = await client.getClusterMetadata();
     // ... fetch execution plan, stats, etc.
 }
 
-// Regardless of mode, sanitize before sending to LLM
-const sanitizedExplainResult = sanitizeExplainResult(explainResult);
+// Note: Sanitization functions are available but currently not applied in production flow
+// See indexAdvisorCommands.test.ts for sanitization testing examples
 ```
 
 ### Complete Example: Find Query
@@ -558,15 +570,41 @@ To enable more accurate index recommendations for complex queries, we are consid
 3. **No Sample Data**: Unlike query generation, no documents fetched
 4. **Field Names Preserved**: Allows meaningful recommendations
 5. **Operator Preservation**: Maintains query pattern analysis capability
-6. **Mode-Independent Privacy**: Sanitization applied regardless of standard or preload mode
+6. **Mode-Independent Privacy**: Sanitization functions available for both modes
 
 ### Preload Mode Specific Considerations:
 
 1. **Caller Responsibility**: External callers must understand the data they provide
 2. **Pre-sanitization Option**: Callers can sanitize data before providing it (defense in depth)
-3. **Extension Still Sanitizes**: Even in preload mode, the extension applies full sanitization
-4. **No Database Connection**: Preload mode cannot verify data sensitivity against database
-5. **Use Case Awareness**: Primarily for testing, batch processing, and external tool integration
+3. **No Database Connection**: Preload mode cannot verify data sensitivity against database
+4. **Use Case Awareness**: Primarily for testing, batch processing, and external tool integration
+5. **Testing Framework**: Complete unit tests available in `indexAdvisorCommands.test.ts`
+
+### Testing Framework Integration:
+
+The Index Advisor now supports a testing framework mode that enables comprehensive testing without requiring a database connection:
+
+**Testing Framework Features:**
+- **No Database Required**: Provide preloaded execution plans, collection stats, and index stats
+- **Optional sessionId**: When all data is preloaded, no session ID or cluster connection is needed
+- **Comprehensive Test Suite**: 12 unit tests covering sanitization and preload mode scenarios
+- **Deterministic Testing**: Fixed test data produces reproducible outcomes
+- **CI/CD Friendly**: Tests run in environments without database access
+
+**Example Test Usage:**
+```typescript
+const context: QueryOptimizationContext = {
+    databaseName: 'testdb',
+    collectionName: 'users',
+    commandType: CommandType.Find,
+    executionPlan: { queryPlanner: {...}, executionStats: {...} },
+    collectionStats: { ns: 'testdb.users', count: 10000, ... },
+    indexStats: [{ name: 'email_1', key: { email: 1 }, ... }],
+    // No sessionId needed for testing!
+};
+```
+
+See `src/commands/llmEnhancedCommands/indexAdvisorCommands.test.ts` for complete testing examples.
 
 ### If Future Enhancement Implemented (v2.0):
 
