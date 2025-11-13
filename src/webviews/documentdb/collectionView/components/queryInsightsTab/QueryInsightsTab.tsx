@@ -270,14 +270,34 @@ export const QueryInsightsMain = (): JSX.Element => {
         }
     }, [queryInsightsState.stage3Data]);
 
-    // Derived metric values from Stage 1 and Stage 2 data
-    // Use server-side execution time from stage2 (executionStats) when available, otherwise use stage1 (client-measured)
-    const executionTime =
-        queryInsightsState.stage2Data?.executionTimeMs ?? queryInsightsState.stage1Data?.executionTime ?? null;
-    const docsReturned = queryInsightsState.stage2Data?.documentsReturned ?? null;
-    const keysExamined = queryInsightsState.stage2Data?.totalKeysExamined ?? null;
-    const docsExamined = queryInsightsState.stage2Data?.totalDocsExamined ?? null;
+    // Derived metric values from Stage 2 data only
+    // Return undefined when loading, null when in error state or no data, or the actual value
+    // - undefined: Shows loading skeleton in metrics
+    // - null: Shows N/A in metrics (error state, no data, or unsupported platform)
+    // - number: Shows the formatted value
+    //
+    // Show skeleton only when Stage 1 or Stage 2 is loading (not Stage 3)
+    const showMetricsSkeleton = currentStage.status === 'loading' && currentStage.phase < 3;
+    // Show N/A only when Stage 1 or Stage 2 has an error (Stage 3 errors don't affect metrics)
+    const hasMetricsError = currentStage.status === 'error' && currentStage.phase < 3;
 
+    // Helper to compute metric value based on error/skeleton state
+    const getMetricValue = <T,>(value: T | null | undefined): T | null | undefined => {
+        return hasMetricsError ? null : showMetricsSkeleton ? undefined : (value ?? null);
+    };
+
+    // Helper to compute cell value with custom unavailable value
+    const getCellValue = <T,>(
+        accessor: () => T | null | undefined,
+        unavailableValue: T | null = null,
+    ): T | null | undefined => {
+        return hasMetricsError ? null : showMetricsSkeleton ? undefined : (accessor() ?? unavailableValue);
+    };
+
+    const executionTime = getMetricValue(queryInsightsState.stage2Data?.executionTimeMs);
+    const docsReturned = getMetricValue(queryInsightsState.stage2Data?.documentsReturned);
+    const keysExamined = getMetricValue(queryInsightsState.stage2Data?.totalKeysExamined);
+    const docsExamined = getMetricValue(queryInsightsState.stage2Data?.totalDocsExamined);
     const performanceTips = [
         {
             title: l10n.t('Optimize Index Strategy'),
@@ -668,40 +688,48 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Execution Strategy')}
-                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy}
+                            value={getCellValue(
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy,
+                            )}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
-                            value={
-                                queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed ||
-                                (queryInsightsState.stage2Data ? l10n.t('None') : undefined)
-                            }
+                            value={getCellValue(
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed,
+                                l10n.t('None'),
+                            )}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Examined-to-Returned Ratio')}
-                            value={queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio}
+                            value={getCellValue(
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio,
+                            )}
                             placeholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={
+                            value={getCellValue(() =>
                                 queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
                                     ? l10n.t('Yes')
-                                    : queryInsightsState.stage2Data
-                                      ? l10n.t('No')
-                                      : undefined
-                            }
+                                    : l10n.t('No'),
+                            )}
                             placeholder="skeleton"
                         />
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
-                            rating={queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score}
-                            diagnostics={
-                                queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
+                            rating={
+                                hasMetricsError || showMetricsSkeleton
+                                    ? undefined
+                                    : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score
                             }
-                            visible={!!queryInsightsState.stage2Data}
+                            diagnostics={
+                                hasMetricsError || showMetricsSkeleton
+                                    ? undefined
+                                    : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
+                            }
+                            visible={!hasMetricsError && !showMetricsSkeleton && !!queryInsightsState.stage2Data}
                         />
                     </SummaryCard>
 
