@@ -488,7 +488,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 // Only transition to error and display message if the error was accepted
                 if (wasAccepted) {
                     transitionToStage(3, 'error');
-                    displayStageError(3, errorMessage);
+                    // Error display is handled by useEffect when error state changes
                 }
                 // Return undefined to satisfy TypeScript without creating unhandled rejection
                 return undefined as never;
