@@ -331,8 +331,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                         stage2Promise: null,
                     }));
                     transitionToStage(2, 'error');
-                    // Display error message since user is actively on this tab
-                    displayStageError(2, errorMessage);
                     // Return undefined to satisfy TypeScript without creating unhandled rejection
                     return undefined as never;
                 });
