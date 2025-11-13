@@ -519,8 +519,8 @@ export const collectionsViewRouter = router({
         //   - Native MongoDB clusters
         const session: ClusterSession = ClusterSession.getSession(sessionId);
         const clusterMetadata = await session.getClient().getClusterMetadata();
-        // eslint-disable-next-line no-constant-condition
-        if (clusterMetadata?.domainInfo_api === 'RU' || true) {
+
+        if (clusterMetadata?.domainInfo_api === 'RU') {
             // TODO: Platform identification improvements needed
             // 1. Create a centralized platform detection service (ClusterSession.getPlatformType())
             // 2. Define platform capabilities enum (SupportsExplain, SupportsAggregation, etc.)
