@@ -27,6 +27,7 @@ import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
 import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigation';
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
+import { extractErrorCode } from './utils/errorCodeExtractor';
 
 interface QueryResults {
     tableHeaders?: string[];
@@ -139,9 +140,8 @@ export const CollectionView = (): JSX.Element => {
                 console.debug('Stage 1 data prefetched:', stage1Data);
             })
             .catch((error) => {
-                // Extract error code if present (custom property added by backend)
-                const errorCode =
-                    error instanceof Error && 'code' in error && typeof error.code === 'string' ? error.code : null;
+                // Extract error code by traversing the cause chain using the helper function
+                const errorCode = extractErrorCode(error);
 
                 // Mark stage as failed to prevent redundant fetch on tab switch
                 // Store both error message and code for UI pattern matching
@@ -150,7 +150,7 @@ export const CollectionView = (): JSX.Element => {
                     queryInsights: {
                         ...prev.queryInsights,
                         currentStage: { phase: 1, status: 'error' },
-                        stage1Error: error instanceof Error ? error.message : String(error),
+                        stage1ErrorMessage: error instanceof Error ? error.message : String(error),
                         stage1ErrorCode: errorCode,
                         stage1Promise: null,
                     },

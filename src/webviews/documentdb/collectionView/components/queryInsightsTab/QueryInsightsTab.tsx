@@ -31,13 +31,14 @@
  */
 
 import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
-import { SparkleRegular, WarningRegular } from '@fluentui/react-icons';
+import { ChatMailRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { useContext, useEffect, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
+import { extractErrorCode } from '../../utils/errorCodeExtractor';
 import { AnimatedCardList, type AnimatedCardItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
@@ -97,18 +98,6 @@ export const QueryInsightsMain = (): JSX.Element => {
     const displayedErrors = new Set(queryInsightsState.displayedErrors);
 
     /**
-     * Centralized error handler for Query Insights stages
-     * Extracts error message and code without displaying
-     */
-    const extractStageError = (error: unknown): { errorMessage: string; errorCode: string | null } => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const errorCode =
-            error instanceof Error && 'code' in error && typeof error.code === 'string' ? error.code : null;
-
-        return { errorMessage, errorCode };
-    };
-
-    /**
      * Display error message to user for the given stage
      * Only displays once per error state to avoid duplicate toasts
      */
@@ -149,7 +138,7 @@ export const QueryInsightsMain = (): JSX.Element => {
      */
     const transitionToStage = (phase: 1 | 2 | 3, status: 'loading' | 'success' | 'error' | 'cancelled'): void => {
         console.log(`[Query Insights] Stage ${currentStage.phase}/${currentStage.status} → ${phase}/${status}`);
-        
+
         setQueryInsightsStateHelper((prev) => {
             // Clear displayed errors tracking when entering loading state
             // This allows error toasts to be shown again if the same error occurs on retry
@@ -166,12 +155,12 @@ export const QueryInsightsMain = (): JSX.Element => {
             if (phase === 1) {
                 // Reset everything when starting fresh
                 newState.stage2Data = null;
-                newState.stage2Error = null;
+                newState.stage2ErrorMessage = null;
                 newState.stage2ErrorCode = null;
                 newState.stage2Promise = null;
 
                 newState.stage3Data = null;
-                newState.stage3Error = null;
+                newState.stage3ErrorMessage = null;
                 newState.stage3ErrorCode = null;
                 newState.stage3Promise = null;
                 newState.stage3RequestKey = null;
@@ -183,7 +172,7 @@ export const QueryInsightsMain = (): JSX.Element => {
             } else if (phase === 2 && status === 'loading') {
                 // When entering stage 2 loading, clear stage 3 data only
                 newState.stage3Data = null;
-                newState.stage3Error = null;
+                newState.stage3ErrorMessage = null;
                 newState.stage3ErrorCode = null;
                 newState.stage3Promise = null;
                 newState.stage3RequestKey = null;
@@ -239,10 +228,12 @@ export const QueryInsightsMain = (): JSX.Element => {
                     return data;
                 })
                 .catch((error) => {
-                    const { errorMessage, errorCode } = extractStageError(error);
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    const errorCode = extractErrorCode(error);
+
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
-                        stage1Error: errorMessage,
+                        stage1ErrorMessage: errorMessage,
                         stage1ErrorCode: errorCode,
                         stage1Promise: null,
                     }));
@@ -268,20 +259,23 @@ export const QueryInsightsMain = (): JSX.Element => {
     useEffect(() => {
         if (currentStage.status === 'error') {
             // Display error for the current stage
-            if (currentStage.phase === 1 && queryInsightsState.stage1Error) {
-                displayStageError(1, queryInsightsState.stage1Error);
-            } else if (currentStage.phase === 2 && queryInsightsState.stage2Error) {
-                displayStageError(2, queryInsightsState.stage2Error);
-            } else if (currentStage.phase === 3 && queryInsightsState.stage3Error) {
-                displayStageError(3, queryInsightsState.stage3Error);
+            // Skip displaying error dialog for RU platform - we show a friendly card instead
+            if (currentStage.phase === 1 && queryInsightsState.stage1ErrorMessage) {
+                if (queryInsightsState.stage1ErrorCode !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU') {
+                    displayStageError(1, queryInsightsState.stage1ErrorMessage);
+                }
+            } else if (currentStage.phase === 2 && queryInsightsState.stage2ErrorMessage) {
+                displayStageError(2, queryInsightsState.stage2ErrorMessage);
+            } else if (currentStage.phase === 3 && queryInsightsState.stage3ErrorMessage) {
+                displayStageError(3, queryInsightsState.stage3ErrorMessage);
             }
         }
     }, [
         currentStage.status,
         currentStage.phase,
-        queryInsightsState.stage1Error,
-        queryInsightsState.stage2Error,
-        queryInsightsState.stage3Error,
+        queryInsightsState.stage1ErrorMessage,
+        queryInsightsState.stage2ErrorMessage,
+        queryInsightsState.stage3ErrorMessage,
         // Note: Don't include displayedErrors as a dependency - it would cause re-runs
         // when we add errors to the set, leading to duplicate detection issues
     ]); // React to status/phase changes AND error message changes
@@ -311,10 +305,12 @@ export const QueryInsightsMain = (): JSX.Element => {
                     return data;
                 })
                 .catch((error) => {
-                    const { errorMessage, errorCode } = extractStageError(error);
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    const errorCode = extractErrorCode(error);
+
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
-                        stage2Error: errorMessage,
+                        stage2ErrorMessage: errorMessage,
                         stage2ErrorCode: errorCode,
                         stage2Promise: null,
                     }));
@@ -442,7 +438,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                 return response;
             })
             .catch((error: unknown) => {
-                const { errorMessage, errorCode } = extractStageError(error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                const errorCode = extractErrorCode(error);
 
                 // Only update state if this request is still the current one
                 let wasAccepted = false;
@@ -454,7 +451,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     wasAccepted = true;
                     return {
                         ...prev,
-                        stage3Error: errorMessage,
+                        stage3ErrorMessage: errorMessage,
                         stage3ErrorCode: errorCode,
                         stage3Promise: null,
                         stage3RequestKey: null,
@@ -674,24 +671,23 @@ export const QueryInsightsMain = (): JSX.Element => {
                             {l10n.t('Optimization Opportunities')}
                         </Text>
 
-                        {/* Error Handling Example:
-                            Use stage1ErrorCode to display platform-specific error messages.
-
-                            Example implementation:
-                            {queryInsightsState.stage1ErrorCode === 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
-                                <MarkdownCard
-                                    title={l10n.t('Query Insights Not Available')}
-                                    icon={<WarningRegular />}
-                                    showAiDisclaimer={false}
-                                    content={l10n.t(
-                                        'Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters. ' +
-                                        'This feature requires the MongoDB explain() command which is only available in vCore clusters. ' +
-                                        '\n\n**Available on:** Azure Cosmos DB for MongoDB vCore, Native MongoDB\n' +
-                                        '**Not available on:** Azure Cosmos DB for MongoDB RU'
-                                    )}
-                                />
-                            )}
-                        */}
+                        {/* Platform-specific error card for RU clusters */}
+                        {queryInsightsState.stage1ErrorCode === 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
+                            <MarkdownCard
+                                title={l10n.t('Query Insights Not Available')}
+                                icon={<ChatMailRegular />}
+                                showAiDisclaimer={false}
+                                content={l10n.t(
+                                    '**Query Insights for Azure Cosmos DB for MongoDB (RU) Accounts**\n\n' +
+                                        'This feature is currently not enabled for RU-based accounts. We recognize that these accounts have unique performance characteristics, and standard optimization patterns from other DocumentDB environments may not be applicable.\n\n' +
+                                        'To ensure our recommendations are accurate and genuinely helpful, a specific analysis tailored to the Request Unit (RU) model is required. For this reason, we have disabled the feature for this account type.\n\n' +
+                                        '---\n\n' +
+                                        '**Interested in performance tooling for RU?**\n\n' +
+                                        "We are gathering feedback to shape future tools. If you'd like to share your experience with query optimization on RU accounts or participate in design discussions, your input is highly valuable.\n\n" +
+                                        "Feel free to [**start a discussion on GitHub**](https://github.com/microsoft/vscode-documentdb/discussions) or reach out to us directly. We'd love to hear from you!",
+                                )}
+                            />
+                        )}
 
                         {/* Skeleton - shown only when Stage 1 is actively loading (not in error state) */}
                         {currentStage.phase === 1 && currentStage.status === 'loading' && (
@@ -721,7 +717,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 }
                                 isLoading={currentStage.phase === 3 && currentStage.status === 'loading'}
                                 enabled={currentStage.phase >= 2 && currentStage.status !== 'loading'}
-                                errorMessage={queryInsightsState.stage3Error ?? undefined}
+                                errorMessage={queryInsightsState.stage3ErrorMessage ?? undefined}
                                 onGetInsights={handleGetAISuggestions}
                                 onLearnMore={() => {
                                     void trpcClient.common.openUrl.mutate({
