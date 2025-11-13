@@ -15,18 +15,29 @@ import './MetricsRow.scss';
  * All metric components extend this to inherit:
  * - Consistent card styling
  * - Tooltip support
- * - Placeholder handling (skeleton/empty)
+ * - Placeholder handling (loading skeleton vs null value placeholder)
  * - Label/value layout
+ *
+ * Placeholder behavior:
+ * - When value is undefined: Shows loading skeleton (configurable via loadingPlaceholder)
+ * - When value is null: Shows null value placeholder (configurable via nullValuePlaceholder, default: 'N/A')
  */
 export interface MetricBaseProps {
     /** The label displayed at the top of the metric card */
     label: string;
 
-    /** The formatted value or custom React node to display */
+    /** The formatted value or custom React node to display
+     * - undefined: Data is loading (shows skeleton)
+     * - null: Data is unavailable/not applicable (shows nullValuePlaceholder)
+     * - string/number/ReactNode: Display the value
+     */
     value?: string | number | React.ReactNode;
 
-    /** How to display when value is null/undefined */
-    placeholder?: 'skeleton' | 'empty';
+    /** What to display while data is loading (when value is undefined) */
+    loadingPlaceholder?: 'skeleton' | 'empty';
+
+    /** What to display when value is explicitly null (data unavailable) */
+    nullValuePlaceholder?: string;
 
     /** Optional tooltip explanation shown on hover */
     tooltipExplanation?: string;
@@ -39,12 +50,19 @@ export interface MetricBaseProps {
 export const MetricBase: React.FC<MetricBaseProps> = ({
     label,
     value,
-    placeholder = 'skeleton',
+    loadingPlaceholder = 'skeleton',
+    nullValuePlaceholder = 'N/A',
     tooltipExplanation,
 }) => {
     const renderValue = () => {
-        if (value === null || value === undefined) {
-            if (placeholder === 'skeleton') {
+        // Explicit null means data is unavailable (e.g., error state, not supported)
+        if (value === null) {
+            return <span className="nullValue">{nullValuePlaceholder}</span>;
+        }
+
+        // Undefined means data is still loading
+        if (value === undefined) {
+            if (loadingPlaceholder === 'skeleton') {
                 return <SkeletonItem size={28} />;
             }
             return null; // empty

@@ -41,10 +41,17 @@ export interface GenericMetricProps extends Omit<MetricBaseProps, 'value'> {
 export const GenericMetric: React.FC<GenericMetricProps> = ({
     label,
     value,
-    placeholder = 'skeleton',
+    loadingPlaceholder = 'skeleton',
     tooltipExplanation,
 }) => {
-    return <MetricBase label={label} value={value} placeholder={placeholder} tooltipExplanation={tooltipExplanation} />;
+    return (
+        <MetricBase
+            label={label}
+            value={value}
+            loadingPlaceholder={loadingPlaceholder}
+            tooltipExplanation={tooltipExplanation}
+        />
+    );
 };
 
 /**

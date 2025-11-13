@@ -29,6 +29,7 @@ import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
 import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigation';
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
+import { extractErrorCode } from './utils/errorCodeExtractor';
 
 interface QueryResults {
     tableHeaders?: string[];
@@ -100,7 +101,6 @@ export const CollectionView = (): JSX.Element => {
      * This happens whenever the user executes a query (even if same query text)
      */
     useEffect(() => {
-        console.trace('[CollectionView] 🔄 Resetting query insights to initial state (Stage 1 loading)');
         setCurrentContext((prev) => ({
             ...prev,
             queryInsights: DefaultCollectionViewContext.queryInsights,
@@ -113,13 +113,9 @@ export const CollectionView = (): JSX.Element => {
      * Uses promise tracking to prevent duplicate requests
      */
     const prefetchQueryInsights = (): void => {
-        // Check if already loading or loaded or in-flight
-        if (
-            currentContext.queryInsights.stage1Data ||
-            (currentContext.queryInsights.currentStage.phase === 1 &&
-                currentContext.queryInsights.currentStage.status === 'loading') ||
-            currentContext.queryInsights.stage1Promise
-        ) {
+        // Check if already loaded or in-flight promise
+        // Don't check status === 'loading' because we just reset to that state before calling this
+        if (currentContext.queryInsights.stage1Data || currentContext.queryInsights.stage1Promise) {
             return; // Already handled
         }
 
@@ -138,11 +134,13 @@ export const CollectionView = (): JSX.Element => {
         // Handle completion
         void promise
             .then((stage1Data) => {
-                // Update state with data and clear promise
+                // Update state with data and mark stage as successful
+                // This prevents redundant fetch when user switches to Query Insights tab
                 setCurrentContext((prev) => ({
                     ...prev,
                     queryInsights: {
                         ...prev.queryInsights,
+                        currentStage: { phase: 1, status: 'success' },
                         stage1Data: stage1Data,
                         stage1Promise: null,
                     },
@@ -150,12 +148,18 @@ export const CollectionView = (): JSX.Element => {
                 console.debug('Stage 1 data prefetched:', stage1Data);
             })
             .catch((error) => {
-                // Silent fail - user can still request insights manually via tab
+                // Extract error code by traversing the cause chain using the helper function
+                const errorCode = extractErrorCode(error);
+
+                // Mark stage as failed to prevent redundant fetch on tab switch
+                // Store both error message and code for UI pattern matching
                 setCurrentContext((prev) => ({
                     ...prev,
                     queryInsights: {
                         ...prev.queryInsights,
-                        stage1Error: error instanceof Error ? error.message : String(error),
+                        currentStage: { phase: 1, status: 'error' },
+                        stage1ErrorMessage: error instanceof Error ? error.message : String(error),
+                        stage1ErrorCode: errorCode,
                         stage1Promise: null,
                     },
                 }));
