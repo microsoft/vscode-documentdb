@@ -66,6 +66,7 @@ export namespace ext {
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
         export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
         export const localPort = 'documentDB.local.port';
+        export const collectionViewDefaultPageSize = 'documentDB.collectionView.defaultPageSize';
 
         export namespace vsCode {
             export const proxyStrictSSL = 'http.proxyStrictSSL';

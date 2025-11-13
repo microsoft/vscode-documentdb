@@ -403,6 +403,7 @@
   "Index drop failed for \"{indexName}\": {error} [{durationMs}ms]": "Index drop failed for \"{indexName}\": {error} [{durationMs}ms]",
   "Index Name": "Index Name",
   "Index optimization is using model \"{actualModel}\" instead of preferred \"{preferredModel}\". Recommendations may be less optimal.": "Index optimization is using model \"{actualModel}\" instead of preferred \"{preferredModel}\". Recommendations may be less optimal.",
+  "Index Options": "Index Options",
   "Index Used": "Index Used",
   "Index visibility modification completed with warning": "Index visibility modification completed with warning",
   "Indexes": "Indexes",

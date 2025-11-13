@@ -24,7 +24,7 @@ export class MongoRUResourceItem extends ClusterItemBase {
         'vscode-azext-azureutils',
         'resources',
         'azureIcons',
-        'MongoClusters.svg',
+        'AzureCosmosDb.svg',
     );
 
     constructor(

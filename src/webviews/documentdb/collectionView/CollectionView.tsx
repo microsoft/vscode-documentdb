@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
+import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
 import './collectionView.scss';
@@ -17,6 +18,7 @@ import {
     DefaultCollectionViewContext,
     Views,
 } from './collectionViewContext';
+import { type CollectionViewWebviewConfigurationType } from './collectionViewController';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
 import { QueryInsightsMain } from './components/queryInsightsTab/QueryInsightsTab';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
@@ -44,7 +46,7 @@ export const CollectionView = (): JSX.Element => {
      * Use the configuration object to access the data passed to the webview at its creation.
      * Feel free to update the content of the object. It won't be synced back to the extension though.
      */
-    //const configuration = useConfiguration<DocumentsViewWebviewConfigurationType>();
+    const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
 
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
@@ -68,7 +70,13 @@ export const CollectionView = (): JSX.Element => {
      */
 
     // that's our current global context of the view
-    const [currentContext, setCurrentContext] = useState<CollectionViewContextType>(DefaultCollectionViewContext);
+    const [currentContext, setCurrentContext] = useState<CollectionViewContextType>(() => ({
+        ...DefaultCollectionViewContext,
+        activeQuery: {
+            ...DefaultCollectionViewContext.activeQuery,
+            pageSize: configuration.defaultPageSize,
+        },
+    }));
 
     useSelectiveContextMenuPrevention();
 

@@ -67,6 +67,10 @@ function createImprovementCard(
 ): ImprovementCard {
     const cardTitle = getCardTitle(improvement.action);
     const indexSpecStr = JSON.stringify(improvement.indexSpec, null, 2);
+    const indexOptionsStr =
+        improvement.indexOptions && Object.keys(improvement.indexOptions).length > 0
+            ? JSON.stringify(improvement.indexOptions, null, 2)
+            : undefined;
     const primaryButtonLabel = getPrimaryButtonLabel(improvement.action, improvement.mongoShell);
 
     return {
@@ -78,6 +82,7 @@ function createImprovementCard(
         recommendedIndex: indexSpecStr,
         indexName: improvement.indexName,
         recommendedIndexDetails: generateIndexExplanation(improvement),
+        indexOptions: indexOptionsStr,
         details: improvement.risks || l10n.t('Additional write and storage overhead for maintaining a new index.'),
         mongoShellCommand: improvement.mongoShell,
         primaryButton: {
