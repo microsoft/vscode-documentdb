@@ -29,6 +29,7 @@ import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
+import { ENABLE_AI_QUERY_GENERATION } from '../../constants';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
@@ -189,17 +190,20 @@ const ToolbarQueryOperations = (): JSX.Element => {
 
             <ToolbarDividerTransparent />
 
-            <ToolbarToggleButton
-                appearance="subtle"
-                aria-label={l10n.t('Generate query with AI')}
-                icon={currentContext.isAiRowVisible ? <SparkleFilled /> : <SparkleRegular />}
-                name="aiToggle"
-                value="copilot"
-            >
-                {l10n.t('Generate')}
-            </ToolbarToggleButton>
-
-            <ToolbarDividerTransparent />
+            {ENABLE_AI_QUERY_GENERATION && (
+                <>
+                    <ToolbarToggleButton
+                        appearance="subtle"
+                        aria-label={l10n.t('Generate query with AI')}
+                        icon={currentContext.isAiRowVisible ? <SparkleFilled /> : <SparkleRegular />}
+                        name="aiToggle"
+                        value="copilot"
+                    >
+                        {l10n.t('Generate')}
+                    </ToolbarToggleButton>
+                    <ToolbarDividerTransparent />
+                </>
+            )}
 
             <ToolbarButton
                 aria-label={l10n.t('Refresh current view')}
