@@ -68,6 +68,7 @@
     "pretest": "npm run build",
     "test": "vscode-test",
     "jesttest": "jest",
+    "csv-test": "ts-node scripts/runCSVTests.ts",
     "update-grammar": "antlr4ts -visitor ./grammar/mongo.g4 -o src/documentdb/grammar",
     "webpack-dev": "rimraf ./dist && npm run webpack-dev-ext && npm run webpack-dev-wv",
     "webpack-prod": "rimraf ./dist && npm run webpack-prod-ext && npm run webpack-prod-wv",

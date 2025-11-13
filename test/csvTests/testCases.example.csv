@@ -1,0 +1,4 @@
+Category | Test Case | Tags | Collection | Positive/Negative | Query | Expected Index Advisor Suggestion | Explanation | Comment
+Basic | Single Field Index | index,find | users | Positive | db.users.find({email: "test@example.com"}) | Create an index on email field | Query filters by email field without index | Basic find query test
+Basic | Compound Index | index,find | users | Positive | db.users.find({status: "active", age: {$gt: 25}}) | Create a compound index on (status, age) | Query filters by multiple fields | Compound index recommendation
+Performance | Sort Without Index | index,sort | orders | Positive | db.orders.find({}).sort({createdAt: -1}).limit(10) | Create an index on createdAt field | Sort operation on large collection | Sort performance optimization

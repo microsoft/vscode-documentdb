@@ -1,0 +1,6 @@
+{
+  "connectionString": "mongodb://localhost:27017",
+  "databaseName": "indexAdvisorTests",
+  "preferredModel": "gpt-4",
+  "fallbackModels": ["gpt-3.5-turbo"]
+}
