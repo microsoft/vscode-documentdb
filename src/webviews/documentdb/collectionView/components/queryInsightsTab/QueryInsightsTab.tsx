@@ -270,13 +270,40 @@ export const QueryInsightsMain = (): JSX.Element => {
         }
     }, [queryInsightsState.stage3Data]);
 
-    // Derived metric values from Stage 1 and Stage 2 data
-    // Use server-side execution time from stage2 (executionStats) when available, otherwise use stage1 (client-measured)
-    const executionTime =
-        queryInsightsState.stage2Data?.executionTimeMs ?? queryInsightsState.stage1Data?.executionTime ?? null;
-    const docsReturned = queryInsightsState.stage2Data?.documentsReturned ?? null;
-    const keysExamined = queryInsightsState.stage2Data?.totalKeysExamined ?? null;
-    const docsExamined = queryInsightsState.stage2Data?.totalDocsExamined ?? null;
+    // Derived metric values from Stage 2 data only
+    // Return undefined when loading, null when in error state or no data, or the actual value
+    // - undefined: Shows loading skeleton in metrics
+    // - null: Shows N/A in metrics (error state, no data, or unsupported platform)
+    // - number: Shows the formatted value
+    //
+    // Show skeleton only when Stage 1 or Stage 2 is loading (not Stage 3)
+    const showMetricsSkeleton = currentStage.status === 'loading' && currentStage.phase < 3;
+    // Show N/A only when Stage 1 or Stage 2 has an error (Stage 3 errors don't affect metrics)
+    const hasMetricsError = currentStage.status === 'error' && currentStage.phase < 3;
+
+    const executionTime = hasMetricsError
+        ? null
+        : showMetricsSkeleton
+          ? undefined
+          : (queryInsightsState.stage2Data?.executionTimeMs ?? null);
+
+    const docsReturned = hasMetricsError
+        ? null
+        : showMetricsSkeleton
+          ? undefined
+          : (queryInsightsState.stage2Data?.documentsReturned ?? null);
+
+    const keysExamined = hasMetricsError
+        ? null
+        : showMetricsSkeleton
+          ? undefined
+          : (queryInsightsState.stage2Data?.totalKeysExamined ?? null);
+
+    const docsExamined = hasMetricsError
+        ? null
+        : showMetricsSkeleton
+          ? undefined
+          : (queryInsightsState.stage2Data?.totalDocsExamined ?? null);
 
     const performanceTips = [
         {
