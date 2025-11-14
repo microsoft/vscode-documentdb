@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.6.0
+
+### New Features & Improvements
+
+- **Query Insights with Performance Advisor**: Introduces a new "Query Insights" tab that provides a three-stage analysis of query performance. This includes a static query plan, detailed execution statistics, and AI-powered recommendations from GitHub Copilot to help understand performance bottlenecks and optimize slow queries.
+- **Improved Query Specification**: The query editor now supports `projection`, `sort`, `skip`, and `limit` parameters, in addition to `filter`. Autocompletion is also enabled for `projection` and `sort` fields.
+- **Index Management from the Tree View**: Users can now `drop`, `hide`, and `unhide` indexes directly from the context menu in the Connections View.
+
+### Fixes
+
+- **UI Element Visibility**: Fixed issues where the autocomplete list in the query editor and tooltips in tree/table views could be hidden by other UI elements.
+
 ## 0.5.2
 
 ### New Features & Improvements
