@@ -770,7 +770,7 @@ export class ClustersClient {
         if (!this._llmEnhancedFeatureApis) {
             throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
-        return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, verbosity,options);
+        return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, verbosity, options);
     }
 
     /**
