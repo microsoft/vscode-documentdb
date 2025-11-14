@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type IndexItem } from '../../tree/documentdb/IndexItem';
-import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
+import { getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
 export async function unhideIndex(context: IActionContext, node: IndexItem): Promise<void> {
@@ -27,12 +27,11 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
     const indexName = node.indexInfo.name;
     const collectionName = node.collectionInfo.name;
 
-    const confirmed = await getConfirmationAsInSettings(
+    const confirmed = await getConfirmationWithClick(
         l10n.t('Unhide index?'),
         l10n.t('Unhide index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
             '\n' +
             l10n.t('This will allow the query planner to use this index again.'),
-        indexName,
     );
 
     if (!confirmed) {
