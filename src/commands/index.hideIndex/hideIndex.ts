@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type IndexItem } from '../../tree/documentdb/IndexItem';
-import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
+import { getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
 export async function hideIndex(context: IActionContext, node: IndexItem): Promise<void> {
@@ -32,12 +32,11 @@ export async function hideIndex(context: IActionContext, node: IndexItem): Promi
     const indexName = node.indexInfo.name;
     const collectionName = node.collectionInfo.name;
 
-    const confirmed = await getConfirmationAsInSettings(
+    const confirmed = await getConfirmationWithClick(
         l10n.t('Hide index?'),
         l10n.t('Hide index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
             '\n' +
             l10n.t('This will prevent the query planner from using this index.'),
-        indexName,
     );
 
     if (!confirmed) {

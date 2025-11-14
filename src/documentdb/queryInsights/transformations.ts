@@ -98,13 +98,14 @@ function createImprovementCard(
                 mongoShell: improvement.mongoShell,
             },
         },
-        secondaryButton: {
-            label: l10n.t('Learn More'),
-            actionId: 'learnMore',
-            payload: {
-                topic: 'index-optimization',
-            },
-        },
+        // TODO: Temporarily removing secondary button until we have relevant content
+        // secondaryButton: {
+        //     label: l10n.t('Learn More'),
+        //     actionId: 'learnMore',
+        //     payload: {
+        //         topic: 'index-optimization',
+        //     },
+        // },
     };
 }
 
@@ -114,16 +115,16 @@ function createImprovementCard(
 function getPrimaryButtonLabel(action: string, mongoShell: string): string {
     switch (action) {
         case 'create':
-            return l10n.t('Create Index');
+            return l10n.t('Create Index…');
         case 'drop':
-            return l10n.t('Drop Index');
+            return l10n.t('Drop Index…');
         case 'modify':
             if (mongoShell.includes('.hideIndex(')) {
                 return l10n.t('Hide Index');
             } else if (mongoShell.includes('.unhideIndex(')) {
                 return l10n.t('Unhide Index');
             }
-            return l10n.t('Modify Index');
+            return l10n.t('Modify Index…');
         default:
             return l10n.t('No Action');
     }
