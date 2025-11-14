@@ -9,8 +9,8 @@
 
 import * as l10n from '@vscode/l10n';
 import { type Document, type Filter, type MongoClient, type Sort } from 'mongodb';
-import { type ExplainVerbosity } from './client/QueryInsightsApis';
 import { ext } from '../extensionVariables';
+import { type ExplainVerbosity } from './client/QueryInsightsApis';
 
 /**
  * Options for explain operations
