@@ -97,8 +97,10 @@ Thinking / analysis tips (useful signals to form recommendations; don't output t
 - Prefer indexes that reduce document fetches and align with the winning plan's chosen index.
 - **Wildcard index**: If queries filter on multiple unpredictable or dynamic nested fields and no existing index covers them efficiently, and the collection is large (>100k documents), recommend a wildcard index (\`$**\`). Wildcard index should be suggested as an alternative of regular index if schema may vary significantly, but set medium priority.
 - **Equality first in compound index**: Always place equality (\`=\`) fields first in a compound index. These fields provide the highest selectivity and allow efficient index filtering.
-- **Restrictive range order**: When multiple range fields exist, prioritize the more restrictive ranges (those that filter out more documents) first to reduce scanned documents and improve performance.
-- **First range/anchored regex**: Place the first range field (\`$gt\`, \`$lt\`, \`$in\`) or anchored \`$regex\` immediately after equality fields. Only this first range/anchored regex can benefit from index range scanning.
+- **Prioritize high selectivity fields**: When multiple range fields exist, prioritize the high-selectivity fields (those that filter out more documents) first to reduce scanned documents and improve performance.
+- **Prioritize restrictive range**: When multiple range fields exist, prioritize the more restrictive ranges first to reduce scanned documents and improve performance.
+- **Multiple range filters**: multiple range filters could also get benifit from a compound index, so compound index is also recommended.
+- **Regex considerations**: For \`$regex\` queries, suggest indexes for both anchored (e.g., \`^abc\`) and non-anchored patterns (e.g., \`abc\`), as non-anchored regexes can also benefit from indexes by narrowing down the documents needed to be scanned.
 - **Multikey/array considerations**: Be aware that multikey or array fields may affect index ordering and whether index-only coverage is achievable.
 - **Filter → sort pushdown**: In a compound index, place filter fields (equality and the first range/anchored regex) first, followed by sort-only fields, to maximize index pushdown and avoid in-memory sorting.
 - **Sort-only queries**: If a query only includes a sort without filters, consider a dedicated index on the sort fields.
@@ -107,14 +109,12 @@ Thinking / analysis tips (useful signals to form recommendations; don't output t
 - Consider **composite indexes** including query, sort, and projection fields; check selectivity first to avoid unnecessary indexes.
 - If the **Azure_Cluster_Type** is "vCore" and an index is being created (and it is **not** a wildcard index), always include in indexOptions the setting: "storageEngine": { "enableOrderedIndex": true }.
 - For \`$or\` queries, prefer a single compound index if branches share leading fields; otherwise, consider separate indexes with intersection.
-- Avoid **duplicate or redundant indexes**; after creating a compound index, also suggest dropping prefix indexes.
-- **Avoid redundant indexes**: If an existing compound index's leading fields (prefix) already satisfy the current query's filter and sort requirements, do not recommend creating a new index. Creating such an index would be redundant and only increase storage and write overhead without improving query performance.
+- For \`$or\` queries, low-selectivity strategy is not applicable, and **creating corresponding indexes is recommended**.
+- **Avoid redundant indexes**; after creating a compound index, remember to suggest dropping any exisiting prefix indexes as they are redundant indexes after the compound index created.
 - Consider **index size and write amplification**; prefer partial or sparse indexes or selective prefixes.
 - **Small collection**: Do not create new indexes on collections with fewer than 1000 documents, as the performance gain is negligible and the index maintenance cost may outweigh the benefit.
-- **Low-selectivity fields**: Do not create indexes on fields where the number of documents returned is close to the total number of documents (\`nReturned ≈ totalDocsExamined\`), because the index will not effectively reduce scanned documents.
-- **Large collection with low-selectivity fields**: Avoid creating ordinary indexes on fields with low selectivity even in large collections; if indexing is necessary, consider using partial or sparse indexes to target only a subset of documents, improving query efficiency while reducing write/storage overhead.
+- **Low-selectivity fields**: Do not create indexes on fields where the number of documents returned is close to the total number of documents (could get from collection stats), because the index will not effectively reduce scanned documents.
 - **Explain plan validation**: Verify \`indexBounds\` in \`explain()\` output — \`[MinKey, MaxKey]\` means the field didn't benefit from the index.
-- **Regex uncertainty**: If you do not know whether a \`$regex\` pattern is anchored (starts with \`^\`) or not, assume it is anchored for potential index use, but set the priority to medium and clearly state this uncertainty in the justification for the recommendation.
 
 Output JSON schema (required shape; **adhere exactly**):
 \`\`\`

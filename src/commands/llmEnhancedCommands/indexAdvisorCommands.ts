@@ -429,6 +429,7 @@ export async function optimizeQuery(
                 const explainData = await client.explainFind(
                     queryContext.databaseName,
                     queryContext.collectionName,
+                    clusterInfo.domainInfo_isAzure === 'true' && clusterInfo.domainInfo_api === 'vCore' ? 'allPlansExecution' : 'executionStats',
                     explainOptions,
                 );
                 explainResult = explainData;

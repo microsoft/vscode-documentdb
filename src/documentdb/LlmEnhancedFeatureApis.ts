@@ -240,6 +240,7 @@ export class llmEnhancedFeatureApis {
     async explainFind(
         databaseName: string,
         collectionName: string,
+        verbosity: string = 'executionStats',
         options: ExplainOptions = {},
     ): Promise<ExplainResult> {
         ext.outputChannel.trace(
@@ -277,7 +278,7 @@ export class llmEnhancedFeatureApis {
 
         const command: Document = {
             explain: findCmd,
-            verbosity: 'executionStats',
+            verbosity: verbosity,
         };
 
         const explainResult = await db.command(command);

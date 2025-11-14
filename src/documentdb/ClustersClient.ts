@@ -764,12 +764,13 @@ export class ClustersClient {
     async explainFind(
         databaseName: string,
         collectionName: string,
+        verbosity: string,
         options: ExplainOptions = {},
     ): Promise<ExplainResult> {
         if (!this._llmEnhancedFeatureApis) {
             throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
-        return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, options);
+        return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, verbosity,options);
     }
 
     /**
