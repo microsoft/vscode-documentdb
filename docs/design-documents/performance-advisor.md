@@ -30,7 +30,7 @@ Populated as soon as the query finishes, using fast signals plus `explain("query
 
 **Metrics displayed:**
 
-- **Execution Time** — Showsserver timing from Stage 2 (e.g., `180 ms`)
+- **Execution Time** — Shows server timing from Stage 2 (e.g., `180 ms`)
 - **Documents Returned** — Count of documents in result set (e.g., `100`)
 - **Keys Examined** — Shows `n/a` until Stage 2, then actual count (e.g., `100`)
 - **Docs Examined** — Shows `n/a` until Stage 2, then actual count (e.g., `100`)
