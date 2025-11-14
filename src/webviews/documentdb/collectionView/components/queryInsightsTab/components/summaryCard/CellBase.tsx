@@ -13,19 +13,30 @@ import './SummaryCard.scss';
  *
  * All cell components extend this to inherit:
  * - Consistent layout
- * - Placeholder handling (skeleton/empty)
+ * - Placeholder handling (loading skeleton vs null value placeholder)
  * - Label/value layout
  * - Column spanning support
+ *
+ * Placeholder behavior:
+ * - When value is undefined: Shows loading skeleton (configurable via loadingPlaceholder)
+ * - When value is null: Shows null value placeholder (configurable via nullValuePlaceholder, default: 'N/A')
  */
 export interface CellBaseProps {
     /** The label displayed at the top of the cell */
     label: string;
 
-    /** The formatted value or custom React node to display */
+    /** The formatted value or custom React node to display
+     * - undefined: Data is loading (shows skeleton)
+     * - null: Data is unavailable/not applicable (shows nullValuePlaceholder)
+     * - string/number/ReactNode: Display the value
+     */
     value?: string | number | React.ReactNode;
 
-    /** How to display when value is null/undefined */
-    placeholder?: 'skeleton' | 'empty';
+    /** What to display while data is loading (when value is undefined) */
+    loadingPlaceholder?: 'skeleton' | 'empty';
+
+    /** What to display when value is explicitly null (data unavailable) */
+    nullValuePlaceholder?: string;
 
     /** Column spanning: 'single' (1 column) or 'full' (2 columns) */
     span?: 'single' | 'full';
@@ -35,10 +46,22 @@ export interface CellBaseProps {
  * Internal base component for summary cells.
  * DO NOT use directly - use GenericCell or create a custom cell component.
  */
-export const CellBase: React.FC<CellBaseProps> = ({ label, value, placeholder = 'skeleton', span = 'single' }) => {
+export const CellBase: React.FC<CellBaseProps> = ({
+    label,
+    value,
+    loadingPlaceholder = 'skeleton',
+    nullValuePlaceholder = 'N/A',
+    span = 'single',
+}) => {
     const renderValue = () => {
-        if (value === null || value === undefined) {
-            if (placeholder === 'skeleton') {
+        // Explicit null means data is unavailable (e.g., error state, not supported)
+        if (value === null) {
+            return <span className="nullValue">{nullValuePlaceholder}</span>;
+        }
+
+        // Undefined means data is still loading
+        if (value === undefined) {
+            if (loadingPlaceholder === 'skeleton') {
                 return <SkeletonItem size={16} />;
             }
             return null; // empty

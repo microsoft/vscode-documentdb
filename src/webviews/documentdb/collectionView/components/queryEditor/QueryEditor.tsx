@@ -12,6 +12,7 @@ import { InputWithProgress } from '../../../../components/InputWithProgress';
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
 import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
+import { ENABLE_AI_QUERY_GENERATION } from '../../constants';
 
 import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
@@ -341,7 +342,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     return (
         <div className="queryEditor">
             {/* Optional AI prompt row */}
-            <Collapse visible={currentContext.isAiRowVisible} unmountOnExit>
+            <Collapse visible={ENABLE_AI_QUERY_GENERATION && currentContext.isAiRowVisible} unmountOnExit>
                 <div className={`aiRow${isAiActive ? ' ai-active' : ''}`}>
                     <InputWithProgress
                         ref={aiInputRef}
