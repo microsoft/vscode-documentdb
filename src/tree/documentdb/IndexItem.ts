@@ -118,6 +118,8 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
             { key: 'sparse' as const, label: 'Sparse' },
             { key: 'background' as const, label: 'Background Build' },
             { key: 'hidden' as const, label: 'Hidden' },
+            { key: 'wildcardProjection' as const, label: 'Wildcard Projection' },
+            { key: 'enableOrderedIndex' as const, label: 'Enable Ordered Index' },
         ];
 
         for (const prop of booleanProps) {

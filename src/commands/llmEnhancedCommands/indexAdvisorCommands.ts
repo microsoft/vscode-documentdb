@@ -346,11 +346,11 @@ async function fillPromptTemplate(
         .replace('{indexStats}', indexes ? JSON.stringify(indexes, null, 2) : 'N/A')
         .replace('{executionStats}', executionStats)
         .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2))
+        .replace('{origin_query}', context.query || 'N/A')
         .replace(
             '{AzureClusterType}',
             clusterInfo.domainInfo_isAzure === 'true' ? JSON.stringify(clusterInfo.domainInfo_api, null, 2) : 'N/A',
         );
-    // .replace('{query}', context.query || 'N/A');
     return filled;
 }
 
@@ -429,6 +429,9 @@ export async function optimizeQuery(
                 const explainData = await client.explainFind(
                     queryContext.databaseName,
                     queryContext.collectionName,
+                    clusterInfo.domainInfo_isAzure === 'true' && clusterInfo.domainInfo_api === 'vCore'
+                        ? 'allPlansExecution'
+                        : 'executionStats',
                     explainOptions,
                 );
                 explainResult = explainData;
@@ -515,19 +518,22 @@ export async function optimizeQuery(
         // Use basic index info as fallback if we have it (from successful listIndexes call)
         if (indexesInfo && indexesInfo.length > 0) {
             // We have index info but getIndexStats failed, convert to IndexStats format
-            indexes = indexesInfo.map((idx) => ({
-                ...idx,
-                host: 'unknown',
-                accesses: { ops: 0, since: new Date() },
-            })) as IndexStats[];
+            indexes = indexesInfo
+                .filter((idx) => idx.key !== undefined)
+                .map((idx) => ({
+                    ...idx,
+                    host: 'unknown',
+                    accesses: 'N/A',
+                    key: idx.key!,
+                })) as IndexStats[];
         }
     }
 
-    // Sanitize explain result to remove constant values while preserving field names
-    const sanitizedExplainResult = sanitizeExplainResult(explainResult);
+    // // Sanitize explain result to remove constant values while preserving field names
+    // const sanitizedExplainResult = sanitizeExplainResult(explainResult);
 
-    // Format execution stats for the prompt
-    const sanitizedExecutionStats = JSON.stringify(sanitizedExplainResult, null, 2);
+    // // Format execution stats for the prompt
+    // const sanitizedExecutionStats = JSON.stringify(sanitizedExplainResult, null, 2);
 
     // Fill the prompt template
     const commandType = queryContext.commandType;
@@ -536,7 +542,8 @@ export async function optimizeQuery(
         queryContext,
         collectionStats,
         indexes,
-        sanitizedExecutionStats,
+        // sanitizedExecutionStats,
+        JSON.stringify(explainResult, null, 2),
         clusterInfo,
     );
 
