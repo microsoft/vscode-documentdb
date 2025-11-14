@@ -60,6 +60,8 @@
         flex-shrink: 1;
         min-height: 0; // Required for flexbox children to shrink below content size
 
+        z-index: 0; // Ensure this is below any floating elements like context menus, especially from Monaco editor
+
         //background-color: aqua; // used to invstigate layout issues
 
         // Temporarily hide overflow during QueryEditor transitions to improve UX responsiveness.
