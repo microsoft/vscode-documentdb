@@ -16,6 +16,7 @@ import { type FindQueryParams } from '../../documentdb/ClustersClient';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type IndexSpecification } from '../../documentdb/LlmEnhancedFeatureApis';
 import { ext } from '../../extensionVariables';
+import { getConfirmationAsInSettings, getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
 import { type AIOptimizationResponse } from './types';
 
 /**
@@ -26,6 +27,7 @@ interface CreateIndexPayload {
     databaseName: string;
     collectionName: string;
     indexSpec: IndexSpecification;
+    indexOptions?: Partial<IndexSpecification>;
 }
 
 /**
@@ -143,7 +145,7 @@ export class QueryInsightsAIService {
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Not an error instance';
-            throw new Error(l10n.t('Failed to parse AI optimization response. {0}', errorMessage));
+            throw new Error(l10n.t('Failed to parse AI optimization response. {error}', { error: errorMessage }));
         }
     }
 
@@ -184,7 +186,7 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(l10n.t('Failed to convert query parameters: {0}', errorMessage));
+            throw new Error(l10n.t('Failed to convert query parameters: {error}', { error: errorMessage }));
         }
 
         return result;
@@ -235,7 +237,10 @@ export class QueryInsightsAIService {
             'indexSpec' in payload &&
             typeof (payload as CreateIndexPayload).databaseName === 'string' &&
             typeof (payload as CreateIndexPayload).collectionName === 'string' &&
-            typeof (payload as CreateIndexPayload).indexSpec === 'object'
+            typeof (payload as CreateIndexPayload).indexSpec === 'object' &&
+            (!('indexOptions' in payload) ||
+                (payload as CreateIndexPayload).indexOptions === undefined ||
+                typeof (payload as CreateIndexPayload).indexOptions === 'object')
         );
     }
 
@@ -304,6 +309,26 @@ export class QueryInsightsAIService {
                 }),
             );
 
+            // Ask for confirmation before creating the index
+            const confirmed = await getConfirmationWithClick(
+                l10n.t('Create index?'),
+                payload.indexOptions?.name
+                    ? l10n.t('Create index "{indexName}" on collection "{collectionName}"?', {
+                          indexName: payload.indexOptions.name,
+                          collectionName: payload.collectionName,
+                      })
+                    : l10n.t('Create index on collection "{collectionName}"?', {
+                          collectionName: payload.collectionName,
+                      }),
+            );
+
+            if (!confirmed) {
+                return {
+                    success: false,
+                    message: l10n.t('Index creation cancelled'),
+                };
+            }
+
             const session = ClusterSession.getSession(actualSessionId);
             const client = session.getClient();
 
@@ -311,7 +336,9 @@ export class QueryInsightsAIService {
 
             if (result.ok === 1) {
                 // Provide positive feedback with additional context from result.note if available
-                const baseMessage = l10n.t('Index "{0}" created successfully', result.indexName ?? 'unnamed');
+                const baseMessage = l10n.t('Index "{indexName}" created successfully', {
+                    indexName: result.indexName ?? 'unnamed',
+                });
                 const message =
                     typeof result.note === 'string' && result.note ? `${baseMessage}. ${result.note}` : baseMessage;
 
@@ -328,7 +355,7 @@ export class QueryInsightsAIService {
                 );
                 return {
                     success: false,
-                    message: l10n.t('Failed to create index: {0}', errorMsg),
+                    message: l10n.t('Failed to create index: {error}', { error: errorMsg }),
                 };
             }
         } catch (error) {
@@ -338,7 +365,7 @@ export class QueryInsightsAIService {
             );
             return {
                 success: false,
-                message: l10n.t('Error creating index: {0}', errorMessage),
+                message: l10n.t('Error creating index: {error}', { error: errorMessage }),
             };
         }
     }
@@ -380,6 +407,29 @@ export class QueryInsightsAIService {
                 ),
             );
 
+            // Ask for confirmation before dropping the index (destructive action)
+            const confirmed = await getConfirmationAsInSettings(
+                l10n.t('Delete index?'),
+                (payload.indexName
+                    ? l10n.t('Delete index "{indexName}" from collection "{collectionName}"?', {
+                          indexName: payload.indexName,
+                          collectionName: payload.collectionName,
+                      })
+                    : l10n.t('Delete index from collection "{collectionName}"?', {
+                          collectionName: payload.collectionName,
+                      })) +
+                    '\n' +
+                    l10n.t('This cannot be undone.'),
+                payload.indexName || 'delete',
+            );
+
+            if (!confirmed) {
+                return {
+                    success: false,
+                    message: l10n.t('Index deletion cancelled'),
+                };
+            }
+
             const session = ClusterSession.getSession(actualSessionId);
             const client = session.getClient();
 
@@ -387,7 +437,9 @@ export class QueryInsightsAIService {
 
             if (result.ok === 1) {
                 // Provide positive feedback with additional context from result.note if available
-                const baseMessage = l10n.t('Index "{0}" dropped successfully', payload.indexName);
+                const baseMessage = l10n.t('Index "{indexName}" dropped successfully', {
+                    indexName: payload.indexName,
+                });
                 const message =
                     typeof result.note === 'string' && result.note ? `${baseMessage}. ${result.note}` : baseMessage;
 
@@ -404,7 +456,7 @@ export class QueryInsightsAIService {
                 );
                 return {
                     success: false,
-                    message: l10n.t('Failed to drop index: {0}', errorMsg),
+                    message: l10n.t('Failed to drop index: {error}', { error: errorMsg }),
                 };
             }
         } catch (error) {
@@ -414,7 +466,7 @@ export class QueryInsightsAIService {
             );
             return {
                 success: false,
-                message: l10n.t('Error dropping index: {0}', errorMessage),
+                message: l10n.t('Error dropping index: {error}', { error: errorMessage }),
             };
         }
     }
@@ -474,6 +526,29 @@ export class QueryInsightsAIService {
                 ),
             );
 
+            // Ask for confirmation before modifying the index
+            const operationText = operation === 'hideIndex' ? l10n.t('hide') : l10n.t('unhide');
+            const confirmed = await getConfirmationWithClick(
+                l10n.t('Modify index?'),
+                indexName
+                    ? l10n.t('This will {operation} the index "{indexName}" on collection "{collectionName}".', {
+                          operation: operationText,
+                          indexName,
+                          collectionName: payload.collectionName,
+                      })
+                    : l10n.t('This will {operation} an index on collection "{collectionName}".', {
+                          operation: operationText,
+                          collectionName: payload.collectionName,
+                      }),
+            );
+
+            if (!confirmed) {
+                return {
+                    success: false,
+                    message: l10n.t('Index modification cancelled'),
+                };
+            }
+
             const session = ClusterSession.getSession(actualSessionId);
             const client = session.getClient();
 
@@ -488,7 +563,10 @@ export class QueryInsightsAIService {
 
             if (result.ok === 1) {
                 // Provide positive feedback with additional context from result.note if available
-                const baseMessage = l10n.t('Index "{0}" {1} successfully', indexName, operation);
+                const baseMessage = l10n.t('Index "{indexName}" {operation} successfully', {
+                    indexName,
+                    operation,
+                });
                 const message =
                     typeof result.note === 'string' && result.note ? `${baseMessage}. ${result.note}` : baseMessage;
 
@@ -510,7 +588,7 @@ export class QueryInsightsAIService {
                 );
                 return {
                     success: false,
-                    message: l10n.t('Failed to modify index: {0}', errmsg),
+                    message: l10n.t('Failed to modify index: {error}', { error: errmsg }),
                 };
             }
         } catch (error) {
@@ -520,7 +598,7 @@ export class QueryInsightsAIService {
             );
             return {
                 success: false,
-                message: l10n.t('Error modifying index: {0}', errorMessage),
+                message: l10n.t('Error modifying index: {error}', { error: errorMessage }),
             };
         }
     }
