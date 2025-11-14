@@ -34,7 +34,7 @@ import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
-import { QueryInsightsApis } from './client/QueryInsightsApis';
+import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import {
     llmEnhancedFeatureApis,
@@ -758,13 +758,14 @@ export class ClustersClient {
      * Supports sort, projection, skip, and limit options
      * @param databaseName - Name of the database
      * @param collectionName - Name of the collection
+     * @param verbosity - Explain verbosity level ('queryPlanner', 'executionStats', 'allPlansExecution')
      * @param options - Query options including filter, sort, projection, skip, and limit
      * @returns Detailed explain result with execution statistics
      */
     async explainFind(
         databaseName: string,
         collectionName: string,
-        verbosity: string,
+        verbosity: ExplainVerbosity,
         options: ExplainOptions = {},
     ): Promise<ExplainResult> {
         if (!this._llmEnhancedFeatureApis) {

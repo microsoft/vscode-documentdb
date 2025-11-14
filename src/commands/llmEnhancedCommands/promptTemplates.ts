@@ -99,7 +99,7 @@ Thinking / analysis tips (useful signals to form recommendations; don't output t
 - **Equality first in compound index**: Always place equality (\`=\`) fields first in a compound index. These fields provide the highest selectivity and allow efficient index filtering.
 - **Prioritize high selectivity fields**: When multiple range fields exist, prioritize the high-selectivity fields (those that filter out more documents) first to reduce scanned documents and improve performance.
 - **Prioritize restrictive range**: When multiple range fields exist, prioritize the more restrictive ranges first to reduce scanned documents and improve performance.
-- **Multiple range filters**: multiple range filters could also get benifit from a compound index, so compound index is also recommended.
+- **Multiple range filters**: multiple range filters could also get benefit from a compound index, so compound index is also recommended.
 - **Regex considerations**: For \`$regex\` queries, suggest indexes for both anchored (e.g., \`^abc\`) and non-anchored patterns (e.g., \`abc\`), as non-anchored regexes can also benefit from indexes by narrowing down the documents needed to be scanned.
 - **Multikey/array considerations**: Be aware that multikey or array fields may affect index ordering and whether index-only coverage is achievable.
 - **Filter → sort pushdown**: In a compound index, place filter fields (equality and the first range/anchored regex) first, followed by sort-only fields, to maximize index pushdown and avoid in-memory sorting.
@@ -110,7 +110,7 @@ Thinking / analysis tips (useful signals to form recommendations; don't output t
 - If the **Azure_Cluster_Type** is "vCore" and an index is being created (and it is **not** a wildcard index), always include in indexOptions the setting: "storageEngine": { "enableOrderedIndex": true }.
 - For \`$or\` queries, prefer a single compound index if branches share leading fields; otherwise, consider separate indexes with intersection.
 - For \`$or\` queries, low-selectivity strategy is not applicable, and **creating corresponding indexes is recommended**.
-- **Avoid redundant indexes**; after creating a compound index, remember to suggest dropping any exisiting prefix indexes as they are redundant indexes after the compound index created.
+- **Avoid redundant indexes**; after creating a compound index, remember to suggest dropping any existing prefix indexes as they are redundant indexes after the compound index created.
 - Consider **index size and write amplification**; prefer partial or sparse indexes or selective prefixes.
 - **Small collection**: Do not create new indexes on collections with fewer than 1000 documents, as the performance gain is negligible and the index maintenance cost may outweigh the benefit.
 - **Low-selectivity fields**: Do not create indexes on fields where the number of documents returned is close to the total number of documents (could get from collection stats), because the index will not effectively reduce scanned documents.

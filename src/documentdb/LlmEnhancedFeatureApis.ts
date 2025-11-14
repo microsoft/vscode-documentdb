@@ -9,6 +9,7 @@
 
 import * as l10n from '@vscode/l10n';
 import { type Document, type Filter, type MongoClient, type Sort } from 'mongodb';
+import { type ExplainVerbosity } from '../../src/documentdb/client/QueryInsightsApis';
 import { ext } from '../extensionVariables';
 
 /**
@@ -234,13 +235,14 @@ export class llmEnhancedFeatureApis {
      * Explain a find query with full execution statistics
      * @param databaseName - Name of the database
      * @param collectionName - Name of the collection
+     * @param verbosity - Explain verbosity level ('queryPlanner', 'executionStats', 'allPlansExecution')
      * @param options - Query options including filter, sort, projection, skip, and limit
      * @returns Detailed explain result with execution statistics
      */
     async explainFind(
         databaseName: string,
         collectionName: string,
-        verbosity: string = 'executionStats',
+        verbosity: ExplainVerbosity = 'executionStats',
         options: ExplainOptions = {},
     ): Promise<ExplainResult> {
         ext.outputChannel.trace(
