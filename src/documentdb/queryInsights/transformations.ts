@@ -120,9 +120,9 @@ function getPrimaryButtonLabel(action: string, mongoShell: string): string {
             return l10n.t('Drop Index…');
         case 'modify':
             if (mongoShell.includes('.hideIndex(')) {
-                return l10n.t('Hide Index');
+                return l10n.t('Hide Index…');
             } else if (mongoShell.includes('.unhideIndex(')) {
-                return l10n.t('Unhide Index');
+                return l10n.t('Unhide Index…');
             }
             return l10n.t('Modify Index…');
         default:
