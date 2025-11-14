@@ -97,14 +97,22 @@ export const CollectionView = (): JSX.Element => {
     }, [currentQueryResults, currentContext]);
 
     /**
-     * Reset query insights when query execution starts
-     * This happens whenever the user executes a query (even if same query text)
+     * Reset query insights when query changes (not on pagination)
+     * Only reset when executionIntent is 'initial' or 'refresh'
+     * On 'pagination', preserve Query Insights data since the query hasn't changed
      */
     useEffect(() => {
-        setCurrentContext((prev) => ({
-            ...prev,
-            queryInsights: DefaultCollectionViewContext.queryInsights,
-        }));
+        const intent = currentContext.activeQuery.executionIntent;
+
+        // Only reset on actual query changes, not pagination
+        if (intent === 'initial' || intent === 'refresh') {
+            console.trace('[CollectionView] Query changed (intent: {0}), resetting Query Insights', intent);
+            setCurrentContext((prev) => ({
+                ...prev,
+                queryInsights: DefaultCollectionViewContext.queryInsights,
+            }));
+        }
+        // On 'pagination' → preserve existing Query Insights state
     }, [currentContext.activeQuery]);
 
     /**
