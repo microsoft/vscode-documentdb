@@ -133,6 +133,12 @@
         flex-direction: column;
         row-gap: 10px;
 
+        // By creating a new stacking context with a z-index, we elevate this entire
+        // container above other elements on the page that exist in the root stacking context.
+        // This ensures that any child elements, including the "trapped" Monaco autocomplete
+        // widgets, will appear on top of elements like the TabList.
+        z-index: 1;
+
         // Overflow prevention
         width: 100%; // Ensure full width
         max-width: 100%; // Prevent overflow
