@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, SkeletonItem, Text, tokens, Tooltip } from '@fluentui/react-components';
+import { Badge, Text, tokens, Tooltip } from '@fluentui/react-components';
 import { InfoRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
@@ -18,7 +18,11 @@ export interface PerformanceRatingCellProps {
     /** The label displayed at the top of the cell */
     label: string;
 
-    /** The performance rating level */
+    /** The performance rating level
+     * - undefined: Data is loading (shows skeleton)
+     * - null: Data is unavailable (shows nullValuePlaceholder)
+     * - PerformanceRating: Shows rating with color and diagnostics
+     */
     rating: PerformanceRating | null | undefined;
 
     /** Array of diagnostic messages explaining the rating */
@@ -26,11 +30,19 @@ export interface PerformanceRatingCellProps {
 
     /** Whether the rating content is visible (for animation) */
     visible?: boolean;
+
+    /** What to display when rating is explicitly null (data unavailable) */
+    nullValuePlaceholder?: string;
 }
 
 /**
  * Custom cell component for displaying performance ratings with colored indicators.
  * Spans the full width (2 columns) of the summary grid.
+ *
+ * Value handling:
+ * - undefined: Shows loading skeleton (data is being fetched)
+ * - null: Shows N/A or custom nullValuePlaceholder (data unavailable/error)
+ * - PerformanceRating: Displays rating badge with diagnostics
  *
  * Example usage:
  * ```tsx
@@ -43,6 +55,13 @@ export interface PerformanceRatingCellProps {
  *   ]}
  *   visible={stageState >= 2}
  * />
+ *
+ * // In error state
+ * <PerformanceRatingCell
+ *   label={l10n.t('Performance Rating')}
+ *   rating={null}
+ *   nullValuePlaceholder={l10n.t('Not available')}
+ * />
  * ```
  */
 export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
@@ -50,6 +69,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     rating,
     diagnostics,
     visible = true,
+    nullValuePlaceholder = 'N/A',
 }) => {
     const getRatingColor = (rating: PerformanceRating): string => {
         switch (rating) {
@@ -77,12 +97,19 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         }
     };
 
-    const hasRating = rating !== null && rating !== undefined;
+    // Determine the content to display based on rating value
+    let customContent: React.ReactNode;
 
-    const customContent = (
-        <>
-            {/* Always render CollapseRelaxed to enable animations when visible prop changes */}
-            <CollapseRelaxed visible={hasRating && visible}>
+    if (rating === null) {
+        // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
+        customContent = null;
+    } else if (rating === undefined) {
+        // Undefined: data loading (will show skeleton)
+        customContent = undefined;
+    } else {
+        // Has rating: display with animation
+        customContent = (
+            <CollapseRelaxed visible={visible}>
                 <div
                     className="efficiencyIndicator"
                     style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '8px' }}
@@ -90,11 +117,11 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                     {/* First row, first column: dot */}
                     <div
                         className="efficiencyDot"
-                        style={{ backgroundColor: getRatingColor(rating!), alignSelf: 'center' }}
+                        style={{ backgroundColor: getRatingColor(rating), alignSelf: 'center' }}
                     />
                     {/* First row, second column: rating text */}
                     <Text weight="semibold" style={{ alignSelf: 'center' }}>
-                        {getRatingText(rating!)}
+                        {getRatingText(rating)}
                     </Text>
                     {/* Second row, first column: empty */}
                     {diagnostics && diagnostics.length > 0 && <div />}
@@ -134,10 +161,8 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                     )}
                 </div>
             </CollapseRelaxed>
-            {/* Show skeleton when rating is not available */}
-            {!hasRating && <SkeletonItem size={16} />}
-        </>
-    );
+        );
+    }
 
-    return <CellBase label={label} value={customContent} placeholder="empty" span="full" />;
+    return <CellBase label={label} value={customContent} nullValuePlaceholder={nullValuePlaceholder} span="full" />;
 };

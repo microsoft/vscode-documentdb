@@ -37,3 +37,9 @@
         }
     }
 }
+
+// Styling for null value placeholders (N/A, Not Available, etc.)
+.nullValue {
+    opacity: 0.5;
+    color: var(--vscode-disabledForeground);
+}
