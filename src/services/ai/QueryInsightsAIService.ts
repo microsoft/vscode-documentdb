@@ -235,11 +235,12 @@ export class QueryInsightsAIService {
             'databaseName' in payload &&
             'collectionName' in payload &&
             'indexSpec' in payload &&
-            'indexOptions' in payload &&
             typeof (payload as CreateIndexPayload).databaseName === 'string' &&
             typeof (payload as CreateIndexPayload).collectionName === 'string' &&
             typeof (payload as CreateIndexPayload).indexSpec === 'object' &&
-            typeof (payload as CreateIndexPayload).indexOptions === 'object'
+            (!('indexOptions' in payload) ||
+                (payload as CreateIndexPayload).indexOptions === undefined ||
+                typeof (payload as CreateIndexPayload).indexOptions === 'object')
         );
     }
 
