@@ -10,6 +10,7 @@
 import * as l10n from '@vscode/l10n';
 import { type Document, type Filter, type MongoClient, type Sort } from 'mongodb';
 import { ext } from '../extensionVariables';
+import { type ExplainVerbosity } from './client/QueryInsightsApis';
 
 /**
  * Options for explain operations
@@ -112,12 +113,14 @@ export interface IndexStats {
     host: string;
 
     // Access statistics
-    accesses: {
-        // Number of times the index has been used
-        ops: number;
-        // Timestamp of last access
-        since: Date;
-    };
+    accesses:
+        | {
+              // Number of times the index has been used
+              ops: number;
+              // Timestamp of last access
+              since: Date;
+          }
+        | 'N/A'; // N/A only for fallback when getIndexStats fails and merging with basic index info
 }
 
 /**
@@ -232,12 +235,14 @@ export class llmEnhancedFeatureApis {
      * Explain a find query with full execution statistics
      * @param databaseName - Name of the database
      * @param collectionName - Name of the collection
+     * @param verbosity - Explain verbosity level ('queryPlanner', 'executionStats', 'allPlansExecution')
      * @param options - Query options including filter, sort, projection, skip, and limit
      * @returns Detailed explain result with execution statistics
      */
     async explainFind(
         databaseName: string,
         collectionName: string,
+        verbosity: ExplainVerbosity = 'executionStats',
         options: ExplainOptions = {},
     ): Promise<ExplainResult> {
         ext.outputChannel.trace(
@@ -275,7 +280,7 @@ export class llmEnhancedFeatureApis {
 
         const command: Document = {
             explain: findCmd,
-            verbosity: 'executionStats',
+            verbosity: verbosity,
         };
 
         const explainResult = await db.command(command);
