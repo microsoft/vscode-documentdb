@@ -570,6 +570,7 @@
   "Query generation is using model \"{actualModel}\" instead of preferred \"{preferredModel}\". Results may vary.": "Query generation is using model \"{actualModel}\" instead of preferred \"{preferredModel}\". Results may vary.",
   "query insights": "query insights",
   "Query Insights APIs not initialized. Client may not be properly connected.": "Query Insights APIs not initialized. Client may not be properly connected.",
+  "Query Insights is not available for Azure Cosmos DB for MongoDB (RU) accounts.": "Query Insights is not available for Azure Cosmos DB for MongoDB (RU) accounts.",
   "Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.": "Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.",
   "Query Insights Not Available": "Query Insights Not Available",
   "Query Insights Stage 2 completed with execution error": "Query Insights Stage 2 completed with execution error",

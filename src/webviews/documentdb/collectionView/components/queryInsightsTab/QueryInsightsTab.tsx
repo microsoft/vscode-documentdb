@@ -30,7 +30,7 @@
  * - Integration with actual explain data
  */
 
-import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
+import { MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
 import { ChatMailRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
@@ -43,7 +43,13 @@ import { AnimatedCardList, FeedbackCard, FeedbackDialog, type AnimatedCardItem }
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
-import { GetPerformanceInsightsCard, ImprovementCard, MarkdownCard, TipsCard } from './components/optimizationCards';
+import {
+    GetPerformanceInsightsCard,
+    ImprovementCard,
+    MarkdownCard,
+    MarkdownCardEx,
+    TipsCard,
+} from './components/optimizationCards';
 import { QueryPlanSummary } from './components/queryPlanSummary';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
@@ -722,20 +728,27 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                         {/* Platform-specific error card for RU clusters */}
                         {queryInsightsState.stage1ErrorCode === 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
-                            <MarkdownCard
+                            <MarkdownCardEx
                                 title={l10n.t('Query Insights Not Available')}
                                 icon={<ChatMailRegular />}
                                 showAiDisclaimer={false}
                                 content={l10n.t(
-                                    '**Query Insights for Azure Cosmos DB for MongoDB (RU) Accounts**\n\n' +
-                                        'This feature is currently not enabled for RU-based accounts. We recognize that these accounts have unique performance characteristics, and standard optimization patterns from other DocumentDB environments may not be applicable.\n\n' +
+                                    'This feature is currently not enabled for RU-based accounts. We recognize that these accounts have unique performance characteristics, and standard optimization patterns from other DocumentDB environments may not be applicable.\n\n' +
                                         'To ensure our recommendations are accurate and genuinely helpful, a specific analysis tailored to the Request Unit (RU) model is required. For this reason, we have disabled the feature for this account type.\n\n' +
                                         '---\n\n' +
                                         '**Interested in performance tooling for RU?**\n\n' +
                                         "We are gathering feedback to shape future tools. If you'd like to share your experience with query optimization on RU accounts or participate in design discussions, your input is highly valuable.\n\n" +
                                         "Feel free to [**start a discussion on GitHub**](https://github.com/microsoft/vscode-documentdb/discussions) or reach out to us directly. We'd love to hear from you!",
                                 )}
-                            />
+                            >
+                                <MessageBar intent="warning" style={{ marginBottom: '12px' }}>
+                                    <MessageBarBody>
+                                        {l10n.t(
+                                            'Query Insights is not available for Azure Cosmos DB for MongoDB (RU) accounts.',
+                                        )}
+                                    </MessageBarBody>
+                                </MessageBar>
+                            </MarkdownCardEx>
                         )}
 
                         {/* Skeleton - shown only when Stage 1 is actively loading (not in error state) */}
@@ -820,9 +833,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
                             rating={
-                                hasMetricsError || showMetricsSkeleton
-                                    ? undefined
-                                    : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score
+                                hasMetricsError
+                                    ? null
+                                    : showMetricsSkeleton
+                                      ? undefined
+                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score
                             }
                             diagnostics={
                                 hasMetricsError || showMetricsSkeleton
@@ -842,8 +857,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                         hasError={hasMetricsError}
                     />
 
-                    {/* Feedback Card */}
-                    <FeedbackCard onFeedback={handleFeedbackClick} />
+                    {/* Feedback Card - hidden for RU accounts where Query Insights is not available */}
+                    {queryInsightsState.stage1ErrorCode !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
+                        <FeedbackCard onFeedback={handleFeedbackClick} />
+                    )}
                 </div>
             </div>
 
