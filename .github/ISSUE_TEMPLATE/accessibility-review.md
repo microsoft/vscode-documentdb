@@ -1,6 +1,6 @@
 ---
 name: Accessibility Review
-about: Accessibility Issue Tempate
+about: Accessibility Issue Template
 title: ''
 labels: a11y
 projects: microsoft/1795
