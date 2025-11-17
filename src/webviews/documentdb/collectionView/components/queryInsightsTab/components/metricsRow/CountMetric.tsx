@@ -11,7 +11,7 @@ import { MetricBase, type MetricBaseProps } from './MetricBase';
  * Specialized metric component for displaying count/integer values.
  *
  * Features:
- * - Automatic thousand grouping: 10000 → "10,000"
+ * - Automatic digit grouping (thousands separator, locale-aware): 10000 → "10,000"
  * - Optional compact mode: 1500000 → "1.5M"
  * - Configurable threshold for compact notation
  *
