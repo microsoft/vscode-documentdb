@@ -162,11 +162,11 @@ export const FeedbackDialog = ({ open, onClose, sentiment, onSubmit }: FeedbackD
                         </div>
                     </DialogContent>
                     <DialogActions>
-                        <Button appearance="secondary" onClick={handleClose} disabled={isSubmitting}>
-                            {l10n.t('Cancel')}
-                        </Button>
                         <Button appearance="primary" onClick={() => void handleSubmit()} disabled={isSubmitting}>
                             {isSubmitting ? l10n.t('Submitting...') : l10n.t('Submit Feedback')}
+                        </Button>
+                        <Button appearance="secondary" onClick={handleClose} disabled={isSubmitting}>
+                            {l10n.t('Cancel')}
                         </Button>
                     </DialogActions>
                 </DialogBody>

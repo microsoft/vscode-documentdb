@@ -550,24 +550,33 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     // Feedback handlers
     const handleFeedbackClick = (sentiment: 'positive' | 'negative') => {
+        // Fire-and-forget event so we capture sentiment immediately when the user clicks
+        void trpcClient.common.reportEvent.mutate({
+            eventName: 'queryInsightsThumb',
+            properties: {
+                sentiment,
+                source: 'feedbackThumb',
+            },
+        });
+
         setFeedbackSentiment(sentiment);
         setFeedbackDialogOpen(true);
     };
 
-    const handleFeedbackSubmit = async (feedback: {
+    const handleFeedbackSubmit = (feedback: {
         sentiment: 'positive' | 'negative';
         selectedReasons: string[];
-    }) => {
+    }): Promise<void> => {
         try {
             const reasonProperties = feedback.selectedReasons.reduce(
                 (acc, reason) => {
-                    acc[reason] = true;
+                    acc[reason] = 'true';
                     return acc;
                 },
-                {} as Record<string, boolean>,
+                {} as Record<string, string>,
             );
 
-            await trpcClient.common.reportEvent.mutate({
+            void trpcClient.common.reportEvent.mutate({
                 eventName: 'queryInsightsFeedback',
                 properties: {
                     sentiment: feedback.sentiment,
@@ -578,6 +587,8 @@ export const QueryInsightsMain = (): JSX.Element => {
         } catch (error) {
             console.error('Failed to send feedback:', error);
         }
+
+        return Promise.resolve();
     };
 
     // Build the cards array for animated presence
