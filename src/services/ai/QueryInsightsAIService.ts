@@ -207,22 +207,30 @@ export class QueryInsightsAIService {
         actionId: string,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> {
-        // Route to appropriate handler based on actionId
-        switch (actionId) {
-            case 'createIndex':
-                return this.handleCreateIndex(sessionId, payload);
-            case 'dropIndex':
-                return this.handleDropIndex(sessionId, payload);
-            case 'modifyIndex':
-                return this.handleModifyIndex(sessionId, payload);
-            case 'learnMore':
-                return this.handleLearnMore(payload);
-            default:
-                return {
-                    success: false,
-                    message: `Unknown action: ${actionId}`,
-                };
-        }
+        return await callWithTelemetryAndErrorHandling(
+            'vscode-documentdb.queryInsights.action',
+            async (context: IActionContext) => {
+                // Track which action was executed
+                context.telemetry.properties.actionId = actionId;
+
+                // Route to appropriate handler based on actionId
+                switch (actionId) {
+                    case 'createIndex':
+                        return this.handleCreateIndex(sessionId, payload);
+                    case 'dropIndex':
+                        return this.handleDropIndex(sessionId, payload);
+                    case 'modifyIndex':
+                        return this.handleModifyIndex(sessionId, payload);
+                    case 'learnMore':
+                        return this.handleLearnMore(payload);
+                    default:
+                        return {
+                            success: false,
+                            message: `Unknown action: ${actionId}`,
+                        };
+                }
+            },
+        ).then((result) => result ?? { success: false, message: 'Unknown error' });
     }
 
     /**
@@ -353,6 +361,7 @@ export class QueryInsightsAIService {
                 ext.outputChannel.error(
                     l10n.t('[Query Insights Action] Create index action failed: {error}', { error: errorMsg }),
                 );
+
                 return {
                     success: false,
                     message: l10n.t('Failed to create index: {error}', { error: errorMsg }),
@@ -363,6 +372,7 @@ export class QueryInsightsAIService {
             ext.outputChannel.error(
                 l10n.t('[Query Insights Action] Create index action error: {error}', { error: errorMessage }),
             );
+
             return {
                 success: false,
                 message: l10n.t('Error creating index: {error}', { error: errorMessage }),
@@ -454,6 +464,7 @@ export class QueryInsightsAIService {
                 ext.outputChannel.error(
                     l10n.t('[Query Insights Action] Drop index action failed: {error}', { error: errorMsg }),
                 );
+
                 return {
                     success: false,
                     message: l10n.t('Failed to drop index: {error}', { error: errorMsg }),
@@ -464,6 +475,7 @@ export class QueryInsightsAIService {
             ext.outputChannel.error(
                 l10n.t('[Query Insights Action] Drop index action error: {error}', { error: errorMessage }),
             );
+
             return {
                 success: false,
                 message: l10n.t('Error dropping index: {error}', { error: errorMessage }),
@@ -586,6 +598,7 @@ export class QueryInsightsAIService {
                 ext.outputChannel.error(
                     l10n.t('[Query Insights Action] Modify index action failed: {error}', { error: errmsg }),
                 );
+
                 return {
                     success: false,
                     message: l10n.t('Failed to modify index: {error}', { error: errmsg }),
@@ -596,6 +609,7 @@ export class QueryInsightsAIService {
             ext.outputChannel.error(
                 l10n.t('[Query Insights Action] Modify index action error: {error}', { error: errorMessage }),
             );
+
             return {
                 success: false,
                 message: l10n.t('Error modifying index: {error}', { error: errorMessage }),

@@ -85,7 +85,7 @@ export const CollectionView = (): JSX.Element => {
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
     // Track which tab is currently active
-    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_performance_main'>('tab_result');
+    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>('tab_result');
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
@@ -548,14 +548,29 @@ export const CollectionView = (): JSX.Element => {
                 <TabList
                     selectedValue={selectedTab}
                     onTabSelect={(_event, data) => {
-                        setSelectedTab(data.value as 'tab_result' | 'tab_performance_main');
+                        const newTab = data.value as 'tab_result' | 'tab_queryInsights';
+
+                        // Report tab switching telemetry
+                        trpcClient.common.reportEvent
+                            .mutate({
+                                eventName: 'tabChanged',
+                                properties: {
+                                    previousTab: selectedTab,
+                                    newTab: newTab,
+                                },
+                            })
+                            .catch((error) => {
+                                console.debug('Failed to report tab change:', error);
+                            });
+
+                        setSelectedTab(newTab);
                     }}
                     style={{ marginTop: '-10px' }}
                 >
                     <Tab id="tab.results" value="tab_result">
                         Results
                     </Tab>
-                    <Tab id="tab.performance.main" value="tab_performance_main">
+                    <Tab id="tab.queryInsights" value="tab_queryInsights">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             Query Insights
                             <Badge appearance="tint" size="small" shape="rounded" color="brand">
@@ -603,7 +618,7 @@ export const CollectionView = (): JSX.Element => {
                     </>
                 )}
 
-                {selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
+                {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
             </div>
         </CollectionViewContext.Provider>
     );

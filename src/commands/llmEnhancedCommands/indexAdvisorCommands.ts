@@ -386,8 +386,14 @@ export async function optimizeQuery(
     const client = session.getClient();
     const clusterInfo = await client.getClusterMetadata();
 
+    // Track cluster information in telemetry
+    context.telemetry.properties.commandType = queryContext.commandType;
+    context.telemetry.properties.isAzure = clusterInfo.domainInfo_isAzure || 'false';
+    context.telemetry.properties.azureApi = clusterInfo.domainInfo_api || 'unknown';
+
     // Check if we have pre-loaded data
     const hasPreloadedData = queryContext.executionPlan;
+    context.telemetry.properties.hasPreloadedData = hasPreloadedData ? 'true' : 'false';
 
     if (hasPreloadedData) {
         // Use pre-loaded data
@@ -452,6 +458,7 @@ export async function optimizeQuery(
                 );
             }
             const explainDuration = Date.now() - explainStart;
+            context.telemetry.measurements.explainDurationMs = explainDuration;
             ext.outputChannel.trace(
                 l10n.t('[Query Insights AI] explain({commandType}) completed in {ms}ms', {
                     commandType: queryContext.commandType,
@@ -459,6 +466,7 @@ export async function optimizeQuery(
                 }),
             );
         } catch (error) {
+            context.telemetry.properties.explainError = 'true';
             throw new Error(
                 l10n.t('Failed to gather query optimization data: {message}', {
                     message: error instanceof Error ? error.message : String(error),
@@ -472,6 +480,7 @@ export async function optimizeQuery(
         const statsStart = Date.now();
         collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
         const statsDuration = Date.now() - statsStart;
+        context.telemetry.measurements.collectionStatsDurationMs = statsDuration;
         ext.outputChannel.trace(
             l10n.t('[Query Insights AI] getCollectionStats completed in {ms}ms', {
                 ms: statsDuration.toString(),
@@ -481,6 +490,7 @@ export async function optimizeQuery(
         const indexesInfoStart = Date.now();
         indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
         const indexesInfoDuration = Date.now() - indexesInfoStart;
+        context.telemetry.measurements.listIndexesDurationMs = indexesInfoDuration;
         ext.outputChannel.trace(
             l10n.t('[Query Insights AI] listIndexes completed in {ms}ms', {
                 ms: indexesInfoDuration.toString(),
@@ -490,6 +500,7 @@ export async function optimizeQuery(
         const indexesStatsStart = Date.now();
         const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
         const indexesStatsDuration = Date.now() - indexesStatsStart;
+        context.telemetry.measurements.indexStatsDurationMs = indexesStatsDuration;
         ext.outputChannel.trace(
             l10n.t('[Query Insights AI] getIndexStats completed in {ms}ms', {
                 ms: indexesStatsDuration.toString(),
@@ -506,9 +517,14 @@ export async function optimizeQuery(
             };
         });
         // indexes.push(...searchIndexes);
+
+        // Track stats availability in telemetry
+        context.telemetry.properties.hasCollectionStats = collectionStats ? 'true' : 'false';
+        context.telemetry.measurements.indexCount = indexes?.length ?? 0;
     } catch (error) {
         // They are not critical errors, we can continue without index stats and collection stats
         // If the API calls failed, collectionStats and indexes remain undefined (safe to continue)
+        context.telemetry.properties.statsError = 'true';
         ext.outputChannel.trace(
             l10n.t('[Query Insights AI] Failed to retrieve collection/index stats (non-critical): {message}', {
                 message: error instanceof Error ? error.message : String(error),
@@ -526,6 +542,9 @@ export async function optimizeQuery(
                     accesses: 'N/A',
                     key: idx.key!,
                 })) as IndexStats[];
+
+            context.telemetry.properties.usedFallbackIndexes = 'true';
+            context.telemetry.measurements.indexCount = indexes.length;
         }
     }
 
@@ -562,6 +581,13 @@ export async function optimizeQuery(
         fallbackModels: fallbackModelsToUse,
     });
     const copilotDuration = Date.now() - copilotStart;
+
+    // Track Copilot call performance and response
+    context.telemetry.measurements.copilotDurationMs = copilotDuration;
+    context.telemetry.measurements.promptSize = promptContent.length;
+    context.telemetry.measurements.responseSize = response.text.length;
+    context.telemetry.properties.modelUsed = response.modelUsed;
+
     ext.outputChannel.trace(
         l10n.t('[Query Insights AI] Copilot response received in {ms}ms (model: {model})', {
             ms: copilotDuration.toString(),
@@ -582,10 +608,6 @@ export async function optimizeQuery(
             ),
         );
     }
-
-    // Add telemetry for the model used
-    context.telemetry.properties.modelUsed = response.modelUsed;
-    context.telemetry.properties.commandType = commandType;
 
     return {
         recommendations: response.text,

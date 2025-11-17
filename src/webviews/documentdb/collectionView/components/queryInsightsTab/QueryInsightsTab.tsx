@@ -519,10 +519,6 @@ export const QueryInsightsMain = (): JSX.Element => {
         transitionToStage(3, 'cancelled');
     };
 
-    /**
-     * MOCK VERSION: Client-side mock for AI suggestions with 5-second delay
-     * This simulates the AI request without calling the backend
-     */
     const handlePrimaryAction = async (
         actionId: string,
         payload: unknown,
