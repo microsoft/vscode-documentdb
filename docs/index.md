@@ -48,7 +48,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 
 - [Connecting with a URL](./user-manual/how-to-construct-url)
 - [Service Discovery](./user-manual/service-discovery)
-  - [Azure Cosmos DB for MongoDB (vCore)](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-vcore)
+  - [Azure DocumentDB](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-vcore)
   - [Azure Cosmos DB for MongoDB (RU)](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-ru)
   - [Azure VMs (DocumentDB)](./user-manual/service-discovery-azure-vms)
   - [Managing Azure Subscriptions](./user-manual/managing-azure-discovery)
@@ -64,9 +64,10 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
-- [0.5](./release-notes/0.5) | [0.5.1](./release-notes/0.5#patch-release-v051) | [0.5.2](./release-notes/0.5#patch-release-v052)
-- [0.4](./release-notes/0.4) | [0.4.1](./release-notes/0.4#patch-release-v041)
-- [0.3](./release-notes/0.3) | [0.3.1](./release-notes/0.3#patch-release-v031)
+- [0.6](./release-notes/0.6)
+- [0.5](./release-notes/0.5), [0.5.1](./release-notes/0.5#patch-release-v051), [0.5.2](./release-notes/0.5#patch-release-v052)
+- [0.4](./release-notes/0.4), [0.4.1](./release-notes/0.4#patch-release-v041)
+- [0.3](./release-notes/0.3), [0.3.1](./release-notes/0.3#patch-release-v031)
 - [0.2.4](./release-notes/0.2.4)
 - [0.2.3](./release-notes/0.2.3)
 - [0.2.2](./release-notes/0.2.2)

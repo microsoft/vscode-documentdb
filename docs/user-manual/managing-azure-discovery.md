@@ -7,7 +7,7 @@
 When using Azure-based service discovery providers in DocumentDB for VS Code, you have access to shared features for managing your Azure credentials and filtering which resources are displayed. These features are consistent across all Azure service discovery providers:
 
 - [Azure Cosmos DB for MongoDB (RU)](./service-discovery-azure-cosmosdb-for-mongodb-ru)
-- [Azure Cosmos DB for MongoDB (vCore)](./service-discovery-azure-cosmosdb-for-mongodb-vcore)
+- [Azure DocumentDB](./service-discovery-azure-cosmosdb-for-mongodb-vcore)
 - [Azure VMs (DocumentDB)](./service-discovery-azure-vms)
 
 For a general overview of service discovery, see the [Service Discovery](./service-discovery) documentation.
@@ -151,5 +151,5 @@ When adding a new connection via the **"Add New Connection"** wizard:
 
 - [Service Discovery Overview](./service-discovery)
 - [Azure CosmosDB for MongoDB (RU) Service Discovery](./service-discovery-azure-cosmosdb-for-mongodb-ru)
-- [Azure CosmosDB for MongoDB (vCore) Service Discovery](./service-discovery-azure-cosmosdb-for-mongodb-vcore)
+- [Azure DocumentDB Service Discovery](./service-discovery-azure-cosmosdb-for-mongodb-vcore)
 - [Azure VMs (DocumentDB) Service Discovery](./service-discovery-azure-vms)

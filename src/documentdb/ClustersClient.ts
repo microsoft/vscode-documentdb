@@ -34,7 +34,18 @@ import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
+import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
+import {
+    llmEnhancedFeatureApis,
+    type CollectionStats,
+    type CreateIndexResult,
+    type DropIndexResult,
+    type ExplainOptions,
+    type ExplainResult,
+    type IndexSpecification,
+    type IndexStats,
+} from './LlmEnhancedFeatureApis';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -48,17 +59,61 @@ export interface DatabaseItemModel {
 export interface CollectionItemModel {
     name: string;
     type?: string;
-    info?: {
-        readOnly?: false;
-    };
+}
+
+/**
+ * Find query parameters for MongoDB find operations.
+ * Each field accepts a JSON string representation of the MongoDB query syntax.
+ */
+export interface FindQueryParams {
+    /**
+     * The filter/query to match documents.
+     * @default '{}'
+     */
+    filter?: string;
+
+    /**
+     * The projection to determine which fields to include/exclude.
+     * @default '{}'
+     */
+    project?: string;
+
+    /**
+     * The sort specification for ordering results.
+     * @default '{}'
+     */
+    sort?: string;
+
+    /**
+     * Number of documents to skip.
+     * @default 0
+     */
+    skip?: number;
+
+    /**
+     * Maximum number of documents to return.
+     * @default 0 (unlimited)
+     */
+    limit?: number;
 }
 
 export interface IndexItemModel {
     name: string;
-    key: {
+    type: 'traditional' | 'search';
+    key?: {
         [key: string]: number | string;
     };
     version?: number;
+    unique?: boolean;
+    sparse?: boolean;
+    background?: boolean;
+    hidden?: boolean;
+    expireAfterSeconds?: number;
+    partialFilterExpression?: Document;
+    status?: string;
+    queryable?: boolean;
+    fields?: unknown[];
+    [key: string]: unknown; // Allow additional index properties
 }
 
 // Currently we only return insertedCount, but we can add more fields in the future if needed
@@ -73,6 +128,9 @@ export class ClustersClient {
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
+    private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
+    private _queryInsightsApis: QueryInsightsApis | null = null;
+    private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
     /**
      * Use getClient instead of a constructor. Connections/Client are being cached and reused.
@@ -142,10 +200,12 @@ export class ClustersClient {
         // Connect with the configured options
         await this.connect(connectionString, options, credentials.emulatorConfiguration);
 
-        // Collect telemetry (non-blocking)
-        void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
-            const metadata: ClusterMetadata = await getClusterMetadata(this._mongoClient, hosts);
+        // Start metadata collection and store the promise
+        this._clusterMetadataPromise = getClusterMetadata(this._mongoClient, hosts);
 
+        // Collect telemetry (non-blocking) - reuses the same promise
+        void callWithTelemetryAndErrorHandling('connect.getmetadata', async (context) => {
+            const metadata: ClusterMetadata = await this._clusterMetadataPromise!;
             context.telemetry.properties = {
                 authmethod: authMethod,
                 ...context.telemetry.properties,
@@ -161,6 +221,8 @@ export class ClustersClient {
     ): Promise<void> {
         try {
             this._mongoClient = await MongoClient.connect(connectionString, options);
+            this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
+            this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
             const message = parseError(error).message;
             if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
@@ -197,11 +259,27 @@ export class ClustersClient {
             await client._mongoClient.connect();
         } else {
             client = new ClustersClient(credentialId);
+            // Cluster metadata is set in initClient
             await client.initClient();
             ClustersClient._clients.set(credentialId, client);
         }
 
         return client;
+    }
+
+    /**
+     * Retrieves cluster metadata for this client instance.
+     *
+     * @returns A promise that resolves to cluster metadata.
+     */
+    public async getClusterMetadata(): Promise<ClusterMetadata> {
+        if (this._clusterMetadataPromise) {
+            return this._clusterMetadataPromise;
+        }
+
+        // This should not happen as the promise is initialized in initClient,
+        // but if it does, we throw an error rather than trying to recover
+        throw new Error(l10n.t('Cluster metadata not initialized. Client may not be properly connected.'));
     }
 
     /**
@@ -239,6 +317,17 @@ export class ClustersClient {
 
     public getCredentials(): CachedClusterCredentials | undefined {
         return CredentialCache.getCredentials(this.credentialId) as CachedClusterCredentials | undefined;
+    }
+
+    /**
+     * Gets the Query Insights APIs instance for explain operations
+     * @returns QueryInsightsApis instance or throws if not initialized
+     */
+    public get queryInsightsApis(): QueryInsightsApis {
+        if (!this._queryInsightsApis) {
+            throw new Error(l10n.t('Query Insights APIs not initialized. Client may not be properly connected.'));
+        }
+        return this._queryInsightsApis;
     }
 
     async listDatabases(): Promise<DatabaseItemModel[]> {
@@ -285,12 +374,87 @@ export class ClustersClient {
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
         const indexes = await collection.indexes();
 
-        let i = 0; // backup for indexes with no names
+        let i = 0;
         return indexes.map((index) => {
-            return { name: index.name ?? 'idx_' + (i++).toString(), key: index.key, version: index.v };
+            const { v, ...indexWithoutV } = index;
+            return {
+                ...indexWithoutV,
+                name: index.name ?? 'idx_' + (i++).toString(),
+                version: v,
+                type: 'traditional' as const,
+            };
         });
     }
 
+    async listSearchIndexesForAtlas(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {
+        try {
+            const collection = this._mongoClient.db(databaseName).collection(collectionName);
+            const searchIndexes = await collection.aggregate([{ $listSearchIndexes: {} }]).toArray();
+            let i = 0; // backup for indexes with no names
+            return searchIndexes.map((index: Document) => ({
+                ...index,
+                name: (index.name as string | undefined) ?? 'search_idx_' + (i++).toString(),
+                type: ((index.type as string | undefined) ?? 'search') as 'traditional' | 'search',
+                fields: index.fields as unknown[] | undefined,
+            }));
+        } catch {
+            // $listSearchIndexes not supported on this platform (e.g., non-Atlas deployments)
+            // Return empty array silently
+            return [];
+        }
+    }
+
+    /**
+     * Executes a MongoDB find query with support for filter, projection, sort, skip, and limit.
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
+     * @returns Array of matching documents
+     */
+    async runFindQuery(
+        databaseName: string,
+        collectionName: string,
+        queryParams: FindQueryParams,
+    ): Promise<WithId<Document>[]> {
+        // Parse filter query
+        const filterStr = queryParams.filter?.trim() || '{}';
+        const filterObj: Filter<Document> = toFilterQueryObj(filterStr);
+
+        // Build find options
+        const options: FindOptions = {
+            skip: queryParams.skip ?? 0,
+            limit: queryParams.limit ?? 0,
+        };
+
+        // Parse and add projection if provided
+        if (queryParams.project && queryParams.project.trim() !== '{}') {
+            try {
+                options.projection = EJSON.parse(queryParams.project) as Document;
+            } catch (error) {
+                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+            }
+        }
+
+        // Parse and add sort if provided
+        if (queryParams.sort && queryParams.sort.trim() !== '{}') {
+            try {
+                options.sort = EJSON.parse(queryParams.sort) as Document;
+            } catch (error) {
+                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+            }
+        }
+
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+        const documents = await collection.find(filterObj, options).toArray();
+
+        return documents;
+    }
+
+    /**
+     * @deprecated Use runFindQuery() instead which supports filter, projection, sort, skip, and limit parameters.
+     * This method will be removed in a future version.
+     */
     //todo: this is just a to see how it could work, we need to use a cursor here for paging
     async runQuery(
         databaseName: string,
@@ -318,28 +482,52 @@ export class ClustersClient {
         return documents;
     }
 
-    async *streamDocuments(
+    /**
+     * Streams documents from a collection with full query support (filter, projection, sort, skip, limit).
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param abortSignal - Signal to abort the streaming operation
+     * @param queryParams - Find query parameters (filter, project, sort, skip, limit)
+     * @returns AsyncGenerator yielding documents one at a time
+     */
+    async *streamDocumentsWithQuery(
         databaseName: string,
         collectionName: string,
         abortSignal: AbortSignal,
-        findQuery: string = '{}',
-        skip: number = 0,
-        limit: number = 0,
+        queryParams: FindQueryParams = {},
     ): AsyncGenerator<Document, void, unknown> {
         /**
          * Configuration
          */
 
-        if (findQuery === undefined || findQuery.trim().length === 0) {
-            findQuery = '{}';
+        // Parse filter query
+        const filterStr = queryParams.filter?.trim() || '{}';
+        const filterObj: Filter<Document> = toFilterQueryObj(filterStr);
+
+        // Build find options
+        const options: FindOptions = {
+            skip: queryParams.skip && queryParams.skip > 0 ? queryParams.skip : undefined,
+            limit: queryParams.limit && queryParams.limit > 0 ? queryParams.limit : undefined,
+        };
+
+        // Parse and add projection if provided
+        if (queryParams.project && queryParams.project.trim() !== '{}') {
+            try {
+                options.projection = EJSON.parse(queryParams.project) as Document;
+            } catch (error) {
+                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+            }
         }
 
-        const findQueryObj: Filter<Document> = toFilterQueryObj(findQuery);
-
-        const options: FindOptions = {
-            skip: skip > 0 ? skip : undefined,
-            limit: limit > 0 ? limit : undefined,
-        };
+        // Parse and add sort if provided
+        if (queryParams.sort && queryParams.sort.trim() !== '{}') {
+            try {
+                options.sort = EJSON.parse(queryParams.sort) as Document;
+            } catch (error) {
+                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+            }
+        }
 
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -347,12 +535,12 @@ export class ClustersClient {
          * Streaming
          */
 
-        const cursor = collection.find(findQueryObj, options).batchSize(100);
+        const cursor = collection.find(filterObj, options).batchSize(100);
 
         try {
             while (await cursor.hasNext()) {
                 if (abortSignal.aborted) {
-                    console.debug('streamDocuments: Aborted by an abort signal.');
+                    console.debug('streamDocumentsWithQuery: Aborted by an abort signal.');
                     return;
                 }
 
@@ -533,5 +721,159 @@ export class ClustersClient {
                 insertedCount: error instanceof MongoBulkWriteError ? error.insertedCount || 0 : 0,
             };
         }
+    }
+
+    // ==========================================
+    // LLM Enhanced Feature APIs
+    // ==========================================
+
+    /**
+     * Get detailed index statistics for a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @returns Array of index statistics including usage information
+     */
+    async getIndexStats(databaseName: string, collectionName: string): Promise<IndexStats[]> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.getIndexStats(databaseName, collectionName);
+    }
+
+    /**
+     * Get detailed collection statistics
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @returns Collection statistics including size, count, and index information
+     */
+    async getCollectionStats(databaseName: string, collectionName: string): Promise<CollectionStats> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.getCollectionStats(databaseName, collectionName);
+    }
+
+    /**
+     * Explain a find query with full execution statistics
+     * Supports sort, projection, skip, and limit options
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param verbosity - Explain verbosity level ('queryPlanner', 'executionStats', 'allPlansExecution')
+     * @param options - Query options including filter, sort, projection, skip, and limit
+     * @returns Detailed explain result with execution statistics
+     */
+    async explainFind(
+        databaseName: string,
+        collectionName: string,
+        verbosity: ExplainVerbosity,
+        options: ExplainOptions = {},
+    ): Promise<ExplainResult> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, verbosity, options);
+    }
+
+    /**
+     * Explain an aggregation pipeline with full execution statistics
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param pipeline - Aggregation pipeline stages
+     * @returns Detailed explain result with execution statistics
+     */
+    async explainAggregate(databaseName: string, collectionName: string, pipeline: Document[]): Promise<ExplainResult> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.explainAggregate(databaseName, collectionName, pipeline);
+    }
+
+    /**
+     * Explain a count operation with full execution statistics
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param filter - Query filter for the count operation
+     * @returns Detailed explain result with execution statistics
+     */
+    async explainCount(databaseName: string, collectionName: string, filter: Filter<Document> = {}): Promise<Document> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.explainCount(databaseName, collectionName, filter);
+    }
+
+    /**
+     * Create an index on a collection
+     * Supports both simple and composite indexes with various options
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexSpec - Index specification including key and options
+     * @returns Result of the index creation operation
+     */
+    async createIndex(
+        databaseName: string,
+        collectionName: string,
+        indexSpec: IndexSpecification,
+    ): Promise<CreateIndexResult> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.createIndex(databaseName, collectionName, indexSpec);
+    }
+
+    /**
+     * Drop an index from a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to drop (use "*" to drop all non-_id indexes)
+     * @returns Result of the index drop operation
+     */
+    async dropIndex(databaseName: string, collectionName: string, indexName: string): Promise<DropIndexResult> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.dropIndex(databaseName, collectionName, indexName);
+    }
+
+    /**
+     * Get sample documents from a collection using random sampling
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param limit - Maximum number of documents to sample (default: 10)
+     * @returns Array of sample documents
+     */
+    async getSampleDocuments(databaseName: string, collectionName: string, limit: number = 10): Promise<Document[]> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.getSampleDocuments(databaseName, collectionName, limit);
+    }
+
+    /**
+     * Hide an index in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to hide
+     * @returns Result of the hide index operation
+     */
+    async hideIndex(databaseName: string, collectionName: string, indexName: string): Promise<Document> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.hideIndex(databaseName, collectionName, indexName);
+    }
+
+    /**
+     * Unhide an index in a collection
+     * @param databaseName - Name of the database
+     * @param collectionName - Name of the collection
+     * @param indexName - Name of the index to unhide
+     * @returns Result of the unhide index operation
+     */
+    async unhideIndex(databaseName: string, collectionName: string, indexName: string): Promise<Document> {
+        if (!this._llmEnhancedFeatureApis) {
+            throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
+        }
+        return this._llmEnhancedFeatureApis.unhideIndex(databaseName, collectionName, indexName);
     }
 }

@@ -122,16 +122,16 @@ export function deactivateInternal(_context: vscode.ExtensionContext): void {
 }
 
 /**
- * Checks if vCore and RU support is to be activated in this extension.
+ * Checks if DocumentDB and RU support is to be activated in this extension.
  * This introduces changes to the behavior of the extension.
  *
- * This function is used to determine whether the vCore and RU features should be enabled in this extension.
+ * This function is used to determine whether the DocumentDB and RU features should be enabled in this extension.
  *
  * The result of this function depends on the version of the Azure Resources extension.
  * When a new version of the Azure Resources extension is released with the `AzureCosmosDbForMongoDbRu` and `MongoClusters`
  * resource types, this function will return true.
  *
- * @returns True if vCore and RU features are enabled, false | undefined otherwise.
+ * @returns True if DocumentDB and RU features are enabled, false | undefined otherwise.
  */
 export async function isVCoreAndRURolloutEnabled(): Promise<boolean | undefined> {
     return callWithTelemetryAndErrorHandling('isVCoreAndRURolloutEnabled', async (context: IActionContext) => {
@@ -155,7 +155,7 @@ export async function isVCoreAndRURolloutEnabled(): Promise<boolean | undefined>
         context.telemetry.properties.vCoreAndRURolloutEnabled = 'false';
         context.telemetry.properties.apiMethodAvailable = 'false';
         ext.outputChannel.appendLog(
-            'Expected Azure Resources API v3.0.0 is not available; VCore and RU support remains inactive.',
+            'Expected Azure Resources API v3.0.0 is not available; DocumentDB and RU support remains inactive.',
         );
         return false;
     });

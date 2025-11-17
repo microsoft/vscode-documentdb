@@ -75,8 +75,8 @@ export async function launchShell(
                     authMechanism = AuthMethodId.NativeAuth;
                 } else {
                     // Only SCRAM-SHA-256 (username/password) authentication is supported here.
-                    // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
-                    // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
+                    // Today we support Entra ID with Azure DocumentDB, and Azure DocumentDB does not support EntraID + shell connectivity as of today
+                    // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication (formerly vCore)
                     throw Error(
                         l10n.t(
                             'Unsupported authentication mechanism. Only "Username and Password" (SCRAM-SHA-256) is supported.',
@@ -94,8 +94,8 @@ export async function launchShell(
 
     if (authMechanism !== AuthMethodId.NativeAuth) {
         // Only SCRAM-SHA-256 (username/password) authentication is supported here.
-        // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
-        // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
+        // Today we support Entra ID with Azure DocumentDB, and Azure DocumentDB does not support EntraID + shell connectivity as of today
+        // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication (formerly vCore)
         throw Error(
             l10n.t('Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.'),
         );

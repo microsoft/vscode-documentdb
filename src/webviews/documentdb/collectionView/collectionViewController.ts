@@ -5,6 +5,7 @@
 
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
+import { SettingsService } from '../../../services/SettingsService';
 import { WebviewController } from '../../api/extension-server/WebviewController';
 import { type RouterContext } from './collectionViewRouter';
 
@@ -13,16 +14,26 @@ export type CollectionViewWebviewConfigurationType = {
     clusterId: string;
     databaseName: string;
     collectionName: string;
+    defaultPageSize: number;
 };
 
 export class CollectionViewController extends WebviewController<CollectionViewWebviewConfigurationType> {
-    constructor(initialData: CollectionViewWebviewConfigurationType) {
+    constructor(initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize'>) {
         // ext.context here is the vscode.ExtensionContext required by the ReactWebviewPanelController's original implementation
         // we're not modifying it here in order to be ready for future updates of the webview API.
 
         const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
 
-        super(ext.context, API.DocumentDB, title, 'mongoClustersCollectionView', initialData);
+        // Get the default page size from settings
+        const defaultPageSize =
+            SettingsService.getSetting<number>(ext.settingsKeys.collectionViewDefaultPageSize) ?? 50;
+
+        const fullInitialData: CollectionViewWebviewConfigurationType = {
+            ...initialData,
+            defaultPageSize,
+        };
+
+        super(ext.context, API.DocumentDB, title, 'mongoClustersCollectionView', fullInitialData);
 
         const trpcContext: RouterContext = {
             dbExperience: API.DocumentDB,

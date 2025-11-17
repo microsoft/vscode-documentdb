@@ -22,7 +22,7 @@ export class SelectRUClusterStep extends AzureWizardPromptStep<NewConnectionWiza
         'vscode-azext-azureutils',
         'resources',
         'azureIcons',
-        'MongoClusters.svg',
+        'AzureCosmosDb.svg',
     );
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {

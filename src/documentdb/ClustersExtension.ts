@@ -32,6 +32,9 @@ import { manageCredentials } from '../commands/discoveryService.manageCredential
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
 import { openHelpAndFeedbackUrl } from '../commands/helpAndFeedback.openUrl/openUrl';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
+import { dropIndex } from '../commands/index.dropIndex/dropIndex';
+import { hideIndex } from '../commands/index.hideIndex/hideIndex';
+import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
 import { launchShell } from '../commands/launchShell/launchShell';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
 import { newConnection } from '../commands/newConnection/newConnection';
@@ -283,6 +286,10 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropCollection', deleteCollection);
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropDatabase', deleteAzureDatabase);
+
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.hideIndex', hideIndex);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.unhideIndex', unhideIndex);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropIndex', dropIndex);
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.createCollection', createCollection);
 
