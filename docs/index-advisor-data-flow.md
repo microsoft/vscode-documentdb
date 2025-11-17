@@ -156,17 +156,17 @@ The Index Advisor supports two operational modes:
 
 ### Operational Modes Comparison
 
-| Aspect | Standard Mode | Preload Mode |
-|--------|---------------|--------------|
-| **Database Connection** | Required (uses cluster ID) | Not required |
-| **Data Collection** | Real-time from database | Pre-provided by caller |
-| **Use Case** | Interactive optimization in VS Code | Batch processing, external tools, testing |
-| **Execution Plan** | Fetched via explain() | Provided in context |
-| **Collection Stats** | Fetched via collStats | Provided in context |
-| **Index Stats** | Fetched via $indexStats | Provided in context |
-| **Cluster Metadata** | Fetched from connection | Minimal default (non-Azure) |
-| **Sanitization** | Applied to fetched data | Applied to pre-loaded data |
-| **Privacy Impact** | Same (all data sanitized) | Same (all data sanitized) |
+| Aspect                  | Standard Mode                       | Preload Mode                              |
+| ----------------------- | ----------------------------------- | ----------------------------------------- |
+| **Database Connection** | Required (uses cluster ID)          | Not required                              |
+| **Data Collection**     | Real-time from database             | Pre-provided by caller                    |
+| **Use Case**            | Interactive optimization in VS Code | Batch processing, external tools, testing |
+| **Execution Plan**      | Fetched via explain()               | Provided in context                       |
+| **Collection Stats**    | Fetched via collStats               | Provided in context                       |
+| **Index Stats**         | Fetched via $indexStats             | Provided in context                       |
+| **Cluster Metadata**    | Fetched from connection             | Minimal default (non-Azure)               |
+| **Sanitization**        | Applied to fetched data             | Applied to pre-loaded data                |
+| **Privacy Impact**      | Same (all data sanitized)           | Same (all data sanitized)                 |
 
 ### Customer Data Categories
 
@@ -224,6 +224,7 @@ The Index Advisor supports two operational modes:
 2. **Collection Statistics**:
    - Numeric metrics only (counts, sizes)
    - No customer data values
+
    ```json
    {
      "count": 150000,
@@ -239,6 +240,7 @@ The Index Advisor supports two operational modes:
    - Index definitions (field names and sort order)
    - Usage statistics (operation counts)
    - **NO indexed values**
+
    ```json
    [
      {
@@ -260,7 +262,8 @@ The Index Advisor supports two operational modes:
 
 5. **Cluster Metadata**:
    - `isAzureCluster`: boolean indicator
-   - `AzureClusterType`: API type if Azure (e.g., "MongoDB RU", "MongoDB vCore")
+
+- `AzureClusterType`: API type if Azure (e.g., "MongoDB RU", "DocumentDB")
 
 ### Sanitization Process Details
 
@@ -271,6 +274,7 @@ The sanitization process is implemented in `src/commands/llmEnhancedCommands/ind
 Original filter values are replaced with the generic placeholder `<value>`:
 
 **Before Sanitization (Never Sent):**
+
 ```json
 {
   "filter": {
@@ -282,6 +286,7 @@ Original filter values are replaced with the generic placeholder `<value>`:
 ```
 
 **After Sanitization (Sent to LLM):**
+
 ```json
 {
   "filter": {
@@ -308,16 +313,16 @@ All stages in the execution plan are recursively sanitized:
 
 #### 3. What Gets Sanitized
 
-| Component | Original Data | After Sanitization |
-|-----------|---------------|-------------------|
-| Filter literal values | `"john@example.com"` | `"<value>"` |
-| Numeric comparisons | `{ "$gt": 25 }` | `{ "$gt": "<value>" }` |
-| Array values | `["active", "pending"]` | `["<value>", "<value>"]` |
-| Nested object values | `{ "city": "Seattle" }` | `{ "city": "<value>" }` |
-| Field names | `"email"` | `"email"` (Preserved) |
-| Operators | `"$gt"`, `"$in"` | `"$gt"`, `"$in"` (Preserved) |
-| Stage types | `"IXSCAN"`, `"FETCH"` | `"IXSCAN"`, `"FETCH"` (Preserved) |
-| Performance metrics | `nReturned: 100` | `nReturned: 100` (Preserved) |
+| Component             | Original Data           | After Sanitization                |
+| --------------------- | ----------------------- | --------------------------------- |
+| Filter literal values | `"john@example.com"`    | `"<value>"`                       |
+| Numeric comparisons   | `{ "$gt": 25 }`         | `{ "$gt": "<value>" }`            |
+| Array values          | `["active", "pending"]` | `["<value>", "<value>"]`          |
+| Nested object values  | `{ "city": "Seattle" }` | `{ "city": "<value>" }`           |
+| Field names           | `"email"`               | `"email"` (Preserved)             |
+| Operators             | `"$gt"`, `"$in"`        | `"$gt"`, `"$in"` (Preserved)      |
+| Stage types           | `"IXSCAN"`, `"FETCH"`   | `"IXSCAN"`, `"FETCH"` (Preserved) |
+| Performance metrics   | `nReturned: 100`        | `nReturned: 100` (Preserved)      |
 
 #### 4. Code Reference
 
@@ -325,13 +330,13 @@ Key sanitization functions in `indexAdvisorCommands.ts`:
 
 ```typescript
 // Main sanitization entry point
-export function sanitizeExplainResult(explainResult: unknown): unknown
+export function sanitizeExplainResult(explainResult: unknown): unknown;
 
 // Removes constants from filter objects
-function removeConstantsFromFilter(obj: unknown): unknown
+function removeConstantsFromFilter(obj: unknown): unknown;
 
 // Recursively sanitizes execution plan stages
-function sanitizeStage(stage: unknown): unknown
+function sanitizeStage(stage: unknown): unknown;
 ```
 
 **Preload Mode Code Pattern:**
@@ -341,20 +346,20 @@ function sanitizeStage(stage: unknown): unknown
 const hasPreloadedData = queryContext.executionPlan;
 
 if (hasPreloadedData) {
-    // Use pre-loaded data (no database connection needed)
-    explainResult = queryContext.executionPlan;
-    collectionStats = queryContext.collectionStats!;
-    indexes = queryContext.indexStats!;
+  // Use pre-loaded data (no database connection needed)
+  explainResult = queryContext.executionPlan;
+  collectionStats = queryContext.collectionStats!;
+  indexes = queryContext.indexStats!;
 
-    // For pre-loaded data, create a minimal cluster info
-    clusterInfo = {
-        domainInfo_isAzure: 'false',
-        domainInfo_api: 'N/A',
-    };
+  // For pre-loaded data, create a minimal cluster info
+  clusterInfo = {
+    domainInfo_isAzure: 'false',
+    domainInfo_api: 'N/A',
+  };
 } else {
-    // Standard mode: fetch from database
-    const client = await ClustersClient.getClient(queryContext.clusterId);
-    // ... fetch execution plan, stats, etc.
+  // Standard mode: fetch from database
+  const client = await ClustersClient.getClient(queryContext.clusterId);
+  // ... fetch execution plan, stats, etc.
 }
 
 // Regardless of mode, sanitize before sending to LLM
@@ -364,14 +369,19 @@ const sanitizedExplainResult = sanitizeExplainResult(explainResult);
 ### Complete Example: Find Query
 
 #### User's Query (Input):
+
 ```javascript
-db.users.find({
-  "email": "john.doe@example.com",
-  "age": { "$gt": 25 }
-}).sort({ "name": -1 }).limit(10)
+db.users
+  .find({
+    email: 'john.doe@example.com',
+    age: { $gt: 25 },
+  })
+  .sort({ name: -1 })
+  .limit(10);
 ```
 
 #### Query Object (Parsed Locally):
+
 ```json
 {
   "filter": {
@@ -384,6 +394,7 @@ db.users.find({
 ```
 
 #### Execution Plan (Before Sanitization - Never Sent):
+
 ```json
 {
   "queryPlanner": {
@@ -402,9 +413,7 @@ db.users.find({
         "inputStage": {
           "stage": "IXSCAN",
           "keyPattern": { "email": 1 },
-          "indexFilterSet": [
-            { "email": "john.doe@example.com" }
-          ]
+          "indexFilterSet": [{ "email": "john.doe@example.com" }]
         }
       }
     }
@@ -419,6 +428,7 @@ db.users.find({
 ```
 
 #### Execution Plan (After Sanitization - Sent to LLM):
+
 ```json
 {
   "queryPlanner": {
@@ -437,9 +447,7 @@ db.users.find({
         "inputStage": {
           "stage": "IXSCAN",
           "keyPattern": { "email": 1 },
-          "indexFilterSet": [
-            { "email": "<value>" }
-          ]
+          "indexFilterSet": [{ "email": "<value>" }]
         }
       }
     }
@@ -454,12 +462,14 @@ db.users.find({
 ```
 
 **Key Privacy Point**: The LLM receives the execution plan structure showing:
+
 - Field names being queried ("email", "age")
 - Operators being used ("$gt")
 - Index usage patterns
 - Performance metrics
 
 But it does NOT receive:
+
 - The actual email address "john.doe@example.com"
 - The actual age threshold value 25
 - Any other literal values from the query
@@ -505,10 +515,10 @@ To enable more accurate index recommendations for complex queries, we are consid
    - Example:
      ```javascript
      db.users.find({
-       "email": "customer@company.com",     // WARNING: Customer email
-       "accountId": "ACC-789012",           // WARNING: Account identifier
-       "lastLoginDate": { "$gte": ISODate("2024-01-15") }  // WARNING: Temporal data
-     })
+       email: 'customer@company.com', // WARNING: Customer email
+       accountId: 'ACC-789012', // WARNING: Account identifier
+       lastLoginDate: { $gte: ISODate('2024-01-15') }, // WARNING: Temporal data
+     });
      ```
 
 2. **Unsanitized Execution Plan**:
@@ -523,15 +533,15 @@ To enable more accurate index recommendations for complex queries, we are consid
 
 #### Privacy Risk Assessment:
 
-| Data Type | Current (v1.0) | Proposed (v2.0) | Risk Level |
-|-----------|----------------|-----------------|------------|
-| Filter literal values | NO (Sanitized to `<value>`) | **Would be sent** | **High** |
-| Collection statistics | Sent (aggregate only) | Sent | Low (metadata) |
-| Index definitions | Sent (structure only) | Sent | Low (metadata) |
-| Execution plan structure | Sent (sanitized) | **Sent unsanitized** | **High** |
-| Database/collection names | Sent | Sent | Low (metadata) |
-| Performance metrics | Sent | Sent | Low (numeric only) |
-| Query field names | Sent | Sent | Low-Medium (schema info) |
+| Data Type                 | Current (v1.0)              | Proposed (v2.0)      | Risk Level               |
+| ------------------------- | --------------------------- | -------------------- | ------------------------ |
+| Filter literal values     | NO (Sanitized to `<value>`) | **Would be sent**    | **High**                 |
+| Collection statistics     | Sent (aggregate only)       | Sent                 | Low (metadata)           |
+| Index definitions         | Sent (structure only)       | Sent                 | Low (metadata)           |
+| Execution plan structure  | Sent (sanitized)            | **Sent unsanitized** | **High**                 |
+| Database/collection names | Sent                        | Sent                 | Low (metadata)           |
+| Performance metrics       | Sent                        | Sent                 | Low (numeric only)       |
+| Query field names         | Sent                        | Sent                 | Low-Medium (schema info) |
 
 ### Benefits of Proposed Enhancement:
 
