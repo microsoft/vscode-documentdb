@@ -5,7 +5,7 @@
 
 import { Card, CardHeader, makeStyles, Text, tokens } from '@fluentui/react-components';
 // TODO: Copy content feature will be added in the next release
-// import { Button, CopyRegular } from '@fluentui/react-icons';
+// import { CopyRegular } from '@fluentui/react-icons';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { forwardRef, type JSX } from 'react';
@@ -151,19 +151,6 @@ export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(
 
         return (
             <Card ref={ref} style={{ marginBottom: '16px' }}>
-                {showAiDisclaimer && (
-                    <Text
-                        size={200}
-                        style={{
-                            position: 'absolute',
-                            top: '12px',
-                            right: '12px',
-                            color: tokens.colorNeutralForeground3,
-                        }}
-                    >
-                        {l10n.t('AI responses may be inaccurate.')}
-                    </Text>
-                )}
                 <div className="optimization-card-container">
                     <div className="optimization-card-icon" style={{ flexShrink: 0 }}>
                         {icon ?? <SparkleRegular />}
@@ -175,12 +162,13 @@ export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(
                                     {title}
                                 </Text>
                             }
-                            // TODO: Copy content feature will be added in the next release
-                            // action={
-                            //     onCopy ? (
-                            //         <Button appearance="subtle" icon={<CopyRegular />} size="small" onClick={onCopy} />
-                            //     ) : undefined
-                            // }
+                            action={
+                                showAiDisclaimer ? (
+                                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                        {l10n.t('AI responses may be inaccurate')}
+                                    </Text>
+                                ) : undefined
+                            }
                         />
                         <div className={styles.content}>
                             <ReactMarkdown>{content}</ReactMarkdown>

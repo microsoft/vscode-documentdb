@@ -39,7 +39,7 @@ import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
-import { AnimatedCardList, type AnimatedCardItem } from './components';
+import { AnimatedCardList, FeedbackCard, FeedbackDialog, type AnimatedCardItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
@@ -92,6 +92,10 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [showErrorCard, setShowErrorCard] = useState(false);
+
+    // Feedback dialog state
+    const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+    const [feedbackSentiment, setFeedbackSentiment] = useState<'positive' | 'negative'>('positive');
 
     /**
      * Display error message to user for the given stage
@@ -544,6 +548,38 @@ export const QueryInsightsMain = (): JSX.Element => {
         setShowTipsCard(false);
     };
 
+    // Feedback handlers
+    const handleFeedbackClick = (sentiment: 'positive' | 'negative') => {
+        setFeedbackSentiment(sentiment);
+        setFeedbackDialogOpen(true);
+    };
+
+    const handleFeedbackSubmit = async (feedback: {
+        sentiment: 'positive' | 'negative';
+        selectedReasons: string[];
+    }) => {
+        try {
+            const reasonProperties = feedback.selectedReasons.reduce(
+                (acc, reason) => {
+                    acc[reason] = true;
+                    return acc;
+                },
+                {} as Record<string, boolean>,
+            );
+
+            await trpcClient.common.reportEvent.mutate({
+                eventName: 'queryInsightsFeedback',
+                properties: {
+                    sentiment: feedback.sentiment,
+                    source: 'feedbackDialog',
+                    ...reasonProperties,
+                },
+            });
+        } catch (error) {
+            console.error('Failed to send feedback:', error);
+        }
+    };
+
     // Build the cards array for animated presence
     const insightCards: AnimatedCardItem[] = [];
 
@@ -559,9 +595,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     icon={<SparkleRegular />}
                     title={l10n.t('Query Performance Analysis')}
                     content={queryInsightsState.stage3Data.analysisCard.content}
-                    onCopy={() => {
-                        void navigator.clipboard.writeText(queryInsightsState.stage3Data?.analysisCard.content ?? '');
-                    }}
                 />
             ),
         });
@@ -582,9 +615,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                         '**Resolving this execution error should take precedence over performance optimization.** ' +
                         'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
                     }
-                    onCopy={() => {
-                        void navigator.clipboard.writeText(queryInsightsState.stage2Data?.concerns?.join('\n\n') ?? '');
-                    }}
                 />
             ),
         });
@@ -602,9 +632,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                             config={card}
                             onPrimaryAction={handlePrimaryAction}
                             onSecondaryAction={handleSecondaryAction}
-                            onCopy={() => {
-                                void navigator.clipboard.writeText(card.mongoShellCommand);
-                            }}
                         />
                     ),
                 });
@@ -612,16 +639,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 // For informational cards (no buttons), use MarkdownCard
                 insightCards.push({
                     key: `${keyPrefix}${card.cardId || `card-${index}`}`,
-                    component: (
-                        <MarkdownCard
-                            icon={<SparkleRegular />}
-                            title={card.title}
-                            content={card.description}
-                            onCopy={() => {
-                                void navigator.clipboard.writeText(card.description);
-                            }}
-                        />
-                    ),
+                    component: <MarkdownCard icon={<SparkleRegular />} title={card.title} content={card.description} />,
                 });
             }
         });
@@ -636,9 +654,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     icon={<SparkleRegular />}
                     title={l10n.t('Understanding Your Query Execution Plan')}
                     content={queryInsightsState.stage3Data.educationalContent}
-                    onCopy={() => {
-                        void navigator.clipboard.writeText(queryInsightsState.stage3Data?.educationalContent ?? '');
-                    }}
                 />
             ),
         });
@@ -820,10 +835,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                         hasError={hasMetricsError}
                     />
 
-                    {/* Quick Actions */}
-                    {/* <QuickActions stageState={stageState} /> */}
+                    {/* Feedback Card */}
+                    <FeedbackCard onFeedback={handleFeedbackClick} />
                 </div>
             </div>
+
+            {/* Feedback Dialog */}
+            <FeedbackDialog
+                open={feedbackDialogOpen}
+                onClose={() => setFeedbackDialogOpen(false)}
+                sentiment={feedbackSentiment}
+                onSubmit={handleFeedbackSubmit}
+            />
         </div>
     );
 };

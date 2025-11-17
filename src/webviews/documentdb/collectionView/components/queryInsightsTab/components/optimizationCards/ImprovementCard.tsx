@@ -156,17 +156,6 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
 
         return (
             <Card ref={ref} style={{ marginBottom: '16px' }}>
-                <Text
-                    size={200}
-                    style={{
-                        position: 'absolute',
-                        top: '12px',
-                        right: '12px',
-                        color: tokens.colorNeutralForeground3,
-                    }}
-                >
-                    {l10n.t('AI responses may be inaccurate.')}
-                </Text>
                 <div className="optimization-card-container">
                     <ArrowTrendingSparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
@@ -186,12 +175,11 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
                                     </Badge>
                                 </div>
                             }
-                            // TODO: Copy content feature will be added in the next release
-                            // action={
-                            //     onCopy ? (
-                            //         <Button appearance="subtle" icon={<CopyRegular />} size="small" onClick={onCopy} />
-                            //     ) : undefined
-                            // }
+                            action={
+                                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                    {l10n.t('AI responses may be inaccurate')}
+                                </Text>
+                            }
                         />
                         <div style={{ marginTop: '12px' }}>
                             {/* Description */}

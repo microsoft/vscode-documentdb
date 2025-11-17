@@ -31,7 +31,7 @@ export interface SummaryCardProps {
 export const SummaryCard: React.FC<SummaryCardProps> = ({ title, children }) => {
     return (
         <Card className="summaryCard">
-            <Text weight="semibold" size={400}>
+            <Text weight="semibold" size={400} style={{ marginBottom: '8px', display: 'block' }}>
                 {title}
             </Text>
             <div className="summaryGrid">{children}</div>
