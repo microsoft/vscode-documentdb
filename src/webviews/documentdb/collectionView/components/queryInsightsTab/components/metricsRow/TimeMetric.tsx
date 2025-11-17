@@ -10,7 +10,7 @@ import { MetricBase, type MetricBaseProps } from './MetricBase';
 /**
  * Specialized metric component for displaying time values.
  *
- * Automatically formats time with DataDog/New Relic style:
+ * Automatically formats time with Datadog/New Relic style:
  * - < 1000ms: "2.33 ms"
  * - 1s - 100s: "15.20 s"
  * - > 100s: "2m 15s"
