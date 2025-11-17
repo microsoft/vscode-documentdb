@@ -30,7 +30,7 @@
  * - Integration with actual explain data
  */
 
-import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
+import { MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
 import { ChatMailRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
@@ -39,11 +39,17 @@ import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
-import { AnimatedCardList, type AnimatedCardItem } from './components';
+import { AnimatedCardList, FeedbackCard, FeedbackDialog, type AnimatedCardItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
-import { GetPerformanceInsightsCard, ImprovementCard, MarkdownCard, TipsCard } from './components/optimizationCards';
+import {
+    GetPerformanceInsightsCard,
+    ImprovementCard,
+    MarkdownCard,
+    MarkdownCardEx,
+    TipsCard,
+} from './components/optimizationCards';
 import { QueryPlanSummary } from './components/queryPlanSummary';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
@@ -92,6 +98,10 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [showTipsCard, setShowTipsCard] = useState(false);
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [showErrorCard, setShowErrorCard] = useState(false);
+
+    // Feedback dialog state
+    const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+    const [feedbackSentiment, setFeedbackSentiment] = useState<'positive' | 'negative'>('positive');
 
     /**
      * Display error message to user for the given stage
@@ -515,10 +525,6 @@ export const QueryInsightsMain = (): JSX.Element => {
         transitionToStage(3, 'cancelled');
     };
 
-    /**
-     * MOCK VERSION: Client-side mock for AI suggestions with 5-second delay
-     * This simulates the AI request without calling the backend
-     */
     const handlePrimaryAction = async (
         actionId: string,
         payload: unknown,
@@ -544,6 +550,49 @@ export const QueryInsightsMain = (): JSX.Element => {
         setShowTipsCard(false);
     };
 
+    // Feedback handlers
+    const handleFeedbackClick = (sentiment: 'positive' | 'negative') => {
+        // Fire-and-forget event so we capture sentiment immediately when the user clicks
+        void trpcClient.common.reportEvent.mutate({
+            eventName: 'queryInsightsThumb',
+            properties: {
+                sentiment,
+                source: 'feedbackThumb',
+            },
+        });
+
+        setFeedbackSentiment(sentiment);
+        setFeedbackDialogOpen(true);
+    };
+
+    const handleFeedbackSubmit = (feedback: {
+        sentiment: 'positive' | 'negative';
+        selectedReasons: string[];
+    }): Promise<void> => {
+        try {
+            const reasonProperties = feedback.selectedReasons.reduce(
+                (acc, reason) => {
+                    acc[reason] = 'true';
+                    return acc;
+                },
+                {} as Record<string, string>,
+            );
+
+            void trpcClient.common.reportEvent.mutate({
+                eventName: 'queryInsightsFeedback',
+                properties: {
+                    sentiment: feedback.sentiment,
+                    source: 'feedbackDialog',
+                    ...reasonProperties,
+                },
+            });
+        } catch (error) {
+            console.error('Failed to send feedback:', error);
+        }
+
+        return Promise.resolve();
+    };
+
     // Build the cards array for animated presence
     const insightCards: AnimatedCardItem[] = [];
 
@@ -559,9 +608,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     icon={<SparkleRegular />}
                     title={l10n.t('Query Performance Analysis')}
                     content={queryInsightsState.stage3Data.analysisCard.content}
-                    onCopy={() => {
-                        void navigator.clipboard.writeText(queryInsightsState.stage3Data?.analysisCard.content ?? '');
-                    }}
                 />
             ),
         });
@@ -582,9 +628,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                         '**Resolving this execution error should take precedence over performance optimization.** ' +
                         'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
                     }
-                    onCopy={() => {
-                        void navigator.clipboard.writeText(queryInsightsState.stage2Data?.concerns?.join('\n\n') ?? '');
-                    }}
                 />
             ),
         });
@@ -602,9 +645,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                             config={card}
                             onPrimaryAction={handlePrimaryAction}
                             onSecondaryAction={handleSecondaryAction}
-                            onCopy={() => {
-                                void navigator.clipboard.writeText(card.mongoShellCommand);
-                            }}
                         />
                     ),
                 });
@@ -612,16 +652,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 // For informational cards (no buttons), use MarkdownCard
                 insightCards.push({
                     key: `${keyPrefix}${card.cardId || `card-${index}`}`,
-                    component: (
-                        <MarkdownCard
-                            icon={<SparkleRegular />}
-                            title={card.title}
-                            content={card.description}
-                            onCopy={() => {
-                                void navigator.clipboard.writeText(card.description);
-                            }}
-                        />
-                    ),
+                    component: <MarkdownCard icon={<SparkleRegular />} title={card.title} content={card.description} />,
                 });
             }
         });
@@ -636,9 +667,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     icon={<SparkleRegular />}
                     title={l10n.t('Understanding Your Query Execution Plan')}
                     content={queryInsightsState.stage3Data.educationalContent}
-                    onCopy={() => {
-                        void navigator.clipboard.writeText(queryInsightsState.stage3Data?.educationalContent ?? '');
-                    }}
                 />
             ),
         });
@@ -700,20 +728,27 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                         {/* Platform-specific error card for RU clusters */}
                         {queryInsightsState.stage1ErrorCode === 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
-                            <MarkdownCard
+                            <MarkdownCardEx
                                 title={l10n.t('Query Insights Not Available')}
                                 icon={<ChatMailRegular />}
                                 showAiDisclaimer={false}
                                 content={l10n.t(
-                                    '**Query Insights for Azure Cosmos DB for MongoDB (RU) Accounts**\n\n' +
-                                        'This feature is currently not enabled for RU-based accounts. We recognize that these accounts have unique performance characteristics, and standard optimization patterns from other DocumentDB environments may not be applicable.\n\n' +
+                                    'This feature is currently not enabled for RU-based accounts. We recognize that these accounts have unique performance characteristics, and standard optimization patterns from other DocumentDB environments may not be applicable.\n\n' +
                                         'To ensure our recommendations are accurate and genuinely helpful, a specific analysis tailored to the Request Unit (RU) model is required. For this reason, we have disabled the feature for this account type.\n\n' +
                                         '---\n\n' +
                                         '**Interested in performance tooling for RU?**\n\n' +
                                         "We are gathering feedback to shape future tools. If you'd like to share your experience with query optimization on RU accounts or participate in design discussions, your input is highly valuable.\n\n" +
                                         "Feel free to [**start a discussion on GitHub**](https://github.com/microsoft/vscode-documentdb/discussions) or reach out to us directly. We'd love to hear from you!",
                                 )}
-                            />
+                            >
+                                <MessageBar intent="warning" style={{ marginBottom: '12px' }}>
+                                    <MessageBarBody>
+                                        {l10n.t(
+                                            'Query Insights is not available for Azure Cosmos DB for MongoDB (RU) accounts.',
+                                        )}
+                                    </MessageBarBody>
+                                </MessageBar>
+                            </MarkdownCardEx>
                         )}
 
                         {/* Skeleton - shown only when Stage 1 is actively loading (not in error state) */}
@@ -798,9 +833,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
                             rating={
-                                hasMetricsError || showMetricsSkeleton
-                                    ? undefined
-                                    : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score
+                                hasMetricsError
+                                    ? null
+                                    : showMetricsSkeleton
+                                      ? undefined
+                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score
                             }
                             diagnostics={
                                 hasMetricsError || showMetricsSkeleton
@@ -820,10 +857,20 @@ export const QueryInsightsMain = (): JSX.Element => {
                         hasError={hasMetricsError}
                     />
 
-                    {/* Quick Actions */}
-                    {/* <QuickActions stageState={stageState} /> */}
+                    {/* Feedback Card - hidden for RU accounts where Query Insights is not available */}
+                    {queryInsightsState.stage1ErrorCode !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
+                        <FeedbackCard onFeedback={handleFeedbackClick} />
+                    )}
                 </div>
             </div>
+
+            {/* Feedback Dialog */}
+            <FeedbackDialog
+                open={feedbackDialogOpen}
+                onClose={() => setFeedbackDialogOpen(false)}
+                sentiment={feedbackSentiment}
+                onSubmit={handleFeedbackSubmit}
+            />
         </div>
     );
 };

@@ -63,7 +63,7 @@ export const AiCard = forwardRef<HTMLDivElement, AiCardProps>(
                         color: tokens.colorNeutralForeground3,
                     }}
                 >
-                    {l10n.t('AI responses may be inaccurate.')}
+                    {l10n.t('AI responses may be inaccurate')}
                 </Text>
                 <div className="optimization-card-container">
                     <SparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />

@@ -6,6 +6,7 @@
 import { Button, Card, CardHeader, Text, tokens } from '@fluentui/react-components';
 import { ChevronLeftRegular, ChevronRightRegular, DismissRegular, LightbulbRegular } from '@fluentui/react-icons';
 import { forwardRef, useState } from 'react';
+import { useTrpcClient } from '../../../../../../api/webview-client/useTrpcClient';
 import './optimizationCard.scss';
 import './TipsCard.scss';
 
@@ -52,14 +53,56 @@ export interface TipsCardProps {
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
 export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips, onDismiss }, ref) => {
+    const { trpcClient } = useTrpcClient();
     const [currentIndex, setCurrentIndex] = useState(0);
 
     const handleNext = () => {
         setCurrentIndex((prev) => (prev + 1) % tips.length);
+
+        // Report tip navigation telemetry
+        trpcClient.common.reportEvent
+            .mutate({
+                eventName: 'queryInsights.tipNavigated',
+                properties: {
+                    direction: 'next',
+                    fromIndex: currentIndex.toString(),
+                    toIndex: ((currentIndex + 1) % tips.length).toString(),
+                },
+            })
+            .catch((error) => {
+                console.debug('Failed to report tip navigation:', error);
+            });
     };
 
     const handlePrevious = () => {
         setCurrentIndex((prev) => (prev - 1 + tips.length) % tips.length);
+
+        // Report tip navigation telemetry
+        trpcClient.common.reportEvent
+            .mutate({
+                eventName: 'queryInsights.tipNavigated',
+                properties: {
+                    direction: 'previous',
+                    fromIndex: currentIndex.toString(),
+                    toIndex: ((currentIndex - 1 + tips.length) % tips.length).toString(),
+                },
+            })
+            .catch((error) => {
+                console.debug('Failed to report tip navigation:', error);
+            });
+    };
+
+    const handleDismiss = () => {
+        // Report tips dismissal telemetry
+        trpcClient.common.reportEvent
+            .mutate({
+                eventName: 'queryInsights.tipsDismissed',
+            })
+            .catch((error) => {
+                console.debug('Failed to report tips dismissal:', error);
+            });
+
+        onDismiss?.();
     };
 
     return (
@@ -97,7 +140,7 @@ export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips
                                         appearance="subtle"
                                         icon={<DismissRegular />}
                                         size="small"
-                                        onClick={onDismiss}
+                                        onClick={handleDismiss}
                                     />
                                 )}
                             </div>

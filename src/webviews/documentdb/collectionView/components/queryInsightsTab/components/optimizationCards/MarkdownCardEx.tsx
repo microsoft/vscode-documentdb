@@ -4,8 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Card, CardHeader, makeStyles, Text, tokens } from '@fluentui/react-components';
-// TODO: Copy content feature will be added in the next release
-// import { CopyRegular } from '@fluentui/react-icons';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { forwardRef, type JSX } from 'react';
@@ -49,59 +47,52 @@ const useStyles = makeStyles({
             backgroundColor: tokens.colorNeutralBackground3,
             padding: tokens.spacingVerticalM,
             borderRadius: tokens.borderRadiusMedium,
+            fontFamily: tokens.fontFamilyMonospace,
+            fontSize: tokens.fontSizeBase200,
             overflow: 'auto',
-            marginTop: tokens.spacingVerticalS,
-            marginBottom: tokens.spacingVerticalS,
-        },
-        '& pre code': {
-            backgroundColor: 'transparent',
-            padding: 0,
-        },
-        '& ul, & ol': {
-            marginTop: tokens.spacingVerticalS,
-            marginBottom: tokens.spacingVerticalS,
-            paddingLeft: tokens.spacingHorizontalXXL,
-        },
-        '& li': {
-            marginTop: tokens.spacingVerticalXS,
-            marginBottom: tokens.spacingVerticalXS,
-            fontSize: tokens.fontSizeBase300,
-        },
-        '& strong': {
-            fontWeight: tokens.fontWeightSemibold,
-        },
-        '& em': {
-            fontStyle: 'italic',
+            border: `1px solid ${tokens.colorNeutralStroke2}`,
         },
         '& blockquote': {
-            marginTop: tokens.spacingVerticalS,
-            marginBottom: tokens.spacingVerticalS,
-            paddingLeft: tokens.spacingHorizontalL,
-            borderLeft: `4px solid ${tokens.colorBrandBackground}`,
-            color: tokens.colorNeutralForeground2,
+            borderLeft: `3px solid ${tokens.colorBrandBackground}`,
+            paddingLeft: tokens.spacingHorizontalM,
+            marginLeft: '0',
             fontStyle: 'italic',
         },
-        '& blockquote p': {
-            marginTop: tokens.spacingVerticalXS,
+        '& ul, & ol': {
+            paddingLeft: tokens.spacingHorizontalL,
+        },
+        '& li': {
             marginBottom: tokens.spacingVerticalXS,
         },
         '& hr': {
-            marginTop: tokens.spacingVerticalL,
-            marginBottom: tokens.spacingVerticalL,
             border: 'none',
-            borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+            height: '1px',
+            backgroundColor: tokens.colorNeutralStroke2,
+            margin: `${tokens.spacingVerticalM} 0`,
         },
         '& a': {
             color: tokens.colorBrandForeground1,
-            textDecoration: 'none',
-        },
-        '& a:hover': {
             textDecoration: 'underline',
+        },
+        '& table': {
+            borderCollapse: 'collapse',
+            width: '100%',
+            marginTop: tokens.spacingVerticalS,
+            marginBottom: tokens.spacingVerticalS,
+        },
+        '& th, & td': {
+            border: `1px solid ${tokens.colorNeutralStroke2}`,
+            padding: tokens.spacingVerticalXS,
+            textAlign: 'left',
+        },
+        '& th': {
+            backgroundColor: tokens.colorNeutralBackground2,
+            fontWeight: tokens.fontWeightSemibold,
         },
     },
 });
 
-interface MarkdownCardProps {
+interface MarkdownCardExProps {
     /**
      * Card title
      */
@@ -113,7 +104,7 @@ interface MarkdownCardProps {
     content: string;
 
     /**
-     * Optional custom icon (defaults to BookInformation24Regular)
+     * Optional custom icon (defaults to SparkleRegular)
      */
     icon?: JSX.Element;
 
@@ -127,26 +118,40 @@ interface MarkdownCardProps {
      * Set to false for non-AI generated content (e.g., error messages)
      */
     showAiDisclaimer?: boolean;
+
+    /**
+     * Optional children to render between the title and content
+     */
+    children?: React.ReactNode;
 }
 
 /**
- * Markdown card component for displaying educational content with rich formatting.
- * This component supports ref forwarding for use with animation libraries.
+ * Extended Markdown card component that supports children between title and content.
+ * This component extends the original MarkdownCard with the ability to insert custom
+ * content (such as MessageBars) between the title/header and the main markdown content.
+ *
+ * **Usage with children**:
+ * ```tsx
+ * <MarkdownCardEx title="..." content="...">
+ *   <MessageBar intent="warning">
+ *     <MessageBarBody>Custom message</MessageBarBody>
+ *   </MessageBar>
+ * </MarkdownCardEx>
+ * ```
  *
  * **Usage with animations**: Use directly with animation libraries like @fluentui/react-motion-components-preview:
- *
  * ```tsx
- *  * <CollapseRelaxed visible={isVisible}>
- *     <MarkdownCard title="..." content="..." {...props} />
+ * <CollapseRelaxed visible={isVisible}>
+ *   <MarkdownCardEx title="..." content="..." {...props} />
  * </CollapseRelaxed>
  * ```
  *
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(
+export const MarkdownCardEx = forwardRef<HTMLDivElement, MarkdownCardExProps>(
     // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
-    ({ title, content, icon, onCopy: _onCopy, showAiDisclaimer = true }, ref) => {
+    ({ title, content, icon, onCopy: _onCopy, showAiDisclaimer = true, children }, ref) => {
         const styles = useStyles();
 
         return (
@@ -169,7 +174,10 @@ export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(
                                     </Text>
                                 ) : undefined
                             }
+                            style={{ marginBottom: '16px' }}
                         />
+                        {/* Custom children content between header and main content */}
+                        {children}
                         <div className={styles.content}>
                             <ReactMarkdown>{content}</ReactMarkdown>
                         </div>
@@ -180,4 +188,4 @@ export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(
     },
 );
 
-MarkdownCard.displayName = 'MarkdownCard';
+MarkdownCardEx.displayName = 'MarkdownCardEx';

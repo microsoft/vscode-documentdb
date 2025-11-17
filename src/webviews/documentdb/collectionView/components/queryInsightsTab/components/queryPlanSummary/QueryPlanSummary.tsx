@@ -45,6 +45,20 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
 }) => {
     const { trpcClient } = useTrpcClient();
 
+    const handleStageDetailsToggle = (isExpanded: boolean) => {
+        trpcClient.common.reportEvent
+            .mutate({
+                eventName: 'queryInsights.stageDetailsToggled',
+                properties: {
+                    action: isExpanded ? 'expanded' : 'collapsed',
+                    isSharded: stage1Data?.isSharded ? 'true' : 'false',
+                },
+            })
+            .catch((error) => {
+                console.debug('Failed to report stage details toggle:', error);
+            });
+    };
+
     const handleViewRawExplain = async () => {
         try {
             await trpcClient.mongoClusters.collectionView.viewRawExplainOutput.mutate();
@@ -207,7 +221,12 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
 
                                         {/* Expandable Stage Details - only show when Stage 2 data is available */}
                                         {shard2Data && !stage2Loading && (
-                                            <Accordion collapsible>
+                                            <Accordion
+                                                collapsible
+                                                onToggle={(_event, data) => {
+                                                    handleStageDetailsToggle(data.openItems.length > 0);
+                                                }}
+                                            >
                                                 <AccordionItem value="1">
                                                     <AccordionHeader size="small">
                                                         {l10n.t('Show Stage Details')}
@@ -326,7 +345,12 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
 
                             {/* Expandable Stage Details - only show when Stage 2 data is available */}
                             {stage2Data && !stage2Loading && (
-                                <Accordion collapsible>
+                                <Accordion
+                                    collapsible
+                                    onToggle={(_event, data) => {
+                                        handleStageDetailsToggle(data.openItems.length > 0);
+                                    }}
+                                >
                                     <AccordionItem value="1">
                                         <AccordionHeader size="small">{l10n.t('Show Stage Details')}</AccordionHeader>
                                         <AccordionPanel>

@@ -4080,7 +4080,7 @@ Looking at the current `CollectionView.tsx` implementation:
 {selectedTab === 'tab_result' && (
     // Results tab content
 )}
-{selectedTab === 'tab_performance_main' && <QueryInsightsMain />}
+{selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
 {selectedTab === 'tab_performance_mock' && <QueryInsightsMainMock />}
 ```
 

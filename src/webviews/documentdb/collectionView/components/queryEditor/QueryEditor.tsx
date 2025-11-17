@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Input, Label, ToggleButton } from '@fluentui/react-components';
+import { Button, Input, Label, ToggleButton, Tooltip } from '@fluentui/react-components';
 import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { useContext, useEffect, useRef, useState, type JSX } from 'react';
@@ -415,38 +415,79 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                     />
                 </div>
                 <div className="queryEditorActions">
-                    <ToggleButton
-                        appearance="subtle"
-                        checked={isEnhancedQueryMode}
-                        onClick={() => {
-                            // Toggle enhanced mode
-                            setIsEnhancedQueryMode(!isEnhancedQueryMode);
+                    <Tooltip
+                        content={l10n.t('Enhanced Query Configuration\n(Projection, Sort, Skip, Limit)')}
+                        relationship="description"
+                        withArrow
+                    >
+                        <ToggleButton
+                            appearance="subtle"
+                            checked={isEnhancedQueryMode}
+                            onClick={() => {
+                                const enhancedModeEnabled = !isEnhancedQueryMode;
 
-                            // Temporarily hide scrollbars during the transition to improve UX responsiveness.
-                            // Note: The window-level scrollbar flickering (caused by cumulative fractional
-                            // pixel rounding) is now fixed by a media query on .collectionView. However,
-                            // this logic remains useful for making the transition feel snappier by hiding
-                            // intermediate scrollbar states in SlickGrid (Table/Tree views) during the
-                            // ~100ms debounce period before resize handlers complete and grids re-render.
-                            hideScrollbarsTemporarily();
-                        }}
-                        icon={isEnhancedQueryMode ? <SettingsFilled /> : <SettingsRegular />}
-                    ></ToggleButton>
+                                // Report enhanced query mode toggle telemetry
+                                trpcClient.common.reportEvent
+                                    .mutate({
+                                        eventName: 'queryEditor.enhancedModeToggled',
+                                        properties: {
+                                            newMode: enhancedModeEnabled ? 'enabled' : 'disabled',
+                                            previousMode: isEnhancedQueryMode ? 'enabled' : 'disabled',
+                                        },
+                                    })
+                                    .catch((error) => {
+                                        console.debug('Failed to report enhanced mode toggle:', error);
+                                    });
 
-                    <Button
-                        appearance="subtle"
-                        icon={<ArrowResetRegular />}
-                        onClick={() => {
-                            // Reset all query-related states
-                            setFilterValue('{  }');
-                            setProjectValue('{  }');
-                            setSortValue('{  }');
-                            setSkipValue(0);
-                            setLimitValue(0);
-                            setAiPromptValue('');
-                            setAiPromptHistory([]); // Clear AI prompt history
-                        }}
-                    />
+                                // Toggle enhanced mode
+                                setIsEnhancedQueryMode(enhancedModeEnabled);
+
+                                // Temporarily hide scrollbars during the transition to improve UX responsiveness.
+                                // Note: The window-level scrollbar flickering (caused by cumulative fractional
+                                // pixel rounding) is now fixed by a media query on .collectionView. However,
+                                // this logic remains useful for making the transition feel snappier by hiding
+                                // intermediate scrollbar states in SlickGrid (Table/Tree views) during the
+                                // ~100ms debounce period before resize handlers complete and grids re-render.
+                                hideScrollbarsTemporarily();
+                            }}
+                            icon={isEnhancedQueryMode ? <SettingsFilled /> : <SettingsRegular />}
+                        ></ToggleButton>
+                    </Tooltip>
+
+                    <Tooltip content={l10n.t('Clear Query')} relationship="description" withArrow>
+                        <Button
+                            appearance="subtle"
+                            icon={<ArrowResetRegular />}
+                            onClick={() => {
+                                // Report clear query telemetry
+                                trpcClient.common.reportEvent
+                                    .mutate({
+                                        eventName: 'queryEditor.clearQuery',
+                                        properties: {
+                                            enhancedMode: isEnhancedQueryMode ? 'enabled' : 'disabled',
+                                        },
+                                        measurements: {
+                                            filterLength: filterValue.length,
+                                            projectionLength: projectValue.length,
+                                            sortLength: sortValue.length,
+                                            skipValue,
+                                            limitValue,
+                                        },
+                                    })
+                                    .catch((error) => {
+                                        console.debug('Failed to report clear query:', error);
+                                    });
+
+                                // Reset all query-related states
+                                setFilterValue('{  }');
+                                setProjectValue('{  }');
+                                setSortValue('{  }');
+                                setSkipValue(0);
+                                setLimitValue(0);
+                                setAiPromptValue('');
+                            }}
+                        />
+                    </Tooltip>
                 </div>
             </div>
 

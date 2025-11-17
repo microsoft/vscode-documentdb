@@ -114,7 +114,7 @@ export const GetPerformanceInsightsCard = forwardRef<HTMLDivElement, GetPerforma
                         color: tokens.colorNeutralForeground3,
                     }}
                 >
-                    {l10n.t('AI responses may be inaccurate.')}
+                    {l10n.t('AI responses may be inaccurate')}
                 </Text>
                 <div className="optimization-card-container">
                     <SparkleRegular
