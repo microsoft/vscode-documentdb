@@ -3,8 +3,8 @@ name: Accessibility Review
 about: Accessibility Issue Tempate
 title: ''
 labels: a11y
+projects: microsoft/1795
 assignees: ''
-
 ---
 
 ## User Experience:
