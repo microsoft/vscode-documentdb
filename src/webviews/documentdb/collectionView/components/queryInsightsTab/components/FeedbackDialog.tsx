@@ -17,7 +17,7 @@ import {
 } from '@fluentui/react-components';
 import { ChatMailRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 
 export interface FeedbackDialogProps {
     /** Whether the dialog is open */
@@ -36,6 +36,11 @@ export interface FeedbackDialogProps {
 export const FeedbackDialog = ({ open, onClose, sentiment, onSubmit }: FeedbackDialogProps): JSX.Element => {
     const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set());
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Reset selected reasons when sentiment changes
+    useEffect(() => {
+        setSelectedReasons(new Set());
+    }, [sentiment]);
 
     const positiveReasons = [
         l10n.t('Data shown was correct'),
