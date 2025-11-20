@@ -15,6 +15,7 @@ export type CollectionViewWebviewConfigurationType = {
     databaseName: string;
     collectionName: string;
     defaultPageSize: number;
+    feedbackSignalsEnabled: boolean;
 };
 
 export class CollectionViewController extends WebviewController<CollectionViewWebviewConfigurationType> {

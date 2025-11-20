@@ -5,6 +5,8 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
+
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { CollectionViewController } from '../../webviews/documentdb/collectionView/collectionViewController';
@@ -37,11 +39,23 @@ export async function openCollectionViewInternal(
      */
     const sessionId = await ClusterSession.initNewSession(props.clusterId);
 
+    // Enable feedback signals only when telemetry level is set to "all"
+    // See: https://code.visualstudio.com/docs/setup/enterprise#_configure-telemetry-level
+    let feedbackSignalsEnabled = false;
+    try {
+        const telemetryLevel = vscode.workspace.getConfiguration('telemetry').get<string>('telemetryLevel');
+        feedbackSignalsEnabled = telemetryLevel === 'all';
+    } catch {
+        // If we fail to read telemetry settings, default to false
+        feedbackSignalsEnabled = false;
+    }
+
     const view = new CollectionViewController({
         sessionId: sessionId,
         clusterId: props.clusterId,
         databaseName: props.databaseName,
         collectionName: props.collectionName,
+        feedbackSignalsEnabled: feedbackSignalsEnabled,
     });
 
     view.revealToForeground();

@@ -11,16 +11,12 @@ import {
     MenuTrigger,
     Toolbar,
     ToolbarButton,
-    ToolbarDivider,
     ToolbarToggleButton,
-    Tooltip,
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
     ArrowExportRegular,
     ArrowImportRegular,
-    CommentCheckmarkRegular,
-    EmojiSmileSlightRegular,
     PlayRegular,
     SparkleFilled,
     SparkleRegular,
@@ -34,14 +30,14 @@ import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuri
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
 export const ToolbarMainView = (): JSX.Element => {
-    const { trpcClient } = useTrpcClient();
+    // const { trpcClient } = useTrpcClient();
 
     return (
         <>
             <ToolbarQueryOperations />
             <ToolbarDataOperations />
-            <ToolbarDivider />
-            <Menu>
+            {/* <ToolbarDivider /> */}
+            {/* <Menu>
                 <MenuTrigger>
                     <Tooltip content={l10n.t('Provide Feedback')} relationship="description" withArrow>
                         <ToolbarButton
@@ -66,7 +62,7 @@ export const ToolbarMainView = (): JSX.Element => {
                         </MenuItem>
                     </MenuList>
                 </MenuPopover>
-            </Menu>
+            </Menu> */}
         </>
     );
 };
