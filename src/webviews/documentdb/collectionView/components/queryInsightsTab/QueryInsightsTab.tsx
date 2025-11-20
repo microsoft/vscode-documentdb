@@ -35,8 +35,10 @@ import { ChatMailRegular, SparkleRegular, WarningRegular } from '@fluentui/react
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useState, type JSX } from 'react';
+import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
+import { CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
 import { AnimatedCardList, FeedbackCard, FeedbackDialog, type AnimatedCardItem } from './components';
@@ -61,6 +63,11 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Stage 2: Detailed Execution Analysis (from explain("executionStats"))
     // Stage 3: AI-Powered Recommendations (opt-in)
     // See: docs/design-documents/performance-advisor.md
+
+    /**
+     * Use the configuration object to access the data passed to the webview at its creation.
+     */
+    const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
 
     const { trpcClient } = useTrpcClient();
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
@@ -858,9 +865,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                     />
 
                     {/* Feedback Card - hidden for RU accounts where Query Insights is not available */}
-                    {queryInsightsState.stage1ErrorCode !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
-                        <FeedbackCard onFeedback={handleFeedbackClick} />
-                    )}
+                    {configuration.feedbackSignalsEnabled &&
+                        queryInsightsState.stage1ErrorCode !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
+                            <FeedbackCard onFeedback={handleFeedbackClick} />
+                        )}
                 </div>
             </div>
 
