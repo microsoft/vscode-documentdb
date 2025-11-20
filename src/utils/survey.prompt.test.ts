@@ -78,6 +78,9 @@ describe('Survey Prompt', () => {
         surveyState.wasPromptedInSession = false;
         surveyState.isCandidate = true;
 
+        // Enable survey for tests (it's disabled in production)
+        surveyConfig.settings.DISABLE_SURVEY = false;
+
         // Reset mocks
         jest.clearAllMocks();
 

@@ -81,6 +81,9 @@ describe('Survey Initialization', () => {
         // This directly modifies the surveyState object in the survey.ts module
         surveyStateRef.isCandidate = undefined;
 
+        // Enable survey for tests (it's disabled in production)
+        SurveyConfig.settings.DISABLE_SURVEY = false;
+
         // Set up default A/B test mocks for passing
         mockABTestPassing();
 
