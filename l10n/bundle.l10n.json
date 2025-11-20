@@ -564,7 +564,6 @@
   "Procedure not found: {name}": "Procedure not found: {name}",
   "Process exited: \"{command}\"": "Process exited: \"{command}\"",
   "Project": "Project",
-  "Provide Feedback": "Provide Feedback",
   "Provider \"{0}\" does not have resource type \"{1}\".": "Provider \"{0}\" does not have resource type \"{1}\".",
   "Query Efficiency Analysis": "Query Efficiency Analysis",
   "Query Execution Failed": "Query Execution Failed",

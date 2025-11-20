@@ -18,7 +18,7 @@ const SurveyConfig = {
     },
     settings: {
         DEBUG_ALWAYS_PROMPT: false, // Forces survey prompt regardless of conditions
-        DISABLE_SURVEY: false, // Completely disables survey functionality
+        DISABLE_SURVEY: true, // Completely disables survey functionality
         PROBABILITY: 1, // Probability to become candidate (0-1), Azure Tools uses 0.15
         A_B_TEST_SELECTION: 1, // change this value to adjust the candidate selection (e.g. 0.50 for 50% of users)
         PROMPT_ENGLISH_ONLY: false, // Whether to limit survey to English locales
