@@ -38,7 +38,7 @@ import { useCallback, useContext, useEffect, useState, type JSX } from 'react';
 import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
-import { CollectionViewWebviewConfigurationType } from '../../collectionViewController';
+import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
 import { AnimatedCardList, FeedbackCard, FeedbackDialog, type AnimatedCardItem } from './components';
