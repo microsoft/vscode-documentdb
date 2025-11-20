@@ -1,5 +1,15 @@
 # Change Log
 
+## 0.6.1
+
+### New Features & Improvements
+
+- **Feedback Optimization**: Introduces privacy consent and feedback signal controls for the Query Insights feature, primarily to ensure compliance with organizational data protection requirements and user telemetry settings. It also disables survey functionality and refines the feedback dialog UI. [#392](https://github.com/microsoft/vscode-documentdb/pull/392)
+
+### Fixes
+
+- **Privacy Policy Link**: Updated the outdated privacy policy link in the README to the current Microsoft privacy statement URL. [#388](https://github.com/microsoft/vscode-documentdb/pull/388)
+
 ## 0.6.0
 
 ### New Features & Improvements

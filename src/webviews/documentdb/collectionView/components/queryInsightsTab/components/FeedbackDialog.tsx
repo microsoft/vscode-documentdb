@@ -12,6 +12,7 @@ import {
     DialogContent,
     DialogSurface,
     DialogTitle,
+    Divider,
     Link,
     Text,
 } from '@fluentui/react-components';
@@ -36,11 +37,13 @@ export interface FeedbackDialogProps {
 export const FeedbackDialog = ({ open, onClose, sentiment, onSubmit }: FeedbackDialogProps): JSX.Element => {
     const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set());
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [consentChecked, setConsentChecked] = useState(false);
 
-    // Reset selected reasons when sentiment changes
+    // Reset selected reasons and consent when sentiment changes or dialog closes
     useEffect(() => {
         setSelectedReasons(new Set());
-    }, [sentiment]);
+        setConsentChecked(false);
+    }, [sentiment, open]);
 
     const positiveReasons = [
         l10n.t('Data shown was correct'),
@@ -88,9 +91,14 @@ export const FeedbackDialog = ({ open, onClose, sentiment, onSubmit }: FeedbackD
     const handleClose = () => {
         if (!isSubmitting) {
             setSelectedReasons(new Set());
+            setConsentChecked(false);
             onClose();
         }
     };
+
+    const consentNoticeText = l10n.t(
+        'Microsoft will process the feedback data you submit on behalf of your organization in accordance with the Data Protection Addendum between your organization and Microsoft.',
+    );
 
     return (
         <Dialog open={open} onOpenChange={(_, data) => !data.open && handleClose()}>
@@ -141,11 +149,10 @@ export const FeedbackDialog = ({ open, onClose, sentiment, onSubmit }: FeedbackD
                                     gap: '8px',
                                 }}
                             >
-                                <Text size={300}>
+                                <Text size={200}>
                                     {l10n.t(
                                         'These signals help us improve, but more context in a discussion, issue report, or a direct message adds even more value. ',
                                     )}
-                                    <br />
                                     <Link
                                         href="https://github.com/microsoft/vscode-documentdb/discussions"
                                         target="_blank"
@@ -164,10 +171,42 @@ export const FeedbackDialog = ({ open, onClose, sentiment, onSubmit }: FeedbackD
                                     {l10n.t(' on GitHub.')}
                                 </Text>
                             </div>
+
+                            {/* Horizontal divider */}
+                            <Divider />
+
+                            {/* Privacy consent section */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {/* Consent checkbox */}
+                                <Checkbox
+                                    required
+                                    checked={consentChecked}
+                                    onChange={(_, data) => setConsentChecked(data.checked === true)}
+                                    label={
+                                        <Text>
+                                            {l10n.t('I have read and agree to the ')}{' '}
+                                            <Link
+                                                href="https://go.microsoft.com/fwlink/?LinkId=521839"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                {l10n.t('Privacy Statement')}
+                                            </Link>
+                                        </Text>
+                                    }
+                                />
+
+                                {/* Privacy notice text */}
+                                <Text size={100}>{consentNoticeText}</Text>
+                            </div>
                         </div>
                     </DialogContent>
                     <DialogActions>
-                        <Button appearance="primary" onClick={() => void handleSubmit()} disabled={isSubmitting}>
+                        <Button
+                            appearance="primary"
+                            onClick={() => void handleSubmit()}
+                            disabled={isSubmitting || !consentChecked}
+                        >
                             {isSubmitting ? l10n.t('Submitting...') : l10n.t('Submit Feedback')}
                         </Button>
                         <Button appearance="secondary" onClick={handleClose} disabled={isSubmitting}>
