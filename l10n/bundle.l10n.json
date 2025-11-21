@@ -514,6 +514,7 @@
   "No Azure VMs found with tag \"{tagName}\" in subscription \"{subscriptionName}\".": "No Azure VMs found with tag \"{tagName}\" in subscription \"{subscriptionName}\".",
   "No collection selected.": "No collection selected.",
   "No commands found in this document.": "No commands found in this document.",
+  "No connections selected to remove.": "No connections selected to remove.",
   "No Connectivity": "No Connectivity",
   "No credentials found for id {credentialId}": "No credentials found for id {credentialId}",
   "No credentials found for the selected cluster.": "No credentials found for the selected cluster.",

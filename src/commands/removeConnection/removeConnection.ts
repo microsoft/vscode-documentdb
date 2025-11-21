@@ -28,6 +28,7 @@ export async function removeConnection(
     }
 
     if (connectionsToDelete.length === 0) {
+        ext.outputChannel.warn(l10n.t('No connections selected to remove.'));
         return;
     }
 
