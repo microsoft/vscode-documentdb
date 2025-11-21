@@ -18,7 +18,14 @@ export async function removeConnection(
     nodes?: DocumentDBClusterItem[],
 ): Promise<void> {
     // Determine the list of connections to delete
-    const connectionsToDelete: DocumentDBClusterItem[] = nodes && nodes.length > 0 ? nodes : node ? [node] : [];
+    let connectionsToDelete: DocumentDBClusterItem[];
+    if (nodes && nodes.length > 0) {
+        connectionsToDelete = nodes;
+    } else if (node) {
+        connectionsToDelete = [node];
+    } else {
+        connectionsToDelete = [];
+    }
 
     if (connectionsToDelete.length === 0) {
         return;
@@ -86,8 +93,16 @@ export async function removeConnection(
 
     // Show summary message
     if (connectionsToDelete.length === 1) {
+        // For single connection, show success or error message
         if (successCount === 1) {
             showConfirmationAsInSettings(l10n.t('The selected connection has been removed.'));
+        } else {
+            // Error is already logged to outputChannel, so throw error to show notification
+            throw new Error(
+                l10n.t('Failed to remove connection "{connectionName}".', {
+                    connectionName: connectionsToDelete[0].cluster.name,
+                }),
+            );
         }
     } else {
         // Show summary for multiple deletions
