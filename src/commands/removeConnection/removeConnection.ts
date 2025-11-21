@@ -87,6 +87,8 @@ export async function removeConnection(
                 }),
             );
 
+            // Note: When multiple deletions fail, we intentionally capture only the last error's
+            // details in telemetry. The errorCount metric below provides context on total failures.
             context.telemetry.properties.error = 'RemoveConnectionError';
             context.telemetry.properties.errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -99,6 +101,7 @@ export async function removeConnection(
 
     // Set telemetry for successfully deleted connections
     context.telemetry.measurements.connectionsDeleted = successCount;
+    context.telemetry.measurements.errorCount = failureCount;
 
     // Show summary message
     if (connectionsToDelete.length === 1) {
