@@ -33,7 +33,7 @@ export async function removeConnection(
 
     // Set telemetry for the first node
     context.telemetry.properties.experience = connectionsToDelete[0].experience.api;
-    context.telemetry.measurements.removedConnections = connectionsToDelete.length;
+    context.telemetry.measurements.connectionsToDelete = connectionsToDelete.length;
 
     // Confirmation logic - different messages for single vs. multiple deletions
     const confirmed = await getConfirmationAsInSettings(
@@ -90,6 +90,9 @@ export async function removeConnection(
 
     // Refresh the tree view
     ext.connectionsBranchDataProvider.refresh();
+
+    // Set telemetry for successfully deleted connections
+    context.telemetry.measurements.connectionsDeleted = successCount;
 
     // Show summary message
     if (connectionsToDelete.length === 1) {
