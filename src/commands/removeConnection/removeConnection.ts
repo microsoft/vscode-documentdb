@@ -36,6 +36,8 @@ export async function removeConnection(
     context.telemetry.measurements.connectionsToDelete = connectionsToDelete.length;
 
     // Confirmation logic - different messages for single vs. multiple deletions
+    const expectedConfirmationWord =
+        connectionsToDelete.length === 1 ? 'delete' : connectionsToDelete.length.toString();
     const confirmed = await getConfirmationAsInSettings(
         l10n.t('Are you sure?'),
         connectionsToDelete.length === 1
@@ -45,7 +47,7 @@ export async function removeConnection(
             : l10n.t('Delete {count} connections?', { count: connectionsToDelete.length }) +
                   '\n' +
                   l10n.t('This cannot be undone.'),
-        'delete',
+        expectedConfirmationWord,
     );
 
     if (!confirmed) {
