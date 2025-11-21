@@ -12,14 +12,6 @@ import { type DocumentDBClusterItem } from '../../tree/connections-view/Document
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
-export async function removeAzureConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
-    if (!node) {
-        throw new Error(l10n.t('No node selected.'));
-    }
-
-    await removeConnection(context, node);
-}
-
 export async function removeConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
     const confirmed = await getConfirmationAsInSettings(
@@ -40,7 +32,10 @@ export async function removeConnection(context: IActionContext, node: DocumentDB
         if ((node as DocumentDBClusterItem).cluster.emulatorConfiguration?.isEmulator) {
             await ConnectionStorageService.delete(ConnectionType.Emulators, node.storageId);
         } else {
+            const start = performance.now();
             await ConnectionStorageService.delete(ConnectionType.Clusters, node.storageId);
+            const end = performance.now();
+            console.debug(`Time taken to delete connection from storage: ${end - start} ms`);
         }
     });
 
