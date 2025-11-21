@@ -40,11 +40,11 @@ export async function removeConnection(
         l10n.t('Are you sure?'),
         connectionsToDelete.length === 1
             ? l10n.t('Delete "{connectionName}"?', { connectionName: connectionsToDelete[0].cluster.name }) +
-              '\n' +
-              l10n.t('This cannot be undone.')
+                  '\n' +
+                  l10n.t('This cannot be undone.')
             : l10n.t('Delete {count} connections?', { count: connectionsToDelete.length }) +
-              '\n' +
-              l10n.t('This cannot be undone.'),
+                  '\n' +
+                  l10n.t('This cannot be undone.'),
         'delete',
     );
 
@@ -84,6 +84,10 @@ export async function removeConnection(
                     error: error instanceof Error ? error.message : String(error),
                 }),
             );
+
+            context.telemetry.properties.error = 'RemoveConnectionError';
+            context.telemetry.properties.errorMessage = error instanceof Error ? error.message : String(error);
+
             failureCount++;
         }
     }
