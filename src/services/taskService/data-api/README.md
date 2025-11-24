@@ -94,6 +94,25 @@ for await (const doc of stream) {
 }
 ```
 
+### Keep-Alive Support
+
+**Motivation:**
+When streaming documents to a slow consumer (e.g., a rate-limited writer or complex processing logic), the database cursor might time out if no documents are requested for an extended period. This is common when the target database throttles writes, causing the reader to pause.
+
+**Mechanism:**
+The `DocumentReader` supports an optional keep-alive mode that maintains a background buffer. It periodically fetches documents from the database even if the consumer isn't requesting them immediately, ensuring the cursor remains active.
+
+**Usage:**
+Enable keep-alive by passing `keepAlive: true` in the options:
+
+```typescript
+const stream = reader.streamDocuments({
+  keepAlive: true,
+  keepAliveIntervalMs: 30000, // Optional: refill every 30s
+  keepAliveTimeoutMs: 3600000, // Optional: abort after 1h
+});
+```
+
 ---
 
 ### DocumentWriter (Abstract Interface)
