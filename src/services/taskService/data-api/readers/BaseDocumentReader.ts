@@ -78,7 +78,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
         const intervalMs = options.keepAliveIntervalMs ?? 10000;
         const timeoutMs = options.keepAliveTimeoutMs ?? 600000; // 10 minutes default
         const streamStartTime = Date.now();
-        let lastYieldTimestamp = Date.now();
+        let lastDatabaseReadAccess = Date.now();
         let dbIterator: AsyncIterator<DocumentDetails> | null = null;
         let keepAliveTimer: NodeJS.Timeout | null = null;
         let keepAliveReadCount = 0;
@@ -113,7 +113,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
 
                     // Fetch if enough time has passed since last yield (regardless of buffer state)
                     // This ensures we "tickle" the database cursor regularly to prevent timeouts
-                    const timeSinceLastYield = Date.now() - lastYieldTimestamp;
+                    const timeSinceLastYield = Date.now() - lastDatabaseReadAccess;
                     if (timeSinceLastYield >= intervalMs && dbIterator) {
                         try {
                             const result = await dbIterator.next();
@@ -144,7 +144,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
                         // Trace skipped keep-alive execution
                         ext.outputChannel.trace(
                             l10n.t(
-                                '[Reader] Keep-alive skipped: only {0}s since last yield (interval: {1}s)',
+                                '[Reader] Keep-alive skipped: only {0}s since last database read access (interval: {1}s)',
                                 Math.floor(timeSinceLastYield / 1000).toString(),
                                 Math.floor(intervalMs / 1000).toString(),
                             ),
@@ -170,7 +170,6 @@ export abstract class BaseDocumentReader implements DocumentReader {
                         );
 
                         yield doc;
-                        lastYieldTimestamp = Date.now();
                         continue;
                     }
                 }
@@ -182,7 +181,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
                 }
 
                 yield result.value;
-                lastYieldTimestamp = Date.now();
+                lastDatabaseReadAccess = Date.now();
             }
         } finally {
             // Record telemetry for keep-alive usage

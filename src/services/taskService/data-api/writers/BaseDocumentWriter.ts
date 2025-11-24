@@ -136,6 +136,8 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
         documents: DocumentDetails[],
         options?: DocumentWriterOptions,
     ): Promise<BulkWriteResult<TDocumentId>> {
+        ext.outputChannel.trace(l10n.t('[Writer] Received {0} documents to write.', documents.length.toString()));
+
         if (documents.length === 0) {
             return {
                 processedCount: 0,
