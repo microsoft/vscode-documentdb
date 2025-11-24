@@ -387,7 +387,9 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                 if (errorType === 'throttle') {
                     wasThrottled = true;
 
-                    const details = this.extractDetailsFromError(error, actionContext) ?? this.createFallbackDetails(0);
+                    const rawDetails =
+                        this.extractDetailsFromError(error, actionContext) ?? this.createFallbackDetails(0);
+                    const details = this.normalizeDetailsForStrategy(rawDetails);
                     const successfulCount = details.processedCount;
 
                     if (this.currentMode.mode === 'fast') {
@@ -432,7 +434,9 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                     );
 
                     const conflictErrors = this.extractConflictDetails(error, actionContext);
-                    const details = this.extractDetailsFromError(error, actionContext) ?? this.createFallbackDetails(0);
+                    const rawDetails =
+                        this.extractDetailsFromError(error, actionContext) ?? this.createFallbackDetails(0);
+                    const details = this.normalizeDetailsForStrategy(rawDetails);
 
                     if (this.conflictResolutionStrategy === ConflictResolutionStrategy.Skip) {
                         ext.outputChannel.trace(
@@ -527,6 +531,57 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
         return {
             processedCount,
         };
+    }
+
+    /**
+     * Normalizes processing details to only include counts relevant for the current strategy.
+     *
+     * This prevents incorrect count accumulation when throttle errors contain counts
+     * that aren't relevant for the operation type. For example, MongoDB may return
+     * both insertedCount and upsertedCount in an error, but for Overwrite strategy
+     * we should only use matchedCount/upsertedCount, not insertedCount.
+     *
+     * Strategy-specific count rules:
+     * - GenerateNewIds: insertedCount only
+     * - Skip: insertedCount, collidedCount
+     * - Abort: insertedCount, collidedCount
+     * - Overwrite: matchedCount, modifiedCount, upsertedCount (NO insertedCount)
+     *
+     * @param details Raw details extracted from error or result
+     * @returns Normalized details with only strategy-relevant counts
+     */
+    protected normalizeDetailsForStrategy(details: ProcessedDocumentsDetails): ProcessedDocumentsDetails {
+        switch (this.conflictResolutionStrategy) {
+            case ConflictResolutionStrategy.GenerateNewIds:
+                // Only insertedCount is valid
+                return {
+                    processedCount: details.insertedCount ?? 0,
+                    insertedCount: details.insertedCount,
+                };
+
+            case ConflictResolutionStrategy.Skip:
+            case ConflictResolutionStrategy.Abort:
+                // insertedCount and collidedCount are valid
+                return {
+                    processedCount: (details.insertedCount ?? 0) + (details.collidedCount ?? 0),
+                    insertedCount: details.insertedCount,
+                    collidedCount: details.collidedCount,
+                };
+
+            case ConflictResolutionStrategy.Overwrite:
+                // matchedCount, modifiedCount, and upsertedCount are valid
+                // NOTE: insertedCount should NOT be included for Overwrite
+                return {
+                    processedCount: (details.matchedCount ?? 0) + (details.upsertedCount ?? 0),
+                    matchedCount: details.matchedCount,
+                    modifiedCount: details.modifiedCount,
+                    upsertedCount: details.upsertedCount,
+                };
+
+            default:
+                // Fallback: return as-is
+                return details;
+        }
     }
 
     /**
