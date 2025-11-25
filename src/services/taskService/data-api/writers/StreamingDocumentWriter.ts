@@ -453,6 +453,10 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
 
     /**
      * Writes a batch with retry logic for transient failures.
+     *
+     * When a throttle error occurs with partial progress (some documents were
+     * successfully inserted before the rate limit was hit), we slice the batch
+     * to skip the already-processed documents before retrying.
      */
     private async writeBatchWithRetry(
         batch: DocumentDetails[],
@@ -460,32 +464,131 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         abortSignal?: AbortSignal,
         actionContext?: IActionContext,
     ): Promise<BatchWriteResult<TDocumentId>> {
-        const result = await this.retryOrchestrator.executeWithProgress(
-            () => this.writeBatch(batch, strategy, actionContext),
-            (error) => this.classifyError(error, actionContext),
-            {
-                onThrottle: (error) => {
+        let currentBatch = batch;
+        let totalResult: BatchWriteResult<TDocumentId> = {
+            processedCount: 0,
+            insertedCount: 0,
+        };
+        let attempt = 0;
+        const maxAttempts = 10; // Same as RetryOrchestrator default
+
+        while (attempt < maxAttempts && currentBatch.length > 0) {
+            if (abortSignal?.aborted) {
+                throw new Error(vscode.l10n.t('Operation was cancelled'));
+            }
+
+            try {
+                const result = await this.writeBatch(currentBatch, strategy, actionContext);
+                // Success - merge results and return
+                return this.mergeResults(totalResult, result);
+            } catch (error) {
+                const errorType = this.classifyError(error, actionContext);
+
+                if (errorType === 'throttle') {
                     const progress = this.extractPartialProgress(error, actionContext);
                     const successfulCount = progress?.processedCount ?? 0;
 
                     this.batchSizeAdapter.handleThrottle(successfulCount);
 
-                    return {
-                        continue: true,
-                        progressMade: successfulCount > 0,
-                    };
-                },
-                onNetwork: (_error) => {
-                    return {
-                        continue: true,
-                        progressMade: false,
-                    };
-                },
-            },
-            abortSignal,
-        );
+                    if (successfulCount > 0) {
+                        // Slice the batch to skip already-processed documents
+                        ext.outputChannel.debug(
+                            vscode.l10n.t(
+                                '[StreamingWriter] Throttle with partial progress: {0}/{1} processed, slicing batch',
+                                successfulCount.toString(),
+                                currentBatch.length.toString(),
+                            ),
+                        );
+                        // Accumulate partial results
+                        totalResult = this.mergeResults(totalResult, {
+                            processedCount: successfulCount,
+                            insertedCount: progress?.insertedCount ?? successfulCount,
+                            matchedCount: progress?.matchedCount,
+                            modifiedCount: progress?.modifiedCount,
+                            upsertedCount: progress?.upsertedCount,
+                        });
+                        // Slice the batch to only contain remaining documents
+                        currentBatch = currentBatch.slice(successfulCount);
+                        attempt = 0; // Reset attempts when progress is made
+                    } else {
+                        attempt++;
+                    }
 
-        return result.result;
+                    // Delay before retry
+                    await this.retryDelay(attempt, abortSignal);
+                    continue;
+                }
+
+                if (errorType === 'network') {
+                    // Network errors don't have partial progress - retry full batch
+                    attempt++;
+                    await this.retryDelay(attempt, abortSignal);
+                    continue;
+                }
+
+                // For 'conflict', 'validator', and 'other' - don't retry
+                throw error;
+            }
+        }
+
+        if (currentBatch.length > 0) {
+            throw new Error(vscode.l10n.t('Failed to complete operation after {0} attempts', maxAttempts.toString()));
+        }
+
+        return totalResult;
+    }
+
+    /**
+     * Merges partial results into the total result.
+     */
+    private mergeResults(
+        total: BatchWriteResult<TDocumentId>,
+        partial: BatchWriteResult<TDocumentId>,
+    ): BatchWriteResult<TDocumentId> {
+        return {
+            processedCount: (total.processedCount ?? 0) + (partial.processedCount ?? 0),
+            insertedCount: (total.insertedCount ?? 0) + (partial.insertedCount ?? 0),
+            matchedCount:
+                total.matchedCount !== undefined || partial.matchedCount !== undefined
+                    ? (total.matchedCount ?? 0) + (partial.matchedCount ?? 0)
+                    : undefined,
+            modifiedCount:
+                total.modifiedCount !== undefined || partial.modifiedCount !== undefined
+                    ? (total.modifiedCount ?? 0) + (partial.modifiedCount ?? 0)
+                    : undefined,
+            upsertedCount:
+                total.upsertedCount !== undefined || partial.upsertedCount !== undefined
+                    ? (total.upsertedCount ?? 0) + (partial.upsertedCount ?? 0)
+                    : undefined,
+            collidedCount:
+                total.collidedCount !== undefined || partial.collidedCount !== undefined
+                    ? (total.collidedCount ?? 0) + (partial.collidedCount ?? 0)
+                    : undefined,
+            errors: total.errors || partial.errors ? [...(total.errors ?? []), ...(partial.errors ?? [])] : undefined,
+        };
+    }
+
+    /**
+     * Delays before retry with exponential backoff.
+     */
+    private async retryDelay(attempt: number, abortSignal?: AbortSignal): Promise<void> {
+        const baseDelay = 100; // ms
+        const maxDelay = 5000; // ms
+        const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+
+        await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(resolve, delay);
+            if (abortSignal) {
+                abortSignal.addEventListener(
+                    'abort',
+                    () => {
+                        clearTimeout(timeout);
+                        reject(new Error(vscode.l10n.t('Operation was cancelled')));
+                    },
+                    { once: true },
+                );
+            }
+        });
     }
 
     // =================================

@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { ext } from '../../../../extensionVariables';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
 import { Task } from '../../taskService';
@@ -208,6 +209,16 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                         if (details) {
                             progressMessage += ` - ${details}`;
                         }
+
+                        ext.outputChannel.trace(
+                            vscode.l10n.t(
+                                '[CopyPasteTask] onProgress: {0}% ({1}/{2} docs) - {3}',
+                                progressPercentage.toString(),
+                                this.totalProcessedDocuments.toString(),
+                                this.sourceDocumentCount.toString(),
+                                progressMessage,
+                            ),
+                        );
 
                         this.updateProgress(progressPercentage, progressMessage);
                     },
