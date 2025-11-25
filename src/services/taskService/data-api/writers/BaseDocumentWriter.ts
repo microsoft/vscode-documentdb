@@ -409,7 +409,15 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
                         this.shrinkBatchSize(successfulCount);
                         attempt = 0;
                     } else {
+                        const previousBatchSize = this.currentBatchSize;
                         this.currentBatchSize = Math.max(this.minBatchSize, Math.floor(this.currentBatchSize / 2) || 1);
+                        ext.outputChannel.trace(
+                            l10n.t(
+                                '[Writer] Throttle with no progress: Halving batch size {0} → {1}',
+                                previousBatchSize.toString(),
+                                this.currentBatchSize.toString(),
+                            ),
+                        );
                         attempt++;
                     }
 
@@ -704,11 +712,22 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
             return;
         }
 
+        const previousBatchSize = this.currentBatchSize;
         const growthFactor = this.currentMode.growthFactor;
         const percentageIncrease = Math.floor(this.currentBatchSize * growthFactor);
         const minimalIncrease = this.currentBatchSize + 1;
 
         this.currentBatchSize = Math.min(this.currentMode.maxBatchSize, Math.max(percentageIncrease, minimalIncrease));
+
+        ext.outputChannel.trace(
+            l10n.t(
+                '[Writer] Success: Growing batch size {0} → {1} (mode: {2}, growth: {3}%)',
+                previousBatchSize.toString(),
+                this.currentBatchSize.toString(),
+                this.currentMode.mode,
+                ((growthFactor - 1) * 100).toFixed(1),
+            ),
+        );
     }
 
     /**
@@ -721,7 +740,17 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
      * @param successfulCount Number of documents successfully written before throttling
      */
     protected shrinkBatchSize(successfulCount: number): void {
+        const previousBatchSize = this.currentBatchSize;
         this.currentBatchSize = Math.max(this.minBatchSize, successfulCount);
+
+        ext.outputChannel.trace(
+            l10n.t(
+                '[Writer] Throttle with partial progress: Reducing batch size {0} → {1} (proven capacity: {2})',
+                previousBatchSize.toString(),
+                this.currentBatchSize.toString(),
+                successfulCount.toString(),
+            ),
+        );
     }
 
     /**

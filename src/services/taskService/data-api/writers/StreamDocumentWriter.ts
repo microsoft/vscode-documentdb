@@ -171,6 +171,7 @@ export class StreamDocumentWriter {
     private totalUpserted: number = 0;
     private flushCount: number = 0;
     private currentStrategy?: ConflictResolutionStrategy;
+    private lastKnownDocumentLimit: number = 0;
 
     /**
      * Creates a new StreamDocumentWriter.
@@ -328,14 +329,48 @@ export class StreamDocumentWriter {
     private shouldFlush(): boolean {
         const constraints = this.writer.getBufferConstraints();
 
+        // Track buffer constraint changes (happens when batch size adapts due to throttling/growth)
+        if (this.lastKnownDocumentLimit !== constraints.optimalDocumentCount) {
+            const direction =
+                constraints.optimalDocumentCount > this.lastKnownDocumentLimit ? 'increased' : 'decreased';
+            const reason = direction === 'increased' ? 'writer growing batch size' : 'writer adapting to throttle';
+
+            ext.outputChannel.trace(
+                vscode.l10n.t(
+                    '[StreamWriter] Buffer document limit {0}: {1} → {2} (reason: {3})',
+                    direction,
+                    this.lastKnownDocumentLimit.toString(),
+                    constraints.optimalDocumentCount.toString(),
+                    reason,
+                ),
+            );
+            this.lastKnownDocumentLimit = constraints.optimalDocumentCount;
+        }
+
         // Flush if document count limit reached
         if (this.buffer.length >= constraints.optimalDocumentCount) {
+            ext.outputChannel.trace(
+                vscode.l10n.t(
+                    '[StreamWriter] Flushing buffer: Document count limit reached ({0}/{1} documents, {2} MB estimated)',
+                    this.buffer.length.toString(),
+                    constraints.optimalDocumentCount.toString(),
+                    (this.bufferMemoryEstimate / (1024 * 1024)).toFixed(2),
+                ),
+            );
             return true;
         }
 
         // Flush if memory limit reached
         const memoryLimitBytes = constraints.maxMemoryMB * 1024 * 1024;
         if (this.bufferMemoryEstimate >= memoryLimitBytes) {
+            ext.outputChannel.trace(
+                vscode.l10n.t(
+                    '[StreamWriter] Flushing buffer: Memory limit reached ({0} MB/{1} MB, {2} documents)',
+                    (this.bufferMemoryEstimate / (1024 * 1024)).toFixed(2),
+                    constraints.maxMemoryMB.toString(),
+                    this.buffer.length.toString(),
+                ),
+            );
             return true;
         }
 
