@@ -6,8 +6,8 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { type DocumentReader, type DocumentWriter } from '../../data-api/types';
-import { StreamDocumentWriter, StreamWriterError } from '../../data-api/writers/StreamDocumentWriter';
+import { type DocumentReader } from '../../data-api/types';
+import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
 import { Task } from '../../taskService';
 import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 import { type CopyPasteConfig } from './copyPasteConfig';
@@ -15,8 +15,8 @@ import { type CopyPasteConfig } from './copyPasteConfig';
 /**
  * Task for copying documents from a source to a target collection.
  *
- * This task uses a database-agnostic approach with `DocumentReader` and `DocumentWriter`
- * interfaces. It uses StreamDocumentWriter to stream documents from the source and write
+ * This task uses a database-agnostic approach with `DocumentReader` and `StreamingDocumentWriter`
+ * interfaces. It uses StreamingDocumentWriter to stream documents from the source and write
  * them in batches to the target, managing memory usage with a configurable buffer.
  */
 export class CopyPasteCollectionTask extends Task implements ResourceTrackingTask {
@@ -25,7 +25,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
     private readonly config: CopyPasteConfig;
     private readonly documentReader: DocumentReader;
-    private readonly documentWriter: DocumentWriter;
+    private readonly documentWriter: StreamingDocumentWriter;
     private sourceDocumentCount: number = 0;
     private totalProcessedDocuments: number = 0;
 
@@ -34,9 +34,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      *
      * @param config Configuration for the copy-paste operation
      * @param documentReader Reader implementation for the source database
-     * @param documentWriter Writer implementation for the target database
+     * @param documentWriter StreamingDocumentWriter implementation for the target database
      */
-    constructor(config: CopyPasteConfig, documentReader: DocumentReader, documentWriter: DocumentWriter) {
+    constructor(config: CopyPasteConfig, documentReader: DocumentReader, documentWriter: StreamingDocumentWriter) {
         super();
         this.config = config;
         this.documentReader = documentReader;
@@ -164,7 +164,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     }
 
     /**
-     * Performs the main copy-paste operation using StreamDocumentWriter.
+     * Performs the main copy-paste operation using StreamingDocumentWriter.
      *
      * @param signal AbortSignal to check for cancellation
      * @param context Optional telemetry context for tracking task operations
@@ -187,14 +187,11 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             actionContext: context,
         });
 
-        // Create streamer
-        const streamWriter = new StreamDocumentWriter(this.documentWriter);
-
-        // Stream documents with progress tracking
+        // Stream documents with progress tracking using the unified StreamingDocumentWriter
         try {
-            const result = await streamWriter.streamDocuments(
-                { conflictResolutionStrategy: this.config.onConflict },
+            const result = await this.documentWriter.streamDocuments(
                 documentStream,
+                { conflictResolutionStrategy: this.config.onConflict },
                 {
                     onProgress: (processedCount, details) => {
                         // Update task's total
@@ -233,8 +230,8 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             const summaryMessage = this.buildSummaryMessage(result);
             this.updateProgress(100, summaryMessage);
         } catch (error) {
-            // Check if it's a StreamWriterError with partial statistics
-            if (error instanceof StreamWriterError) {
+            // Check if it's a StreamingWriterError with partial statistics
+            if (error instanceof StreamingWriterError) {
                 // Add partial statistics to telemetry even on error
                 if (context) {
                     context.telemetry.properties.errorDuringStreaming = 'true';

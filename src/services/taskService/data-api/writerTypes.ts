@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Types and interfaces for DocumentWriter implementations.
- * These are used internally by BaseDocumentWriter and its subclasses for
+ * Types and interfaces for StreamingDocumentWriter implementations.
+ * These are used internally by StreamingDocumentWriter and its subclasses for
  * adaptive batching, retry logic, error classification, and strategy methods.
  */
 
@@ -105,4 +105,28 @@ export interface BatchWriteOutcome<TDocumentId = unknown> extends DocumentOperat
     processedCount: number;
     wasThrottled: boolean;
     errors?: Array<{ documentId?: TDocumentId; error: Error }>;
+}
+
+// =================================
+// NEW STREAMING WRITER TYPES
+// =================================
+
+/**
+ * Result of a single batch write operation for the new StreamingDocumentWriter.
+ * Returned by the writeBatch abstract method.
+ */
+export interface BatchWriteResult<TDocumentId = unknown> extends DocumentOperationCounts {
+    /** Total number of documents processed in this batch */
+    processedCount: number;
+    /** Array of errors that occurred (for Skip strategy - conflicts, for Abort - first error stops) */
+    errors?: Array<{ documentId?: TDocumentId; error: Error }>;
+}
+
+/**
+ * Partial progress extracted from an error during throttle/network recovery.
+ * Used by extractPartialProgress abstract method.
+ */
+export interface PartialProgress extends DocumentOperationCounts {
+    /** Number of documents successfully processed before the error */
+    processedCount: number;
 }

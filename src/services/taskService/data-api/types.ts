@@ -5,12 +5,12 @@
 
 /**
  * Public API types and interfaces for the data-api module.
- * These interfaces define the contract for consumers of DocumentReader,
- * DocumentWriter, and StreamDocumentWriter.
+ * These interfaces define the contract for consumers of DocumentReader
+ * and StreamingDocumentWriter.
  */
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type DocumentOperationCounts, type ProcessedDocumentsDetails } from './writerTypes';
+import { type DocumentOperationCounts } from './writerTypes';
 
 // =================================
 // PUBLIC INTERFACES
@@ -116,53 +116,6 @@ export interface DocumentReaderOptions {
 }
 
 /**
- * Options for writing documents.
- */
-export interface DocumentWriterOptions {
-    /**
-     * Optional progress callback for reporting processed documents with detailed breakdown.
-     * Called after each batch is successfully processed (written, overwritten, or skipped).
-     * @param details - Detailed information about the batch including:
-     *                  - processedCount: Total documents processed
-     *                  - insertedCount: Documents inserted (Skip/Abort/GenerateNewIds strategies)
-     *                  - collidedCount: Documents skipped due to conflicts (Skip/Abort strategies)
-     *                  - matchedCount: Existing documents matched (Overwrite strategy)
-     *                  - upsertedCount: New documents inserted (Overwrite strategy)
-     *                  - modifiedCount: Documents actually modified (Overwrite strategy)
-     */
-    progressCallback?: (details: ProcessedDocumentsDetails) => void /**
-     * Optional abort signal to cancel the write operation.
-     * The writer will check this signal during retry loops and throw
-     * an appropriate error if cancellation is requested.
-     */;
-    abortSignal?: AbortSignal;
-
-    /**
-     * Optional action context for telemetry collection.
-     * Used to record write operation statistics for analytics and monitoring.
-     */
-    actionContext?: IActionContext;
-}
-
-/**
- * Result of a bulk write operation.
- */
-export interface BulkWriteResult<TDocumentId = unknown> extends DocumentOperationCounts {
-    /**
-     * Total number of documents processed (attempted).
-     * Equals the sum of insertedCount + collidedCount + matchedCount + upsertedCount.
-     * For strategies that track conflicts (Skip), collidedCount includes conflicting documents.
-     * The errors array provides detailed information about failures but is not added separately to this count.
-     */
-    processedCount: number;
-
-    /**
-     * Array of errors that occurred during the write operation.
-     */
-    errors: Array<{ documentId?: TDocumentId; error: Error }> | null;
-}
-
-/**
  * Result of ensuring a target exists.
  */
 export interface EnsureTargetExistsResult {
@@ -170,35 +123,6 @@ export interface EnsureTargetExistsResult {
      * Whether the target had to be created (true) or already existed (false).
      */
     targetWasCreated: boolean;
-}
-
-/**
- * Buffer constraints for optimal document streaming and batching.
- * Provides both document count and memory limits to help tasks manage their read buffers efficiently.
- */
-export interface BufferConstraints {
-    /**
-     * Optimal number of documents per batch (adaptive, based on database performance).
-     * This value changes dynamically based on throttling, network conditions, and write success.
-     */
-    optimalDocumentCount: number;
-
-    /**
-     * Maximum memory per batch in megabytes (database-specific safe limit).
-     * This is a conservative value that accounts for:
-     * - BSON encoding overhead (~10-20%)
-     * - Network protocol headers
-     */
-    maxMemoryMB: number;
-}
-
-/**
- * Configuration for streaming document writes.
- * Minimal interface containing only what the streamer needs.
- */
-export interface StreamWriterConfig {
-    /** Strategy for handling document conflicts (duplicate _id) */
-    conflictResolutionStrategy: ConflictResolutionStrategy;
 }
 
 /**
@@ -211,40 +135,6 @@ export interface StreamWriteResult extends DocumentOperationCounts {
 
     /** Number of buffer flushes performed */
     flushCount: number;
-}
-
-/**
- * Interface for writing documents to a target collection.
- */
-export interface DocumentWriter<TDocumentId = unknown> {
-    /**
-     * Writes documents in bulk to the target collection.
-     *
-     * @param documents Array of documents to write
-     * @param options Optional write options
-     * @returns Promise resolving to the write result
-     */
-    writeDocuments(
-        documents: DocumentDetails[],
-        options?: DocumentWriterOptions,
-    ): Promise<BulkWriteResult<TDocumentId>>;
-
-    /**
-     * Gets buffer constraints for optimal document streaming.
-     * Provides both optimal document count (adaptive batch size) and memory limits
-     * to help tasks manage their read buffers efficiently.
-     *
-     * @returns Buffer constraints with document count and memory limits
-     */
-    getBufferConstraints(): BufferConstraints;
-
-    /**
-     * Ensures the target exists before writing.
-     * May need methods for pre-flight checks or setup.
-     *
-     * @returns Promise resolving to information about whether the target was created
-     */
-    ensureTargetExists(): Promise<EnsureTargetExistsResult>;
 }
 
 // =================================

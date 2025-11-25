@@ -7,7 +7,7 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { DocumentDbDocumentReader } from '../../services/taskService/data-api/readers/DocumentDbDocumentReader';
-import { DocumentDbDocumentWriter } from '../../services/taskService/data-api/writers/DocumentDbDocumentWriter';
+import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { TaskService, TaskState } from '../../services/taskService/taskService';
@@ -64,12 +64,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         // Create the document reader and writer instances
         const reader = new DocumentDbDocumentReader(sourceConnectionId, sourceDatabaseName, sourceCollectionName);
         const targetClient = await ClustersClient.getClient(targetConnectionId);
-        const writer = new DocumentDbDocumentWriter(
-            targetClient,
-            targetDatabaseName,
-            finalTargetCollectionName,
-            config,
-        );
+        const writer = new DocumentDbStreamingWriter(targetClient, targetDatabaseName, finalTargetCollectionName);
 
         // Create the copy-paste task
         const task = new CopyPasteCollectionTask(config, reader, writer);
