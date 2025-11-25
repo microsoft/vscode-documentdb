@@ -81,9 +81,7 @@ export class DocumentDbDocumentWriter extends BaseDocumentWriter<string> {
 
             // Log each skipped document with its native _id format for detailed debugging
             for (const id of conflictIds) {
-                ext.outputChannel.appendLog(
-                    l10n.t('[Writer] Skipped document with _id: {0}', this.formatDocumentId(id)),
-                );
+                ext.outputChannel.trace(l10n.t('[Writer] Skipped document with _id: {0}', this.formatDocumentId(id)));
             }
         }
 

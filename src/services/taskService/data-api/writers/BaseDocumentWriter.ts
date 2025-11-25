@@ -78,7 +78,7 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
     protected currentMode: OptimizationModeConfig;
 
     /** Current progress callback for the ongoing write operation */
-    private currentProgressCallback?: (processedCount: number) => void;
+    private currentProgressCallback?: (details: ProcessedDocumentsDetails) => void;
 
     /**
      * Buffer memory limit in MB. This is a conservative limit that accounts for
@@ -628,16 +628,20 @@ export abstract class BaseDocumentWriter<TDocumentId> implements DocumentWriter<
     }
 
     /**
-     * Invokes the progress callback with the processed document count.
+     * Invokes the progress callback with detailed processing information.
      *
      * Called after each successful write operation to report incremental progress
      * to higher-level components (e.g., StreamDocumentWriter, tasks).
      *
-     * @param details Processing details containing counts to report
+     * Passes the full ProcessedDocumentsDetails object so consumers can see the
+     * exact breakdown (inserted/skipped for Skip, matched/upserted for Overwrite, etc.)
+     * instead of just a total count.
+     *
+     * @param details Processing details containing all counts from the write operation
      */
     protected reportProgress(details: ProcessedDocumentsDetails): void {
         if (details.processedCount > 0) {
-            this.currentProgressCallback?.(details.processedCount);
+            this.currentProgressCallback?.(details);
         }
     }
 

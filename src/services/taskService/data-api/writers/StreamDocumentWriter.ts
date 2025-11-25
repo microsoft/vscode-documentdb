@@ -184,37 +184,52 @@ export class StreamDocumentWriter {
      * Only shows statistics that are relevant for the current conflict resolution strategy.
      *
      * @param strategy The conflict resolution strategy being used
+     * @param optimisticCounts Optional optimistic counts to use instead of this.total* fields (for real-time updates during flush)
      * @returns Formatted details string, or undefined if no relevant stats to show
      */
-    private formatProgressDetails(strategy: ConflictResolutionStrategy): string | undefined {
+    private formatProgressDetails(
+        strategy: ConflictResolutionStrategy,
+        optimisticCounts?: {
+            inserted: number;
+            skipped: number;
+            matched: number;
+            upserted: number;
+        },
+    ): string | undefined {
         const parts: string[] = [];
+
+        // Use optimistic counts if provided (during flush), otherwise use authoritative totals (after flush)
+        const inserted = optimisticCounts?.inserted ?? this.totalInserted;
+        const skipped = optimisticCounts?.skipped ?? this.totalSkipped;
+        const matched = optimisticCounts?.matched ?? this.totalMatched;
+        const upserted = optimisticCounts?.upserted ?? this.totalUpserted;
 
         switch (strategy) {
             case ConflictResolutionStrategy.Abort:
             case ConflictResolutionStrategy.GenerateNewIds:
                 // Abort/GenerateNewIds: Only show inserted (matched/upserted always 0, uses insertMany)
-                if (this.totalInserted > 0) {
-                    parts.push(vscode.l10n.t('{0} inserted', this.totalInserted.toLocaleString()));
+                if (inserted > 0) {
+                    parts.push(vscode.l10n.t('{0} inserted', inserted.toLocaleString()));
                 }
                 break;
 
             case ConflictResolutionStrategy.Skip:
                 // Skip: Show inserted + skipped (matched/upserted always 0, uses insertMany with error handling)
-                if (this.totalInserted > 0) {
-                    parts.push(vscode.l10n.t('{0} inserted', this.totalInserted.toLocaleString()));
+                if (inserted > 0) {
+                    parts.push(vscode.l10n.t('{0} inserted', inserted.toLocaleString()));
                 }
-                if (this.totalSkipped > 0) {
-                    parts.push(vscode.l10n.t('{0} skipped', this.totalSkipped.toLocaleString()));
+                if (skipped > 0) {
+                    parts.push(vscode.l10n.t('{0} skipped', skipped.toLocaleString()));
                 }
                 break;
 
             case ConflictResolutionStrategy.Overwrite:
                 // Overwrite: Show matched + upserted (inserted always 0, uses replaceOne)
-                if (this.totalMatched > 0) {
-                    parts.push(vscode.l10n.t('{0} matched', this.totalMatched.toLocaleString()));
+                if (matched > 0) {
+                    parts.push(vscode.l10n.t('{0} matched', matched.toLocaleString()));
                 }
-                if (this.totalUpserted > 0) {
-                    parts.push(vscode.l10n.t('{0} upserted', this.totalUpserted.toLocaleString()));
+                if (upserted > 0) {
+                    parts.push(vscode.l10n.t('{0} upserted', upserted.toLocaleString()));
                 }
                 break;
         }
@@ -366,24 +381,53 @@ export class StreamDocumentWriter {
 
         let processedInFlush = 0;
 
+        // Track cumulative counts within this flush
+        // Start from historical totals and add batch deltas as progress callbacks fire
+        // This ensures accurate real-time counts even during throttle retries
+        let flushInserted = 0;
+        let flushSkipped = 0;
+        let flushMatched = 0;
+        let flushUpserted = 0;
+
         const result = await this.writer.writeDocuments(this.buffer, {
             abortSignal,
-            progressCallback: (count) => {
-                processedInFlush += count;
+            progressCallback: (batchDetails) => {
+                // processedCount should always be present in batchDetails (required field)
+                const processedCount = batchDetails.processedCount as number;
+                processedInFlush += processedCount;
 
                 // Report progress immediately during internal retry loops (e.g., throttle retries)
                 // This ensures users see real-time updates even when the writer is making
                 // incremental progress through throttle/retry iterations
                 //
-                // IMPORTANT: We DON'T update this.totalProcessed here because:
-                // 1. The writer's progressCallback may report the same documents multiple times
-                //    (e.g., pre-filtered documents in Skip strategy during retries)
-                // 2. We get the accurate final counts from result.processedCount below
-                // 3. We only use this callback for real-time UI updates, not statistics tracking
-                if (onProgress && count > 0) {
-                    // Generate details for this incremental update based on current totals
-                    const details = this.currentStrategy ? this.formatProgressDetails(this.currentStrategy) : undefined;
-                    onProgress(count, details);
+                // Now we receive ACTUAL breakdown from the writer (inserted/skipped for Skip,
+                // matched/upserted for Overwrite) instead of estimating from historical ratios.
+                // This provides accurate real-time progress details.
+                if (onProgress && processedCount > 0) {
+                    // Accumulate counts within this flush
+                    // Batch counts may be undefined for strategies that don't use them, so we default to 0
+                    // Note: We assert number type since ?? 0 guarantees non-undefined result
+                    flushInserted += (batchDetails.insertedCount ?? 0) as number;
+                    flushSkipped += (batchDetails.collidedCount ?? 0) as number;
+                    flushMatched += (batchDetails.matchedCount ?? 0) as number;
+                    flushUpserted += (batchDetails.upsertedCount ?? 0) as number;
+
+                    // Calculate global cumulative totals (historical + current flush)
+                    const cumulativeInserted = this.totalInserted + flushInserted;
+                    const cumulativeSkipped = this.totalSkipped + flushSkipped;
+                    const cumulativeMatched = this.totalMatched + flushMatched;
+                    const cumulativeUpserted = this.totalUpserted + flushUpserted;
+
+                    // Generate formatted details using cumulative counts
+                    const details = this.currentStrategy
+                        ? this.formatProgressDetails(this.currentStrategy, {
+                              inserted: cumulativeInserted,
+                              skipped: cumulativeSkipped,
+                              matched: cumulativeMatched,
+                              upserted: cumulativeUpserted,
+                          })
+                        : undefined;
+                    onProgress(processedCount, details);
                 }
             },
         });

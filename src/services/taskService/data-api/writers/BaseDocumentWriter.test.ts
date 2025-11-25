@@ -369,8 +369,8 @@ describe('BaseDocumentWriter', () => {
             const progressUpdates: number[] = [];
 
             await writer.writeDocuments(documents, {
-                progressCallback: (count) => {
-                    progressUpdates.push(count);
+                progressCallback: (details) => {
+                    progressUpdates.push(details.processedCount);
                 },
             });
 

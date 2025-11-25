@@ -10,7 +10,7 @@
  */
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type DocumentOperationCounts } from './writerTypes';
+import { type DocumentOperationCounts, type ProcessedDocumentsDetails } from './writerTypes';
 
 // =================================
 // PUBLIC INTERFACES
@@ -120,18 +120,21 @@ export interface DocumentReaderOptions {
  */
 export interface DocumentWriterOptions {
     /**
-     * Optional progress callback for reporting processed documents.
+     * Optional progress callback for reporting processed documents with detailed breakdown.
      * Called after each batch is successfully processed (written, overwritten, or skipped).
-     * @param processedInBatch - Number of documents processed in the current batch
-     *                           (includes inserted, overwritten, and skipped documents)
+     * @param details - Detailed information about the batch including:
+     *                  - processedCount: Total documents processed
+     *                  - insertedCount: Documents inserted (Skip/Abort/GenerateNewIds strategies)
+     *                  - collidedCount: Documents skipped due to conflicts (Skip/Abort strategies)
+     *                  - matchedCount: Existing documents matched (Overwrite strategy)
+     *                  - upsertedCount: New documents inserted (Overwrite strategy)
+     *                  - modifiedCount: Documents actually modified (Overwrite strategy)
      */
-    progressCallback?: (processedInBatch: number) => void;
-
-    /**
+    progressCallback?: (details: ProcessedDocumentsDetails) => void /**
      * Optional abort signal to cancel the write operation.
      * The writer will check this signal during retry loops and throw
      * an appropriate error if cancellation is requested.
-     */
+     */;
     abortSignal?: AbortSignal;
 
     /**

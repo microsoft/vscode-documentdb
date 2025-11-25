@@ -130,6 +130,132 @@ describe('StreamDocumentWriter', () => {
             expect(totalReported).toBeGreaterThanOrEqual(1500);
         });
 
+        it('should report correct progress details for Skip strategy', async () => {
+            writer = new MockDocumentWriter('testdb', 'testcollection', ConflictResolutionStrategy.Skip);
+            streamer = new StreamDocumentWriter(writer);
+
+            // Seed storage with some existing documents (doc1-doc50)
+            const existingDocs = createDocuments(50, 1);
+            writer.seedStorage(existingDocs);
+
+            // Stream 150 documents (doc1-doc150), where first 50 exist
+            const documents = createDocuments(150);
+            const stream = createDocumentStream(documents);
+            const progressUpdates: Array<{ count: number; details?: string }> = [];
+
+            await streamer.streamDocuments({ conflictResolutionStrategy: ConflictResolutionStrategy.Skip }, stream, {
+                onProgress: (count, details) => {
+                    progressUpdates.push({ count, details });
+                },
+            });
+
+            // Should have progress updates
+            expect(progressUpdates.length).toBeGreaterThan(0);
+
+            // Last progress update should show both inserted and skipped
+            const lastUpdate = progressUpdates[progressUpdates.length - 1];
+            expect(lastUpdate.details).toBeDefined();
+            expect(lastUpdate.details).toContain('inserted');
+            expect(lastUpdate.details).toContain('skipped');
+            expect(lastUpdate.details).toContain('100'); // 100 inserted
+            expect(lastUpdate.details).toContain('50'); // 50 skipped
+        });
+
+        it('should report correct progress details for Overwrite strategy', async () => {
+            writer = new MockDocumentWriter('testdb', 'testcollection', ConflictResolutionStrategy.Overwrite);
+            streamer = new StreamDocumentWriter(writer);
+
+            // Seed storage with some existing documents (doc1-doc75)
+            const existingDocs = createDocuments(75, 1);
+            writer.seedStorage(existingDocs);
+
+            // Stream 150 documents (doc1-doc150), where first 75 exist (will be matched/replaced)
+            const documents = createDocuments(150);
+            const stream = createDocumentStream(documents);
+            const progressUpdates: Array<{ count: number; details?: string }> = [];
+
+            await streamer.streamDocuments(
+                { conflictResolutionStrategy: ConflictResolutionStrategy.Overwrite },
+                stream,
+                {
+                    onProgress: (count, details) => {
+                        progressUpdates.push({ count, details });
+                    },
+                },
+            );
+
+            // Should have progress updates
+            expect(progressUpdates.length).toBeGreaterThan(0);
+
+            // Last progress update should show matched and upserted
+            const lastUpdate = progressUpdates[progressUpdates.length - 1];
+            expect(lastUpdate.details).toBeDefined();
+            expect(lastUpdate.details).toContain('matched');
+            expect(lastUpdate.details).toContain('upserted');
+            expect(lastUpdate.details).toContain('75'); // 75 matched (existing docs)
+            expect(lastUpdate.details).toContain('75'); // 75 upserted (new docs)
+        });
+
+        it('should report correct progress details for GenerateNewIds strategy', async () => {
+            writer = new MockDocumentWriter('testdb', 'testcollection', ConflictResolutionStrategy.GenerateNewIds);
+            streamer = new StreamDocumentWriter(writer);
+
+            // Stream 120 documents - all should be inserted with new IDs
+            const documents = createDocuments(120);
+            const stream = createDocumentStream(documents);
+            const progressUpdates: Array<{ count: number; details?: string }> = [];
+
+            await streamer.streamDocuments(
+                { conflictResolutionStrategy: ConflictResolutionStrategy.GenerateNewIds },
+                stream,
+                {
+                    onProgress: (count, details) => {
+                        progressUpdates.push({ count, details });
+                    },
+                },
+            );
+
+            // Should have progress updates
+            expect(progressUpdates.length).toBeGreaterThan(0);
+
+            // Last progress update should show only inserted (no skipped/matched/upserted)
+            const lastUpdate = progressUpdates[progressUpdates.length - 1];
+            expect(lastUpdate.details).toBeDefined();
+            expect(lastUpdate.details).toContain('inserted');
+            expect(lastUpdate.details).toContain('120');
+            expect(lastUpdate.details).not.toContain('skipped');
+            expect(lastUpdate.details).not.toContain('matched');
+            expect(lastUpdate.details).not.toContain('upserted');
+        });
+
+        it('should report correct progress details for Abort strategy', async () => {
+            writer = new MockDocumentWriter('testdb', 'testcollection', ConflictResolutionStrategy.Abort);
+            streamer = new StreamDocumentWriter(writer);
+
+            // Stream 100 documents - all should be inserted (no conflicts in Abort strategy for this test)
+            const documents = createDocuments(100);
+            const stream = createDocumentStream(documents);
+            const progressUpdates: Array<{ count: number; details?: string }> = [];
+
+            await streamer.streamDocuments({ conflictResolutionStrategy: ConflictResolutionStrategy.Abort }, stream, {
+                onProgress: (count, details) => {
+                    progressUpdates.push({ count, details });
+                },
+            });
+
+            // Should have progress updates
+            expect(progressUpdates.length).toBeGreaterThan(0);
+
+            // Last progress update should show only inserted (no skipped/matched/upserted)
+            const lastUpdate = progressUpdates[progressUpdates.length - 1];
+            expect(lastUpdate.details).toBeDefined();
+            expect(lastUpdate.details).toContain('inserted');
+            expect(lastUpdate.details).toContain('100');
+            expect(lastUpdate.details).not.toContain('skipped');
+            expect(lastUpdate.details).not.toContain('matched');
+            expect(lastUpdate.details).not.toContain('upserted');
+        });
+
         it('should aggregate statistics correctly across flushes', async () => {
             writer = new MockDocumentWriter('testdb', 'testcollection', ConflictResolutionStrategy.Skip);
             streamer = new StreamDocumentWriter(writer);
