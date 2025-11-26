@@ -228,6 +228,25 @@ The `RetryOrchestrator` handles transient failures:
 
 ---
 
+## Keep-Alive Logic
+
+The `KeepAliveOrchestrator` handles cursor timeouts during slow consumption:
+
+- **Purpose**: Prevent database cursor timeouts when the consumer processes documents slowly
+- **Mechanism**: Periodically reads from the database iterator into a buffer
+- **Default interval**: 10 seconds
+- **Default timeout**: 10 minutes (to prevent runaway operations)
+
+When keep-alive is enabled:
+
+1. Documents are read from the buffer if available (pre-fetched by timer)
+2. If buffer is empty, documents are read directly from the database
+3. Timer fires periodically to "tickle" the cursor and buffer documents
+
+> **Note:** For detailed sequence diagrams, see the JSDoc comments in `BaseDocumentReader.ts`.
+
+---
+
 ## File Structure
 
 ```
@@ -235,8 +254,9 @@ src/services/taskService/data-api/
 ├── types.ts                              # Public interfaces (StreamWriteResult, DocumentDetails, etc.)
 ├── writerTypes.internal.ts               # Internal writer types (StrategyBatchResult variants, PartialProgress)
 ├── readers/
-│   ├── BaseDocumentReader.ts             # Abstract reader base class
-│   └── DocumentDbDocumentReader.ts       # MongoDB implementation
+│   ├── BaseDocumentReader.ts             # Abstract reader base class (see JSDoc for sequence diagrams)
+│   ├── DocumentDbDocumentReader.ts       # MongoDB implementation
+│   └── KeepAliveOrchestrator.ts          # Isolated keep-alive logic
 └── writers/
     ├── StreamingDocumentWriter.ts        # Abstract base class (see JSDoc for sequence diagrams)
     ├── DocumentDbStreamingWriter.ts      # MongoDB implementation

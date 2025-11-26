@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import Denque from 'denque';
 import { l10n } from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { type DocumentDetails, type DocumentReader, type DocumentReaderOptions } from '../types';
+import { KeepAliveOrchestrator } from './KeepAliveOrchestrator';
 
 /**
  * Abstract base class for DocumentReader implementations.
@@ -43,10 +43,68 @@ export abstract class BaseDocumentReader implements DocumentReader {
      * This is the main entry point for reading documents. It delegates to the
      * database-specific implementation to handle connection and streaming.
      *
-     * When keep-alive is enabled, maintains a buffer with periodic refills to
-     * prevent connection/cursor timeouts during slow consumption.
+     * When keep-alive is enabled, uses KeepAliveOrchestrator to maintain
+     * cursor activity during slow consumption.
      *
      * Uses the database and collection names provided in the constructor.
+     *
+     * ## Sequence Diagrams
+     *
+     * ### Direct Mode (No Keep-Alive)
+     *
+     * ```
+     * Consumer              BaseDocumentReader           Database
+     *    │                        │                         │
+     *    │ streamDocuments()      │                         │
+     *    │───────────────────────>│                         │
+     *    │                        │ streamDocumentsFromDatabase()
+     *    │                        │────────────────────────>│
+     *    │                        │                         │
+     *    │                        │<── document stream      │
+     *    │<── yield doc           │                         │
+     *    │<── yield doc           │                         │
+     *    │<── yield doc           │                         │
+     *    │<── done                │                         │
+     * ```
+     *
+     * ### Keep-Alive Mode
+     *
+     * When keep-alive is enabled, the KeepAliveOrchestrator periodically reads
+     * from the database to prevent cursor timeouts during slow consumption:
+     *
+     * ```
+     * Consumer              BaseDocumentReader         KeepAliveOrchestrator       Database
+     *    │                        │                           │                       │
+     *    │ streamDocuments()      │                           │                       │
+     *    │───────────────────────>│                           │                       │
+     *    │                        │ orchestrator.start()      │                       │
+     *    │                        │──────────────────────────>│                       │
+     *    │                        │                           │ (start timer)         │
+     *    │                        │                           │                       │
+     *    │                        │ orchestrator.next()       │                       │
+     *    │                        │──────────────────────────>│                       │
+     *    │                        │                           │ iterator.next()       │
+     *    │                        │                           │──────────────────────>│
+     *    │                        │                           │<── document           │
+     *    │<── yield doc           │<── document               │                       │
+     *    │                        │                           │                       │
+     *    │ (slow processing...)   │                           │                       │
+     *    │                        │                           │ [timer fires]         │
+     *    │                        │                           │ iterator.next()       │
+     *    │                        │                           │──────────────────────>│
+     *    │                        │                           │<── document           │
+     *    │                        │                           │ (buffer document)     │
+     *    │                        │                           │                       │
+     *    │                        │ orchestrator.next()       │                       │
+     *    │                        │──────────────────────────>│                       │
+     *    │                        │                           │ (return from buffer)  │
+     *    │<── yield doc           │<── document               │                       │
+     *    │                        │                           │                       │
+     *    │                        │ orchestrator.stop()       │                       │
+     *    │                        │──────────────────────────>│                       │
+     *    │                        │                           │ (cleanup timer)       │
+     *    │<── done                │<── stats                  │                       │
+     * ```
      *
      * @param options Optional streaming options (signal, keep-alive)
      * @returns AsyncIterable of documents
@@ -73,129 +131,34 @@ export abstract class BaseDocumentReader implements DocumentReader {
             return;
         }
 
-        // Keep-alive enabled: buffer-based streaming with periodic refills
-        const buffer = new Denque<DocumentDetails>();
-        const intervalMs = options.keepAliveIntervalMs ?? 10000;
-        const timeoutMs = options.keepAliveTimeoutMs ?? 600000; // 10 minutes default
-        const streamStartTime = Date.now();
-        let lastDatabaseReadAccess = Date.now();
-        let dbIterator: AsyncIterator<DocumentDetails> | null = null;
-        let keepAliveTimer: NodeJS.Timeout | null = null;
-        let keepAliveReadCount = 0;
-        let maxBufferLength = 0;
-        let timedOut = false; // Flag to signal timeout from keep-alive callback to main loop
+        // Keep-alive enabled: use orchestrator for buffer management
+        const orchestrator = new KeepAliveOrchestrator({
+            intervalMs: options.keepAliveIntervalMs,
+            timeoutMs: options.keepAliveTimeoutMs,
+        });
 
         try {
-            // Start database stream
-            dbIterator = this.streamDocumentsFromDatabase(options.signal, options.actionContext)[
+            // Start database stream with orchestrator
+            const dbIterator = this.streamDocumentsFromDatabase(options.signal, options.actionContext)[
                 Symbol.asyncIterator
             ]();
+            orchestrator.start(dbIterator);
 
-            // Start keep-alive timer: periodically refill buffer to maintain database connection
-            keepAliveTimer = setInterval(() => {
-                void (async () => {
-                    // Check if keep-alive has been running too long
-                    const keepAliveElapsedMs = Date.now() - streamStartTime;
-                    if (keepAliveElapsedMs >= timeoutMs) {
-                        // Keep-alive timeout exceeded - abort the operation
-                        if (dbIterator) {
-                            await dbIterator.return?.();
-                        }
-                        const errorMessage = l10n.t(
-                            'Keep-alive timeout exceeded: stream has been running for {0} seconds (limit: {1} seconds)',
-                            Math.floor(keepAliveElapsedMs / 1000).toString(),
-                            Math.floor(timeoutMs / 1000).toString(),
-                        );
-                        ext.outputChannel.error(l10n.t('[Reader] {0}', errorMessage));
-                        timedOut = true;
-                        return;
-                    }
-
-                    // Fetch if enough time has passed since last yield (regardless of buffer state)
-                    // This ensures we "tickle" the database cursor regularly to prevent timeouts
-                    const timeSinceLastYield = Date.now() - lastDatabaseReadAccess;
-                    if (timeSinceLastYield >= intervalMs && dbIterator) {
-                        try {
-                            const result = await dbIterator.next();
-                            if (!result.done) {
-                                buffer.push(result.value);
-                                keepAliveReadCount++;
-
-                                // Track maximum buffer length for telemetry
-                                const currentBufferLength = buffer.length;
-                                if (currentBufferLength > maxBufferLength) {
-                                    maxBufferLength = currentBufferLength;
-                                }
-
-                                // Trace keep-alive read activity
-                                ext.outputChannel.trace(
-                                    l10n.t(
-                                        '[Reader] Keep-alive read: count={0}, buffer length={1}',
-                                        keepAliveReadCount.toString(),
-                                        currentBufferLength.toString(),
-                                    ),
-                                );
-                            }
-                        } catch {
-                            // Silently ignore background fetch errors
-                            // Persistent errors will surface when main loop calls dbIterator.next()
-                        }
-                    } else if (timeSinceLastYield < intervalMs) {
-                        // Trace skipped keep-alive execution
-                        ext.outputChannel.trace(
-                            l10n.t(
-                                '[Reader] Keep-alive skipped: only {0}s since last database read access (interval: {1}s)',
-                                Math.floor(timeSinceLastYield / 1000).toString(),
-                                Math.floor(intervalMs / 1000).toString(),
-                            ),
-                        );
-                    }
-                })();
-            }, intervalMs);
-
-            // Unified control loop: queue-first, DB-fallback
+            // Stream documents through orchestrator
             while (!options.signal?.aborted) {
-                // Check for timeout from keep-alive callback
-                if (timedOut) {
-                    throw new Error(l10n.t('Keep-alive timeout exceeded'));
-                }
-
-                // 1. Try buffer first (already pre-fetched by keep-alive)
-                if (!buffer.isEmpty()) {
-                    const doc = buffer.shift();
-                    if (doc) {
-                        // Trace buffer read with remaining size
-                        ext.outputChannel.trace(
-                            l10n.t('[Reader] Read from buffer, remaining: {0} documents', buffer.length),
-                        );
-
-                        yield doc;
-                        continue;
-                    }
-                }
-
-                // 2. Buffer empty, fetch directly from database
-                const result = await dbIterator.next();
+                const result = await orchestrator.next(options.signal);
                 if (result.done) {
                     break;
                 }
-
                 yield result.value;
-                lastDatabaseReadAccess = Date.now();
             }
         } finally {
-            // Record telemetry for keep-alive usage
-            if (options.actionContext && keepAliveReadCount > 0) {
-                options.actionContext.telemetry.measurements.keepAliveReadCount = keepAliveReadCount;
-                options.actionContext.telemetry.measurements.maxBufferLength = maxBufferLength;
-            }
+            // Stop orchestrator and record telemetry
+            const stats = await orchestrator.stop();
 
-            // Cleanup resources
-            if (keepAliveTimer) {
-                clearInterval(keepAliveTimer);
-            }
-            if (dbIterator) {
-                await dbIterator.return?.();
+            if (options.actionContext && stats.keepAliveReadCount > 0) {
+                options.actionContext.telemetry.measurements.keepAliveReadCount = stats.keepAliveReadCount;
+                options.actionContext.telemetry.measurements.maxBufferLength = stats.maxBufferLength;
             }
         }
     }
