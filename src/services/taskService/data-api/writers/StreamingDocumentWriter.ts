@@ -97,28 +97,135 @@ export class StreamingWriterError extends Error {
 }
 
 /**
- * Unified abstract base class for streaming document write operations.
+ * Abstract base class for streaming document write operations.
  *
- * This class combines the responsibilities previously split between StreamDocumentWriter
- * and BaseDocumentWriter into a single, cohesive component. It provides:
+ * Provides integrated buffering, adaptive batching, retry logic, and progress reporting
+ * for high-volume document write operations.
  *
  * ## Key Features
  *
- * 1. **Unified Buffer Management**: Single-level buffering with adaptive flush triggers
+ * 1. **Buffer Management**: Single-level buffering with adaptive flush triggers
  * 2. **Integrated Retry Logic**: Uses RetryOrchestrator for transient failure handling
  * 3. **Adaptive Batching**: Uses BatchSizeAdapter for dual-mode (fast/RU-limited) operation
  * 4. **Statistics Aggregation**: Uses WriteStats for progress tracking
- * 5. **Two-Layer Progress Flow**: Simplified from the previous four-layer approach
+ * 5. **Immediate Progress Reporting**: Partial progress reported during throttle recovery
  *
  * ## Subclass Contract (3 Abstract Methods)
  *
- * Subclasses only need to implement 3 methods (reduced from 7):
+ * Subclasses implement 3 methods:
  *
  * 1. `writeBatch(documents, strategy)`: Write a batch with the specified strategy
  * 2. `classifyError(error)`: Classify errors for retry decisions
  * 3. `extractPartialProgress(error)`: Extract progress from throttle/network errors
  *
  * Plus `ensureTargetExists()` for collection setup.
+ *
+ * ## Sequence Diagrams
+ *
+ * ### Normal Flow (No Errors)
+ *
+ * ```
+ * CopyPasteTask          StreamingWriter           flushBuffer          writeBatchWithRetry      writeBatch (subclass)
+ *      │                       │                       │                       │                       │
+ *      │ streamDocuments()     │                       │                       │                       │
+ *      │──────────────────────>│                       │                       │                       │
+ *      │                       │                       │                       │                       │
+ *      │                       │ (buffer 500 docs)     │                       │                       │
+ *      │                       │──────────────────────>│                       │                       │
+ *      │                       │                       │ writeBatchWithRetry() │                       │
+ *      │                       │                       │──────────────────────>│                       │
+ *      │                       │                       │                       │ writeBatch()          │
+ *      │                       │                       │                       │──────────────────────>│
+ *      │                       │                       │                       │                       │
+ *      │                       │                       │                       │<── StrategyBatchResult│
+ *      │                       │                       │<── result             │                       │
+ *      │                       │                       │                       │                       │
+ *      │                       │                       │ stats.addBatch()      │                       │
+ *      │                       │                       │ onProgress()          │                       │
+ *      │<── onProgress(500)    │                       │                       │                       │
+ *      │                       │                       │                       │                       │
+ *      │                       │<── flush complete     │                       │                       │
+ *      │<── StreamWriteResult  │                       │                       │                       │
+ * ```
+ *
+ * ### Throttle Recovery with Partial Progress
+ *
+ * When the database throttles a request but has already written some documents,
+ * the partial progress is reported immediately and the batch is sliced for retry:
+ *
+ * ```
+ * flushBuffer              writeBatchWithRetry              writeBatch           BatchSizeAdapter
+ *      │                          │                             │                       │
+ *      │ batch=[doc1..doc500]     │                             │                       │
+ *      │─────────────────────────>│                             │                       │
+ *      │                          │ writeBatch()                │                       │
+ *      │                          │────────────────────────────>│                       │
+ *      │                          │                             │                       │
+ *      │                          │<── THROTTLE (9 written)     │                       │
+ *      │                          │                             │                       │
+ *      │                          │ handleThrottle(9)           │                       │
+ *      │                          │────────────────────────────────────────────────────>│
+ *      │                          │                             │   (switch to RU mode) │
+ *      │                          │                             │                       │
+ *      │<── onPartialProgress(9)  │                             │                       │
+ *      │    (reports immediately) │                             │                       │
+ *      │                          │                             │                       │
+ *      │                          │ slice batch → [doc10..doc500]                       │
+ *      │                          │                             │                       │
+ *      │                          │ retryDelay()                │                       │
+ *      │                          │ writeBatch([doc10..doc500]) │                       │
+ *      │                          │────────────────────────────>│                       │
+ *      │                          │                             │                       │
+ *      │                          │<── THROTTLE (7 written)     │                       │
+ *      │                          │                             │                       │
+ *      │<── onPartialProgress(7)  │                             │                       │
+ *      │                          │                             │                       │
+ *      │                          │ (continues until all done)  │                       │
+ *      │                          │                             │                       │
+ *      │<── result (remaining)    │                             │                       │
+ *      │                          │                             │                       │
+ *      │ totalProcessed = 9+7+... │ (partial + final)           │                       │
+ * ```
+ *
+ * ### Network Error with Retry
+ *
+ * Network errors trigger exponential backoff retries without slicing:
+ *
+ * ```
+ * writeBatchWithRetry              writeBatch                  RetryOrchestrator
+ *      │                             │                               │
+ *      │ writeBatch()                │                               │
+ *      │────────────────────────────>│                               │
+ *      │                             │                               │
+ *      │<── NETWORK ERROR            │                               │
+ *      │                             │                               │
+ *      │ classifyError() → 'network' │                               │
+ *      │                             │                               │
+ *      │ attempt++                   │                               │
+ *      │ retryDelay(attempt)         │ (exponential backoff + jitter)│
+ *      │                             │                               │
+ *      │ writeBatch() (same batch)   │                               │
+ *      │────────────────────────────>│                               │
+ *      │                             │                               │
+ *      │<── SUCCESS                  │                               │
+ *      │                             │                               │
+ * ```
+ *
+ * ## Trace Output Example
+ *
+ * ```
+ * [StreamingWriter] Starting document streaming with skip strategy
+ * [StreamingWriter] Reading documents from source...
+ * [StreamingWriter] Writing 500 documents to target (may take a moment)...
+ * [BatchSizeAdapter] Switched from fast mode to ru-limited mode after throttle. Batch size: 500 → 9
+ * [BatchSizeAdapter] Throttle: Adjusting batch size 9 → 9 (proven capacity: 9)
+ * [StreamingWriter] Throttle: wrote 9 docs, 491 remaining in batch
+ * [CopyPasteTask] onProgress: 0% (9/5546 docs) - Processed 9 of 5546 documents (0%) - 9 inserted
+ * [BatchSizeAdapter] Throttle: Adjusting batch size 9 → 7 (proven capacity: 7)
+ * [StreamingWriter] Throttle: wrote 7 docs, 484 remaining in batch
+ * ...
+ * [StreamingWriter] Buffer flush complete (500 total processed so far)
+ * ```
  *
  * ## Usage Example
  *

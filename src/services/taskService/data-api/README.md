@@ -7,7 +7,7 @@ The Data API provides a robust, database-agnostic framework for streaming and bu
 **Key Components:**
 
 - **DocumentReader**: Streams documents from source collections
-- **StreamingDocumentWriter**: Unified abstract base class for streaming writes with integrated buffering, batching, and retry logic
+- **StreamingDocumentWriter**: Abstract base class for streaming writes with integrated buffering, batching, and retry logic
 
 **Supported Databases:**
 
@@ -36,7 +36,7 @@ The Data API provides a robust, database-agnostic framework for streaming and bu
                 ▼                                         ▼
     ┌──────────────────┐              ┌──────────────────────────────┐
     │ DocumentReader   │              │ StreamingDocumentWriter      │
-    │ (Source)         │              │ (Target - unified writer)    │
+    │ (Source)         │              │ (Target)                     │
     └────────┬─────────┘              └──────────────┬───────────────┘
              │                                       │
              │ 2. streamDocuments()                  │
@@ -88,15 +88,16 @@ for await (const doc of stream) {
 
 ### StreamingDocumentWriter
 
-**Purpose:** Unified base class for streaming document writes with integrated buffering, adaptive batching, retry logic, and progress reporting.
+**Purpose:** Abstract base class for streaming document writes with integrated buffering, adaptive batching, retry logic, and progress reporting.
 
 **Key Features:**
 
-1. **Unified Buffer Management**: Single-level buffering with adaptive flush triggers
+1. **Buffer Management**: Single-level buffering with adaptive flush triggers
 2. **Integrated Retry Logic**: Uses RetryOrchestrator for transient failure handling
 3. **Adaptive Batching**: Uses BatchSizeAdapter for dual-mode (fast/RU-limited) operation
 4. **Statistics Aggregation**: Uses WriteStats for progress tracking
-5. **Two-Layer Progress Flow**: Simplified from previous four-layer approach
+5. **Immediate Progress Reporting**: Progress reported during throttle recovery
+6. **Semantic Result Types**: Strategy-specific result types (`SkipBatchResult`, `OverwriteBatchResult`, etc.)
 
 **Key Methods:**
 
@@ -124,28 +125,32 @@ const result = await writer.streamDocuments(
 console.log(`Processed: ${result.totalProcessed}, Inserted: ${result.insertedCount}`);
 ```
 
+> **Note:** For detailed sequence diagrams showing throttle recovery and network error handling,
+> see the JSDoc comments in `StreamingDocumentWriter.ts`.
+
 ---
 
 ## Implementing New Database Writers
 
-To add support for a new database, extend `StreamingDocumentWriter` and implement **only 3 abstract methods**:
+To add support for a new database, extend `StreamingDocumentWriter` and implement **3 abstract methods**:
 
 ```typescript
 class MyDatabaseStreamingWriter extends StreamingDocumentWriter<string> {
   /**
    * Write a batch of documents using the specified strategy.
-   * Handles all 4 conflict resolution strategies internally.
+   * Returns strategy-specific results with semantic field names.
    */
   protected async writeBatch(
     documents: DocumentDetails[],
     strategy: ConflictResolutionStrategy,
-  ): Promise<BatchWriteResult<string>> {
+  ): Promise<StrategyBatchResult<string>> {
     // Implement database-specific write logic
+    // Return SkipBatchResult, OverwriteBatchResult, AbortBatchResult, or GenerateNewIdsBatchResult
   }
 
   /**
    * Classify an error for retry decisions.
-   * Returns: 'throttle' | 'network' | 'conflict' | 'other'
+   * Returns: 'throttle' | 'network' | 'conflict' | 'validator' | 'other'
    */
   protected classifyError(error: unknown): ErrorType {
     // Map database error codes to classification
@@ -171,12 +176,12 @@ class MyDatabaseStreamingWriter extends StreamingDocumentWriter<string> {
 
 ## Conflict Resolution Strategies
 
-| Strategy           | Behavior                                    | Use Case              |
-| ------------------ | ------------------------------------------- | --------------------- |
-| **Skip**           | Skip documents with existing \_id, continue | Safe incremental sync |
-| **Overwrite**      | Replace existing documents (upsert)         | Full data refresh     |
-| **Abort**          | Stop on first conflict                      | Strict validation     |
-| **GenerateNewIds** | Generate new \_id values                    | Duplicating data      |
+| Strategy           | Result Type                 | Behavior                                    | Use Case              |
+| ------------------ | --------------------------- | ------------------------------------------- | --------------------- |
+| **Skip**           | `SkipBatchResult`           | Skip documents with existing \_id, continue | Safe incremental sync |
+| **Overwrite**      | `OverwriteBatchResult`      | Replace existing documents (upsert)         | Full data refresh     |
+| **Abort**          | `AbortBatchResult`          | Stop on first conflict                      | Strict validation     |
+| **GenerateNewIds** | `GenerateNewIdsBatchResult` | Generate new \_id values                    | Duplicating data      |
 
 ---
 
@@ -227,16 +232,16 @@ The `RetryOrchestrator` handles transient failures:
 
 ```
 src/services/taskService/data-api/
-├── types.ts                              # Public interfaces
-├── writerTypes.ts                        # Internal writer types
+├── types.ts                              # Public interfaces (StreamWriteResult, DocumentDetails, etc.)
+├── writerTypes.internal.ts               # Internal writer types (StrategyBatchResult variants, PartialProgress)
 ├── readers/
 │   ├── BaseDocumentReader.ts             # Abstract reader base class
 │   └── DocumentDbDocumentReader.ts       # MongoDB implementation
 └── writers/
-    ├── StreamingDocumentWriter.ts        # Unified abstract base class
+    ├── StreamingDocumentWriter.ts        # Abstract base class (see JSDoc for sequence diagrams)
     ├── DocumentDbStreamingWriter.ts      # MongoDB implementation
     ├── RetryOrchestrator.ts              # Isolated retry logic
-    ├── BatchSizeAdapter.ts               # Adaptive batch sizing
+    ├── BatchSizeAdapter.ts               # Adaptive batch sizing (fast/RU-limited modes)
     └── WriteStats.ts                     # Statistics aggregation
 ```
 
