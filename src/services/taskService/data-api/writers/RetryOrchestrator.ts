@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { l10n } from 'vscode';
-import { type ErrorType } from '../writerTypes';
+import { type ErrorType } from '../writerTypes.internal';
 
 /**
  * Result of a retry-able operation.

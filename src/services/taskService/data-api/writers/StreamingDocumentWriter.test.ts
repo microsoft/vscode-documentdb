@@ -5,7 +5,15 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from '../types';
-import { type BatchWriteResult, type ErrorType, type PartialProgress } from '../writerTypes';
+import {
+    type AbortBatchResult,
+    type ErrorType,
+    type GenerateNewIdsBatchResult,
+    type OverwriteBatchResult,
+    type PartialProgress,
+    type SkipBatchResult,
+    type StrategyBatchResult,
+} from '../writerTypes.internal';
 import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter';
 
 // Mock extensionVariables (ext) module
@@ -114,7 +122,7 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
         documents: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
         _actionContext?: IActionContext,
-    ): Promise<BatchWriteResult<string>> {
+    ): Promise<StrategyBatchResult<string>> {
         // Check for partial write simulation (throttle with actual writes)
         this.checkAndThrowErrorWithPartialWrite(documents, strategy);
 
@@ -165,7 +173,7 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
 
     // Strategy implementations
 
-    private writeWithAbortStrategy(documents: DocumentDetails[]): BatchWriteResult<string> {
+    private writeWithAbortStrategy(documents: DocumentDetails[]): AbortBatchResult<string> {
         const conflicts: Array<{ documentId: string; error: Error }> = [];
         let insertedCount = 0;
 
@@ -185,14 +193,14 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
         }
 
         return {
-            insertedCount,
-            collidedCount: conflicts.length,
             processedCount: insertedCount + conflicts.length,
+            insertedCount,
+            abortedCount: conflicts.length,
             errors: conflicts.length > 0 ? conflicts : undefined,
         };
     }
 
-    private writeWithSkipStrategy(documents: DocumentDetails[]): BatchWriteResult<string> {
+    private writeWithSkipStrategy(documents: DocumentDetails[]): SkipBatchResult<string> {
         // Pre-filter conflicts (like DocumentDbStreamingWriter does)
         const docsToInsert: DocumentDetails[] = [];
         const skippedIds: string[] = [];
@@ -219,42 +227,36 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
         }));
 
         return {
-            insertedCount,
-            collidedCount: skippedIds.length,
             processedCount: insertedCount + skippedIds.length,
+            insertedCount,
+            skippedCount: skippedIds.length,
             errors: errors.length > 0 ? errors : undefined,
         };
     }
 
-    private writeWithOverwriteStrategy(documents: DocumentDetails[]): BatchWriteResult<string> {
-        let matchedCount = 0;
-        let upsertedCount = 0;
-        let modifiedCount = 0;
+    private writeWithOverwriteStrategy(documents: DocumentDetails[]): OverwriteBatchResult<string> {
+        let replacedCount = 0;
+        let createdCount = 0;
 
         for (const doc of documents) {
             const docId = doc.id as string;
             if (this.storage.has(docId)) {
-                matchedCount++;
-                // Check if content actually changed
-                if (JSON.stringify(this.storage.get(docId)) !== JSON.stringify(doc.documentContent)) {
-                    modifiedCount++;
-                }
+                replacedCount++;
                 this.storage.set(docId, doc.documentContent);
             } else {
-                upsertedCount++;
+                createdCount++;
                 this.storage.set(docId, doc.documentContent);
             }
         }
 
         return {
-            matchedCount,
-            modifiedCount,
-            upsertedCount,
-            processedCount: matchedCount + upsertedCount,
+            processedCount: replacedCount + createdCount,
+            replacedCount,
+            createdCount,
         };
     }
 
-    private writeWithGenerateNewIdsStrategy(documents: DocumentDetails[]): BatchWriteResult<string> {
+    private writeWithGenerateNewIdsStrategy(documents: DocumentDetails[]): GenerateNewIdsBatchResult<string> {
         let insertedCount = 0;
 
         for (const doc of documents) {
@@ -265,8 +267,8 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
         }
 
         return {
-            insertedCount,
             processedCount: insertedCount,
+            insertedCount,
         };
     }
 

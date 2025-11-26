@@ -7,44 +7,11 @@
  * Types and interfaces for StreamingDocumentWriter implementations.
  * These are used internally by StreamingDocumentWriter and its subclasses for
  * adaptive batching, retry logic, error classification, and strategy methods.
- */
-
-// =================================
-// RAW BATCH WRITE RESULT (INTERNAL)
-// =================================
-
-/**
- * Raw batch write result returned by implementing classes.
  *
- * This is the format that database implementations return directly from their
- * batch operations. It contains database-specific fields that are then normalized
- * by the base class into strategy-specific results.
- *
- * @internal This type is for the writeBatch method implementation. The base class
- * converts this to StrategyBatchResult for statistics and progress tracking.
+ * DESIGN PRINCIPLE: All types use semantic/strategy-specific names (insertedCount, skippedCount,
+ * replacedCount, createdCount). Database-specific implementations convert from raw DB field names
+ * (collidedCount, matchedCount, upsertedCount) to semantic names at the boundary.
  */
-export interface BatchWriteResult<TDocumentId = unknown> {
-    /** Total number of documents processed in this batch */
-    processedCount: number;
-
-    /** Number of new documents successfully inserted */
-    insertedCount?: number;
-
-    /** Number of documents that collided with existing documents */
-    collidedCount?: number;
-
-    /** Number of existing documents that matched (for upsert operations) */
-    matchedCount?: number;
-
-    /** Number of existing documents that were modified (for upsert operations) */
-    modifiedCount?: number;
-
-    /** Number of new documents created via upsert (didn't exist before) */
-    upsertedCount?: number;
-
-    /** Array of errors that occurred during the operation */
-    errors?: Array<{ documentId?: TDocumentId; error: Error }>;
-}
 
 // =================================
 // STRATEGY-SPECIFIC BATCH RESULTS
@@ -150,71 +117,19 @@ export function isGenerateNewIdsResult<T>(result: StrategyBatchResult<T>): resul
 }
 
 // =================================
-// RESULT CONVERSION
-// =================================
-
-/** Strategy type for conversion - matches ConflictResolutionStrategy enum values */
-export type ConflictStrategy = 'skip' | 'abort' | 'overwrite' | 'generateNewIds';
-
-/**
- * Converts a raw BatchWriteResult from the implementing class to a strategy-specific
- * StrategyBatchResult with proper semantic naming.
- *
- * This function maps database-specific fields to strategy-appropriate semantic names:
- * - Skip: insertedCount + collidedCount → insertedCount + skippedCount
- * - Abort: insertedCount + collidedCount → insertedCount + abortedCount
- * - Overwrite: matchedCount + upsertedCount → replacedCount + createdCount
- * - GenerateNewIds: insertedCount → insertedCount
- *
- * @param result Raw batch write result from database implementation
- * @param strategy The conflict resolution strategy being used
- * @returns Strategy-specific batch result with semantic field names
- */
-export function toStrategyResult<T>(result: BatchWriteResult<T>, strategy: ConflictStrategy): StrategyBatchResult<T> {
-    switch (strategy) {
-        case 'skip':
-            return {
-                processedCount: result.processedCount,
-                insertedCount: result.insertedCount ?? 0,
-                skippedCount: result.collidedCount ?? 0,
-                errors: result.errors,
-            } as SkipBatchResult<T>;
-
-        case 'abort':
-            return {
-                processedCount: result.processedCount,
-                insertedCount: result.insertedCount ?? 0,
-                abortedCount: result.collidedCount ?? 0,
-                errors: result.errors,
-            } as AbortBatchResult<T>;
-
-        case 'overwrite':
-            return {
-                processedCount: result.processedCount,
-                replacedCount: result.matchedCount ?? 0,
-                createdCount: result.upsertedCount ?? 0,
-                errors: result.errors,
-            } as OverwriteBatchResult<T>;
-
-        case 'generateNewIds':
-            return {
-                processedCount: result.processedCount,
-                insertedCount: result.insertedCount ?? 0,
-                errors: result.errors,
-            } as GenerateNewIdsBatchResult<T>;
-    }
-}
-
-// =================================
 // PARTIAL PROGRESS FOR THROTTLE RECOVERY
 // =================================
 
 /**
  * Partial progress extracted from an error during throttle/network recovery.
  *
- * This is a simplified version that only tracks what we can reliably extract
- * from a database error: how many documents were successfully processed.
- * The implementing class should provide strategy-appropriate counts.
+ * Uses semantic names that match the conflict resolution strategy:
+ * - Skip: insertedCount, skippedCount
+ * - Abort: insertedCount
+ * - Overwrite: replacedCount, createdCount
+ * - GenerateNewIds: insertedCount
+ *
+ * The database-specific implementation converts raw DB field names to these semantic names.
  */
 export interface PartialProgress {
     /** Number of documents successfully processed before the error */

@@ -9,7 +9,15 @@ import { l10n } from 'vscode';
 import { isBulkWriteError, type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { ext } from '../../../../extensionVariables';
 import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from '../types';
-import { type BatchWriteResult, type ErrorType, type PartialProgress } from '../writerTypes';
+import {
+    type AbortBatchResult,
+    type ErrorType,
+    type GenerateNewIdsBatchResult,
+    type OverwriteBatchResult,
+    type PartialProgress,
+    type SkipBatchResult,
+    type StrategyBatchResult,
+} from '../writerTypes.internal';
 import { StreamingDocumentWriter } from './StreamingDocumentWriter';
 
 /**
@@ -68,12 +76,14 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      * - Overwrite: Replace existing documents (upsert)
      * - Abort: Insert all, stop on first conflict
      * - GenerateNewIds: Remove _id, insert with new IDs
+     *
+     * Returns strategy-specific results with semantic field names.
      */
     protected override async writeBatch(
         documents: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
         actionContext?: IActionContext,
-    ): Promise<BatchWriteResult<string>> {
+    ): Promise<StrategyBatchResult<string>> {
         switch (strategy) {
             case ConflictResolutionStrategy.Skip:
                 return this.writeWithSkipStrategy(documents, actionContext);
@@ -176,11 +186,12 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      * Implements the Skip conflict resolution strategy.
      *
      * Pre-filters conflicts by querying for existing _id values before insertion.
+     * Returns SkipBatchResult with semantic names (insertedCount, skippedCount).
      */
     private async writeWithSkipStrategy(
         documents: DocumentDetails[],
         _actionContext?: IActionContext,
-    ): Promise<BatchWriteResult<string>> {
+    ): Promise<SkipBatchResult<string>> {
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
         const { docsToInsert, conflictIds } = await this.preFilterConflicts(rawDocuments);
 
@@ -200,7 +211,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
         }
 
         let insertedCount = 0;
-        let fallbackCollidedCount = 0;
+        let fallbackSkippedCount = 0;
         const fallbackErrors: Array<{ documentId: string; error: Error }> = [];
 
         if (docsToInsert.length > 0) {
@@ -230,7 +241,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                         // Extract counts from the error - some documents may have been inserted
                         const rawCounts = this.extractRawDocumentCounts(error);
                         insertedCount = rawCounts.insertedCount ?? 0;
-                        fallbackCollidedCount = duplicateErrors.length;
+                        fallbackSkippedCount = duplicateErrors.length;
 
                         // Build errors for the fallback conflicts
                         for (const writeError of duplicateErrors) {
@@ -251,7 +262,8 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
             }
         }
 
-        const collidedCount = conflictIds.length + fallbackCollidedCount;
+        // Convert to semantic names: collidedCount → skippedCount
+        const skippedCount = conflictIds.length + fallbackSkippedCount;
         const errors = [
             ...conflictIds.map((id) => ({
                 documentId: this.formatDocumentId(id),
@@ -261,9 +273,9 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
         ];
 
         return {
+            processedCount: insertedCount + skippedCount,
             insertedCount,
-            collidedCount,
-            processedCount: insertedCount + collidedCount,
+            skippedCount,
             errors: errors.length > 0 ? errors : undefined,
         };
     }
@@ -272,11 +284,12 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      * Implements the Overwrite conflict resolution strategy.
      *
      * Uses bulkWrite with replaceOne operations and upsert:true.
+     * Returns OverwriteBatchResult with semantic names (replacedCount, createdCount).
      */
     private async writeWithOverwriteStrategy(
         documents: DocumentDetails[],
         _actionContext?: IActionContext,
-    ): Promise<BatchWriteResult<string>> {
+    ): Promise<OverwriteBatchResult<string>> {
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
         const collection = this.client.getCollection(this.databaseName, this.collectionName);
 
@@ -294,15 +307,16 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
             bypassDocumentValidation: true,
         });
 
-        const matchedCount = result.matchedCount ?? 0;
-        const upsertedCount = result.upsertedCount ?? 0;
-        const modifiedCount = result.modifiedCount ?? 0;
+        // Convert from raw MongoDB names to semantic names:
+        // matchedCount → replacedCount (existing docs that were replaced)
+        // upsertedCount → createdCount (new docs that were created)
+        const replacedCount = result.matchedCount ?? 0;
+        const createdCount = result.upsertedCount ?? 0;
 
         return {
-            matchedCount,
-            modifiedCount,
-            upsertedCount,
-            processedCount: matchedCount + upsertedCount,
+            processedCount: replacedCount + createdCount,
+            replacedCount,
+            createdCount,
         };
     }
 
@@ -310,11 +324,12 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      * Implements the Abort conflict resolution strategy.
      *
      * Catches BulkWriteError with duplicate key errors and returns conflict details.
+     * Returns AbortBatchResult with semantic names (insertedCount, abortedCount).
      */
     private async writeWithAbortStrategy(
         documents: DocumentDetails[],
         _actionContext?: IActionContext,
-    ): Promise<BatchWriteResult<string>> {
+    ): Promise<AbortBatchResult<string>> {
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
 
         try {
@@ -326,9 +341,11 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
             );
             const insertedCount = insertResult.insertedCount ?? 0;
 
+            // Success - no abort
             return {
-                insertedCount,
                 processedCount: insertedCount,
+                insertedCount,
+                abortedCount: 0,
             };
         } catch (error) {
             if (isBulkWriteError(error)) {
@@ -369,14 +386,12 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                         );
                     }
 
-                    // Return BatchWriteResult with raw MongoDB field names
+                    // Convert to semantic names: collidedCount → abortedCount
+                    // abortedCount represents documents that caused abort (conflicts)
                     return {
                         processedCount: rawCounts.processedCount,
-                        insertedCount: rawCounts.insertedCount,
-                        matchedCount: rawCounts.matchedCount,
-                        modifiedCount: rawCounts.modifiedCount,
-                        upsertedCount: rawCounts.upsertedCount,
-                        collidedCount: rawCounts.collidedCount,
+                        insertedCount: rawCounts.insertedCount ?? 0,
+                        abortedCount: rawCounts.collidedCount ?? 1, // At least 1 conflict caused abort
                         errors: conflictErrors,
                     };
                 }
@@ -390,11 +405,12 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      * Implements the GenerateNewIds conflict resolution strategy.
      *
      * Transforms documents by removing _id and storing it in a backup field.
+     * Returns GenerateNewIdsBatchResult with semantic names (insertedCount).
      */
     private async writeWithGenerateNewIdsStrategy(
         documents: DocumentDetails[],
         _actionContext?: IActionContext,
-    ): Promise<BatchWriteResult<string>> {
+    ): Promise<GenerateNewIdsBatchResult<string>> {
         const transformedDocuments = documents.map((detail) => {
             const rawDocument = detail.documentContent as WithId<Document>;
             const { _id, ...docWithoutId } = rawDocument;
@@ -415,8 +431,8 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
         const insertedCount = insertResult.insertedCount ?? 0;
 
         return {
-            insertedCount,
             processedCount: insertedCount,
+            insertedCount,
         };
     }
 
