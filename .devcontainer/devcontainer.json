@@ -10,7 +10,6 @@
 
   "forwardPorts": [3000],
 
-  // VS Code customizations
   "customizations": {
     "vscode": {
       "extensions": [
