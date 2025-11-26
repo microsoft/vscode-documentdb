@@ -104,8 +104,8 @@ export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
         <SlickgridReact
             gridId="myGridTree"
             ref={gridRef}
-            gridOptions={gridOptions}
-            columnDefinitions={columnsDef}
+            options={gridOptions}
+            columns={columnsDef}
             dataset={liveData}
             onReactGridCreated={() => console.log('Tree View created')}
         />
