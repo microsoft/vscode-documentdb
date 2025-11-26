@@ -522,6 +522,7 @@
   "Task is running": "Task is running",
   "Task stopped": "Task stopped",
   "Task stopped during initialization": "Task stopped during initialization",
+  "Task stopped. {0}": "Task stopped. {0}",
   "Task will complete successfully": "Task will complete successfully",
   "Task will fail at a random step for testing": "Task will fail at a random step for testing",
   "Task with ID {0} already exists": "Task with ID {0} already exists",

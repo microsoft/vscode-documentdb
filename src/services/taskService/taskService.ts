@@ -317,7 +317,12 @@ export abstract class Task {
                 // Determine final state based on abort status
                 if (this.abortController.signal.aborted) {
                     context.telemetry.properties.task_final_state = 'stopped';
-                    this.updateStatus(TaskState.Stopped, vscode.l10n.t('Task stopped'));
+                    // Preserve current progress message to show what was accomplished before stopping
+                    const currentMessage = this._status.message;
+                    const stoppedMessage = currentMessage
+                        ? vscode.l10n.t('Task stopped. {0}', currentMessage)
+                        : vscode.l10n.t('Task stopped');
+                    this.updateStatus(TaskState.Stopped, stoppedMessage);
                 } else {
                     context.telemetry.properties.task_final_state = 'completed';
                     this.updateStatus(TaskState.Completed, vscode.l10n.t('Task completed successfully'), 100);
@@ -329,7 +334,12 @@ export abstract class Task {
                 // Determine final state based on abort status
                 if (this.abortController.signal.aborted) {
                     context.telemetry.properties.task_final_state = 'stopped';
-                    this.updateStatus(TaskState.Stopped, vscode.l10n.t('Task stopped'));
+                    // Preserve current progress message to show what was accomplished before stopping
+                    const currentMessage = this._status.message;
+                    const stoppedMessage = currentMessage
+                        ? vscode.l10n.t('Task stopped. {0}', currentMessage)
+                        : vscode.l10n.t('Task stopped');
+                    this.updateStatus(TaskState.Stopped, stoppedMessage);
                 } else {
                     context.telemetry.properties.task_final_state = 'failed';
                     this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
