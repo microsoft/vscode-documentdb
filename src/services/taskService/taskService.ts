@@ -239,23 +239,7 @@ export abstract class Task {
     protected updateProgress(progress: number, message?: string): void {
         // Only allow progress updates when running to prevent race conditions
         if (this._status.state === TaskState.Running) {
-            ext.outputChannel.trace(
-                vscode.l10n.t(
-                    '[Task.updateProgress] Updating progress: {0}% - {1}',
-                    progress.toString(),
-                    message ?? '',
-                ),
-            );
             this.updateStatus(TaskState.Running, message, progress);
-        } else {
-            ext.outputChannel.trace(
-                vscode.l10n.t(
-                    '[Task.updateProgress] Ignoring progress update (state={0}): {1}% - {2}',
-                    this._status.state,
-                    progress.toString(),
-                    message ?? '',
-                ),
-            );
         }
         // Silently ignore progress updates in other states to prevent race conditions
     }

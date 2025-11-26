@@ -197,6 +197,8 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
             ),
         );
 
+        ext.outputChannel.trace(vscode.l10n.t('[StreamingWriter] Reading documents from source...'));
+
         // Stream documents and buffer them
         for await (const document of documentStream) {
             if (abortSignal?.aborted) {
@@ -331,26 +333,12 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
 
         // Flush if document count limit reached
         if (this.buffer.length >= constraints.optimalDocumentCount) {
-            ext.outputChannel.trace(
-                vscode.l10n.t(
-                    '[StreamingWriter] Flushing buffer: Document count limit ({0}/{1} documents)',
-                    this.buffer.length.toString(),
-                    constraints.optimalDocumentCount.toString(),
-                ),
-            );
             return true;
         }
 
         // Flush if memory limit reached
         const memoryLimitBytes = constraints.maxMemoryMB * 1024 * 1024;
         if (this.bufferMemoryEstimate >= memoryLimitBytes) {
-            ext.outputChannel.trace(
-                vscode.l10n.t(
-                    '[StreamingWriter] Flushing buffer: Memory limit ({0} MB/{1} MB)',
-                    (this.bufferMemoryEstimate / (1024 * 1024)).toFixed(2),
-                    constraints.maxMemoryMB.toString(),
-                ),
-            );
             return true;
         }
 
@@ -386,7 +374,10 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         }
 
         ext.outputChannel.trace(
-            vscode.l10n.t('[StreamingWriter] Flushing {0} documents', this.buffer.length.toString()),
+            vscode.l10n.t(
+                '[StreamingWriter] Writing {0} documents to target (may take a moment)...',
+                this.buffer.length.toString(),
+            ),
         );
 
         let pendingDocs = [...this.buffer];
@@ -467,14 +458,16 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         // Record flush
         stats.recordFlush();
 
+        ext.outputChannel.trace(
+            vscode.l10n.t(
+                '[StreamingWriter] Buffer flush complete ({0} total processed so far)',
+                stats.getTotalProcessed().toString(),
+            ),
+        );
+
         // Clear buffer
         this.buffer = [];
         this.bufferMemoryEstimate = 0;
-
-        // Handle non-fatal errors (Skip strategy logs them)
-        if (allErrors.length > 0 && config.conflictResolutionStrategy === ConflictResolutionStrategy.Skip) {
-            this.logSkippedDocuments(allErrors);
-        }
     }
 
     /**
@@ -519,11 +512,12 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                     this.batchSizeAdapter.handleThrottle(successfulCount);
 
                     if (successfulCount > 0) {
+                        const remainingCount = currentBatch.length - successfulCount;
                         ext.outputChannel.debug(
                             vscode.l10n.t(
-                                '[StreamingWriter] Throttle with partial progress: {0}/{1} processed, slicing batch',
+                                '[StreamingWriter] Throttle: wrote {0} docs, {1} remaining in batch',
                                 successfulCount.toString(),
-                                currentBatch.length.toString(),
+                                remainingCount.toString(),
                             ),
                         );
 
@@ -693,24 +687,5 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
 
         // Re-throw unexpected errors
         throw error;
-    }
-
-    /**
-     * Logs skipped documents (Skip strategy).
-     */
-    private logSkippedDocuments(errors: Array<{ documentId?: TDocumentId; error: Error }>): void {
-        for (const error of errors) {
-            ext.outputChannel.appendLog(
-                vscode.l10n.t(
-                    '[StreamingWriter] Skipped document with _id: {0} - {1}',
-                    error.documentId !== undefined && error.documentId !== null
-                        ? typeof error.documentId === 'string'
-                            ? error.documentId
-                            : JSON.stringify(error.documentId)
-                        : 'unknown',
-                    error.error?.message ?? 'Unknown error',
-                ),
-            );
-        }
     }
 }

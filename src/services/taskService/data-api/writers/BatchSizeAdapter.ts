@@ -134,7 +134,7 @@ export class BatchSizeAdapter {
 
         ext.outputChannel.trace(
             l10n.t(
-                '[BatchSizeAdapter] Throttle: Reducing batch size {0} → {1} (proven capacity: {2})',
+                '[BatchSizeAdapter] Throttle: Adjusting batch size {0} → {1} (proven capacity: {2})',
                 previousBatchSize.toString(),
                 this.currentBatchSize.toString(),
                 successfulCount.toString(),
