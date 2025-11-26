@@ -11,6 +11,12 @@ jest.mock('../../extensionVariables', () => ({
         outputChannel: {
             appendLine: jest.fn(), // Mock appendLine as a no-op function
             error: jest.fn(),
+            trace: jest.fn(),
+            debug: jest.fn(),
+            warn: jest.fn(),
+            info: jest.fn(),
+            appendLog: jest.fn(),
+            show: jest.fn(),
         },
     },
 }));

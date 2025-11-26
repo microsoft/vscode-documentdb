@@ -16,7 +16,6 @@ import {
     type AbortBatchResult,
     type ErrorType,
     type GenerateNewIdsBatchResult,
-    isOverwriteResult,
     isSkipResult,
     type OverwriteBatchResult,
     type PartialProgress,
@@ -402,12 +401,30 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
             const batchSize = Math.min(pendingDocs.length, this.batchSizeAdapter.getCurrentBatchSize());
             const batch = pendingDocs.slice(0, batchSize);
 
+            // Track partial progress count for this batch (used for slicing pendingDocs)
+            let partialProgressCount = 0;
+
+            // Create callback for reporting partial progress during retries
+            const onPartialProgress = (partialResult: StrategyBatchResult<TDocumentId>): void => {
+                partialProgressCount += partialResult.processedCount;
+
+                // Add partial progress to stats immediately
+                stats.addBatch(partialResult);
+
+                // Report progress to caller
+                if (options?.onProgress && partialResult.processedCount > 0) {
+                    const details = stats.formatProgress(config.conflictResolutionStrategy);
+                    options.onProgress(partialResult.processedCount, details);
+                }
+            };
+
             try {
                 const result = await this.writeBatchWithRetry(
                     batch,
                     config.conflictResolutionStrategy,
                     options?.abortSignal,
                     options?.actionContext,
+                    onPartialProgress,
                 );
 
                 // Result already uses semantic names - add directly to stats
@@ -438,8 +455,9 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                     this.batchSizeAdapter.grow();
                 }
 
-                // Move to next batch
-                pendingDocs = pendingDocs.slice(result.processedCount);
+                // Move to next batch - account for both partial progress and final result
+                const totalProcessedInBatch = partialProgressCount + result.processedCount;
+                pendingDocs = pendingDocs.slice(totalProcessedInBatch);
             } catch (error) {
                 // Handle fatal errors
                 this.handleWriteError(error, allErrors, config.conflictResolutionStrategy, stats);
@@ -466,17 +484,19 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * successfully inserted before the rate limit was hit), we accumulate the
      * partial progress and slice the batch to skip already-processed documents.
      *
-     * Returns a strategy-specific result with all accumulated counts.
+     * The onPartialProgress callback is called immediately when partial progress
+     * is detected during throttle recovery, allowing real-time progress reporting.
+     *
+     * Returns a strategy-specific result with remaining counts (excluding already-reported partial progress).
      */
     private async writeBatchWithRetry(
         batch: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
         abortSignal?: AbortSignal,
         actionContext?: IActionContext,
+        onPartialProgress?: (partialResult: StrategyBatchResult<TDocumentId>) => void,
     ): Promise<StrategyBatchResult<TDocumentId>> {
         let currentBatch = batch;
-        // Accumulate partial progress during retries (using semantic names)
-        let accumulated: PartialProgress = { processedCount: 0 };
         let attempt = 0;
         const maxAttempts = 10;
 
@@ -487,8 +507,8 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
 
             try {
                 const result = await this.writeBatch(currentBatch, strategy, actionContext);
-                // Success - merge accumulated progress with final result and return
-                return this.mergeWithAccumulated(accumulated, result, strategy);
+                // Success - return the result (partial progress already reported via callback)
+                return result;
             } catch (error) {
                 const errorType = this.classifyError(error, actionContext);
 
@@ -506,8 +526,13 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                                 currentBatch.length.toString(),
                             ),
                         );
-                        // Accumulate partial progress (all using semantic names)
-                        accumulated = this.accumulateProgress(accumulated, progress);
+
+                        // Report partial progress immediately via callback
+                        if (onPartialProgress && progress) {
+                            const partialResult = this.progressToResult(progress, strategy);
+                            onPartialProgress(partialResult);
+                        }
+
                         // Slice the batch to only contain remaining documents
                         currentBatch = currentBatch.slice(successfulCount);
                         attempt = 0; // Reset attempts when progress is made
@@ -534,87 +559,14 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
             throw new Error(vscode.l10n.t('Failed to complete operation after {0} attempts', maxAttempts.toString()));
         }
 
-        // All documents processed via partial progress - return accumulated as result
-        return this.progressToResult(accumulated, strategy);
+        // All documents processed via partial progress - return empty result
+        // (all progress was already reported via callback)
+        return this.progressToResult({ processedCount: 0 }, strategy);
     }
 
     /**
-     * Accumulates partial progress from throttle errors.
-     */
-    private accumulateProgress(total: PartialProgress, partial: PartialProgress | undefined): PartialProgress {
-        if (!partial) return total;
-        return {
-            processedCount: total.processedCount + partial.processedCount,
-            insertedCount: (total.insertedCount ?? 0) + (partial.insertedCount ?? 0) || undefined,
-            skippedCount: (total.skippedCount ?? 0) + (partial.skippedCount ?? 0) || undefined,
-            replacedCount: (total.replacedCount ?? 0) + (partial.replacedCount ?? 0) || undefined,
-            createdCount: (total.createdCount ?? 0) + (partial.createdCount ?? 0) || undefined,
-        };
-    }
-
-    /**
-     * Merges accumulated progress with a final batch result.
-     */
-    private mergeWithAccumulated(
-        accumulated: PartialProgress,
-        result: StrategyBatchResult<TDocumentId>,
-        strategy: ConflictResolutionStrategy,
-    ): StrategyBatchResult<TDocumentId> {
-        // If no accumulated progress, just return the result
-        if (accumulated.processedCount === 0) {
-            return result;
-        }
-
-        // Merge based on strategy type
-        switch (strategy) {
-            case ConflictResolutionStrategy.Skip:
-                if (isSkipResult(result)) {
-                    return {
-                        processedCount: accumulated.processedCount + result.processedCount,
-                        insertedCount: (accumulated.insertedCount ?? 0) + result.insertedCount,
-                        skippedCount: (accumulated.skippedCount ?? 0) + result.skippedCount,
-                        errors: result.errors,
-                    } satisfies SkipBatchResult<TDocumentId>;
-                }
-                break;
-
-            case ConflictResolutionStrategy.Overwrite:
-                if (isOverwriteResult(result)) {
-                    return {
-                        processedCount: accumulated.processedCount + result.processedCount,
-                        replacedCount: (accumulated.replacedCount ?? 0) + result.replacedCount,
-                        createdCount: (accumulated.createdCount ?? 0) + result.createdCount,
-                        errors: result.errors,
-                    } satisfies OverwriteBatchResult<TDocumentId>;
-                }
-                break;
-
-            case ConflictResolutionStrategy.Abort: {
-                const abortResult = result as AbortBatchResult<TDocumentId>;
-                return {
-                    processedCount: accumulated.processedCount + result.processedCount,
-                    insertedCount: (accumulated.insertedCount ?? 0) + abortResult.insertedCount,
-                    abortedCount: abortResult.abortedCount,
-                    errors: result.errors,
-                } satisfies AbortBatchResult<TDocumentId>;
-            }
-
-            case ConflictResolutionStrategy.GenerateNewIds: {
-                const genResult = result as GenerateNewIdsBatchResult<TDocumentId>;
-                return {
-                    processedCount: accumulated.processedCount + result.processedCount,
-                    insertedCount: (accumulated.insertedCount ?? 0) + genResult.insertedCount,
-                    errors: result.errors,
-                } satisfies GenerateNewIdsBatchResult<TDocumentId>;
-            }
-        }
-
-        return result;
-    }
-
-    /**
-     * Converts accumulated progress to a strategy-specific result.
-     * Used when all documents were processed via partial progress (multiple throttles).
+     * Converts partial progress to a strategy-specific result.
+     * Used for reporting partial progress during throttle recovery.
      */
     private progressToResult(
         progress: PartialProgress,
