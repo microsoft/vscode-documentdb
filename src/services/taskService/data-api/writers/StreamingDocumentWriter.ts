@@ -255,7 +255,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      *
      * **Skip**: SkipBatchResult { insertedCount, skippedCount }
      * - Pre-filter conflicts for performance (optional optimization)
-     * - Return skipped documents in errors array with descriptive messages
+     * - Return combined results (pre-filtered + insert phase)
      *
      * **Overwrite**: OverwriteBatchResult { replacedCount, createdCount }
      * - Use replaceOne with upsert:true

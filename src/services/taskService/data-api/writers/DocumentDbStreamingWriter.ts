@@ -195,6 +195,12 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
         const { docsToInsert, conflictIds } = await this.preFilterConflicts(rawDocuments);
 
+        // Build errors for pre-filtered conflicts
+        const preFilterErrors = conflictIds.map((id) => ({
+            documentId: this.formatDocumentId(id),
+            error: new Error(l10n.t('Document already exists (skipped)')),
+        }));
+
         if (conflictIds.length > 0) {
             ext.outputChannel.debug(
                 l10n.t(
@@ -262,21 +268,15 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
             }
         }
 
-        // Convert to semantic names: collidedCount → skippedCount
-        const skippedCount = conflictIds.length + fallbackSkippedCount;
-        const errors = [
-            ...conflictIds.map((id) => ({
-                documentId: this.formatDocumentId(id),
-                error: new Error(l10n.t('Document already exists (skipped)')),
-            })),
-            ...fallbackErrors,
-        ];
+        // Return combined results (pre-filter + insert phase)
+        const totalSkippedCount = conflictIds.length + fallbackSkippedCount;
+        const allErrors = [...preFilterErrors, ...fallbackErrors];
 
         return {
-            processedCount: insertedCount + skippedCount,
+            processedCount: insertedCount + totalSkippedCount,
             insertedCount,
-            skippedCount,
-            errors: errors.length > 0 ? errors : undefined,
+            skippedCount: totalSkippedCount,
+            errors: allErrors.length > 0 ? allErrors : undefined,
         };
     }
 
