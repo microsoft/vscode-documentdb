@@ -12,7 +12,7 @@ import {
     type EnsureTargetExistsResult,
     type StreamWriteResult,
 } from '../types';
-import { type BatchWriteResult, type ErrorType, type PartialProgress } from '../writerTypes';
+import { type BatchWriteResult, type ErrorType, type PartialProgress, toStrategyResult } from '../writerTypes';
 import { BatchSizeAdapter } from './BatchSizeAdapter';
 import { RetryOrchestrator } from './RetryOrchestrator';
 import { WriteStats } from './WriteStats';
@@ -67,15 +67,17 @@ export class StreamingWriterError extends Error {
      */
     getStatsString(): string {
         const parts: string[] = [];
-        const { totalProcessed, insertedCount, collidedCount, matchedCount, upsertedCount } = this.partialStats;
+        const { totalProcessed, insertedCount, skippedCount, replacedCount, createdCount, abortedCount } =
+            this.partialStats;
 
         parts.push(`${totalProcessed} total`);
 
         const breakdown: string[] = [];
         if ((insertedCount ?? 0) > 0) breakdown.push(`${insertedCount ?? 0} inserted`);
-        if ((collidedCount ?? 0) > 0) breakdown.push(`${collidedCount ?? 0} skipped`);
-        if ((matchedCount ?? 0) > 0) breakdown.push(`${matchedCount ?? 0} matched`);
-        if ((upsertedCount ?? 0) > 0) breakdown.push(`${upsertedCount ?? 0} upserted`);
+        if ((skippedCount ?? 0) > 0) breakdown.push(`${skippedCount ?? 0} skipped`);
+        if ((replacedCount ?? 0) > 0) breakdown.push(`${replacedCount ?? 0} replaced`);
+        if ((createdCount ?? 0) > 0) breakdown.push(`${createdCount ?? 0} created`);
+        if ((abortedCount ?? 0) > 0) breakdown.push(`${abortedCount ?? 0} aborted`);
 
         if (breakdown.length > 0) {
             parts.push(`(${breakdown.join(', ')})`);
@@ -212,9 +214,9 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
             const finalStats = stats.getFinalStats();
             options.actionContext.telemetry.measurements.streamTotalProcessed = finalStats.totalProcessed;
             options.actionContext.telemetry.measurements.streamTotalInserted = finalStats.insertedCount ?? 0;
-            options.actionContext.telemetry.measurements.streamTotalSkipped = finalStats.collidedCount ?? 0;
-            options.actionContext.telemetry.measurements.streamTotalMatched = finalStats.matchedCount ?? 0;
-            options.actionContext.telemetry.measurements.streamTotalUpserted = finalStats.upsertedCount ?? 0;
+            options.actionContext.telemetry.measurements.streamTotalSkipped = finalStats.skippedCount ?? 0;
+            options.actionContext.telemetry.measurements.streamTotalReplaced = finalStats.replacedCount ?? 0;
+            options.actionContext.telemetry.measurements.streamTotalCreated = finalStats.createdCount ?? 0;
             options.actionContext.telemetry.measurements.streamFlushCount = finalStats.flushCount;
         }
 
@@ -398,15 +400,11 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                     options?.actionContext,
                 );
 
+                // Convert raw result to strategy-specific format for stats
+                const strategyResult = toStrategyResult(result, config.conflictResolutionStrategy);
+
                 // Update statistics
-                stats.addBatch({
-                    processedCount: result.processedCount,
-                    insertedCount: result.insertedCount,
-                    collidedCount: result.collidedCount,
-                    matchedCount: result.matchedCount,
-                    modifiedCount: result.modifiedCount,
-                    upsertedCount: result.upsertedCount,
-                });
+                stats.addBatch(strategyResult);
 
                 // Report progress
                 if (options?.onProgress && result.processedCount > 0) {
@@ -499,13 +497,14 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                                 currentBatch.length.toString(),
                             ),
                         );
-                        // Accumulate partial results
+                        // Accumulate partial results - convert from semantic names back to raw format
+                        // for internal merging (will be converted back when passed to stats)
                         totalResult = this.mergeResults(totalResult, {
                             processedCount: successfulCount,
-                            insertedCount: progress?.insertedCount ?? successfulCount,
-                            matchedCount: progress?.matchedCount,
-                            modifiedCount: progress?.modifiedCount,
-                            upsertedCount: progress?.upsertedCount,
+                            insertedCount: progress?.insertedCount,
+                            collidedCount: progress?.skippedCount,
+                            matchedCount: progress?.replacedCount,
+                            upsertedCount: progress?.createdCount,
                         });
                         // Slice the batch to only contain remaining documents
                         currentBatch = currentBatch.slice(successfulCount);
@@ -569,21 +568,32 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     }
 
     /**
-     * Delays before retry with exponential backoff.
+     * Delays before retry with exponential backoff and jitter.
+     *
+     * Uses ±30% jitter to prevent thundering herd when multiple clients
+     * are retrying simultaneously against the same server.
      */
     private async retryDelay(attempt: number, abortSignal?: AbortSignal): Promise<void> {
         const baseDelay = 100; // ms
         const maxDelay = 5000; // ms
-        const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+        const jitterRange = 0.3; // ±30% jitter
 
-        await new Promise<void>((resolve, reject) => {
+        // Calculate base exponential delay
+        const exponentialDelay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+
+        // Apply jitter: multiply by random factor in range [1-jitter, 1+jitter]
+        const jitterFactor = 1 + (Math.random() * 2 - 1) * jitterRange;
+        const delay = Math.round(exponentialDelay * jitterFactor);
+
+        await new Promise<void>((resolve) => {
             const timeout = setTimeout(resolve, delay);
             if (abortSignal) {
                 abortSignal.addEventListener(
                     'abort',
                     () => {
                         clearTimeout(timeout);
-                        reject(new Error(vscode.l10n.t('Operation was cancelled')));
+                        // Resolve gracefully instead of rejecting - caller handles abort
+                        resolve();
                     },
                     { once: true },
                 );

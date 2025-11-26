@@ -343,7 +343,7 @@ describe('StreamingDocumentWriter', () => {
             });
 
             expect(result.totalProcessed).toBe(0);
-            expect(result.insertedCount).toBe(0);
+            expect(result.insertedCount).toBeUndefined(); // No documents processed in empty stream
             expect(result.flushCount).toBe(0);
         });
 
@@ -509,11 +509,11 @@ describe('StreamingDocumentWriter', () => {
             // Should have progress updates
             expect(progressUpdates.length).toBeGreaterThan(0);
 
-            // Last progress update should show matched and upserted
+            // Last progress update should show replaced and created
             const lastUpdate = progressUpdates[progressUpdates.length - 1];
             expect(lastUpdate.details).toBeDefined();
-            expect(lastUpdate.details).toContain('matched');
-            expect(lastUpdate.details).toContain('upserted');
+            expect(lastUpdate.details).toContain('replaced');
+            expect(lastUpdate.details).toContain('created');
         });
 
         it('should report correct progress details for GenerateNewIds strategy', async () => {
@@ -559,7 +559,7 @@ describe('StreamingDocumentWriter', () => {
 
             expect(result.totalProcessed).toBe(300);
             expect(result.insertedCount).toBe(200); // 300 - 100 existing
-            expect(result.collidedCount).toBe(100); // 100 collided with existing documents
+            expect(result.skippedCount).toBe(100); // 100 skipped due to conflicts with existing documents
         });
     });
 
@@ -708,7 +708,7 @@ describe('StreamingDocumentWriter', () => {
 
             expect(result.totalProcessed).toBe(100);
             expect(result.insertedCount).toBe(100);
-            expect(result.collidedCount).toBe(0);
+            expect(result.skippedCount).toBeUndefined(); // No skips in empty collection
             expect(writer.getStorage().size).toBe(100);
         });
 
@@ -725,7 +725,7 @@ describe('StreamingDocumentWriter', () => {
 
             expect(result.totalProcessed).toBe(50);
             expect(result.insertedCount).toBe(47); // 50 - 3 conflicts
-            expect(result.collidedCount).toBe(3); // 3 collided with existing documents
+            expect(result.skippedCount).toBe(3); // 3 skipped due to conflicts with existing documents
             expect(writer.getStorage().size).toBe(50); // 47 new + 3 existing
         });
     });
@@ -742,8 +742,8 @@ describe('StreamingDocumentWriter', () => {
             });
 
             expect(result.totalProcessed).toBe(100);
-            expect(result.upsertedCount).toBe(100);
-            expect(result.matchedCount).toBe(0);
+            expect(result.createdCount).toBe(100);
+            expect(result.replacedCount).toBeUndefined(); // No replacements in empty collection
             expect(writer.getStorage().size).toBe(100);
         });
 
@@ -759,8 +759,8 @@ describe('StreamingDocumentWriter', () => {
             });
 
             expect(result.totalProcessed).toBe(50);
-            expect(result.matchedCount).toBe(3); // doc10, doc20, doc30
-            expect(result.upsertedCount).toBe(47); // 50 - 3 matched
+            expect(result.replacedCount).toBe(3); // doc10, doc20, doc30 were replaced
+            expect(result.createdCount).toBe(47); // 50 - 3 replaced = 47 created
             expect(writer.getStorage().size).toBe(50);
         });
     });
@@ -1020,9 +1020,6 @@ describe('StreamingDocumentWriter', () => {
             const error = new StreamingWriterError('Test error', {
                 totalProcessed: 100,
                 insertedCount: 100,
-                collidedCount: 0,
-                matchedCount: 0,
-                upsertedCount: 0,
                 flushCount: 2,
             });
 
@@ -1035,9 +1032,7 @@ describe('StreamingDocumentWriter', () => {
             const error = new StreamingWriterError('Test error', {
                 totalProcessed: 100,
                 insertedCount: 80,
-                collidedCount: 20,
-                matchedCount: 0,
-                upsertedCount: 0,
+                skippedCount: 20,
                 flushCount: 2,
             });
 
@@ -1050,17 +1045,15 @@ describe('StreamingDocumentWriter', () => {
         it('should format getStatsString for Overwrite strategy correctly', () => {
             const error = new StreamingWriterError('Test error', {
                 totalProcessed: 100,
-                insertedCount: 0,
-                collidedCount: 0,
-                matchedCount: 60,
-                upsertedCount: 40,
+                replacedCount: 60,
+                createdCount: 40,
                 flushCount: 2,
             });
 
             const statsString = error.getStatsString();
             expect(statsString).toContain('100 total');
-            expect(statsString).toContain('60 matched');
-            expect(statsString).toContain('40 upserted');
+            expect(statsString).toContain('60 replaced');
+            expect(statsString).toContain('40 created');
         });
     });
 
@@ -1077,6 +1070,90 @@ describe('StreamingDocumentWriter', () => {
             const constraints = writer.getBufferConstraints();
 
             expect(constraints.maxMemoryMB).toBe(24); // BUFFER_MEMORY_LIMIT_MB
+        });
+    });
+
+    // ==================== 13. Batch Size Boundaries ====================
+
+    describe('Batch Size Boundaries', () => {
+        it('should respect minimum batch size of 1', async () => {
+            // Inject multiple throttles to drive batch size down
+            writer.setErrorConfig({
+                errorType: 'throttle',
+                afterDocuments: 0, // Throttle immediately with no progress
+                partialProgress: 0,
+            });
+
+            const documents = createDocuments(100);
+            const stream = createDocumentStream(documents);
+
+            // First throttle should halve the batch size
+            // After multiple throttles, batch size should not go below 1
+            try {
+                await writer.streamDocuments(stream, {
+                    conflictResolutionStrategy: ConflictResolutionStrategy.Abort,
+                });
+            } catch {
+                // Expected to eventually fail after max retries
+            }
+
+            // Batch size should be at minimum of 1, not 0
+            expect(writer.getCurrentBatchSize()).toBeGreaterThanOrEqual(1);
+        });
+
+        it('should start with fast mode max batch size of 500', () => {
+            // Fast mode initial batch size is 500
+            expect(writer.getCurrentMode()).toBe('fast');
+            expect(writer.getCurrentBatchSize()).toBe(500);
+        });
+
+        it('should switch to RU-limited mode with smaller initial size after throttle', async () => {
+            // Trigger a throttle to switch to RU-limited mode
+            writer.setErrorConfig({
+                errorType: 'throttle',
+                afterDocuments: 50,
+                partialProgress: 50,
+            });
+
+            const documents = createDocuments(100);
+            const stream = createDocumentStream(documents);
+
+            await writer.streamDocuments(stream, {
+                conflictResolutionStrategy: ConflictResolutionStrategy.Abort,
+            });
+
+            expect(writer.getCurrentMode()).toBe('ru-limited');
+            // RU-limited mode should have smaller batch sizes
+            expect(writer.getCurrentBatchSize()).toBeLessThanOrEqual(1000);
+        });
+    });
+
+    // ==================== 14. Multiple Throttle Handling ====================
+
+    describe('Multiple Throttle Handling', () => {
+        it('should handle consecutive throttles without duplicating documents', async () => {
+            // Configure to throttle multiple times with partial progress
+            // The throttle will clear itself after the first successful recovery
+            writer.setErrorConfig({
+                errorType: 'throttle',
+                afterDocuments: 30,
+                partialProgress: 30,
+                writeBeforeThrottle: true,
+            });
+
+            const documents = createDocuments(200);
+            const stream = createDocumentStream(documents);
+
+            const result = await writer.streamDocuments(stream, {
+                conflictResolutionStrategy: ConflictResolutionStrategy.Abort,
+            });
+
+            // Should have processed all 200 documents exactly once
+            expect(result.totalProcessed).toBe(200);
+            expect(result.insertedCount).toBe(200);
+
+            // Storage should have exactly 200 documents (no duplicates)
+            expect(writer.getStorage().size).toBe(200);
         });
     });
 });

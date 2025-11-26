@@ -231,9 +231,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             if (context) {
                 context.telemetry.measurements.totalProcessedDocuments = result.totalProcessed;
                 context.telemetry.measurements.totalInsertedDocuments = result.insertedCount ?? 0;
-                context.telemetry.measurements.totalCollidedDocuments = result.collidedCount ?? 0;
-                context.telemetry.measurements.totalMatchedDocuments = result.matchedCount ?? 0;
-                context.telemetry.measurements.totalUpsertedDocuments = result.upsertedCount ?? 0;
+                context.telemetry.measurements.totalSkippedDocuments = result.skippedCount ?? 0;
+                context.telemetry.measurements.totalReplacedDocuments = result.replacedCount ?? 0;
+                context.telemetry.measurements.totalCreatedDocuments = result.createdCount ?? 0;
                 context.telemetry.measurements.bufferFlushCount = result.flushCount;
             }
 
@@ -248,9 +248,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                     context.telemetry.properties.errorDuringStreaming = 'true';
                     context.telemetry.measurements.totalProcessedDocuments = error.partialStats.totalProcessed;
                     context.telemetry.measurements.totalInsertedDocuments = error.partialStats.insertedCount ?? 0;
-                    context.telemetry.measurements.totalCollidedDocuments = error.partialStats.collidedCount ?? 0;
-                    context.telemetry.measurements.totalMatchedDocuments = error.partialStats.matchedCount ?? 0;
-                    context.telemetry.measurements.totalUpsertedDocuments = error.partialStats.upsertedCount ?? 0;
+                    context.telemetry.measurements.totalSkippedDocuments = error.partialStats.skippedCount ?? 0;
+                    context.telemetry.measurements.totalReplacedDocuments = error.partialStats.replacedCount ?? 0;
+                    context.telemetry.measurements.totalCreatedDocuments = error.partialStats.createdCount ?? 0;
                     context.telemetry.measurements.bufferFlushCount = error.partialStats.flushCount;
                 }
 
@@ -282,8 +282,8 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         totalProcessed: number;
         insertedCount?: number;
         skippedCount?: number;
-        matchedCount?: number;
-        upsertedCount?: number;
+        replacedCount?: number;
+        createdCount?: number;
     }): string {
         const parts: string[] = [];
 
@@ -297,11 +297,11 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         if ((stats.skippedCount ?? 0) > 0) {
             parts.push(vscode.l10n.t('{0} skipped', (stats.skippedCount ?? 0).toLocaleString()));
         }
-        if ((stats.matchedCount ?? 0) > 0) {
-            parts.push(vscode.l10n.t('{0} matched', (stats.matchedCount ?? 0).toLocaleString()));
+        if ((stats.replacedCount ?? 0) > 0) {
+            parts.push(vscode.l10n.t('{0} replaced', (stats.replacedCount ?? 0).toLocaleString()));
         }
-        if ((stats.upsertedCount ?? 0) > 0) {
-            parts.push(vscode.l10n.t('{0} upserted', (stats.upsertedCount ?? 0).toLocaleString()));
+        if ((stats.createdCount ?? 0) > 0) {
+            parts.push(vscode.l10n.t('{0} created', (stats.createdCount ?? 0).toLocaleString()));
         }
 
         return parts.join(', ');

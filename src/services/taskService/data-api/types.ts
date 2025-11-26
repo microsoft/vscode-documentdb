@@ -10,7 +10,6 @@
  */
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type DocumentOperationCounts } from './writerTypes';
 
 // =================================
 // PUBLIC INTERFACES
@@ -127,14 +126,37 @@ export interface EnsureTargetExistsResult {
 
 /**
  * Result of a streaming write operation.
- * Provides statistics for task telemetry.
+ * Provides statistics for task telemetry using semantic names.
+ *
+ * The counts are strategy-specific:
+ * - Skip: insertedCount + skippedCount
+ * - Abort: insertedCount + abortedCount
+ * - Overwrite: replacedCount + createdCount
+ * - GenerateNewIds: insertedCount only
  */
-export interface StreamWriteResult extends DocumentOperationCounts {
-    /** Total documents processed (inserted + skipped + matched + upserted) */
+export interface StreamWriteResult {
+    /** Total documents processed across all strategies */
     totalProcessed: number;
 
     /** Number of buffer flushes performed */
     flushCount: number;
+
+    // Strategy-specific counts (only relevant ones will be set)
+
+    /** Number of new documents inserted (Skip, Abort, GenerateNewIds strategies) */
+    insertedCount?: number;
+
+    /** Number of documents skipped due to conflicts (Skip strategy) */
+    skippedCount?: number;
+
+    /** Number of documents that caused abort (Abort strategy) */
+    abortedCount?: number;
+
+    /** Number of existing documents replaced/updated (Overwrite strategy) */
+    replacedCount?: number;
+
+    /** Number of new documents created via upsert (Overwrite strategy) */
+    createdCount?: number;
 }
 
 // =================================

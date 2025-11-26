@@ -13,6 +13,19 @@ import { type BatchWriteResult, type ErrorType, type PartialProgress } from '../
 import { StreamingDocumentWriter } from './StreamingDocumentWriter';
 
 /**
+ * Raw document counts extracted from MongoDB driver responses.
+ * Uses MongoDB-specific field names (internal use only).
+ */
+interface RawDocumentCounts {
+    processedCount: number;
+    insertedCount?: number;
+    matchedCount?: number;
+    modifiedCount?: number;
+    upsertedCount?: number;
+    collidedCount?: number;
+}
+
+/**
  * DocumentDB with MongoDB API implementation of StreamingDocumentWriter.
  *
  * This implementation supports Azure Cosmos DB for MongoDB (vCore and RU-based) as well as
@@ -136,7 +149,8 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
             return undefined;
         }
 
-        return this.extractDocumentCounts(error);
+        const rawCounts = this.extractRawDocumentCounts(error);
+        return this.translateToPartialProgress(rawCounts);
     }
 
     /**
@@ -186,21 +200,65 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
         }
 
         let insertedCount = 0;
+        let fallbackCollidedCount = 0;
+        const fallbackErrors: Array<{ documentId: string; error: Error }> = [];
+
         if (docsToInsert.length > 0) {
-            const insertResult = await this.client.insertDocuments(
-                this.databaseName,
-                this.collectionName,
-                docsToInsert,
-                true,
-            );
-            insertedCount = insertResult.insertedCount ?? 0;
+            try {
+                const insertResult = await this.client.insertDocuments(
+                    this.databaseName,
+                    this.collectionName,
+                    docsToInsert,
+                    true,
+                );
+                insertedCount = insertResult.insertedCount ?? 0;
+            } catch (error) {
+                // Fallback: Handle race condition conflicts during insert
+                // Another process may have inserted documents after our pre-filter check
+                if (isBulkWriteError(error)) {
+                    const writeErrors = this.extractWriteErrors(error);
+                    const duplicateErrors = writeErrors.filter((e) => e?.code === 11000);
+
+                    if (duplicateErrors.length > 0) {
+                        ext.outputChannel.debug(
+                            l10n.t(
+                                '[DocumentDbStreamingWriter] Fallback: {0} race condition conflicts detected during Skip insert',
+                                duplicateErrors.length.toString(),
+                            ),
+                        );
+
+                        // Extract counts from the error - some documents may have been inserted
+                        const rawCounts = this.extractRawDocumentCounts(error);
+                        insertedCount = rawCounts.insertedCount ?? 0;
+                        fallbackCollidedCount = duplicateErrors.length;
+
+                        // Build errors for the fallback conflicts
+                        for (const writeError of duplicateErrors) {
+                            const documentId = this.extractDocumentIdFromWriteError(writeError);
+                            fallbackErrors.push({
+                                documentId: documentId ?? '[unknown]',
+                                error: new Error(l10n.t('Document already exists (race condition, skipped)')),
+                            });
+                        }
+                    } else {
+                        // Non-duplicate bulk write error - re-throw
+                        throw error;
+                    }
+                } else {
+                    // Non-bulk write error - re-throw
+                    throw error;
+                }
+            }
         }
 
-        const collidedCount = conflictIds.length;
-        const errors = conflictIds.map((id) => ({
-            documentId: this.formatDocumentId(id),
-            error: new Error('Document already exists (skipped)'),
-        }));
+        const collidedCount = conflictIds.length + fallbackCollidedCount;
+        const errors = [
+            ...conflictIds.map((id) => ({
+                documentId: this.formatDocumentId(id),
+                error: new Error(l10n.t('Document already exists (skipped)')),
+            })),
+            ...fallbackErrors,
+        ];
 
         return {
             insertedCount,
@@ -281,7 +339,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                         l10n.t('[DocumentDbStreamingWriter] Handling expected conflicts in Abort strategy'),
                     );
 
-                    const details = this.extractDocumentCounts(error);
+                    const rawCounts = this.extractRawDocumentCounts(error);
                     const conflictErrors = writeErrors
                         .filter((e) => e?.code === 11000)
                         .map((writeError) => {
@@ -311,13 +369,14 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                         );
                     }
 
+                    // Return BatchWriteResult with raw MongoDB field names
                     return {
-                        processedCount: details.processedCount,
-                        insertedCount: details.insertedCount,
-                        matchedCount: details.matchedCount,
-                        modifiedCount: details.modifiedCount,
-                        upsertedCount: details.upsertedCount,
-                        collidedCount: details.collidedCount,
+                        processedCount: rawCounts.processedCount,
+                        insertedCount: rawCounts.insertedCount,
+                        matchedCount: rawCounts.matchedCount,
+                        modifiedCount: rawCounts.modifiedCount,
+                        upsertedCount: rawCounts.upsertedCount,
+                        collidedCount: rawCounts.collidedCount,
                         errors: conflictErrors,
                     };
                 }
@@ -399,9 +458,10 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
     }
 
     /**
-     * Extracts document operation counts from DocumentDB result or error objects.
+     * Extracts raw document operation counts from DocumentDB result or error objects.
+     * Returns MongoDB-specific field names for internal use.
      */
-    private extractDocumentCounts(resultOrError: unknown): PartialProgress {
+    private extractRawDocumentCounts(resultOrError: unknown): RawDocumentCounts {
         const topLevel = resultOrError as {
             insertedCount?: number;
             matchedCount?: number;
@@ -435,6 +495,19 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
             modifiedCount,
             upsertedCount,
             collidedCount,
+        };
+    }
+
+    /**
+     * Translates raw MongoDB counts to semantic PartialProgress names.
+     */
+    private translateToPartialProgress(raw: RawDocumentCounts): PartialProgress {
+        return {
+            processedCount: raw.processedCount,
+            insertedCount: raw.insertedCount,
+            skippedCount: raw.collidedCount, // collided = skipped for Skip strategy
+            replacedCount: raw.matchedCount, // matched = replaced for Overwrite
+            createdCount: raw.upsertedCount, // upserted = created for Overwrite
         };
     }
 
