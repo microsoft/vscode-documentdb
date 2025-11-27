@@ -11,7 +11,7 @@ import {
     isSkipResult,
     type PartialProgress,
     type StrategyBatchResult,
-} from '../writerTypes.internal';
+} from './writerTypes.internal';
 
 /**
  * Aggregated statistics tracker for streaming document write operations.

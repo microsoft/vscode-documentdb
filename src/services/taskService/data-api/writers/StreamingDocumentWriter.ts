@@ -12,6 +12,8 @@ import {
     type EnsureTargetExistsResult,
     type StreamWriteResult,
 } from '../types';
+import { BatchSizeAdapter } from './BatchSizeAdapter';
+import { RetryOrchestrator } from './RetryOrchestrator';
 import {
     type AbortBatchResult,
     type ErrorType,
@@ -21,9 +23,7 @@ import {
     type PartialProgress,
     type SkipBatchResult,
     type StrategyBatchResult,
-} from '../writerTypes.internal';
-import { BatchSizeAdapter } from './BatchSizeAdapter';
-import { RetryOrchestrator } from './RetryOrchestrator';
+} from './writerTypes.internal';
 import { WriteStats } from './WriteStats';
 
 /**

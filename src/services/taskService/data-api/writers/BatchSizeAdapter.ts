@@ -5,7 +5,7 @@
 
 import { l10n } from 'vscode';
 import { ext } from '../../../../extensionVariables';
-import { FAST_MODE, type OptimizationModeConfig, RU_LIMITED_MODE } from '../writerTypes.internal';
+import { FAST_MODE, type OptimizationModeConfig, RU_LIMITED_MODE } from './writerTypes.internal';
 
 /**
  * Configuration for batch size adaptation behavior.

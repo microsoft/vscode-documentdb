@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from '../types';
+import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter';
 import {
     type AbortBatchResult,
     type ErrorType,
@@ -13,8 +14,7 @@ import {
     type PartialProgress,
     type SkipBatchResult,
     type StrategyBatchResult,
-} from '../writerTypes.internal';
-import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter';
+} from './writerTypes.internal';
 
 // Mock extensionVariables (ext) module
 jest.mock('../../../../extensionVariables', () => ({

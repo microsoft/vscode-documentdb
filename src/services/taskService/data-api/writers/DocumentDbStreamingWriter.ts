@@ -9,6 +9,7 @@ import { l10n } from 'vscode';
 import { isBulkWriteError, type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { ext } from '../../../../extensionVariables';
 import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from '../types';
+import { StreamingDocumentWriter } from './StreamingDocumentWriter';
 import {
     type AbortBatchResult,
     type ErrorType,
@@ -17,8 +18,7 @@ import {
     type PartialProgress,
     type SkipBatchResult,
     type StrategyBatchResult,
-} from '../writerTypes.internal';
-import { StreamingDocumentWriter } from './StreamingDocumentWriter';
+} from './writerTypes.internal';
 
 /**
  * Raw document counts extracted from MongoDB driver responses.
