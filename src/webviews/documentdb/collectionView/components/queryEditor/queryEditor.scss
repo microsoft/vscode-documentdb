@@ -1,0 +1,182 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+@use '../../../../index.scss';
+
+/**
+ * Query Editor Component
+ *
+ * Overall Structure:
+ * ┌────────────────────────────────────────────────┐
+ * │ Filter Row:                                    │
+ * │ ┌──────────────────────────┬───────────────┐  │
+ * │ │ Filter (Monaco Adaptive) │ Toggle Button │  │
+ * │ └──────────────────────────┴───────────────┘  │
+ * │                                                │
+ * │ Enhanced Input Area (when toggled on):        │
+ * │ ┌──────────────────────────────────────────┐  │
+ * │ │ Row 1: Project (full width)              │  │
+ * │ ├──────────────────────┬──────┬────────────┤  │
+ * │ │ Row 2: Sort          │ Skip │ Limit      │  │
+ * │ │    (flexible)        │(10ch)│ (10ch)     │  │
+ * │ └──────────────────────┴──────┴────────────┘  │
+ * └────────────────────────────────────────────────┘
+ */
+.queryEditor {
+    display: flex;
+    flex-direction: column;
+    row-gap: 10px;
+    width: 100%; // Ensure full width
+    max-width: 100%; // Prevent overflow
+
+    /**
+     * AI Row
+     *
+     * Layout: Single Input with icon decorations
+     * - Shows/hides with Collapse animation
+     */
+    .aiRow {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+
+        /**
+         * AI Active State Override
+         *
+         * Overrides the bottom border with an animated gradient.
+         * Applied when the AI input is actively processing (e.g., after pressing Enter).
+         *
+         * DOM Structure:
+         * .aiRow.ai-active
+         *   └─ span.fui-Input (wrapper with border/background)
+         *      ├─ input.fui-Input__input (actual input element)
+         *      └─ span.fui-Input__contentAfter (button container)
+         *
+         * Strategy:
+         * - Override Fluent UI's ::after pseudo-element (used for focus border)
+         * - Replace solid color with animated gradient
+         * - Keep the 2px height and positioning from original
+         * - Use simpler gradient animation (left-to-right sweep)
+         */
+        &.ai-active {
+            .fui-Input {
+                position: relative;
+                border-bottom-color: transparent !important;
+                border-color: transparent !important;
+
+                &::after {
+                    opacity: 0 !important;
+                    border-bottom: none !important;
+                    background: transparent !important;
+                    height: 3px !important;
+                    transform: none !important;
+                    transition: none !important;
+                }
+            }
+        }
+    }
+
+    /**
+     * Filter Row
+     *
+     * Layout: [Filter Field (flexible)] [Enhanced Toggle] [AI Toggle]
+     * - Filter field takes all available space
+     * - Toggle buttons are fixed size on the right
+     */
+    .filterRow {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 10px;
+        width: 100%; // Ensure full width
+        max-width: 100%; // Prevent overflow
+
+        .filterField {
+            flex: 1 1 0%; // Grow to fill space, can shrink, start from 0
+            min-width: 0; // Allow shrinking below content size
+            display: flex;
+            flex-direction: column;
+        }
+
+        .queryEditorActions,
+        .aiToggle {
+            flex: 0 0 auto; // Don't grow or shrink, size based on content
+            display: flex;
+            gap: 8px;
+            padding-top: 2px; // Align with monaco container
+        }
+    }
+
+    /**
+     * Enhanced Input Area Container
+     *
+     * Structure (Flex Layout):
+     * ┌───────────────────────────────────────┐
+     * │ Row 1: Project (full width)           │
+     * ├───────────────────┬──────┬────────────┤
+     * │ Row 2: Sort       │ Skip │ Limit      │
+     * │    (flexible)     │(10ch)│ (10ch)     │
+     * └───────────────────┴──────┴────────────┘
+     *
+     * Layout:
+     * - Row 1: Project field takes full width
+     * - Row 2: Sort takes remaining space, Skip and Limit are fixed width
+     */
+    .enhancedInputArea {
+        // Flex behavior within parent (queryEditor is a flex container)
+        flex: 0 1 auto; // Don't grow, can shrink, auto size based on content
+
+        // Flexbox configuration (vertical stacking of rows)
+        display: flex;
+        flex-direction: column;
+        row-gap: 10px;
+
+        // By creating a new stacking context with a z-index, we elevate this entire
+        // container above other elements on the page that exist in the root stacking context.
+        // This ensures that any child elements, including the "trapped" Monaco autocomplete
+        // widgets, will appear on top of elements like the TabList.
+        z-index: 1;
+
+        // Overflow prevention
+        width: 100%; // Ensure full width
+        max-width: 100%; // Prevent overflow
+        min-width: 0; // Allow shrinking below content size
+
+        // Row 1: Project field (full width)
+        // Row 2: Sort + Skip + Limit (horizontal layout)
+        .fieldRow {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            width: 100%;
+            min-width: 0; // Allow shrinking
+
+            .field {
+                display: flex;
+                flex-direction: column;
+                row-gap: 4px;
+                min-width: 0; // Allow shrinking below content size
+
+                // Wide fields (Project, Sort) - take available space
+                &.fieldWide {
+                    flex: 1 1 0%; // Grow to fill space, can shrink
+                }
+
+                // Narrow fields (Skip, Limit) - fixed width ~10 characters
+                &.fieldNarrow {
+                    flex: 0 0 auto; // Don't grow or shrink
+                    width: 10ch; // Fixed width
+                    row-gap: 5px; // Align with monaco container
+
+                    input {
+                        min-width: 0; // Allow input to shrink if needed
+                        width: 100%; // Take full width of parent
+                        max-width: 100%; // Don't exceed parent
+                    }
+                }
+            }
+        }
+    }
+}

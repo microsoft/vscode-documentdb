@@ -184,6 +184,10 @@ module.exports = (env, { mode }) => {
                         from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/MongoClusters.svg',
                         to: 'resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/MongoClusters.svg',
                     },
+                    {
+                        from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/AzureCosmosDb.svg',
+                        to: 'resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/AzureCosmosDb.svg',
+                    },
                 ],
             }),
         ].filter(Boolean),

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 
 export interface UpdateCredentialsWizardContext extends IActionContext {
@@ -13,8 +14,9 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
 
     availableAuthenticationMethods: AuthMethodId[];
 
-    // user input
-    username?: string;
-    password?: string;
+    // structured authentication configurations
+    nativeAuthConfig?: NativeAuthConfig;
+    entraIdAuthConfig?: EntraIdAuthConfig;
+
     selectedAuthenticationMethod?: AuthMethodId;
 }

@@ -13,19 +13,26 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizar
         const passwordTemp = await context.ui.showInputBox({
             prompt: l10n.t(
                 'You need to provide the password for "{username}" in order to continue. Your password will not be stored.',
-                { username: context.selectedUserName ?? '' },
+                { username: context.nativeAuthConfig?.connectionUser ?? context.selectedUserName ?? '' },
             ),
             placeHolder: l10n.t('Password for {username_at_resource}', {
-                username_at_resource: `${context.selectedUserName}@${context.resourceName}`,
+                username_at_resource: `${context.nativeAuthConfig?.connectionUser ?? context.selectedUserName}@${context.resourceName}`,
             }),
             title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
-            value: context.password ?? '',
+            value: context.nativeAuthConfig?.connectionPassword ?? context.password ?? '',
             password: true,
             ignoreFocusOut: true,
         });
 
-        context.password = passwordTemp.trim();
-        context.valuesToMask.push(context.password);
+        const trimmedPassword = passwordTemp.trim();
+
+        // Update both structured config and legacy field
+        context.nativeAuthConfig = {
+            connectionUser: context.nativeAuthConfig?.connectionUser ?? context.selectedUserName ?? '',
+            connectionPassword: trimmedPassword,
+        };
+        context.password = trimmedPassword;
+        context.valuesToMask.push(trimmedPassword);
 
         context.isPasswordUpdated = true;
     }

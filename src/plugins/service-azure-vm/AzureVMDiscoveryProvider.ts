@@ -10,11 +10,11 @@ import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
+import { SelectSubscriptionStep } from '../api-shared/azure/wizard/SelectSubscriptionStep';
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
 import { configureVmFilter } from './discovery-tree/configureVmFilterWizard';
 import { AzureVMExecuteStep } from './discovery-wizard/AzureVMExecuteStep';
 import { SelectPortStep } from './discovery-wizard/SelectPortStep';
-import { SelectSubscriptionStep } from './discovery-wizard/SelectSubscriptionStep';
 import { SelectTagStep } from './discovery-wizard/SelectTagStep';
 import { SelectVMStep } from './discovery-wizard/SelectVMStep';
 
@@ -68,6 +68,27 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
         if (node instanceof AzureServiceRootItem) {
             await configureVmFilter(context, this.azureSubscriptionProvider);
             ext.discoveryBranchDataProvider.refresh(node);
+        }
+    }
+
+    async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {
+        // Add telemetry for credential configuration activation
+        context.telemetry.properties.credentialConfigActivated = 'true';
+        context.telemetry.properties.discoveryProviderId = this.id;
+        context.telemetry.properties.nodeProvided = node ? 'true' : 'false';
+
+        if (!node || node instanceof AzureServiceRootItem) {
+            // Use the new Azure credentials configuration wizard
+            const { configureAzureCredentials } = await import('../api-shared/azure/credentialsManagement');
+            await configureAzureCredentials(context, this.azureSubscriptionProvider, node);
+
+            if (node) {
+                // Tree context: refresh specific node
+                ext.discoveryBranchDataProvider.refresh(node);
+            } else {
+                // Wizard context: refresh entire discovery tree
+                ext.discoveryBranchDataProvider.refresh();
+            }
         }
     }
 }

@@ -14,7 +14,7 @@ import { UsageImpact } from '../../../utils/surveyTypes';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
-import { MonacoEditor } from '../../MonacoEditor';
+import { MonacoEditor } from '../../components/MonacoEditor';
 import { ToolbarDocuments } from './components/toolbarDocuments';
 import { type DocumentsViewWebviewConfigurationType } from './documentsViewController';
 import './documentView.scss';

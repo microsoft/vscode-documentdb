@@ -1,0 +1,26 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.inputWithProgress {
+    position: relative;
+    width: 100%;
+
+    &.progress-active {
+        :global(.fui-Input) {
+            position: relative;
+            border-bottom-color: transparent !important;
+            border-color: transparent !important;
+
+            &::after {
+                opacity: 0 !important;
+                border-bottom: none !important;
+                background: transparent !important;
+                height: 3px !important;
+                transform: none !important;
+                transition: none !important;
+            }
+        }
+    }
+}

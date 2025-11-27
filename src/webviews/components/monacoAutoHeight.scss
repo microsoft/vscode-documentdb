@@ -1,0 +1,26 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+@use '../index.scss';
+
+/**
+ * Monaco Editor Auto Height Container
+ *
+ * Applies Fluent UI Input styling to Monaco editor container
+ * for visual consistency with other input components.
+ */
+.monacoAutoHeightContainer {
+    // Apply complete Fluent UI input styling
+    @include index.fluent-input;
+
+    // Monaco-specific tweaks: adjust right padding for scrollbar
+    padding-right: 4px;
+
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: 0px;
+
+    border-width: 2px;
+}

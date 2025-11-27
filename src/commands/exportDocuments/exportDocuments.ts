@@ -7,7 +7,7 @@ import { callWithTelemetryAndErrorHandling, type IActionContext, parseError } fr
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ClustersClient, type FindQueryParams } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { appendToFile } from '../../utils/fs/appendToFile';
@@ -22,7 +22,7 @@ export async function exportEntireCollection(context: IActionContext, node?: Col
 export async function exportQueryResults(
     context: IActionContext,
     node?: CollectionItem,
-    props?: { queryText?: string; source?: string },
+    props?: { queryText?: string; queryParams?: FindQueryParams; source?: string },
 ): Promise<void> {
     context.telemetry.properties.experience = node?.experience.api;
 
@@ -42,11 +42,17 @@ export async function exportQueryResults(
     const client = await ClustersClient.getClient(node.cluster.id);
 
     const docStreamAbortController = new AbortController();
-    const docStream = client.streamDocuments(
+
+    // Convert legacy queryText to queryParams if needed
+    const queryParams: FindQueryParams = props?.queryParams ?? {
+        filter: props?.queryText ?? '{}',
+    };
+
+    const docStream = client.streamDocumentsWithQuery(
         node.databaseInfo.name,
         node.collectionInfo.name,
         docStreamAbortController.signal,
-        props?.queryText,
+        queryParams,
     );
 
     const filePath = targetUri.fsPath; // Convert `vscode.Uri` to a regular file path
@@ -67,7 +73,8 @@ export async function exportQueryResults(
         });
 
         actionContext.telemetry.properties.source = props?.source;
-        actionContext.telemetry.measurements.queryLength = props?.queryText?.length;
+        actionContext.telemetry.measurements.queryLength =
+            props?.queryParams?.filter?.length ?? props?.queryText?.length;
         actionContext.telemetry.measurements.documentCount = documentCount;
     });
 

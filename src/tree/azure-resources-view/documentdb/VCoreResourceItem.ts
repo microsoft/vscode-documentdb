@@ -13,6 +13,7 @@ import {
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { getThemeAgnosticIconURI } from '../../../constants';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
@@ -27,20 +28,11 @@ import {
     getClusterInformationFromAzure,
 } from '../../../plugins/service-azure-mongo-vcore/utils/clusterHelpers';
 import { nonNullValue } from '../../../utils/nonNull';
-import { ClusterItemBase, type ClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../documentdb/ClusterModel';
 
 export class VCoreResourceItem extends ClusterItemBase {
-    iconPath = vscode.Uri.joinPath(
-        ext.context.extensionUri,
-        'resources',
-        'from_node_modules',
-        '@microsoft',
-        'vscode-azext-azureutils',
-        'resources',
-        'azureIcons',
-        'MongoClusters.svg',
-    );
+    iconPath = getThemeAgnosticIconURI('AzureDocumentDb.svg');
 
     constructor(
         readonly subscription: AzureSubscription,
@@ -49,7 +41,7 @@ export class VCoreResourceItem extends ClusterItemBase {
         super(cluster);
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'documentdb';
@@ -62,7 +54,7 @@ export class VCoreResourceItem extends ClusterItemBase {
                 this.cluster.name,
             );
 
-            return extractCredentialsFromCluster(context, clusterInformation);
+            return extractCredentialsFromCluster(context, clusterInformation, this.subscription);
         });
     }
 
@@ -96,12 +88,12 @@ export class VCoreResourceItem extends ClusterItemBase {
 
             // Get and validate cluster information
             const clusterInformation = await this.getClusterInformation(context);
-            const credentials = extractCredentialsFromCluster(context, clusterInformation);
+            const credentials = extractCredentialsFromCluster(context, clusterInformation, this.subscription);
 
             // Prepare wizard context
             const wizardContext: AuthenticateWizardContext = {
                 ...context,
-                adminUserName: credentials.connectionUser,
+                adminUserName: credentials.nativeAuthConfig?.connectionUser,
                 resourceName: this.cluster.name,
                 availableAuthMethods: credentials.availableAuthMethods,
             };
@@ -117,6 +109,16 @@ export class VCoreResourceItem extends ClusterItemBase {
             }
 
             // Cache credentials and attempt connection
+            const nativeAuthConfig =
+                wizardContext.selectedUserName || wizardContext.password
+                    ? {
+                          connectionUser:
+                              wizardContext.nativeAuthConfig?.connectionUser ?? wizardContext.selectedUserName ?? '',
+                          connectionPassword:
+                              wizardContext.nativeAuthConfig?.connectionPassword ?? wizardContext.password ?? '',
+                      }
+                    : wizardContext.nativeAuthConfig;
+
             CredentialCache.setAuthCredentials(
                 this.id,
                 nonNullValue(
@@ -125,8 +127,9 @@ export class VCoreResourceItem extends ClusterItemBase {
                     'VCoreResourceItem.ts',
                 ),
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'VCoreResourceItem.ts'),
-                wizardContext.selectedUserName,
-                wizardContext.password,
+                nativeAuthConfig,
+                undefined,
+                credentials.entraIdAuthConfig,
             );
 
             switch (wizardContext.selectedAuthMethod) {

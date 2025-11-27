@@ -68,7 +68,7 @@ This document provides comprehensive guidelines and context for GitHub Copilot t
 - Use l10n for any user-facing strings with `vscode.l10n.t()`.
 - Use `npm run prettier-fix` to format your code before committing.
 - Use `npm run lint` to check for linting errors.
-- Use `npm run build` to ensure the project builds successfully (do not use `npm run compile`).
+- Use `npm run build` to ensure the project builds successfully.
 - Use `npm run l10n` to update localization files in case you change any user-facing strings.
 - Ensure TypeScript compilation passes without errors.
 

@@ -11,32 +11,33 @@ import {
     MenuTrigger,
     Toolbar,
     ToolbarButton,
-    ToolbarDivider,
-    Tooltip,
+    ToolbarToggleButton,
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
     ArrowExportRegular,
     ArrowImportRegular,
-    CommentCheckmarkRegular,
-    EmojiSmileSlightRegular,
     PlayRegular,
+    SparkleFilled,
+    SparkleRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
+import { ENABLE_AI_QUERY_GENERATION } from '../../constants';
+import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
 export const ToolbarMainView = (): JSX.Element => {
-    const { trpcClient } = useTrpcClient();
+    // const { trpcClient } = useTrpcClient();
 
     return (
         <>
             <ToolbarQueryOperations />
             <ToolbarDataOperations />
-            <ToolbarDivider />
-            <Menu>
+            {/* <ToolbarDivider /> */}
+            {/* <Menu>
                 <MenuTrigger>
                     <Tooltip content={l10n.t('Provide Feedback')} relationship="description" withArrow>
                         <ToolbarButton
@@ -61,7 +62,7 @@ export const ToolbarMainView = (): JSX.Element => {
                         </MenuItem>
                     </MenuList>
                 </MenuPopover>
-            </Menu>
+            </Menu> */}
         </>
     );
 };
@@ -73,6 +74,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
     const { trpcClient } = useTrpcClient();
 
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
+    const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
     const handleExecuteQuery = () => {
         // return to the root level
@@ -84,11 +86,28 @@ const ToolbarQueryOperations = (): JSX.Element => {
             },
         }));
 
-        // execute the query
-        const queryContent = currentContext.queryEditor?.getCurrentContent() ?? '';
+        // execute the query - get all values from the query editor at once
+        const query = currentContext.queryEditor?.getCurrentQuery() ?? {
+            filter: '{  }',
+            project: '{  }',
+            sort: '{  }',
+            skip: 0,
+            limit: 0,
+        };
+
         setCurrentContext((prev) => ({
             ...prev,
-            currentQueryDefinition: { ...prev.currentQueryDefinition, queryText: queryContent, pageNumber: 1 },
+            activeQuery: {
+                ...prev.activeQuery,
+                queryText: query.filter, // deprecated: kept in sync with filter for backward compatibility
+                filter: query.filter,
+                project: query.project,
+                sort: query.sort,
+                skip: query.skip,
+                limit: query.limit,
+                pageNumber: 1,
+                executionIntent: 'initial',
+            },
         }));
 
         trpcClient.common.reportEvent
@@ -98,7 +117,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
                     ui: 'button',
                 },
                 measurements: {
-                    queryLength: queryContent.length,
+                    queryLength: query.filter.length,
                 },
             })
             .catch((error) => {
@@ -110,7 +129,10 @@ const ToolbarQueryOperations = (): JSX.Element => {
         // basically, do not modify the query at all, do not use the input from the editor
         setCurrentContext((prev) => ({
             ...prev,
-            currentQueryDefinition: { ...prev.currentQueryDefinition },
+            activeQuery: {
+                ...prev.activeQuery,
+                executionIntent: 'refresh',
+            },
         }));
 
         trpcClient.common.reportEvent
@@ -121,9 +143,9 @@ const ToolbarQueryOperations = (): JSX.Element => {
                     view: currentContext.currentView,
                 },
                 measurements: {
-                    page: currentContext.currentQueryDefinition.pageNumber,
-                    pageSize: currentContext.currentQueryDefinition.pageSize,
-                    queryLength: currentContext.currentQueryDefinition.queryText.length,
+                    page: currentContext.activeQuery.pageNumber,
+                    pageSize: currentContext.activeQuery.pageSize,
+                    queryLength: currentContext.activeQuery.queryText.length,
                 },
             })
             .catch((error) => {
@@ -131,8 +153,27 @@ const ToolbarQueryOperations = (): JSX.Element => {
             });
     };
 
+    const checkedValues = {
+        aiToggle: currentContext.isAiRowVisible ? ['copilot'] : [],
+    };
+
+    const handleCheckedValueChange: React.ComponentProps<typeof Toolbar>['onCheckedValueChange'] = (
+        _e,
+        { name, checkedItems },
+    ) => {
+        if (name === 'aiToggle') {
+            setCurrentContext((prev) => ({
+                ...prev,
+                isAiRowVisible: checkedItems.includes('copilot'),
+            }));
+
+            // Temporarily hide scrollbars during the transition to improve UX responsiveness
+            hideScrollbarsTemporarily();
+        }
+    };
+
     return (
-        <Toolbar size="small">
+        <Toolbar size="small" checkedValues={checkedValues} onCheckedValueChange={handleCheckedValueChange}>
             <ToolbarButton
                 aria-label={l10n.t('Execute the find query')}
                 disabled={currentContext.isLoading}
@@ -144,6 +185,21 @@ const ToolbarQueryOperations = (): JSX.Element => {
             </ToolbarButton>
 
             <ToolbarDividerTransparent />
+
+            {ENABLE_AI_QUERY_GENERATION && (
+                <>
+                    <ToolbarToggleButton
+                        appearance="subtle"
+                        aria-label={l10n.t('Generate query with AI')}
+                        icon={currentContext.isAiRowVisible ? <SparkleFilled /> : <SparkleRegular />}
+                        name="aiToggle"
+                        value="copilot"
+                    >
+                        {l10n.t('Generate')}
+                    </ToolbarToggleButton>
+                    <ToolbarDividerTransparent />
+                </>
+            )}
 
             <ToolbarButton
                 aria-label={l10n.t('Refresh current view')}
@@ -166,12 +222,22 @@ const ToolbarDataOperations = (): JSX.Element => {
     };
 
     const handleExportEntireCollection = () => {
-        void trpcClient.mongoClusters.collectionView.exportDocuments.query({ query: '{}' });
+        void trpcClient.mongoClusters.collectionView.exportDocuments.query({
+            filter: '{}',
+            project: undefined,
+            sort: undefined,
+            skip: undefined,
+            limit: undefined,
+        });
     };
 
     const handleExportQueryResults = () => {
         void trpcClient.mongoClusters.collectionView.exportDocuments.query({
-            query: currentContext.currentQueryDefinition.queryText,
+            filter: currentContext.activeQuery.filter,
+            project: currentContext.activeQuery.project,
+            sort: currentContext.activeQuery.sort,
+            skip: currentContext.activeQuery.skip,
+            limit: currentContext.activeQuery.limit,
         });
     };
 

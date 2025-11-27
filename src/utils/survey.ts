@@ -18,7 +18,7 @@ const SurveyConfig = {
     },
     settings: {
         DEBUG_ALWAYS_PROMPT: false, // Forces survey prompt regardless of conditions
-        DISABLE_SURVEY: false, // Completely disables survey functionality
+        DISABLE_SURVEY: true, // Completely disables survey functionality
         PROBABILITY: 1, // Probability to become candidate (0-1), Azure Tools uses 0.15
         A_B_TEST_SELECTION: 1, // change this value to adjust the candidate selection (e.g. 0.50 for 50% of users)
         PROMPT_ENGLISH_ONLY: false, // Whether to limit survey to English locales
@@ -242,7 +242,7 @@ async function initSurvey(): Promise<void> {
             try {
                 // Deterministic machine ID selection using MD5 (faster than SHA-256)
                 // MD5 is sufficient for non-security random distribution needs
-                const buffer = crypto.createHash('md5').update(env.machineId).digest();
+                const buffer = crypto.createHash('md5').update(env.machineId).digest(); // CodeQL [SM04514] MD5 is used for deterministic machine ID selection and not for any cryptographic security purposes.
 
                 // Read a 32-bit unsigned integer from the buffer directly
                 // (Using the first 4 bytes gives a full 32-bit range)

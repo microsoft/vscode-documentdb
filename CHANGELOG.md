@@ -1,5 +1,53 @@
 # Change Log
 
+## 0.6.1
+
+### New Features & Improvements
+
+- **Feedback Optimization**: Introduces privacy consent and feedback signal controls for the Query Insights feature, primarily to ensure compliance with organizational data protection requirements and user telemetry settings. It also disables survey functionality and refines the feedback dialog UI. [#392](https://github.com/microsoft/vscode-documentdb/pull/392)
+
+### Fixes
+
+- **Privacy Policy Link**: Updated the outdated privacy policy link in the README to the current Microsoft privacy statement URL. [#388](https://github.com/microsoft/vscode-documentdb/pull/388)
+
+## 0.6.0
+
+### New Features & Improvements
+
+- **Query Insights with Performance Advisor**: Introduces a new "Query Insights" tab that provides a three-stage analysis of query performance. This includes a static query plan, detailed execution statistics, and AI-powered recommendations from GitHub Copilot to help understand performance bottlenecks and optimize slow queries.
+- **Improved Query Specification**: The query editor now supports `projection`, `sort`, `skip`, and `limit` parameters, in addition to `filter`. Autocompletion is also enabled for `projection` and `sort` fields.
+- **Index Management from the Tree View**: Users can now `drop`, `hide`, and `unhide` indexes directly from the context menu in the Connections View.
+- **Azure Cosmos DB for MongoDB (vCore)** is now **Azure DocumentDB**: Renamed the service in the UI and in the documentation.
+
+### Fixes
+
+- **UI Element Visibility**: Fixed issues where the autocomplete list in the query editor and tooltips in tree/table views could be hidden by other UI elements.
+
+## 0.5.2
+
+### New Features & Improvements
+
+- **Updated Migration API for Integrations**: This release introduces API versioning for the DocumentDB extension API and adds support for a new, more robust v0.3.0 API. The changes update documentation, interfaces, and implementation to reflect the new API version, including stricter provider registration and context validation. The migration provider workflow and usage examples have been clarified, and deprecated API versions are documented. Additional improvements include dependency updates, better credential handling, and minor localization and client registration changes. [#321](https://github.com/microsoft/vscode-documentdb/issues/321), [#322](https://github.com/microsoft/vscode-documentdb/pull/322)
+
+## 0.5.1
+
+### Fixes
+
+- **Connection String Parsing**: Resolved an issue where connection strings containing special characters (e.g., `@`) in query parameters, such as those from Azure Cosmos DB (`appName=@myaccount@`), would fail to parse. The connection string parser now properly sanitizes query parameters before parsing, ensuring reliable connections. [#314](https://github.com/microsoft/vscode-documentdb/issues/314), [#316](https://github.com/microsoft/vscode-documentdb/pull/316)
+
+## 0.5.0
+
+### New Features & Improvements
+
+- **Enhanced Microsoft Entra ID Support**: Overhauled Microsoft Entra ID integration for Azure Cosmos DB for MongoDB (vCore) to fully support multi-account and multi-tenant environments, enabling uninterrupted workflows for developers working across different organizations. This includes multi-account management and multi-tenant filtering. [#277](https://github.com/microsoft/vscode-documentdb/pull/277), [#285](https://github.com/microsoft/vscode-documentdb/issues/285), [#284](https://github.com/microsoft/vscode-documentdb/issues/284), [#265](https://github.com/microsoft/vscode-documentdb/issues/265), [#243](https://github.com/microsoft/vscode-documentdb/issues/243)
+- **New "Help and Feedback" View**: Added a new view to the extension sidebar, providing a central place to access documentation, see the changelog, report issues, and request features. [#289](https://github.com/microsoft/vscode-documentdb/pull/289)
+
+### Fixes
+
+- **Password Re-entry on Shell Launch**: Fixed a regression where users with saved credentials were still prompted for a password when launching the shell. [#285](https://github.com/microsoft/vscode-documentdb/issues/285)
+- **Tenant Information in Service Discovery**: Resolved an issue where the extension would fail to respect the tenant context when interacting with Azure resources from a non-default tenant. [#276](https://github.com/microsoft/vscode-documentdb/issues/276)
+- **Connection Authentication Update**: Corrected a failure that occurred when updating a connection's authentication method from Entra ID to a username/password. [#284](https://github.com/microsoft/vscode-documentdb/issues/284)
+
 ## 0.4.1
 
 ### Improvement

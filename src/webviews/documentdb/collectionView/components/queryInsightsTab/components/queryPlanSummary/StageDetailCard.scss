@@ -1,0 +1,64 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+@use '../../queryInsights.scss' as *;
+
+.stage-detail-card {
+    display: flex;
+    flex-direction: column;
+
+    .stage-detail-card-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .stage-detail-card-description {
+        color: var(--vscode-descriptionForeground);
+    }
+
+    .cellLabel {
+        @extend .baseDataHeader;
+    }
+
+    .cellValue {
+        font-size: 12px;
+        font-weight: 400;
+    }
+
+    // ==================
+    // Primary metrics: Bordered grid cells
+    // ==================
+    .primary-metrics-bordered-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+
+        .primary-metric-grid-cell {
+            display: flex;
+            flex-direction: column;
+
+            .cellLabel {
+                display: inline;
+            }
+        }
+    }
+
+    // ==================
+    // Optional metrics: Inline badges
+    // ==================
+    .metrics-inline-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+
+        .badge-label {
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .badge-value {
+            color: var(--vscode-foreground);
+        }
+    }
+}

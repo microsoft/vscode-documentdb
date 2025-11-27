@@ -25,7 +25,7 @@ import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/Provi
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
-import { ClusterItemBase, type ClusterCredentials } from '../documentdb/ClusterItemBase';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 
@@ -41,7 +41,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
         return this.cluster.storageId;
     }
 
-    public async getCredentials(): Promise<ClusterCredentials | undefined> {
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         const connectionType = this.cluster.emulatorConfiguration?.isEmulator
             ? ConnectionType.Emulators
             : ConnectionType.Clusters;
@@ -53,10 +53,16 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
-            connectionUser: connectionCredentials.secrets.userName,
-            connectionPassword: connectionCredentials.secrets.password,
             availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
             selectedAuthMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
+
+            // Structured auth configurations
+            nativeAuthConfig: connectionCredentials.secrets.nativeAuthConfig,
+            entraIdAuthConfig: connectionCredentials.secrets.entraIdAuthConfig
+                ? {
+                      tenantId: connectionCredentials.secrets.entraIdAuthConfig.tenantId,
+                  }
+                : undefined,
         };
     }
 
@@ -87,8 +93,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
-            let username: string | undefined = connectionCredentials.secrets.userName;
-            let password: string | undefined = connectionCredentials.secrets.password;
+            // Use nativeAuthConfig for credentials
+            let username: string | undefined = connectionCredentials.secrets.nativeAuthConfig?.connectionUser;
+            let password: string | undefined = connectionCredentials.secrets.nativeAuthConfig?.connectionPassword;
             let authMethod: AuthMethodId | undefined = authMethodFromString(
                 connectionCredentials.properties.selectedAuthMethod,
             );
@@ -153,8 +160,14 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         connection.properties.selectedAuthMethod = authMethod;
                         connection.secrets = {
                             connectionString: connectionString.toString(),
-                            userName: username,
-                            password: password,
+                            // Populate nativeAuthConfig configuration
+                            nativeAuthConfig:
+                                authMethod === AuthMethodId.NativeAuth && (username || password)
+                                    ? {
+                                          connectionUser: username ?? '',
+                                          connectionPassword: password ?? '',
+                                      }
+                                    : undefined,
                         };
                         try {
                             await ConnectionStorageService.save(connectionType, connection, true);
@@ -194,9 +207,14 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                 this.id,
                 authMethod,
                 connectionString.toString(),
-                username,
-                password,
+                username && password
+                    ? {
+                          connectionUser: username,
+                          connectionPassword: password,
+                      }
+                    : undefined,
                 this.cluster.emulatorConfiguration, // workspace items can potentially be connecting to an emulator, so we always pass it
+                connectionCredentials.secrets.entraIdAuthConfig,
             );
 
             let clustersClient: ClustersClient;
