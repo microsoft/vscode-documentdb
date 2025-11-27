@@ -12,6 +12,7 @@ import {
     type GenerateNewIdsBatchResult,
     type OverwriteBatchResult,
     type PartialProgress,
+    type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
 } from './writerTypes.internal';
@@ -63,6 +64,12 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
     // Store partial progress from last error (preserved after errorConfig is cleared)
     private lastPartialProgress?: number;
 
+    // Enable pre-filtering for Skip strategy (simulates real behavior)
+    private preFilterEnabled: boolean = false;
+
+    // Callback to inject documents between pre-filter and write (for race condition tests)
+    private onAfterPreFilterCallback?: () => void;
+
     constructor(databaseName: string = 'testdb', collectionName: string = 'testcollection') {
         super(databaseName, collectionName);
     }
@@ -107,6 +114,24 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
 
     public getBufferConstraints(): { optimalDocumentCount: number; maxMemoryMB: number } {
         return this.batchSizeAdapter.getBufferConstraints();
+    }
+
+    /**
+     * Enable pre-filtering for Skip strategy.
+     * When enabled, preFilterForSkipStrategy will query storage for existing IDs
+     * before the write, simulating real DocumentDB behavior.
+     */
+    public enablePreFiltering(): void {
+        this.preFilterEnabled = true;
+    }
+
+    /**
+     * Set a callback that will be invoked after pre-filtering but before writing.
+     * This allows tests to inject documents into storage to simulate race conditions
+     * where documents appear in the target after pre-filter but before insert.
+     */
+    public setAfterPreFilterCallback(callback: () => void): void {
+        this.onAfterPreFilterCallback = callback;
     }
 
     // Abstract method implementations
@@ -163,6 +188,58 @@ class MockStreamingWriter extends StreamingDocumentWriter<string> {
             };
         }
         return undefined;
+    }
+
+    /**
+     * Pre-filter implementation for Skip strategy.
+     * Queries storage for existing IDs and filters them out before write.
+     * Invokes onAfterPreFilterCallback after filtering to allow race condition simulation.
+     */
+    protected override async preFilterForSkipStrategy(
+        documents: DocumentDetails[],
+        _actionContext?: IActionContext,
+    ): Promise<PreFilterResult<string> | undefined> {
+        if (!this.preFilterEnabled) {
+            return undefined;
+        }
+
+        // Query storage for existing IDs (simulates real DB query)
+        const existingIds: string[] = [];
+        const docsToInsert: DocumentDetails[] = [];
+
+        for (const doc of documents) {
+            const docId = doc.id as string;
+            if (this.storage.has(docId)) {
+                existingIds.push(docId);
+            } else {
+                docsToInsert.push(doc);
+            }
+        }
+
+        // After pre-filter, invoke callback to allow race condition simulation
+        // This simulates the time gap between querying for existing IDs and inserting
+        if (this.onAfterPreFilterCallback) {
+            this.onAfterPreFilterCallback();
+        }
+
+        if (existingIds.length === 0) {
+            return undefined;
+        }
+
+        const errors = existingIds.map((id) => ({
+            documentId: id,
+            error: new Error('Document already exists (skipped)'),
+        }));
+
+        return {
+            documentsToInsert: docsToInsert,
+            skippedResult: {
+                processedCount: existingIds.length,
+                insertedCount: 0,
+                skippedCount: existingIds.length,
+                errors,
+            },
+        };
     }
 
     // Strategy implementations
@@ -877,6 +954,81 @@ describe('StreamingDocumentWriter', () => {
                     expect(result.totalProcessed).toBe(100);
                     expect(result.insertedCount).toBe(SPARSE_INSERT_COUNT);
                     expect(result.skippedCount).toBe(SPARSE_EXISTING_COUNT);
+                    expect(writer.getStorage().size).toBe(100);
+                });
+            });
+
+            describe('race condition handling', () => {
+                it('should skip documents that appear after pre-filter but before insert', async () => {
+                    // This test simulates a race condition where:
+                    // 1. Pre-filter queries target and finds no existing docs
+                    // 2. External process inserts doc25 and doc75 (simulated via callback)
+                    // 3. Insert attempts to write all docs, but doc25 and doc75 now conflict
+                    // 4. Writer should still skip these gracefully
+
+                    writer.enablePreFiltering();
+
+                    // Set up callback to inject documents AFTER pre-filter but BEFORE insert
+                    let callbackInvoked = false;
+                    writer.setAfterPreFilterCallback(() => {
+                        // This simulates another process inserting documents while we're preparing to write
+                        writer.seedStorage([createDocuments(1, 25)[0], createDocuments(1, 75)[0]]);
+                        callbackInvoked = true;
+                    });
+
+                    const documents = createDocuments(100); // doc1-doc100
+                    const stream = createDocumentStream(documents);
+
+                    const result = await writer.streamDocuments(stream, {
+                        conflictResolutionStrategy: ConflictResolutionStrategy.Skip,
+                    });
+
+                    // Callback should have been invoked
+                    expect(callbackInvoked).toBe(true);
+
+                    // All 100 docs should be processed
+                    expect(result.totalProcessed).toBe(100);
+
+                    // 98 inserted (doc25 and doc75 were injected after pre-filter)
+                    expect(result.insertedCount).toBe(98);
+
+                    // 2 skipped (doc25 and doc75 - detected during write as race condition conflicts)
+                    expect(result.skippedCount).toBe(2);
+
+                    // Storage should have all 100 docs
+                    expect(writer.getStorage().size).toBe(100);
+                });
+
+                it('should handle race condition with pre-existing documents', async () => {
+                    // More complex scenario:
+                    // - doc1-doc10 exist before we start
+                    // - Pre-filter correctly identifies them as skipped
+                    // - While writing, doc50 is inserted by another process
+                    // - Writer should handle both pre-filtered skips and race condition skip
+
+                    writer.enablePreFiltering();
+                    writer.seedStorage(createDocuments(10, 1)); // doc1-doc10 exist
+
+                    // Set up callback to inject doc50 after pre-filter
+                    writer.setAfterPreFilterCallback(() => {
+                        writer.seedStorage([createDocuments(1, 50)[0]]); // doc50 inserted by "another process"
+                    });
+
+                    const documents = createDocuments(100); // doc1-doc100
+                    const stream = createDocumentStream(documents);
+
+                    const result = await writer.streamDocuments(stream, {
+                        conflictResolutionStrategy: ConflictResolutionStrategy.Skip,
+                    });
+
+                    expect(result.totalProcessed).toBe(100);
+
+                    // 89 inserted: 100 - 10 (pre-existing) - 1 (race condition)
+                    expect(result.insertedCount).toBe(89);
+
+                    // 11 skipped: 10 (pre-filtered) + 1 (race condition)
+                    expect(result.skippedCount).toBe(11);
+
                     expect(writer.getStorage().size).toBe(100);
                 });
             });
