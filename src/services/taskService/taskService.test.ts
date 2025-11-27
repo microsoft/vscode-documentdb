@@ -115,6 +115,44 @@ class TestTask extends Task {
     }
 }
 
+/**
+ * Helper function to wait for a task to reach a terminal state (Completed, Failed, or Stopped).
+ * This is more reliable than fixed timeouts, especially when running tests in parallel.
+ */
+function waitForTaskCompletion(task: Task, timeoutMs: number = 5000): Promise<TaskStatus> {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            reject(new Error(`Task did not complete within ${timeoutMs}ms. Current state: ${task.getStatus().state}`));
+        }, timeoutMs);
+
+        const checkStatus = (status: TaskStatus): void => {
+            if (
+                status.state === TaskState.Completed ||
+                status.state === TaskState.Failed ||
+                status.state === TaskState.Stopped
+            ) {
+                clearTimeout(timeout);
+                resolve(status);
+            }
+        };
+
+        // Check if already in terminal state
+        const currentStatus = task.getStatus();
+        if (
+            currentStatus.state === TaskState.Completed ||
+            currentStatus.state === TaskState.Failed ||
+            currentStatus.state === TaskState.Stopped
+        ) {
+            clearTimeout(timeout);
+            resolve(currentStatus);
+            return;
+        }
+
+        // Listen for status changes
+        task.onDidChangeStatus(checkStatus);
+    });
+}
+
 describe('TaskService', () => {
     let taskService: typeof TaskService;
 
@@ -152,8 +190,8 @@ describe('TaskService', () => {
 
         await task.start();
 
-        // Wait for completion
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Wait for task to actually complete instead of using fixed timeout
+        await waitForTaskCompletion(task);
 
         // Verify state transitions
         expect(states).toEqual([
@@ -192,8 +230,8 @@ describe('TaskService', () => {
 
         await task.start();
 
-        // Wait for failure
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Wait for task to fail instead of using fixed timeout
+        await waitForTaskCompletion(task);
 
         // Verify state transitions
         expect(states).toContain(TaskState.Initializing);
@@ -221,14 +259,23 @@ describe('TaskService', () => {
 
         await task.start();
 
-        // Wait for task to be running and complete at least one step
-        await new Promise((resolve) => setTimeout(resolve, 80));
+        // Wait for task to be running - poll until we see the Running state
+        await new Promise<void>((resolve) => {
+            const checkRunning = (): void => {
+                if (states.includes(TaskState.Running)) {
+                    resolve();
+                } else {
+                    setTimeout(checkRunning, 10);
+                }
+            };
+            checkRunning();
+        });
 
         // Stop the task
         task.stop();
 
-        // Wait for the task to process the abort signal
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Wait for the task to reach terminal state
+        await waitForTaskCompletion(task);
 
         // Get the final state
         const finalStatus = task.getStatus();
@@ -264,8 +311,8 @@ describe('TaskService', () => {
         await task1.start();
         await task2.start();
 
-        // Wait for completion
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Wait for both tasks to complete
+        await Promise.all([waitForTaskCompletion(task1), waitForTaskCompletion(task2)]);
 
         // Verify we received updates from both tasks
         const task1Updates = serviceStatusUpdates.filter((u) => u.taskId === task1.id);
@@ -312,8 +359,17 @@ describe('TaskService', () => {
 
         await task.start();
 
-        // Wait for task to be running
-        await new Promise((resolve) => setTimeout(resolve, 30));
+        // Wait for task to be running - poll until we see the Running state
+        await new Promise<void>((resolve) => {
+            const checkRunning = (): void => {
+                if (states.includes(TaskState.Running)) {
+                    resolve();
+                } else {
+                    setTimeout(checkRunning, 10);
+                }
+            };
+            checkRunning();
+        });
 
         // Delete the running task
         await taskService.deleteTask(task.id);
@@ -321,8 +377,8 @@ describe('TaskService', () => {
         // Verify task was stopped
         expect(states).toContain(TaskState.Stopping);
 
-        // Wait for task to be stopped
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Wait for task to reach terminal state
+        await waitForTaskCompletion(task);
 
         expect(task.getStatus().state).toBe(TaskState.Stopped);
     });
