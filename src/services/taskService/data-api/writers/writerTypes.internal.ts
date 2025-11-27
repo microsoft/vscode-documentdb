@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type DocumentDetails } from '../types';
+
 /**
  * Types and interfaces for StreamingDocumentWriter implementations.
  * These are used internally by StreamingDocumentWriter and its subclasses for
@@ -76,6 +78,28 @@ export interface OverwriteBatchResult<TDocumentId = unknown> extends BaseBatchRe
 export interface GenerateNewIdsBatchResult<TDocumentId = unknown> extends BaseBatchResult<TDocumentId> {
     /** Number of documents successfully inserted with new IDs */
     insertedCount: number;
+}
+
+// =================================
+// PRE-FILTER SUPPORT FOR SKIP STRATEGY
+// =================================
+
+/**
+ * Result of pre-filtering documents for Skip strategy.
+ *
+ * This is called once per batch BEFORE the retry loop to:
+ * 1. Query the target for existing document IDs
+ * 2. Remove conflicts from the batch upfront
+ * 3. Return the result so skipped docs can be reported immediately
+ *
+ * This prevents duplicate skip logging during throttle retries and
+ * ensures accurate batch slicing.
+ */
+export interface PreFilterResult<TDocumentId = unknown> {
+    /** Documents that should be inserted (don't exist in target) */
+    documentsToInsert: DocumentDetails[];
+    /** Result containing skipped count and errors for pre-filtered conflicts */
+    skippedResult: SkipBatchResult<TDocumentId>;
 }
 
 /**

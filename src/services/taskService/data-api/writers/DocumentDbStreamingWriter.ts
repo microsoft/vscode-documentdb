@@ -16,6 +16,7 @@ import {
     type GenerateNewIdsBatchResult,
     type OverwriteBatchResult,
     type PartialProgress,
+    type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
 } from './writerTypes.internal';
@@ -178,6 +179,72 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
         return { targetWasCreated: false };
     }
 
+    /**
+     * Pre-filters documents for Skip strategy by querying the target for existing IDs.
+     *
+     * This is called ONCE per batch BEFORE the retry loop. Benefits:
+     * - Skipped documents logged only once (no duplicates on throttle retries)
+     * - Accurate batch slicing during throttle recovery
+     * - Reduced insert payload size
+     */
+    protected override async preFilterForSkipStrategy(
+        documents: DocumentDetails[],
+        _actionContext?: IActionContext,
+    ): Promise<PreFilterResult<string> | undefined> {
+        const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
+        const { docsToInsert, conflictIds } = await this.preFilterConflicts(rawDocuments);
+
+        if (conflictIds.length === 0) {
+            // No conflicts found - skip pre-filtering, let writeBatch handle all docs
+            return undefined;
+        }
+
+        // Log the pre-filtered conflicts with clear messaging
+        ext.outputChannel.debug(
+            l10n.t(
+                '[DocumentDbStreamingWriter] Pre-filter: found {0} existing documents via server query (will skip)',
+                conflictIds.length.toString(),
+            ),
+        );
+
+        for (const id of conflictIds) {
+            ext.outputChannel.trace(
+                l10n.t('[DocumentDbStreamingWriter] Pre-filtered: _id {0} already exists', this.formatDocumentId(id)),
+            );
+        }
+
+        // Build errors for pre-filtered conflicts
+        const errors = conflictIds.map((id) => ({
+            documentId: this.formatDocumentId(id),
+            error: new Error(l10n.t('Document already exists (skipped)')),
+        }));
+
+        // Convert filtered documents back to DocumentDetails
+        const documentsToInsert: DocumentDetails[] = docsToInsert.map((rawDoc) => {
+            // Find the original DocumentDetails for this document
+            const original = documents.find((d) => {
+                const content = d.documentContent as WithId<Document>;
+                try {
+                    return JSON.stringify(content._id) === JSON.stringify(rawDoc._id);
+                } catch {
+                    return false;
+                }
+            });
+            // Original should always exist since docsToInsert is a subset of documents
+            return original!;
+        });
+
+        return {
+            documentsToInsert,
+            skippedResult: {
+                processedCount: conflictIds.length,
+                insertedCount: 0,
+                skippedCount: conflictIds.length,
+                errors: errors.length > 0 ? errors : undefined,
+            },
+        };
+    }
+
     // =================================
     // STRATEGY IMPLEMENTATIONS
     // =================================
@@ -185,7 +252,11 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
     /**
      * Implements the Skip conflict resolution strategy.
      *
-     * Pre-filters conflicts by querying for existing _id values before insertion.
+     * NOTE: Pre-filtering is now done at the parent level (preFilterForSkipStrategy).
+     * The documents passed here are already filtered - they should all be insertable.
+     * This method only handles rare race condition conflicts that may occur if another
+     * process inserted documents between the pre-filter query and the insert.
+     *
      * Returns SkipBatchResult with semantic names (insertedCount, skippedCount).
      */
     private async writeWithSkipStrategy(
@@ -193,45 +264,23 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
         _actionContext?: IActionContext,
     ): Promise<SkipBatchResult<string>> {
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
-        const { docsToInsert, conflictIds } = await this.preFilterConflicts(rawDocuments);
-
-        // Build errors for pre-filtered conflicts
-        const preFilterErrors = conflictIds.map((id) => ({
-            documentId: this.formatDocumentId(id),
-            error: new Error(l10n.t('Document already exists (skipped)')),
-        }));
-
-        if (conflictIds.length > 0) {
-            ext.outputChannel.debug(
-                l10n.t(
-                    '[DocumentDbStreamingWriter] Skipping {0} conflicting documents (server-side detection)',
-                    conflictIds.length.toString(),
-                ),
-            );
-
-            for (const id of conflictIds) {
-                ext.outputChannel.trace(
-                    l10n.t('[DocumentDbStreamingWriter] Skipped document with _id: {0}', this.formatDocumentId(id)),
-                );
-            }
-        }
 
         let insertedCount = 0;
-        let fallbackSkippedCount = 0;
-        const fallbackErrors: Array<{ documentId: string; error: Error }> = [];
+        let skippedCount = 0;
+        const errors: Array<{ documentId: string; error: Error }> = [];
 
-        if (docsToInsert.length > 0) {
+        if (rawDocuments.length > 0) {
             try {
                 const insertResult = await this.client.insertDocuments(
                     this.databaseName,
                     this.collectionName,
-                    docsToInsert,
+                    rawDocuments,
                     true,
                 );
                 insertedCount = insertResult.insertedCount ?? 0;
             } catch (error) {
-                // Fallback: Handle race condition conflicts during insert
-                // Another process may have inserted documents after our pre-filter check
+                // Handle race condition conflicts during insert
+                // Another process may have inserted documents after the pre-filter check
                 if (isBulkWriteError(error)) {
                     const writeErrors = this.extractWriteErrors(error);
                     const duplicateErrors = writeErrors.filter((e) => e?.code === 11000);
@@ -239,7 +288,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                     if (duplicateErrors.length > 0) {
                         ext.outputChannel.debug(
                             l10n.t(
-                                '[DocumentDbStreamingWriter] Fallback: {0} race condition conflicts detected during Skip insert',
+                                '[DocumentDbStreamingWriter] Race condition: {0} documents inserted by another process (skipping)',
                                 duplicateErrors.length.toString(),
                             ),
                         );
@@ -247,15 +296,22 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                         // Extract counts from the error - some documents may have been inserted
                         const rawCounts = this.extractRawDocumentCounts(error);
                         insertedCount = rawCounts.insertedCount ?? 0;
-                        fallbackSkippedCount = duplicateErrors.length;
+                        skippedCount = duplicateErrors.length;
 
-                        // Build errors for the fallback conflicts
+                        // Build errors for the race condition conflicts
                         for (const writeError of duplicateErrors) {
                             const documentId = this.extractDocumentIdFromWriteError(writeError);
-                            fallbackErrors.push({
+                            errors.push({
                                 documentId: documentId ?? '[unknown]',
-                                error: new Error(l10n.t('Document already exists (race condition, skipped)')),
+                                error: new Error(l10n.t('Document inserted by another process (skipped)')),
                             });
+
+                            ext.outputChannel.trace(
+                                l10n.t(
+                                    '[DocumentDbStreamingWriter] Race condition skip: _id {0}',
+                                    documentId ?? '[unknown]',
+                                ),
+                            );
                         }
                     } else {
                         // Non-duplicate bulk write error - re-throw
@@ -268,15 +324,11 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
             }
         }
 
-        // Return combined results (pre-filter + insert phase)
-        const totalSkippedCount = conflictIds.length + fallbackSkippedCount;
-        const allErrors = [...preFilterErrors, ...fallbackErrors];
-
         return {
-            processedCount: insertedCount + totalSkippedCount,
+            processedCount: insertedCount + skippedCount,
             insertedCount,
-            skippedCount: totalSkippedCount,
-            errors: allErrors.length > 0 ? allErrors : undefined,
+            skippedCount,
+            errors: errors.length > 0 ? errors : undefined,
         };
     }
 

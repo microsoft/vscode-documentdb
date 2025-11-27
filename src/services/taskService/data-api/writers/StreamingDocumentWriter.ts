@@ -21,6 +21,7 @@ import {
     isSkipResult,
     type OverwriteBatchResult,
     type PartialProgress,
+    type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
 } from './writerTypes.internal';
@@ -428,6 +429,33 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         actionContext?: IActionContext,
     ): PartialProgress | undefined;
 
+    /**
+     * Pre-filters documents for Skip strategy by querying the target for existing IDs.
+     *
+     * This is called ONCE per batch BEFORE the retry loop to:
+     * 1. Query the target collection for existing document IDs
+     * 2. Identify conflicts upfront (documents that already exist)
+     * 3. Return filtered batch and skipped result
+     *
+     * Benefits:
+     * - Skipped documents are reported only once (no duplicate logging on retries)
+     * - Batch slicing during throttle recovery is accurate
+     * - Reduced payload size for insert operations
+     *
+     * Default implementation returns undefined (no pre-filtering).
+     * Subclasses should override for Skip strategy optimization.
+     *
+     * @param documents Batch of documents to pre-filter
+     * @param actionContext Optional context for telemetry
+     * @returns Pre-filter result with filtered batch and skipped info, or undefined to skip pre-filtering
+     */
+    protected preFilterForSkipStrategy(
+        _documents: DocumentDetails[],
+        _actionContext?: IActionContext,
+    ): Promise<PreFilterResult<TDocumentId> | undefined> {
+        return Promise.resolve(undefined);
+    }
+
     // =================================
     // BUFFER MANAGEMENT
     // =================================
@@ -585,6 +613,11 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     /**
      * Writes a batch with retry logic for transient failures.
      *
+     * For Skip strategy, pre-filters conflicts ONCE before the retry loop to:
+     * - Report skipped documents immediately (no duplicate logging on retries)
+     * - Ensure accurate batch slicing during throttle recovery
+     * - Reduce payload size for insert operations
+     *
      * When a throttle error occurs with partial progress (some documents were
      * successfully inserted before the rate limit was hit), we accumulate the
      * partial progress and slice the batch to skip already-processed documents.
@@ -605,6 +638,25 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         let currentBatch = batch;
         let attempt = 0;
         const maxAttempts = 10;
+
+        // For Skip strategy: pre-filter conflicts ONCE before retry loop
+        if (strategy === ConflictResolutionStrategy.Skip) {
+            const preFilterResult = await this.preFilterForSkipStrategy(batch, actionContext);
+            if (preFilterResult) {
+                // Report skipped documents immediately
+                if (preFilterResult.skippedResult.skippedCount > 0) {
+                    onPartialProgress(preFilterResult.skippedResult);
+                }
+
+                // Continue with only the documents that need to be inserted
+                currentBatch = preFilterResult.documentsToInsert;
+
+                // If all documents were skipped, return empty result
+                if (currentBatch.length === 0) {
+                    return this.progressToResult({ processedCount: 0 }, strategy);
+                }
+            }
+        }
 
         while (attempt < maxAttempts && currentBatch.length > 0) {
             if (abortSignal?.aborted) {
