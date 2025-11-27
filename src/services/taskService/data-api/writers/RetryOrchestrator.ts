@@ -14,6 +14,8 @@ export interface RetryOperationResult<T> {
     result: T;
     /** Whether the operation was throttled at any point */
     wasThrottled: boolean;
+    /** Whether the operation was cancelled via abort signal */
+    wasCancelled?: boolean;
 }
 
 /**
@@ -103,12 +105,13 @@ export class RetryOrchestrator {
 
         while (attempt < this.config.maxAttempts) {
             if (abortSignal?.aborted) {
-                throw new Error(l10n.t('Operation was cancelled'));
+                // Return cancelled result gracefully (not an error)
+                return { result: undefined as unknown as T, wasThrottled, wasCancelled: true };
             }
 
             try {
                 const result = await operation();
-                return { result, wasThrottled };
+                return { result, wasThrottled, wasCancelled: false };
             } catch (error) {
                 const errorType = classifier(error);
 
@@ -171,12 +174,13 @@ export class RetryOrchestrator {
 
         while (attempt < this.config.maxAttempts) {
             if (abortSignal?.aborted) {
-                throw new Error(l10n.t('Operation was cancelled'));
+                // Return cancelled result gracefully (not an error)
+                return { result: undefined as unknown as T, wasThrottled, wasCancelled: true };
             }
 
             try {
                 const result = await operation();
-                return { result, wasThrottled };
+                return { result, wasThrottled, wasCancelled: false };
             } catch (error) {
                 const errorType = classifier(error);
 

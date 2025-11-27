@@ -602,7 +602,8 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
 
         while (attempt < maxAttempts && currentBatch.length > 0) {
             if (abortSignal?.aborted) {
-                throw new Error(vscode.l10n.t('Operation was cancelled'));
+                // Gracefully return empty result on cancellation (not an error)
+                return this.progressToResult({ processedCount: 0 }, strategy);
             }
 
             try {
