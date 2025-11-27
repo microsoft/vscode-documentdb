@@ -44,9 +44,11 @@ The Data API provides a robust, database-agnostic framework for streaming and bu
              │                                       │
              │                        3. Buffer & Adaptive Batching
              │                                       │
-             │                        4. Retry with Exponential Backoff
+             │                        4. Pre-filter (Skip strategy)
              │                                       │
-             │                        5. Progress Callbacks
+             │                        5. Retry with Exponential Backoff
+             │                                       │
+             │                        6. Progress Callbacks
              │                                       │
              ▼                                       ▼
 ┌──────────────────┐                  ┌──────────────────┐
@@ -95,9 +97,10 @@ for await (const doc of stream) {
 1. **Buffer Management**: Single-level buffering with adaptive flush triggers
 2. **Integrated Retry Logic**: Uses RetryOrchestrator for transient failure handling
 3. **Adaptive Batching**: Uses BatchSizeAdapter for dual-mode (fast/RU-limited) operation
-4. **Statistics Aggregation**: Uses WriteStats for progress tracking
-5. **Immediate Progress Reporting**: Progress reported during throttle recovery
-6. **Semantic Result Types**: Strategy-specific result types (`SkipBatchResult`, `OverwriteBatchResult`, etc.)
+4. **Pre-filtering (Skip Strategy)**: Queries target for existing IDs before insert to avoid duplicate logging
+5. **Statistics Aggregation**: Uses WriteStats for progress tracking
+6. **Immediate Progress Reporting**: Progress reported during throttle recovery
+7. **Semantic Result Types**: Strategy-specific result types (`SkipBatchResult`, `OverwriteBatchResult`, etc.)
 
 **Key Methods:**
 
@@ -130,9 +133,81 @@ console.log(`Processed: ${result.totalProcessed}, Inserted: ${result.insertedCou
 
 ---
 
+## Pre-filtering (Skip Strategy Optimization)
+
+When using the **Skip** conflict resolution strategy, the writer can pre-filter documents by querying the target collection for existing IDs before attempting insertion. This optimization is performed **once per batch before the retry loop**.
+
+### Why Pre-filtering?
+
+Without pre-filtering, when throttling occurs:
+
+1. Documents are partially inserted
+2. Batch is sliced and retried
+3. Skip detection happens again on retry
+4. Same skipped documents are logged multiple times
+
+With pre-filtering:
+
+1. Existing IDs are queried once upfront
+2. Skipped documents are reported immediately
+3. Only insertable documents enter the retry loop
+4. No duplicate logging on throttle retries
+
+### Pre-filter Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     PRE-FILTER FLOW (Skip Strategy)                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    writeBatchWithRetry()
+           │
+           │ 1. Strategy == Skip?
+           ▼
+    ┌──────────────────────────────┐
+    │ preFilterForSkipStrategy()   │
+    │ ─────────────────────────────│
+    │ Query: find({_id: {$in: ...}})│
+    │ Returns: existing IDs        │
+    └──────────────┬───────────────┘
+                   │
+                   │ 2. Report skipped docs immediately
+                   │    via onPartialProgress()
+                   │
+                   │ 3. Remove skipped docs from batch
+                   ▼
+    ┌──────────────────────────────┐
+    │ Retry loop with filtered     │
+    │ batch (only insertable docs) │
+    │ ─────────────────────────────│
+    │ • Throttle → slice & retry   │
+    │ • No duplicate skip logging  │
+    │ • Accurate batch slicing     │
+    └──────────────────────────────┘
+```
+
+### Benefits
+
+| Benefit                    | Description                                           |
+| -------------------------- | ----------------------------------------------------- |
+| **No duplicate logging**   | Skipped documents logged once, not on every retry     |
+| **Accurate batch slicing** | Throttle recovery slices only insertable documents    |
+| **Reduced payload size**   | Insert requests contain only new documents            |
+| **Cleaner trace output**   | Clear separation between pre-filter and insert phases |
+
+### Race Condition Handling
+
+If another process inserts documents between the pre-filter query and the insert operation, the writer handles this gracefully:
+
+1. Duplicate key error (11000) is caught during insert
+2. Documents are marked as "race condition skipped"
+3. Operation continues with remaining documents
+
+---
+
 ## Implementing New Database Writers
 
-To add support for a new database, extend `StreamingDocumentWriter` and implement **3 abstract methods**:
+To add support for a new database, extend `StreamingDocumentWriter` and implement **3 abstract methods** plus 1 optional method:
 
 ```typescript
 class MyDatabaseStreamingWriter extends StreamingDocumentWriter<string> {
@@ -168,6 +243,16 @@ class MyDatabaseStreamingWriter extends StreamingDocumentWriter<string> {
    */
   public async ensureTargetExists(): Promise<EnsureTargetExistsResult> {
     // Create collection if needed
+  }
+
+  /**
+   * OPTIONAL: Pre-filter for Skip strategy optimization.
+   * Query target for existing IDs and return filtered batch.
+   * Default implementation returns undefined (no pre-filtering).
+   */
+  protected async preFilterForSkipStrategy(documents: DocumentDetails[]): Promise<PreFilterResult<string> | undefined> {
+    // Query target: find({_id: {$in: batchIds}})
+    // Return { documentsToInsert, skippedResult } or undefined
   }
 }
 ```
@@ -251,15 +336,17 @@ When keep-alive is enabled:
 
 ```
 src/services/taskService/data-api/
+├── README.md                             # This documentation
 ├── types.ts                              # Public interfaces (StreamWriteResult, DocumentDetails, etc.)
-├── writerTypes.internal.ts               # Internal writer types (StrategyBatchResult variants, PartialProgress)
 ├── readers/
 │   ├── BaseDocumentReader.ts             # Abstract reader base class (see JSDoc for sequence diagrams)
-│   ├── DocumentDbDocumentReader.ts       # MongoDB implementation
+│   ├── DocumentDbDocumentReader.ts       # MongoDB/DocumentDB implementation
 │   └── KeepAliveOrchestrator.ts          # Isolated keep-alive logic
 └── writers/
     ├── StreamingDocumentWriter.ts        # Abstract base class (see JSDoc for sequence diagrams)
-    ├── DocumentDbStreamingWriter.ts      # MongoDB implementation
+    ├── StreamingDocumentWriter.test.ts   # Comprehensive tests for streaming writer
+    ├── DocumentDbStreamingWriter.ts      # MongoDB/DocumentDB implementation
+    ├── writerTypes.internal.ts           # Internal types (StrategyBatchResult, PreFilterResult, etc.)
     ├── RetryOrchestrator.ts              # Isolated retry logic
     ├── BatchSizeAdapter.ts               # Adaptive batch sizing (fast/RU-limited modes)
     └── WriteStats.ts                     # Statistics aggregation

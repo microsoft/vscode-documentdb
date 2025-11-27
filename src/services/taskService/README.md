@@ -345,6 +345,43 @@ The Data API provides the document streaming and writing infrastructure. See [`d
 | **Abort**          | Stop on first conflict            | Strict validation |
 | **GenerateNewIds** | Generate new `_id` values         | Duplicating data  |
 
+### Pre-filtering Optimization (Skip Strategy)
+
+For the **Skip** strategy, the writer performs a pre-filtering step **once** before the retry loop to efficiently identify which documents already exist in the target:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     PRE-FILTER FLOW (Skip Strategy)                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+writeBatchWithRetry() receives [doc1, doc2, doc3, doc4, doc5]
+           │
+           ▼
+┌──────────────────────────────────────┐
+│ 1. Pre-filter (ONCE before retries)  │
+│    Query target: which IDs exist?    │
+│    Result: doc2, doc4 already exist  │
+└──────────────────────────────────────┘
+           │
+           ├──► Report skipped immediately: {skipped: 2}
+           │
+           ▼
+┌──────────────────────────────────────┐
+│ 2. Retry loop (only insertable docs) │
+│    [doc1, doc3, doc5] → insert       │
+│    Throttle? → slice & retry         │
+└──────────────────────────────────────┘
+           │
+           ▼
+       Final result
+```
+
+This optimization:
+
+- **Reduces redundant queries**: Existing IDs are checked once, not on every retry
+- **Accurate progress reporting**: Skipped documents are reported immediately
+- **Handles race conditions**: The insert still handles rare conflicts (documents inserted after pre-filter)
+
 ---
 
 ## Implementing Tasks
@@ -473,30 +510,32 @@ The writer uses a single buffer (not two-level buffering) because:
 
 ```
 src/services/taskService/
-├── README.md                          # This documentation
-├── taskService.ts                     # Task base class + TaskServiceManager
-├── taskService.test.ts                # Task lifecycle tests
-├── taskServiceResourceTracking.ts     # Resource conflict detection
+├── README.md                           # This documentation
+├── taskService.ts                      # Task base class + TaskServiceManager
+├── taskService.test.ts                 # Task lifecycle tests
+├── taskServiceResourceTracking.ts      # Resource conflict detection
 ├── taskServiceResourceTracking.test.ts
-├── resourceUsageHelper.ts             # Memory monitoring utilities
-├── data-api/                          # Document streaming infrastructure
-│   ├── README.md                      # Data API documentation
-│   ├── types.ts                       # Public interfaces
-│   ├── writerTypes.internal.ts        # Internal writer types
+├── resourceUsageHelper.ts              # Memory monitoring utilities
+├── data-api/                           # Document streaming infrastructure
+│   ├── README.md                       # Data API documentation
+│   ├── types.ts                        # Public interfaces
 │   ├── readers/
-│   │   ├── BaseDocumentReader.ts      # Abstract reader
-│   │   └── DocumentDbDocumentReader.ts
+│   │   ├── BaseDocumentReader.ts       # Abstract reader (see JSDoc for diagrams)
+│   │   ├── DocumentDbDocumentReader.ts # MongoDB/DocumentDB implementation
+│   │   └── KeepAliveOrchestrator.ts    # Isolated keep-alive logic
 │   └── writers/
-│       ├── StreamingDocumentWriter.ts # Abstract writer (see JSDoc for diagrams)
-│       ├── DocumentDbStreamingWriter.ts
-│       ├── BatchSizeAdapter.ts        # Adaptive batching
-│       ├── RetryOrchestrator.ts       # Retry logic
-│       └── WriteStats.ts              # Statistics
+│       ├── StreamingDocumentWriter.ts  # Abstract writer (see JSDoc for diagrams)
+│       ├── StreamingDocumentWriter.test.ts # Comprehensive tests
+│       ├── DocumentDbStreamingWriter.ts # MongoDB/DocumentDB implementation
+│       ├── writerTypes.internal.ts     # Internal types (PreFilterResult, etc.)
+│       ├── BatchSizeAdapter.ts         # Adaptive batching
+│       ├── RetryOrchestrator.ts        # Retry logic
+│       └── WriteStats.ts               # Statistics aggregation
 └── tasks/
-    ├── DemoTask.ts                    # Simple example task
+    ├── DemoTask.ts                     # Simple example task
     └── copy-and-paste/
-        ├── CopyPasteCollectionTask.ts # Main copy-paste task
-        └── copyPasteConfig.ts         # Configuration types
+        ├── CopyPasteCollectionTask.ts  # Main copy-paste task
+        └── copyPasteConfig.ts          # Configuration types
 ```
 
 ---
