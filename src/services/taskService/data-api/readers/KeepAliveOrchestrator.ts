@@ -138,7 +138,12 @@ export class KeepAliveOrchestrator {
     };
 
     constructor(config?: KeepAliveConfig) {
-        this.config = { ...DEFAULT_CONFIG, ...config };
+        // Filter out undefined values to ensure defaults are used
+        // (object spread would overwrite defaults with undefined if keys exist)
+        this.config = {
+            intervalMs: config?.intervalMs ?? DEFAULT_CONFIG.intervalMs,
+            timeoutMs: config?.timeoutMs ?? DEFAULT_CONFIG.timeoutMs,
+        };
     }
 
     /**
