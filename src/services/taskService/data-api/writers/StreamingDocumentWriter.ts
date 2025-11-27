@@ -525,6 +525,11 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                     onPartialProgress,
                 );
 
+                // Null means cancelled - break out of loop
+                if (result === null) {
+                    break;
+                }
+
                 // Result already uses semantic names - add directly to stats
                 stats.addBatch(result);
 
@@ -587,23 +592,24 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * The onPartialProgress callback is called immediately when partial progress
      * is detected during throttle recovery, allowing real-time progress reporting.
      *
-     * Returns a strategy-specific result with remaining counts (excluding already-reported partial progress).
+     * Returns a strategy-specific result with remaining counts (excluding already-reported partial progress),
+     * or null if the operation was cancelled.
      */
     private async writeBatchWithRetry(
         batch: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
-        abortSignal?: AbortSignal,
-        actionContext?: IActionContext,
-        onPartialProgress?: (partialResult: StrategyBatchResult<TDocumentId>) => void,
-    ): Promise<StrategyBatchResult<TDocumentId>> {
+        abortSignal: AbortSignal | undefined,
+        actionContext: IActionContext | undefined,
+        onPartialProgress: (partialResult: StrategyBatchResult<TDocumentId>) => void,
+    ): Promise<StrategyBatchResult<TDocumentId> | null> {
         let currentBatch = batch;
         let attempt = 0;
         const maxAttempts = 10;
 
         while (attempt < maxAttempts && currentBatch.length > 0) {
             if (abortSignal?.aborted) {
-                // Gracefully return empty result on cancellation (not an error)
-                return this.progressToResult({ processedCount: 0 }, strategy);
+                // Return null on cancellation - caller will handle gracefully
+                return null;
             }
 
             try {
@@ -630,7 +636,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                         );
 
                         // Report partial progress immediately via callback
-                        if (onPartialProgress && progress) {
+                        if (progress) {
                             const partialResult = this.progressToResult(progress, strategy);
                             onPartialProgress(partialResult);
                         }
