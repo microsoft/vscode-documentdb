@@ -3,10 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
+import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import {
@@ -14,12 +13,14 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { askToConfigureCredentials } from '../../api-shared/azure/askToConfigureCredentials';
+import { getTenantFilteredSubscriptions } from '../../api-shared/azure/subscriptionFiltering/subscriptionFilteringHelpers';
 import { AzureSubscriptionItem } from './AzureSubscriptionItem';
 
 export class AzureServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
     public contextValue: string =
-        'enableRefreshCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAzureServiceRootItem';
+        'enableRefreshCommand;enableManageCredentialsCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAzureServiceRootItem';
 
     constructor(
         private readonly azureSubscriptionProvider: VSCodeAzureSubscriptionProvider,
@@ -29,19 +30,17 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        /**
-         * This is an important step to ensure that the user is signed in to Azure before listing subscriptions.
-         */
-        if (!(await this.azureSubscriptionProvider.isSignedIn())) {
-            const signIn: vscode.MessageItem = { title: l10n.t('Sign In') };
-            void vscode.window
-                .showInformationMessage(l10n.t('You are not signed in to Azure. Sign in and retry.'), signIn)
-                .then(async (input) => {
-                    if (input === signIn) {
-                        await this.azureSubscriptionProvider.signIn();
-                        ext.discoveryBranchDataProvider.refresh();
-                    }
-                });
+        const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
+        const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
+
+        if (!subscriptions || subscriptions.length === 0) {
+            // Show modal dialog for empty state
+            const configureResult = await askToConfigureCredentials();
+            if (configureResult === 'configure') {
+                // Note to future maintainers: 'void' is important here so that the return below returns the error node.
+                // Otherwise, the /retry node might be duplicated as we're inside of tree node with a loading state (the node items are being swapped etc.)
+                void vscode.commands.executeCommand('vscode-documentdb.command.discoveryView.manageCredentials', this);
+            }
 
             return [
                 createGenericElementWithContext({
@@ -55,9 +54,21 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
             ];
         }
 
-        const subscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
-        if (!subscriptions || subscriptions.length === 0) {
-            return [];
+        // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
+        // Note to future maintainers: we used to run getSubscriptions and getTenants "in parallel", however
+        // this lead to incorrect responses from getSubscriptions. We didn't investigate
+        const tenantPromise = this.azureSubscriptionProvider.getTenants().catch(() => undefined);
+        const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5000));
+        const knownTenants = await Promise.race([tenantPromise, timeoutPromise]);
+
+        // Build tenant lookup for better performance
+        const tenantMap = new Map<string, AzureTenant>();
+        if (knownTenants) {
+            for (const tenant of knownTenants) {
+                if (tenant.tenantId) {
+                    tenantMap.set(tenant.tenantId, tenant);
+                }
+            }
         }
 
         return (
@@ -70,6 +81,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
                         subscription: sub,
                         subscriptionName: sub.name,
                         subscriptionId: sub.subscriptionId,
+                        tenant: tenantMap.get(sub.tenantId),
                     });
                 })
         );
@@ -85,7 +97,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: l10n.t('Azure Cosmos DB for MongoDB (vCore)'),
+            label: l10n.t('Azure DocumentDB'),
             iconPath: new vscode.ThemeIcon('azure'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };

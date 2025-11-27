@@ -7,7 +7,7 @@
 import { getSessionFromVSCode } from '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode';
 import * as l10n from '@vscode/l10n';
 import { type MongoClientOptions, type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
-import { type ClustersCredentials } from '../CredentialCache';
+import { type CachedClusterCredentials } from '../CredentialCache';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 
@@ -15,13 +15,13 @@ import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
  * Handler for Microsoft Entra ID authentication via OIDC
  */
 export class MicrosoftEntraIDAuthHandler implements AuthHandler {
-    constructor(private readonly clusterCredentials: ClustersCredentials) {}
+    constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
 
     public async configureAuth(): Promise<AuthHandlerResponse> {
         // Get Microsoft Entra ID token
         const session = await getSessionFromVSCode(
             ['https://ossrdbms-aad.database.windows.net/.default'],
-            undefined, // currently, we don't see any requirements for support of scoping by tenantIds
+            this.clusterCredentials.entraIdConfig?.tenantId,
             {
                 createIfNone: true,
             },

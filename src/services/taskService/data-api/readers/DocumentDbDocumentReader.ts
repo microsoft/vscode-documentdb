@@ -48,7 +48,7 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
     ): AsyncIterable<DocumentDetails> {
         const client = await ClustersClient.getClient(this.connectionId);
 
-        const documentStream = client.streamDocuments(
+        const documentStream = client.streamDocumentsWithQuery(
             this.databaseName,
             this.collectionName,
             signal ?? new AbortController().signal,

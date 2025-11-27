@@ -1,0 +1,33 @@
+{
+  "_debug_active": false,
+  "_instructions": "Set _debug_active to true to activate - This is a COLLSCAN example for testing poor query performance",
+
+  "queryPlanner": {
+    "plannerVersion": 1,
+    "namespace": "mydb.mycollection",
+    "indexFilterSet": false,
+    "parsedQuery": {
+      "description": { "$regex": "urgent" }
+    },
+    "winningPlan": {
+      "stage": "SORT",
+      "sortPattern": {
+        "createdAt": -1
+      },
+      "inputStage": {
+        "stage": "COLLSCAN",
+        "filter": {
+          "description": { "$regex": "urgent" }
+        },
+        "direction": "forward"
+      }
+    },
+    "rejectedPlans": []
+  },
+  "serverInfo": {
+    "host": "localhost",
+    "port": 27017,
+    "version": "6.0.0"
+  },
+  "ok": 1
+}

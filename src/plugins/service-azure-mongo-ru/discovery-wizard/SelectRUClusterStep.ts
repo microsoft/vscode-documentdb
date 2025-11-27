@@ -22,7 +22,7 @@ export class SelectRUClusterStep extends AzureWizardPromptStep<NewConnectionWiza
         'vscode-azext-azureutils',
         'resources',
         'azureIcons',
-        'MongoClusters.svg',
+        'AzureCosmosDb.svg',
     );
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
@@ -30,34 +30,47 @@ export class SelectRUClusterStep extends AzureWizardPromptStep<NewConnectionWiza
             throw new Error('SelectedSubscription is not set.');
         }
 
-        const managementClient = await createCosmosDBManagementClient(
-            context,
-            context.properties[AzureContextProperties.SelectedSubscription] as unknown as AzureSubscription,
-        );
+        // Create async function to provide better loading UX and debugging experience
+        const getRUClusterQuickPickItems = async (): Promise<(QuickPickItem & { id: string })[]> => {
+            const managementClient = await createCosmosDBManagementClient(
+                context,
+                context.properties[AzureContextProperties.SelectedSubscription] as unknown as AzureSubscription,
+            );
 
-        const allAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
-        const accounts = allAccounts.filter((account) => account.kind === 'MongoDB');
+            const allAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
+            const accounts = allAccounts.filter((account) => account.kind === 'MongoDB');
 
-        const promptItems: (QuickPickItem & { id: string })[] = accounts
-            .filter((account) => account.name) // Filter out accounts without a name
-            .map((account) => ({
-                id: account.id!,
-                label: account.name!,
-                description: account.id,
-                iconPath: this.iconPath,
+            const promptItems: (QuickPickItem & { id: string })[] = accounts
+                .filter((account) => account.name) // Filter out accounts without a name
+                .map((account) => ({
+                    id: account.id!,
+                    label: account.name!,
+                    description: account.id,
+                    iconPath: this.iconPath,
 
-                alwaysShow: true,
-            }))
-            .sort((a, b) => a.label.localeCompare(b.label));
+                    alwaysShow: true,
+                }))
+                .sort((a, b) => a.label.localeCompare(b.label));
 
-        const selectedItem = await context.ui.showQuickPick([...promptItems], {
+            return promptItems;
+        };
+
+        const selectedItem = await context.ui.showQuickPick(getRUClusterQuickPickItems(), {
             stepName: 'selectRUCluster',
             placeHolder: l10n.t('Choose a RU cluster…'),
-            loadingPlaceHolder: l10n.t('Loading RU clusters…'),
+            loadingPlaceHolder: l10n.t('Loading Clusters…'),
             enableGrouping: true,
             matchOnDescription: true,
             suppressPersistence: true,
         });
+
+        // Get accounts again to find the selected one (likely cached by Azure SDK)
+        const managementClient = await createCosmosDBManagementClient(
+            context,
+            context.properties[AzureContextProperties.SelectedSubscription] as unknown as AzureSubscription,
+        );
+        const allAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
+        const accounts = allAccounts.filter((account) => account.kind === 'MongoDB');
 
         context.properties[AzureContextProperties.SelectedCluster] = accounts.find(
             (account) => account.id === selectedItem.id,

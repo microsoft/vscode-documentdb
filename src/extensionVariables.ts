@@ -15,6 +15,7 @@ import { type DocumentDbWorkspaceResourceProvider } from './tree/azure-workspace
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
 import { type CollectionItem } from './tree/documentdb/CollectionItem';
+import { type HelpAndFeedbackBranchDataProvider } from './tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
 import { type TreeElement } from './tree/TreeElement';
 
 /**
@@ -58,6 +59,8 @@ export namespace ext {
 
     export let discoveryBranchDataProvider: DiscoveryBranchDataProvider;
 
+    export let helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
+
     export namespace settingsKeys {
         export const shellPath = 'documentDB.mongoShell.path';
         export const shellArgs = 'documentDB.mongoShell.args';
@@ -69,6 +72,7 @@ export namespace ext {
         export const showLargeCollectionWarning = 'documentDB.copyPaste.showLargeCollectionWarning';
         export const largeCollectionWarningThreshold = 'documentDB.copyPaste.largeCollectionWarningThreshold';
         export const localPort = 'documentDB.local.port';
+        export const collectionViewDefaultPageSize = 'documentDB.collectionView.defaultPageSize';
 
         export namespace vsCode {
             export const proxyStrictSSL = 'http.proxyStrictSSL';

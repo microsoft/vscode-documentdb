@@ -1,0 +1,50 @@
+{
+  "_debug_active": true,
+  "_instructions": "Set _debug_active to true to activate this override. This file contains a MongoDB explain('queryPlanner') response.",
+
+  "queryPlanner": {
+    "plannerVersion": 1,
+    "namespace": "mydb.mycollection",
+    "indexFilterSet": false,
+    "parsedQuery": {
+      "status": { "$eq": "PENDING" }
+    },
+    "winningPlan": {
+      "stage": "PROJECTION",
+      "transformBy": {
+        "_id": 1,
+        "status": 1,
+        "createdAt": 1
+      },
+      "inputStage": {
+        "stage": "FETCH",
+        "inputStage": {
+          "stage": "IXSCAN",
+          "keyPattern": {
+            "status": 1
+          },
+          "indexName": "status_1",
+          "isMultiKey": false,
+          "multiKeyPaths": {
+            "status": []
+          },
+          "isUnique": false,
+          "isSparse": false,
+          "isPartial": false,
+          "indexVersion": 2,
+          "direction": "forward",
+          "indexBounds": {
+            "status": ["[\"PENDING\", \"PENDING\"]"]
+          }
+        }
+      }
+    },
+    "rejectedPlans": []
+  },
+  "serverInfo": {
+    "host": "localhost",
+    "port": 27017,
+    "version": "6.0.0"
+  },
+  "ok": 1
+}

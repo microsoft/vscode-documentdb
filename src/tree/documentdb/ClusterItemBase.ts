@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ext } from '../../extensionVariables';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
@@ -21,24 +22,30 @@ import { type ClusterModel } from './ClusterModel';
 import { DatabaseItem } from './DatabaseItem';
 
 /**
- * Full connection details for a DocumentDB cluster used at runtime.
+ * Full connection details for a DocumentDB cluster used at runtime during service discovery.
  *
- * This type intentionally contains concrete credentials
- * because some service-discovery flows provide ephemeral credentials from an
- * external service rather than from stored connections.
+ * This type intentionally contains concrete credentials because some service-discovery
+ * flows provide ephemeral credentials from an external service rather than from stored connections.
  *
  * TODO: Maintainer notes:
  * - This type is a temporary bridge for service-discovery scenarios. The preferred
  *   long-term approach is an optional discovery API that returns connection info
  *   on demand so we avoid keeping credentials in memory longer than necessary.
  */
-export type ClusterCredentials = {
+export type EphemeralClusterCredentials = {
     connectionString: string;
-    connectionUser?: string;
-    connectionPassword?: string;
     availableAuthMethods: AuthMethodId[];
     selectedAuthMethod?: AuthMethodId; // some providers can pre-select a method
+
+    // Authentication method specific configurations
+    nativeAuthConfig?: NativeAuthConfig;
+    entraIdAuthConfig?: EntraIdAuthConfig;
 };
+
+/**
+ * @deprecated Use EphemeralClusterCredentials instead. This alias is provided for backward compatibility.
+ */
+export type ClusterCredentials = EphemeralClusterCredentials;
 
 // This info will be available at every level in the tree for immediate access
 export abstract class ClusterItemBase
@@ -89,15 +96,15 @@ export abstract class ClusterItemBase
      * Must be implemented by subclasses.
      * This is relevant for service discovery scenarios
      *
-     * @returns A promise that resolves to the credentials if successful; otherwise, undefined.
+     * @returns A promise that resolves to the EphemeralClusterCredentials if successful; otherwise, undefined.
      */
-    public abstract getCredentials(): Promise<ClusterCredentials | undefined>;
+    public abstract getCredentials(): Promise<EphemeralClusterCredentials | undefined>;
 
     /**
      * Authenticates and connects to the cluster to list all available databases.
      * Here, the MongoDB client is created and cached for future use.
      *
-     * In case of the Azure environment (vCore), we might reach out to Azure to pull
+     * In case of the Azure environment (DocumentDB), we might reach out to Azure to pull
      * the list of users known to the cluster.
      *
      * (These operations can be slow as they involve network and authentication calls.)

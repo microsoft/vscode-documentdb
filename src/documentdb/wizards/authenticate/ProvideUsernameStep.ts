@@ -14,13 +14,20 @@ export class ProvideUserNameStep extends AzureWizardPromptStep<AuthenticateWizar
         const username = await context.ui.showInputBox({
             prompt: l10n.t('Please provide the username for "{resource}":', { resource: context.resourceName }),
             placeHolder: l10n.t('Username for {resource}', { resource: context.resourceName }),
-            value: context.adminUserName,
+            value: context.nativeAuthConfig?.connectionUser ?? context.adminUserName,
             title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             ignoreFocusOut: true,
         });
 
-        context.selectedUserName = username.trim();
-        context.valuesToMask.push(context.selectedUserName, username);
+        const trimmedUsername = username.trim();
+
+        // Update both structured config and legacy field
+        context.nativeAuthConfig = {
+            connectionUser: trimmedUsername,
+            connectionPassword: context.nativeAuthConfig?.connectionPassword ?? context.password ?? '',
+        };
+        context.selectedUserName = trimmedUsername;
+        context.valuesToMask.push(trimmedUsername, username);
 
         context.isUserNameUpdated = true;
     }

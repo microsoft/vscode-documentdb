@@ -9,7 +9,7 @@ import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { maskSensitiveValuesInTelemetry } from '../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
-import { type ClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
+import { type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 
 /**
@@ -20,7 +20,7 @@ export async function extractCredentialsFromRUAccount(
     subscription: AzureSubscription,
     resourceGroup: string,
     accountName: string,
-): Promise<ClusterCredentials> {
+): Promise<EphemeralClusterCredentials> {
     if (!resourceGroup || !accountName) {
         throw new Error(l10n.t('Account information is incomplete.'));
     }
@@ -83,13 +83,19 @@ export async function extractCredentialsFromRUAccount(
     // it here anyway.
     parsedCS.searchParams.delete('appName');
 
-    const clusterCredentials: ClusterCredentials = {
+    const clusterCredentials: EphemeralClusterCredentials = {
         connectionString: parsedCS.toString(),
-        connectionUser: username,
-        connectionPassword: password,
         availableAuthMethods: [AuthMethodId.NativeAuth],
         selectedAuthMethod: AuthMethodId.NativeAuth,
+        // Auth configs
+        nativeAuthConfig: {
+            connectionUser: username,
+            connectionPassword: password,
+        },
     };
+
+    // Add telemetry properties from subscription
+    context.telemetry.properties.isCustomCloud = subscription.isCustomCloud.toString();
 
     return clusterCredentials;
 }

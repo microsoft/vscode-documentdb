@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { isWindows } from '../../constants';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
@@ -44,8 +45,8 @@ export async function launchShell(
         const clusterCredentials = activeClient.getCredentials();
         if (clusterCredentials) {
             connectionString = clusterCredentials.connectionString;
-            username = clusterCredentials.connectionUser;
-            password = clusterCredentials.connectionPassword;
+            username = CredentialCache.getConnectionUser(node.cluster.id);
+            password = CredentialCache.getConnectionPassword(node.cluster.id);
             authMechanism = clusterCredentials.authMechanism;
         }
     } else {
@@ -68,13 +69,14 @@ export async function launchShell(
 
                 if (selectedAuthMethod === AuthMethodId.NativeAuth || (nativeAuthIsAvailable && !selectedAuthMethod)) {
                     connectionString = discoveredClusterCredentials.connectionString;
-                    username = discoveredClusterCredentials.connectionUser;
-                    password = discoveredClusterCredentials.connectionPassword;
+                    // Use nativeAuthConfig for credential access
+                    username = discoveredClusterCredentials.nativeAuthConfig?.connectionUser;
+                    password = discoveredClusterCredentials.nativeAuthConfig?.connectionPassword;
                     authMechanism = AuthMethodId.NativeAuth;
                 } else {
                     // Only SCRAM-SHA-256 (username/password) authentication is supported here.
-                    // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
-                    // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
+                    // Today we support Entra ID with Azure DocumentDB, and Azure DocumentDB does not support EntraID + shell connectivity as of today
+                    // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication (formerly vCore)
                     throw Error(
                         l10n.t(
                             'Unsupported authentication mechanism. Only "Username and Password" (SCRAM-SHA-256) is supported.',
@@ -92,8 +94,8 @@ export async function launchShell(
 
     if (authMechanism !== AuthMethodId.NativeAuth) {
         // Only SCRAM-SHA-256 (username/password) authentication is supported here.
-        // Today we support Entra ID with Azure Cosmos DB for MongoDB (vCore), and vCore does not support shell connectivity as of today
-        // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication
+        // Today we support Entra ID with Azure DocumentDB, and Azure DocumentDB does not support EntraID + shell connectivity as of today
+        // https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/limits#microsoft-entra-id-authentication (formerly vCore)
         throw Error(
             l10n.t('Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.'),
         );

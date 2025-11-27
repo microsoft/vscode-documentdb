@@ -19,12 +19,16 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewConnectionWizar
             prompt: prompt,
             ignoreFocusOut: true,
             password: true,
-            value: context.password,
+            value: context.nativeAuthConfig?.connectionPassword,
             validateInput: (password?: string) => this.validateInput(context, password),
         });
 
         context.valuesToMask.push(password);
-        context.password = password;
+        // Update both structured config and legacy field
+        context.nativeAuthConfig = {
+            connectionUser: context.nativeAuthConfig?.connectionUser ?? '',
+            connectionPassword: password,
+        };
     }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
@@ -41,7 +45,7 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewConnectionWizar
 
         try {
             const parsedConnectionString = new DocumentDBConnectionString(context.connectionString!);
-            parsedConnectionString.username = context.username ?? '';
+            parsedConnectionString.username = context.nativeAuthConfig?.connectionUser ?? '';
             parsedConnectionString.password = password;
 
             const connectionString = parsedConnectionString.toString();

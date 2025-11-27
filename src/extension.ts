@@ -14,7 +14,6 @@ import {
     registerErrorHandler,
     registerUIExtensionVariables,
     TreeElementStateManager,
-    type AzureExtensionApi,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
@@ -24,7 +23,7 @@ import { ext } from './extensionVariables';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
-import { type DocumentDBExtensionApi } from '../api/src';
+import { type DocumentDBExtensionApi, type DocumentDBExtensionApiV030 } from '../api/src';
 import { MigrationService } from './services/migrationServices';
 
 export async function activateInternal(
@@ -72,8 +71,8 @@ export async function activateInternal(
         //registerReportIssueCommand('azureDatabases.reportIssue');
     });
 
-    // Create the DocumentDB Extension API
-    const documentDBApi: DocumentDBExtensionApi = {
+    // Create the DocumentDB Extension API v0.2.0
+    const documentDBApiV2: DocumentDBExtensionApi = {
         apiVersion: '0.2.0',
         migration: {
             registerProvider: (provider) => {
@@ -89,17 +88,31 @@ export async function activateInternal(
         },
     };
 
-    // Return both the DocumentDB API and Azure Extension API
-    return {
-        ...documentDBApi,
-        ...createApiProvider([
-            <AzureExtensionApi>{
-                findTreeItem: () => undefined,
-                pickTreeItem: () => undefined,
-                revealTreeItem: () => undefined,
-                apiVersion: '1.2.0',
+    // Create the DocumentDB Extension API v0.3.0
+    const documentDBApiV3: DocumentDBExtensionApiV030 = {
+        apiVersion: '0.3.0',
+        migration: {
+            registerProvider: (context: vscode.ExtensionContext, provider) => {
+                const extensionId = context.extension.id;
+                MigrationService.registerProviderWithContext(extensionId, provider);
+
+                ext.outputChannel.appendLine(
+                    vscode.l10n.t(
+                        'API v0.3.0: Registered new migration provider: "{providerId}" - "{providerLabel}" from extension "{extensionId}"',
+                        {
+                            providerId: provider.id,
+                            providerLabel: provider.label,
+                            extensionId: extensionId,
+                        },
+                    ),
+                );
             },
-        ]),
+        },
+    };
+
+    // Return DocumentDB Extension API provider supporting multiple versions
+    return {
+        ...createApiProvider([documentDBApiV2, documentDBApiV3]),
     };
 }
 
@@ -109,22 +122,23 @@ export function deactivateInternal(_context: vscode.ExtensionContext): void {
 }
 
 /**
- * Checks if vCore and RU support is to be activated in this extension.
+ * Checks if DocumentDB and RU support is to be activated in this extension.
  * This introduces changes to the behavior of the extension.
  *
- * This function is used to determine whether the vCore and RU features should be enabled in this extension.
+ * This function is used to determine whether the DocumentDB and RU features should be enabled in this extension.
  *
  * The result of this function depends on the version of the Azure Resources extension.
  * When a new version of the Azure Resources extension is released with the `AzureCosmosDbForMongoDbRu` and `MongoClusters`
  * resource types, this function will return true.
  *
- * @returns True if vCore and RU features are enabled, false | undefined otherwise.
+ * @returns True if DocumentDB and RU features are enabled, false | undefined otherwise.
  */
 export async function isVCoreAndRURolloutEnabled(): Promise<boolean | undefined> {
     return callWithTelemetryAndErrorHandling('isVCoreAndRURolloutEnabled', async (context: IActionContext) => {
         // Suppress error display and don't rethrow - this is feature detection that should fail gracefully
         context.errorHandling.suppressDisplay = true;
         context.errorHandling.rethrow = false;
+        context.telemetry.properties.isActivationEvent = 'true';
 
         const azureResourcesExtensionApi = await apiUtils.getAzureExtensionApi<
             AzureResourcesExtensionApi & { isDocumentDbExtensionSupportEnabled: () => boolean }
@@ -142,7 +156,7 @@ export async function isVCoreAndRURolloutEnabled(): Promise<boolean | undefined>
         context.telemetry.properties.vCoreAndRURolloutEnabled = 'false';
         context.telemetry.properties.apiMethodAvailable = 'false';
         ext.outputChannel.appendLog(
-            'Expected Azure Resources API v3.0.0 is not available; VCore and RU support remains inactive.',
+            'Expected Azure Resources API v3.0.0 is not available; DocumentDB and RU support remains inactive.',
         );
         return false;
     });

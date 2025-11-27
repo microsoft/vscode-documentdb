@@ -62,7 +62,7 @@ interface ResourceModelInUse extends Resource {
     // introduced new properties
     resourceGroup?: string;
 
-    // adding support for MongoRU and vCore
+    // adding support for MongoRU and DocumentDB
     dbExperience: Experience;
 
     /**

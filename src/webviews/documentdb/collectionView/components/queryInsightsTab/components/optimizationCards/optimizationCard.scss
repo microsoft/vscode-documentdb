@@ -1,0 +1,41 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+// Shared properties for all optimization cards
+.optimization-card {
+    // Icon sizing (used by all cards)
+    &-icon {
+        font-size: 40px;
+        color: var(--colorBrandForeground1);
+    }
+
+    // Container layout (used by all cards)
+    &-container {
+        display: flex;
+        gap: 16px;
+    }
+}
+
+// Index code block display
+.index-code-block {
+    background-color: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    margin: 0;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+// Index details text (appears below code block)
+.index-details-text {
+    display: block;
+    margin-top: 4px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+}

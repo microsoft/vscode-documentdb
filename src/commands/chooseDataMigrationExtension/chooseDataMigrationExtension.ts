@@ -104,35 +104,43 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                     throw new Error(l10n.t('No credentials found for the selected cluster.'));
                 }
 
-                const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
-                parsedCS.username = credentials?.connectionUser ?? '';
-                parsedCS.password = credentials?.connectionPassword ?? '';
+                // TODO: Include a dialog box for users to approve sharing credentials with a 3rd-party extension
+                // This should be done when the provider is used, each time the action states it "requiredAuthentication".
+                // We should allow whitelisting extensions trusted by the user to avoid repeated prompts.
+                // This could be done on our own but available for the user to edit in settings.
+                const parsedCS_WithCredentials = new DocumentDBConnectionString(credentials.connectionString);
+                parsedCS_WithCredentials.username = CredentialCache.getConnectionUser(node.cluster.id) ?? '';
+                parsedCS_WithCredentials.password = CredentialCache.getConnectionPassword(node.cluster.id) ?? '';
 
                 const options = {
-                    connectionString: parsedCS.toString(),
+                    connectionString: parsedCS_WithCredentials.toString(),
                     extendedProperties: {
                         clusterId: node.cluster.id,
                     },
                 };
 
                 // Get available actions from the provider
-                const availableActions = await selectedProvider.getAvailableActions(options);
+                const availableActions: (QuickPickItem & {
+                    id: string;
+                    learnMoreUrl?: string;
+                    requiresAuthentication?: boolean;
+                })[] = (await selectedProvider.getAvailableActions(options)).map((action) => ({
+                    id: action.id,
+                    label: action.label,
+                    detail: action.description,
+                    iconPath: action.iconPath,
+                    alwaysShow: action.alwaysShow,
+                    requiresAuthentication: action.requiresAuthentication,
+                }));
 
                 if (availableActions.length === 0) {
                     // No actions available, execute default action
                     await selectedProvider.executeAction(options);
                 } else {
-                    // Extend actions with Learn More option if provider has a learn more URL
-                    const extendedActions: (QuickPickItem & {
-                        id: string;
-                        learnMoreUrl?: string;
-                        requiresAuthentication?: boolean;
-                    })[] = [...availableActions];
-
                     const learnMoreUrl = selectedProvider.getLearnMoreUrl?.();
 
                     if (learnMoreUrl) {
-                        extendedActions.push(
+                        availableActions.push(
                             { id: 'separator', label: '', kind: QuickPickItemKind.Separator },
                             {
                                 id: 'learnMore',
@@ -145,7 +153,7 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                     }
 
                     // Show action picker to user
-                    const selectedAction = await context.ui.showQuickPick(extendedActions, {
+                    const selectedAction = await context.ui.showQuickPick(availableActions, {
                         placeHolder: l10n.t('Choose the migration action…'),
                         stepName: 'selectMigrationAction',
                         suppressPersistence: true,

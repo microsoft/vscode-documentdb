@@ -1,0 +1,74 @@
+{
+  "_debug_active": false,
+  "_instructions": "Set _debug_active to true to activate - This is a COLLSCAN example showing poor performance with in-memory sort",
+
+  "queryPlanner": {
+    "plannerVersion": 1,
+    "namespace": "mydb.mycollection",
+    "indexFilterSet": false,
+    "parsedQuery": {
+      "description": { "$regex": "urgent" }
+    },
+    "winningPlan": {
+      "stage": "SORT",
+      "sortPattern": {
+        "createdAt": -1
+      },
+      "inputStage": {
+        "stage": "COLLSCAN",
+        "filter": {
+          "description": { "$regex": "urgent" }
+        },
+        "direction": "forward"
+      }
+    },
+    "rejectedPlans": []
+  },
+  "executionStats": {
+    "executionSuccess": true,
+    "nReturned": 20,
+    "executionTimeMillis": 550,
+    "totalKeysExamined": 0,
+    "totalDocsExamined": 2400,
+    "executionStages": {
+      "stage": "SORT",
+      "nReturned": 20,
+      "executionTimeMillisEstimate": 165,
+      "works": 2402,
+      "advanced": 20,
+      "needTime": 2401,
+      "needYield": 0,
+      "saveState": 2,
+      "restoreState": 2,
+      "isEOF": 1,
+      "sortPattern": {
+        "createdAt": -1
+      },
+      "memUsage": 8192,
+      "memLimit": 33554432,
+      "inputStage": {
+        "stage": "COLLSCAN",
+        "filter": {
+          "description": { "$regex": "urgent" }
+        },
+        "nReturned": 2400,
+        "executionTimeMillisEstimate": 385,
+        "works": 2402,
+        "advanced": 2400,
+        "needTime": 1,
+        "needYield": 0,
+        "saveState": 2,
+        "restoreState": 2,
+        "isEOF": 1,
+        "direction": "forward",
+        "docsExamined": 2400
+      }
+    }
+  },
+  "serverInfo": {
+    "host": "localhost",
+    "port": 27017,
+    "version": "6.0.0"
+  },
+  "ok": 1
+}

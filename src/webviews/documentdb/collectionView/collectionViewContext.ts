@@ -4,6 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createContext } from 'react';
+import {
+    type QueryInsightsStage1Response,
+    type QueryInsightsStage2Response,
+    type QueryInsightsStage3Response,
+} from './types/queryInsights';
 
 export enum Views {
     TABLE = 'Table View',
@@ -11,16 +16,66 @@ export enum Views {
     JSON = 'JSON View',
 }
 
+/**
+ * Query Insights State - Tracks the three-stage progressive loading of query insights
+ * - Stage 1: Query planner data (lightweight, from explain("queryPlanner"))
+ * - Stage 2: Execution statistics (from explain("executionStats"))
+ * - Stage 3: AI-powered recommendations (opt-in, requires external AI service call)
+ *
+ * Promise tracking prevents duplicate requests during rapid tab switching.
+ */
+
+export type QueryInsightsStageStatus = 'loading' | 'success' | 'error' | 'cancelled';
+
+export interface QueryInsightsCurrentStage {
+    phase: 1 | 2 | 3;
+    status: QueryInsightsStageStatus;
+}
+
+export interface QueryInsightsState {
+    // Explicit stage tracking for clear state transitions
+    currentStage: QueryInsightsCurrentStage;
+
+    stage1Data: QueryInsightsStage1Response | null;
+    stage1ErrorMessage: string | null;
+    stage1ErrorCode: string | null; // Error code for UI pattern matching (e.g., 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU')
+    stage1Promise: Promise<QueryInsightsStage1Response> | null;
+
+    stage2Data: QueryInsightsStage2Response | null;
+    stage2ErrorMessage: string | null;
+    stage2ErrorCode: string | null; // Error code for UI pattern matching
+    stage2Promise: Promise<QueryInsightsStage2Response> | null;
+
+    stage3Data: QueryInsightsStage3Response | null;
+    stage3ErrorMessage: string | null;
+    stage3ErrorCode: string | null; // Error code for UI pattern matching
+    stage3Promise: Promise<QueryInsightsStage3Response> | null;
+    stage3RequestKey: string | null; // Unique key to track if the response is still valid
+
+    // Track which errors have been displayed to the user (to prevent duplicate toasts)
+    displayedErrors: string[]; // Array of error keys that have been shown
+}
+
+export type TableViewState = {
+    currentPath: string[];
+};
+
 export type CollectionViewContextType = {
     isLoading: boolean; // this is a concious decision to use 'isLoading' instead of <Suspense> tags. It's not only the data display component that is supposed to react to the lading state but also some input fields, buttons, etc.
     isFirstTimeLoad: boolean; // this will be set to true during the first data fetch, here we need more time and add more loading animations, but only on the first load
     currentView: Views;
     currentViewState?: TableViewState; // | TreeViewConfiguration |  other views can get config over time
-    currentQueryDefinition: {
-        // holds the current query, we run a new database query when this changes
-        queryText: string;
+    activeQuery: {
+        // The last executed query (used for export, pagination, display)
+        queryText: string; // deprecated: use filter instead
+        filter: string; // MongoDB API find filter (same as queryText for backward compatibility)
+        project: string; // MongoDB API projection
+        sort: string; // MongoDB API sort specification
+        skip: number; // Number of documents to skip
+        limit: number; // Maximum number of documents to return
         pageNumber: number;
         pageSize: number;
+        executionIntent?: 'initial' | 'refresh' | 'pagination'; // Intent of the query execution
     };
     commands: {
         disableAddDocument: boolean;
@@ -35,21 +90,30 @@ export type CollectionViewContextType = {
         selectedDocumentIndexes: number[];
     };
     queryEditor?: {
-        getCurrentContent: () => string;
+        getCurrentQuery: () => {
+            filter: string;
+            project: string;
+            sort: string;
+            skip: number;
+            limit: number;
+        };
         setJsonSchema(schema: object): Promise<void>; //monacoEditor.languages.json.DiagnosticsOptions, but we don't want to import monacoEditor here
     };
-};
-
-export type TableViewState = {
-    currentPath: string[];
+    isAiRowVisible: boolean; // Controls visibility of the AI prompt row in QueryEditor
+    queryInsights: QueryInsightsState; // Query insights state for progressive loading
 };
 
 export const DefaultCollectionViewContext: CollectionViewContextType = {
     isLoading: false,
     isFirstTimeLoad: true,
     currentView: Views.TABLE,
-    currentQueryDefinition: {
-        queryText: '{  }',
+    activeQuery: {
+        queryText: '{  }', // deprecated: use filter instead
+        filter: '{  }',
+        project: '{  }',
+        sort: '{  }',
+        skip: 0,
+        limit: 0,
         pageNumber: 1,
         pageSize: 10,
     },
@@ -62,6 +126,28 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
     dataSelection: {
         selectedDocumentObjectIds: [],
         selectedDocumentIndexes: [],
+    },
+    isAiRowVisible: false,
+    queryInsights: {
+        currentStage: { phase: 1, status: 'loading' },
+
+        stage1Data: null,
+        stage1ErrorMessage: null,
+        stage1ErrorCode: null,
+        stage1Promise: null,
+
+        stage2Data: null,
+        stage2ErrorMessage: null,
+        stage2ErrorCode: null,
+        stage2Promise: null,
+
+        stage3Data: null,
+        stage3ErrorMessage: null,
+        stage3ErrorCode: null,
+        stage3Promise: null,
+        stage3RequestKey: null,
+
+        displayedErrors: [],
     },
 };
 

@@ -56,6 +56,9 @@ describe('Survey Scoring', () => {
         surveyState.usageScore = 0;
         surveyState.wasPromptedInSession = false;
 
+        // Enable survey for tests (it's disabled in production)
+        surveyConfig.settings.DISABLE_SURVEY = false;
+
         // Clear mock calls between tests
         jest.clearAllMocks();
     });

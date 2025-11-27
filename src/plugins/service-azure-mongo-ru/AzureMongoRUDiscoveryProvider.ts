@@ -10,9 +10,9 @@ import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
-import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering';
+import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering/configureAzureSubscriptionFilter';
 import { AzureContextProperties } from '../api-shared/azure/wizard/AzureContextProperties';
-import { SelectSubscriptionStep } from '../service-azure-vm/discovery-wizard/SelectSubscriptionStep';
+import { SelectSubscriptionStep } from '../api-shared/azure/wizard/SelectSubscriptionStep';
 import { AzureMongoRUServiceRootItem } from './discovery-tree/AzureMongoRUServiceRootItem';
 import { AzureMongoRUExecuteStep } from './discovery-wizard/AzureMongoRUExecuteStep';
 import { SelectRUClusterStep } from './discovery-wizard/SelectRUClusterStep';
@@ -56,6 +56,27 @@ export class AzureMongoRUDiscoveryProvider extends Disposable implements Discove
         if (node instanceof AzureMongoRUServiceRootItem) {
             await configureAzureSubscriptionFilter(context, this.azureSubscriptionProvider);
             ext.discoveryBranchDataProvider.refresh(node);
+        }
+    }
+
+    async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {
+        // Add telemetry for credential configuration activation
+        context.telemetry.properties.credentialConfigActivated = 'true';
+        context.telemetry.properties.discoveryProviderId = this.id;
+        context.telemetry.properties.nodeProvided = node ? 'true' : 'false';
+
+        if (!node || node instanceof AzureMongoRUServiceRootItem) {
+            // Use the new Azure credentials configuration wizard
+            const { configureAzureCredentials } = await import('../api-shared/azure/credentialsManagement');
+            await configureAzureCredentials(context, this.azureSubscriptionProvider, node);
+
+            if (node) {
+                // Tree context: refresh specific node
+                ext.discoveryBranchDataProvider.refresh(node);
+            } else {
+                // Wizard context: refresh entire discovery tree
+                ext.discoveryBranchDataProvider.refresh();
+            }
         }
     }
 }
