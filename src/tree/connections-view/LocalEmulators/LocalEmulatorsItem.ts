@@ -5,6 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { type IconPath } from 'vscode';
 
 import path from 'path';
 import { getResourcesPath } from '../../../constants';
@@ -54,7 +55,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
         ];
     }
 
-    private iconPath: { light: vscode.Uri; dark: vscode.Uri } = {
+    private iconPath: IconPath = {
         light: vscode.Uri.file(path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-light-themes.svg')),
         dark: vscode.Uri.file(path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-dark-themes.svg')),
     };

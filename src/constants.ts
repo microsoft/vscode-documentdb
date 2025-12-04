@@ -10,14 +10,14 @@ export const isMacOS: boolean = /^darwin/.test(process.platform);
 import * as fs from 'fs';
 import assert from 'node:assert';
 import * as path from 'path';
-import { Uri } from 'vscode';
+import { Uri, type IconPath } from 'vscode';
 import { ext } from './extensionVariables';
 
 export namespace Links {
     export const LocalConnectionDebuggingTips: string = 'https://aka.ms/vscode-documentdb-local-connections';
 }
 
-export function getThemedIconPath(iconName: string): { light: Uri; dark: Uri } {
+export function getThemedIconPath(iconName: string): IconPath {
     const light = path.join(getResourcesPath(), 'icons', 'light', iconName);
     const dark = path.join(getResourcesPath(), 'icons', 'dark', iconName);
 
@@ -30,7 +30,7 @@ export function getThemedIconPath(iconName: string): { light: Uri; dark: Uri } {
     };
 }
 
-export function getThemeAgnosticIconPath(iconName: string): Uri {
+export function getThemeAgnosticIconPath(iconName: string): IconPath {
     const icon = path.join(getResourcesPath(), 'icons', 'theme-agnostic', iconName);
 
     assert.ok(fs.existsSync(icon));
@@ -38,7 +38,7 @@ export function getThemeAgnosticIconPath(iconName: string): Uri {
     return Uri.file(icon);
 }
 
-export function getIconPath(iconName: string): Uri {
+export function getIconPath(iconName: string): IconPath {
     const icon = path.join(getResourcesPath(), 'icons', iconName);
     assert.ok(fs.existsSync(icon));
     return Uri.file(icon);

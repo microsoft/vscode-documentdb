@@ -7,7 +7,7 @@
   "description": "DocumentDB and MongoDB GUI: Connect to databases, run queries, and manage your data. Supports working with databases across both cloud-based and local environments.",
   "enableMongoClusters": true,
   "engines": {
-    "vscode": "^1.90.0",
+    "vscode": "^1.96.0",
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
   },
@@ -101,7 +101,7 @@
     "@types/react-dom": "~19.2.2",
     "@types/semver": "~7.7.1",
     "@types/uuid": "~10.0.0",
-    "@types/vscode": "1.90.0",
+    "@types/vscode": "~1.96.0",
     "@types/vscode-webview": "~1.57.5",
     "@vscode/l10n-dev": "~0.0.35",
     "@vscode/test-cli": "~0.0.12",
