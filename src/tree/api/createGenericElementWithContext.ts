@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type GenericElementOptions } from '@microsoft/vscode-azext-utils';
-import { type TreeItem, Uri, type IconPath } from 'vscode';
+import { Uri, type IconPath, type TreeItem } from 'vscode';
 import { nonNullValue } from '../../utils/nonNull';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -37,10 +37,10 @@ export function createGenericElementWithContext(
         contextValue: nonNullValue(options.contextValue, 'options.contextValue', 'createGenericElementWithContext.ts'),
 
         getTreeItem(): TreeItem {
-            const { iconPath: _, ...restOptions } = options;
+            const { iconPath, ...restOptions } = options;
             return {
                 ...restOptions,
-                iconPath: convertIconPath(options.iconPath),
+                iconPath: convertIconPath(iconPath),
                 command: options.commandId
                     ? {
                           title: '',
