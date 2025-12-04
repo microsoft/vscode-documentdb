@@ -171,7 +171,6 @@
     "monaco-editor": "~0.54.0",
     "mongodb": "~7.0.0",
     "mongodb-connection-string-url": "~3.0.2",
-    "npm": "^11.6.4",
     "react-hotkeys-hook": "~5.2.1",
     "react-markdown": "^10.1.0",
     "regenerator-runtime": "^0.14.1",
