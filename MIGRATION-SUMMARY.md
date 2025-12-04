@@ -211,7 +211,7 @@ All tests passed successfully after the migration:
 
 ### Compatibility:
 - ✅ Node.js 20+ (as specified in package.json engines)
-- ✅ VS Code 1.90.0+ (as specified in package.json engines)
+- ✅ VS Code 1.96.0+ (as specified in package.json engines)
 - ✅ All existing features work as expected
 - ✅ No user-facing breaking changes
 
