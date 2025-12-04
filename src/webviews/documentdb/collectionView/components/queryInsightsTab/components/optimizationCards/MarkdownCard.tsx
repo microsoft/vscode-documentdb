@@ -8,7 +8,7 @@ import { Card, CardHeader, makeStyles, Text, tokens } from '@fluentui/react-comp
 // import { CopyRegular } from '@fluentui/react-icons';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { forwardRef, type JSX } from 'react';
+import { type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './optimizationCard.scss';
 
@@ -127,6 +127,11 @@ interface MarkdownCardProps {
      * Set to false for non-AI generated content (e.g., error messages)
      */
     showAiDisclaimer?: boolean;
+    
+    /**
+     * Ref to forward to the card element
+     */
+    ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -144,9 +149,8 @@ interface MarkdownCardProps {
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(
-    // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
-    ({ title, content, icon, onCopy: _onCopy, showAiDisclaimer = true }, ref) => {
+// TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
+export function MarkdownCard({ title, content, icon, onCopy: _onCopy, showAiDisclaimer = true, ref }: MarkdownCardProps) {
         const styles = useStyles();
 
         return (
@@ -177,7 +181,4 @@ export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(
                 </div>
             </Card>
         );
-    },
-);
-
-MarkdownCard.displayName = 'MarkdownCard';
+}

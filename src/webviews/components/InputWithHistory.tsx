@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Input, type InputProps } from '@fluentui/react-components';
-import { forwardRef, useRef, useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 
 export interface InputWithHistoryProps extends InputProps {
     /**
@@ -27,6 +27,11 @@ export interface InputWithHistoryProps extends InputProps {
      * - If omitted: Component manages history internally (even if `history` prop is provided for initial state)
      */
     onHistoryChange?: (history: string[]) => void;
+    
+    /**
+     * Ref to forward to the underlying input element
+     */
+    ref?: React.Ref<HTMLInputElement>;
 }
 
 /**
@@ -72,19 +77,16 @@ export interface InputWithHistoryProps extends InputProps {
  * />
  * ```
  */
-export const InputWithHistory = forwardRef<HTMLInputElement, InputWithHistoryProps>(
-    (
-        {
-            history: controlledHistory,
-            maxHistorySize = 50,
-            onHistoryChange,
-            value: controlledValue,
-            onChange,
-            onKeyDown,
-            ...inputProps
-        },
-        ref,
-    ): JSX.Element => {
+export function InputWithHistory({
+    history: controlledHistory,
+    maxHistorySize = 50,
+    onHistoryChange,
+    value: controlledValue,
+    onChange,
+    onKeyDown,
+    ref,
+    ...inputProps
+}: InputWithHistoryProps): JSX.Element {
         // Determine if history is fully controlled (both history AND onHistoryChange provided)
         const isHistoryControlled = controlledHistory !== undefined && onHistoryChange !== undefined;
 
@@ -250,10 +252,7 @@ export const InputWithHistory = forwardRef<HTMLInputElement, InputWithHistoryPro
             }
         };
 
-        return (
-            <Input ref={ref} {...inputProps} value={currentValue} onChange={handleChange} onKeyDown={handleKeyDown} />
-        );
-    },
-);
-
-InputWithHistory.displayName = 'InputWithHistory';
+    return (
+        <Input ref={ref} {...inputProps} value={currentValue} onChange={handleChange} onKeyDown={handleKeyDown} />
+    );
+}

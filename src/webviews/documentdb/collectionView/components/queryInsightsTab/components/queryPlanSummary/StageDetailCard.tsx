@@ -5,7 +5,7 @@
 
 import { Badge, Card, Text, Tooltip } from '@fluentui/react-components';
 import { WarningRegular } from '@fluentui/react-icons';
-import { forwardRef } from 'react';
+import React from 'react';
 import './StageDetailCard.scss';
 
 export type StageType = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
@@ -50,6 +50,11 @@ export interface StageDetailCardProps {
      * Optional className for styling
      */
     className?: string;
+    
+    /**
+     * Ref to forward to the card element
+     */
+    ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -57,8 +62,7 @@ export interface StageDetailCardProps {
  * Uses bordered grid cells for primary metrics (Returned + Execution Time).
  * Supports ref forwarding for use with animation libraries.
  */
-export const StageDetailCard = forwardRef<HTMLDivElement, StageDetailCardProps>(
-    ({ stageType, description, returned, executionTimeMs, metrics, hasFailed, className }, ref) => {
+export function StageDetailCard({ stageType, description, returned, executionTimeMs, metrics, hasFailed, className, ref }: StageDetailCardProps) {
         // Use danger color for failed stages, otherwise use brand color
         const badgeColor = hasFailed ? 'danger' : 'brand';
 
@@ -138,7 +142,4 @@ export const StageDetailCard = forwardRef<HTMLDivElement, StageDetailCardProps>(
                 )}
             </Card>
         );
-    },
-);
-
-StageDetailCard.displayName = 'StageDetailCard';
+}

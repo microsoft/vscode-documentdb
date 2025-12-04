@@ -15,7 +15,7 @@ import {
 } from '@fluentui/react-components';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { forwardRef } from 'react';
+import React from 'react';
 import '../optimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 
@@ -64,6 +64,11 @@ export interface GetPerformanceInsightsCardProps {
      * Optional className to apply to the Card component (e.g., for spacing)
      */
     className?: string;
+    
+    /**
+     * Ref to forward to the card element
+     */
+    ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -81,22 +86,19 @@ export interface GetPerformanceInsightsCardProps {
  * **Note**: This component does not apply default margins. Use the `className` prop to apply
  * spacing classes (e.g., `cardSpacing`) when using in layouts that require spacing.
  */
-export const GetPerformanceInsightsCard = forwardRef<HTMLDivElement, GetPerformanceInsightsCardProps>(
-    (
-        {
-            bodyText,
-            recommendation,
-            isLoading,
-            enabled = true,
-            errorMessage,
-            onGetInsights,
-            onLearnMore,
-            onCancel,
-            className,
-        },
-        ref,
-    ) => {
-        return (
+export function GetPerformanceInsightsCard({
+    bodyText,
+    recommendation,
+    isLoading,
+    enabled = true,
+    errorMessage,
+    onGetInsights,
+    onLearnMore,
+    onCancel,
+    className,
+    ref,
+}: GetPerformanceInsightsCardProps) {
+    return (
             <Card
                 ref={ref}
                 className={`get-performance-insights-card${className ? ` ${className}` : ''}`}
@@ -168,7 +170,4 @@ export const GetPerformanceInsightsCard = forwardRef<HTMLDivElement, GetPerforma
                 </div>
             </Card>
         );
-    },
-);
-
-GetPerformanceInsightsCard.displayName = 'GetPerformanceInsightsCard';
+}

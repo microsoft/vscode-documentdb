@@ -8,7 +8,7 @@ import { Card, CardHeader, Text, tokens } from '@fluentui/react-components';
 // import { Button, CopyRegular } from '@fluentui/react-icons';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { forwardRef, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import './AiCard.scss';
 import './optimizationCard.scss';
 
@@ -32,6 +32,11 @@ export interface AiCardProps {
      * Optional callback when the copy button is clicked
      */
     onCopy?: () => void;
+    
+    /**
+     * Ref to forward to the card element
+     */
+    ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -49,9 +54,8 @@ export interface AiCardProps {
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const AiCard = forwardRef<HTMLDivElement, AiCardProps>(
-    // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
-    ({ title, titleChildren, children, onCopy: _onCopy }, ref) => {
+// TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
+export function AiCard({ title, titleChildren, children, onCopy: _onCopy, ref }: AiCardProps) {
         return (
             <Card ref={ref} style={{ marginBottom: '16px' }}>
                 <Text
@@ -89,7 +93,4 @@ export const AiCard = forwardRef<HTMLDivElement, AiCardProps>(
                 </div>
             </Card>
         );
-    },
-);
-
-AiCard.displayName = 'AiCard';
+}

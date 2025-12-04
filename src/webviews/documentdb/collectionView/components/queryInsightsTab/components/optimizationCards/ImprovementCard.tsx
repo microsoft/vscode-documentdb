@@ -20,7 +20,7 @@ import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
 // TODO: Copy content feature will be added in the next release
 // import { CopyRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { forwardRef, useState } from 'react';
+import { useState } from 'react';
 import { type ImprovementCard as ImprovementCardConfig } from '../../../../types/queryInsights';
 import './AiCard.scss';
 import './optimizationCard.scss';
@@ -47,6 +47,11 @@ export interface ImprovementCardProps {
      * Returns a Promise with success status and optional message
      */
     onSecondaryAction?: (actionId: string, payload: unknown) => Promise<{ success: boolean; message?: string }>;
+    
+    /**
+     * Ref to forward to the card element
+     */
+    ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -76,9 +81,8 @@ const priorityColors: Record<'high' | 'medium' | 'low', 'danger' | 'warning' | '
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
-    // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
-    ({ config, onCopy: _onCopy, onPrimaryAction, onSecondaryAction }, ref) => {
+// TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
+export function ImprovementCard({ config, onCopy: _onCopy, onPrimaryAction, onSecondaryAction, ref }: ImprovementCardProps) {
         // Separate state for each button - independent execution tracking
         const [primaryState, setPrimaryState] = useState<{
             isLoading: boolean;
@@ -310,7 +314,4 @@ export const ImprovementCard = forwardRef<HTMLDivElement, ImprovementCardProps>(
                 </div>
             </Card>
         );
-    },
-);
-
-ImprovementCard.displayName = 'ImprovementCard';
+}
