@@ -10,54 +10,38 @@ export const isMacOS: boolean = /^darwin/.test(process.platform);
 import * as fs from 'fs';
 import assert from 'node:assert';
 import * as path from 'path';
-import { Utils, type URI } from 'vscode-uri';
+import { Uri } from 'vscode';
 import { ext } from './extensionVariables';
 
 export namespace Links {
     export const LocalConnectionDebuggingTips: string = 'https://aka.ms/vscode-documentdb-local-connections';
 }
 
-export interface IThemedIconPath {
-    light: string;
-    dark: string;
-}
+export function getThemedIconPath(iconName: string): { light: Uri; dark: Uri } {
+    const light = path.join(getResourcesPath(), 'icons', 'light', iconName);
+    const dark = path.join(getResourcesPath(), 'icons', 'dark', iconName);
 
-export interface IThemedIconURI {
-    light: URI;
-    dark: URI;
-}
+    assert.ok(fs.existsSync(light));
+    assert.ok(fs.existsSync(dark));
 
-export function getThemedIconPath(iconName: string): IThemedIconPath {
-    const a = {
-        light: path.join(getResourcesPath(), 'icons', 'light', iconName),
-        dark: path.join(getResourcesPath(), 'icons', 'dark', iconName),
+    return {
+        light: Uri.file(light),
+        dark: Uri.file(dark),
     };
-    assert.ok(fs.existsSync(a.light));
-    return a;
 }
 
-export function getThemeAgnosticIconPath(iconName: string): IThemedIconPath {
-    const a = {
-        light: path.join(getResourcesPath(), 'icons', 'theme-agnostic', iconName),
-        dark: path.join(getResourcesPath(), 'icons', 'theme-agnostic', iconName),
-    };
-    assert.ok(fs.existsSync(a.light));
-    return a;
+export function getThemeAgnosticIconPath(iconName: string): Uri {
+    const icon = path.join(getResourcesPath(), 'icons', 'theme-agnostic', iconName);
+
+    assert.ok(fs.existsSync(icon));
+
+    return Uri.file(icon);
 }
 
-export function getIconURI(iconName: string): URI {
-    const uri = Utils.joinPath(ext.context.extensionUri, 'resources', 'icons', iconName);
-    assert.ok(fs.existsSync(uri.path));
-    return uri;
-}
-
-export function getThemeAgnosticIconURI(iconName: string): IThemedIconURI {
-    const a = {
-        light: Utils.joinPath(ext.context.extensionUri, 'resources', 'icons', 'theme-agnostic', iconName),
-        dark: Utils.joinPath(ext.context.extensionUri, 'resources', 'icons', 'theme-agnostic', iconName),
-    };
-    assert.ok(fs.existsSync(a.light.path));
-    return a;
+export function getIconPath(iconName: string): Uri {
+    const icon = path.join(getResourcesPath(), 'icons', iconName);
+    assert.ok(fs.existsSync(icon));
+    return Uri.file(icon);
 }
 
 export function getResourcesPath(): string {

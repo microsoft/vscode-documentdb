@@ -7,7 +7,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
 import path from 'path';
-import { getResourcesPath, type IThemedIconPath } from '../../../constants';
+import { getResourcesPath } from '../../../constants';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import {
     ConnectionStorageService,
@@ -54,9 +54,9 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
         ];
     }
 
-    private iconPath: IThemedIconPath = {
-        light: path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-light-themes.svg'),
-        dark: path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-dark-themes.svg'),
+    private iconPath: { light: vscode.Uri; dark: vscode.Uri } = {
+        light: vscode.Uri.file(path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-light-themes.svg')),
+        dark: vscode.Uri.file(path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-dark-themes.svg')),
     };
 
     public getTreeItem(): vscode.TreeItem {
