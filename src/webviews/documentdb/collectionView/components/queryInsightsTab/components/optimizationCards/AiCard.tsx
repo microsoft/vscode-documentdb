@@ -32,7 +32,7 @@ export interface AiCardProps {
      * Optional callback when the copy button is clicked
      */
     onCopy?: () => void;
-    
+
     /**
      * Ref to forward to the card element
      */
@@ -56,41 +56,41 @@ export interface AiCardProps {
  */
 // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
 export function AiCard({ title, titleChildren, children, onCopy: _onCopy, ref }: AiCardProps) {
-        return (
-            <Card ref={ref} style={{ marginBottom: '16px' }}>
-                <Text
-                    size={200}
-                    style={{
-                        position: 'absolute',
-                        top: '12px',
-                        right: '12px',
-                        color: tokens.colorNeutralForeground3,
-                    }}
-                >
-                    {l10n.t('AI responses may be inaccurate')}
-                </Text>
-                <div className="optimization-card-container">
-                    <SparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                        <CardHeader
-                            header={
-                                <div className="ai-card-title-container">
-                                    <Text weight="semibold" size={400}>
-                                        {title}
-                                    </Text>
-                                    {titleChildren}
-                                </div>
-                            }
-                            // TODO: Copy content feature will be added in the next release
-                            // action={
-                            //     onCopy ? (
-                            //         <Button appearance="subtle" icon={<CopyRegular />} size="small" onClick={onCopy} />
-                            //     ) : undefined
-                            // }
-                        />
-                        <div style={{ marginTop: '12px' }}>{children}</div>
-                    </div>
+    return (
+        <Card ref={ref} style={{ marginBottom: '16px' }}>
+            <Text
+                size={200}
+                style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    color: tokens.colorNeutralForeground3,
+                }}
+            >
+                {l10n.t('AI responses may be inaccurate')}
+            </Text>
+            <div className="optimization-card-container">
+                <SparkleRegular className="optimization-card-icon" style={{ flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                    <CardHeader
+                        header={
+                            <div className="ai-card-title-container">
+                                <Text weight="semibold" size={400}>
+                                    {title}
+                                </Text>
+                                {titleChildren}
+                            </div>
+                        }
+                        // TODO: Copy content feature will be added in the next release
+                        // action={
+                        //     onCopy ? (
+                        //         <Button appearance="subtle" icon={<CopyRegular />} size="small" onClick={onCopy} />
+                        //     ) : undefined
+                        // }
+                    />
+                    <div style={{ marginTop: '12px' }}>{children}</div>
                 </div>
-            </Card>
-        );
+            </div>
+        </Card>
+    );
 }

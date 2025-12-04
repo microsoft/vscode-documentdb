@@ -14,7 +14,7 @@ interface InputWithProgressProps extends InputWithHistoryProps {
      * and hides Fluent UI's default underline border to prevent visual conflicts.
      */
     indeterminateProgress?: boolean;
-    
+
     /**
      * Ref to forward to the underlying input element
      */

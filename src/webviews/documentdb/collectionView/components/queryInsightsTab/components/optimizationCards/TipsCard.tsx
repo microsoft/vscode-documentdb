@@ -35,7 +35,7 @@ export interface TipsCardProps {
      * Optional callback when the copy button is clicked
      */
     onCopy?: () => void;
-    
+
     /**
      * Ref to forward to the card element
      */
