@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { getIconPath } from '../../constants';
+import { getIconPath } from '../../utils/icons';
 
 /**
  * Authentication method identifiers

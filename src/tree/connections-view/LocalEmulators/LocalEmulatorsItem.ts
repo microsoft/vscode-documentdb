@@ -8,7 +8,6 @@ import * as vscode from 'vscode';
 import { type IconPath } from 'vscode';
 
 import path from 'path';
-import { getResourcesPath } from '../../../constants';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import {
     ConnectionStorageService,
@@ -16,6 +15,7 @@ import {
     type ConnectionItem,
 } from '../../../services/connectionStorageService';
 import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
+import { getResourcesPath } from '../../../utils/icons';
 import { type ClusterModelWithStorage } from '../../documentdb/ClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
