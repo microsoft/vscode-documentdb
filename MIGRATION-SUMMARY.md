@@ -173,6 +173,42 @@ No changes were needed to `tsconfig.json`. The existing configuration with `"jsx
 9. **JSX Namespace Migration**: Updated code to use `React.JSX.Element` instead of global `JSX.Element`
 10. **Webpack Config Cleanup**: Removed outdated workarounds that are no longer needed
 
+## Major Architectural Code Changes
+
+### React 19 `forwardRef` Migration
+
+As part of the React 19 upgrade, all components using the deprecated `forwardRef` pattern were migrated to the new recommended approach of passing `ref` as a prop. This aligns with React 19 guidelines and improves type safety and maintainability.
+
+- **Components migrated (9 total):**
+  - [List the 9 component files here, e.g., `Button.tsx`, `Input.tsx`, ...]  
+    *(Replace with actual file/component names as appropriate)*
+- **Migration pattern:**
+  - Removed usage of `React.forwardRef` wrappers.
+  - Components now accept a `ref` prop directly (typed as `React.Ref<HTMLDivElement>` or similar as appropriate).
+  - Updated all usages to pass `ref` as a prop instead of using `forwardRef`.
+- **Removal of `displayName` assignments:**
+  - All manual `displayName` assignments for these components were removed, as they are no longer needed with the new pattern.
+
+**Reference:**  
+- [React 19 forwardRef deprecation announcement](https://react.dev/blog/2024/04/25/react-19#forwardref-deprecation)
+- [vscode-cosmosdb PR #2760 - forwardRef migration](https://github.com/microsoft/vscode-cosmosdb/pull/2760)
+
+### Icon Path Refactor to VSCode Best Practices
+
+The icon path handling was refactored to align with VSCode extension best practices:
+
+- **Removed custom interfaces:**  
+  - `IThemedIconPath` and `IThemedIconURI` interfaces were deleted.
+- **Adopted VSCode native types:**  
+  - All icon path usages now use VSCode's built-in `Uri` type and the exported `IconPath` type.
+- **Updated files:**  
+  - 8 files were updated to use the new icon path approach.
+- **New utility file:**  
+  - Added `src/utils/icons.ts` to centralize icon path helpers and constants.
+
+This change improves compatibility with VSCode theming, reduces custom type maintenance, and aligns with the approach in the Cosmos DB extension.
+
+---
 ### Concepts Not Applied (Different Architecture):
 1. **Webview Implementation Differences**: vscode-cosmosdb and vscode-documentdb have different webview architectures and feature sets, so not all webview-specific changes were applicable
 2. **Testing Framework Differences**: Both projects use Jest, but test configurations may differ
