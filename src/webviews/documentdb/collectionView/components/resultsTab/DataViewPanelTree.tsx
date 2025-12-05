@@ -5,7 +5,7 @@
 
 import { debounce } from 'es-toolkit';
 import * as React from 'react';
-import { FieldType, Formatters, SlickgridReact, type GridOption } from 'slickgrid-react';
+import { Formatters, SlickgridReact, type GridOption } from 'slickgrid-react';
 
 interface Props {
     liveData: { [key: string]: unknown }[];
@@ -20,7 +20,7 @@ export const DataViewPanelTree = ({ liveData }: Props): React.JSX.Element => {
             name: 'Field',
             field: 'field',
             minWidth: 100,
-            type: FieldType.string,
+            type: 'string' as const,
             formatter: Formatters.tree,
             cssClass: 'cell-title',
             filterable: true,
