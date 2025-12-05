@@ -15,7 +15,7 @@ import {
 } from '@fluentui/react-components';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { forwardRef } from 'react';
+import React from 'react';
 import '../optimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 
@@ -64,6 +64,11 @@ export interface GetPerformanceInsightsCardProps {
      * Optional className to apply to the Card component (e.g., for spacing)
      */
     className?: string;
+
+    /**
+     * Ref to forward to the card element
+     */
+    ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -81,94 +86,88 @@ export interface GetPerformanceInsightsCardProps {
  * **Note**: This component does not apply default margins. Use the `className` prop to apply
  * spacing classes (e.g., `cardSpacing`) when using in layouts that require spacing.
  */
-export const GetPerformanceInsightsCard = forwardRef<HTMLDivElement, GetPerformanceInsightsCardProps>(
-    (
-        {
-            bodyText,
-            recommendation,
-            isLoading,
-            enabled = true,
-            errorMessage,
-            onGetInsights,
-            onLearnMore,
-            onCancel,
-            className,
-        },
-        ref,
-    ) => {
-        return (
-            <Card
-                ref={ref}
-                className={`get-performance-insights-card${className ? ` ${className}` : ''}`}
+export function GetPerformanceInsightsCard({
+    bodyText,
+    recommendation,
+    isLoading,
+    enabled = true,
+    errorMessage,
+    onGetInsights,
+    onLearnMore,
+    onCancel,
+    className,
+    ref,
+}: GetPerformanceInsightsCardProps) {
+    return (
+        <Card
+            ref={ref}
+            className={`get-performance-insights-card${className ? ` ${className}` : ''}`}
+            style={{
+                backgroundColor: tokens.colorBrandBackground2,
+                border: `1px solid ${tokens.colorBrandStroke1}`,
+            }}
+        >
+            <Text
+                size={200}
                 style={{
-                    backgroundColor: tokens.colorBrandBackground2,
-                    border: `1px solid ${tokens.colorBrandStroke1}`,
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    color: tokens.colorNeutralForeground3,
                 }}
             >
-                <Text
-                    size={200}
-                    style={{
-                        position: 'absolute',
-                        top: '12px',
-                        right: '12px',
-                        color: tokens.colorNeutralForeground3,
-                    }}
-                >
-                    {l10n.t('AI responses may be inaccurate')}
-                </Text>
-                <div className="optimization-card-container">
-                    <SparkleRegular
-                        className="optimization-card-icon"
-                        style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }}
-                    />
-                    <div style={{ flex: 1 }}>
-                        <Text weight="semibold" size={500} style={{ display: 'block', marginBottom: '8px' }}>
-                            {l10n.t('AI Performance Insights')}
+                {l10n.t('AI responses may be inaccurate')}
+            </Text>
+            <div className="optimization-card-container">
+                <SparkleRegular
+                    className="optimization-card-icon"
+                    style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }}
+                />
+                <div style={{ flex: 1 }}>
+                    <Text weight="semibold" size={500} style={{ display: 'block', marginBottom: '8px' }}>
+                        {l10n.t('AI Performance Insights')}
+                    </Text>
+                    <Text size={300} style={{ display: 'block', marginBottom: '16px' }}>
+                        {bodyText}
+                    </Text>
+                    {recommendation && (
+                        <Text size={400} weight="semibold" style={{ display: 'block', marginBottom: '16px' }}>
+                            {recommendation}
                         </Text>
-                        <Text size={300} style={{ display: 'block', marginBottom: '16px' }}>
-                            {bodyText}
-                        </Text>
-                        {recommendation && (
-                            <Text size={400} weight="semibold" style={{ display: 'block', marginBottom: '16px' }}>
-                                {recommendation}
-                            </Text>
-                        )}
-                        {errorMessage && (
-                            <MessageBar intent="info" style={{ marginBottom: '16px' }}>
-                                <MessageBarBody>
-                                    <MessageBarTitle>Error:</MessageBarTitle>
-                                    {errorMessage}
-                                </MessageBarBody>
-                            </MessageBar>
-                        )}
-                        {isLoading ? (
-                            <div className="get-performance-insights-card-loading">
-                                <Spinner size="small" />
-                                <Text size={300}>{l10n.t('AI is analyzing...')}</Text>
-                                <Button appearance="subtle" size="small" onClick={onCancel}>
-                                    {l10n.t('Cancel')}
-                                </Button>
-                            </div>
-                        ) : (
-                            <div className="get-performance-insights-card-actions">
-                                <Button
-                                    appearance="primary"
-                                    icon={<SparkleRegular />}
-                                    onClick={onGetInsights}
-                                    disabled={!enabled}
-                                >
-                                    {errorMessage ? l10n.t('Retry') : l10n.t('Get AI Performance Insights')}
-                                </Button>
-                                <Button appearance="subtle" onClick={onLearnMore} disabled={!enabled}>
-                                    {l10n.t('Learn more about AI Performance Insights')}
-                                </Button>
-                            </div>
-                        )}
-                    </div>
+                    )}
+                    {errorMessage && (
+                        <MessageBar intent="info" style={{ marginBottom: '16px' }}>
+                            <MessageBarBody>
+                                <MessageBarTitle>Error:</MessageBarTitle>
+                                {errorMessage}
+                            </MessageBarBody>
+                        </MessageBar>
+                    )}
+                    {isLoading ? (
+                        <div className="get-performance-insights-card-loading">
+                            <Spinner size="small" />
+                            <Text size={300}>{l10n.t('AI is analyzing...')}</Text>
+                            <Button appearance="subtle" size="small" onClick={onCancel}>
+                                {l10n.t('Cancel')}
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="get-performance-insights-card-actions">
+                            <Button
+                                appearance="primary"
+                                icon={<SparkleRegular />}
+                                onClick={onGetInsights}
+                                disabled={!enabled}
+                            >
+                                {errorMessage ? l10n.t('Retry') : l10n.t('Get AI Performance Insights')}
+                            </Button>
+                            <Button appearance="subtle" onClick={onLearnMore} disabled={!enabled}>
+                                {l10n.t('Learn more about AI Performance Insights')}
+                            </Button>
+                        </div>
+                    )}
                 </div>
-            </Card>
-        );
-    },
-);
-
-GetPerformanceInsightsCard.displayName = 'GetPerformanceInsightsCard';
+            </div>
+        </Card>
+    );
+}
