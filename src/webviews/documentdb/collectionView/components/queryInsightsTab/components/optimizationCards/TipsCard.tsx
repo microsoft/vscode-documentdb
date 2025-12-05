@@ -5,7 +5,7 @@
 
 import { Button, Card, CardHeader, Text, tokens } from '@fluentui/react-components';
 import { ChevronLeftRegular, ChevronRightRegular, DismissRegular, LightbulbRegular } from '@fluentui/react-icons';
-import { forwardRef, useState } from 'react';
+import { useState } from 'react';
 import { useTrpcClient } from '../../../../../../api/webview-client/useTrpcClient';
 import './optimizationCard.scss';
 import './TipsCard.scss';
@@ -35,6 +35,11 @@ export interface TipsCardProps {
      * Optional callback when the copy button is clicked
      */
     onCopy?: () => void;
+
+    /**
+     * Ref to forward to the card element
+     */
+    ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -52,7 +57,7 @@ export interface TipsCardProps {
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips, onDismiss }, ref) => {
+export function TipsCard({ title, tips, onDismiss, ref }: TipsCardProps) {
     const { trpcClient } = useTrpcClient();
     const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -158,6 +163,4 @@ export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips
             </div>
         </Card>
     );
-});
-
-TipsCard.displayName = 'TipsCard';
+}

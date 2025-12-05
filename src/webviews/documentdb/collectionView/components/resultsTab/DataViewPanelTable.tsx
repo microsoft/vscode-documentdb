@@ -209,8 +209,8 @@ export function DataViewPanelTable({ liveHeaders, liveData, handleStepIn }: Prop
             <SlickgridReact
                 gridId="myGrid"
                 ref={gridRef}
-                gridOptions={gridOptions}
-                columnDefinitions={gridColumns}
+                options={gridOptions}
+                columns={gridColumns}
                 dataset={liveData}
                 onDblClick={(event) => onCellDblClick(event)}
                 onSelectedRowsChanged={debounce(

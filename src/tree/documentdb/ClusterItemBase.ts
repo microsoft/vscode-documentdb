@@ -6,6 +6,7 @@
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { type IconPath } from 'vscode';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -58,20 +59,7 @@ export abstract class ClusterItemBase
     protected descriptionOverride?: string;
     protected tooltipOverride?: string | vscode.MarkdownString;
 
-    protected iconPath?:
-        | string
-        | vscode.Uri
-        | {
-              /**
-               * The icon path for the light theme.
-               */
-              light: string | vscode.Uri;
-              /**
-               * The icon path for the dark theme.
-               */
-              dark: string | vscode.Uri;
-          }
-        | vscode.ThemeIcon;
+    protected iconPath?: IconPath;
 
     private readonly experienceContextValue: string = '';
 
