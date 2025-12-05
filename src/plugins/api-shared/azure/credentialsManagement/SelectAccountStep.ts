@@ -7,8 +7,12 @@ import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-aze
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
-import { nonNullValue } from '../../../../utils/nonNull';
-import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
+import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
+import {
+    type AccountWithTenantInfo,
+    type CredentialsManagementWizardContext,
+    type TenantWithSignInStatus,
+} from './CredentialsManagementWizardContext';
 
 interface AccountQuickPickItem extends vscode.QuickPickItem {
     account?: vscode.AuthenticationSessionAccountInformation;
@@ -19,22 +23,46 @@ interface AccountQuickPickItem extends vscode.QuickPickItem {
 
 export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManagementWizardContext> {
     public async prompt(context: CredentialsManagementWizardContext): Promise<void> {
-        // Create async function to provide better loading UX and debugging experience
+        // Create async function to provide loading UX
         const getAccountQuickPickItems = async (): Promise<AccountQuickPickItem[]> => {
-            const loadStartTime = Date.now();
+            // Use cached data when navigating back, otherwise fetch
+            // Note: allAccountsWithTenantInfo is initialized with [] in wizard context creation
+            // so it's captured in propertiesBeforePrompt and survives back navigation
+            // (AzureWizard filters out null/undefined values when capturing propertiesBeforePrompt)
+            if (context.allAccountsWithTenantInfo.length === 0) {
+                const loadStartTime = Date.now();
+                context.allAccountsWithTenantInfo = await this.getAccountsWithTenantInfo(context);
+                context.telemetry.measurements.accountsLoadingTimeMs = Date.now() - loadStartTime;
+            }
 
-            const accounts = await this.getAvailableAccounts(context);
-            context.availableAccounts = accounts;
+            const accountsWithInfo = context.allAccountsWithTenantInfo;
+            context.telemetry.measurements.initialAccountCount = accountsWithInfo.length;
 
-            // Add telemetry for account availability
-            context.telemetry.measurements.initialAccountCount = accounts.length;
-            context.telemetry.measurements.accountsLoadingTimeMs = Date.now() - loadStartTime;
+            const accountItems: AccountQuickPickItem[] = accountsWithInfo.map((info) => {
+                const totalTenants = info.tenantsWithStatus.length;
+                const signedInCount = info.tenantsWithStatus.filter((t) => t.isSignedIn).length;
 
-            const accountItems: AccountQuickPickItem[] = accounts.map((account) => ({
-                label: account.label,
-                iconPath: new vscode.ThemeIcon('account'),
-                account,
-            }));
+                let description: string;
+                if (totalTenants === 0) {
+                    description = l10n.t('No tenants available');
+                } else if (totalTenants === 1) {
+                    description =
+                        signedInCount === 1 ? l10n.t('1 tenant (1 signed in)') : l10n.t('1 tenant (0 signed in)');
+                } else {
+                    description = l10n.t(
+                        '{0} tenants ({1} signed in)',
+                        totalTenants.toString(),
+                        signedInCount.toString(),
+                    );
+                }
+
+                return {
+                    label: info.account.label,
+                    description,
+                    iconPath: new vscode.ThemeIcon('account'),
+                    account: info.account,
+                };
+            });
 
             // Handle empty accounts case
             if (accountItems.length === 0) {
@@ -105,22 +133,40 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
         return !context.selectedAccount;
     }
 
-    private async getAvailableAccounts(
+    private async getAccountsWithTenantInfo(
         context: CredentialsManagementWizardContext,
-    ): Promise<vscode.AuthenticationSessionAccountInformation[]> {
+    ): Promise<AccountWithTenantInfo[]> {
         try {
             // Get all tenants which include the accounts
             const tenants = await context.azureSubscriptionProvider.getTenants();
 
-            // Extract unique accounts from tenants
-            const accounts = tenants.map((tenant) => tenant.account);
-            const uniqueAccounts = accounts.filter(
-                (account, index, self) => index === self.findIndex((a) => a.id === account.id),
+            // Check sign-in status for all tenants in parallel
+            const knownTenantsWithStatus: TenantWithSignInStatus[] = await Promise.all(
+                tenants.map(async (tenant) => {
+                    const tenantId = nonNullProp(tenant, 'tenantId', 'tenant.tenantId', 'SelectAccountStep.ts');
+                    const isSignedIn = await context.azureSubscriptionProvider.isSignedIn(tenantId, tenant.account);
+                    return { tenant, isSignedIn };
+                }),
             );
 
-            return uniqueAccounts.sort((a, b) => a.label.localeCompare(b.label));
+            // Group tenants by account
+            const accountMap = new Map<string, AccountWithTenantInfo>();
+
+            for (const tenantWithStatus of knownTenantsWithStatus) {
+                const accountId = tenantWithStatus.tenant.account.id;
+                if (!accountMap.has(accountId)) {
+                    accountMap.set(accountId, {
+                        account: tenantWithStatus.tenant.account,
+                        tenantsWithStatus: [],
+                    });
+                }
+                const info = accountMap.get(accountId)!;
+                info.tenantsWithStatus.push(tenantWithStatus);
+            }
+
+            return Array.from(accountMap.values()).sort((a, b) => a.account.label.localeCompare(b.account.label));
         } catch (error) {
-            ext.outputChannel.appendLine(
+            ext.outputChannel.error(
                 l10n.t(
                     'Failed to retrieve Azure accounts: {0}',
                     error instanceof Error ? error.message : String(error),
@@ -132,16 +178,16 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
 
     private async handleSignIn(context: CredentialsManagementWizardContext): Promise<void> {
         try {
-            ext.outputChannel.appendLine(l10n.t('Starting Azure sign-in process…'));
+            ext.outputChannel.info(l10n.t('Starting Azure sign-in process…'));
             const success = await context.azureSubscriptionProvider.signIn();
             if (success) {
-                ext.outputChannel.appendLine(l10n.t('Azure sign-in completed successfully'));
+                ext.outputChannel.info(l10n.t('Azure sign-in completed successfully'));
             } else {
-                ext.outputChannel.appendLine(l10n.t('Azure sign-in was cancelled or failed'));
+                ext.outputChannel.warn(l10n.t('Azure sign-in was cancelled or failed'));
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            ext.outputChannel.appendLine(l10n.t('Azure sign-in failed: {0}', errorMessage));
+            ext.outputChannel.error(l10n.t('Azure sign-in failed: {0}', errorMessage));
             throw error;
         }
     }
