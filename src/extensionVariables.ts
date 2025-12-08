@@ -14,6 +14,7 @@ import { type ClustersWorkspaceBranchDataProvider } from './tree/azure-workspace
 import { type DocumentDbWorkspaceResourceProvider } from './tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { type ConnectionsBranchDataProvider } from './tree/connections-view/ConnectionsBranchDataProvider';
 import { type DiscoveryBranchDataProvider } from './tree/discovery-view/DiscoveryBranchDataProvider';
+import { type CollectionItem } from './tree/documentdb/CollectionItem';
 import { type HelpAndFeedbackBranchDataProvider } from './tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
 import { type TreeElement } from './tree/TreeElement';
 
@@ -28,6 +29,9 @@ export namespace ext {
     export const prefix: string = 'documentDB';
     export let fileSystem: DatabasesFileSystem;
     export let mongoLanguageClient: MongoDBLanguageClient;
+
+    // TODO: TN improve this: This is a temporary solution to get going.
+    export let copiedCollectionNode: CollectionItem | undefined;
 
     // Since the Azure Resources extension did not update API interface, but added a new interface with activity
     // we have to use the new interface AzureResourcesExtensionApiWithActivity instead of AzureResourcesExtensionApi
@@ -65,6 +69,8 @@ export namespace ext {
         export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
         export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
+        export const showLargeCollectionWarning = 'documentDB.copyPaste.showLargeCollectionWarning';
+        export const largeCollectionWarningThreshold = 'documentDB.copyPaste.largeCollectionWarningThreshold';
         export const localPort = 'documentDB.local.port';
         export const collectionViewDefaultPageSize = 'documentDB.collectionView.defaultPageSize';
 

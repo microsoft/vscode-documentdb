@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError } from '../../documentdb/ClustersClient';
 import {
     AzureDomains,
     getHostsFromConnectionString,
@@ -293,10 +293,31 @@ async function insertDocumentWithBufferIntoCluster(
     // Documents to process could be the current document (if too large)
     // or the contents of the buffer (if it was full)
     const client = await ClustersClient.getClient(node.cluster.id);
-    const insertResult = await client.insertDocuments(databaseName, collectionName, documentsToProcess as Document[]);
-
-    return {
-        count: insertResult.insertedCount,
-        errorOccurred: insertResult.insertedCount < (documentsToProcess?.length || 0),
-    };
+    try {
+        const insertResult = await client.insertDocuments(
+            databaseName,
+            collectionName,
+            documentsToProcess as Document[],
+            false,
+        );
+        return {
+            count: insertResult.insertedCount,
+            errorOccurred: false,
+        };
+    } catch (error) {
+        if (isBulkWriteError(error)) {
+            // Handle MongoDB bulk write errors
+            // It could be a partial failure, so we need to check the result
+            return {
+                count: error.result.insertedCount,
+                errorOccurred: true,
+            };
+        } else {
+            // Handle other errors
+            return {
+                count: 0,
+                errorOccurred: true,
+            };
+        }
+    }
 }
