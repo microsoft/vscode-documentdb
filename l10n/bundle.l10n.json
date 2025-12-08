@@ -535,7 +535,7 @@
   "No suitable language model found. Please ensure GitHub Copilot is installed and you have an active subscription.": "No suitable language model found. Please ensure GitHub Copilot is installed and you have an active subscription.",
   "No tenants available": "No tenants available",
   "No tenants available for this account": "No tenants available for this account",
-  "No tenants selected. Azure discovery will be filtered to exclude all tenant results.": "No tenants selected. Azure discovery will be filtered to exclude all tenant results.",
+  "No tenants selected. Tenant filtering disabled (all tenants will be shown).": "No tenants selected. Tenant filtering disabled (all tenants will be shown).",
   "None": "None",
   "Not connected to any MongoDB database.": "Not connected to any MongoDB database.",
   "Note: This confirmation type can be configured in the extension settings.": "Note: This confirmation type can be configured in the extension settings.",
