@@ -18,7 +18,7 @@ import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionP
 import { type FilteringWizardContext } from './FilteringWizardContext';
 import { FilterSubscriptionSubStep } from './FilterSubscriptionSubStep';
 import { FilterTenantSubStep } from './FilterTenantSubStep';
-import { getTenantFilteredSubscriptions, isTenantFilteredOut } from './subscriptionFilteringHelpers';
+import { isTenantFilteredOut } from './subscriptionFilteringHelpers';
 
 /**
  * Custom error to signal that initialization has completed and wizard should proceed to subwizard
@@ -94,17 +94,18 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         context.telemetry.measurements.subscriptionLoadTimeMs = Date.now() - subscriptionLoadStartTime;
         context.telemetry.measurements.allSubscriptionsCount = context.allSubscriptions.length;
 
-        // Check if there are any tenant-filtered subscriptions available
-        const filteredSubscriptions = getTenantFilteredSubscriptions(context.allSubscriptions);
-        if (!filteredSubscriptions || filteredSubscriptions.length === 0) {
-            // Show modal dialog for empty state
+        // Check if there are any subscriptions available at all (before filtering)
+        // Only show the credentials dialog if there are truly no subscriptions
+        // If subscriptions exist but are filtered out, proceed with the wizard to let user adjust filters
+        if (!context.allSubscriptions || context.allSubscriptions.length === 0) {
+            // No subscriptions at all - user needs to sign in or configure accounts
             const configureResult = await askToConfigureCredentials();
             if (configureResult === 'configure') {
                 await this.configureCredentialsFromWizard(context, azureSubscriptionProvider);
 
                 throw new UserCancelledError('User chose to configure Azure credentials');
             }
-            // User chose not to configure - also cancel the wizard since there's nothing to filter
+            // User chose not to configure - cancel the wizard since there's nothing to filter
             throw new UserCancelledError('No subscriptions available for filtering');
         }
 
