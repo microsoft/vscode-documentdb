@@ -9,6 +9,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
+import { removeUnselectedTenant } from '../subscriptionFiltering/subscriptionFilteringHelpers';
 import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
 
 interface TenantQuickPickItem extends vscode.QuickPickItem {
@@ -133,6 +134,7 @@ export class AccountTenantsStep extends AzureWizardPromptStep<CredentialsManagem
     private async handleSignIn(context: CredentialsManagementWizardContext, tenant: AzureTenant): Promise<void> {
         const tenantId = nonNullProp(tenant, 'tenantId', 'tenant.tenantId', 'AccountTenantsStep.ts');
         const tenantName = tenant.displayName ?? tenantId;
+        const accountId = tenant.account.id;
 
         try {
             ext.outputChannel.appendLine(l10n.t('Starting sign-in to tenant: {0}', tenantName));
@@ -143,6 +145,13 @@ export class AccountTenantsStep extends AzureWizardPromptStep<CredentialsManagem
             if (success) {
                 ext.outputChannel.appendLine(l10n.t('Successfully signed in to tenant: {0}', tenantName));
                 void vscode.window.showInformationMessage(l10n.t('Successfully signed in to {0}', tenantName));
+
+                // Auto-select the newly authenticated tenant by removing it from the unselected list
+                // This ensures the tenant's subscriptions will appear in the Discovery View
+                await removeUnselectedTenant(tenantId, accountId);
+                ext.outputChannel.appendLine(
+                    l10n.t('Tenant {0} has been automatically included in subscription discovery', tenantName),
+                );
             } else {
                 ext.outputChannel.appendLine(l10n.t('Sign-in to tenant was cancelled or failed: {0}', tenantName));
             }

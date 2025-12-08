@@ -33,9 +33,9 @@ export class AzureMongoRUServiceRootItem
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
         const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
+        const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
 
-        // Case 1: No subscriptions at all - user needs to authenticate
-        if (!allSubscriptions || allSubscriptions.length === 0) {
+        if (!subscriptions || subscriptions.length === 0) {
             // Show modal dialog for empty state
             const configureResult = await askToConfigureCredentials();
             if (configureResult === 'configure') {
@@ -51,35 +51,6 @@ export class AzureMongoRUServiceRootItem
                     label: vscode.l10n.t('Click here to retry'),
                     iconPath: new vscode.ThemeIcon('refresh'),
                     commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-            ];
-        }
-
-        // Case 2: Subscriptions exist but all are filtered out
-        const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
-        if (subscriptions.length === 0) {
-            void vscode.window.showWarningMessage(
-                vscode.l10n.t(
-                    'All subscriptions are filtered out. Adjust your tenant or subscription filters to see resources.',
-                ),
-            );
-
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error', // note: keep this in sync with the `hasRetryNode` function in this file
-                    id: `${this.id}/retry`,
-                    label: vscode.l10n.t('Click here to retry'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/configure-filters`,
-                    label: vscode.l10n.t('Click here to configure filters'),
-                    iconPath: new vscode.ThemeIcon('filter'),
-                    commandId: 'vscode-documentdb.command.discoveryView.filterProviderContent',
                     commandArgs: [this],
                 }),
             ];
