@@ -38,10 +38,15 @@ export class AzureMongoRUServiceRootItem
         if (!subscriptions || subscriptions.length === 0) {
             // Show modal dialog for empty state
             const configureResult = await askToConfigureCredentials();
+            // Note to future maintainers: 'void' is important here so that the return below returns the error node.
+            // Otherwise, the /retry node might be duplicated as we're inside of tree node with a loading state (the node items are being swapped etc.)
             if (configureResult === 'configure') {
-                // Note to future maintainers: 'void' is important here so that the return below returns the error node.
-                // Otherwise, the /retry node might be duplicated as we're inside of tree node with a loading state (the node items are being swapped etc.)
                 void vscode.commands.executeCommand('vscode-documentdb.command.discoveryView.manageCredentials', this);
+            } else if (configureResult === 'filter') {
+                void vscode.commands.executeCommand(
+                    'vscode-documentdb.command.discoveryView.filterProviderContent',
+                    this,
+                );
             }
 
             return [
