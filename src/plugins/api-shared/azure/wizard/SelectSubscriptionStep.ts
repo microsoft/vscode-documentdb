@@ -6,7 +6,7 @@
 import { VSCodeAzureSubscriptionProvider, type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { QuickPickItemKind, ThemeIcon, Uri, window, type QuickPickItem } from 'vscode';
+import { commands, QuickPickItemKind, ThemeIcon, Uri, window, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
 import { askToConfigureCredentials } from '../askToConfigureCredentials';
@@ -73,8 +73,12 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
                 if (configureResult === 'configure') {
                     await this.configureCredentialsFromWizard(context, subscriptionProvider);
                     await this.showRetryInstructions();
+                } else if (configureResult === 'filter') {
+                    // Open the subscription filtering wizard
+                    void commands.executeCommand('vscode-documentdb.command.discoveryView.filterProviderContent');
+                    await this.showRetryInstructions();
                 }
-                // Both paths abort the wizard
+                // All paths abort the wizard
                 throw new UserCancelledError('No subscriptions available');
             }
 

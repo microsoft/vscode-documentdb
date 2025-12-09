@@ -70,7 +70,7 @@ export class AccountTenantsStep extends AzureWizardPromptStep<CredentialsManagem
             const tenantItems: TenantQuickPickItem[] = sortedTenants.map(({ tenant, isSignedIn }) => ({
                 label: tenant.displayName ?? tenant.tenantId ?? l10n.t('Unknown tenant'),
                 description: tenant.tenantId ?? '',
-                detail: isSignedIn ? l10n.t('Signed in') : l10n.t('$(sign-in) Select to sign in'),
+                detail: isSignedIn ? l10n.t('$(pass) Signed in') : l10n.t('$(sign-in) Select to sign in'),
                 tenant,
                 isSignedIn,
             }));

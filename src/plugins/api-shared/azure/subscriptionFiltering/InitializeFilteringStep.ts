@@ -99,7 +99,8 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         // If subscriptions exist but are filtered out, proceed with the wizard to let user adjust filters
         if (!context.allSubscriptions || context.allSubscriptions.length === 0) {
             // No subscriptions at all - user needs to sign in or configure accounts
-            const configureResult = await askToConfigureCredentials();
+            // Don't show filter option since we're already in the filtering wizard
+            const configureResult = await askToConfigureCredentials({ showFilterOption: false });
             if (configureResult === 'configure') {
                 await this.configureCredentialsFromWizard(context, azureSubscriptionProvider);
 

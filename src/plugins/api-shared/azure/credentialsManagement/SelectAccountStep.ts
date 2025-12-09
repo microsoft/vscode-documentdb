@@ -42,15 +42,17 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                 const totalTenants = info.tenantsWithStatus.length;
                 const signedInCount = info.tenantsWithStatus.filter((t) => t.isSignedIn).length;
 
-                let description: string;
+                let detail: string;
                 if (totalTenants === 0) {
-                    description = l10n.t('No tenants available');
+                    detail = l10n.t('No tenants available');
                 } else if (totalTenants === 1) {
-                    description =
-                        signedInCount === 1 ? l10n.t('1 tenant (1 signed in)') : l10n.t('1 tenant (0 signed in)');
+                    detail =
+                        signedInCount === 1
+                            ? l10n.t('1 tenant available (1 signed in)')
+                            : l10n.t('1 tenant available (0 signed in)');
                 } else {
-                    description = l10n.t(
-                        '{0} tenants ({1} signed in)',
+                    detail = l10n.t(
+                        '{0} tenants available ({1} signed in)',
                         totalTenants.toString(),
                         signedInCount.toString(),
                     );
@@ -58,7 +60,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
 
                 return {
                     label: info.account.label,
-                    description,
+                    detail,
                     iconPath: new vscode.ThemeIcon('account'),
                     account: info.account,
                 };
@@ -76,7 +78,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                     },
                     { label: '', kind: vscode.QuickPickItemKind.Separator },
                     {
-                        label: l10n.t('Exit without making changes'),
+                        label: l10n.t('Exit'),
                         iconPath: new vscode.ThemeIcon('close'),
                         isExitOption: true,
                     },
@@ -93,7 +95,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                     isSignInOption: true,
                 },
                 {
-                    label: l10n.t('Exit without making changes'),
+                    label: l10n.t('Exit'),
                     iconPath: new vscode.ThemeIcon('close'),
                     isExitOption: true,
                 },
