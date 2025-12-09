@@ -6,7 +6,7 @@
 import { VSCodeAzureSubscriptionProvider, type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { commands, QuickPickItemKind, ThemeIcon, Uri, window, type QuickPickItem } from 'vscode';
+import { QuickPickItemKind, ThemeIcon, Uri, window, type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../../extensionVariables';
 import { askToConfigureCredentials } from '../askToConfigureCredentials';
@@ -74,8 +74,8 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
                     await this.configureCredentialsFromWizard(context, subscriptionProvider);
                     await this.showRetryInstructions();
                 } else if (configureResult === 'filter') {
-                    // Open the subscription filtering wizard
-                    void commands.executeCommand('vscode-documentdb.command.discoveryView.filterProviderContent');
+                    // Open the subscription filtering wizard directly
+                    await this.configureFiltersFromWizard(context, subscriptionProvider);
                     await this.showRetryInstructions();
                 }
                 // All paths abort the wizard
@@ -169,6 +169,19 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             subscriptionProvider as AzureSubscriptionProviderWithFilters,
             undefined,
         );
+    }
+
+    private async configureFiltersFromWizard(
+        context: NewConnectionWizardContext,
+        subscriptionProvider: VSCodeAzureSubscriptionProvider,
+    ): Promise<void> {
+        // Add telemetry for filter configuration activation
+        context.telemetry.properties.filterConfigActivated = 'true';
+        context.telemetry.properties.nodeProvided = 'false';
+
+        // Call the subscription filter configuration directly using the subscription provider from context
+        const { configureAzureSubscriptionFilter } = await import('../subscriptionFiltering');
+        await configureAzureSubscriptionFilter(context, subscriptionProvider);
     }
 
     private async showRetryInstructions(): Promise<void> {
