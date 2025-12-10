@@ -8,7 +8,7 @@ import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
-import './optimizationCard.scss';
+import './baseOptimizationCard.scss';
 
 const useStyles = makeStyles({
     content: {

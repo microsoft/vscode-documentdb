@@ -16,6 +16,13 @@
         display: flex;
         gap: 16px;
     }
+
+    // Title container with badges (used by ImprovementCard)
+    &-title-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 }
 
 // Index code block display

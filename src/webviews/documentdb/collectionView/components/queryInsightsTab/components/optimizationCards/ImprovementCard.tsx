@@ -22,8 +22,7 @@ import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useState } from 'react';
 import { type ImprovementCard as ImprovementCardConfig } from '../../../../types/queryInsights';
-import './AiCard.scss';
-import './optimizationCard.scss';
+import './baseOptimizationCard.scss';
 
 export interface ImprovementCardProps {
     /**
@@ -171,7 +170,7 @@ export function ImprovementCard({
                 <div style={{ flex: 1 }}>
                     <CardHeader
                         header={
-                            <div className="ai-card-title-container">
+                            <div className="optimization-card-title-container">
                                 <Text weight="semibold" size={400}>
                                     {config.title}
                                 </Text>
