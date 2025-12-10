@@ -10,6 +10,7 @@ import { type NewConnectionWizardContext } from '../../../commands/newConnection
 import { type GenericResource } from '@azure/arm-resources';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
+import { DISCOVERY_PROVIDER_ID } from '../config';
 import { extractCredentialsFromRUAccount } from '../utils/ruClusterHelpers';
 
 export class AzureMongoRUExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardContext> {
@@ -23,7 +24,7 @@ export class AzureMongoRUExecuteStep extends AzureWizardExecuteStep<NewConnectio
             throw new Error('SelectedCluster is not set.');
         }
 
-        context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';
+        context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
 
         const subscription = context.properties[
             AzureContextProperties.SelectedSubscription

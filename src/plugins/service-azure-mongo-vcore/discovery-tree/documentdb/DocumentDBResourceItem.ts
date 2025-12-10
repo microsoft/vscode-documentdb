@@ -26,6 +26,7 @@ import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../t
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { getThemeAgnosticIconPath } from '../../../../utils/icons';
 import { nonNullValue } from '../../../../utils/nonNull';
+import { DISCOVERY_PROVIDER_ID, RESOURCE_TYPE } from '../../config';
 import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../../utils/clusterHelpers';
 
 export class DocumentDBResourceItem extends ClusterItemBase {
@@ -41,8 +42,8 @@ export class DocumentDBResourceItem extends ClusterItemBase {
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
-            context.telemetry.properties.resourceType = 'mongoVCore';
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+            context.telemetry.properties.resourceType = RESOURCE_TYPE;
 
             // Retrieve and validate cluster information (throws if invalid)
             const clusterInformation = await getClusterInformationFromAzure(
@@ -77,9 +78,9 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             const connectionStartTime = Date.now();
             context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.connectionInitiatedFrom = 'discoveryView';
-            context.telemetry.properties.resourceType = 'mongoVCore';
+            context.telemetry.properties.resourceType = RESOURCE_TYPE;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -200,7 +201,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
         // Prompt the user for credentials
         await callWithTelemetryAndErrorHandling('connect.promptForCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-mongo-vcore-discovery';
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.credentialsRequired = 'true';
             context.telemetry.properties.credentialPromptReason = 'firstTime';
 

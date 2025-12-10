@@ -68,8 +68,15 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
             // Check for empty state first
             if (subscriptions.length === 0) {
+                // Telemetry: track that empty subscriptions dialog was shown
+                context.telemetry.properties.emptySubscriptionsDialogShown = 'true';
+
                 // Show modal dialog for empty state
                 const configureResult = await askToConfigureCredentials();
+
+                // Telemetry: track which option was selected
+                context.telemetry.properties.emptySubscriptionsDialogChoice = configureResult;
+
                 if (configureResult === 'configure') {
                     await this.configureCredentialsFromWizard(context, subscriptionProvider);
                     await this.showRetryInstructions();
@@ -160,6 +167,10 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
         // Add telemetry for credential configuration activation
         context.telemetry.properties.credentialConfigActivated = 'true';
         context.telemetry.properties.nodeProvided = 'false';
+        context.telemetry.properties.initiatedFrom = 'newConnectionWizard';
+        if (context.discoveryProviderId) {
+            context.telemetry.properties.discoveryProviderId = context.discoveryProviderId;
+        }
 
         // Call the credentials management function directly using the subscription provider from context
         // The subscription provider in the wizard context is actually AzureSubscriptionProviderWithFilters
@@ -178,6 +189,10 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
         // Add telemetry for filter configuration activation
         context.telemetry.properties.filterConfigActivated = 'true';
         context.telemetry.properties.nodeProvided = 'false';
+        context.telemetry.properties.initiatedFrom = 'newConnectionWizard';
+        if (context.discoveryProviderId) {
+            context.telemetry.properties.discoveryProviderId = context.discoveryProviderId;
+        }
 
         // Call the subscription filter configuration directly using the subscription provider from context
         const { configureAzureSubscriptionFilter } = await import('../subscriptionFiltering');

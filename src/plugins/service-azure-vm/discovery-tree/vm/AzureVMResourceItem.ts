@@ -25,6 +25,7 @@ import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
+import { DISCOVERY_PROVIDER_ID } from '../../config';
 
 // Define a model for VM, similar to ClusterModel but for VM properties
 export interface VirtualMachineModel extends ClusterModel {
@@ -67,7 +68,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            context.telemetry.properties.discoveryProvider = 'azure-vm-discovery';
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.view = Views.DiscoveryView;
 
             const newPort = await context.ui.showInputBox({
@@ -158,7 +159,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            context.telemetry.properties.discoveryProvider = 'azure-vm-discovery';
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.view = Views.DiscoveryView;
 
             ext.outputChannel.appendLine(

@@ -13,6 +13,7 @@ import { Views } from '../../../../documentdb/Views';
 import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { DISCOVERY_PROVIDER_ID, RESOURCE_TYPE } from '../../config';
 import { extractCredentialsFromRUAccount } from '../../utils/ruClusterHelpers';
 
 export class MongoRUResourceItem extends ClusterItemBase {
@@ -37,8 +38,8 @@ export class MongoRUResourceItem extends ClusterItemBase {
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';
-            context.telemetry.properties.resourceType = 'mongoRU';
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+            context.telemetry.properties.resourceType = RESOURCE_TYPE;
 
             const credentials = await extractCredentialsFromRUAccount(
                 context,
@@ -59,9 +60,9 @@ export class MongoRUResourceItem extends ClusterItemBase {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             const connectionStartTime = Date.now();
             context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.connectionInitiatedFrom = 'discoveryView';
-            context.telemetry.properties.resourceType = 'mongoRU';
+            context.telemetry.properties.resourceType = RESOURCE_TYPE;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {

@@ -15,6 +15,7 @@ import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithC
 import { type ClusterModel } from '../../../tree/documentdb/ClusterModel';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullProp } from '../../../utils/nonNull';
+import { DISCOVERY_PROVIDER_ID } from '../config';
 import { MongoRUResourceItem } from './documentdb/MongoRUResourceItem';
 
 export interface AzureSubscriptionModel {
@@ -40,7 +41,7 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
             'azure-mongo-ru-discovery.getChildren',
             async (context: IActionContext) => {
                 const startTime = Date.now();
-                context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';
+                context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
 
                 const managementClient = await createCosmosDBManagementClient(context, this.subscription.subscription);
                 const allAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
