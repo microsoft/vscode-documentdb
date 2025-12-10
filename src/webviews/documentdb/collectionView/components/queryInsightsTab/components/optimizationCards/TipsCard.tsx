@@ -7,7 +7,7 @@ import { Button, Card, CardHeader, Text, tokens } from '@fluentui/react-componen
 import { ChevronLeftRegular, ChevronRightRegular, DismissRegular, LightbulbRegular } from '@fluentui/react-icons';
 import { useState } from 'react';
 import { useTrpcClient } from '../../../../../../api/webview-client/useTrpcClient';
-import './optimizationCard.scss';
+import './baseOptimizationCard.scss';
 import './TipsCard.scss';
 
 export interface Tip {

@@ -6,6 +6,7 @@
 import {
     Button,
     Card,
+    CardHeader,
     MessageBar,
     MessageBarBody,
     MessageBarTitle,
@@ -16,7 +17,7 @@ import {
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import React from 'react';
-import '../optimizationCard.scss';
+import '../baseOptimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 
 export interface GetPerformanceInsightsCardProps {
@@ -107,26 +108,25 @@ export function GetPerformanceInsightsCard({
                 border: `1px solid ${tokens.colorBrandStroke1}`,
             }}
         >
-            <Text
-                size={200}
-                style={{
-                    position: 'absolute',
-                    top: '12px',
-                    right: '12px',
-                    color: tokens.colorNeutralForeground3,
-                }}
-            >
-                {l10n.t('AI responses may be inaccurate')}
-            </Text>
             <div className="optimization-card-container">
                 <SparkleRegular
                     className="optimization-card-icon"
                     style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }}
                 />
                 <div style={{ flex: 1 }}>
-                    <Text weight="semibold" size={500} style={{ display: 'block', marginBottom: '8px' }}>
-                        {l10n.t('AI Performance Insights')}
-                    </Text>
+                    <CardHeader
+                        header={
+                            <Text weight="semibold" size={500}>
+                                {l10n.t('AI Performance Insights')}
+                            </Text>
+                        }
+                        action={
+                            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                {l10n.t('AI responses may be inaccurate')}
+                            </Text>
+                        }
+                        style={{ marginBottom: '8px' }}
+                    />
                     <Text size={300} style={{ display: 'block', marginBottom: '16px' }}>
                         {bodyText}
                     </Text>
