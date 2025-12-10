@@ -25,6 +25,7 @@ import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
 import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
+import { DISCOVERY_PROVIDER_ID } from '../../config';
 
 // Define a model for VM, similar to ClusterModel but for VM properties
 export interface VirtualMachineModel extends ClusterModel {
@@ -39,11 +40,16 @@ export class AzureVMResourceItem extends ClusterItemBase {
     iconPath = new vscode.ThemeIcon('server-environment');
 
     constructor(
-        readonly subscription: AzureSubscription, // Retained from original
-        readonly cluster: VirtualMachineModel, // Using the new VM model
-        // connectionInfo: any, // Passed from the wizard execution step, containing vmId, name, connectionStringTemplate
+        /**
+         * Correlation ID for telemetry funnel analysis.
+         * For statistics only - does not influence functionality.
+         */
+        journeyCorrelationId: string,
+        readonly subscription: AzureSubscription,
+        readonly cluster: VirtualMachineModel,
     ) {
-        super(cluster); // label, id
+        super(cluster);
+        this.journeyCorrelationId = journeyCorrelationId;
 
         // Construct tooltip and description
         const tooltipParts: string[] = [`**Name:** ${cluster.name}`, `**ID:** ${cluster.id}`];
@@ -67,8 +73,11 @@ export class AzureVMResourceItem extends ClusterItemBase {
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            context.telemetry.properties.discoveryProvider = 'azure-vm-discovery';
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.view = Views.DiscoveryView;
+            if (this.journeyCorrelationId) {
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+            }
 
             const newPort = await context.ui.showInputBox({
                 prompt: l10n.t('Enter the port number your DocumentDB uses. The default port: {defaultPort}.', {
@@ -158,8 +167,11 @@ export class AzureVMResourceItem extends ClusterItemBase {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            context.telemetry.properties.discoveryProvider = 'azure-vm-discovery';
+            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.view = Views.DiscoveryView;
+            if (this.journeyCorrelationId) {
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+            }
 
             ext.outputChannel.appendLine(
                 l10n.t('Azure VM: Attempting to authenticate with "{vmName}"…', {
@@ -241,6 +253,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
                     username: wizardContext.selectedUserName ?? '',
                 }),
             );
+
             return clustersClient;
         });
         return result ?? null;

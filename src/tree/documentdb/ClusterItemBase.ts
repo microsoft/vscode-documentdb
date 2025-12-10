@@ -56,6 +56,13 @@ export abstract class ClusterItemBase
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_documentdbcluster';
 
+    /**
+     * Correlation ID used for telemetry funnel analysis.
+     * This is for statistics only and does not influence functionality.
+     * It tracks the user's journey through the discovery flow.
+     */
+    public journeyCorrelationId?: string;
+
     protected descriptionOverride?: string;
     protected tooltipOverride?: string | vscode.MarkdownString;
 

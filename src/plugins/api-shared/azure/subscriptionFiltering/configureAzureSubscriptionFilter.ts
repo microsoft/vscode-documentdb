@@ -11,6 +11,7 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { ext } from '../../../../extensionVariables';
 import { ExecuteStep } from './ExecuteStep';
 import { type FilteringWizardContext } from './FilteringWizardContext';
 import { InitializeFilteringStep } from './InitializeFilteringStep';
@@ -81,6 +82,8 @@ export async function configureAzureSubscriptionFilter<
         context.telemetry.properties.subscriptionFilteringResult = 'Failed';
         context.telemetry.properties.subscriptionFilteringError =
             error instanceof Error ? error.message : String(error);
-        throw error;
+        ext.outputChannel.error(
+            `Error during subscription filtering: ${error instanceof Error ? error.message : String(error)}`,
+        );
     }
 }

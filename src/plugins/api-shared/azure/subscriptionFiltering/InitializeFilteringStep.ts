@@ -18,7 +18,7 @@ import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionP
 import { type FilteringWizardContext } from './FilteringWizardContext';
 import { FilterSubscriptionSubStep } from './FilterSubscriptionSubStep';
 import { FilterTenantSubStep } from './FilterTenantSubStep';
-import { getTenantFilteredSubscriptions, isTenantFilteredOut } from './subscriptionFilteringHelpers';
+import { isTenantFilteredOut } from './subscriptionFilteringHelpers';
 
 /**
  * Custom error to signal that initialization has completed and wizard should proceed to subwizard
@@ -60,33 +60,53 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         const azureSubscriptionProvider = context.azureSubscriptionProvider;
 
         const tenantLoadStartTime = Date.now();
-        context.availableTenants = await azureSubscriptionProvider.getTenants();
-        context.availableTenants = context.availableTenants.sort((a, b) => {
-            // Sort by display name if available, otherwise by tenant ID
-            const aName = a.displayName || a.tenantId || '';
-            const bName = b.displayName || b.tenantId || '';
-            return aName.localeCompare(bName);
-        });
+        const allTenants = await azureSubscriptionProvider.getTenants();
+
+        // Filter to only show authenticated tenants
+        // Check sign-in status for all tenants in parallel
+        const tenantsWithSignInStatus = await Promise.all(
+            allTenants.map(async (tenant) => {
+                if (!tenant.tenantId) {
+                    return { tenant, isSignedIn: false };
+                }
+                const isSignedIn = await azureSubscriptionProvider.isSignedIn(tenant.tenantId, tenant.account);
+                return { tenant, isSignedIn };
+            }),
+        );
+
+        // Only include authenticated tenants in the available list
+        context.availableTenants = tenantsWithSignInStatus
+            .filter(({ isSignedIn }) => isSignedIn)
+            .map(({ tenant }) => tenant)
+            .sort((a, b) => {
+                // Sort by display name if available, otherwise by tenant ID
+                const aName = a.displayName || a.tenantId || '';
+                const bName = b.displayName || b.tenantId || '';
+                return aName.localeCompare(bName);
+            });
 
         context.telemetry.measurements.tenantLoadTimeMs = Date.now() - tenantLoadStartTime;
-        context.telemetry.measurements.tenantsCount = context.availableTenants.length;
+        context.telemetry.measurements.tenantsCount = allTenants.length;
+        context.telemetry.measurements.authenticatedTenantsCount = context.availableTenants.length;
 
         const subscriptionLoadStartTime = Date.now();
         context.allSubscriptions = await azureSubscriptionProvider.getSubscriptions(false);
         context.telemetry.measurements.subscriptionLoadTimeMs = Date.now() - subscriptionLoadStartTime;
         context.telemetry.measurements.allSubscriptionsCount = context.allSubscriptions.length;
 
-        // Check if there are any tenant-filtered subscriptions available
-        const filteredSubscriptions = getTenantFilteredSubscriptions(context.allSubscriptions);
-        if (!filteredSubscriptions || filteredSubscriptions.length === 0) {
-            // Show modal dialog for empty state
-            const configureResult = await askToConfigureCredentials();
+        // Check if there are any subscriptions available at all (before filtering)
+        // Only show the credentials dialog if there are truly no subscriptions
+        // If subscriptions exist but are filtered out, proceed with the wizard to let user adjust filters
+        if (!context.allSubscriptions || context.allSubscriptions.length === 0) {
+            // No subscriptions at all - user needs to sign in or configure accounts
+            // Don't show filter option since we're already in the filtering wizard
+            const configureResult = await askToConfigureCredentials({ showFilterOption: false });
             if (configureResult === 'configure') {
                 await this.configureCredentialsFromWizard(context, azureSubscriptionProvider);
 
                 throw new UserCancelledError('User chose to configure Azure credentials');
             }
-            // User chose not to configure - also cancel the wizard since there's nothing to filter
+            // User chose not to configure - cancel the wizard since there's nothing to filter
             throw new UserCancelledError('No subscriptions available for filtering');
         }
 

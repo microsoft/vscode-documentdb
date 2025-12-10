@@ -17,6 +17,7 @@ import { createScrapbook } from '../../commands/scrapbook-commands/createScrapbo
 import { executeAllCommand } from '../../commands/scrapbook-commands/executeAllCommand';
 import { executeCommand } from '../../commands/scrapbook-commands/executeCommand';
 import { ext } from '../../extensionVariables';
+import { withTreeNodeCommandCorrelation } from '../../utils/commandTelemetry';
 import { MongoConnectError } from './connectToClient';
 import { MongoDBLanguageClient } from './languageClient';
 import { getAllErrorsFromTextDocument } from './ScrapbookHelpers';
@@ -37,13 +38,25 @@ export function registerScrapbookCommands(): void {
 
     setUpErrorReporting();
 
-    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.new', createScrapbook);
-    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.executeCommand', executeCommand);
-    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.executeAllCommands', executeAllCommand);
+    registerCommandWithTreeNodeUnwrapping(
+        'vscode-documentdb.command.scrapbook.new',
+        withTreeNodeCommandCorrelation(createScrapbook),
+    );
+    registerCommandWithTreeNodeUnwrapping(
+        'vscode-documentdb.command.scrapbook.executeCommand',
+        withTreeNodeCommandCorrelation(executeCommand),
+    );
+    registerCommandWithTreeNodeUnwrapping(
+        'vscode-documentdb.command.scrapbook.executeAllCommands',
+        withTreeNodeCommandCorrelation(executeAllCommand),
+    );
 
     // #region Database command
 
-    registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.scrapbook.connect', connectCluster);
+    registerCommandWithTreeNodeUnwrapping(
+        'vscode-documentdb.command.scrapbook.connect',
+        withTreeNodeCommandCorrelation(connectCluster),
+    );
 
     // #endregion
 }

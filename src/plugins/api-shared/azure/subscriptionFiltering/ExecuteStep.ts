@@ -54,12 +54,28 @@ export class ExecuteStep extends AzureWizardExecuteStep<FilteringWizardContext> 
             }
         }
 
-        const selectedTenantIds = new Set(selectedTenants.map((tenant) => tenant.tenantId || ''));
-
         // Add telemetry for tenant filtering
         context.telemetry.measurements.tenantFilteringCount = allTenants.length;
         context.telemetry.measurements.selectedFinalTenantsCount = selectedTenants.length;
         context.telemetry.properties.filteringActionType = 'tenantFiltering';
+
+        // If no tenants selected, clear all tenant filtering (show all tenants)
+        // This is analogous to subscription filtering where empty selection means "no filter"
+        if (selectedTenants.length === 0) {
+            for (const accountId of accountIds) {
+                for (const tenant of allTenants) {
+                    const tenantId = tenant.tenantId || '';
+                    await removeUnselectedTenant(tenantId, accountId);
+                }
+            }
+
+            ext.outputChannel.appendLine(
+                l10n.t('No tenants selected. Tenant filtering disabled (all tenants will be shown).'),
+            );
+            return;
+        }
+
+        const selectedTenantIds = new Set(selectedTenants.map((tenant) => tenant.tenantId || ''));
 
         // Apply tenant filtering for each account
         for (const accountId of accountIds) {
@@ -80,16 +96,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<FilteringWizardContext> 
             l10n.t('Successfully configured tenant filtering. Selected {0} tenant(s)', selectedTenants.length),
         );
 
-        if (selectedTenants.length > 0) {
-            const tenantNames = selectedTenants.map(
-                (tenant) => tenant.displayName || tenant.tenantId || l10n.t('Unknown tenant'),
-            );
-            ext.outputChannel.appendLine(l10n.t('Selected tenants: {0}', tenantNames.join(', ')));
-        } else {
-            ext.outputChannel.appendLine(
-                l10n.t('No tenants selected. Azure discovery will be filtered to exclude all tenant results.'),
-            );
-        }
+        const tenantNames = selectedTenants.map(
+            (tenant) => tenant.displayName || tenant.tenantId || l10n.t('Unknown tenant'),
+        );
+        ext.outputChannel.appendLine(l10n.t('Selected tenants: {0}', tenantNames.join(', ')));
     }
 
     private async applySubscriptionFiltering(context: FilteringWizardContext): Promise<void> {

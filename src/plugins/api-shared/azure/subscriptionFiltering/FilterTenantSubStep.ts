@@ -16,6 +16,7 @@ interface TenantQuickPickItem extends vscode.QuickPickItem {
 
 export class FilterTenantSubStep extends AzureWizardPromptStep<FilteringWizardContext> {
     public async prompt(context: FilteringWizardContext): Promise<void> {
+        // availableTenants only contains authenticated tenants (filtered in InitializeFilteringStep)
         const tenants = context.availableTenants || [];
 
         // Add telemetry for tenant filtering
@@ -23,7 +24,9 @@ export class FilterTenantSubStep extends AzureWizardPromptStep<FilteringWizardCo
 
         if (tenants.length === 0) {
             void vscode.window.showWarningMessage(
-                l10n.t('No tenants found. Please try signing in again or check your Azure permissions.'),
+                l10n.t(
+                    'No authenticated tenants found. Use "Manage Azure Accounts" in the Discovery View to sign in to tenants.',
+                ),
             );
             return;
         }
@@ -42,7 +45,7 @@ export class FilterTenantSubStep extends AzureWizardPromptStep<FilteringWizardCo
 
         const selectedItems = await context.ui.showQuickPick(tenantItems, {
             stepName: 'filterTenants',
-            placeHolder: l10n.t('Select tenants to include in subscription discovery'),
+            placeHolder: l10n.t('Select tenants (manage accounts to see more)'),
             canPickMany: true,
             enableGrouping: true,
             matchOnDescription: true,

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext, type IWizardOptions } from '@microsoft/vscode-azext-utils';
-import { Disposable, l10n, ThemeIcon } from 'vscode';
+import { Disposable } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
@@ -13,15 +13,16 @@ import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureS
 import { configureAzureSubscriptionFilter } from '../api-shared/azure/subscriptionFiltering/configureAzureSubscriptionFilter';
 import { AzureContextProperties } from '../api-shared/azure/wizard/AzureContextProperties';
 import { SelectSubscriptionStep } from '../api-shared/azure/wizard/SelectSubscriptionStep';
+import { DESCRIPTION, DISCOVERY_PROVIDER_ID, ICON_PATH, LABEL, WIZARD_TITLE } from './config';
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
 import { AzureExecuteStep } from './discovery-wizard/AzureExecuteStep';
 import { SelectClusterStep } from './discovery-wizard/SelectClusterStep';
 
 export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvider {
-    id = 'azure-mongo-vcore-discovery';
-    label = l10n.t('Azure DocumentDB');
-    description = l10n.t('Azure Service Discovery for Azure DocumentDB');
-    iconPath = new ThemeIcon('azure');
+    id = DISCOVERY_PROVIDER_ID;
+    label = LABEL;
+    description = DESCRIPTION;
+    iconPath = ICON_PATH;
 
     azureSubscriptionProvider: AzureSubscriptionProviderWithFilters;
 
@@ -47,7 +48,7 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
         context.properties[AzureContextProperties.AzureSubscriptionProvider] = this.azureSubscriptionProvider;
 
         return {
-            title: l10n.t('Azure Service Discovery'),
+            title: WIZARD_TITLE,
             promptSteps: [new SelectSubscriptionStep(), new SelectClusterStep()],
             executeSteps: [new AzureExecuteStep()],
             showLoadingPrompt: true,
@@ -68,7 +69,7 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
     async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {
         // Add telemetry for credential configuration activation
         context.telemetry.properties.credentialConfigActivated = 'true';
-        context.telemetry.properties.discoveryProviderId = this.id;
+        context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
         context.telemetry.properties.nodeProvided = node ? 'true' : 'false';
 
         if (!node || node instanceof AzureServiceRootItem) {
