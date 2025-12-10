@@ -32,6 +32,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
     constructor(
         public readonly parentId: string,
         public readonly subscription: AzureSubscriptionModel,
+        private readonly journeyCorrelationId: string,
     ) {
         this.id = `${parentId}/${subscription.subscriptionId}`;
     }
@@ -43,6 +44,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 const startTime = Date.now();
                 context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
                 context.telemetry.properties.view = Views.DiscoveryView;
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
 
                 const computeClient = await createComputeManagementClient(context, this.subscription.subscription); // For listing VMs
                 const networkClient = await createNetworkManagementClient(context, this.subscription.subscription); // For fetching IP addresses
@@ -112,7 +114,9 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             fqdn: fqdn,
                             dbExperience: DocumentDBExperience,
                         };
-                        vmItems.push(new AzureVMResourceItem(this.subscription.subscription, vmInfo));
+                        vmItems.push(
+                            new AzureVMResourceItem(this.journeyCorrelationId, this.subscription.subscription, vmInfo),
+                        );
                     }
                 }
 

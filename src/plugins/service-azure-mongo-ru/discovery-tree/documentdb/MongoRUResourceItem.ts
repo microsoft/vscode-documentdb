@@ -29,10 +29,16 @@ export class MongoRUResourceItem extends ClusterItemBase {
     );
 
     constructor(
+        /**
+         * Correlation ID for telemetry funnel analysis.
+         * For statistics only - does not influence functionality.
+         */
+        journeyCorrelationId: string,
         readonly subscription: AzureSubscription,
         cluster: ClusterModel,
     ) {
         super(cluster);
+        this.journeyCorrelationId = journeyCorrelationId;
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
@@ -40,6 +46,9 @@ export class MongoRUResourceItem extends ClusterItemBase {
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.resourceType = RESOURCE_TYPE;
+            if (this.journeyCorrelationId) {
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+            }
 
             const credentials = await extractCredentialsFromRUAccount(
                 context,
@@ -63,6 +72,9 @@ export class MongoRUResourceItem extends ClusterItemBase {
             context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.connectionInitiatedFrom = 'discoveryView';
             context.telemetry.properties.resourceType = RESOURCE_TYPE;
+            if (this.journeyCorrelationId) {
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+            }
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {

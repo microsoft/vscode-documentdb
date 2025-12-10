@@ -5,6 +5,7 @@
 
 import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
@@ -30,6 +31,10 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
+        // Generate a new journey correlation ID for telemetry funnel analysis
+        // This ID is passed to all child items and included in their telemetry events
+        const journeyCorrelationId = randomUUID();
+
         const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
         const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
 
@@ -82,12 +87,16 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
                 .sort((a, b) => a.name.localeCompare(b.name))
                 // map to AzureSubscriptionItem
                 .map((sub) => {
-                    return new AzureSubscriptionItem(this.id, {
-                        subscription: sub,
-                        subscriptionName: sub.name,
-                        subscriptionId: sub.subscriptionId,
-                        tenant: tenantMap.get(sub.tenantId),
-                    });
+                    return new AzureSubscriptionItem(
+                        this.id,
+                        {
+                            subscription: sub,
+                            subscriptionName: sub.name,
+                            subscriptionId: sub.subscriptionId,
+                            tenant: tenantMap.get(sub.tenantId),
+                        },
+                        journeyCorrelationId,
+                    );
                 })
         );
     }

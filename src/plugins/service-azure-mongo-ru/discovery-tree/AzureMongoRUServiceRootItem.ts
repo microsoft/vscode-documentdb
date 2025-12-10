@@ -5,6 +5,7 @@
 
 import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
@@ -32,6 +33,9 @@ export class AzureMongoRUServiceRootItem
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
+        // Generate a journey correlation ID for funnel telemetry tracking
+        const journeyCorrelationId = randomUUID();
+
         const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
         const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
 
@@ -84,12 +88,16 @@ export class AzureMongoRUServiceRootItem
                 .sort((a, b) => a.name.localeCompare(b.name))
                 // map to AzureMongoRUSubscriptionItem
                 .map((sub) => {
-                    return new AzureMongoRUSubscriptionItem(this.id, {
-                        subscription: sub,
-                        subscriptionName: sub.name,
-                        subscriptionId: sub.subscriptionId,
-                        tenant: tenantMap.get(sub.tenantId),
-                    });
+                    return new AzureMongoRUSubscriptionItem(
+                        this.id,
+                        {
+                            subscription: sub,
+                            subscriptionName: sub.name,
+                            subscriptionId: sub.subscriptionId,
+                            tenant: tenantMap.get(sub.tenantId),
+                        },
+                        journeyCorrelationId,
+                    );
                 })
         );
     }

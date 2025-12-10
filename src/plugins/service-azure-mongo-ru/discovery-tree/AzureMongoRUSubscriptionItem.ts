@@ -32,6 +32,7 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
     constructor(
         public readonly parentId: string,
         public readonly subscription: AzureSubscriptionModel,
+        private readonly journeyCorrelationId: string,
     ) {
         this.id = `${parentId}/${subscription.subscriptionId}`;
     }
@@ -42,6 +43,7 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
             async (context: IActionContext) => {
                 const startTime = Date.now();
                 context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
 
                 const managementClient = await createCosmosDBManagementClient(context, this.subscription.subscription);
                 const allAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
@@ -62,7 +64,11 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                             dbExperience: CosmosDBMongoRUExperience,
                         } as ClusterModel;
 
-                        return new MongoRUResourceItem(this.subscription.subscription, clusterInfo);
+                        return new MongoRUResourceItem(
+                            this.journeyCorrelationId,
+                            this.subscription.subscription,
+                            clusterInfo,
+                        );
                     });
             },
         );

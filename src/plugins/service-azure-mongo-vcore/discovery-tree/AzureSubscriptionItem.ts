@@ -32,6 +32,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
     constructor(
         public readonly parentId: string,
         public readonly subscription: AzureSubscriptionModel,
+        private readonly journeyCorrelationId: string,
     ) {
         this.id = `${parentId}/${subscription.subscriptionId}`;
     }
@@ -42,6 +43,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
             async (context: IActionContext) => {
                 const startTime = Date.now();
                 context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
 
                 const client = await createResourceManagementClient(context, this.subscription.subscription);
 
@@ -64,7 +66,11 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             dbExperience: DocumentDBExperience,
                         } as ClusterModel;
 
-                        return new DocumentDBResourceItem(this.subscription.subscription, clusterInfo);
+                        return new DocumentDBResourceItem(
+                            this.journeyCorrelationId,
+                            this.subscription.subscription,
+                            clusterInfo,
+                        );
                     });
             },
         );
