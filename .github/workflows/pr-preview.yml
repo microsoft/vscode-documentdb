@@ -1,4 +1,4 @@
-name: Preview Documentation
+name: Generate Documentation Preview
 
 # Manually deploy PR documentation previews to GitHub Pages
 # Can be triggered from the Actions tab to preview docs from any PR
@@ -7,7 +7,7 @@ on:
     workflow_dispatch:
         inputs:
             pr_number:
-                description: 'PR number to preview (leave empty for "clean-all")'
+                description: 'PR number to preview (leave empty for "CleanAll")'
                 required: false
                 type: string
             action_type:
@@ -15,10 +15,10 @@ on:
                 required: true
                 type: choice
                 options:
-                    - deploy
-                    - remove
-                    - clean-all
-                default: deploy
+                    - Generate
+                    - Clean
+                    - CleanAll
+                default: Generate
 
 # SECURITY: Minimal permissions required
 # - contents:write is needed to push to gh-pages branch
@@ -28,65 +28,77 @@ permissions:
     pull-requests: write
 
 concurrency:
-    group: ${{ inputs.action_type == 'clean-all' && 'pr-preview-clean-all' || format('pr-preview-{0}', inputs.pr_number) }}
+    group: ${{ inputs.action_type == 'CleanAll' && 'pr-preview-clean-all' || format('pr-preview-{0}', inputs.pr_number) }}
     cancel-in-progress: true
 
 jobs:
     deploy-preview:
         name: Deploy Documentation Preview
         runs-on: ubuntu-latest
-        if: inputs.action_type != 'clean-all'
+        if: ${{ inputs.action_type != 'CleanAll' }}
 
         steps:
-            # Validate that pr_number is provided for deploy/remove actions
-            - name: Validate PR Number
-              if: ${{ inputs.action_type != 'clean-all' }}
+            - name: 🔢 Validate PR Number
+              if: ${{ inputs.action_type != 'CleanAll' }}
               run: |
                   if [ -z "${{ inputs.pr_number }}" ]; then
                     echo "Error: pr_number input is required for action_type '${{ inputs.action_type }}'."
                     exit 1
                   fi
-            # Get PR details to access the head SHA and branch
-            - name: Get PR Details
+
+            - name: 🔎 Get PR Details
               id: pr
               uses: actions/github-script@v7
               with:
                   script: |
+                      const prNumberInput = process.env.PR_NUMBER_INPUT;
+                      const pull_number = prNumberInput ? Number(prNumberInput) : context.issue.number;
                       const pr = await github.rest.pulls.get({
                         owner: context.repo.owner,
                         repo: context.repo.repo,
-                        pull_number: ${{ toJSON(inputs.pr_number) }}
+                        pull_number
                       });
                       core.setOutput('ref', pr.data.head.sha);
                       core.setOutput('head_ref', pr.data.head.ref);
+                      core.setOutput('pr_number', String(pr.data.number));
                       return pr.data;
+              env:
+                  PR_NUMBER_INPUT: ${{ inputs.pr_number }}
 
-            # Checkout the PR branch
-            - name: Checkout PR
+            - name: 📥 Checkout PR
               uses: actions/checkout@v4
               with:
                   ref: ${{ steps.pr.outputs.ref }}
                   token: ${{ secrets.GITHUB_TOKEN }}
                   persist-credentials: true
 
-            # Deploy or remove the preview based on manual input
-            - name: Deploy/Remove Preview
+            - name: ⚙️ Resolve Action
+              id: resolve
+              run: |
+                  if [ "${{ inputs.action_type }}" = "Generate" ]; then
+                    echo "action=deploy" >> $GITHUB_OUTPUT
+                  elif [ "${{ inputs.action_type }}" = "Clean" ]; then
+                    echo "action=remove" >> $GITHUB_OUTPUT
+                  else
+                    echo "action=none" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: 🚀 Deploy/Clean Preview
               id: preview
               uses: rossjrw/pr-preview-action@v1
               with:
                   source-dir: docs/
                   preview-branch: gh-pages
                   umbrella-dir: pr-preview
-                  action: ${{ inputs.action_type }}
+                  action: ${{ steps.resolve.outputs.action }}
                   comment: false
                   token: ${{ secrets.GITHUB_TOKEN }}
 
-            # Post custom comment for deployments
-            - name: Comment Preview URL
+            - name: 💬 Comment Preview URL
+              if: ${{ steps.resolve.outputs.action == 'deploy' }}
               uses: marocchino/sticky-pull-request-comment@v2
-              if: inputs.action_type == 'deploy'
               with:
-                  number: ${{ inputs.pr_number }}
+                  number: ${{ steps.pr.outputs.pr_number }}
                   header: pr-preview
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   message: |
@@ -101,37 +113,34 @@ jobs:
                       ---
                       <sub>Preview deployed to branch `gh-pages` at ${{ steps.preview.outputs.action-start-time }} by @${{ github.actor }}</sub>
 
-            # Post comment when preview is removed
-            - name: Comment Preview Removed
+            - name: 🗑️ Comment Preview Cleaned
+              if: ${{ steps.resolve.outputs.action == 'remove' }}
               uses: marocchino/sticky-pull-request-comment@v2
-              if: inputs.action_type == 'remove'
               with:
-                  number: ${{ inputs.pr_number }}
+                  number: ${{ steps.pr.outputs.pr_number }}
                   header: pr-preview
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   message: |
                       ## 📚 Documentation Preview
 
-                      Preview has been manually removed.
+                      Preview has been manually cleaned.
 
                       ---
-                      <sub>Removed at ${{ steps.preview.outputs.action-start-time }} by @${{ github.actor }}</sub>
+                      <sub>Cleaned at ${{ steps.preview.outputs.action-start-time }} by @${{ github.actor }}</sub>
 
     clean-all-previews:
         name: Clean All Previews
         runs-on: ubuntu-latest
-        if: inputs.action_type == 'clean-all'
+        if: ${{ inputs.action_type == 'CleanAll' }}
 
         steps:
-            # Checkout the gh-pages branch
-            - name: Checkout gh-pages
+            - name: 📁 Checkout gh-pages
               uses: actions/checkout@v4
               with:
                   ref: gh-pages
                   token: ${{ secrets.GITHUB_TOKEN }}
 
-            # Remove the entire pr-preview directory
-            - name: Remove All Previews
+            - name: 🧹 Remove All Previews
               run: |
                   if [ -d "pr-preview" ]; then
                     echo "Removing all preview deployments..."
