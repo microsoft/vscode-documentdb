@@ -1,4 +1,4 @@
-name: Generate Documentation Preview
+name: Deploy Documentation (Preview)
 
 # Manually deploy PR documentation previews to GitHub Pages
 # Can be triggered from the Actions tab to preview docs from any PR
