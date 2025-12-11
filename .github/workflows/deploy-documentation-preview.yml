@@ -123,15 +123,19 @@ jobs:
                   header: pr-preview
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   message: |
-                      ## 📚 Documentation Preview
+                      ## 🚀 Documentation Preview Deployed
 
                       Your documentation preview has been manually deployed and will be available shortly at:
 
-                      **🔗 https://microsoft.github.io/vscode-documentdb/pr-preview/pr-${{ steps.pr.outputs.pr_number }}/**
+                      **🌐 https://microsoft.github.io/vscode-documentdb/pr-preview/pr-${{ steps.pr.outputs.pr_number }}/**
 
                       To update the preview, trigger this workflow again with the same PR number.
 
                       ---
+                      **🔍 Monitor deployment:**
+                      - [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+                      - [All deployments](https://github.com/microsoft/vscode-documentdb/deployments)
+
                       <sub>Preview deployed to branch `gh-pages` by @${{ github.actor }}</sub>
 
             - name: 🗑️ Comment Preview Cleaned
@@ -142,11 +146,13 @@ jobs:
                   header: pr-preview
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   message: |
-                      ## 📚 Documentation Preview
+                      ## ℹ️ Documentation Preview Cleaned
 
                       Preview has been manually cleaned.
 
                       ---
+                      **🔍 [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})**
+
                       <sub>Cleaned by @${{ github.actor }}</sub>
 
     # Separate job to clean all previews
