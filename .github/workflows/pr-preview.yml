@@ -42,10 +42,10 @@ jobs:
             - name: Validate PR Number
               if: ${{ inputs.action_type != 'clean-all' }}
               run: |
-                if [ -z "${{ inputs.pr_number }}" ]; then
-                  echo "Error: pr_number input is required for action_type '${{ inputs.action_type }}'."
-                  exit 1
-                fi
+                  if [ -z "${{ inputs.pr_number }}" ]; then
+                    echo "Error: pr_number input is required for action_type '${{ inputs.action_type }}'."
+                    exit 1
+                  fi
             # Get PR details to access the head SHA and branch
             - name: Get PR Details
               id: pr
@@ -77,6 +77,7 @@ jobs:
                   umbrella-dir: pr-preview
                   action: ${{ inputs.action_type }}
                   comment: false
+                  token: ${{ secrets.GH_PAGES_PREVIEW_TOKEN }}
 
             # Post custom comment for deployments
             - name: Comment Preview URL
@@ -85,6 +86,7 @@ jobs:
               with:
                   number: ${{ inputs.pr_number }}
                   header: pr-preview
+                  GITHUB_TOKEN: ${{ secrets.GH_PAGES_PREVIEW_TOKEN }}
                   message: |
                       ## 📚 Documentation Preview
 
@@ -104,6 +106,7 @@ jobs:
               with:
                   number: ${{ inputs.pr_number }}
                   header: pr-preview
+                  GITHUB_TOKEN: ${{ secrets.GH_PAGES_PREVIEW_TOKEN }}
                   message: |
                       ## 📚 Documentation Preview
 
@@ -123,6 +126,7 @@ jobs:
               uses: actions/checkout@v4
               with:
                   ref: gh-pages
+                  token: ${{ secrets.GH_PAGES_PREVIEW_TOKEN }}
 
             # Remove the entire pr-preview directory
             - name: Remove All Previews
