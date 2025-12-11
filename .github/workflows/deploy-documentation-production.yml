@@ -1,4 +1,4 @@
-name: Deploy Documentation (Production)
+name: Deploy Documentation
 
 on:
     push:
@@ -26,6 +26,4 @@ jobs:
                   folder: docs/
                   branch: gh-pages
                   clean: true
-                  clean-exclude: |
-                      pr-preview/**
                   token: ${{ secrets.GITHUB_TOKEN }}
