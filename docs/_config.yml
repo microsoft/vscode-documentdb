@@ -1,2 +1,82 @@
+# Remote theme configuration for GitHub Pages
+remote_theme: 'jekyll/minima@1e8a445'
+
+# Site settings
 title: DocumentDB for VS Code
 description: Learn more about the DocumentDB for VS Code Extension
+# baseurl: "" # Uncomment and set if site is in a subdirectory
+# url: "https://yourdomain.com" # Set your production URL
+
+# GitHub Pages supported plugins
+# See: https://pages.github.com/versions/
+plugins:
+    - jekyll-feed
+    - jekyll-seo-tag
+    - jekyll-sitemap
+    - jekyll-mentions
+    - jekyll-redirect-from
+    - jekyll-avatar
+    - jemoji
+
+# Author metadata (for SEO and theme)
+author:
+    name: Microsoft
+    email: '' # Optional
+
+# Minima theme configuration
+minima:
+    # Skin selection: classic (default), dark, auto, solarized, solarized-light, solarized-dark
+    skin: auto
+
+    # Date format (Liquid date filter)
+    # See: http://shopify.github.io/liquid/filters/date/
+    date_format: '%b %-d, %Y'
+
+    # Show post excerpts on the home page
+    show_excerpts: false
+
+    # Hide site feed link in footer
+    hide_site_feed_link: false
+
+    # Navigation pages - customize which pages appear in header nav
+    # Uncomment and modify to control navigation order
+    # nav_pages:
+    #   - about.md
+    #   - index.md
+
+    # Social links (displayed in footer)
+    # Uses Font Awesome icons: https://fontawesome.com/search?ic=brands
+    social_links:
+        # - title: GitHub Repository
+        #   icon: github
+        #   url: "https://github.com/microsoft/vscode-documentdb"
+        # - title: X (Twitter)
+        #   icon: x-twitter
+        #   url: "https://twitter.com/yourhandle"
+        # - title: LinkedIn
+        #   icon: linkedin
+        #   url: "https://linkedin.com/company/microsoft"
+
+# Google Analytics (optional)
+# google_analytics: G-NNNNNNNNNN
+
+# Disqus comments (optional) - only shows in production
+# disqus:
+#   shortname: your_disqus_shortname
+
+# # Build settings
+# markdown: kramdown
+# kramdown:
+#     input: GFM
+#     hard_wrap: false
+#     syntax_highlighter: rouge
+
+# Exclude from processing
+exclude:
+    - Gemfile
+    - Gemfile.lock
+    - node_modules
+    - vendor/bundle/
+    - vendor/cache/
+    - vendor/gems/
+    - vendor/ruby/
