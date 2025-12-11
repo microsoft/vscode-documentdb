@@ -38,6 +38,14 @@ jobs:
         if: inputs.action_type != 'clean-all'
 
         steps:
+            # Validate that pr_number is provided for deploy/remove actions
+            - name: Validate PR Number
+              if: ${{ inputs.action_type != 'clean-all' }}
+              run: |
+                if [ -z "${{ inputs.pr_number }}" ]; then
+                  echo "Error: pr_number input is required for action_type '${{ inputs.action_type }}'."
+                  exit 1
+                fi
             # Get PR details to access the head SHA and branch
             - name: Get PR Details
               id: pr
