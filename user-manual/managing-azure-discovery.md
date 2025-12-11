@@ -14,64 +14,39 @@ For a general overview of service discovery, see the [Service Discovery](./servi
 
 ---
 
-## Managing Azure Accounts and Tenants
+## Managing Azure Accounts
 
-The **Manage Credentials** feature allows you to view your Azure accounts, sign in to specific tenants, and add new accounts for service discovery.
+The **Manage Credentials** feature allows you to view and manage which Azure accounts are being used for service discovery within the extension.
 
 ### How to Access
 
 You can access the credential management feature in two ways:
 
 1. **From the context menu**: Right-click on an Azure service discovery provider and select `Manage Credentials...`
-2. **From the Service Discovery panel**: Click the `key icon` next to the service discovery provider name.
+2. **From the Service Discovery panel**: Click the `key icon` next to the service discovery provider name
 
-### Account and Tenant Management Flow
+### Available Actions
 
-The wizard provides options to manage your Azure authentication state.
+When you open the credential management wizard, you can:
 
-#### Step 1: Select an Account
+1. **View signed-in accounts**: See all Azure accounts currently authenticated in VS Code and available for service discovery
+2. **Sign in with a different account**: Add additional Azure accounts for accessing more resources
+3. **View active account details**: See which account is currently being used for a specific service discovery provider
+4. **Exit without changes**: Close the wizard without making modifications
 
-First, you'll see a list of all Azure accounts currently authenticated in VS Code. For each account, you can see how many tenants are available and how many you are currently signed in to.
-
-You can:
-
-- Select an existing account to manage its tenants.
-- Choose `Sign in with a different account…` to add a new Azure account.
+### Account Selection
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│ Azure accounts used for service discovery                 │
-├───────────────────────────────────────────────────────────┤
-│ 👤 user@contoso.com                                       │
-│    2 tenants available (1 signed in)                      │
-│ 👤 user@fabrikam.com                                      │
-│    1 tenant available (1 signed in)                       │
-├───────────────────────────────────────────────────────────┤
-│ 🔐 Sign in with a different account…                      │
-│ ✖️ Exit                                                   │
-└───────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│ Azure accounts used for service discovery  │
+├────────────────────────────────────────────┤
+│ 👤 user1@contoso.com                       │
+│ 👤 user2@fabrikam.com                      │
+├────────────────────────────────────────────┤
+│ 🔐 Sign in with a different account…       │
+│ ✖️  Exit without making changes            │
+└────────────────────────────────────────────┘
 ```
-
-#### Step 2: Manage Tenants for the Selected Account
-
-After selecting an account, you will see a list of all tenants associated with that account, along with their sign-in status.
-
-```
-┌───────────────────────────────────────────────────────────┐
-│ Tenants for "user@contoso.com"                            │
-├───────────────────────────────────────────────────────────┤
-│ Experiments                                               │
-│ ✅ Signed in                                              │
-│ Production                                                │
-│ 🔐 Select to sign in                                      │
-├───────────────────────────────────────────────────────────┤
-│ ⬅️ Back to account selection                              │
-│ ✖️ Exit                                                   │
-└───────────────────────────────────────────────────────────┘
-```
-
-- **Sign in to a tenant**: Select any tenant marked with `$(sign-in) Select to sign in`. The extension will authenticate you for that specific tenant, making its subscriptions available for discovery.
-- **Already signed-in tenants**: Selecting a tenant that is already signed in will simply confirm your status and allow you to return to the list.
 
 ### Signing Out from an Azure Account
 
@@ -87,7 +62,7 @@ The credential management wizard does **not** provide a sign-out option. If you 
 
 ## Filtering Azure Resources
 
-The **Filter** feature allows you to control which Azure resources are displayed in the Service Discovery panel by selecting from your **currently signed-in tenants** and their corresponding subscriptions.
+The **Filter** feature allows you to control which Azure resources are displayed in the Service Discovery panel by selecting specific tenants and subscriptions.
 
 ### How to Access
 
@@ -95,55 +70,56 @@ You can access the filtering feature by clicking the **funnel icon** next to the
 
 ### Filtering Flow
 
-The filtering wizard guides you through selecting which Azure resources to display. The flow adapts based on your Azure environment.
+The filtering wizard guides you through selecting which Azure resources to display:
 
 #### Single-Tenant Scenario
 
-If you have access to only one Azure tenant (or are only signed in to one), the wizard will skip tenant selection and proceed directly to subscription filtering:
+If you have access to only one Azure tenant, the wizard will skip tenant selection and proceed directly to subscription filtering:
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│ Select subscriptions to include in service discovery      │
-├───────────────────────────────────────────────────────────┤
-│ ☑️ Demos (Experiments)                                    │
-│   (sub-id-123)                                            │
-│ ☑️ TestRuns (Experiments)                                 │
-│   (sub-id-456)                                            │
-└───────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│ Select subscriptions to include in         │
+│ service discovery                          │
+├────────────────────────────────────────────┤
+│ ☑️ Production Subscription                 │
+│   (sub-id-123) (Contoso)                   │
+│ ☑️ Development Subscription                │
+│   (sub-id-456) (Contoso)                   │
+│ ☐ Test Subscription                        │
+│   (sub-id-789) (Contoso)                   │
+└────────────────────────────────────────────┘
 ```
 
 #### Multi-Tenant Scenario
 
 If you have access to multiple Azure tenants, the wizard will first ask you to select tenants, then filter subscriptions based on your tenant selection:
 
-**Step 1: Select Tenants**
-
-The wizard first asks you to select from the tenants you are currently signed in to. Only tenants authenticated via the "Manage Credentials" flow will appear here.
-
 ```
-┌───────────────────────────────────────────────────────────┐
-│ Select tenants (manage accounts to see more)              │
-├───────────────────────────────────────────────────────────┤
-│ ☑️ Experiments                                            │
-│   (tenant-id-123)                                         │
-│ ☑️ Production                                             │
-│   (tenant-id-456)                                         │
-└───────────────────────────────────────────────────────────┘
-```
+Step 1: Select Tenants
+┌────────────────────────────────────────────┐
+│ Select tenants to include in subscription  │
+│ discovery                                  │
+├────────────────────────────────────────────┤
+│ ☑️ Contoso                                 │
+│   (tenant-id-123) contoso.onmicrosoft.com  │
+│ ☑️ Fabrikam                                │
+│   (tenant-id-456) fabrikam.onmicrosoft.com │
+│ ☐ Adventure Works                          │
+│   (tenant-id-789) adventureworks.com       │
+└────────────────────────────────────────────┘
 
-**Step 2: Select Subscriptions**
-
-Next, you'll see a list of subscriptions belonging to the tenants you selected in the previous step.
-
-```
-┌───────────────────────────────────────────────────────────┐
-│ Select subscriptions to include in service discovery      │
-├───────────────────────────────────────────────────────────┤
-│ ☑️ Demos (Experiments)                                    │
-│   (sub-id-123)                                            │
-│ ☑️ Portal (Production)                                    │
-│   (sub-id-789)                                            │
-└───────────────────────────────────────────────────────────┘
+Step 2: Select Subscriptions (filtered by selected tenants)
+┌────────────────────────────────────────────┐
+│ Select subscriptions to include in         │
+│ service discovery                          │
+├────────────────────────────────────────────┤
+│ ☑️ Contoso Production                      │
+│   (sub-id-123) (Contoso)                   │
+│ ☑️ Contoso Development                     │
+│   (sub-id-456) (Contoso)                   │
+│ ☑️ Fabrikam Production                     │
+│   (sub-id-789) (Fabrikam)                  │
+└────────────────────────────────────────────┘
 ```
 
 ### Filter Persistence
@@ -158,21 +134,22 @@ The filtering behavior differs depending on how you access service discovery:
 
 When working within the **Service Discovery** panel in the sidebar:
 
-- Your filter selections (tenants and subscriptions) are **applied automatically**.
-- Only resources from selected tenants and subscriptions are displayed.
-- The filter persists until you change it.
+- Your filter selections (tenants and subscriptions) are **applied automatically**
+- Only resources from selected tenants and subscriptions are displayed
+- The filter persists until you change it
 
 #### From the "Add New Connection" Wizard
 
 When adding a new connection via the **"Add New Connection"** wizard:
 
-- **No filtering is applied** by default.
-- You will see **all subscriptions from all tenants** you have access to, regardless of your filter settings or sign-in status for each tenant.
-- This ensures you can always access any resource when explicitly adding a connection.
+- **No filtering is applied** by default
+- You will see **all subscriptions from all tenants** you have access to
+- You must select one subscription to continue, but the full list is available
+- This ensures you can always access any resource when explicitly adding a connection
 
 ## Related Documentation
 
 - [Service Discovery Overview](./service-discovery)
-- [Azure Cosmos DB for MongoDB (RU) Service Discovery](./service-discovery-azure-cosmosdb-for-mongodb-ru)
+- [Azure CosmosDB for MongoDB (RU) Service Discovery](./service-discovery-azure-cosmosdb-for-mongodb-ru)
 - [Azure DocumentDB Service Discovery](./service-discovery-azure-cosmosdb-for-mongodb-vcore)
 - [Azure VMs (DocumentDB) Service Discovery](./service-discovery-azure-vms)
