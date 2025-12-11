@@ -4,8 +4,10 @@ remote_theme: 'jekyll/minima@1e8a445'
 # Site settings
 title: DocumentDB for VS Code
 description: Learn more about the DocumentDB for VS Code Extension
-baseurl: '/pr-preview/pr-420' # Set to your subfolder path (or "" for root)
-url: 'https://microsoft.github.io' # Your GitHub Pages domain
+# WARNING: All deployments (production + PR previews) share this single config
+# due to GitHub Pages limitations. This baseurl is set for production.
+baseurl: '/vscode-documentdb'
+url: 'https://microsoft.github.io'
 
 # GitHub Pages supported plugins
 # See: https://pages.github.com/versions/
