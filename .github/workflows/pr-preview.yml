@@ -47,7 +47,7 @@ jobs:
                       const pr = await github.rest.pulls.get({
                         owner: context.repo.owner,
                         repo: context.repo.repo,
-                        pull_number: ${{ inputs.pr_number }}
+                        pull_number: ${{ toJSON(inputs.pr_number) }}
                       });
                       core.setOutput('ref', pr.data.head.sha);
                       core.setOutput('head_ref', pr.data.head.ref);
