@@ -131,6 +131,12 @@ jobs:
 
                       To update the preview, trigger this workflow again with the same PR number.
 
+                      ### ⚠️ Known Limitations
+
+                      **Config sharing:** All deployments (production + PR previews) share the same Jekyll `_config.yml` from the `gh-pages` branch root. Changes to config settings will affect all deployments.
+
+                      **Asset links:** PR previews use the production `baseurl` setting, so some CSS/JS/image links may not work correctly in the preview. This is a known limitation of the current GitHub Pages setup.
+
                       ---
                       **🔍 Monitor deployment:**
                       - [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
