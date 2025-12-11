@@ -83,16 +83,37 @@ jobs:
                     echo "action=none" >> $GITHUB_OUTPUT
                   fi
 
-            - name: 🚀 Deploy/Clean Preview
+            - name: 🚀 Deploy Preview
               id: preview
-              uses: rossjrw/pr-preview-action@v1
+              uses: JamesIves/github-pages-deploy-action@v4
+              if: ${{ steps.resolve.outputs.action == 'deploy' }}
               with:
-                  source-dir: docs/
-                  preview-branch: gh-pages
-                  umbrella-dir: pr-preview
-                  action: ${{ steps.resolve.outputs.action }}
-                  comment: false
+                  folder: docs/
+                  branch: gh-pages
+                  target-folder: pr-preview/pr-${{ steps.pr.outputs.pr_number }}
+                  clean: false
                   token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: 🧹 Clean Preview (Checkout gh-pages)
+              if: ${{ steps.resolve.outputs.action == 'remove' }}
+              uses: actions/checkout@v4
+              with:
+                  ref: gh-pages
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: 🧹 Clean Preview (Remove Directory)
+              if: ${{ steps.resolve.outputs.action == 'remove' }}
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  if [ -d "pr-preview/pr-${{ steps.pr.outputs.pr_number }}" ]; then
+                    git rm -rf "pr-preview/pr-${{ steps.pr.outputs.pr_number }}"
+                    git commit -m "Remove preview for PR #${{ steps.pr.outputs.pr_number }}"
+                    git push
+                    echo "✅ Preview removed"
+                  else
+                    echo "ℹ️ Preview directory not found"
+                  fi
 
             - name: 💬 Comment Preview URL
               if: ${{ steps.resolve.outputs.action == 'deploy' }}
@@ -106,12 +127,12 @@ jobs:
 
                       Your documentation preview has been manually deployed and will be available shortly at:
 
-                      **🔗 ${{ steps.preview.outputs.preview-url }}**
+                      **🔗 https://microsoft.github.io/vscode-documentdb/pr-preview/pr-${{ steps.pr.outputs.pr_number }}/**
 
                       To update the preview, trigger this workflow again with the same PR number.
 
                       ---
-                      <sub>Preview deployed to branch `gh-pages` at ${{ steps.preview.outputs.action-start-time }} by @${{ github.actor }}</sub>
+                      <sub>Preview deployed to branch `gh-pages` by @${{ github.actor }}</sub>
 
             - name: 🗑️ Comment Preview Cleaned
               if: ${{ steps.resolve.outputs.action == 'remove' }}
@@ -126,13 +147,14 @@ jobs:
                       Preview has been manually cleaned.
 
                       ---
-                      <sub>Cleaned at ${{ steps.preview.outputs.action-start-time }} by @${{ github.actor }}</sub>
+                      <sub>Cleaned by @${{ github.actor }}</sub>
 
+    # Separate job to clean all previews
     clean-all-previews:
-        name: Clean All Previews
         runs-on: ubuntu-latest
         if: ${{ inputs.action_type == 'CleanAll' }}
-
+        permissions:
+            contents: write
         steps:
             - name: 📁 Checkout gh-pages
               uses: actions/checkout@v4
