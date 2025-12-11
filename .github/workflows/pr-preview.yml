@@ -28,7 +28,7 @@ permissions:
     pull-requests: write
 
 concurrency:
-    group: pr-preview-${{ inputs.pr_number }}
+    group: ${{ inputs.action_type == 'clean-all' && 'pr-preview-clean-all' || format('pr-preview-{0}', inputs.pr_number) }}
     cancel-in-progress: true
 
 jobs:
