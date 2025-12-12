@@ -21,7 +21,7 @@ import { UsageImpact } from '../../../../../utils/surveyTypes';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext, Views } from '../../collectionViewContext';
 
-export const ToolbarTableNavigation = (): JSX.Element => {
+export const ToolbarTableNavigation = (): React.JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */

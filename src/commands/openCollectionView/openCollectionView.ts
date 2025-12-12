@@ -9,9 +9,13 @@ import * as vscode from 'vscode';
 
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
+import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import { CollectionViewController } from '../../webviews/documentdb/collectionView/collectionViewController';
 
 export async function openCollectionView(context: IActionContext, node: CollectionItem) {
+    // added manually here as this function can by called bypassing our general command registration
+    trackJourneyCorrelationId(context, node);
+
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }

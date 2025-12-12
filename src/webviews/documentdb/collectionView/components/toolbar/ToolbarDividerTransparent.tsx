@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export const ToolbarDividerTransparent = (): JSX.Element => {
+import * as React from 'react';
+
+export const ToolbarDividerTransparent = (): React.JSX.Element => {
     return <div className="toolbarDividerTransparent" />;
 };

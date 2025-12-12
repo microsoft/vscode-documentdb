@@ -15,6 +15,7 @@ import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { createComputeManagementClient, createNetworkManagementClient } from '../../../utils/azureClients';
+import { DISCOVERY_PROVIDER_ID } from '../config';
 import { AzureVMResourceItem, type VirtualMachineModel } from './vm/AzureVMResourceItem';
 
 export interface AzureSubscriptionModel {
@@ -31,6 +32,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
     constructor(
         public readonly parentId: string,
         public readonly subscription: AzureSubscriptionModel,
+        private readonly journeyCorrelationId: string,
     ) {
         this.id = `${parentId}/${subscription.subscriptionId}`;
     }
@@ -39,7 +41,10 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
         return await callWithTelemetryAndErrorHandling(
             'azure-vm-discovery.getChildren',
             async (context: IActionContext) => {
+                const startTime = Date.now();
+                context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
                 context.telemetry.properties.view = Views.DiscoveryView;
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
 
                 const computeClient = await createComputeManagementClient(context, this.subscription.subscription); // For listing VMs
                 const networkClient = await createNetworkManagementClient(context, this.subscription.subscription); // For fetching IP addresses
@@ -109,9 +114,15 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             fqdn: fqdn,
                             dbExperience: DocumentDBExperience,
                         };
-                        vmItems.push(new AzureVMResourceItem(this.subscription.subscription, vmInfo));
+                        vmItems.push(
+                            new AzureVMResourceItem(this.journeyCorrelationId, this.subscription.subscription, vmInfo),
+                        );
                     }
                 }
+
+                // Add enhanced telemetry for discovery
+                context.telemetry.measurements.discoveryResourcesCount = vmItems.length;
+                context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
 
                 return vmItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
             },
