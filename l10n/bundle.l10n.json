@@ -52,6 +52,7 @@
   "[Query Insights Stage 3] AI service completed in {ms}ms (requestKey: {key})": "[Query Insights Stage 3] AI service completed in {ms}ms (requestKey: {key})",
   "[Query Insights Stage 3] Completed: {count} improvement cards generated (requestKey: {key})": "[Query Insights Stage 3] Completed: {count} improvement cards generated (requestKey: {key})",
   "[Query Insights Stage 3] Started for {db}.{collection} (requestKey: {key})": "[Query Insights Stage 3] Started for {db}.{collection} (requestKey: {key})",
+  "[Query Insights Stage 3] Using cached execution plan from Stage 2 (requestKey: {key})": "[Query Insights Stage 3] Using cached execution plan from Stage 2 (requestKey: {key})",
   "{0} tenants available ({1} signed in)": "{0} tenants available ({1} signed in)",
   "{countMany} documents have been deleted.": "{countMany} documents have been deleted.",
   "{countOne} document has been deleted.": "{countOne} document has been deleted.",

@@ -720,8 +720,9 @@ export const collectionsViewRouter = router({
      *
      * This endpoint:
      * 1. Retrieves the current query from ClusterSession (no parameters needed)
-     * 2. Calls AI service with query, database, and collection info
-     * 3. Transforms AI response into UI-friendly format with action buttons
+     * 2. Retrieves cached execution plan from Stage 2
+     * 3. Calls AI service with query, database, collection info, and execution plan
+     * 4. Transforms AI response into UI-friendly format with action buttons
      */
     getQueryInsightsStage3: publicProcedure
         .use(trpcToTelemetry)
@@ -745,16 +746,27 @@ export const collectionsViewRouter = router({
             // Get query parameters from session (current query)
             const queryParams = session.getCurrentFindQueryParams();
 
+            // Get cached execution plan from Stage 2
+            const cachedExecutionPlan = session.getRawExplainOutput(databaseName, collectionName);
+            if (cachedExecutionPlan) {
+                ext.outputChannel.trace(
+                    l10n.t('[Query Insights Stage 3] Using cached execution plan from Stage 2 (requestKey: {key})', {
+                        key: requestKey,
+                    }),
+                );
+            }
+
             // Create AI service instance
             const aiService = new QueryInsightsAIService();
 
-            // Call AI service
+            // Call AI service with execution plan
             const aiServiceStart = Date.now();
             const aiRecommendations = await aiService.getOptimizationRecommendations(
                 sessionId,
                 queryParams,
                 databaseName,
                 collectionName,
+                cachedExecutionPlan ?? undefined,
             );
             const aiServiceDuration = Date.now() - aiServiceStart;
             ext.outputChannel.trace(

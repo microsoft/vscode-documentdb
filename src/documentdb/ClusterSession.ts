@@ -418,8 +418,11 @@ export class ClusterSession {
     }
 
     /**
-     * Gets execution statistics - uses explain("executionStats")
+     * Gets execution statistics - uses explain with appropriate verbosity based on cluster type
      * Re-runs the query with execution stats and caches the result
+     *
+     * For Azure Cosmos DB vCore clusters: uses "allPlansExecution" verbosity for richer plan data
+     * For other clusters: uses "executionStats" verbosity
      *
      * Note: This method intentionally excludes skip/limit to get insights for the full query scope,
      * not just a single page. For page-specific explain plans, use client.queryInsightsApis.explainFind() directly.
@@ -446,10 +449,18 @@ export class ClusterSession {
             return this._executionStatsCache.result;
         }
 
-        // Execute explain("executionStats") using QueryInsightsApis from ClustersClient
+        // Determine verbosity based on cluster type
+        // vCore clusters support allPlansExecution for richer plan data
+        const clusterMetadata = await this._client.getClusterMetadata();
+        const verbosity =
+            clusterMetadata.domainInfo_isAzure === 'true' && clusterMetadata.domainInfo_api === 'vCore'
+                ? 'allPlansExecution'
+                : 'executionStats';
+
+        // Execute explain using QueryInsightsApis from ClustersClient
         // This re-runs the query to get authoritative execution metrics
         const explainResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
-            verbosity: 'executionStats',
+            verbosity,
             sort: options?.sort,
             projection: options?.projection,
             skip: options?.skip,
