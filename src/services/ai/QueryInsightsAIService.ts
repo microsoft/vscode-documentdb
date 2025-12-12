@@ -62,6 +62,7 @@ export class QueryInsightsAIService {
      * @param query - The query string
      * @param databaseName - Target database name
      * @param collectionName - Target collection name
+     * @param executionPlan - Optional pre-loaded execution plan
      * @returns AI optimization recommendations
      */
     public async getOptimizationRecommendations(
@@ -69,6 +70,7 @@ export class QueryInsightsAIService {
         query: string | FindQueryParams,
         databaseName: string,
         collectionName: string,
+        executionPlan?: unknown,
     ): Promise<AIOptimizationResponse> {
         const result = await callWithTelemetryAndErrorHandling(
             'vscode-documentdb.queryInsights.getOptimizationRecommendations',
@@ -84,6 +86,7 @@ export class QueryInsightsAIService {
                         collectionName,
                         queryObject,
                         commandType: CommandType.Find,
+                        executionPlan,
                     };
                 } else {
                     // handle string query for temporary compatibility
@@ -92,7 +95,8 @@ export class QueryInsightsAIService {
                         databaseName,
                         collectionName,
                         query,
-                        commandType: CommandType.Find, // For now, only support find queries
+                        commandType: CommandType.Find,
+                        executionPlan,
                     };
                 }
 
