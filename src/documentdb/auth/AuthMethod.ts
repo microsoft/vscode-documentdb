@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { getIconURI } from '../../constants';
+import { getIconPath } from '../../utils/icons';
 
 /**
  * Authentication method identifiers
@@ -122,7 +122,7 @@ export function createAuthMethodQuickPickItems(
         label: method.label,
         detail: method.detail,
         authMethod: method.id,
-        iconPath: method.iconName ? getIconURI(method.iconName) : undefined,
+        iconPath: method.iconName ? getIconPath(method.iconName) : undefined,
         alwaysShow: true,
         description:
             showSupportInfo && availableMethods && !availableMethods.includes(method.id)

@@ -101,12 +101,7 @@ export function isTenantFilteredOut(tenantId: string, accountId: string): boolea
  * @returns Filtered subscriptions from selected tenants only
  */
 export function getTenantFilteredSubscriptions(subscriptions: AzureSubscription[]): AzureSubscription[] {
-    const filteredSubscriptions = subscriptions.filter(
-        (subscription) => !isTenantFilteredOut(subscription.tenantId, subscription.account.id),
-    );
-
-    // If filtering would result in an empty list, return all subscriptions as a fallback
-    return filteredSubscriptions.length > 0 ? filteredSubscriptions : subscriptions;
+    return subscriptions.filter((subscription) => !isTenantFilteredOut(subscription.tenantId, subscription.account.id));
 }
 
 /**

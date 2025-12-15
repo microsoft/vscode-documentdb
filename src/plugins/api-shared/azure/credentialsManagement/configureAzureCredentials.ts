@@ -13,10 +13,11 @@ import * as l10n from '@vscode/l10n';
 import { ext } from '../../../../extensionVariables';
 import { isTreeElementWithContextValue } from '../../../../tree/TreeElementWithContextValue';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
-import { AccountActionsStep } from './AccountActionsStep';
+import { AccountTenantsStep } from './AccountTenantsStep';
 import { type CredentialsManagementWizardContext } from './CredentialsManagementWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 import { SelectAccountStep } from './SelectAccountStep';
+import { TenantActionStep } from './TenantActionStep';
 
 /**
  * Internal implementation of Azure account management.
@@ -32,16 +33,19 @@ async function configureAzureCredentialsInternal(
         ext.outputChannel.appendLine(l10n.t('Starting Azure account management wizard'));
 
         // Create wizard context
+        // Note: allAccountsWithTenantInfo is initialized with [] so it exists in propertiesBeforePrompt
+        // (AzureWizard filters out null/undefined values) and survives back navigation
         const wizardContext: CredentialsManagementWizardContext = {
             ...context,
             selectedAccount: undefined,
+            allAccountsWithTenantInfo: [],
             azureSubscriptionProvider,
         };
 
         // Create and configure the wizard
         const wizard = new AzureWizard(wizardContext, {
             title: l10n.t('Manage Azure Accounts'),
-            promptSteps: [new SelectAccountStep(), new AccountActionsStep()],
+            promptSteps: [new SelectAccountStep(), new AccountTenantsStep(), new TenantActionStep()],
             executeSteps: [new ExecuteStep()],
         });
 

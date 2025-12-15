@@ -26,6 +26,12 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
         throw new Error(l10n.t('No node selected.'));
     }
 
+    // Include journey correlation ID in telemetry for funnel analysis
+    // This is for statistics only - does not influence functionality
+    if (node.journeyCorrelationId) {
+        context.telemetry.properties.journeyCorrelationId = node.journeyCorrelationId;
+    }
+
     // FYI: As of Sept 2025 this command is used in two views: the discovery view and the azure resources view
     const sourceViewId =
         node.contextValue.includes('documentDbBranch') || node.contextValue.includes('ruBranch')
