@@ -48,7 +48,7 @@
   "[Query Insights Stage 1] Started for {db}.{collection}": "[Query Insights Stage 1] Started for {db}.{collection}",
   "[Query Insights Stage 1] Using debug data file": "[Query Insights Stage 1] Using debug data file",
   "[Query Insights Stage 2] Completed: execTime={time}ms, returned={ret}, examined={ex}, ratio={ratio}": "[Query Insights Stage 2] Completed: execTime={time}ms, returned={ret}, examined={ex}, ratio={ratio}",
-  "[Query Insights Stage 2] explain(executionStats) completed in {ms}ms": "[Query Insights Stage 2] explain(executionStats) completed in {ms}ms",
+  "[Query Insights Stage 2] explain completed in {ms}ms": "[Query Insights Stage 2] explain completed in {ms}ms",
   "[Query Insights Stage 2] Query execution failed: {error}": "[Query Insights Stage 2] Query execution failed: {error}",
   "[Query Insights Stage 2] Started for {db}.{collection}": "[Query Insights Stage 2] Started for {db}.{collection}",
   "[Query Insights Stage 2] Using debug data file": "[Query Insights Stage 2] Using debug data file",

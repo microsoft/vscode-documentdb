@@ -652,7 +652,7 @@ export const collectionsViewRouter = router({
             );
             const executionStatsDuration = Date.now() - executionStatsStart;
             ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 2] explain(executionStats) completed in {ms}ms', {
+                l10n.t('[Query Insights Stage 2] explain completed in {ms}ms', {
                     ms: executionStatsDuration.toString(),
                 }),
             );
