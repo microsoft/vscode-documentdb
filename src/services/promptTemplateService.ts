@@ -62,13 +62,14 @@ export class PromptTemplateService {
                     }),
                 );
             } catch (error) {
-                // Log error telemetry for custom template load failure (error type only, no message for privacy)
+                // Log telemetry for template load operation (automatically includes result='Failed' when error is thrown)
                 void callWithTelemetryAndErrorHandling(
-                    'vscode-documentdb.promptTemplate.loadFailed',
+                    'vscode-documentdb.promptTemplate.load',
                     async (context: IActionContext) => {
+                        context.errorHandling.suppressDisplay = true;
                         context.telemetry.properties.templateType = 'indexAdvisor';
                         context.telemetry.properties.commandType = commandType;
-                        context.telemetry.properties.templateLoadError = 'true';
+                        throw error;
                     },
                 );
 
@@ -117,13 +118,14 @@ export class PromptTemplateService {
                     }),
                 );
             } catch (error) {
-                // Log error telemetry for custom template load failure (error type only, no message for privacy)
+                // Log telemetry for template load operation (automatically includes result='Failed' when error is thrown)
                 void callWithTelemetryAndErrorHandling(
-                    'vscode-documentdb.promptTemplate.loadFailed',
+                    'vscode-documentdb.promptTemplate.load',
                     async (context: IActionContext) => {
+                        context.errorHandling.suppressDisplay = true;
                         context.telemetry.properties.templateType = 'queryGeneration';
                         context.telemetry.properties.generationType = generationType;
-                        context.telemetry.properties.templateLoadError = 'true';
+                        throw error;
                     },
                 );
 
