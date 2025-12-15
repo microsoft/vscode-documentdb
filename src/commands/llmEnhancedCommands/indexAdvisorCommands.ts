@@ -405,6 +405,8 @@ export async function optimizeQuery(
         // Track preloaded stats in telemetry
         context.telemetry.properties.hasPreloadedCollectionStats = collectionStats ? 'true' : 'false';
         context.telemetry.properties.hasPreloadedIndexStats = indexes ? 'true' : 'false';
+
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded execution plan'));
     } else {
         // Check if we have queryObject or need to parse query string
         if (!queryContext.queryObject && !queryContext.query) {
@@ -495,6 +497,7 @@ export async function optimizeQuery(
             );
         } else {
             context.telemetry.properties.fetchedCollectionStats = 'false';
+            ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded collection stats'));
         }
 
         if (!indexes) {
@@ -531,6 +534,7 @@ export async function optimizeQuery(
             context.telemetry.properties.fetchedIndexStats = 'true';
         } else {
             context.telemetry.properties.fetchedIndexStats = 'false';
+            ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded index stats'));
         }
 
         // Track stats availability in telemetry
