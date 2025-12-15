@@ -90,41 +90,41 @@ This document tracks the implementation progress of the folder hierarchy feature
 
 ---
 
-### ❌ 5. Add Clipboard State to Extension Variables
-**Status:** NOT STARTED  
-**Priority:** MEDIUM
+### ✅ 5. Add Clipboard State to Extension Variables
+**Status:** COMPLETED  
+**Commit:** [pending]
 
 **Tasks:**
-- ⬜ Add clipboardState to ext namespace
-- ⬜ Set context key documentdb.clipboardHasItems
-- ⬜ Manage clipboard state for cut/copy/paste
+- ✅ Add clipboardState to ext namespace
+- ✅ Set context key documentdb.clipboardHasItems
+- ✅ Manage clipboard state for cut/copy/paste
 
-**Changes Needed:**
-- Update `extensionVariables.ts`
-- Add context key management
+**Changes Made:**
+- Added `ClipboardState` interface to extensionVariables.ts
+- Added `clipboardState` property to ext namespace
+- Implemented context key management in clipboard commands
 
 ---
 
-### ⚠️ 6. Add Folder CRUD Commands
-**Status:** PARTIALLY COMPLETED  
-**Commit:** bff7c9b, 41e4e10, 075ec64
+### ✅ 6. Add Folder CRUD Commands
+**Status:** COMPLETED  
+**Commit:** bff7c9b, 41e4e10, 075ec64, [pending]
 
 **Tasks:**
 - ✅ createFolder command with duplicate check
 - ✅ renameFolder command with duplicate check
 - ✅ deleteFolder command with confirmation
-- ❌ cutItems command (not implemented)
-- ❌ copyItems command (not implemented)
-- ❌ pasteItems command (not implemented)
+- ✅ cutItems command
+- ✅ copyItems command
+- ✅ pasteItems command
 
 **Changes Made:**
-- Implemented createFolder, renameFolder, deleteFolder commands
-- All use wizard pattern
-- Updated to work with unified storage
-
-**Changes Needed:**
-- Implement cut/copy/paste commands
-- Add clipboard management
+- Implemented all folder CRUD commands with wizard pattern
+- Implemented cut/copy/paste commands with clipboard management
+- All commands work with unified storage
+- Paste includes duplicate name handling with user prompts
+- Supports moving/copying across connection type boundaries
+- Recursive operations for folders with descendants
 
 ---
 
@@ -221,11 +221,11 @@ This document tracks the implementation progress of the folder hierarchy feature
 ## Summary Statistics
 
 **Total Work Items:** 10  
-**Completed:** 3  
-**Partially Completed:** 4  
-**Not Started:** 3  
+**Completed:** 6  
+**Partially Completed:** 2  
+**Not Started:** 2  
 
-**Completion Percentage:** 30% (Core functionality) + 40% (Partial) = 70% foundation complete
+**Completion Percentage:** 60% (Complete) + 20% (Partial) = 80% foundation complete
 
 ---
 

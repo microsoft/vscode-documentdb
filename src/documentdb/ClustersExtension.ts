@@ -21,6 +21,9 @@ import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
+import { copyItems } from '../commands/clipboardOperations/copyItems';
+import { cutItems } from '../commands/clipboardOperations/cutItems';
+import { pasteItems } from '../commands/clipboardOperations/pasteItems';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
@@ -295,6 +298,23 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.deleteFolder',
                     withTreeNodeCommandCorrelation(deleteFolder),
+                );
+
+                //// Clipboard Operations:
+
+                registerCommand(
+                    'vscode-documentdb.command.connectionsView.cutItems',
+                    withCommandCorrelation(cutItems),
+                );
+
+                registerCommand(
+                    'vscode-documentdb.command.connectionsView.copyItems',
+                    withCommandCorrelation(copyItems),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.pasteItems',
+                    withTreeNodeCommandCorrelation(pasteItems),
                 );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
