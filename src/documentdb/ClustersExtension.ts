@@ -25,8 +25,10 @@ import { copyAzureConnectionString } from '../commands/copyConnectionString/copy
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
+import { createFolder } from '../commands/createFolder/createFolder';
 import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
+import { deleteFolder } from '../commands/deleteFolder/deleteFolder';
 import { filterProviderContent } from '../commands/discoveryService.filterProviderContent/filterProviderContent';
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
@@ -46,6 +48,7 @@ import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { renameConnection } from '../commands/renameConnection/renameConnection';
+import { renameFolder } from '../commands/renameFolder/renameFolder';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
@@ -270,6 +273,23 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.renameConnection',
                     withTreeNodeCommandCorrelation(renameConnection),
+                );
+
+                //// Folder Management Commands:
+
+                registerCommandWithModalErrors(
+                    'vscode-documentdb.command.connectionsView.createFolder',
+                    withCommandCorrelation(createFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.renameFolder',
+                    withTreeNodeCommandCorrelation(renameFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.deleteFolder',
+                    withTreeNodeCommandCorrelation(deleteFolder),
                 );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:

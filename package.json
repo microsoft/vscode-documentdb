@@ -301,6 +301,26 @@
         "title": "Remove…"
       },
       {
+        "//": "[ConnectionsView] Create Folder",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.connectionsView.createFolder",
+        "title": "New Folder…",
+        "icon": "$(new-folder)"
+      },
+      {
+        "//": "[ConnectionsView] Rename Folder",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.connectionsView.renameFolder",
+        "title": "Rename Folder…",
+        "icon": "$(edit)"
+      },
+      {
+        "//": "[ConnectionsView] Delete Folder",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.connectionsView.deleteFolder",
+        "title": "Delete Folder…"
+      },
+      {
         "//": "[ConnectionsView] Refresh View",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.refresh",
@@ -526,6 +546,11 @@
           "group": "navigation@5"
         },
         {
+          "command": "vscode-documentdb.command.connectionsView.createFolder",
+          "when": "view == connectionsView",
+          "group": "navigation@6"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.refresh",
           "when": "view == discoveryView",
           "group": "navigation@10"
@@ -568,6 +593,24 @@
           "command": "vscode-documentdb.command.connectionsView.removeConnection",
           "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "0@5"
+        },
+        {
+          "//": "Create Subfolder in Folder...",
+          "command": "vscode-documentdb.command.connectionsView.createFolder",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
+          "group": "0@1"
+        },
+        {
+          "//": "Rename Folder...",
+          "command": "vscode-documentdb.command.connectionsView.renameFolder",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
+          "group": "0@2"
+        },
+        {
+          "//": "Delete Folder...",
+          "command": "vscode-documentdb.command.connectionsView.deleteFolder",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
+          "group": "0@3"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
