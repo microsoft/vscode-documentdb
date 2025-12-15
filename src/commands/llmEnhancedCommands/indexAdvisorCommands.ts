@@ -393,6 +393,7 @@ export async function optimizeQuery(
 
     // Check if we have pre-loaded data
     const hasPreloadedExecutionPlan = queryContext.executionPlan !== undefined;
+    context.telemetry.properties.hasPreloadedExecutionPlan = hasPreloadedExecutionPlan ? 'true' : 'false';
 
     if (hasPreloadedExecutionPlan) {
         // Use pre-loaded data
@@ -400,6 +401,10 @@ export async function optimizeQuery(
         // Use pre-loaded collection stats and index stats if available
         collectionStats = queryContext.collectionStats;
         indexes = queryContext.indexStats;
+
+        // Track preloaded stats in telemetry
+        context.telemetry.properties.hasPreloadedCollectionStats = collectionStats ? 'true' : 'false';
+        context.telemetry.properties.hasPreloadedIndexStats = indexes ? 'true' : 'false';
     } else {
         // Check if we have queryObject or need to parse query string
         if (!queryContext.queryObject && !queryContext.query) {
@@ -482,11 +487,14 @@ export async function optimizeQuery(
             collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
             const statsDuration = Date.now() - statsStart;
             context.telemetry.measurements.collectionStatsDurationMs = statsDuration;
+            context.telemetry.properties.fetchedCollectionStats = 'true';
             ext.outputChannel.trace(
                 l10n.t('[Query Insights AI] getCollectionStats completed in {ms}ms', {
                     ms: statsDuration.toString(),
                 }),
             );
+        } else {
+            context.telemetry.properties.fetchedCollectionStats = 'false';
         }
 
         if (!indexes) {
@@ -520,6 +528,9 @@ export async function optimizeQuery(
                 };
             });
             // indexes.push(...searchIndexes);
+            context.telemetry.properties.fetchedIndexStats = 'true';
+        } else {
+            context.telemetry.properties.fetchedIndexStats = 'false';
         }
 
         // Track stats availability in telemetry
