@@ -398,8 +398,8 @@ export async function optimizeQuery(
         // Use pre-loaded data
         explainResult = queryContext.executionPlan;
         // Use pre-loaded collection stats and index stats if available
-        collectionStats = queryContext.collectionStats!;
-        indexes = queryContext.indexStats!;
+        collectionStats = queryContext.collectionStats;
+        indexes = queryContext.indexStats;
     } else {
         // Check if we have queryObject or need to parse query string
         if (!queryContext.queryObject && !queryContext.query) {
