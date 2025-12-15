@@ -8,9 +8,9 @@ import { Card, CardHeader, makeStyles, Text, tokens } from '@fluentui/react-comp
 // import { CopyRegular } from '@fluentui/react-icons';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { forwardRef, type JSX } from 'react';
+import { type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
-import './optimizationCard.scss';
+import './baseOptimizationCard.scss';
 
 const useStyles = makeStyles({
     content: {
@@ -127,6 +127,11 @@ interface MarkdownCardProps {
      * Set to false for non-AI generated content (e.g., error messages)
      */
     showAiDisclaimer?: boolean;
+
+    /**
+     * Ref to forward to the card element
+     */
+    ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -144,40 +149,43 @@ interface MarkdownCardProps {
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const MarkdownCard = forwardRef<HTMLDivElement, MarkdownCardProps>(
-    // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
-    ({ title, content, icon, onCopy: _onCopy, showAiDisclaimer = true }, ref) => {
-        const styles = useStyles();
+// TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
+export function MarkdownCard({
+    title,
+    content,
+    icon,
+    onCopy: _onCopy,
+    showAiDisclaimer = true,
+    ref,
+}: MarkdownCardProps) {
+    const styles = useStyles();
 
-        return (
-            <Card ref={ref} style={{ marginBottom: '16px' }}>
-                <div className="optimization-card-container">
-                    <div className="optimization-card-icon" style={{ flexShrink: 0 }}>
-                        {icon ?? <SparkleRegular />}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <CardHeader
-                            header={
-                                <Text weight="semibold" size={400}>
-                                    {title}
+    return (
+        <Card ref={ref} style={{ marginBottom: '16px' }}>
+            <div className="optimization-card-container">
+                <div className="optimization-card-icon" style={{ flexShrink: 0 }}>
+                    {icon ?? <SparkleRegular />}
+                </div>
+                <div style={{ flex: 1 }}>
+                    <CardHeader
+                        header={
+                            <Text weight="semibold" size={400}>
+                                {title}
+                            </Text>
+                        }
+                        action={
+                            showAiDisclaimer ? (
+                                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                    {l10n.t('AI responses may be inaccurate')}
                                 </Text>
-                            }
-                            action={
-                                showAiDisclaimer ? (
-                                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                        {l10n.t('AI responses may be inaccurate')}
-                                    </Text>
-                                ) : undefined
-                            }
-                        />
-                        <div className={styles.content}>
-                            <ReactMarkdown>{content}</ReactMarkdown>
-                        </div>
+                            ) : undefined
+                        }
+                    />
+                    <div className={styles.content}>
+                        <ReactMarkdown>{content}</ReactMarkdown>
                     </div>
                 </div>
-            </Card>
-        );
-    },
-);
-
-MarkdownCard.displayName = 'MarkdownCard';
+            </div>
+        </Card>
+    );
+}

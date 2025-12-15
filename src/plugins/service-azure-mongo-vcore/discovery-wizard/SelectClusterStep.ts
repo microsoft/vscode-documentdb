@@ -9,12 +9,12 @@ import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import { type QuickPickItem } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
-import { getThemeAgnosticIconURI } from '../../../constants';
 import { createResourceManagementClient } from '../../../utils/azureClients';
+import { getThemeAgnosticIconPath } from '../../../utils/icons';
 import { AzureContextProperties } from '../../api-shared/azure/wizard/AzureContextProperties';
 
 export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
-    iconPath = getThemeAgnosticIconURI('AzureDocumentDb.svg');
+    iconPath = getThemeAgnosticIconPath('AzureDocumentDb.svg');
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         if (

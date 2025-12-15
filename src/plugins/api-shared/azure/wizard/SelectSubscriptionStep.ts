@@ -68,13 +68,24 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
 
             // Check for empty state first
             if (subscriptions.length === 0) {
+                // Telemetry: track that empty subscriptions dialog was shown
+                context.telemetry.properties.emptySubscriptionsDialogShown = 'true';
+
                 // Show modal dialog for empty state
                 const configureResult = await askToConfigureCredentials();
+
+                // Telemetry: track which option was selected
+                context.telemetry.properties.emptySubscriptionsDialogChoice = configureResult;
+
                 if (configureResult === 'configure') {
                     await this.configureCredentialsFromWizard(context, subscriptionProvider);
                     await this.showRetryInstructions();
+                } else if (configureResult === 'filter') {
+                    // Open the subscription filtering wizard directly
+                    await this.configureFiltersFromWizard(context, subscriptionProvider);
+                    await this.showRetryInstructions();
                 }
-                // Both paths abort the wizard
+                // All paths abort the wizard
                 throw new UserCancelledError('No subscriptions available');
             }
 
@@ -109,7 +120,10 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             return [
                 {
                     id: 'editAccountsAndTenants',
-                    label: l10n.t('Sign in to other Azure accounts to access more subscriptions'),
+                    label: l10n.t('Manage Azure Accounts…'),
+                    detail: l10n.t(
+                        'Sign in to additional accounts or authenticate with other tenants to see more subscriptions.',
+                    ),
                     iconPath: new ThemeIcon('key'),
                     alwaysShow: true,
                 },
@@ -153,6 +167,10 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
         // Add telemetry for credential configuration activation
         context.telemetry.properties.credentialConfigActivated = 'true';
         context.telemetry.properties.nodeProvided = 'false';
+        context.telemetry.properties.initiatedFrom = 'newConnectionWizard';
+        if (context.discoveryProviderId) {
+            context.telemetry.properties.discoveryProviderId = context.discoveryProviderId;
+        }
 
         // Call the credentials management function directly using the subscription provider from context
         // The subscription provider in the wizard context is actually AzureSubscriptionProviderWithFilters
@@ -162,6 +180,23 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
             subscriptionProvider as AzureSubscriptionProviderWithFilters,
             undefined,
         );
+    }
+
+    private async configureFiltersFromWizard(
+        context: NewConnectionWizardContext,
+        subscriptionProvider: VSCodeAzureSubscriptionProvider,
+    ): Promise<void> {
+        // Add telemetry for filter configuration activation
+        context.telemetry.properties.filterConfigActivated = 'true';
+        context.telemetry.properties.nodeProvided = 'false';
+        context.telemetry.properties.initiatedFrom = 'newConnectionWizard';
+        if (context.discoveryProviderId) {
+            context.telemetry.properties.discoveryProviderId = context.discoveryProviderId;
+        }
+
+        // Call the subscription filter configuration directly using the subscription provider from context
+        const { configureAzureSubscriptionFilter } = await import('../subscriptionFiltering');
+        await configureAzureSubscriptionFilter(context, subscriptionProvider);
     }
 
     private async showRetryInstructions(): Promise<void> {

@@ -371,6 +371,152 @@ export async function yourCommand(context: IActionContext, targetItem: SomeItem)
 }
 ```
 
+### Wizard Back Navigation and Context Persistence
+
+When users navigate back in a wizard (via `GoBackError`), the `AzureWizard` framework resets context properties. Understanding this behavior is critical for proper wizard implementation.
+
+#### How AzureWizard Handles Back Navigation
+
+When a step throws `GoBackError`, the wizard:
+
+1. Pops steps from the finished stack until finding the previous prompted step
+2. **Resets context properties** to what existed before that step's `prompt()` ran
+3. Re-runs the step's `prompt()` method
+
+**Critical Implementation Detail**: Before each step's `prompt()` runs, the wizard captures `propertiesBeforePrompt`:
+
+```javascript
+// From AzureWizard.js - this runs for EACH step before prompt()
+step.propertiesBeforePrompt = Object.keys(this._context).filter((k) => !isNullOrUndefined(this._context[k])); // Only non-null/undefined values!
+```
+
+When going back, properties NOT in `propertiesBeforePrompt` are set to `undefined`:
+
+```javascript
+// From AzureWizard.js goBack() method
+for (const key of Object.keys(this._context)) {
+  if (!step.propertiesBeforePrompt.find((p) => p === key)) {
+    this._context[key] = undefined; // Property gets cleared!
+  }
+}
+```
+
+#### Making Context Properties Survive Back Navigation
+
+To ensure a context property survives when users navigate back, you must initialize it with a **non-null, non-undefined value** in the wizard context creation:
+
+```typescript
+// ❌ Bad - Property will be cleared on back navigation
+const wizardContext: MyWizardContext = {
+  ...context,
+  cachedData: undefined, // undefined is filtered out of propertiesBeforePrompt!
+};
+
+// ❌ Bad - Property not initialized, same problem
+const wizardContext: MyWizardContext = {
+  ...context,
+  // cachedData not set - will be undefined
+};
+
+// ✅ Good - Property will survive back navigation (using empty array)
+const wizardContext: MyWizardContext = {
+  ...context,
+  cachedData: [], // Empty array is not null/undefined, captured in propertiesBeforePrompt
+};
+
+// ✅ Good - Property will survive back navigation (using empty object)
+const wizardContext: MyWizardContext = {
+  ...context,
+  cachedConfig: {}, // Empty object is not null/undefined
+};
+
+// ✅ Good - Property will survive back navigation (using empty string)
+const wizardContext: MyWizardContext = {
+  ...context,
+  cachedId: '', // Empty string is not null/undefined
+};
+
+// ✅ Good - Property will survive back navigation (using zero)
+const wizardContext: MyWizardContext = {
+  ...context,
+  retryCount: 0, // Zero is not null/undefined
+};
+
+// ✅ Good - Property will survive back navigation (using false)
+const wizardContext: MyWizardContext = {
+  ...context,
+  hasBeenValidated: false, // false is not null/undefined
+};
+```
+
+#### Pattern for Cached Data with Back Navigation Support
+
+When you need to cache expensive data (like API calls) that should survive back navigation:
+
+1. **Context Interface**: Make the property required with a non-nullable type
+
+```typescript
+export interface MyWizardContext extends IActionContext {
+  // Required - initialized with non-null/undefined value to survive back navigation
+  cachedItems: CachedItem[];
+
+  // Optional - user selections that may be cleared
+  selectedItem?: SomeItem;
+}
+```
+
+2. **Wizard Initialization**: Initialize with a non-null/undefined value
+
+```typescript
+const wizardContext: MyWizardContext = {
+  ...context,
+  cachedItems: [], // Any non-null/undefined value survives back navigation
+};
+```
+
+3. **Step Implementation**: Check appropriately for the initial value
+
+```typescript
+public async prompt(context: MyWizardContext): Promise<void> {
+  const getQuickPickItems = async () => {
+    // Check for initial empty value (array uses .length, string uses === '', etc.)
+    if (context.cachedItems.length === 0) {
+      context.cachedItems = await this.fetchExpensiveData();
+    }
+    return context.cachedItems.map(item => ({ label: item.name }));
+  };
+
+  await context.ui.showQuickPick(getQuickPickItems(), { /* options */ });
+}
+```
+
+4. **Clearing Cache**: Reset to the initial non-null/undefined value
+
+```typescript
+// When you need to invalidate the cache (e.g., after a mutation)
+context.cachedItems = []; // Reset to initial value, not undefined!
+```
+
+#### Using GoBackError in Steps
+
+To navigate back programmatically from a step:
+
+```typescript
+import { GoBackError } from '@microsoft/vscode-azext-utils';
+
+public async prompt(context: MyWizardContext): Promise<void> {
+  const result = await context.ui.showQuickPick(items, options);
+
+  if (result.isBackOption) {
+    // Clear step-specific selections before going back
+    context.selectedItem = undefined;
+    throw new GoBackError();
+  }
+
+  // Process selection...
+}
+```
+
 ### Tree View Architecture
 
 - Use proper data providers that implement `vscode.TreeDataProvider`.
