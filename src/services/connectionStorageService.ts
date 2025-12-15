@@ -47,6 +47,7 @@ export interface ConnectionProperties extends Record<string, unknown> {
     };
     availableAuthMethods: string[];
     selectedAuthMethod?: string; // Not using our `AuthMethod` here on purpose as it might change over time
+    folderId?: string; // Optional folder ID to organize connections in hierarchy
 }
 
 /**
