@@ -88,10 +88,15 @@ export class ClustersExtension implements vscode.Disposable {
     registerConnectionsTree(_activateContext: IActionContext): void {
         ext.connectionsBranchDataProvider = new ConnectionsBranchDataProvider();
 
+        // Import drag-and-drop controller
+        const { ConnectionsDragAndDropController } = require('../tree/connections-view/ConnectionsDragAndDropController');
+        const dragAndDropController = new ConnectionsDragAndDropController();
+
         ext.connectionsTreeView = vscode.window.createTreeView(Views.ConnectionsView, {
             canSelectMany: true,
             showCollapseAll: true,
             treeDataProvider: ext.connectionsBranchDataProvider,
+            dragAndDropController: dragAndDropController,
         });
         ext.context.subscriptions.push(ext.connectionsTreeView);
     }
