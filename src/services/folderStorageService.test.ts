@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { FolderStorageService, type FolderItem } from './folderStorageService';
-import { StorageService } from './storageService';
+import { StorageService, type Storage } from './storageService';
 
 // Mock extension variables
 jest.mock('../extensionVariables', () => ({
@@ -30,7 +30,7 @@ jest.mock('../extensionVariables', () => ({
 }));
 
 describe('FolderStorageService', () => {
-    let mockStorageService: any;
+    let mockStorageService: Storage;
     let mockItems: Map<string, any>;
 
     beforeEach(() => {
@@ -56,6 +56,15 @@ describe('FolderStorageService', () => {
             }),
             delete: jest.fn(async (workspace: string, id: string) => {
                 mockItems.delete(`${workspace}/${id}`);
+            }),
+            keys: jest.fn((workspace: string) => {
+                const allKeys: string[] = [];
+                for (const key of mockItems.keys()) {
+                    if (key.startsWith(workspace)) {
+                        allKeys.push(key);
+                    }
+                }
+                return allKeys;
             }),
         };
 
