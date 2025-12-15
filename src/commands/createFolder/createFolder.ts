@@ -6,6 +6,7 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { Views } from '../../documentdb/Views';
+import { ConnectionType } from '../../services/connectionStorageService';
 import { type FolderItem } from '../../tree/connections-view/FolderItem';
 import { refreshView } from '../refreshView/refreshView';
 import { type CreateFolderWizardContext } from './CreateFolderWizardContext';
@@ -19,7 +20,9 @@ import { PromptFolderNameStep } from './PromptFolderNameStep';
 export async function createFolder(context: IActionContext, parentFolder?: FolderItem): Promise<void> {
     const wizardContext: CreateFolderWizardContext = {
         ...context,
-        parentFolderId: parentFolder?.folderId,
+        parentFolderId: parentFolder?.storageId,
+        // Default to Clusters for root-level folders; use parent's type for subfolders
+        connectionType: ConnectionType.Clusters, // TODO: This should be determined based on the parent or user selection
     };
 
     const wizard = new AzureWizard(wizardContext, {

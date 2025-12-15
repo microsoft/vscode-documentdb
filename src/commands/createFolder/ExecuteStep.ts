@@ -5,9 +5,10 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { FolderStorageService } from '../../services/folderStorageService';
-import { nonNullOrEmptyValue } from '../../utils/nonNull';
+import { ConnectionStorageService, ItemType } from '../../services/connectionStorageService';
+import { nonNullOrEmptyValue, nonNullValue } from '../../utils/nonNull';
 import { randomUtils } from '../../utils/randomUtils';
 import { type CreateFolderWizardContext } from './CreateFolderWizardContext';
 
@@ -16,14 +17,28 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateFolderWizardContex
 
     public async execute(context: CreateFolderWizardContext): Promise<void> {
         const folderName = nonNullOrEmptyValue(context.folderName, 'context.folderName', 'ExecuteStep.ts');
+        const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'ExecuteStep.ts');
 
         const folderId = randomUtils.getRandomUUID();
 
-        await FolderStorageService.save({
-            id: folderId,
-            name: folderName,
-            parentId: context.parentFolderId,
-        });
+        // Create folder as a ConnectionItem with type 'folder'
+        await ConnectionStorageService.save(
+            connectionType,
+            {
+                id: folderId,
+                name: folderName,
+                properties: {
+                    type: ItemType.Folder,
+                    parentId: context.parentFolderId,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [],
+                },
+                secrets: {
+                    connectionString: '',
+                },
+            },
+            false,
+        );
 
         ext.outputChannel.appendLine(
             l10n.t('Created folder: {folderName}', {

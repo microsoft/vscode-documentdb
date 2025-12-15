@@ -113,19 +113,32 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
             return null;
         }
 
-        // Get root-level folders (folders without a parent)
-        const { FolderStorageService } = await import('../../services/folderStorageService');
+        // Import FolderItem and ItemType
         const { FolderItem } = await import('./FolderItem');
-        const rootFolders = await FolderStorageService.getChildren(undefined);
-        const folderItems = rootFolders.map((folder) => new FolderItem(folder, parentId));
+        const { ItemType } = await import('../../services/connectionStorageService');
+
+        // Get root-level folders from both connection types
+        const rootFoldersClusters = await ConnectionStorageService.getChildren(undefined, ConnectionType.Clusters);
+        const rootFoldersEmulators = await ConnectionStorageService.getChildren(undefined, ConnectionType.Emulators);
+
+        const clusterFolderItems = rootFoldersClusters
+            .filter((item) => item.properties.type === ItemType.Folder)
+            .map((folder) => new FolderItem(folder, parentId, ConnectionType.Clusters));
+
+        const emulatorFolderItems = rootFoldersEmulators
+            .filter((item) => item.properties.type === ItemType.Folder)
+            .map((folder) => new FolderItem(folder, parentId, ConnectionType.Emulators));
 
         // Filter connections to only show those not in any folder (root-level connections)
         const allConnections = [...connectionItems, ...emulatorItems];
-        const rootConnections = allConnections.filter((connection) => !connection.properties.folderId);
+        const rootConnections = allConnections.filter(
+            (connection) => connection.properties.type === ItemType.Connection && !connection.properties.parentId,
+        );
 
         const rootItems = [
             new LocalEmulatorsItem(parentId),
-            ...folderItems,
+            ...clusterFolderItems,
+            ...emulatorFolderItems,
             ...rootConnections.map((connection: ConnectionItem) => {
                 const model: ClusterModelWithStorage = {
                     id: `${parentId}/${connection.id}`,

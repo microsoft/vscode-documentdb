@@ -7,8 +7,7 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 import * as l10n from '@vscode/l10n';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
-import { FolderStorageService } from '../../services/folderStorageService';
+import { ConnectionStorageService, ConnectionType, ItemType } from '../../services/connectionStorageService';
 import { type FolderItem } from '../../tree/connections-view/FolderItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -23,16 +22,15 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
         throw new Error(l10n.t('No folder selected.'));
     }
 
-    // Check if folder has child folders
-    const childFolders = await FolderStorageService.getChildren(folderItem.folderId);
+    // Determine connection type - for now, use Clusters as default
+    // TODO: This should be retrieved from the folder item
+    const connectionType = ConnectionType.Clusters;
+
+    // Get all descendants (folders and connections)
+    const allDescendants = await ConnectionStorageService.getDescendants(folderItem.storageId, connectionType);
     
-    // Check if folder contains connections
-    const allClusterConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
-    const allEmulatorConnections = await ConnectionStorageService.getAll(ConnectionType.Emulators);
-    const allConnections = [...allClusterConnections, ...allEmulatorConnections];
-    const connectionsInFolder = allConnections.filter(
-        (connection) => connection.properties.folderId === folderItem.folderId,
-    );
+    const childFolders = allDescendants.filter((item) => item.properties.type === ItemType.Folder);
+    const connectionsInFolder = allDescendants.filter((item) => item.properties.type === ItemType.Connection);
 
     let confirmMessage = l10n.t('Delete folder "{folderName}"?', { folderName: folderItem.name });
     
@@ -50,40 +48,16 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
     }
 
     await ext.state.showDeleting(folderItem.id, async () => {
-        // Delete all connections in this folder and its subfolders
-        const allFolderIds = await getAllDescendantFolderIds(folderItem.folderId);
-        allFolderIds.push(folderItem.folderId);
-
-        for (const connection of allConnections) {
-            if (connection.properties.folderId && allFolderIds.includes(connection.properties.folderId)) {
-                const connectionType = connection.properties.emulatorConfiguration?.isEmulator
-                    ? ConnectionType.Emulators
-                    : ConnectionType.Clusters;
-                await ConnectionStorageService.delete(connectionType, connection.id);
-            }
+        // Delete all descendants (connections and child folders)
+        for (const item of allDescendants) {
+            await ConnectionStorageService.delete(connectionType, item.id);
         }
 
-        // Delete the folder (this will recursively delete child folders)
-        await FolderStorageService.delete(folderItem.folderId);
+        // Delete the folder itself
+        await ConnectionStorageService.delete(connectionType, folderItem.storageId);
     });
 
     await refreshView(context, Views.ConnectionsView);
 
     showConfirmationAsInSettings(l10n.t('The selected folder has been removed.'));
-}
-
-/**
- * Recursively get all descendant folder IDs
- */
-async function getAllDescendantFolderIds(folderId: string): Promise<string[]> {
-    const childFolders = await FolderStorageService.getChildren(folderId);
-    const descendantIds: string[] = [];
-
-    for (const child of childFolders) {
-        descendantIds.push(child.id);
-        const subDescendants = await getAllDescendantFolderIds(child.id);
-        descendantIds.push(...subDescendants);
-    }
-
-    return descendantIds;
 }

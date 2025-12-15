@@ -6,7 +6,7 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { Views } from '../../documentdb/Views';
-import { FolderStorageService } from '../../services/folderStorageService';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { type FolderItem } from '../../tree/connections-view/FolderItem';
 import { refreshView } from '../refreshView/refreshView';
 import { ExecuteStep } from './ExecuteStep';
@@ -18,14 +18,19 @@ export async function renameFolder(context: IActionContext, folderItem: FolderIt
         throw new Error(l10n.t('No folder selected.'));
     }
 
+    // Determine connection type - for now, use Clusters as default
+    // TODO: This should be retrieved from the folder item
+    const connectionType = ConnectionType.Clusters;
+
     // Get folder data to get parentId
-    const folderData = await FolderStorageService.get(folderItem.folderId);
+    const folderData = await ConnectionStorageService.get(folderItem.storageId, connectionType);
 
     const wizardContext: RenameFolderWizardContext = {
         ...context,
-        folderId: folderItem.folderId,
+        folderId: folderItem.storageId,
         originalFolderName: folderItem.name,
-        parentFolderId: folderData?.parentId,
+        parentFolderId: folderData?.properties.parentId,
+        connectionType: connectionType,
     };
 
     const wizard = new AzureWizard(wizardContext, {

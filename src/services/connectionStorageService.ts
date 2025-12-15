@@ -32,7 +32,17 @@ export enum ConnectionType {
     Emulators = 'emulators',
 }
 
+/**
+ * Item type discriminator for unified storage
+ */
+export enum ItemType {
+    Connection = 'connection',
+    Folder = 'folder',
+}
+
 export interface ConnectionProperties extends Record<string, unknown> {
+    type: ItemType; // Discriminator for item type
+    parentId?: string; // Parent folder ID for hierarchy (undefined = root level)
     api: API;
     emulatorConfiguration?: {
         /**
@@ -47,7 +57,6 @@ export interface ConnectionProperties extends Record<string, unknown> {
     };
     availableAuthMethods: string[];
     selectedAuthMethod?: string; // Not using our `AuthMethod` here on purpose as it might change over time
-    folderId?: string; // Optional folder ID to organize connections in hierarchy
 }
 
 /**
@@ -191,15 +200,19 @@ export class ConnectionStorageService {
         return {
             id: item.id,
             name: item.name,
-            version: '2.0',
+            version: '3.0',
             properties: item.properties,
             secrets: secretsArray,
         };
     }
 
     private static fromStorageItem(item: StorageItem<ConnectionProperties>): ConnectionItem {
-        if (item.version !== '2.0') {
-            return this.migrateToV2(item);
+        // Handle migration from older versions
+        if (item.version !== '3.0') {
+            if (item.version !== '2.0') {
+                return this.migrateToV3(this.migrateToV2(item));
+            }
+            return this.migrateToV3(this.migrateV2ToIntermediate(item));
         }
 
         const secretsArray = item.secrets ?? [];
@@ -266,6 +279,8 @@ export class ConnectionStorageService {
             id: item.id,
             name: item.name,
             properties: {
+                type: ItemType.Connection,
+                parentId: undefined,
                 api: (item.properties?.api as API) ?? API.DocumentDB,
                 emulatorConfiguration: {
                     isEmulator: !!item.properties?.isEmulator,
@@ -285,6 +300,171 @@ export class ConnectionStorageService {
                     : undefined,
             },
         };
+    }
+
+    /**
+     * Helper method to migrate v2 format to intermediate format before v3
+     */
+    private static migrateV2ToIntermediate(item: StorageItem<ConnectionProperties>): ConnectionItem {
+        const secretsArray = item.secrets ?? [];
+
+        // Reconstruct native auth config from individual fields
+        let nativeAuthConfig: NativeAuthConfig | undefined;
+        const nativeAuthUser = secretsArray[SecretIndex.NativeAuthConnectionUser];
+        const nativeAuthPassword = secretsArray[SecretIndex.NativeAuthConnectionPassword];
+
+        if (nativeAuthUser) {
+            nativeAuthConfig = {
+                connectionUser: nativeAuthUser,
+                connectionPassword: nativeAuthPassword,
+            };
+        }
+
+        // Reconstruct Entra ID auth config from individual fields
+        let entraIdAuthConfig: EntraIdAuthConfig | undefined;
+        const entraIdTenantId = secretsArray[SecretIndex.EntraIdTenantId];
+        const entraIdSubscriptionId = secretsArray[SecretIndex.EntraIdSubscriptionId];
+
+        if (entraIdTenantId || entraIdSubscriptionId) {
+            entraIdAuthConfig = {
+                tenantId: entraIdTenantId,
+                subscriptionId: entraIdSubscriptionId,
+            };
+        }
+
+        return {
+            id: item.id,
+            name: item.name,
+            properties: {
+                ...item.properties,
+                type: ItemType.Connection,
+                parentId: undefined,
+            } as ConnectionProperties,
+            secrets: {
+                connectionString: secretsArray[SecretIndex.ConnectionString] ?? '',
+                nativeAuthConfig: nativeAuthConfig,
+                entraIdAuthConfig: entraIdAuthConfig,
+            },
+        };
+    }
+
+    /**
+     * Migrates v2 items to v3 by adding type and parentId fields
+     */
+    private static migrateToV3(item: ConnectionItem): ConnectionItem {
+        // Ensure type and parentId exist (defaults for v3)
+        if (!item.properties.type) {
+            item.properties.type = ItemType.Connection;
+        }
+        if (item.properties.parentId === undefined) {
+            item.properties.parentId = undefined; // Explicit root level
+        }
+        return item;
+    }
+
+    /**
+     * Get all children of a parent (folders and connections)
+     */
+    public static async getChildren(parentId: string | undefined, connectionType: ConnectionType): Promise<ConnectionItem[]> {
+        const allItems = await this.getAll(connectionType);
+        return allItems.filter((item) => item.properties.parentId === parentId);
+    }
+
+    /**
+     * Get all descendants (recursive) of a parent folder
+     */
+    public static async getDescendants(parentId: string, connectionType: ConnectionType): Promise<ConnectionItem[]> {
+        const children = await this.getChildren(parentId, connectionType);
+        const descendants: ConnectionItem[] = [...children];
+
+        for (const child of children) {
+            if (child.properties.type === ItemType.Folder) {
+                const childDescendants = await this.getDescendants(child.id, connectionType);
+                descendants.push(...childDescendants);
+            }
+        }
+
+        return descendants;
+    }
+
+    /**
+     * Update the parent ID of an item
+     */
+    public static async updateParentId(
+        itemId: string,
+        connectionType: ConnectionType,
+        newParentId: string | undefined,
+    ): Promise<void> {
+        const item = await this.get(itemId, connectionType);
+        if (!item) {
+            throw new Error(`Item with id ${itemId} not found`);
+        }
+
+        // Check for circular reference if moving a folder
+        if (item.properties.type === ItemType.Folder && newParentId) {
+            if (await this.isDescendantOf(newParentId, itemId, connectionType)) {
+                throw new Error('Cannot move a folder into one of its descendants');
+            }
+        }
+
+        item.properties.parentId = newParentId;
+        await this.save(connectionType, item, true);
+    }
+
+    /**
+     * Check if a folder is a descendant of another folder
+     */
+    private static async isDescendantOf(
+        folderId: string,
+        potentialAncestorId: string,
+        connectionType: ConnectionType,
+    ): Promise<boolean> {
+        const folder = await this.get(folderId, connectionType);
+        if (!folder || !folder.properties.parentId) {
+            return false;
+        }
+
+        if (folder.properties.parentId === potentialAncestorId) {
+            return true;
+        }
+
+        return this.isDescendantOf(folder.properties.parentId, potentialAncestorId, connectionType);
+    }
+
+    /**
+     * Check if a name is a duplicate within the same parent folder
+     */
+    public static async isNameDuplicateInParent(
+        name: string,
+        parentId: string | undefined,
+        connectionType: ConnectionType,
+        itemType: ItemType,
+        excludeId?: string,
+    ): Promise<boolean> {
+        const siblings = await this.getChildren(parentId, connectionType);
+        return siblings.some(
+            (sibling) =>
+                sibling.name === name &&
+                sibling.properties.type === itemType &&
+                sibling.id !== excludeId,
+        );
+    }
+
+    /**
+     * Get the full path of an item (e.g., "Folder1/Folder2/Connection")
+     */
+    public static async getPath(itemId: string, connectionType: ConnectionType): Promise<string> {
+        const item = await this.get(itemId, connectionType);
+        if (!item) {
+            return '';
+        }
+
+        if (!item.properties.parentId) {
+            return item.name;
+        }
+
+        const parentPath = await this.getPath(item.properties.parentId, connectionType);
+        return `${parentPath}/${item.name}`;
     }
 
     /**

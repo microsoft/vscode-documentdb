@@ -6,7 +6,7 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../extensionVariables';
-import { FolderStorageService } from '../../services/folderStorageService';
+import { ConnectionStorageService } from '../../services/connectionStorageService';
 import { nonNullOrEmptyValue, nonNullValue } from '../../utils/nonNull';
 import { type RenameFolderWizardContext } from './RenameFolderWizardContext';
 
@@ -21,16 +21,21 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameFolderWizardContex
             'context.originalFolderName',
             'ExecuteStep.ts',
         );
+        const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'ExecuteStep.ts');
 
         // Don't do anything if the name hasn't changed
         if (newFolderName === originalFolderName) {
             return;
         }
 
-        const folder = nonNullValue(await FolderStorageService.get(folderId), 'FolderStorageService.get(folderId)', 'ExecuteStep.ts');
+        const folder = nonNullValue(
+            await ConnectionStorageService.get(folderId, connectionType),
+            'ConnectionStorageService.get(folderId, connectionType)',
+            'ExecuteStep.ts',
+        );
 
         folder.name = newFolderName;
-        await FolderStorageService.save(folder, true);
+        await ConnectionStorageService.save(connectionType, folder, true);
 
         ext.outputChannel.appendLine(
             l10n.t('Renamed folder from "{oldName}" to "{newName}"', {

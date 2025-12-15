@@ -5,8 +5,8 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { FolderStorageService } from '../../services/folderStorageService';
-import { nonNullOrEmptyValue } from '../../utils/nonNull';
+import { ConnectionStorageService, ItemType } from '../../services/connectionStorageService';
+import { nonNullOrEmptyValue, nonNullValue } from '../../utils/nonNull';
 import { type RenameFolderWizardContext } from './RenameFolderWizardContext';
 
 export class PromptNewFolderNameStep extends AzureWizardPromptStep<RenameFolderWizardContext> {
@@ -16,6 +16,7 @@ export class PromptNewFolderNameStep extends AzureWizardPromptStep<RenameFolderW
             'context.originalFolderName',
             'PromptNewFolderNameStep.ts',
         );
+        const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'PromptNewFolderNameStep.ts');
 
         const newFolderName = await context.ui.showInputBox({
             prompt: l10n.t('Enter new folder name'),
@@ -31,8 +32,15 @@ export class PromptNewFolderNameStep extends AzureWizardPromptStep<RenameFolderW
                 }
 
                 // Check for duplicate folder names at the same level
-                const existingFolders = await FolderStorageService.getChildren(context.parentFolderId);
-                if (existingFolders.some((folder) => folder.name === value.trim() && folder.id !== context.folderId)) {
+                const isDuplicate = await ConnectionStorageService.isNameDuplicateInParent(
+                    value.trim(),
+                    context.parentFolderId,
+                    connectionType,
+                    ItemType.Folder,
+                    context.folderId,
+                );
+
+                if (isDuplicate) {
                     return l10n.t('A folder with this name already exists at this level');
                 }
 

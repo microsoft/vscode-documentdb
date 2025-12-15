@@ -5,11 +5,14 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { FolderStorageService } from '../../services/folderStorageService';
+import { ConnectionStorageService, ItemType } from '../../services/connectionStorageService';
+import { nonNullValue } from '../../utils/nonNull';
 import { type CreateFolderWizardContext } from './CreateFolderWizardContext';
 
 export class PromptFolderNameStep extends AzureWizardPromptStep<CreateFolderWizardContext> {
     public async prompt(context: CreateFolderWizardContext): Promise<void> {
+        const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'PromptFolderNameStep.ts');
+
         const folderName = await context.ui.showInputBox({
             prompt: l10n.t('Enter folder name'),
             validateInput: async (value: string) => {
@@ -18,8 +21,14 @@ export class PromptFolderNameStep extends AzureWizardPromptStep<CreateFolderWiza
                 }
 
                 // Check for duplicate folder names at the same level
-                const existingFolders = await FolderStorageService.getChildren(context.parentFolderId);
-                if (existingFolders.some((folder) => folder.name === value.trim())) {
+                const isDuplicate = await ConnectionStorageService.isNameDuplicateInParent(
+                    value.trim(),
+                    context.parentFolderId,
+                    connectionType,
+                    ItemType.Folder,
+                );
+
+                if (isDuplicate) {
                     return l10n.t('A folder with this name already exists at this level');
                 }
 

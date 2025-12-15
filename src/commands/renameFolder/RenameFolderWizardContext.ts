@@ -4,10 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type ConnectionType } from '../../services/connectionStorageService';
 
 export interface RenameFolderWizardContext extends IActionContext {
     folderId?: string;
     originalFolderName?: string;
     newFolderName?: string;
     parentFolderId?: string; // To check for duplicate names at the same level
+    connectionType?: ConnectionType;
 }

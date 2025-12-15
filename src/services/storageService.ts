@@ -303,7 +303,6 @@ class StorageImpl implements Storage {
 export enum StorageNames {
     Connections = 'connections',
     Default = 'default',
-    Folders = 'folders',
     Global = 'global',
     Workspace = 'workspace',
 }

@@ -6,8 +6,7 @@
 import * as vscode from 'vscode';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
-import { FolderStorageService, type FolderItem as FolderData } from '../../services/folderStorageService';
+import { ConnectionStorageService, ConnectionType, ItemType, type ConnectionItem } from '../../services/connectionStorageService';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -20,17 +19,20 @@ import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 export class FolderItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
     public contextValue: string = 'treeItem_folder';
-    private folderData: FolderData;
+    private folderData: ConnectionItem;
+    private connectionType: ConnectionType;
 
     constructor(
-        folderData: FolderData,
-        public readonly parentId: string,
+        folderData: ConnectionItem,
+        public readonly parentTreeId: string,
+        connectionType: ConnectionType,
     ) {
         this.folderData = folderData;
-        this.id = `${parentId}/${folderData.id}`;
+        this.connectionType = connectionType;
+        this.id = `${parentTreeId}/${folderData.id}`;
     }
 
-    public get folderId(): string {
+    public get storageId(): string {
         return this.folderData.id;
     }
 
@@ -49,36 +51,31 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
     }
 
     public async getChildren(): Promise<TreeElement[]> {
-        // Get child folders
-        const childFolders = await FolderStorageService.getChildren(this.folderData.id);
-        const folderItems = childFolders.map((folder) => new FolderItem(folder, this.id));
+        // Get all children (both folders and connections)
+        const children = await ConnectionStorageService.getChildren(this.folderData.id, this.connectionType);
 
-        // Get connections in this folder
-        const clusterConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
-        const emulatorConnections = await ConnectionStorageService.getAll(ConnectionType.Emulators);
-        const allConnections = [...clusterConnections, ...emulatorConnections];
+        const treeElements: TreeElement[] = [];
 
-        const connectionsInFolder = allConnections.filter(
-            (connection) => connection.properties.folderId === this.folderData.id,
-        );
+        for (const child of children) {
+            if (child.properties.type === ItemType.Folder) {
+                // Create folder item
+                treeElements.push(new FolderItem(child, this.id, this.connectionType));
+            } else {
+                // Create connection item
+                const model: ClusterModelWithStorage = {
+                    id: `${this.id}/${child.id}`,
+                    storageId: child.id,
+                    name: child.name,
+                    dbExperience: DocumentDBExperience,
+                    connectionString: child?.secrets?.connectionString ?? undefined,
+                    emulatorConfiguration: child.properties.emulatorConfiguration,
+                };
 
-        const connectionItems = connectionsInFolder.map((connection: ConnectionItem) => {
-            const model: ClusterModelWithStorage = {
-                id: `${this.id}/${connection.id}`,
-                storageId: connection.id,
-                name: connection.name,
-                dbExperience: DocumentDBExperience,
-                connectionString: connection?.secrets?.connectionString ?? undefined,
-                emulatorConfiguration: connection.properties.emulatorConfiguration,
-            };
-
-            return new DocumentDBClusterItem(model);
-        });
-
-        // Combine folders first, then connections
-        const children = [...folderItems, ...connectionItems];
+                treeElements.push(new DocumentDBClusterItem(model));
+            }
+        }
 
         // Wrap in state handling
-        return children.map((item) => ext.state.wrapItemInStateHandling(item, () => {}) as TreeElement);
+        return treeElements.map((item) => ext.state.wrapItemInStateHandling(item, () => {}) as TreeElement);
     }
 }
