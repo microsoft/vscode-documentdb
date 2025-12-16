@@ -102,6 +102,12 @@ export class QueryInsightsAIService {
                 // Parse the AI response to extract structured recommendations
                 const parsedResponse = this.parseAIResponse(optimizationResult.recommendations);
 
+                // count all actionable recommendations like create, drop, modify..
+                const actionableRecommendationCount = parsedResponse.improvements.filter(
+                    (improvement) => improvement.action !== 'none',
+                ).length;
+                context.telemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
+
                 return parsedResponse;
             },
         );
