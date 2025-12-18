@@ -1,0 +1,36 @@
+{
+  "_debug_active": false,
+  "_instructions": "Set _debug_active to true to activate this override. This file contains a MongoDB explain('executionStats') response with COLLSCAN.",
+  "explainVersion": 2,
+  "command": "db.runCommand({explain: { 'find' : 'f_pos', 'filter' : { 'title' : { '$regex' : 'iwg' } } }})",
+  "explainCommandPlanningTimeMillis": 0.228,
+  "explainCommandExecTimeMillis": 1275.03,
+  "dataSize": "9400 bytes",
+  "queryPlanner": {
+    "namespace": "try_on_new_million.f_pos",
+    "winningPlan": {
+      "stage": "COLLSCAN",
+      "runtimeFilterSet": [{ "$regex": { "title": "iwg" } }],
+      "estimatedTotalKeysExamined": 333333
+    }
+  },
+  "executionStats": {
+    "nReturned": 235,
+    "executionTimeMillis": 1250.332,
+    "executionStartAtTimeMillis": 0.085,
+    "totalDocsExamined": 1000000,
+    "totalKeysExamined": 235,
+    "executionStages": {
+      "stage": "COLLSCAN",
+      "nReturned": 235,
+      "executionTimeMillis": 1250.332,
+      "executionStartAtTimeMillis": 0.085,
+      "totalDocsExamined": 1000000,
+      "totalKeysExamined": 235,
+      "totalDocsRemovedByRuntimeFilter": 999765,
+      "numBlocksFromCache": 5282,
+      "numBlocksFromDisk": 7064
+    }
+  },
+  "ok": 1
+}
