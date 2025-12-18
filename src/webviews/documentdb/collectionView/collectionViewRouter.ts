@@ -13,13 +13,7 @@ import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { getKnownFields, type FieldEntry } from '../../../utils/json/mongo/autocomplete/getKnownFields';
-import {
-    publicProcedure,
-    publicProcedureWithTelemetry,
-    router,
-    trpcToTelemetry,
-    type WithTelemetry,
-} from '../../api/extension-server/trpc';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
 
 import * as l10n from '@vscode/l10n';
 import {
@@ -144,13 +138,12 @@ async function findCollectionNodeInTree(
 }
 
 export const collectionsViewRouter = router({
-    getInfo: publicProcedure.use(trpcToTelemetry).query(({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         return l10n.t('Info from the webview: ') + JSON.stringify(myCtx);
     }),
-    runFindQuery: publicProcedure
-        .use(trpcToTelemetry)
+    runFindQuery: publicProcedureWithTelemetry
         // parameters
         .input(
             z.object({
@@ -166,7 +159,7 @@ export const collectionsViewRouter = router({
         )
         // procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // Track execution intent for telemetry
             const executionIntent = input.executionIntent ?? 'pagination';
@@ -224,46 +217,42 @@ export const collectionsViewRouter = router({
 
             return querySchema;
         }),
-    getCurrentPageAsTable: publicProcedure
-        .use(trpcToTelemetry)
+    getCurrentPageAsTable: publicProcedureWithTelemetry
         //parameters
         .input(z.array(z.string()))
         // procedure type
         .query(({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
             const tableData = session.getCurrentPageAsTable(input);
 
             return tableData;
         }),
-    getCurrentPageAsTree: publicProcedure
-        .use(trpcToTelemetry)
+    getCurrentPageAsTree: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
             const treeData = session.getCurrentPageAsTree();
 
             return treeData;
         }),
-    getCurrentPageAsJson: publicProcedure
-        .use(trpcToTelemetry)
+    getCurrentPageAsJson: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
             const jsonData = session.getCurrentPageAsJson();
 
             return jsonData;
         }),
-    addDocument: publicProcedure
-        .use(trpcToTelemetry)
+    addDocument: publicProcedureWithTelemetry
         // procedure type
         .mutation(({ ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
@@ -272,13 +261,12 @@ export const collectionsViewRouter = router({
                 mode: 'add',
             });
         }),
-    viewDocumentById: publicProcedure
-        .use(trpcToTelemetry)
+    viewDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
         .mutation(({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
@@ -288,13 +276,12 @@ export const collectionsViewRouter = router({
                 mode: 'view',
             });
         }),
-    editDocumentById: publicProcedure
-        .use(trpcToTelemetry)
+    editDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
         .mutation(({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
@@ -304,13 +291,12 @@ export const collectionsViewRouter = router({
                 mode: 'edit',
             });
         }),
-    deleteDocumentsById: publicProcedure
-        .use(trpcToTelemetry)
+    deleteDocumentsById: publicProcedureWithTelemetry
         // parameteres
         .input(z.array(z.string())) // stands for string[]
         // procedure type
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const confirmed = await getConfirmationAsInSettings(
                 l10n.t('Are you sure?'),
@@ -339,8 +325,7 @@ export const collectionsViewRouter = router({
 
             return acknowledged;
         }),
-    exportDocuments: publicProcedure
-        .use(trpcToTelemetry)
+    exportDocuments: publicProcedureWithTelemetry
         // parameters
         .input(
             z.object({
@@ -353,7 +338,7 @@ export const collectionsViewRouter = router({
         )
         //procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
             const collectionTreeNode = await findCollectionNodeInTree(
@@ -382,8 +367,8 @@ export const collectionsViewRouter = router({
             }
         }),
 
-    importDocuments: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    importDocuments: publicProcedureWithTelemetry.query(async ({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
         const collectionTreeNode = await findCollectionNodeInTree(
@@ -401,8 +386,7 @@ export const collectionsViewRouter = router({
         }
     }),
 
-    generateQuery: publicProcedure
-        .use(trpcToTelemetry)
+    generateQuery: publicProcedureWithTelemetry
         // parameters
         .input(
             z.object({
@@ -418,7 +402,7 @@ export const collectionsViewRouter = router({
         )
         // handle generation request
         .query(async ({ input, ctx }) => {
-            const generationCtx = ctx as RouterContext;
+            const generationCtx = ctx as WithTelemetry<RouterContext>;
 
             const result = await callWithTelemetryAndErrorHandling(
                 'vscode-documentdb.collectionView.generateQuery',
@@ -505,8 +489,8 @@ export const collectionsViewRouter = router({
      * Note: This uses queryPlanner verbosity (no query re-execution)
      * Documents returned is NOT available in Stage 1 - only in Stage 2 with executionStats
      */
-    getQueryInsightsStage1: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    getQueryInsightsStage1: publicProcedureWithTelemetry.query(async ({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
         const { sessionId, databaseName, collectionName } = myCtx;
 
         ext.outputChannel.trace(
@@ -616,8 +600,8 @@ export const collectionsViewRouter = router({
      *
      * Note: This executes the query with executionStats verbosity
      */
-    getQueryInsightsStage2: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    getQueryInsightsStage2: publicProcedureWithTelemetry.query(async ({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
         const { sessionId, databaseName, collectionName } = myCtx;
 
         ext.outputChannel.trace(
@@ -732,11 +716,10 @@ export const collectionsViewRouter = router({
      * 2. Calls AI service with query, database, and collection info
      * 3. Transforms AI response into UI-friendly format with action buttons
      */
-    getQueryInsightsStage3: publicProcedure
-        .use(trpcToTelemetry)
+    getQueryInsightsStage3: publicProcedureWithTelemetry
         .input(z.object({ requestKey: z.string() }))
         .query(async ({ input, ctx }): Promise<QueryInsightsStage3Response> => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
             const { sessionId, clusterId, databaseName, collectionName } = myCtx;
             const { requestKey } = input;
 
@@ -795,8 +778,7 @@ export const collectionsViewRouter = router({
      * Takes actionId and payload from the button click and routes to appropriate handler
      * in QueryInsightsAIService
      */
-    executeQueryInsightsAction: publicProcedure
-        .use(trpcToTelemetry)
+    executeQueryInsightsAction: publicProcedureWithTelemetry
         .input(
             z.object({
                 actionId: z.string(),
@@ -804,7 +786,7 @@ export const collectionsViewRouter = router({
             }),
         )
         .mutation(async ({ ctx, input }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
             const { sessionId, clusterId } = myCtx;
             const { actionId, payload } = input;
 
@@ -821,8 +803,8 @@ export const collectionsViewRouter = router({
      * View Raw Explain Output
      * Opens the raw explain plan output in a new VS Code document
      */
-    viewRawExplainOutput: publicProcedure.use(trpcToTelemetry).mutation(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    viewRawExplainOutput: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
         const { sessionId, databaseName, collectionName } = myCtx;
 
         // Get ClusterSession

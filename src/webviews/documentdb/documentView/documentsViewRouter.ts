@@ -12,7 +12,12 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../api/configuration/appRouter';
-import { publicProcedure, router, trpcToTelemetry } from '../../api/extension-server/trpc';
+import {
+    publicProcedure,
+    publicProcedureWithTelemetry,
+    router,
+    type WithTelemetry,
+} from '../../api/extension-server/trpc';
 
 export type RouterContext = BaseRouterContext & {
     clusterId: string;
@@ -29,13 +34,12 @@ export const documentsViewRouter = router({
 
         return l10n.t('Info from the webview: ') + JSON.stringify(myCtx);
     }),
-    getDocumentById: publicProcedure
-        .use(trpcToTelemetry)
+    getDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // run query
             const client: ClustersClient = await ClustersClient.getClient(myCtx.clusterId);
@@ -52,13 +56,12 @@ export const documentsViewRouter = router({
 
             return extendedJson;
         }),
-    saveDocument: publicProcedure
-        .use(trpcToTelemetry)
+    saveDocument: publicProcedureWithTelemetry
         // parameteres
         .input(z.object({ documentContent: z.string() }))
         // procedure type
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // eslint-disable-next-line
             const documentBson: Document = EJSON.parse(input.documentContent);
