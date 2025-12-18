@@ -57,7 +57,7 @@ export const documentsViewRouter = router({
             return extendedJson;
         }),
     saveDocument: publicProcedureWithTelemetry
-        // parameteres
+        // parameters
         .input(z.object({ documentContent: z.string() }))
         // procedure type
         .mutation(async ({ input, ctx }) => {

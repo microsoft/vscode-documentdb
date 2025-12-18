@@ -198,9 +198,6 @@ export const collectionsViewRouter = router({
         .query(({ ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
-            // Telemetry is guaranteed present via WithTelemetry<T> - no optional checks needed
-            myCtx.telemetry.measurements.schemaFieldCount = 0;
-
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
 
             const _currentJsonSchema = session.getCurrentSchema();
@@ -217,7 +214,7 @@ export const collectionsViewRouter = router({
             return querySchema;
         }),
     getCurrentPageAsTable: publicProcedureWithTelemetry
-        //parameters
+        // parameters
         .input(z.array(z.string()))
         // procedure type
         .query(({ input, ctx }) => {
@@ -291,7 +288,7 @@ export const collectionsViewRouter = router({
             });
         }),
     deleteDocumentsById: publicProcedureWithTelemetry
-        // parameteres
+        // parameters
         .input(z.array(z.string())) // stands for string[]
         // procedure type
         .mutation(async ({ input, ctx }) => {
