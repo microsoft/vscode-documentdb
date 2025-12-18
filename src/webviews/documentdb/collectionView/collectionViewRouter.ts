@@ -611,9 +611,6 @@ export const collectionsViewRouter = router({
             }),
         );
 
-        // Track execution time to ensure minimum duration for better UX
-        const startTime = performance.now();
-
         let analyzed: ExecutionStatsAnalysis;
         let explainResult: Document | undefined;
 
@@ -674,13 +671,6 @@ export const collectionsViewRouter = router({
             );
             const errorResponse = createFailedQueryResponse(analyzed, explainResult);
 
-            // Ensure minimum execution time for better UX
-            const elapsedTime = performance.now() - startTime;
-            const minimumDuration = 1500; // 1.5 seconds
-            if (elapsedTime < minimumDuration) {
-                await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
-            }
-
             ext.outputChannel.trace(l10n.t('Query Insights Stage 2 completed with execution error'));
             return errorResponse;
         }
@@ -688,13 +678,6 @@ export const collectionsViewRouter = router({
         // Transform to UI format (normal successful execution path)
         ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
         const transformed = transformStage2Response(analyzed);
-
-        // Ensure minimum execution time for better UX (avoid jarring instant transitions)
-        const elapsedTime = performance.now() - startTime;
-        const minimumDuration = 1500; // 1.5 seconds
-        if (elapsedTime < minimumDuration) {
-            await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
-        }
 
         ext.outputChannel.trace(
             l10n.t(
