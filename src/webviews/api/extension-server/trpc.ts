@@ -46,10 +46,6 @@ export const trpcToTelemetry = t.middleware(async (opts) => {
         async (context) => {
             context.errorHandling.suppressDisplay = true;
 
-            if (opts.ctx) {
-                console.log(opts.ctx);
-            }
-
             const result = await opts.next({
                 ctx: {
                     ...opts.ctx,
