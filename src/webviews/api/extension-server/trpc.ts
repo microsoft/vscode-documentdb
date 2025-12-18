@@ -13,8 +13,16 @@
  * @see https://trpc.io/docs/v11/procedures
  */
 
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { initTRPC } from '@trpc/server';
+
+/**
+ * Helper type: transforms a context type to have required (non-optional) telemetry.
+ * Use with publicProcedureWithTelemetry to get type-safe telemetry access.
+ */
+export type WithTelemetry<T extends { telemetry?: ITelemetryContext }> = T & {
+    telemetry: ITelemetryContext;
+};
 
 /**
  * Initialization of tRPC backend.
@@ -31,36 +39,46 @@ export const createCallerFactory = t.createCallerFactory;
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
-
 // Create middleware for logging requests
-export const trpcToTelemetry = t.middleware(async ({ path, type, next }) => {
-    const result = await callWithTelemetryAndErrorHandling(`documentDB.rpc.${type}.${path}`, async (context) => {
-        context.errorHandling.suppressDisplay = true;
+export const trpcToTelemetry = t.middleware(async (opts) => {
+    const result = await callWithTelemetryAndErrorHandling(
+        `documentDB.rpc.${opts.type}.${opts.path}`,
+        async (context) => {
+            context.errorHandling.suppressDisplay = true;
 
-        const result = await next();
+            const result = await opts.next({
+                ctx: {
+                    ...opts.ctx,
+                    telemetry: context.telemetry,
+                },
+            });
 
-        if (!result.ok) {
-            /**
-             * we're not handling any error here as we just want to log it here and let the
-             * caller of the RPC call handle the error there.
-             */
+            if (!result.ok) {
+                /**
+                 * we're not handling any error here as we just want to log it here and let the
+                 * caller of the RPC call handle the error there.
+                 */
 
-            context.telemetry.properties.result = 'Failed';
-            context.telemetry.properties.error = result.error.name;
-            context.telemetry.properties.errorMessage = result.error.message;
-            context.telemetry.properties.errorStack = result.error.stack;
-            if (result.error.cause) {
-                context.telemetry.properties.errorCause = JSON.stringify(result.error.cause, null, 0);
+                context.telemetry.properties.result = 'Failed';
+                context.telemetry.properties.error = result.error.name;
+                context.telemetry.properties.errorMessage = result.error.message;
+                context.telemetry.properties.errorStack = result.error.stack;
+                if (result.error.cause) {
+                    context.telemetry.properties.errorCause = JSON.stringify(result.error.cause, null, 0);
+                }
             }
-        }
 
-        return result;
-    });
+            return result;
+        },
+    );
 
     if (!result) {
         // This should never happen, but TypeScript requires us to handle the case where result is undefined.
-        throw new Error(`No result returned from tRPC call for ${type} ${path}`);
+        throw new Error(`No result returned from tRPC call for ${opts.type} ${opts.path}`);
     }
 
     return result;
 });
+
+// Convenience base procedure that always attaches telemetry
+export const publicProcedureWithTelemetry = publicProcedure.use(trpcToTelemetry);
