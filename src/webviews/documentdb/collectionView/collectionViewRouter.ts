@@ -13,7 +13,13 @@ import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { getKnownFields, type FieldEntry } from '../../../utils/json/mongo/autocomplete/getKnownFields';
-import { publicProcedure, router, trpcToTelemetry } from '../../api/extension-server/trpc';
+import {
+    publicProcedure,
+    publicProcedureWithTelemetry,
+    router,
+    trpcToTelemetry,
+    type WithTelemetry,
+} from '../../api/extension-server/trpc';
 
 import * as l10n from '@vscode/l10n';
 import {
@@ -194,11 +200,13 @@ export const collectionsViewRouter = router({
 
             return { documentCount: size };
         }),
-    getAutocompletionSchema: publicProcedure
-        .use(trpcToTelemetry)
+    getAutocompletionSchema: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            // Telemetry is guaranteed present via WithTelemetry<T> - no optional checks needed
+            myCtx.telemetry.measurements.schemaFieldCount = 0;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
 
@@ -209,6 +217,7 @@ export const collectionsViewRouter = router({
 
             if (autoCompletionData.length > 0) {
                 querySchema = generateMongoFindJsonSchema(autoCompletionData);
+                myCtx.telemetry.measurements.schemaFieldCount = autoCompletionData.length;
             } else {
                 querySchema = basicFindQuerySchema;
             }
