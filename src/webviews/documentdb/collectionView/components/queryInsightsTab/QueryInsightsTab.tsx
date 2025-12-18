@@ -325,10 +325,20 @@ export const QueryInsightsMain = (): JSX.Element => {
             // Transition to Stage 2 loading
             transitionToStage(2, 'loading');
 
+            // Track start time to ensure minimum duration for better UX
+            const startTime = performance.now();
+
             // Query parameters are now retrieved from ClusterSession - no need to pass them
             const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
                 .query()
-                .then((data) => {
+                .then(async (data) => {
+                    // Ensure minimum execution time for better UX (avoid jarring instant transitions)
+                    const elapsedTime = performance.now() - startTime;
+                    const minimumDuration = 1500; // 1.5 seconds
+                    if (elapsedTime < minimumDuration) {
+                        await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
+                    }
+
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage2Data: data,
@@ -337,7 +347,14 @@ export const QueryInsightsMain = (): JSX.Element => {
                     transitionToStage(2, 'success');
                     return data;
                 })
-                .catch((error) => {
+                .catch(async (error) => {
+                    // Ensure minimum execution time for better UX (avoid jarring instant transitions)
+                    const elapsedTime = performance.now() - startTime;
+                    const minimumDuration = 1500; // 1.5 seconds
+                    if (elapsedTime < minimumDuration) {
+                        await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
+                    }
+
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     const errorCode = extractErrorCode(error);
 
