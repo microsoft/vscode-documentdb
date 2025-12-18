@@ -346,6 +346,7 @@
   "Failed to gather schema information: {message}": "Failed to gather schema information: {message}",
   "Failed to get optimization recommendations from index advisor.": "Failed to get optimization recommendations from index advisor.",
   "Failed to get public IP": "Failed to get public IP",
+  "Failed to get response from language model": "Failed to get response from language model",
   "Failed to hide index.": "Failed to hide index.",
   "Failed to initialize Azure management clients": "Failed to initialize Azure management clients",
   "Failed to load {0}": "Failed to load {0}",

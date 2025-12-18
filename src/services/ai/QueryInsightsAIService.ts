@@ -220,14 +220,15 @@ export class QueryInsightsAIService {
                 // Route to appropriate handler based on actionId
                 switch (actionId) {
                     case 'createIndex':
-                        return this.handleCreateIndex(sessionId, payload);
+                        return this.handleCreateIndex(context, sessionId, payload);
                     case 'dropIndex':
-                        return this.handleDropIndex(sessionId, payload);
+                        return this.handleDropIndex(context, sessionId, payload);
                     case 'modifyIndex':
-                        return this.handleModifyIndex(sessionId, payload);
+                        return this.handleModifyIndex(context, sessionId, payload);
                     case 'learnMore':
                         return this.handleLearnMore(payload);
                     default:
+                        context.telemetry.properties.actionError = 'unknownAction';
                         return {
                             success: false,
                             message: `Unknown action: ${actionId}`,
@@ -292,12 +293,14 @@ export class QueryInsightsAIService {
      * Handles create index action
      */
     private async handleCreateIndex(
+        context: IActionContext,
         sessionId: string | undefined,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> {
         try {
             // Validate payload
             if (!this.isCreateIndexPayload(payload)) {
+                context.telemetry.properties.actionError = 'invalidPayload';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for create index action', {}));
                 return {
                     success: false,
@@ -308,6 +311,7 @@ export class QueryInsightsAIService {
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
+                context.telemetry.properties.actionError = 'noSessionId';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Session ID is required', {}));
                 return {
                     success: false,
@@ -362,6 +366,7 @@ export class QueryInsightsAIService {
                 };
             } else {
                 const errorMsg = typeof result.note === 'string' ? result.note : 'Unknown error';
+                context.telemetry.properties.actionError = 'createIndexFailed';
                 ext.outputChannel.error(
                     l10n.t('[Query Insights Action] Create index action failed: {error}', { error: errorMsg }),
                 );
@@ -373,6 +378,7 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            context.telemetry.properties.actionError = 'createIndexException';
             ext.outputChannel.error(
                 l10n.t('[Query Insights Action] Create index action error: {error}', { error: errorMessage }),
             );
@@ -388,12 +394,14 @@ export class QueryInsightsAIService {
      * Handles drop index action
      */
     private async handleDropIndex(
+        context: IActionContext,
         sessionId: string | undefined,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> {
         try {
             // Validate payload
             if (!this.isDropIndexPayload(payload)) {
+                context.telemetry.properties.actionError = 'invalidPayload';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for drop index action', {}));
                 return {
                     success: false,
@@ -404,6 +412,7 @@ export class QueryInsightsAIService {
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
+                context.telemetry.properties.actionError = 'noSessionId';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Session ID is required', {}));
                 return {
                     success: false,
@@ -465,6 +474,7 @@ export class QueryInsightsAIService {
                 };
             } else {
                 const errorMsg = typeof result.note === 'string' ? result.note : 'Unknown error';
+                context.telemetry.properties.actionError = 'dropIndexFailed';
                 ext.outputChannel.error(
                     l10n.t('[Query Insights Action] Drop index action failed: {error}', { error: errorMsg }),
                 );
@@ -476,6 +486,7 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            context.telemetry.properties.actionError = 'dropIndexException';
             ext.outputChannel.error(
                 l10n.t('[Query Insights Action] Drop index action error: {error}', { error: errorMessage }),
             );
@@ -491,12 +502,14 @@ export class QueryInsightsAIService {
      * Handles modify index action
      */
     private async handleModifyIndex(
+        context: IActionContext,
         sessionId: string | undefined,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> {
         try {
             // Validate payload
             if (!this.isModifyIndexPayload(payload)) {
+                context.telemetry.properties.actionError = 'invalidPayload';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for modify index action', {}));
                 return {
                     success: false,
@@ -507,6 +520,7 @@ export class QueryInsightsAIService {
             const parseOperationPattern = /db\.getCollection\(['"]([^'"]+)['"]\)\.(\w+)\((.*)\)/;
             const match = payload.mongoShell.match(parseOperationPattern);
             if (!match || match.length < 3 || (match[2] !== 'hideIndex' && match[2] !== 'unhideIndex')) {
+                context.telemetry.properties.actionError = 'invalidMongoShellFormat';
                 ext.outputChannel.warn(
                     l10n.t('[Query Insights Action] Invalid mongoShell command format: {command}', {
                         command: payload.mongoShell,
@@ -524,6 +538,7 @@ export class QueryInsightsAIService {
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
+                context.telemetry.properties.actionError = 'noSessionId';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Session ID is required', {}));
                 return {
                     success: false,
@@ -599,6 +614,7 @@ export class QueryInsightsAIService {
                         : typeof result.note === 'string'
                           ? result.note
                           : 'Unknown error';
+                context.telemetry.properties.actionError = 'modifyIndexFailed';
                 ext.outputChannel.error(
                     l10n.t('[Query Insights Action] Modify index action failed: {error}', { error: errmsg }),
                 );
@@ -610,6 +626,7 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            context.telemetry.properties.actionError = 'modifyIndexException';
             ext.outputChannel.error(
                 l10n.t('[Query Insights Action] Modify index action error: {error}', { error: errorMessage }),
             );
