@@ -210,7 +210,6 @@ export const collectionsViewRouter = router({
 
             if (autoCompletionData.length > 0) {
                 querySchema = generateMongoFindJsonSchema(autoCompletionData);
-                myCtx.telemetry.measurements.schemaFieldCount = autoCompletionData.length;
             } else {
                 querySchema = basicFindQuerySchema;
             }
@@ -513,6 +512,7 @@ export const collectionsViewRouter = router({
         const session: ClusterSession = ClusterSession.getSession(sessionId);
         const clusterMetadata = await session.getClient().getClusterMetadata();
 
+        ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
         if (clusterMetadata?.domainInfo_api === 'RU') {
             // TODO: Platform identification improvements needed
             // 1. Create a centralized platform detection service (ClusterSession.getPlatformType())
@@ -628,6 +628,9 @@ export const collectionsViewRouter = router({
             // Get ClusterSession
             const session: ClusterSession = ClusterSession.getSession(sessionId);
 
+            const clusterMetadata = await session.getClient().getClusterMetadata();
+            ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+
             // Get query parameters from session with parsed BSON objects
             const queryParams = session.getCurrentFindQueryParamsWithObjects();
 
@@ -733,6 +736,8 @@ export const collectionsViewRouter = router({
 
             // Get ClusterSession
             const session: ClusterSession = ClusterSession.getSession(sessionId);
+            const clusterMetadata = await session.getClient().getClusterMetadata();
+            ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
 
             // Get query parameters from session (current query)
             const queryParams = session.getCurrentFindQueryParams();
@@ -755,6 +760,11 @@ export const collectionsViewRouter = router({
                     key: requestKey,
                 }),
             );
+
+            ctx.telemetry.measurements.recommendationCount = aiRecommendations.improvements.length;
+            ctx.telemetry.measurements.actionableRecommendationCount = aiRecommendations.improvements.filter(
+                (rec) => rec.action !== 'none',
+            ).length;
 
             // Transform AI response to UI format with button payloads
             const transformed = transformAIResponseForUI(aiRecommendations, {
