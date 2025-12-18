@@ -392,14 +392,21 @@ export async function optimizeQuery(
     context.telemetry.properties.azureApi = clusterInfo.domainInfo_api || 'unknown';
 
     // Check if we have pre-loaded data
-    const hasPreloadedData = queryContext.executionPlan;
-    context.telemetry.properties.hasPreloadedData = hasPreloadedData ? 'true' : 'false';
+    const hasPreloadedExecutionPlan = queryContext.executionPlan !== undefined;
+    context.telemetry.properties.hasPreloadedExecutionPlan = hasPreloadedExecutionPlan ? 'true' : 'false';
 
-    if (hasPreloadedData) {
+    if (hasPreloadedExecutionPlan) {
         // Use pre-loaded data
         explainResult = queryContext.executionPlan;
-        collectionStats = queryContext.collectionStats!;
-        indexes = queryContext.indexStats!;
+        // Use pre-loaded collection stats and index stats if available
+        collectionStats = queryContext.collectionStats;
+        indexes = queryContext.indexStats;
+
+        // Track preloaded stats in telemetry
+        context.telemetry.properties.hasPreloadedCollectionStats = collectionStats ? 'true' : 'false';
+        context.telemetry.properties.hasPreloadedIndexStats = indexes ? 'true' : 'false';
+
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded execution plan'));
     } else {
         // Check if we have queryObject or need to parse query string
         if (!queryContext.queryObject && !queryContext.query) {
@@ -477,46 +484,58 @@ export async function optimizeQuery(
 
     let indexesInfo: IndexItemModel[] | undefined;
     try {
-        const statsStart = Date.now();
-        collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
-        const statsDuration = Date.now() - statsStart;
-        context.telemetry.measurements.collectionStatsDurationMs = statsDuration;
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] getCollectionStats completed in {ms}ms', {
-                ms: statsDuration.toString(),
-            }),
-        );
+        if (!collectionStats) {
+            const statsStart = Date.now();
+            collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
+            const statsDuration = Date.now() - statsStart;
+            context.telemetry.measurements.collectionStatsDurationMs = statsDuration;
+            context.telemetry.properties.fetchedCollectionStats = 'true';
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] getCollectionStats completed in {ms}ms', {
+                    ms: statsDuration.toString(),
+                }),
+            );
+        } else {
+            context.telemetry.properties.fetchedCollectionStats = 'false';
+            ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded collection stats'));
+        }
 
-        const indexesInfoStart = Date.now();
-        indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
-        const indexesInfoDuration = Date.now() - indexesInfoStart;
-        context.telemetry.measurements.listIndexesDurationMs = indexesInfoDuration;
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] listIndexes completed in {ms}ms', {
-                ms: indexesInfoDuration.toString(),
-            }),
-        );
+        if (!indexes) {
+            const indexesInfoStart = Date.now();
+            indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
+            const indexesInfoDuration = Date.now() - indexesInfoStart;
+            context.telemetry.measurements.listIndexesDurationMs = indexesInfoDuration;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] listIndexes completed in {ms}ms', {
+                    ms: indexesInfoDuration.toString(),
+                }),
+            );
 
-        const indexesStatsStart = Date.now();
-        const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
-        const indexesStatsDuration = Date.now() - indexesStatsStart;
-        context.telemetry.measurements.indexStatsDurationMs = indexesStatsDuration;
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] getIndexStats completed in {ms}ms', {
-                ms: indexesStatsDuration.toString(),
-            }),
-        );
+            const indexesStatsStart = Date.now();
+            const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
+            const indexesStatsDuration = Date.now() - indexesStatsStart;
+            context.telemetry.measurements.indexStatsDurationMs = indexesStatsDuration;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] getIndexStats completed in {ms}ms', {
+                    ms: indexesStatsDuration.toString(),
+                }),
+            );
 
-        // // TODO: handle search indexes for Atlas
-        // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
-        indexes = indexesStats.map((indexStat) => {
-            const indexInfo = indexesInfo?.find((idx) => idx.name === indexStat.name);
-            return {
-                ...indexStat,
-                ...indexInfo,
-            };
-        });
-        // indexes.push(...searchIndexes);
+            // // TODO: handle search indexes for Atlas
+            // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
+            indexes = indexesStats.map((indexStat) => {
+                const indexInfo = indexesInfo?.find((idx) => idx.name === indexStat.name);
+                return {
+                    ...indexStat,
+                    ...indexInfo,
+                };
+            });
+            // indexes.push(...searchIndexes);
+            context.telemetry.properties.fetchedIndexStats = 'true';
+        } else {
+            context.telemetry.properties.fetchedIndexStats = 'false';
+            ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded index stats'));
+        }
 
         // Track stats availability in telemetry
         context.telemetry.properties.hasCollectionStats = collectionStats ? 'true' : 'false';
