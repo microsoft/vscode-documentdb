@@ -53,6 +53,8 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
 
         // Ask if user wants to include password (only in connections view with native auth)
         if (isConnectionsView) {
+            // Note: selectedAuthMethod is undefined when it's the only auth method available in legacy connections
+            // that haven't been explicitly authenticated yet. In such cases, NativeAuth is assumed.
             const isNativeAuth =
                 credentials.selectedAuthMethod === AuthMethodId.NativeAuth ||
                 credentials.selectedAuthMethod === undefined;
