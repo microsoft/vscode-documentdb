@@ -373,7 +373,7 @@
         "//": "Copy Connection String",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.copyConnectionString",
-        "title": "Copy Connection String"
+        "title": "Copy Connection String…"
       },
       {
         "//": "Create Database",
