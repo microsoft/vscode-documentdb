@@ -11,6 +11,7 @@ import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBCon
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { nonNullProp, nonNullValue } from '../../utils/nonNull';
 
 /**
  * Helper function to check if a specific value exists in a delimited context string.
@@ -79,7 +80,17 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
                 );
 
                 if (includePassword.includePassword) {
-                    parsedConnectionString.password = credentials.nativeAuthConfig?.connectionPassword || '';
+                    const nativeAuthConfig = nonNullValue(
+                        credentials.nativeAuthConfig,
+                        'credentials.nativeAuthConfig',
+                        'copyConnectionString.ts',
+                    );
+                    parsedConnectionString.password = nonNullProp(
+                        nativeAuthConfig,
+                        'connectionPassword',
+                        'nativeAuthConfig.connectionPassword',
+                        'copyConnectionString.ts',
+                    );
                 }
             }
         }
