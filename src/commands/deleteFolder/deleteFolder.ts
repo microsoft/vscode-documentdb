@@ -26,11 +26,28 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
     // TODO: This should be retrieved from the folder item
     const connectionType = ConnectionType.Clusters;
 
-    // Get all descendants (folders and connections)
-    const allDescendants = await ConnectionStorageService.getDescendants(folderItem.storageId, connectionType);
+    // Recursively get all descendants (folders and connections)
+    async function getAllDescendantsRecursive(parentId: string): Promise<{ id: string; type: ItemType }[]> {
+        const children = await ConnectionStorageService.getChildren(parentId, connectionType);
+        const descendants: { id: string; type: ItemType }[] = [];
+
+        for (const child of children) {
+            descendants.push({ id: child.id, type: child.properties.type });
+            
+            // Recursively get descendants of folders
+            if (child.properties.type === ItemType.Folder) {
+                const childDescendants = await getAllDescendantsRecursive(child.id);
+                descendants.push(...childDescendants);
+            }
+        }
+
+        return descendants;
+    }
+
+    const allDescendants = await getAllDescendantsRecursive(folderItem.storageId);
     
-    const childFolders = allDescendants.filter((item) => item.properties.type === ItemType.Folder);
-    const connectionsInFolder = allDescendants.filter((item) => item.properties.type === ItemType.Connection);
+    const childFolders = allDescendants.filter((item) => item.type === ItemType.Folder);
+    const connectionsInFolder = allDescendants.filter((item) => item.type === ItemType.Connection);
 
     let confirmMessage = l10n.t('Delete folder "{folderName}"?', { folderName: folderItem.name });
     
