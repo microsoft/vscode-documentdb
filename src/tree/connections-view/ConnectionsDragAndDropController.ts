@@ -140,43 +140,35 @@ export class ConnectionsDragAndDropController implements vscode.TreeDragAndDropC
                     continue;
                 }
 
-                // Prevent moving folder into itself or its descendants
-                if (sourceItem.properties.type === ItemType.Folder && targetParentId) {
-                    const descendants = await ConnectionStorageService.getDescendants(
-                        sourceItem.id,
-                        sourceConnectionType,
+                // Block crossing emulator boundary
+                if (sourceConnectionType !== targetConnectionType) {
+                    void vscode.window.showErrorMessage(
+                        l10n.t('Cannot move items between emulator and non-emulator areas.'),
                     );
-                    if (descendants.some((d) => d.id === targetParentId) || sourceItem.id === targetParentId) {
-                        void vscode.window.showErrorMessage(
-                            l10n.t('Cannot move a folder into itself or its descendants.'),
-                        );
+                    continue;
+                }
+
+                // Prevent moving folder into itself or its descendants using getPath
+                if (sourceItem.properties.type === ItemType.Folder && targetParentId) {
+                    try {
+                        const targetPath = await ConnectionStorageService.getPath(targetParentId, targetConnectionType);
+                        const sourcePath = await ConnectionStorageService.getPath(sourceItem.id, sourceConnectionType);
+                        
+                        // Check if target path starts with source path (would be circular)
+                        if (targetPath.startsWith(sourcePath + '/') || targetPath === sourcePath) {
+                            void vscode.window.showErrorMessage(
+                                l10n.t('Cannot move a folder into itself or its descendants.'),
+                            );
+                            continue;
+                        }
+                    } catch (error) {
+                        // If path resolution fails, skip this item
                         continue;
                     }
                 }
 
-                // If crossing boundaries, we need to delete from old and create in new
-                if (sourceConnectionType !== targetConnectionType) {
-                    // Create in target
-                    const newItem = { ...sourceItem };
-                    newItem.properties.parentId = targetParentId;
-                    await ConnectionStorageService.save(targetConnectionType, newItem, false);
-
-                    // Delete from source
-                    await ConnectionStorageService.delete(sourceConnectionType, sourceItem.id);
-
-                    // If it's a folder, move all descendants too
-                    if (sourceItem.properties.type === ItemType.Folder) {
-                        await this.moveDescendantsAcrossBoundaries(
-                            sourceItem.id,
-                            newItem.id,
-                            sourceConnectionType,
-                            targetConnectionType,
-                        );
-                    }
-                } else {
-                    // Same connection type, just update parentId
-                    await ConnectionStorageService.updateParentId(sourceItem.id, sourceConnectionType, targetParentId);
-                }
+                // Update the item's parentId (simple operation, no recursion needed)
+                await ConnectionStorageService.updateParentId(sourceItem.id, sourceConnectionType, targetParentId);
             }
 
             // Refresh the tree
@@ -187,32 +179,6 @@ export class ConnectionsDragAndDropController implements vscode.TreeDragAndDropC
                     error: error instanceof Error ? error.message : String(error),
                 }),
             );
-        }
-    }
-
-    /**
-     * Helper to move folder descendants when crossing connection type boundaries
-     */
-    private async moveDescendantsAcrossBoundaries(
-        oldParentId: string,
-        newParentId: string,
-        sourceType: ConnectionType,
-        targetType: ConnectionType,
-    ): Promise<void> {
-        const descendants = await ConnectionStorageService.getDescendants(oldParentId, sourceType);
-
-        for (const descendant of descendants) {
-            // Update parentId reference
-            const newItem = { ...descendant };
-            if (newItem.properties.parentId === oldParentId) {
-                newItem.properties.parentId = newParentId;
-            }
-
-            // Create in target
-            await ConnectionStorageService.save(targetType, newItem, false);
-
-            // Delete from source
-            await ConnectionStorageService.delete(sourceType, descendant.id);
         }
     }
 }

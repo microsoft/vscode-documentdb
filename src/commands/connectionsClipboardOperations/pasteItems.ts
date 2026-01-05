@@ -125,6 +125,15 @@ async function pasteFolderItem(
         return;
     }
 
+    // Block boundary crossing
+    if (sourceConnectionType !== targetConnectionType) {
+        void vscode.window.showErrorMessage(
+            l10n.t('Cannot paste items between emulator and non-emulator areas.'),
+        );
+        stats.skipped++;
+        return;
+    }
+
     // Check for duplicate names
     let targetName = folder.name;
     const isDuplicate = await ConnectionStorageService.isNameDuplicateInParent(
@@ -168,27 +177,14 @@ async function pasteFolderItem(
     }
 
     if (isCut) {
-        // Move folder
-        if (sourceConnectionType === targetConnectionType) {
-            // Same connection type, update parentId
-            folder.properties.parentId = targetParentId;
-            if (targetName !== folder.name) {
-                folder.name = targetName;
-            }
-            await ConnectionStorageService.save(sourceConnectionType, folder, true);
-        } else {
-            // Different connection type, delete and recreate
-            const newFolder = { ...folder };
-            newFolder.properties.parentId = targetParentId;
-            newFolder.name = targetName;
-            await ConnectionStorageService.save(targetConnectionType, newFolder, false);
-            await ConnectionStorageService.delete(sourceConnectionType, folder.id);
-
-            // Move all descendants
-            await moveDescendants(folder.id, newFolder.id, sourceConnectionType, targetConnectionType);
+        // Move folder (just update parentId, children move automatically)
+        folder.properties.parentId = targetParentId;
+        if (targetName !== folder.name) {
+            folder.name = targetName;
         }
+        await ConnectionStorageService.save(sourceConnectionType, folder, true);
     } else {
-        // Copy folder with new ID
+        // Copy folder with new ID and recursively copy all descendants
         const newId = randomUtils.getRandomUUID();
         const newFolder = {
             ...folder,
@@ -222,6 +218,15 @@ async function pasteConnectionItem(
     const connection = await ConnectionStorageService.get(connectionItem.storageId, sourceConnectionType);
 
     if (!connection) {
+        stats.skipped++;
+        return;
+    }
+
+    // Block boundary crossing
+    if (sourceConnectionType !== targetConnectionType) {
+        void vscode.window.showErrorMessage(
+            l10n.t('Cannot paste items between emulator and non-emulator areas.'),
+        );
         stats.skipped++;
         return;
     }
@@ -271,21 +276,12 @@ async function pasteConnectionItem(
     }
 
     if (isCut) {
-        // Move connection
-        if (sourceConnectionType === targetConnectionType) {
-            connection.properties.parentId = targetParentId;
-            if (targetName !== connection.name) {
-                connection.name = targetName;
-            }
-            await ConnectionStorageService.save(sourceConnectionType, connection, true);
-        } else {
-            // Different connection type, delete and recreate
-            const newConnection = { ...connection };
-            newConnection.properties.parentId = targetParentId;
-            newConnection.name = targetName;
-            await ConnectionStorageService.save(targetConnectionType, newConnection, false);
-            await ConnectionStorageService.delete(sourceConnectionType, connection.id);
+        // Move connection (just update parentId)
+        connection.properties.parentId = targetParentId;
+        if (targetName !== connection.name) {
+            connection.name = targetName;
         }
+        await ConnectionStorageService.save(sourceConnectionType, connection, true);
     } else {
         // Copy connection with new ID
         const newId = randomUtils.getRandomUUID();
@@ -302,28 +298,6 @@ async function pasteConnectionItem(
     }
 
     stats.success++;
-}
-
-async function moveDescendants(
-    oldParentId: string,
-    newParentId: string,
-    sourceType: ConnectionType,
-    targetType: ConnectionType,
-): Promise<void> {
-    const descendants = await ConnectionStorageService.getDescendants(oldParentId, sourceType);
-
-    for (const descendant of descendants) {
-        // Update parentId reference if it points to the old parent
-        if (descendant.properties.parentId === oldParentId) {
-            descendant.properties.parentId = newParentId;
-        }
-
-        // Create in target
-        await ConnectionStorageService.save(targetType, descendant, false);
-
-        // Delete from source
-        await ConnectionStorageService.delete(sourceType, descendant.id);
-    }
 }
 
 async function copyDescendants(
@@ -351,5 +325,7 @@ async function copyDescendants(
         if (child.properties.type === ItemType.Folder) {
             await copyDescendants(child.id, newId, sourceType, targetType);
         }
+    }
+}
     }
 }

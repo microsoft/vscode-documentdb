@@ -371,23 +371,6 @@ export class ConnectionStorageService {
     }
 
     /**
-     * Get all descendants (recursive) of a parent folder
-     */
-    public static async getDescendants(parentId: string, connectionType: ConnectionType): Promise<ConnectionItem[]> {
-        const children = await this.getChildren(parentId, connectionType);
-        const descendants: ConnectionItem[] = [...children];
-
-        for (const child of children) {
-            if (child.properties.type === ItemType.Folder) {
-                const childDescendants = await this.getDescendants(child.id, connectionType);
-                descendants.push(...childDescendants);
-            }
-        }
-
-        return descendants;
-    }
-
-    /**
      * Update the parent ID of an item
      */
     public static async updateParentId(
@@ -401,34 +384,19 @@ export class ConnectionStorageService {
         }
 
         // Check for circular reference if moving a folder
+        // Use getPath to detect if we're trying to move into our own subtree
         if (item.properties.type === ItemType.Folder && newParentId) {
-            if (await this.isDescendantOf(newParentId, itemId, connectionType)) {
-                throw new Error('Cannot move a folder into one of its descendants');
+            const targetPath = await this.getPath(newParentId, connectionType);
+            const sourcePath = await this.getPath(itemId, connectionType);
+            
+            // Check if target path starts with source path (would be circular)
+            if (targetPath.startsWith(sourcePath + '/') || targetPath === sourcePath) {
+                throw new Error('Cannot move a folder into itself or one of its descendants');
             }
         }
 
         item.properties.parentId = newParentId;
         await this.save(connectionType, item, true);
-    }
-
-    /**
-     * Check if a folder is a descendant of another folder
-     */
-    private static async isDescendantOf(
-        folderId: string,
-        potentialAncestorId: string,
-        connectionType: ConnectionType,
-    ): Promise<boolean> {
-        const folder = await this.get(folderId, connectionType);
-        if (!folder || !folder.properties.parentId) {
-            return false;
-        }
-
-        if (folder.properties.parentId === potentialAncestorId) {
-            return true;
-        }
-
-        return this.isDescendantOf(folder.properties.parentId, potentialAncestorId, connectionType);
     }
 
     /**
