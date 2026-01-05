@@ -315,6 +315,13 @@
         "icon": "$(edit)"
       },
       {
+        "//": "[ConnectionsView] Rename Item (Generic)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.connectionsView.renameItem",
+        "title": "Rename…",
+        "icon": "$(edit)"
+      },
+      {
         "//": "[ConnectionsView] Delete Folder",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.deleteFolder",
@@ -549,6 +556,11 @@
           "command": "vscode-documentdb.command.connectionsView.createFolder",
           "when": "view == connectionsView",
           "group": "navigation@6"
+        },
+        {
+          "command": "vscode-documentdb.command.connectionsView.renameItem",
+          "when": "view == connectionsView && documentdb.canRenameSelection",
+          "group": "navigation@7"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.refresh",

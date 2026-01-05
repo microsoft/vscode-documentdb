@@ -101,6 +101,17 @@ export class ClustersExtension implements vscode.Disposable {
             dragAndDropController: dragAndDropController,
         });
         ext.context.subscriptions.push(ext.connectionsTreeView);
+
+        // Add selection change listener to manage context key for rename command
+        ext.context.subscriptions.push(
+            ext.connectionsTreeView.onDidChangeSelection((e) => {
+                const canRename =
+                    e.selection.length === 1 &&
+                    (e.selection[0]?.contextValue === 'treeItem_folder' ||
+                        e.selection[0]?.contextValue?.includes('treeitem_documentdbcluster'));
+                void vscode.commands.executeCommand('setContext', 'documentdb.canRenameSelection', canRename);
+            }),
+        );
     }
 
     registerDiscoveryTree(_activateContext: IActionContext): void {
