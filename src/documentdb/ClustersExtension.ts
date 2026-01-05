@@ -50,9 +50,7 @@ import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeEl
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
-import { renameConnection } from '../commands/renameConnection/renameConnection';
-import { renameFolder } from '../commands/renameFolder/renameFolder';
-import { renameItem } from '../commands/renameItem/renameItem';
+import { renameConnection, renameFolder, renameItem } from '../commands/renameItem/renameItem';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';

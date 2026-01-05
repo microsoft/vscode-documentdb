@@ -327,5 +327,3 @@ async function copyDescendants(
         }
     }
 }
-    }
-}
