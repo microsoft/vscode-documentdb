@@ -130,23 +130,23 @@ This document tracks the implementation progress of the folder hierarchy feature
 
 ### ⚠️ 7. Register View Header Commands
 **Status:** PARTIALLY COMPLETED  
-**Commit:** 41e4e10
+**Commit:** 41e4e10, c8cb23a
 
 **Tasks:**
 - ✅ Register createFolder in package.json
 - ❌ Add createFolder button to navigation header
-- ❌ Register renameItem command
+- ✅ Register renameItem command
 - ❌ Add renameItem button to navigation header
 - ❌ Implement context key documentdb.canRenameSelection
 
 **Changes Made:**
 - Commands registered in package.json
 - Basic structure in place
+- Created generic `renameItem` dispatcher command
 
 **Changes Needed:**
 - Add view/title menu entries in package.json
 - Implement context key logic
-- Create generic rename dispatcher
 
 ---
 
@@ -221,11 +221,24 @@ This document tracks the implementation progress of the folder hierarchy feature
 ## Summary Statistics
 
 **Total Work Items:** 10  
-**Completed:** 6  
-**Partially Completed:** 2  
+**Completed:** 7  
+**Partially Completed:** 1  
 **Not Started:** 2  
 
-**Completion Percentage:** 60% (Complete) + 20% (Partial) = 80% foundation complete
+**Completion Percentage:** 70% (Complete) + 10% (Partial) = 80% foundation complete
+
+---
+
+## Recent Simplifications
+
+### Code Simplification (Latest Update)
+- Removed `getDescendants` dependency for move operations (kept only for delete)
+- Simplified circular reference detection using `getPath` comparison
+- Blocked boundary crossing between emulator and non-emulator areas
+- Move operations now O(1) - just update parentId, children auto-move
+- Removed `moveDescendantsAcrossBoundaries` helper function
+- Renamed `commands/clipboardOperations` to `commands/connectionsClipboardOperations`
+- Created generic `renameItem` command that dispatches to folder/connection rename
 
 ---
 

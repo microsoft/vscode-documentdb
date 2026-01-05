@@ -52,6 +52,7 @@ import { removeConnection } from '../commands/removeConnection/removeConnection'
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { renameConnection } from '../commands/renameConnection/renameConnection';
 import { renameFolder } from '../commands/renameFolder/renameFolder';
+import { renameItem } from '../commands/renameItem/renameItem';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
@@ -281,6 +282,13 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.renameConnection',
                     withTreeNodeCommandCorrelation(renameConnection),
+                );
+
+                //// Generic Rename Command:
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.renameItem',
+                    withTreeNodeCommandCorrelation(renameItem),
                 );
 
                 //// Folder Management Commands:
