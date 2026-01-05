@@ -106,20 +106,12 @@ export class ConnectionsDragAndDropController implements vscode.TreeDragAndDropC
                     continue; // Item not found
                 }
 
-                // Check if crossing emulator boundary
+                // Block crossing emulator boundary
                 if (sourceConnectionType !== targetConnectionType) {
-                    const crossBoundary = await vscode.window.showWarningMessage(
-                        l10n.t(
-                            'You are moving items between emulator and non-emulator areas. This may cause issues. Continue?',
-                        ),
-                        { modal: true },
-                        l10n.t('Continue'),
-                        l10n.t('Cancel'),
+                    void vscode.window.showErrorMessage(
+                        l10n.t('Cannot move items between emulator and non-emulator areas.'),
                     );
-
-                    if (crossBoundary !== l10n.t('Continue')) {
-                        continue;
-                    }
+                    continue;
                 }
 
                 // Check for duplicate names
@@ -136,14 +128,6 @@ export class ConnectionsDragAndDropController implements vscode.TreeDragAndDropC
                         l10n.t('An item named "{name}" already exists in the target folder.', {
                             name: sourceItem.name,
                         }),
-                    );
-                    continue;
-                }
-
-                // Block crossing emulator boundary
-                if (sourceConnectionType !== targetConnectionType) {
-                    void vscode.window.showErrorMessage(
-                        l10n.t('Cannot move items between emulator and non-emulator areas.'),
                     );
                     continue;
                 }
