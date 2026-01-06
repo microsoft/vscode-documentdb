@@ -210,9 +210,11 @@ export class ConnectionStorageService {
         // Handle migration from older versions
         if (item.version !== '3.0') {
             if (item.version !== '2.0') {
+                // No version or v1 - migrate to v2 then v3
                 return this.migrateToV3(this.migrateToV2(item));
             }
-            return this.migrateToV3(this.migrateV2ToIntermediate(item));
+            // v2.0 - convert v2.0 format to intermediate ConnectionItem, then migrate to v3
+            return this.migrateToV3(this.convertV2ToConnectionItem(item));
         }
 
         const secretsArray = item.secrets ?? [];
@@ -303,9 +305,9 @@ export class ConnectionStorageService {
     }
 
     /**
-     * Helper method to migrate v2 format to intermediate format before v3
+     * Converts a v2.0 StorageItem directly to ConnectionItem format (without adding v3 fields yet)
      */
-    private static migrateV2ToIntermediate(item: StorageItem<ConnectionProperties>): ConnectionItem {
+    private static convertV2ToConnectionItem(item: StorageItem<ConnectionProperties>): ConnectionItem {
         const secretsArray = item.secrets ?? [];
 
         // Reconstruct native auth config from individual fields
@@ -335,11 +337,7 @@ export class ConnectionStorageService {
         return {
             id: item.id,
             name: item.name,
-            properties: {
-                ...item.properties,
-                type: ItemType.Connection,
-                parentId: undefined,
-            } as ConnectionProperties,
+            properties: item.properties ?? ({} as ConnectionProperties),
             secrets: {
                 connectionString: secretsArray[SecretIndex.ConnectionString] ?? '',
                 nativeAuthConfig: nativeAuthConfig,
