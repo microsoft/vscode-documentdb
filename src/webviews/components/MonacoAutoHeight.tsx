@@ -97,7 +97,7 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
               ...editorProps,
               options: {
                   ...editorProps.options,
-                  ariaLabel: ariaLabel,
+                  ariaLabel,
               },
           }
         : editorProps;
