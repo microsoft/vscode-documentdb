@@ -44,6 +44,14 @@ export type MonacoAutoHeightProps = EditorProps & {
      * When false (default), Tab navigation behaves like a standard input and moves focus to the next/previous focusable element.
      */
     trapTabKey?: boolean;
+    /**
+     * OPTION 2 (EXPERIMENTAL): Accessible label for the editor.
+     * Sets the aria-label for screen readers. This provides an alternative to
+     * passing ariaLabel through the options prop (Option 1).
+     *
+     * If both ariaLabel prop and options.ariaLabel are provided, the ariaLabel prop takes precedence.
+     */
+    ariaLabel?: string;
 };
 
 export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
@@ -80,7 +88,19 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
 
     // These props are intentionally destructured but not used directly - they're handled specially
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { adaptiveHeight, onExecuteRequest, onMount, trapTabKey, ...editorProps } = props;
+    const { adaptiveHeight, onExecuteRequest, onMount, trapTabKey, ariaLabel, ...editorProps } = props;
+
+    // OPTION 2: Merge ariaLabel prop into editor options
+    // If ariaLabel prop is provided, it takes precedence over options.ariaLabel
+    const mergedEditorProps = ariaLabel
+        ? {
+              ...editorProps,
+              options: {
+                  ...editorProps.options,
+                  ariaLabel: ariaLabel,
+              },
+          }
+        : editorProps;
 
     const handleMonacoEditorMount = (
         editor: monacoEditor.editor.IStandaloneCodeEditor,
@@ -264,7 +284,7 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
 
     return (
         <div className="monacoAutoHeightContainer" style={{ height: editorHeight }}>
-            <MonacoEditor {...editorProps} onMount={handleMonacoEditorMount} />
+            <MonacoEditor {...mergedEditorProps} onMount={handleMonacoEditorMount} />
         </div>
     );
 };
