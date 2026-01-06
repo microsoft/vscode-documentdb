@@ -49,7 +49,9 @@ export async function pasteItems(context: IActionContext, targetElement?: TreeEl
         // Paste as sibling to connection
         const connection = await ConnectionStorageService.get(
             targetElement.storageId,
-            targetElement.cluster.emulatorConfiguration?.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters,
+            targetElement.cluster.emulatorConfiguration?.isEmulator
+                ? ConnectionType.Emulators
+                : ConnectionType.Clusters,
         );
         targetParentId = connection?.properties.parentId;
         targetConnectionType = targetElement.cluster.emulatorConfiguration?.isEmulator
@@ -95,10 +97,7 @@ export async function pasteItems(context: IActionContext, targetElement?: TreeEl
         await refreshView(context, Views.ConnectionsView);
 
         void vscode.window.showInformationMessage(
-            l10n.t(
-                'Pasted {success} item(s). {skipped} item(s) skipped due to conflicts.',
-                processedCount,
-            ),
+            l10n.t('Pasted {success} item(s). {skipped} item(s) skipped due to conflicts.', processedCount),
         );
     } catch (error) {
         void vscode.window.showErrorMessage(
@@ -127,9 +126,7 @@ async function pasteFolderItem(
 
     // Block boundary crossing
     if (sourceConnectionType !== targetConnectionType) {
-        void vscode.window.showErrorMessage(
-            l10n.t('Cannot paste items between emulator and non-emulator areas.'),
-        );
+        void vscode.window.showErrorMessage(l10n.t('Cannot paste items between emulator and non-emulator areas.'));
         stats.skipped++;
         return;
     }
@@ -224,9 +221,7 @@ async function pasteConnectionItem(
 
     // Block boundary crossing
     if (sourceConnectionType !== targetConnectionType) {
-        void vscode.window.showErrorMessage(
-            l10n.t('Cannot paste items between emulator and non-emulator areas.'),
-        );
+        void vscode.window.showErrorMessage(l10n.t('Cannot paste items between emulator and non-emulator areas.'));
         stats.skipped++;
         return;
     }

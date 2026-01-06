@@ -10,7 +10,7 @@ import { openCollectionViewInternal } from './commands/openCollectionView/openCo
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
 import { API } from './DocumentDBExperiences';
 import { ext } from './extensionVariables';
-import { ConnectionStorageService, ConnectionType, type ConnectionItem } from './services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType, ItemType, type ConnectionItem } from './services/connectionStorageService';
 import {
     buildConnectionsViewTreePath,
     revealInConnectionsView,
@@ -171,6 +171,7 @@ async function handleConnectionStringRequest(
             name: newConnectionLabel,
             // Connection strings handled by this handler are MongoDB-style, so mark the API accordingly.
             properties: {
+                type: ItemType.Connection,
                 api: API.DocumentDB,
                 emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
                 availableAuthMethods: [],

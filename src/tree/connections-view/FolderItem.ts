@@ -6,7 +6,12 @@
 import * as vscode from 'vscode';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, ItemType, type ConnectionItem } from '../../services/connectionStorageService';
+import {
+    ConnectionStorageService,
+    ItemType,
+    type ConnectionItem,
+    type ConnectionType,
+} from '../../services/connectionStorageService';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';

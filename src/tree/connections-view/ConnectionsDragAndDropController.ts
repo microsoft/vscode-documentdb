@@ -20,10 +20,7 @@ export class ConnectionsDragAndDropController implements vscode.TreeDragAndDropC
     dropMimeTypes = ['application/vnd.code.tree.connectionsView'];
     dragMimeTypes = ['application/vnd.code.tree.connectionsView'];
 
-    public async handleDrag(
-        source: readonly TreeElement[],
-        dataTransfer: vscode.DataTransfer,
-    ): Promise<void> {
+    public async handleDrag(source: readonly TreeElement[], dataTransfer: vscode.DataTransfer): Promise<void> {
         // Store the source items in the data transfer
         const items = source.filter((item) => {
             // Don't allow dragging LocalEmulatorsItem or NewConnectionItemCV
@@ -81,7 +78,9 @@ export class ConnectionsDragAndDropController implements vscode.TreeDragAndDropC
                 // Drop onto connection - use its parent folder
                 const connection = await ConnectionStorageService.get(
                     target.storageId,
-                    target.cluster.emulatorConfiguration?.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters,
+                    target.cluster.emulatorConfiguration?.isEmulator
+                        ? ConnectionType.Emulators
+                        : ConnectionType.Clusters,
                 );
                 targetParentId = connection?.properties.parentId;
                 targetConnectionType = target.cluster.emulatorConfiguration?.isEmulator
@@ -137,7 +136,7 @@ export class ConnectionsDragAndDropController implements vscode.TreeDragAndDropC
                     try {
                         const targetPath = await ConnectionStorageService.getPath(targetParentId, targetConnectionType);
                         const sourcePath = await ConnectionStorageService.getPath(sourceItem.id, sourceConnectionType);
-                        
+
                         // Check if target path starts with source path (would be circular)
                         if (targetPath.startsWith(sourcePath + '/') || targetPath === sourcePath) {
                             void vscode.window.showErrorMessage(
@@ -145,7 +144,7 @@ export class ConnectionsDragAndDropController implements vscode.TreeDragAndDropC
                             );
                             continue;
                         }
-                    } catch (error) {
+                    } catch {
                         // If path resolution fails, skip this item
                         continue;
                     }

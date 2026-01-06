@@ -24,14 +24,15 @@ import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExt
 import { copyItems } from '../commands/connections-view/clipboard/copyItems';
 import { cutItems } from '../commands/connections-view/clipboard/cutItems';
 import { pasteItems } from '../commands/connections-view/clipboard/pasteItems';
+import { createFolder } from '../commands/connections-view/createFolder/createFolder';
+import { deleteFolder } from '../commands/connections-view/deleteFolder/deleteFolder';
+import { renameConnection, renameFolder, renameItem } from '../commands/connections-view/renameItem/renameItem';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
-import { createFolder } from '../commands/connections-view/createFolder/createFolder';
 import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
-import { deleteFolder } from '../commands/connections-view/deleteFolder/deleteFolder';
 import { filterProviderContent } from '../commands/discoveryService.filterProviderContent/filterProviderContent';
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
@@ -50,7 +51,6 @@ import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeEl
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
-import { renameConnection, renameFolder, renameItem } from '../commands/connections-view/renameItem/renameItem';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
@@ -91,7 +91,9 @@ export class ClustersExtension implements vscode.Disposable {
         ext.connectionsBranchDataProvider = new ConnectionsBranchDataProvider();
 
         // Import drag-and-drop controller
-        const { ConnectionsDragAndDropController } = require('../tree/connections-view/ConnectionsDragAndDropController');
+        const {
+            ConnectionsDragAndDropController,
+        } = require('../tree/connections-view/ConnectionsDragAndDropController');
         const dragAndDropController = new ConnectionsDragAndDropController();
 
         ext.connectionsTreeView = vscode.window.createTreeView(Views.ConnectionsView, {
@@ -105,10 +107,11 @@ export class ClustersExtension implements vscode.Disposable {
         // Add selection change listener to manage context key for rename command
         ext.context.subscriptions.push(
             ext.connectionsTreeView.onDidChangeSelection((e) => {
+                const selectedItem = e.selection[0] as any;
                 const canRename =
                     e.selection.length === 1 &&
-                    (e.selection[0]?.contextValue === 'treeItem_folder' ||
-                        e.selection[0]?.contextValue?.includes('treeitem_documentdbcluster'));
+                    (selectedItem?.contextValue === 'treeItem_folder' ||
+                        selectedItem?.contextValue?.includes('treeitem_documentdbcluster'));
                 void vscode.commands.executeCommand('setContext', 'documentdb.canRenameSelection', canRename);
             }),
         );
@@ -319,10 +322,7 @@ export class ClustersExtension implements vscode.Disposable {
 
                 //// Clipboard Operations:
 
-                registerCommand(
-                    'vscode-documentdb.command.connectionsView.cutItems',
-                    withCommandCorrelation(cutItems),
-                );
+                registerCommand('vscode-documentdb.command.connectionsView.cutItems', withCommandCorrelation(cutItems));
 
                 registerCommand(
                     'vscode-documentdb.command.connectionsView.copyItems',

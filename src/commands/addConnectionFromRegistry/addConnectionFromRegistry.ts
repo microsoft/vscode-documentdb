@@ -10,7 +10,7 @@ import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBCon
 import { Views } from '../../documentdb/Views';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType, ItemType, type ConnectionItem } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,
@@ -150,7 +150,11 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
             const connectionItem: ConnectionItem = {
                 id: storageId,
                 name: newConnectionLabel,
-                properties: { api: API.DocumentDB, availableAuthMethods: credentials.availableAuthMethods },
+                properties: { 
+                    type: ItemType.Connection,
+                    api: API.DocumentDB, 
+                    availableAuthMethods: credentials.availableAuthMethods 
+                },
                 secrets: {
                     connectionString: parsedCS.toString(),
                     nativeAuthConfig: credentials.nativeAuthConfig,

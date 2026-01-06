@@ -3,14 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    AzureWizard,
+    AzureWizardExecuteStep,
+    AzureWizardPromptStep,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { l10n as vscodel10n, window } from 'vscode';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, ItemType } from '../../../services/connectionStorageService';
-import { type DocumentDBClusterItem } from '../../../tree/connections-view/DocumentDBClusterItem';
-import { type FolderItem } from '../../../tree/connections-view/FolderItem';
+import { DocumentDBClusterItem } from '../../../tree/connections-view/DocumentDBClusterItem';
+import { FolderItem } from '../../../tree/connections-view/FolderItem';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { nonNullOrEmptyValue, nonNullValue } from '../../../utils/nonNull';
 import { refreshView } from '../../refreshView/refreshView';
@@ -91,7 +96,11 @@ class PromptNewFolderNameStep extends AzureWizardPromptStep<RenameFolderWizardCo
             'context.originalFolderName',
             'PromptNewFolderNameStep',
         );
-        const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'PromptNewFolderNameStep');
+        const connectionType = nonNullValue(
+            context.connectionType,
+            'context.connectionType',
+            'PromptNewFolderNameStep',
+        );
 
         const newFolderName = await context.ui.showInputBox({
             prompt: l10n.t('Enter new folder name'),
@@ -143,7 +152,11 @@ class RenameConnectionExecuteStep extends AzureWizardExecuteStep<RenameConnectio
         const connection = await ConnectionStorageService.get(context.storageId, resourceType);
 
         if (connection) {
-            connection.name = nonNullValue(context.newConnectionName, 'context.newConnectionName', 'RenameConnectionExecuteStep');
+            connection.name = nonNullValue(
+                context.newConnectionName,
+                'context.newConnectionName',
+                'RenameConnectionExecuteStep',
+            );
 
             try {
                 await ConnectionStorageService.save(resourceType, connection, true);
@@ -171,13 +184,21 @@ class RenameFolderExecuteStep extends AzureWizardExecuteStep<RenameFolderWizardC
 
     public async execute(context: RenameFolderWizardContext): Promise<void> {
         const folderId = nonNullOrEmptyValue(context.folderId, 'context.folderId', 'RenameFolderExecuteStep');
-        const newFolderName = nonNullOrEmptyValue(context.newFolderName, 'context.newFolderName', 'RenameFolderExecuteStep');
+        const newFolderName = nonNullOrEmptyValue(
+            context.newFolderName,
+            'context.newFolderName',
+            'RenameFolderExecuteStep',
+        );
         const originalFolderName = nonNullOrEmptyValue(
             context.originalFolderName,
             'context.originalFolderName',
             'RenameFolderExecuteStep',
         );
-        const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'RenameFolderExecuteStep');
+        const connectionType = nonNullValue(
+            context.connectionType,
+            'context.connectionType',
+            'RenameFolderExecuteStep',
+        );
 
         // Don't do anything if the name hasn't changed
         if (newFolderName === originalFolderName) {

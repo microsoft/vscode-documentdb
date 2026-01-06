@@ -363,7 +363,10 @@ export class ConnectionStorageService {
     /**
      * Get all children of a parent (folders and connections)
      */
-    public static async getChildren(parentId: string | undefined, connectionType: ConnectionType): Promise<ConnectionItem[]> {
+    public static async getChildren(
+        parentId: string | undefined,
+        connectionType: ConnectionType,
+    ): Promise<ConnectionItem[]> {
         const allItems = await this.getAll(connectionType);
         return allItems.filter((item) => item.properties.parentId === parentId);
     }
@@ -386,7 +389,7 @@ export class ConnectionStorageService {
         if (item.properties.type === ItemType.Folder && newParentId) {
             const targetPath = await this.getPath(newParentId, connectionType);
             const sourcePath = await this.getPath(itemId, connectionType);
-            
+
             // Check if target path starts with source path (would be circular)
             if (targetPath.startsWith(sourcePath + '/') || targetPath === sourcePath) {
                 throw new Error('Cannot move a folder into itself or one of its descendants');
@@ -409,10 +412,7 @@ export class ConnectionStorageService {
     ): Promise<boolean> {
         const siblings = await this.getChildren(parentId, connectionType);
         return siblings.some(
-            (sibling) =>
-                sibling.name === name &&
-                sibling.properties.type === itemType &&
-                sibling.id !== excludeId,
+            (sibling) => sibling.name === name && sibling.properties.type === itemType && sibling.id !== excludeId,
         );
     }
 

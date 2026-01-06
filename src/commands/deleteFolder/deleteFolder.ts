@@ -33,7 +33,7 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
 
         for (const child of children) {
             descendants.push({ id: child.id, type: child.properties.type });
-            
+
             // Recursively get descendants of folders
             if (child.properties.type === ItemType.Folder) {
                 const childDescendants = await getAllDescendantsRecursive(child.id);
@@ -45,17 +45,18 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
     }
 
     const allDescendants = await getAllDescendantsRecursive(folderItem.storageId);
-    
+
     const childFolders = allDescendants.filter((item) => item.type === ItemType.Folder);
     const connectionsInFolder = allDescendants.filter((item) => item.type === ItemType.Connection);
 
     let confirmMessage = l10n.t('Delete folder "{folderName}"?', { folderName: folderItem.name });
-    
+
     if (childFolders.length > 0 || connectionsInFolder.length > 0) {
         const itemCount = childFolders.length + connectionsInFolder.length;
-        confirmMessage += '\n' + l10n.t('This folder contains {count} item(s) which will also be deleted.', { count: itemCount });
+        confirmMessage +=
+            '\n' + l10n.t('This folder contains {count} item(s) which will also be deleted.', { count: itemCount });
     }
-    
+
     confirmMessage += '\n' + l10n.t('This cannot be undone.');
 
     const confirmed = await getConfirmationAsInSettings(l10n.t('Are you sure?'), confirmMessage, 'delete');

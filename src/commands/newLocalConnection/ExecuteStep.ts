@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { type ConnectionItem, ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { type ConnectionItem, ConnectionStorageService, ConnectionType, ItemType } from '../../services/connectionStorageService';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
@@ -141,6 +141,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 id: generateDocumentDBStorageId(connectionString),
                 name: newConnectionLabel,
                 properties: {
+                    type: ItemType.Connection,
                     api: experience.api === API.DocumentDB ? API.DocumentDB : experience.api,
                     emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
                     availableAuthMethods: [],

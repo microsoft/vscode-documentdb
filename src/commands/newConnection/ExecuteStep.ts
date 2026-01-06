@@ -12,7 +12,7 @@ import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 
 import { Views } from '../../documentdb/Views';
-import { type ConnectionItem, ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { type ConnectionItem, ConnectionStorageService, ConnectionType, ItemType } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,
@@ -128,6 +128,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     id: storageId,
                     name: newConnectionLabel,
                     properties: {
+                        type: ItemType.Connection,
                         api: api,
                         availableAuthMethods: newAvailableAuthenticationMethods,
                         selectedAuthMethod: newAuthenticationMethod,

@@ -11,7 +11,11 @@ import { type CreateFolderWizardContext } from './CreateFolderWizardContext';
 
 export class PromptFolderNameStep extends AzureWizardPromptStep<CreateFolderWizardContext> {
     public async prompt(context: CreateFolderWizardContext): Promise<void> {
-        const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'PromptFolderNameStep.ts');
+        const connectionType = nonNullValue(
+            context.connectionType,
+            'context.connectionType',
+            'PromptFolderNameStep.ts',
+        );
 
         const folderName = await context.ui.showInputBox({
             prompt: l10n.t('Enter folder name'),
