@@ -12,7 +12,12 @@ import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 
 import { Views } from '../../documentdb/Views';
-import { type ConnectionItem, ConnectionStorageService, ConnectionType, ItemType } from '../../services/connectionStorageService';
+import {
+    type ConnectionItem,
+    ConnectionStorageService,
+    ConnectionType,
+    ItemType,
+} from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,

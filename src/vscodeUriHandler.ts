@@ -10,7 +10,12 @@ import { openCollectionViewInternal } from './commands/openCollectionView/openCo
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
 import { API } from './DocumentDBExperiences';
 import { ext } from './extensionVariables';
-import { ConnectionStorageService, ConnectionType, ItemType, type ConnectionItem } from './services/connectionStorageService';
+import {
+    ConnectionStorageService,
+    ConnectionType,
+    ItemType,
+    type ConnectionItem,
+} from './services/connectionStorageService';
 import {
     buildConnectionsViewTreePath,
     revealInConnectionsView,

@@ -147,7 +147,20 @@ export class ConnectionStorageService {
         return this._storageService;
     }
 
+    /**
+     * Gets all connection items of a given connection type (excludes folders).
+     * @param connectionType The type of connection storage (Clusters or Emulators)
+     */
     public static async getAll(connectionType: ConnectionType): Promise<ConnectionItem[]> {
+        const allItems = await this.getAllItems(connectionType);
+        return allItems.filter((item) => item.properties.type === ItemType.Connection);
+    }
+
+    /**
+     * Internal method to get all items (connections and folders) from storage.
+     * Use getAll() for public API that returns only connections.
+     */
+    private static async getAllItems(connectionType: ConnectionType): Promise<ConnectionItem[]> {
         const storageService = await this.getStorageService();
         const items = await storageService.getItems<ConnectionProperties>(connectionType);
         return items.map((item) => this.fromStorageItem(item));
@@ -226,9 +239,7 @@ export class ConnectionStorageService {
      * Helper function to reconstruct a ConnectionItem from a StorageItem's secrets array.
      * This is shared between v2.0 and v3.0 formats since they use the same secrets structure.
      */
-    private static reconstructConnectionItemFromSecrets(
-        item: StorageItem<ConnectionProperties>,
-    ): ConnectionItem {
+    private static reconstructConnectionItemFromSecrets(item: StorageItem<ConnectionProperties>): ConnectionItem {
         const secretsArray = item.secrets ?? [];
 
         // Reconstruct native auth config from individual fields
@@ -340,13 +351,24 @@ export class ConnectionStorageService {
 
     /**
      * Get all children of a parent (folders and connections)
+     * @param parentId The parent folder ID, or undefined for root-level items
+     * @param connectionType The type of connection storage (Clusters or Emulators)
+     * @param filter Optional filter to return only specific item types (ItemType.Connection or ItemType.Folder).
+     *               Default returns all items.
      */
     public static async getChildren(
         parentId: string | undefined,
         connectionType: ConnectionType,
+        filter?: ItemType,
     ): Promise<ConnectionItem[]> {
-        const allItems = await this.getAll(connectionType);
-        return allItems.filter((item) => item.properties.parentId === parentId);
+        const allItems = await this.getAllItems(connectionType);
+        let children = allItems.filter((item) => item.properties.parentId === parentId);
+
+        if (filter !== undefined) {
+            children = children.filter((item) => item.properties.type === filter);
+        }
+
+        return children;
     }
 
     /**

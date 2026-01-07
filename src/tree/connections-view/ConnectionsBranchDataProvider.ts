@@ -103,10 +103,11 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
      * Helper function to get the root items of the connections tree.
      */
     private async getRootItems(parentId: string): Promise<TreeElement[] | null | undefined> {
-        const connectionItems = await ConnectionStorageService.getAll(ConnectionType.Clusters);
-        const emulatorItems = await ConnectionStorageService.getAll(ConnectionType.Emulators);
+        // Check if there are any connections at all (for welcome screen logic)
+        const allConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
+        const allEmulators = await ConnectionStorageService.getAll(ConnectionType.Emulators);
 
-        if (connectionItems.length === 0 && emulatorItems.length === 0) {
+        if (allConnections.length === 0 && allEmulators.length === 0) {
             /**
              * we have a special case here as we want to show a "welcome screen" in the case when no connections were found.
              */
@@ -117,40 +118,40 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
         const { FolderItem } = await import('./FolderItem');
         const { ItemType } = await import('../../services/connectionStorageService');
 
-        // Get root-level folders from both connection types
-        const rootFoldersClusters = await ConnectionStorageService.getChildren(undefined, ConnectionType.Clusters);
-        const rootFoldersEmulators = await ConnectionStorageService.getChildren(undefined, ConnectionType.Emulators);
-
-        const clusterFolderItems = rootFoldersClusters
-            .filter((item) => item.properties.type === ItemType.Folder)
-            .map((folder) => new FolderItem(folder, parentId, ConnectionType.Clusters));
-
-        const emulatorFolderItems = rootFoldersEmulators
-            .filter((item) => item.properties.type === ItemType.Folder)
-            .map((folder) => new FolderItem(folder, parentId, ConnectionType.Emulators));
-
-        // Filter connections to only show those not in any folder (root-level connections)
-        const allConnections = [...connectionItems, ...emulatorItems];
-        const rootConnections = allConnections.filter(
-            (connection) => connection.properties.type === ItemType.Connection && !connection.properties.parentId,
+        // Get root-level items (parentId = undefined) for clusters only
+        // Emulators are handled by LocalEmulatorsItem and should not be at root
+        const rootFoldersClusters = await ConnectionStorageService.getChildren(
+            undefined,
+            ConnectionType.Clusters,
+            ItemType.Folder,
         );
+        const rootConnectionsClusters = await ConnectionStorageService.getChildren(
+            undefined,
+            ConnectionType.Clusters,
+            ItemType.Connection,
+        );
+
+        const clusterFolderItems = rootFoldersClusters.map(
+            (folder) => new FolderItem(folder, parentId, ConnectionType.Clusters),
+        );
+
+        const clusterItems = rootConnectionsClusters.map((connection: ConnectionItem) => {
+            const model: ClusterModelWithStorage = {
+                id: `${parentId}/${connection.id}`,
+                storageId: connection.id,
+                name: connection.name,
+                dbExperience: DocumentDBExperience,
+                connectionString: connection?.secrets?.connectionString ?? undefined,
+                emulatorConfiguration: connection.properties.emulatorConfiguration,
+            };
+
+            return new DocumentDBClusterItem(model);
+        });
 
         const rootItems = [
             new LocalEmulatorsItem(parentId),
             ...clusterFolderItems,
-            ...emulatorFolderItems,
-            ...rootConnections.map((connection: ConnectionItem) => {
-                const model: ClusterModelWithStorage = {
-                    id: `${parentId}/${connection.id}`,
-                    storageId: connection.id,
-                    name: connection.name,
-                    dbExperience: DocumentDBExperience,
-                    connectionString: connection?.secrets?.connectionString ?? undefined,
-                    emulatorConfiguration: connection.properties.emulatorConfiguration,
-                };
-
-                return new DocumentDBClusterItem(model);
-            }),
+            ...clusterItems,
             new NewConnectionItemCV(parentId),
         ];
 
