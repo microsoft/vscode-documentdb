@@ -217,8 +217,6 @@
   "Create new {0}...": "Create new {0}...",
   "Create New Folder": "Create New Folder",
   "Create New Folder in \"{folderName}\"": "Create New Folder in \"{folderName}\"",
-  "Create Subfolder in \"{folderName}\"": "Create Subfolder in \"{folderName}\"",
-  "Created folder: {folderName}": "Created folder: {folderName}",
   "Created new folder: {folderName} in folder with ID {parentFolderId}": "Created new folder: {folderName} in folder with ID {parentFolderId}",
   "Creating \"{nodeName}\"…": "Creating \"{nodeName}\"…",
   "Creating {0}...": "Creating {0}...",

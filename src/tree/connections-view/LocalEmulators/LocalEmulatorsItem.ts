@@ -9,7 +9,12 @@ import { type IconPath } from 'vscode';
 
 import path from 'path';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
-import { ConnectionItem, ConnectionStorageService, ConnectionType, ItemType } from '../../../services/connectionStorageService';
+import {
+    ConnectionItem,
+    ConnectionStorageService,
+    ConnectionType,
+    ItemType,
+} from '../../../services/connectionStorageService';
 import { EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
 import { getResourcesPath } from '../../../utils/icons';
 import { ClusterModelWithStorage } from '../../documentdb/ClusterModel';
