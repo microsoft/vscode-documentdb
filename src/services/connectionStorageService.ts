@@ -207,16 +207,28 @@ export class ConnectionStorageService {
     }
 
     private static fromStorageItem(item: StorageItem<ConnectionProperties>): ConnectionItem {
-        // Handle migration from older versions
-        if (item.version !== '3.0') {
-            if (item.version !== '2.0') {
-                // No version or v1 - migrate to v2 then v3
-                return this.migrateToV3(this.migrateToV2(item));
-            }
-            // v2.0 - convert v2.0 format to intermediate ConnectionItem, then migrate to v3
-            return this.migrateToV3(this.convertV2ToConnectionItem(item));
-        }
+        switch (item.version) {
+            case '3.0':
+                // v3.0 - reconstruct directly from storage
+                return this.reconstructConnectionItemFromSecrets(item);
 
+            case '2.0':
+                // v2.0 - convert v2.0 format to intermediate ConnectionItem, then migrate to v3
+                return this.migrateToV3(this.convertV2ToConnectionItem(item));
+
+            default:
+                // v1.0 (no version field) - migrate to v2 then v3
+                return this.migrateToV3(this.migrateToV2(item));
+        }
+    }
+
+    /**
+     * Helper function to reconstruct a ConnectionItem from a StorageItem's secrets array.
+     * This is shared between v2.0 and v3.0 formats since they use the same secrets structure.
+     */
+    private static reconstructConnectionItemFromSecrets(
+        item: StorageItem<ConnectionProperties>,
+    ): ConnectionItem {
         const secretsArray = item.secrets ?? [];
 
         // Reconstruct native auth config from individual fields
@@ -308,42 +320,8 @@ export class ConnectionStorageService {
      * Converts a v2.0 StorageItem directly to ConnectionItem format (without adding v3 fields yet)
      */
     private static convertV2ToConnectionItem(item: StorageItem<ConnectionProperties>): ConnectionItem {
-        const secretsArray = item.secrets ?? [];
-
-        // Reconstruct native auth config from individual fields
-        let nativeAuthConfig: NativeAuthConfig | undefined;
-        const nativeAuthUser = secretsArray[SecretIndex.NativeAuthConnectionUser];
-        const nativeAuthPassword = secretsArray[SecretIndex.NativeAuthConnectionPassword];
-
-        if (nativeAuthUser) {
-            nativeAuthConfig = {
-                connectionUser: nativeAuthUser,
-                connectionPassword: nativeAuthPassword,
-            };
-        }
-
-        // Reconstruct Entra ID auth config from individual fields
-        let entraIdAuthConfig: EntraIdAuthConfig | undefined;
-        const entraIdTenantId = secretsArray[SecretIndex.EntraIdTenantId];
-        const entraIdSubscriptionId = secretsArray[SecretIndex.EntraIdSubscriptionId];
-
-        if (entraIdTenantId || entraIdSubscriptionId) {
-            entraIdAuthConfig = {
-                tenantId: entraIdTenantId,
-                subscriptionId: entraIdSubscriptionId,
-            };
-        }
-
-        return {
-            id: item.id,
-            name: item.name,
-            properties: item.properties ?? ({} as ConnectionProperties),
-            secrets: {
-                connectionString: secretsArray[SecretIndex.ConnectionString] ?? '',
-                nativeAuthConfig: nativeAuthConfig,
-                entraIdAuthConfig: entraIdAuthConfig,
-            },
-        };
+        // v2.0 uses the same secrets structure as v3.0, so we can reuse the helper
+        return this.reconstructConnectionItemFromSecrets(item);
     }
 
     /**
