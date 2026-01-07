@@ -40,9 +40,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateFolderWizardContex
             false,
         );
 
-        ext.outputChannel.appendLine(
-            l10n.t('Created folder: {folderName}', {
+        ext.outputChannel.trace(
+            l10n.t('Created new folder: {folderName} in folder with ID {parentFolderId}', {
                 folderName: folderName,
+                parentFolderId: context.parentFolderId ?? 'root',
             }),
         );
     }
