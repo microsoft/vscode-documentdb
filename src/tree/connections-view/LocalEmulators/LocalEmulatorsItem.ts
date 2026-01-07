@@ -10,14 +10,14 @@ import { type IconPath } from 'vscode';
 import path from 'path';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import {
-    ConnectionItem,
+    type ConnectionItem,
     ConnectionStorageService,
     ConnectionType,
     ItemType,
 } from '../../../services/connectionStorageService';
-import { EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
+import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
 import { getResourcesPath } from '../../../utils/icons';
-import { ClusterModelWithStorage } from '../../documentdb/ClusterModel';
+import { type ClusterModelWithStorage } from '../../documentdb/ClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
 import { DocumentDBClusterItem } from '../DocumentDBClusterItem';

@@ -68,6 +68,7 @@ import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-vie
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
+import { isTreeElementWithContextValue } from '../tree/TreeElementWithContextValue';
 import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
@@ -100,11 +101,12 @@ export class ClustersExtension implements vscode.Disposable {
         // Add selection change listener to manage context key for rename command
         ext.context.subscriptions.push(
             ext.connectionsTreeView.onDidChangeSelection((e) => {
-                const selectedItem = e.selection[0] as any;
+                const selectedItem = e.selection[0];
                 const canRename =
                     e.selection.length === 1 &&
-                    (selectedItem?.contextValue === 'treeItem_folder' ||
-                        selectedItem?.contextValue?.includes('treeitem_documentdbcluster'));
+                    isTreeElementWithContextValue(selectedItem) &&
+                    (selectedItem.contextValue === 'treeItem_folder' ||
+                        selectedItem.contextValue.includes('treeitem_documentdbcluster'));
                 void vscode.commands.executeCommand('setContext', 'documentdb.canRenameSelection', canRename);
             }),
         );
