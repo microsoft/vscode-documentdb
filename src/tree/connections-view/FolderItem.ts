@@ -5,7 +5,6 @@
 
 import * as vscode from 'vscode';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
-import { ext } from '../../extensionVariables';
 import {
     ConnectionStorageService,
     ItemType,
@@ -84,7 +83,6 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
             }
         }
 
-        // Wrap in state handling
-        return treeElements.map((item) => ext.state.wrapItemInStateHandling(item, () => {}) as TreeElement);
+        return treeElements;
     }
 }
