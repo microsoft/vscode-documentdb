@@ -267,8 +267,7 @@ export async function renameFolder(context: IActionContext, folderItem: FolderIt
     }
 
     // Determine connection type - for now, use Clusters as default
-    // TODO: This should be retrieved from the folder item
-    const connectionType = ConnectionType.Clusters;
+    const connectionType = folderItem?.connectionType ?? ConnectionType.Clusters;
 
     // Get folder data to get parentId
     const folderData = await ConnectionStorageService.get(folderItem.storageId, connectionType);

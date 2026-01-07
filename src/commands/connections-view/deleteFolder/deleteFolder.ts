@@ -23,8 +23,7 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
     }
 
     // Determine connection type - for now, use Clusters as default
-    // TODO: This should be retrieved from the folder item
-    const connectionType = ConnectionType.Clusters;
+    const connectionType = folderItem?.connectionType ?? ConnectionType.Clusters;
 
     // Recursively get all descendants (folders and connections)
     async function getAllDescendantsRecursive(parentId: string): Promise<{ id: string; type: ItemType }[]> {

@@ -9,6 +9,8 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { ConnectionType } from '../../../services/connectionStorageService';
 import { type FolderItem } from '../../../tree/connections-view/FolderItem';
+import { type LocalEmulatorsItem } from '../../../tree/connections-view/LocalEmulators/LocalEmulatorsItem';
+import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { refreshView } from '../../refreshView/refreshView';
 import { type CreateFolderWizardContext } from './CreateFolderWizardContext';
 import { ExecuteStep } from './ExecuteStep';
@@ -18,7 +20,10 @@ import { PromptFolderNameStep } from './PromptFolderNameStep';
  * Command to create a new folder in the connections view.
  * Can be invoked from the connections view header or from a folder's context menu.
  */
-export async function createFolder(context: IActionContext, parentFolder?: FolderItem): Promise<void> {
+export async function createFolder(
+    context: IActionContext,
+    parentFolder?: FolderItem | LocalEmulatorsItem,
+): Promise<void> {
     // Heuristic check: When invoked from view title, VS Code may pass a stale selection
     // as parentFolder. Verify it matches the actual current selection.
     if (parentFolder && ext.connectionsTreeView?.selection) {
@@ -32,20 +37,52 @@ export async function createFolder(context: IActionContext, parentFolder?: Folde
         }
     }
 
+    // Determine connection type based on parent
+    let connectionType: ConnectionType;
+    let parentFolderId: string | undefined;
+    let parentName: string | undefined;
+
+    if (parentFolder) {
+        // Check if it's a LocalEmulatorsItem by inspecting contextValue
+        const contextValue = (parentFolder as TreeElementWithContextValue).contextValue;
+        if (contextValue?.includes('treeItem_LocalEmulators')) {
+            // Creating a folder under LocalEmulators
+            connectionType = ConnectionType.Emulators;
+            parentFolderId = undefined; // LocalEmulatorsItem doesn't have a storageId, folders under it are root-level in Emulators
+            parentName = 'DocumentDB Local';
+        } else if ('connectionType' in parentFolder) {
+            // It's a FolderItem with connectionType property
+            connectionType = (parentFolder as FolderItem).connectionType;
+            parentFolderId = (parentFolder as FolderItem).storageId;
+            parentName = (parentFolder as FolderItem).name;
+        } else {
+            // Fallback to Clusters if we can't determine
+            connectionType = ConnectionType.Clusters;
+            parentFolderId = undefined;
+        }
+    } else {
+        // Root-level folder creation defaults to Clusters
+        connectionType = ConnectionType.Clusters;
+        parentFolderId = undefined;
+    }
+
     ext.outputChannel.trace(
-        `[createFolder] invoked. Parent folder: ${parentFolder || parentFolder != undefined ? parentFolder.name : 'None (root level)'}`,
+        `[createFolder] invoked. Parent: ${parentName || 'None (root level)'}, ConnectionType: ${connectionType}`,
+    );
+
+    ext.outputChannel.trace(
+        `[createFolder] invoked. Parent: ${parentName || 'None (root level)'}, ConnectionType: ${connectionType}`,
     );
 
     const wizardContext: CreateFolderWizardContext = {
         ...context,
-        parentFolderId: parentFolder?.storageId,
-        // Default to Clusters for root-level folders; use parent's type for subfolders
-        connectionType: ConnectionType.Clusters, // TODO: This should be determined based on the parent or user selection
+        parentFolderId: parentFolderId,
+        connectionType: connectionType,
     };
 
     const wizard = new AzureWizard(wizardContext, {
-        title: parentFolder
-            ? l10n.t('Create New Folder in "{folderName}"', { folderName: parentFolder.name })
+        title: parentName
+            ? l10n.t('Create New Folder in "{folderName}"', { folderName: parentName })
             : l10n.t('Create New Folder'),
         promptSteps: [new PromptFolderNameStep()],
         executeSteps: [new ExecuteStep()],

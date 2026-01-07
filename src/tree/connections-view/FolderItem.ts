@@ -25,7 +25,7 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
     public contextValue: string = 'treeItem_folder';
     private folderData: ConnectionItem;
-    private connectionType: ConnectionType;
+    private _connectionType: ConnectionType;
 
     constructor(
         folderData: ConnectionItem,
@@ -33,7 +33,7 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
         connectionType: ConnectionType,
     ) {
         this.folderData = folderData;
-        this.connectionType = connectionType;
+        this._connectionType = connectionType;
         this.id = `${parentTreeId}/${folderData.id}`;
     }
 
@@ -43,6 +43,10 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
 
     public get name(): string {
         return this.folderData.name;
+    }
+
+    public get connectionType(): ConnectionType {
+        return this._connectionType;
     }
 
     public getTreeItem(): vscode.TreeItem {
@@ -57,14 +61,14 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
 
     public async getChildren(): Promise<TreeElement[]> {
         // Get all children (both folders and connections)
-        const children = await ConnectionStorageService.getChildren(this.folderData.id, this.connectionType);
+        const children = await ConnectionStorageService.getChildren(this.folderData.id, this._connectionType);
 
         const treeElements: TreeElement[] = [];
 
         for (const child of children) {
             if (child.properties.type === ItemType.Folder) {
                 // Create folder item
-                treeElements.push(new FolderItem(child, this.id, this.connectionType));
+                treeElements.push(new FolderItem(child, this.id, this._connectionType));
             } else {
                 // Create connection item
                 const model: ClusterModelWithStorage = {
