@@ -561,7 +561,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     setSkipValue(value >= 0 ? value : 0);
                                 }}
                                 aria-labelledby="skip-label"
-                                aria-label={l10n.t('Skip')}
                             />
                         </div>
                         <div className="field fieldNarrow">
@@ -577,7 +576,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     setLimitValue(value >= 0 ? value : 0);
                                 }}
                                 aria-labelledby="limit-label"
-                                aria-label={l10n.t('Limit')}
                             />
                         </div>
                     </div>

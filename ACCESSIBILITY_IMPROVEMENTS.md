@@ -18,7 +18,6 @@ This document provides a comprehensive summary of accessibility improvements mad
 - **Action Taken**: 
   - Added `id="skip-label"` to the `<Label>` element
   - Added `aria-labelledby="skip-label"` to connect the label to the input
-  - Added `aria-label={l10n.t('Skip')}` as a fallback accessible name
 - **Result**: Screen readers will now announce "Skip" when focusing on this input field
 
 #### Limit Input Field (Lines 565-579)
@@ -27,7 +26,6 @@ This document provides a comprehensive summary of accessibility improvements mad
 - **Action Taken**: 
   - Added `id="limit-label"` to the `<Label>` element
   - Added `aria-labelledby="limit-label"` to connect the label to the input
-  - Added `aria-label={l10n.t('Limit')}` as a fallback accessible name
 - **Result**: Screen readers will now announce "Limit" when focusing on this input field
 
 #### AI Query Input Field (Lines 345-390)
@@ -99,7 +97,7 @@ This document provides a comprehensive summary of accessibility improvements mad
   - Checkboxes have associated labels via the label prop
 
 ### Best Practices Applied
-1. **Dual Labeling Strategy**: Used both `aria-labelledby` (to reference visible labels) and `aria-label` (as fallback) for number inputs
+1. **Proper ARIA Labeling**: Used `aria-labelledby` to reference visible labels (for number inputs) and `aria-label` for inputs without visible labels (AI prompt, dropdowns)
 2. **Localization**: All accessible names are properly localized using the l10n system
 3. **Consistency**: Applied the same pattern across all similar components
 4. **Non-breaking**: Changes are additive only - no existing functionality was removed or modified
