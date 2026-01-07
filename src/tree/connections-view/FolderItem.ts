@@ -53,7 +53,28 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
             id: this.id,
             contextValue: this.contextValue,
             label: this.folderData.name,
-            iconPath: new vscode.ThemeIcon('folder'),
+            // IMPORTANT: Icon choice affects tree item alignment in VS Code!
+            //
+            // We use 'folder-library' instead of 'folder' due to VS Code's internal alignment logic.
+            // VS Code's TreeRenderer uses an Aligner class (in src/vs/workbench/browser/parts/views/treeView.ts)
+            // that determines whether to add spacing before non-collapsible items to align them with
+            // collapsible siblings (which have a twistie/expand arrow).
+            //
+            // The Aligner.hasIcon() method treats ThemeIcon('folder') and ThemeIcon('file') specially:
+            //   - For these "file kind" icons, it checks if the user's file icon theme has folder/file
+            //     icons enabled via: `fileIconTheme.hasFileIcons && fileIconTheme.hasFolderIcons`
+            //   - If the theme doesn't have folder icons, hasIcon() returns FALSE even though the icon exists
+            //
+            // This breaks the alignIconWithTwisty() calculation, which decides whether non-collapsible
+            // siblings (like "New Connection..." action items) need extra padding. When hasIcon() returns
+            // false for folders but true for action items, the alignment logic produces incorrect results,
+            // causing visual misalignment in the tree.
+            //
+            // By using 'folder-library' (or any non-file-kind icon), hasIcon() always returns true,
+            // ensuring consistent alignment between collapsible folders and non-collapsible action items.
+            //
+            // Reference: VS Code source - src/vs/workbench/browser/parts/views/treeView.ts, Aligner class
+            iconPath: new vscode.ThemeIcon('folder-library'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
