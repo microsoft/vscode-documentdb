@@ -25,9 +25,9 @@ import { Badge, Card, Text } from '@fluentui/react-components';
 import { InfoRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { GenericCell, SummaryCard } from '../components/summaryCard';
-import { mockEfficiencyData, mockMetrics, mockPerformanceRating, type MockMetricData } from './mockData';
+import { mockEfficiencyData, mockMetrics, mockPerformanceRating } from './mockData';
 import './Approach2.scss';
 
 /**

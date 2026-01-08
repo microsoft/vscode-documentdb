@@ -39,7 +39,7 @@ interface MetricCardApproach3Props {
     onBlur: () => void;
 }
 
-const MetricCardApproach3: React.FC<MetricCardApproach3Props> = ({ metric, isFocused, onFocus, onBlur }) => {
+const MetricCardApproach3: React.FC<MetricCardApproach3Props> = ({ metric, onFocus, onBlur }) => {
     return (
         <Card
             className="metricCard approach3-metricCard"

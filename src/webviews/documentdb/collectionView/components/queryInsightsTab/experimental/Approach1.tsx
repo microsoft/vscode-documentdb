@@ -55,7 +55,7 @@ const MetricCardApproach1: React.FC<MetricCardApproach1Props> = ({ metric }) => 
                     positioning="below"
                     relationship="description"
                     visible={tooltipOpen}
-                    onVisibleChange={(e, data) => setTooltipOpen(data.visible)}
+                    onVisibleChange={(_e, data) => setTooltipOpen(data.visible)}
                 >
                     <Button
                         appearance="transparent"
@@ -131,7 +131,7 @@ const PerformanceRatingApproach1: React.FC = () => {
                                 positioning="above-start"
                                 relationship="description"
                                 visible={openTooltips[index] ?? false}
-                                onVisibleChange={(e, data) => {
+                                onVisibleChange={(_e, data) => {
                                     setOpenTooltips((prev) => ({ ...prev, [index]: data.visible }));
                                 }}
                             >

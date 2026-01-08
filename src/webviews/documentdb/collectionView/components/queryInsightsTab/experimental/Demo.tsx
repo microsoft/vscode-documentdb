@@ -8,7 +8,7 @@
  * This allows for easy comparison and testing with accessibility tools
  */
 
-import { Tab, TabList, TabPanel, Text } from '@fluentui/react-components';
+import { Tab, TabList, Text } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
 import { useState } from 'react';
@@ -43,19 +43,13 @@ export const QueryInsightsAccessibilityDemo: React.FC = () => {
             </TabList>
 
             <div className="demo-content">
-                <TabPanel value="approach1" selected={selectedTab === 'approach1'}>
-                    <QueryInsightsApproach1 />
-                </TabPanel>
+                {selectedTab === 'approach1' && <QueryInsightsApproach1 />}
 
-                <TabPanel value="approach2" selected={selectedTab === 'approach2'}>
-                    <QueryInsightsApproach2 />
-                </TabPanel>
+                {selectedTab === 'approach2' && <QueryInsightsApproach2 />}
 
-                <TabPanel value="approach3" selected={selectedTab === 'approach3'}>
-                    <QueryInsightsApproach3 />
-                </TabPanel>
+                {selectedTab === 'approach3' && <QueryInsightsApproach3 />}
 
-                <TabPanel value="comparison" selected={selectedTab === 'comparison'}>
+                {selectedTab === 'comparison' && (
                     <div className="comparison-panel">
                         <Text size={500} weight="semibold" className="comparison-title">
                             {l10n.t('Approach Comparison')}
@@ -155,7 +149,7 @@ export const QueryInsightsAccessibilityDemo: React.FC = () => {
                             </Text>
                         </div>
                     </div>
-                </TabPanel>
+                )}
             </div>
         </div>
     );
