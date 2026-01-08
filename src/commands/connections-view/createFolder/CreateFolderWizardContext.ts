@@ -9,5 +9,6 @@ import { type ConnectionType } from '../../../services/connectionStorageService'
 export interface CreateFolderWizardContext extends IActionContext {
     folderName?: string;
     parentFolderId?: string; // undefined means root level
+    parentFolderName?: string;
     connectionType?: ConnectionType; // Connection type for the folder
 }

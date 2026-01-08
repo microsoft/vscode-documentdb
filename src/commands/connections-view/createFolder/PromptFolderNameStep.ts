@@ -19,6 +19,9 @@ export class PromptFolderNameStep extends AzureWizardPromptStep<CreateFolderWiza
 
         const folderName = await context.ui.showInputBox({
             prompt: l10n.t('Enter folder name'),
+            title: context.parentFolderName
+                        ? l10n.t('Create New Folder in "{folderName}"', { folderName: context.parentFolderName })
+                        : l10n.t('Create New Folder'),
             validateInput: async (value: string) => {
                 if (!value || value.trim().length === 0) {
                     return l10n.t('Folder name cannot be empty');

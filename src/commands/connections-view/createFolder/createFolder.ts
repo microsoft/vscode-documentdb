@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
-import * as l10n from '@vscode/l10n';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { ConnectionType } from '../../../services/connectionStorageService';
@@ -78,12 +77,10 @@ export async function createFolder(
         ...context,
         parentFolderId: parentFolderId,
         connectionType: connectionType,
+        parentFolderName: parentName,
     };
 
     const wizard = new AzureWizard(wizardContext, {
-        title: parentName
-            ? l10n.t('Create New Folder in "{folderName}"', { folderName: parentName })
-            : l10n.t('Create New Folder'),
         promptSteps: [new PromptFolderNameStep()],
         executeSteps: [new ExecuteStep()],
     });
