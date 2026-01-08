@@ -154,20 +154,26 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
                 await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
 
-                // Refresh the connections tree when adding a new root-level connection
-                if (parentId === undefined || parentId === '') {
-                    await vscode.commands.executeCommand(`connectionsView.focus`);
-                    ext.connectionsBranchDataProvider.refresh();
-                    await waitForConnectionsViewReady(context);
+                // Refresh the connections tree and reveal the new connection
+                await vscode.commands.executeCommand(`connectionsView.focus`);
+                ext.connectionsBranchDataProvider.refresh();
+                await waitForConnectionsViewReady(context);
 
-                    // Reveal the connection
-                    const connectionPath = buildConnectionsViewTreePath(storageId, false);
-                    await revealConnectionsViewElement(context, connectionPath, {
-                        select: true,
-                        focus: true,
-                        expand: false, // Don't expand immediately to avoid login prompts
-                    });
+                // Build the reveal path based on whether this is in a subfolder
+                let connectionPath: string;
+                if (context.parentTreeId) {
+                    // Connection in a subfolder: append to parent's tree ID
+                    connectionPath = `${context.parentTreeId}/${storageId}`;
+                } else {
+                    // Root-level connection
+                    connectionPath = buildConnectionsViewTreePath(storageId, false);
                 }
+
+                await revealConnectionsViewElement(context, connectionPath, {
+                    select: true,
+                    focus: true,
+                    expand: false, // Don't expand immediately to avoid login prompts
+                });
 
                 showConfirmationAsInSettings(l10n.t('New connection has been added.'));
             },

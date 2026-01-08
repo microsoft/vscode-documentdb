@@ -5,13 +5,11 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { ConnectionType } from '../../../services/connectionStorageService';
 import { type FolderItem } from '../../../tree/connections-view/FolderItem';
 import { type LocalEmulatorsItem } from '../../../tree/connections-view/LocalEmulators/LocalEmulatorsItem';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
-import { refreshView } from '../../refreshView/refreshView';
 import { type CreateFolderWizardContext } from './CreateFolderWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptFolderNameStep } from './PromptFolderNameStep';
@@ -26,6 +24,7 @@ async function executeCreateFolderWizard(
     // Determine connection type based on parent
     let connectionType: ConnectionType;
     let parentFolderId: string | undefined;
+    let parentTreeId: string | undefined;
     let parentName: string | undefined;
 
     if (parentFolder) {
@@ -35,21 +34,25 @@ async function executeCreateFolderWizard(
             // Creating a folder under LocalEmulators
             connectionType = ConnectionType.Emulators;
             parentFolderId = undefined; // LocalEmulatorsItem doesn't have a storageId, folders under it are root-level in Emulators
+            parentTreeId = parentFolder.id; // Store tree ID for reveal path
             parentName = 'DocumentDB Local';
         } else if ('connectionType' in parentFolder) {
             // It's a FolderItem with connectionType property
             connectionType = (parentFolder as FolderItem).connectionType;
             parentFolderId = (parentFolder as FolderItem).storageId;
+            parentTreeId = parentFolder.id; // Store tree ID for reveal path
             parentName = (parentFolder as FolderItem).name;
         } else {
             // Fallback to Clusters if we can't determine
             connectionType = ConnectionType.Clusters;
             parentFolderId = undefined;
+            parentTreeId = undefined;
         }
     } else {
         // Root-level folder creation defaults to Clusters
         connectionType = ConnectionType.Clusters;
         parentFolderId = undefined;
+        parentTreeId = undefined;
     }
 
     ext.outputChannel.trace(
@@ -63,6 +66,7 @@ async function executeCreateFolderWizard(
     const wizardContext: CreateFolderWizardContext = {
         ...context,
         parentFolderId: parentFolderId,
+        parentTreeId: parentTreeId,
         connectionType: connectionType,
         wizardTitle: wizardTitle,
     };
@@ -75,9 +79,6 @@ async function executeCreateFolderWizard(
 
     await wizard.prompt();
     await wizard.execute();
-
-    // Refresh the connections view
-    await refreshView(context, Views.ConnectionsView);
 }
 
 /**

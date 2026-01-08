@@ -5,9 +5,13 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
+import { Views } from '../../../documentdb/Views';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService, ItemType } from '../../../services/connectionStorageService';
+import { revealConnectionsViewElement } from '../../../tree/api/revealConnectionsViewElement';
+import { waitForConnectionsViewReady } from '../../../tree/connections-view/connectionsViewHelpers';
 import { nonNullOrEmptyValue, nonNullValue } from '../../../utils/nonNull';
 import { randomUtils } from '../../../utils/randomUtils';
 import { type CreateFolderWizardContext } from './CreateFolderWizardContext';
@@ -40,12 +44,36 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateFolderWizardContex
             false,
         );
 
+        // Store the created folder ID for later reveal
+        const createdFolderId = folderId;
+
         ext.outputChannel.trace(
             l10n.t('Created new folder: {folderName} in folder with ID {parentFolderId}', {
                 folderName: folderName,
                 parentFolderId: context.parentFolderId ?? 'root',
             }),
         );
+
+        // Refresh the connections view and reveal the new folder
+        await vscode.commands.executeCommand(`connectionsView.focus`);
+        ext.connectionsBranchDataProvider.refresh();
+        await waitForConnectionsViewReady(context);
+
+        // Build the reveal path based on whether this is in a subfolder
+        let folderPath: string;
+        if (context.parentTreeId) {
+            // Subfolder: append to parent's tree ID
+            folderPath = `${context.parentTreeId}/${createdFolderId}`;
+        } else {
+            // Root-level folder
+            folderPath = `${Views.ConnectionsView}/${createdFolderId}`;
+        }
+
+        await revealConnectionsViewElement(context, folderPath, {
+            select: true,
+            focus: true,
+            expand: false,
+        });
     }
 
     public shouldExecute(context: CreateFolderWizardContext): boolean {

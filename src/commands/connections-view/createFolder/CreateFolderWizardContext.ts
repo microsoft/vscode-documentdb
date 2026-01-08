@@ -10,6 +10,7 @@ export interface CreateFolderWizardContext extends IActionContext {
     folderName?: string;
     parentFolderId?: string; // undefined means root level
     parentFolderName?: string;
+    parentTreeId?: string; // Full tree ID of parent folder (for reveal after creation)
     connectionType?: ConnectionType; // Connection type for the folder
     wizardTitle?: string; // Title for the wizard UI
 }
