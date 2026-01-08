@@ -83,12 +83,13 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
         // Get all children (both folders and connections)
         const children = await ConnectionStorageService.getChildren(this.folderData.id, this._connectionType);
 
-        const treeElements: TreeElement[] = [];
+        const folderElements: TreeElement[] = [];
+        const connectionElements: TreeElement[] = [];
 
         for (const child of children) {
             if (child.properties.type === ItemType.Folder) {
                 // Create folder item
-                treeElements.push(new FolderItem(child, this.id, this._connectionType));
+                folderElements.push(new FolderItem(child, this.id, this._connectionType));
             } else {
                 // Create connection item
                 const model: ClusterModelWithStorage = {
@@ -100,10 +101,25 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
                     emulatorConfiguration: child.properties.emulatorConfiguration,
                 };
 
-                treeElements.push(new DocumentDBClusterItem(model));
+                connectionElements.push(new DocumentDBClusterItem(model));
             }
         }
 
-        return treeElements;
+        // Sort folders alphabetically by name
+        folderElements.sort((a, b) => {
+            const aName = (a as FolderItem).name;
+            const bName = (b as FolderItem).name;
+            return aName.localeCompare(bName);
+        });
+
+        // Sort connections alphabetically by name
+        connectionElements.sort((a, b) => {
+            const aName = (a as DocumentDBClusterItem).cluster.name;
+            const bName = (b as DocumentDBClusterItem).cluster.name;
+            return aName.localeCompare(bName);
+        });
+
+        // Return folders first, then connections
+        return [...folderElements, ...connectionElements];
     }
 }

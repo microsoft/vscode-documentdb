@@ -68,6 +68,12 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
             return new DocumentDBClusterItem(model);
         });
 
+        // Sort folders alphabetically by name
+        folderItems.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Sort connections alphabetically by name
+        connectionItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
+
         // Return folders first, then connections, then the "New Emulator Connection" item
         return [...folderItems, ...connectionItems, new NewEmulatorConnectionItemCV(this.id)];
     }

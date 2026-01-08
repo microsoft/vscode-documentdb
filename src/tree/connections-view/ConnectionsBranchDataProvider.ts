@@ -148,6 +148,12 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
             return new DocumentDBClusterItem(model);
         });
 
+        // Sort folders alphabetically by name
+        clusterFolderItems.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Sort connections alphabetically by name
+        clusterItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
+
         const rootItems = [
             new LocalEmulatorsItem(parentId),
             ...clusterFolderItems,
