@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as l10n from '@vscode/l10n';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { ConnectionType } from '../../../services/connectionStorageService';
@@ -16,26 +17,12 @@ import { ExecuteStep } from './ExecuteStep';
 import { PromptFolderNameStep } from './PromptFolderNameStep';
 
 /**
- * Command to create a new folder in the connections view.
- * Can be invoked from the connections view header or from a folder's context menu.
+ * Shared helper function to execute the folder creation wizard.
  */
-export async function createFolder(
+async function executeCreateFolderWizard(
     context: IActionContext,
-    parentFolder?: FolderItem | LocalEmulatorsItem,
+    parentFolder: FolderItem | LocalEmulatorsItem | undefined,
 ): Promise<void> {
-    // Heuristic check: When invoked from view title, VS Code may pass a stale selection
-    // as parentFolder. Verify it matches the actual current selection.
-    if (parentFolder && ext.connectionsTreeView?.selection) {
-        const currentSelection = ext.connectionsTreeView.selection;
-
-        // If there's no selection or the parentFolder doesn't match the first selected item,
-        // it's likely a stale parameter from view title invocation
-        if (currentSelection.length === 0 || currentSelection[0] !== parentFolder) {
-            ext.outputChannel.trace(`[createFolder] Detected stale parentFolder parameter. Ignoring it.`);
-            parentFolder = undefined; // Treat as root-level folder creation
-        }
-    }
-
     // Determine connection type based on parent
     let connectionType: ConnectionType;
     let parentFolderId: string | undefined;
@@ -66,21 +53,22 @@ export async function createFolder(
     }
 
     ext.outputChannel.trace(
-        `[createFolder] invoked. Parent: ${parentName || 'None (root level)'}, ConnectionType: ${connectionType}`,
+        `createFolder invoked. Parent: ${parentName || 'None (root level)'}, ConnectionType: ${connectionType}`,
     );
 
-    ext.outputChannel.trace(
-        `[createFolder] invoked. Parent: ${parentName || 'None (root level)'}, ConnectionType: ${connectionType}`,
-    );
+    const wizardTitle = parentName
+        ? l10n.t('Create New Folder in "{folderName}"', { folderName: parentName })
+        : l10n.t('Create New Folder');
 
     const wizardContext: CreateFolderWizardContext = {
         ...context,
         parentFolderId: parentFolderId,
         connectionType: connectionType,
-        parentFolderName: parentName,
+        wizardTitle: wizardTitle,
     };
 
     const wizard = new AzureWizard(wizardContext, {
+        title: wizardTitle,
         promptSteps: [new PromptFolderNameStep()],
         executeSteps: [new ExecuteStep()],
     });
@@ -90,4 +78,42 @@ export async function createFolder(
 
     // Refresh the connections view
     await refreshView(context, Views.ConnectionsView);
+}
+
+/**
+ * Command to create a new folder in the connections view.
+ * Invoked from the connections view navigation area.
+ * If a folder is selected, creates a subfolder; otherwise creates a root-level folder.
+ */
+export async function createFolder(
+    context: IActionContext,
+    parentFolder?: FolderItem | LocalEmulatorsItem,
+): Promise<void> {
+    // When invoked from navigation area, VS Code may pass a stale parentFolder parameter
+    // Validate it against the current selection
+    if (parentFolder && ext.connectionsTreeView?.selection) {
+        const currentSelection = ext.connectionsTreeView.selection;
+        // If there's no selection OR parentFolder doesn't match the first selected item, it's stale
+        if (currentSelection.length === 0 || currentSelection[0] !== parentFolder) {
+            ext.outputChannel.trace(`[createFolder] Detected stale parentFolder parameter. Ignoring it.`);
+            parentFolder = undefined;
+        }
+    }
+
+    await executeCreateFolderWizard(context, parentFolder);
+}
+
+/**
+ * Command to create a subfolder within an existing folder.
+ * Invoked from the folder's context menu (right-click).
+ */
+export async function createSubfolder(
+    context: IActionContext,
+    parentFolder: FolderItem | LocalEmulatorsItem,
+): Promise<void> {
+    if (!parentFolder) {
+        throw new Error(l10n.t('No parent folder selected.'));
+    }
+
+    await executeCreateFolderWizard(context, parentFolder);
 }

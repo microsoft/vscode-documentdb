@@ -24,7 +24,7 @@ import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExt
 import { copyItems } from '../commands/connections-view/clipboard/copyItems';
 import { cutItems } from '../commands/connections-view/clipboard/cutItems';
 import { pasteItems } from '../commands/connections-view/clipboard/pasteItems';
-import { createFolder } from '../commands/connections-view/createFolder/createFolder';
+import { createFolder, createSubfolder } from '../commands/connections-view/createFolder/createFolder';
 import { deleteFolder } from '../commands/connections-view/deleteFolder/deleteFolder';
 import { renameConnection, renameFolder, renameItem } from '../commands/connections-view/renameItem/renameItem';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
@@ -303,6 +303,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithModalErrors(
                     'vscode-documentdb.command.connectionsView.createFolder',
                     withCommandCorrelation(createFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.createSubfolder',
+                    withTreeNodeCommandCorrelation(createSubfolder),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(

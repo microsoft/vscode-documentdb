@@ -308,6 +308,12 @@
         "icon": "$(new-folder)"
       },
       {
+        "//": "[ConnectionsView] Create Subfolder",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.connectionsView.createSubfolder",
+        "title": "New Folder…"
+      },
+      {
         "//": "[ConnectionsView] Rename Folder",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.renameFolder",
@@ -608,8 +614,8 @@
         },
         {
           "//": "Create Subfolder in Folder...",
-          "command": "vscode-documentdb.command.connectionsView.createFolder",
-          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
+          "command": "vscode-documentdb.command.connectionsView.createSubfolder",
+          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators)\\b/i",
           "group": "0@1"
         },
         {
@@ -826,6 +832,22 @@
         },
         {
           "command": "vscode-documentdb.command.connectionsView.removeConnection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.connectionsView.createFolder",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.connectionsView.createSubfolder",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.connectionsView.renameFolder",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.connectionsView.deleteFolder",
           "when": "never"
         },
         {
