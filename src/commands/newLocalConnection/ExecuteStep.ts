@@ -172,7 +172,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
 
             await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);
 
-            // We're not refreshing the tree here, the new connection is a child node, the parent node will refresh itself
+            // Refresh the parent to show the new connection (more efficient than full view refresh)
+            // parentTreeElementId is either the LocalEmulatorsItem id or a FolderItem id
+            ext.state.notifyChildrenChanged(context.parentTreeElementId);
 
             showConfirmationAsInSettings(l10n.t('New connection has been added.'));
         });

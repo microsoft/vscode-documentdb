@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { refreshParentInConnectionsView } from '../../tree/connections-view/connectionsViewHelpers';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -47,7 +48,7 @@ export async function removeConnection(context: IActionContext, node: DocumentDB
     // delete cached credentials from memory
     CredentialCache.deleteCredentials(node.id);
 
-    ext.connectionsBranchDataProvider.refresh();
+    refreshParentInConnectionsView(node.id);
 
     showConfirmationAsInSettings(l10n.t('The selected connection has been removed.'));
 }

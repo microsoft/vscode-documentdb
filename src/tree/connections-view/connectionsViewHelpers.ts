@@ -76,6 +76,41 @@ export function buildConnectionsViewTreePath(
 }
 
 /**
+ * Refreshes the parent element in the Connections View tree after a child modification.
+ *
+ * This function extracts the parent tree element ID from a child's full tree path
+ * and triggers a selective refresh of that parent's children. This is more efficient
+ * than refreshing the entire connections view.
+ *
+ * **Tree Path Structure:**
+ * Tree element IDs follow the pattern: `connectionsView/[localEmulators/]parentId/childId`
+ * The parent ID is extracted by finding the last `/` separator.
+ *
+ * **Fallback Behavior:**
+ * If no parent is found (root-level element), the entire connections branch is refreshed.
+ *
+ * @param treeElementId - The full tree path of the child element that was modified
+ *
+ * @example
+ * ```typescript
+ * // After renaming a connection in a folder:
+ * // treeElementId = 'connectionsView/folderId/connectionId'
+ * // This will refresh 'connectionsView/folderId' to show the updated connection
+ * refreshParentInConnectionsView(node.id);
+ * ```
+ */
+export function refreshParentInConnectionsView(treeElementId: string): void {
+    const lastSlashIndex = treeElementId.lastIndexOf('/');
+    if (lastSlashIndex !== -1) {
+        const parentId = treeElementId.substring(0, lastSlashIndex);
+        ext.state.notifyChildrenChanged(parentId);
+    } else {
+        // Root-level element, refresh the whole branch
+        ext.connectionsBranchDataProvider.refresh();
+    }
+}
+
+/**
  * Reveals and focuses on an element in the Connections View.
  *
  * This function provides a reliable way to navigate the Connections View tree

@@ -5,9 +5,8 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { l10n as vscodel10n } from 'vscode';
-import { Views } from '../../../documentdb/Views';
+import { refreshParentInConnectionsView } from '../../../tree/connections-view/connectionsViewHelpers';
 import { DocumentDBClusterItem } from '../../../tree/connections-view/DocumentDBClusterItem';
-import { refreshView } from '../../refreshView/refreshView';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptNewConnectionNameStep } from './PromptNewConnectionNameStep';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';
@@ -36,5 +35,5 @@ export async function renameConnection(context: IActionContext, node: DocumentDB
     await wizard.prompt();
     await wizard.execute();
 
-    await refreshView(context, Views.ConnectionsView);
+    refreshParentInConnectionsView(node.id);
 }

@@ -5,13 +5,12 @@
 
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, ItemType } from '../../../services/connectionStorageService';
+import { refreshParentInConnectionsView } from '../../../tree/connections-view/connectionsViewHelpers';
 import { type FolderItem } from '../../../tree/connections-view/FolderItem';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
-import { refreshView } from '../../refreshView/refreshView';
 
 /**
  * Command to delete a folder from the connections view.
@@ -74,7 +73,7 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
         await ConnectionStorageService.delete(connectionType, folderItem.storageId);
     });
 
-    await refreshView(context, Views.ConnectionsView);
+    refreshParentInConnectionsView(folderItem.id);
 
     showConfirmationAsInSettings(l10n.t('The selected folder has been removed.'));
 }

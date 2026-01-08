@@ -155,9 +155,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
                 await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
 
-                // Refresh the connections tree and reveal the new connection
+                // Refresh the parent to show the new connection (more efficient than full view refresh)
                 await vscode.commands.executeCommand(`connectionsView.focus`);
-                ext.connectionsBranchDataProvider.refresh();
+                if (context.parentTreeId) {
+                    // Connection in a subfolder: refresh the parent folder
+                    ext.state.notifyChildrenChanged(context.parentTreeId);
+                } else {
+                    // Root-level connection: refresh the connections view root
+                    ext.state.notifyChildrenChanged(Views.ConnectionsView);
+                }
                 await waitForConnectionsViewReady(context);
 
                 // Build the reveal path based on whether this is in a subfolder

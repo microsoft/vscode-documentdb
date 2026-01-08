@@ -54,20 +54,21 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateFolderWizardContex
             }),
         );
 
-        // Refresh the connections view and reveal the new folder
+        // Refresh the parent to show the new folder (more efficient than full view refresh)
         await vscode.commands.executeCommand(`connectionsView.focus`);
-        ext.connectionsBranchDataProvider.refresh();
+        if (context.parentTreeId) {
+            // Folder in a subfolder: refresh the parent folder
+            ext.state.notifyChildrenChanged(context.parentTreeId);
+        } else {
+            // Root-level folder: refresh the connections view root
+            ext.state.notifyChildrenChanged(Views.ConnectionsView);
+        }
         await waitForConnectionsViewReady(context);
 
         // Build the reveal path based on whether this is in a subfolder
-        let folderPath: string;
-        if (context.parentTreeId) {
-            // Subfolder: append to parent's tree ID
-            folderPath = `${context.parentTreeId}/${createdFolderId}`;
-        } else {
-            // Root-level folder
-            folderPath = `${Views.ConnectionsView}/${createdFolderId}`;
-        }
+        const folderPath = context.parentTreeId
+            ? `${context.parentTreeId}/${createdFolderId}`
+            : `${Views.ConnectionsView}/${createdFolderId}`;
 
         await revealConnectionsViewElement(context, folderPath, {
             select: true,

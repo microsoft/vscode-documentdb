@@ -5,10 +5,9 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { l10n as vscodel10n } from 'vscode';
-import { Views } from '../../../documentdb/Views';
 import { ConnectionStorageService, ConnectionType } from '../../../services/connectionStorageService';
+import { refreshParentInConnectionsView } from '../../../tree/connections-view/connectionsViewHelpers';
 import { FolderItem } from '../../../tree/connections-view/FolderItem';
-import { refreshView } from '../../refreshView/refreshView';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptNewFolderNameStep } from './PromptNewFolderNameStep';
 import { type RenameFolderWizardContext } from './RenameFolderWizardContext';
@@ -44,5 +43,5 @@ export async function renameFolder(context: IActionContext, folderItem: FolderIt
     await wizard.prompt();
     await wizard.execute();
 
-    await refreshView(context, Views.ConnectionsView);
+    refreshParentInConnectionsView(folderItem.id);
 }
