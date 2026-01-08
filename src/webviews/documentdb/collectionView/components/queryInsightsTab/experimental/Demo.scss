@@ -1,0 +1,96 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Demo Page Styles */
+.accessibility-demo-container {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.demo-header {
+    margin-bottom: 32px;
+}
+
+.demo-intro {
+    display: block;
+    margin-top: 12px;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.6;
+}
+
+.demo-content {
+    margin-top: 24px;
+}
+
+/* Comparison Panel */
+.comparison-panel {
+    padding: 20px;
+}
+
+.comparison-title {
+    display: block;
+    margin-bottom: 24px;
+}
+
+.comparison-grid {
+    display: grid;
+    gap: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    margin-bottom: 32px;
+}
+
+.comparison-card {
+    padding: 20px;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.comparison-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .section-title {
+        display: block;
+        color: var(--vscode-foreground);
+    }
+
+    ul {
+        margin: 0;
+        padding-left: 20px;
+        line-height: 1.6;
+    }
+
+    li {
+        margin-bottom: 8px;
+        font-size: 13px;
+    }
+}
+
+/* Recommendation Section */
+.recommendation-section {
+    padding: 20px;
+    background: var(--vscode-editorWidget-background);
+    border: 2px solid var(--vscode-focusBorder);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.recommendation-text {
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+/* Tab Panel adjustments */
+.fui-TabPanel {
+    padding-top: 16px;
+}
