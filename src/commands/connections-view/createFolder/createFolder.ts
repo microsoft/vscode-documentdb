@@ -84,24 +84,11 @@ async function executeCreateFolderWizard(
 /**
  * Command to create a new folder in the connections view.
  * Invoked from the connections view navigation area.
- * If a folder is selected, creates a subfolder; otherwise creates a root-level folder.
+ * Always creates a root-level folder in the Clusters section.
  */
-export async function createFolder(
-    context: IActionContext,
-    parentFolder?: FolderItem | LocalEmulatorsItem,
-): Promise<void> {
-    // When invoked from navigation area, VS Code may pass a stale parentFolder parameter
-    // Validate it against the current selection
-    if (parentFolder && ext.connectionsTreeView?.selection) {
-        const currentSelection = ext.connectionsTreeView.selection;
-        // If there's no selection OR parentFolder doesn't match the first selected item, it's stale
-        if (currentSelection.length === 0 || currentSelection[0] !== parentFolder) {
-            ext.outputChannel.trace(`[createFolder] Detected stale parentFolder parameter. Ignoring it.`);
-            parentFolder = undefined;
-        }
-    }
-
-    await executeCreateFolderWizard(context, parentFolder);
+export async function createFolder(context: IActionContext): Promise<void> {
+    // Navigation button always creates at root level of Clusters
+    await executeCreateFolderWizard(context, undefined);
 }
 
 /**

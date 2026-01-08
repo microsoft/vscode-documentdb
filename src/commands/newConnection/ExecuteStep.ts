@@ -135,6 +135,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     properties: {
                         type: ItemType.Connection,
                         api: api,
+                        parentId: parentId || undefined, // Set parent folder ID if in a subfolder
                         availableAuthMethods: newAvailableAuthenticationMethods,
                         selectedAuthMethod: newAuthenticationMethod,
                     },

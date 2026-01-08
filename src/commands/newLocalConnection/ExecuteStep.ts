@@ -148,6 +148,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 properties: {
                     type: ItemType.Connection,
                     api: experience.api === API.DocumentDB ? API.DocumentDB : experience.api,
+                    parentId: context.parentStorageId, // Set parent folder ID if in a subfolder
                     emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
                     availableAuthMethods: [],
                 },

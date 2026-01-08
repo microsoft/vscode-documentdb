@@ -314,6 +314,12 @@
         "title": "New Folder…"
       },
       {
+        "//": "[ConnectionsView] New Connection in Folder",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.connectionsView.newConnectionInFolder",
+        "title": "New Connection…"
+      },
+      {
         "//": "[ConnectionsView] Rename Folder",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.renameFolder",
@@ -607,16 +613,22 @@
           "group": "0@1"
         },
         {
+          "//": "New Connection in Folder...",
+          "command": "vscode-documentdb.command.connectionsView.newConnectionInFolder",
+          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators)\\b/i",
+          "group": "0@2"
+        },
+        {
           "//": "Rename Folder...",
           "command": "vscode-documentdb.command.connectionsView.renameFolder",
           "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
-          "group": "0@2"
+          "group": "0@3"
         },
         {
           "//": "Delete Folder...",
           "command": "vscode-documentdb.command.connectionsView.deleteFolder",
           "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
-          "group": "0@3"
+          "group": "0@4"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
