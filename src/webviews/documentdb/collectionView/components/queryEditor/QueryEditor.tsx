@@ -172,33 +172,30 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     };
 
     // ===========================================
-    // EXPERIMENTAL ACCESSIBILITY OPTIONS
+    // ACCESSIBILITY: Programmatic Names for Monaco Editors
     // ===========================================
-    // These are three different approaches to setting the programmatic name (aria-label)
-    // for Monaco editor instances. Choose the one that works best with screen readers.
+    // Monaco Editor natively supports the `ariaLabel` property in its
+    // IStandaloneEditorConstructionOptions interface. This sets the aria-label
+    // attribute on the editor's internal textarea, allowing screen readers to
+    // announce a meaningful description of each editor's purpose.
     //
-    // OPTION 1: Pass ariaLabel directly through Monaco's options prop
-    // This is the most direct approach - Monaco Editor natively supports ariaLabel
-    // in its IStandaloneEditorConstructionOptions interface.
-    //
-    // OPTION 2: Add a dedicated ariaLabel prop to MonacoAutoHeight component
-    // This provides a cleaner API and separates accessibility concerns from other options.
-    // Requires modifying the MonacoAutoHeight component.
-    //
-    // OPTION 3: Set aria-label on wrapper element + DOM manipulation after mount
-    // This approach uses standard HTML accessibility attributes on the wrapper element
-    // and optionally updates the editor's internal DOM elements after mounting.
+    // We create separate option objects for each editor type, extending the
+    // base monacoOptions with a specific ariaLabel for accessibility.
     // ===========================================
 
-    // Option 1: Create options with ariaLabel for each editor type
+    // Accessibility: Filter editor options with aria-label for screen readers
     const filterEditorOptions: editor.IStandaloneEditorConstructionOptions = {
         ...monacoOptions,
         ariaLabel: l10n.t('Query filter - Enter a MongoDB query filter in JSON format'),
     };
 
-    // Note: Project field uses Option 2 (ariaLabel prop) instead of options
-    // so we don't need projectEditorOptions here
+    // Accessibility: Project editor options with aria-label for screen readers
+    const projectEditorOptions: editor.IStandaloneEditorConstructionOptions = {
+        ...monacoOptions,
+        ariaLabel: l10n.t('Projection - Specify which fields to include or exclude'),
+    };
 
+    // Accessibility: Sort editor options with aria-label for screen readers
     const sortEditorOptions: editor.IStandaloneEditorConstructionOptions = {
         ...monacoOptions,
         ariaLabel: l10n.t('Sort - Specify sort order for query results'),
@@ -424,7 +421,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
             <div className="filterRow">
                 <div className="filterField">
-                    {/* OPTION 1: Pass ariaLabel directly through Monaco options prop */}
+                    {/* Accessibility: ariaLabel is set via filterEditorOptions for screen reader support */}
                     <MonacoAutoHeight
                         height={'100%'}
                         width={'100%'}
@@ -533,7 +530,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <Label size="small" weight="semibold">
                                 {l10n.t('Project')}
                             </Label>
-                            {/* OPTION 2: Use dedicated ariaLabel prop on MonacoAutoHeight */}
+                            {/* Accessibility: ariaLabel is set via projectEditorOptions for screen reader support */}
                             <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
@@ -544,7 +541,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     minLines: 1,
                                     lineHeight: 19,
                                 }}
-                                ariaLabel={l10n.t('Projection - Specify which fields to include or exclude')}
                                 onMount={(editor) => {
                                     projectEditorRef.current = editor;
                                     editor.setValue(projectValue);
@@ -552,7 +548,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                         setProjectValue(editor.getValue());
                                     });
                                 }}
-                                options={monacoOptions}
+                                options={projectEditorOptions}
                             />
                         </div>
                     </div>
@@ -563,7 +559,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <Label size="small" weight="semibold">
                                 {l10n.t('Sort')}
                             </Label>
-                            {/* OPTION 1: Pass ariaLabel through options prop */}
+                            {/* Accessibility: ariaLabel is set via sortEditorOptions for screen reader support */}
                             <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
@@ -610,114 +606,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     const value = parseInt(data.value, 10);
                                     setLimitValue(value >= 0 ? value : 0);
                                 }}
-                            />
-                        </div>
-                    </div>
-                </div>
-            </Collapse>
-
-            {/* ===========================================
-                EXPERIMENTAL ACCESSIBILITY TEST SECTION
-                =========================================== */}
-            {/* This section is for testing accessibility options only.
-                Remove or comment out before production release. */}
-            <Collapse visible={isEnhancedQueryMode} unmountOnExit>
-                <div className="enhancedInputArea">
-                    <div className="fieldRow">
-                        <Label
-                            size="small"
-                            weight="semibold"
-                            style={{ width: '100%', marginTop: '16px', marginBottom: '8px', color: 'var(--vscode-editorWarning-foreground)' }}
-                        >
-                            {l10n.t('⚠️ Experimental A11y Test Inputs - Remove Before Production')}
-                        </Label>
-                    </div>
-
-                    {/* OPTION 3: aria-label on wrapper + DOM manipulation after mount */}
-                    <div className="fieldRow">
-                        <div className="field fieldWide">
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Option 3 Test - DOM Manipulation')}
-                            </Label>
-                            <div
-                                aria-label={l10n.t('Option 3 Test Editor - Wrapper with aria-label')}
-                                role="group"
-                            >
-                                <MonacoAutoHeight
-                                    height={'100%'}
-                                    width={'100%'}
-                                    language="json"
-                                    adaptiveHeight={{
-                                        enabled: true,
-                                        maxLines: 3,
-                                        minLines: 1,
-                                        lineHeight: 19,
-                                    }}
-                                    onMount={(editor) => {
-                                        editor.setValue('{  }');
-                                        // OPTION 3: Post-mount DOM manipulation
-                                        // Set aria-label directly on the editor's textarea element
-                                        const domNode = editor.getDomNode();
-                                        if (domNode) {
-                                            const textareaElements = domNode.querySelectorAll('textarea.inputarea');
-                                            textareaElements.forEach((textarea) => {
-                                                textarea.setAttribute(
-                                                    'aria-label',
-                                                    l10n.t('Option 3 Test Editor - Direct DOM manipulation on textarea'),
-                                                );
-                                            });
-                                        }
-                                    }}
-                                    options={monacoOptions}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Summary row showing all three options side by side */}
-                    <div className="fieldRow">
-                        <div className="field fieldWide" style={{ flex: 1 }}>
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Option 1 Test (options.ariaLabel)')}
-                            </Label>
-                            <MonacoAutoHeight
-                                height={'100%'}
-                                width={'100%'}
-                                language="json"
-                                adaptiveHeight={{
-                                    enabled: true,
-                                    maxLines: 2,
-                                    minLines: 1,
-                                    lineHeight: 19,
-                                }}
-                                onMount={(editor) => {
-                                    editor.setValue('{ "option": 1 }');
-                                }}
-                                options={{
-                                    ...monacoOptions,
-                                    ariaLabel: l10n.t('Option 1 Test - ariaLabel passed via options prop'),
-                                }}
-                            />
-                        </div>
-                        <div className="field fieldWide" style={{ flex: 1 }}>
-                            <Label size="small" weight="semibold">
-                                {l10n.t('Option 2 Test (ariaLabel prop)')}
-                            </Label>
-                            <MonacoAutoHeight
-                                height={'100%'}
-                                width={'100%'}
-                                language="json"
-                                adaptiveHeight={{
-                                    enabled: true,
-                                    maxLines: 2,
-                                    minLines: 1,
-                                    lineHeight: 19,
-                                }}
-                                ariaLabel={l10n.t('Option 2 Test - ariaLabel as dedicated component prop')}
-                                onMount={(editor) => {
-                                    editor.setValue('{ "option": 2 }');
-                                }}
-                                options={monacoOptions}
                             />
                         </div>
                     </div>
