@@ -413,7 +413,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         }}
                         options={{
                             ...monacoOptions,
-                            ariaLabel: l10n.t('Query filter: Enter the DocumentDB query filter in JSON format'),
+                            ariaLabel: l10n.t('Filter: Enter the DocumentDB query filter in JSON format'),
                         }}
                     />
                 </div>
@@ -502,7 +502,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <Label size="small" weight="semibold">
                                 {l10n.t('Project')}
                             </Label>
-                            {/* Accessibility: ariaLabel is set via projectEditorOptions for screen reader support */}
                             <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
@@ -522,7 +521,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 }}
                                 options={{
                                     ...monacoOptions,
-                                    ariaLabel: l10n.t('Projection: Specify which fields to include or exclude'),
+                                    ariaLabel: l10n.t('Project: Specify which fields to include or exclude'),
                                 }}
                             />
                         </div>
@@ -534,7 +533,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <Label size="small" weight="semibold">
                                 {l10n.t('Sort')}
                             </Label>
-                            {/* Accessibility: ariaLabel is set via sortEditorOptions for screen reader support */}
                             <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
