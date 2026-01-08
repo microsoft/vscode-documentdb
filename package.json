@@ -284,7 +284,7 @@
         "//": "[ConnectionsView] Rename Connection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.renameConnection",
-        "title": "Rename…",
+        "title": "Rename Connection…",
         "icon": "$(edit)"
       },
       {
@@ -318,13 +318,6 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.renameFolder",
         "title": "Rename Folder…",
-        "icon": "$(edit)"
-      },
-      {
-        "//": "[ConnectionsView] Rename Item (Generic)",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.connectionsView.renameItem",
-        "title": "Rename…",
         "icon": "$(edit)"
       },
       {
@@ -562,11 +555,6 @@
           "command": "vscode-documentdb.command.connectionsView.createFolder",
           "when": "view == connectionsView",
           "group": "navigation@6"
-        },
-        {
-          "command": "vscode-documentdb.command.connectionsView.renameItem",
-          "when": "view == connectionsView && documentdb.canRenameSelection",
-          "group": "navigation@7"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.refresh",

@@ -26,7 +26,8 @@ import { cutItems } from '../commands/connections-view/clipboard/cutItems';
 import { pasteItems } from '../commands/connections-view/clipboard/pasteItems';
 import { createFolder, createSubfolder } from '../commands/connections-view/createFolder/createFolder';
 import { deleteFolder } from '../commands/connections-view/deleteFolder/deleteFolder';
-import { renameConnection, renameFolder, renameItem } from '../commands/connections-view/renameItem/renameItem';
+import { renameConnection } from '../commands/connections-view/renameConnection/renameConnection';
+import { renameFolder } from '../commands/connections-view/renameFolder/renameFolder';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
@@ -68,7 +69,6 @@ import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-vie
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
-import { isTreeElementWithContextValue } from '../tree/TreeElementWithContextValue';
 import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
@@ -97,19 +97,6 @@ export class ClustersExtension implements vscode.Disposable {
             treeDataProvider: ext.connectionsBranchDataProvider,
         });
         ext.context.subscriptions.push(ext.connectionsTreeView);
-
-        // Add selection change listener to manage context key for rename command
-        ext.context.subscriptions.push(
-            ext.connectionsTreeView.onDidChangeSelection((e) => {
-                const selectedItem = e.selection[0];
-                const canRename =
-                    e.selection.length === 1 &&
-                    isTreeElementWithContextValue(selectedItem) &&
-                    (selectedItem.contextValue === 'treeItem_folder' ||
-                        selectedItem.contextValue.includes('treeitem_documentdbcluster'));
-                void vscode.commands.executeCommand('setContext', 'documentdb.canRenameSelection', canRename);
-            }),
-        );
     }
 
     registerDiscoveryTree(_activateContext: IActionContext): void {
@@ -289,13 +276,6 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.renameConnection',
                     withTreeNodeCommandCorrelation(renameConnection),
-                );
-
-                //// Generic Rename Command:
-
-                registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.connectionsView.renameItem',
-                    withTreeNodeCommandCorrelation(renameItem),
                 );
 
                 //// Folder Management Commands:
