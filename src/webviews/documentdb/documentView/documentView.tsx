@@ -38,7 +38,7 @@ const monacoOptions = {
     readOnly: false,
     automaticLayout: false,
     // Accessibility: aria-label for screen readers
-    ariaLabel: l10n.t('Document editor - Edit the MongoDB document in JSON format'),
+    ariaLabel: l10n.t('Document Editor: Edit the document in JSON format'),
 };
 
 export const DocumentView = (): JSX.Element => {

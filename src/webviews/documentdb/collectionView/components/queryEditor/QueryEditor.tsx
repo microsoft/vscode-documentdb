@@ -186,19 +186,19 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     // Accessibility: Filter editor options with aria-label for screen readers
     const filterEditorOptions: editor.IStandaloneEditorConstructionOptions = {
         ...monacoOptions,
-        ariaLabel: l10n.t('Query filter - Enter a MongoDB query filter in JSON format'),
+        ariaLabel: l10n.t('Query filter: Enter the DocumentDB query filter in JSON format'),
     };
 
     // Accessibility: Project editor options with aria-label for screen readers
     const projectEditorOptions: editor.IStandaloneEditorConstructionOptions = {
         ...monacoOptions,
-        ariaLabel: l10n.t('Projection - Specify which fields to include or exclude'),
+        ariaLabel: l10n.t('Projection: Specify which fields to include or exclude'),
     };
 
     // Accessibility: Sort editor options with aria-label for screen readers
     const sortEditorOptions: editor.IStandaloneEditorConstructionOptions = {
         ...monacoOptions,
-        ariaLabel: l10n.t('Sort - Specify sort order for query results'),
+        ariaLabel: l10n.t('Sort: Specify sort order for query results'),
     };
 
     // Cleanup any pending operations when component unmounts
