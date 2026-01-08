@@ -14,6 +14,8 @@ import {
     ConnectionType,
     ItemType,
 } from '../../services/connectionStorageService';
+import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
+import { buildConnectionsViewTreePath } from '../../tree/connections-view/connectionsViewHelpers';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
@@ -74,8 +76,19 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         });
 
         if (existingDuplicateConnection) {
+            // Reveal the existing duplicate connection
+            const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, true);
+            await revealConnectionsViewElement(context, connectionPath, {
+                select: true,
+                focus: false,
+                expand: false, // Don't expand to avoid login prompts
+            });
+
             throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
-                details: l10n.t('The existing connection name:\n"{0}"', existingDuplicateConnection.name),
+                details: l10n.t(
+                    'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
+                    existingDuplicateConnection.name,
+                ),
             });
         }
 

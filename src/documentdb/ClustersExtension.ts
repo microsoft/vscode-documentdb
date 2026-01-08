@@ -291,7 +291,7 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(createSubfolder),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.connectionsView.newConnectionInFolder',
                     withTreeNodeCommandCorrelation(newConnectionInFolder),
                 );
