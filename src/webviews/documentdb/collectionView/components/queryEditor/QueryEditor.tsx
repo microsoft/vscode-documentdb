@@ -171,36 +171,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         automaticLayout: false,
     };
 
-    // ===========================================
-    // ACCESSIBILITY: Programmatic Names for Monaco Editors
-    // ===========================================
-    // Monaco Editor natively supports the `ariaLabel` property in its
-    // IStandaloneEditorConstructionOptions interface. This sets the aria-label
-    // attribute on the editor's internal textarea, allowing screen readers to
-    // announce a meaningful description of each editor's purpose.
-    //
-    // We create separate option objects for each editor type, extending the
-    // base monacoOptions with a specific ariaLabel for accessibility.
-    // ===========================================
-
-    // Accessibility: Filter editor options with aria-label for screen readers
-    const filterEditorOptions: editor.IStandaloneEditorConstructionOptions = {
-        ...monacoOptions,
-        ariaLabel: l10n.t('Query filter: Enter the DocumentDB query filter in JSON format'),
-    };
-
-    // Accessibility: Project editor options with aria-label for screen readers
-    const projectEditorOptions: editor.IStandaloneEditorConstructionOptions = {
-        ...monacoOptions,
-        ariaLabel: l10n.t('Projection: Specify which fields to include or exclude'),
-    };
-
-    // Accessibility: Sort editor options with aria-label for screen readers
-    const sortEditorOptions: editor.IStandaloneEditorConstructionOptions = {
-        ...monacoOptions,
-        ariaLabel: l10n.t('Sort: Specify sort order for query results'),
-    };
-
     // Cleanup any pending operations when component unmounts
     useEffect(() => {
         return () => {
@@ -421,7 +391,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
             <div className="filterRow">
                 <div className="filterField">
-                    {/* Accessibility: ariaLabel is set via filterEditorOptions for screen reader support */}
                     <MonacoAutoHeight
                         height={'100%'}
                         width={'100%'}
@@ -442,7 +411,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 setFilterValue(editor.getValue());
                             });
                         }}
-                        options={filterEditorOptions}
+                        options={{
+                            ...monacoOptions,
+                            ariaLabel: l10n.t('Query filter: Enter the DocumentDB query filter in JSON format'),
+                        }}
                     />
                 </div>
                 <div className="queryEditorActions">
@@ -548,7 +520,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                         setProjectValue(editor.getValue());
                                     });
                                 }}
-                                options={projectEditorOptions}
+                                options={{
+                                    ...monacoOptions,
+                                    ariaLabel: l10n.t('Projection: Specify which fields to include or exclude'),
+                                }}
                             />
                         </div>
                     </div>
@@ -577,7 +552,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                         setSortValue(editor.getValue());
                                     });
                                 }}
-                                options={sortEditorOptions}
+                                options={{
+                                    ...monacoOptions,
+                                    ariaLabel: l10n.t('Sort: Specify sort order for query results'),
+                                }}
                             />
                         </div>
                         <div className="field fieldNarrow">
