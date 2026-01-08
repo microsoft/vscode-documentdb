@@ -15,6 +15,7 @@ import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithC
 import { type ClusterModel } from '../../../tree/documentdb/ClusterModel';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullProp } from '../../../utils/nonNull';
+import { DISCOVERY_PROVIDER_ID } from '../config';
 import { MongoRUResourceItem } from './documentdb/MongoRUResourceItem';
 
 export interface AzureSubscriptionModel {
@@ -31,6 +32,7 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
     constructor(
         public readonly parentId: string,
         public readonly subscription: AzureSubscriptionModel,
+        private readonly journeyCorrelationId: string,
     ) {
         this.id = `${parentId}/${subscription.subscriptionId}`;
     }
@@ -40,7 +42,8 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
             'azure-mongo-ru-discovery.getChildren',
             async (context: IActionContext) => {
                 const startTime = Date.now();
-                context.telemetry.properties.discoveryProvider = 'azure-mongo-ru-discovery';
+                context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
 
                 const managementClient = await createCosmosDBManagementClient(context, this.subscription.subscription);
                 const allAccounts = await uiUtils.listAllIterator(managementClient.databaseAccounts.list());
@@ -61,7 +64,11 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                             dbExperience: CosmosDBMongoRUExperience,
                         } as ClusterModel;
 
-                        return new MongoRUResourceItem(this.subscription.subscription, clusterInfo);
+                        return new MongoRUResourceItem(
+                            this.journeyCorrelationId,
+                            this.subscription.subscription,
+                            clusterInfo,
+                        );
                     });
             },
         );

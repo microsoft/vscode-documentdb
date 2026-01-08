@@ -5,6 +5,7 @@
 
 import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
@@ -32,16 +33,24 @@ export class AzureMongoRUServiceRootItem
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
+        // Generate a journey correlation ID for funnel telemetry tracking
+        const journeyCorrelationId = randomUUID();
+
         const allSubscriptions = await this.azureSubscriptionProvider.getSubscriptions(true);
         const subscriptions = getTenantFilteredSubscriptions(allSubscriptions);
 
         if (!subscriptions || subscriptions.length === 0) {
             // Show modal dialog for empty state
             const configureResult = await askToConfigureCredentials();
+            // Note to future maintainers: 'void' is important here so that the return below returns the error node.
+            // Otherwise, the /retry node might be duplicated as we're inside of tree node with a loading state (the node items are being swapped etc.)
             if (configureResult === 'configure') {
-                // Note to future maintainers: 'void' is important here so that the return below returns the error node.
-                // Otherwise, the /retry node might be duplicated as we're inside of tree node with a loading state (the node items are being swapped etc.)
                 void vscode.commands.executeCommand('vscode-documentdb.command.discoveryView.manageCredentials', this);
+            } else if (configureResult === 'filter') {
+                void vscode.commands.executeCommand(
+                    'vscode-documentdb.command.discoveryView.filterProviderContent',
+                    this,
+                );
             }
 
             return [
@@ -79,12 +88,16 @@ export class AzureMongoRUServiceRootItem
                 .sort((a, b) => a.name.localeCompare(b.name))
                 // map to AzureMongoRUSubscriptionItem
                 .map((sub) => {
-                    return new AzureMongoRUSubscriptionItem(this.id, {
-                        subscription: sub,
-                        subscriptionName: sub.name,
-                        subscriptionId: sub.subscriptionId,
-                        tenant: tenantMap.get(sub.tenantId),
-                    });
+                    return new AzureMongoRUSubscriptionItem(
+                        this.id,
+                        {
+                            subscription: sub,
+                            subscriptionName: sub.name,
+                            subscriptionId: sub.subscriptionId,
+                            tenant: tenantMap.get(sub.tenantId),
+                        },
+                        journeyCorrelationId,
+                    );
                 })
         );
     }

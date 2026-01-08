@@ -35,7 +35,10 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
                     alwaysShow: true,
                 },
                 {
-                    label: l10n.t('Sign in to other Azure accounts to access more tenants'),
+                    label: l10n.t('Manage Azure Accounts…'),
+                    detail: l10n.t(
+                        'Sign in to additional accounts or authenticate with other tenants to see more options.',
+                    ),
                     iconPath: new vscode.ThemeIcon('key'),
                     alwaysShow: true,
                     isSignInOption: true,

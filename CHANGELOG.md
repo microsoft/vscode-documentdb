@@ -1,5 +1,27 @@
 # Change Log
 
+## 0.6.3
+
+### Improvements
+
+- **Query Insights**: The Query Insights feature has been updated to use the available `executionStats` instead of running the analysis in the AI context, improving performance and reliability. [#404](https://github.com/microsoft/vscode-documentdb/issues/404), [#423](https://github.com/microsoft/vscode-documentdb/pull/423)
+- **API Telemetry Support**: Enhanced telemetry support in web views for better monitoring and diagnostics. [#429](https://github.com/microsoft/vscode-documentdb/pull/429)
+- **Dependency Security Update**: Updated `tRPC` dependencies to address a security vulnerability. [#430](https://github.com/microsoft/vscode-documentdb/issues/430), [#431](https://github.com/microsoft/vscode-documentdb/pull/431)
+
+## 0.6.2
+
+### Fixes
+
+- **Azure Tenant Filtering in Service Discovery**: Resolved an issue where users could not deselect tenants when filtering from a large number of available tenants. This update improves the Azure account, tenant, and subscription management workflow. For more details on the enhanced workflow, see the [updated documentation](https://microsoft.github.io/vscode-documentdb/user-manual/managing-azure-discovery). [#391](https://github.com/microsoft/vscode-documentdb/issues/391), [#415](https://github.com/microsoft/vscode-documentdb/pull/415)
+- **Service Discovery Defaults**: The service discovery feature now starts with no pre-selected engines. Previously, the Azure Cosmos DB for MongoDB (RU) plugin was enabled by default, which has been corrected. [#390](https://github.com/microsoft/vscode-documentdb/issues/390), [#412](https://github.com/microsoft/vscode-documentdb/pull/412)
+- **Accessibility in Query Insights**: Fixed a responsive layout issue in the "Query Insights" tab where the 'AI response may be inaccurate' text would overlap with other UI elements on resize. [#376](https://github.com/microsoft/vscode-documentdb/issues/376), [#416](https://github.com/microsoft/vscode-documentdb/pull/416)
+
+### Improvements
+
+- **Dependency Upgrades**:
+  - Upgraded to React 19 and SlickGrid 9, enhancing UI performance and modernizing the webview components. This also includes updates to TypeScript, Webpack, and other build tools. [#406](https://github.com/microsoft/vscode-documentdb/issues/406), [#407](https://github.com/microsoft/vscode-documentdb/pull/407)
+  - Updated various other dependencies to improve security and performance. [#386](https://github.com/microsoft/vscode-documentdb/pull/386)
+
 ## 0.6.1
 
 ### New Features & Improvements

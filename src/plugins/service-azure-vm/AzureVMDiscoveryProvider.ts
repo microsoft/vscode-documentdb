@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext, type IWizardOptions } from '@microsoft/vscode-azext-utils';
-import { Disposable, l10n, ThemeIcon } from 'vscode';
+import { Disposable } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { AzureSubscriptionProviderWithFilters } from '../api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { SelectSubscriptionStep } from '../api-shared/azure/wizard/SelectSubscriptionStep';
+import { DESCRIPTION, DISCOVERY_PROVIDER_ID, ICON_PATH, LABEL, WIZARD_TITLE } from './config';
 import { AzureServiceRootItem } from './discovery-tree/AzureServiceRootItem';
 import { configureVmFilter } from './discovery-tree/configureVmFilterWizard';
 import { AzureVMExecuteStep } from './discovery-wizard/AzureVMExecuteStep';
@@ -28,10 +29,10 @@ export enum AzureVMContextProperties {
 }
 
 export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryProvider {
-    id = 'azure-vm-discovery';
-    label = l10n.t('Azure VMs (DocumentDB)');
-    description = l10n.t('Azure VM Service Discovery');
-    iconPath = new ThemeIcon('vm'); // Using a generic VM icon
+    id = DISCOVERY_PROVIDER_ID;
+    label = LABEL;
+    description = DESCRIPTION;
+    iconPath = ICON_PATH;
 
     azureSubscriptionProvider: AzureSubscriptionProviderWithFilters;
 
@@ -53,7 +54,7 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
         context.properties[AzureVMContextProperties.AzureSubscriptionProvider] = this.azureSubscriptionProvider;
 
         return {
-            title: l10n.t('Azure VM Service Discovery'),
+            title: WIZARD_TITLE,
             promptSteps: [new SelectSubscriptionStep(), new SelectTagStep(), new SelectVMStep(), new SelectPortStep()],
             executeSteps: [new AzureVMExecuteStep()],
             showLoadingPrompt: true,
@@ -74,7 +75,7 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
     async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {
         // Add telemetry for credential configuration activation
         context.telemetry.properties.credentialConfigActivated = 'true';
-        context.telemetry.properties.discoveryProviderId = this.id;
+        context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
         context.telemetry.properties.nodeProvided = node ? 'true' : 'false';
 
         if (!node || node instanceof AzureServiceRootItem) {
