@@ -86,16 +86,24 @@ export function buildConnectionsViewTreePath(
  * Tree element IDs follow the pattern: `connectionsView/[localEmulators/]parentId/childId`
  * The parent ID is extracted by finding the last `/` separator.
  *
- * **Fallback Behavior:**
- * If no parent is found (root-level element), the entire connections branch is refreshed.
+ * **Root-Level Detection:**
+ * Elements at the root level have IDs like `connectionsView/folderId` or
+ * `connectionsView/localEmulators/emulatorId`. When the extracted parentId is just
+ * the view prefix (`connectionsView` or `connectionsView/localEmulators`), this indicates
+ * the element is at root level and the entire branch is refreshed instead.
  *
  * @param treeElementId - The full tree path of the child element that was modified
  *
  * @example
  * ```typescript
- * // After renaming a connection in a folder:
+ * // Nested element - refreshes parent folder:
  * // treeElementId = 'connectionsView/folderId/connectionId'
- * // This will refresh 'connectionsView/folderId' to show the updated connection
+ * // Extracts parentId = 'connectionsView/folderId' → notifyChildrenChanged()
+ * refreshParentInConnectionsView(node.id);
+ *
+ * // Root-level element - refreshes entire branch:
+ * // treeElementId = 'connectionsView/folderId'
+ * // Extracts parentId = 'connectionsView' → full refresh()
  * refreshParentInConnectionsView(node.id);
  * ```
  */
@@ -103,9 +111,22 @@ export function refreshParentInConnectionsView(treeElementId: string): void {
     const lastSlashIndex = treeElementId.lastIndexOf('/');
     if (lastSlashIndex !== -1) {
         const parentId = treeElementId.substring(0, lastSlashIndex);
-        ext.state.notifyChildrenChanged(parentId);
+
+        // Check if parentId is just the view prefix (e.g., "connectionsView" or "connectionsView/localEmulators")
+        // These are not actual tree element IDs - they indicate the element is at root level
+        // Root-level elements: "connectionsView/folderId" → parentId = "connectionsView"
+        // LocalEmulators root: "connectionsView/localEmulators/emulatorId" → parentId = "connectionsView/localEmulators"
+        const isRootLevel =
+            parentId === Views.ConnectionsView || parentId === `${Views.ConnectionsView}/localEmulators`;
+
+        if (isRootLevel) {
+            // Root-level element, refresh the whole branch
+            ext.connectionsBranchDataProvider.refresh();
+        } else {
+            ext.state.notifyChildrenChanged(parentId);
+        }
     } else {
-        // Root-level element, refresh the whole branch
+        // No slash found (shouldn't happen with proper tree IDs), refresh the whole branch
         ext.connectionsBranchDataProvider.refresh();
     }
 }
