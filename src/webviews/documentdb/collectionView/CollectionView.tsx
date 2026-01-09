@@ -85,9 +85,7 @@ export const CollectionView = (): JSX.Element => {
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
     // Track which tab is currently active
-    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>(
-        'tab_result',
-    );
+    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>('tab_result');
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
