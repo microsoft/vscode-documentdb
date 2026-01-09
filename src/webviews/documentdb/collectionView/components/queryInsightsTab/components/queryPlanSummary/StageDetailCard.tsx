@@ -5,7 +5,7 @@
 
 import { Badge, Card, Text, Tooltip } from '@fluentui/react-components';
 import { WarningRegular } from '@fluentui/react-icons';
-import React from 'react';
+import React, { useState } from 'react';
 import './StageDetailCard.scss';
 
 export type StageType = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
@@ -61,6 +61,7 @@ export interface StageDetailCardProps {
  * Stage detail card component for displaying query execution plan stage information.
  * Uses bordered grid cells for primary metrics (Returned + Execution Time).
  * Supports ref forwarding for use with animation libraries.
+ * Badges with tooltips are keyboard accessible.
  */
 export function StageDetailCard({
     stageType,
@@ -74,6 +75,9 @@ export function StageDetailCard({
 }: StageDetailCardProps) {
     // Use danger color for failed stages, otherwise use brand color
     const badgeColor = hasFailed ? 'danger' : 'brand';
+
+    // Track tooltip visibility for each badge with truncated content
+    const [openTooltips, setOpenTooltips] = useState<Record<number, boolean>>({});
 
     return (
         <Card ref={ref} appearance="outline" className={`stage-detail-card${className ? ` ${className}` : ''}`}>
@@ -126,7 +130,31 @@ export function StageDetailCard({
                         const displayValue = isTruncated ? valueStr.substring(0, maxLength) + '...' : valueStr;
 
                         const badgeContent = (
-                            <Badge key={index} appearance="outline" size="small" shape="rounded" color="informative">
+                            <Badge
+                                key={index}
+                                appearance="outline"
+                                size="small"
+                                shape="rounded"
+                                color="informative"
+                                tabIndex={isTruncated ? 0 : undefined}
+                                className={isTruncated ? 'focusableBadge' : undefined}
+                                role={isTruncated ? 'button' : undefined}
+                                aria-label={
+                                    isTruncated
+                                        ? `${metric.label}: ${displayValue}. Press Enter or Space for full value.`
+                                        : undefined
+                                }
+                                onKeyDown={
+                                    isTruncated
+                                        ? (e) => {
+                                              if (e.key === 'Enter' || e.key === ' ') {
+                                                  e.preventDefault();
+                                                  setOpenTooltips((prev) => ({ ...prev, [index]: !prev[index] }));
+                                              }
+                                          }
+                                        : undefined
+                                }
+                            >
                                 <span className="badge-label">{metric.label}:&nbsp;</span>
                                 <span className="badge-value">{displayValue}</span>
                             </Badge>
@@ -134,7 +162,15 @@ export function StageDetailCard({
 
                         // Wrap in tooltip if truncated
                         return isTruncated ? (
-                            <Tooltip key={index} content={valueStr} relationship="label">
+                            <Tooltip
+                                key={index}
+                                content={valueStr}
+                                relationship="label"
+                                visible={openTooltips[index] ?? false}
+                                onVisibleChange={(_e, data) => {
+                                    setOpenTooltips((prev) => ({ ...prev, [index]: data.visible }));
+                                }}
+                            >
                                 {badgeContent}
                             </Tooltip>
                         ) : (

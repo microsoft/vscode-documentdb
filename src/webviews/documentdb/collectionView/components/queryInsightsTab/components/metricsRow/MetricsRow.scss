@@ -43,6 +43,22 @@
     }
 }
 
+// Header for metric card with info button
+.metricCardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+}
+
+// Info button styling
+.metricInfoButton {
+    min-width: 24px;
+    padding: 4px;
+    // Fluent UI Button handles its own focus styling via data-fui-focus-visible
+}
+
 .metricTooltip {
     padding: 8px;
 

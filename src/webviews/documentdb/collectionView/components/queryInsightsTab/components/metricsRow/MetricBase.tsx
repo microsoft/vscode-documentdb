@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
-import { DataUsageRegular } from '@fluentui/react-icons';
+import { Button, Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
+import { DataUsageRegular, InfoRegular } from '@fluentui/react-icons';
 import * as React from 'react';
+import { useState } from 'react';
 import './MetricsRow.scss';
 
 /**
@@ -14,7 +15,7 @@ import './MetricsRow.scss';
  *
  * All metric components extend this to inherit:
  * - Consistent card styling
- * - Tooltip support
+ * - Tooltip support with info button for keyboard accessibility
  * - Placeholder handling (loading skeleton vs null value placeholder)
  * - Label/value layout
  *
@@ -39,7 +40,7 @@ export interface MetricBaseProps {
     /** What to display when value is explicitly null (data unavailable) */
     nullValuePlaceholder?: string;
 
-    /** Optional tooltip explanation shown on hover */
+    /** Optional tooltip explanation shown on hover and via info button */
     tooltipExplanation?: string;
 }
 
@@ -54,6 +55,8 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
     nullValuePlaceholder = 'N/A',
     tooltipExplanation,
 }) => {
+    const [tooltipOpen, setTooltipOpen] = useState(false);
+
     const renderValue = () => {
         // Explicit null means data is unavailable (e.g., error state, not supported)
         if (value === null) {
@@ -71,9 +74,21 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
         return value;
     };
 
-    const content = (
+    const cardContent = (
         <Card className="metricCard" appearance="filled">
-            <div className="dataHeader">{label}</div>
+            <div className="metricCardHeader">
+                <div className="dataHeader">{label}</div>
+                {tooltipExplanation && (
+                    <Button
+                        appearance="transparent"
+                        icon={<InfoRegular />}
+                        size="small"
+                        aria-label={`More information about ${label}`}
+                        className="metricInfoButton"
+                        onClick={() => setTooltipOpen(!tooltipOpen)}
+                    />
+                )}
+            </div>
             <div className="dataValue">{renderValue()}</div>
         </Card>
     );
@@ -102,11 +117,13 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
                 }}
                 positioning="below"
                 relationship="description"
+                visible={tooltipOpen}
+                onVisibleChange={(_e, data) => setTooltipOpen(data.visible)}
             >
-                {content}
+                {cardContent}
             </Tooltip>
         );
     }
 
-    return content;
+    return cardContent;
 };

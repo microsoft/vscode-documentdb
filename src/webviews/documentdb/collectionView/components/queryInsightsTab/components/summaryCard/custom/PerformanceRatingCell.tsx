@@ -8,6 +8,7 @@ import { InfoRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
+import { useState } from 'react';
 import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
 import './PerformanceRatingCell.scss';
@@ -44,6 +45,8 @@ export interface PerformanceRatingCellProps {
  * - null: Shows N/A or custom nullValuePlaceholder (data unavailable/error)
  * - PerformanceRating: Displays rating badge with diagnostics
  *
+ * Diagnostic badges are keyboard accessible with focus indicators.
+ *
  * Example usage:
  * ```tsx
  * <PerformanceRatingCell
@@ -71,6 +74,8 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     visible = true,
     nullValuePlaceholder = 'N/A',
 }) => {
+    const [openTooltips, setOpenTooltips] = useState<Record<number, boolean>>({});
+
     const getRatingColor = (rating: PerformanceRating): string => {
         switch (rating) {
             case 'poor':
@@ -145,6 +150,10 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                     }}
                                     positioning="above-start"
                                     relationship="description"
+                                    visible={openTooltips[index] ?? false}
+                                    onVisibleChange={(_e, data) => {
+                                        setOpenTooltips((prev) => ({ ...prev, [index]: data.visible }));
+                                    }}
                                 >
                                     <Badge
                                         appearance="tint"
@@ -152,6 +161,16 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                         size="small"
                                         shape="rounded"
                                         icon={<InfoRegular />}
+                                        tabIndex={0}
+                                        className="focusableBadge"
+                                        role="button"
+                                        aria-label={`${diagnostic.message}. Press Enter or Space for details.`}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                setOpenTooltips((prev) => ({ ...prev, [index]: !prev[index] }));
+                                            }
+                                        }}
                                     >
                                         {diagnostic.message}
                                     </Badge>
