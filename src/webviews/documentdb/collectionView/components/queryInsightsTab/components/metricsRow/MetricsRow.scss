@@ -52,10 +52,11 @@
     width: 100%;
 }
 
-// Info button styling
+// Info button styling - override cursor to not show pointer
 .metricInfoButton {
     min-width: 24px;
     padding: 4px;
+    cursor: default !important;
     // Fluent UI Button handles its own focus styling via data-fui-focus-visible
 }
 

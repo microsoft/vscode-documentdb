@@ -8,7 +8,6 @@ import { InfoRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
-import { useState } from 'react';
 import '../../../../../../../components/focusableBadge/focusableBadge.scss';
 import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
@@ -75,8 +74,6 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     visible = true,
     nullValuePlaceholder = 'N/A',
 }) => {
-    const [openTooltips, setOpenTooltips] = useState<Record<number, boolean>>({});
-
     const getRatingColor = (rating: PerformanceRating): string => {
         switch (rating) {
             case 'poor':
@@ -151,10 +148,6 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                     }}
                                     positioning="above-start"
                                     relationship="description"
-                                    visible={openTooltips[index] ?? false}
-                                    onVisibleChange={(_e, data) => {
-                                        setOpenTooltips((prev) => ({ ...prev, [index]: data.visible }));
-                                    }}
                                 >
                                     <Badge
                                         appearance="tint"
@@ -164,14 +157,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                         icon={<InfoRegular />}
                                         tabIndex={0}
                                         className="focusableBadge"
-                                        role="button"
-                                        aria-label={`${diagnostic.message}. Press Enter or Space for details.`}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                e.preventDefault();
-                                                setOpenTooltips((prev) => ({ ...prev, [index]: !prev[index] }));
-                                            }
-                                        }}
+                                        aria-label={diagnostic.message}
                                     >
                                         {diagnostic.message}
                                     </Badge>

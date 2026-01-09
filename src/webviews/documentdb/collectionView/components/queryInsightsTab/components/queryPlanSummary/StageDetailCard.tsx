@@ -5,7 +5,7 @@
 
 import { Badge, Card, Text, Tooltip } from '@fluentui/react-components';
 import { WarningRegular } from '@fluentui/react-icons';
-import React, { useState } from 'react';
+import React from 'react';
 import '../../../../../../components/focusableBadge/focusableBadge.scss';
 import './StageDetailCard.scss';
 
@@ -77,9 +77,6 @@ export function StageDetailCard({
     // Use danger color for failed stages, otherwise use brand color
     const badgeColor = hasFailed ? 'danger' : 'brand';
 
-    // Track tooltip visibility for each badge with truncated content
-    const [openTooltips, setOpenTooltips] = useState<Record<number, boolean>>({});
-
     return (
         <Card ref={ref} appearance="outline" className={`stage-detail-card${className ? ` ${className}` : ''}`}>
             {/* Header: Badge + Description */}
@@ -139,22 +136,7 @@ export function StageDetailCard({
                                 color="informative"
                                 tabIndex={isTruncated ? 0 : undefined}
                                 className={isTruncated ? 'focusableBadge' : undefined}
-                                role={isTruncated ? 'button' : undefined}
-                                aria-label={
-                                    isTruncated
-                                        ? `${metric.label}: ${displayValue}. Press Enter or Space for full value.`
-                                        : undefined
-                                }
-                                onKeyDown={
-                                    isTruncated
-                                        ? (e) => {
-                                              if (e.key === 'Enter' || e.key === ' ') {
-                                                  e.preventDefault();
-                                                  setOpenTooltips((prev) => ({ ...prev, [index]: !prev[index] }));
-                                              }
-                                          }
-                                        : undefined
-                                }
+                                aria-label={isTruncated ? `${metric.label}: ${displayValue}` : undefined}
                             >
                                 <span className="badge-label">{metric.label}:&nbsp;</span>
                                 <span className="badge-value">{displayValue}</span>
@@ -163,15 +145,7 @@ export function StageDetailCard({
 
                         // Wrap in tooltip if truncated
                         return isTruncated ? (
-                            <Tooltip
-                                key={index}
-                                content={valueStr}
-                                relationship="label"
-                                visible={openTooltips[index] ?? false}
-                                onVisibleChange={(_e, data) => {
-                                    setOpenTooltips((prev) => ({ ...prev, [index]: data.visible }));
-                                }}
-                            >
+                            <Tooltip key={index} content={valueStr} relationship="label">
                                 {badgeContent}
                             </Tooltip>
                         ) : (

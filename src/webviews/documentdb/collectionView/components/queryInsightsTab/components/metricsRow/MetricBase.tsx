@@ -6,7 +6,7 @@
 import { Button, Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
 import { DataUsageRegular, InfoRegular } from '@fluentui/react-icons';
 import * as React from 'react';
-import { useState } from 'react';
+import { useRef } from 'react';
 import './MetricsRow.scss';
 
 /**
@@ -55,7 +55,7 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
     nullValuePlaceholder = 'N/A',
     tooltipExplanation,
 }) => {
-    const [tooltipOpen, setTooltipOpen] = useState(false);
+    const cardRef = useRef<HTMLDivElement>(null);
 
     const renderValue = () => {
         // Explicit null means data is unavailable (e.g., error state, not supported)
@@ -74,56 +74,45 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
         return value;
     };
 
-    const cardContent = (
-        <Card className="metricCard" appearance="filled">
+    // Format tooltip content if tooltip explanation is provided
+    const valueText =
+        value !== null && value !== undefined && (typeof value === 'string' || typeof value === 'number')
+            ? String(value)
+            : '';
+
+    return (
+        <Card className="metricCard" appearance="filled" ref={cardRef}>
             <div className="metricCardHeader">
                 <div className="dataHeader">{label}</div>
                 {tooltipExplanation && (
-                    <Button
-                        appearance="transparent"
-                        icon={<InfoRegular />}
-                        size="small"
-                        aria-label={`More information about ${label}`}
-                        className="metricInfoButton"
-                        onClick={() => setTooltipOpen(!tooltipOpen)}
-                    />
+                    <Tooltip
+                        content={{
+                            children: (
+                                <div className="metricTooltip">
+                                    <div className="tooltipHeader">{label}</div>
+                                    <div className="tooltipContent">{tooltipExplanation}</div>
+                                    {valueText && (
+                                        <div className="tooltipValue">
+                                            <DataUsageRegular fontSize={24} /> {valueText}
+                                        </div>
+                                    )}
+                                </div>
+                            ),
+                        }}
+                        positioning={{ target: cardRef.current, position: 'below' }}
+                        relationship="description"
+                    >
+                        <Button
+                            appearance="transparent"
+                            icon={<InfoRegular />}
+                            size="small"
+                            aria-label={`More information about ${label}`}
+                            className="metricInfoButton"
+                        />
+                    </Tooltip>
                 )}
             </div>
             <div className="dataValue">{renderValue()}</div>
         </Card>
     );
-
-    if (tooltipExplanation) {
-        // Format tooltip with similar styling to performance rating badges
-        const valueText =
-            value !== null && value !== undefined && (typeof value === 'string' || typeof value === 'number')
-                ? String(value)
-                : '';
-
-        return (
-            <Tooltip
-                content={{
-                    children: (
-                        <div className="metricTooltip">
-                            <div className="tooltipHeader">{label}</div>
-                            <div className="tooltipContent">{tooltipExplanation}</div>
-                            {valueText && (
-                                <div className="tooltipValue">
-                                    <DataUsageRegular fontSize={24} /> {valueText}
-                                </div>
-                            )}
-                        </div>
-                    ),
-                }}
-                positioning="below"
-                relationship="description"
-                visible={tooltipOpen}
-                onVisibleChange={(_e, data) => setTooltipOpen(data.visible)}
-            >
-                {cardContent}
-            </Tooltip>
-        );
-    }
-
-    return cardContent;
 };
