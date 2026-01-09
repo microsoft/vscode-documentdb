@@ -65,11 +65,9 @@
 .approach1-infoButton {
     min-width: 24px;
     padding: 4px;
-
-    &:focus-visible {
-        outline: 2px solid var(--vscode-focusBorder);
-        outline-offset: 2px;
-    }
+    
+    /* Fluent UI Button components automatically handle focus-visible styling */
+    /* We don't need to override it here - Fluent UI manages data-fui-focus-visible */
 }
 
 .approach1-metricTooltip {
@@ -112,12 +110,13 @@
     gap: 8px;
 }
 
-/* Focusable badge styling - matching Fluent UI focus indicator pattern */
+/* Focusable badge styling - using Fluent UI's data-fui-focus-visible attribute */
 .approach1-focusableBadge {
     cursor: pointer;
     position: relative;
     
-    /* Add focus-visible indicator that matches Fluent UI Button focus style */
+    /* Add focus indicator using Fluent UI's focus-visible attribute pattern */
+    /* This matches how Fluent UI Buttons show focus */
     &::after {
         content: '';
         position: absolute;
@@ -127,7 +126,8 @@
         pointer-events: none;
     }
     
-    &:focus-visible::after {
+    /* Use Fluent UI's data-fui-focus-visible attribute for focus styling */
+    &[data-fui-focus-visible]::after {
         border-color: var(--vscode-focusBorder);
     }
 }
