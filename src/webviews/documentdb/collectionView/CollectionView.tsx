@@ -21,6 +21,7 @@ import {
 import { type CollectionViewWebviewConfigurationType } from './collectionViewController';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
 import { QueryInsightsMain } from './components/queryInsightsTab/QueryInsightsTab';
+import { QueryInsightsAccessibilityDemo } from './components/queryInsightsTab/experimental/Demo';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
 import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
@@ -85,7 +86,9 @@ export const CollectionView = (): JSX.Element => {
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
     // Track which tab is currently active
-    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>('tab_result');
+    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights' | 'tab_accessibilityDemo'>(
+        'tab_result',
+    );
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
@@ -548,7 +551,7 @@ export const CollectionView = (): JSX.Element => {
                 <TabList
                     selectedValue={selectedTab}
                     onTabSelect={(_event, data) => {
-                        const newTab = data.value as 'tab_result' | 'tab_queryInsights';
+                        const newTab = data.value as 'tab_result' | 'tab_queryInsights' | 'tab_accessibilityDemo';
 
                         // Report tab switching telemetry
                         trpcClient.common.reportEvent
@@ -575,6 +578,14 @@ export const CollectionView = (): JSX.Element => {
                             Query Insights
                             <Badge appearance="tint" size="small" shape="rounded" color="brand">
                                 PREVIEW
+                            </Badge>
+                        </div>
+                    </Tab>
+                    <Tab id="tab.accessibilityDemo" value="tab_accessibilityDemo">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            Accessibility Demo
+                            <Badge appearance="tint" size="small" shape="rounded" color="important">
+                                EXPERIMENTAL
                             </Badge>
                         </div>
                     </Tab>
@@ -619,6 +630,8 @@ export const CollectionView = (): JSX.Element => {
                 )}
 
                 {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
+
+                {selectedTab === 'tab_accessibilityDemo' && <QueryInsightsAccessibilityDemo />}
             </div>
         </CollectionViewContext.Provider>
     );
