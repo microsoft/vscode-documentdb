@@ -412,7 +412,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 setFilterValue(editor.getValue());
                             });
                         }}
-                        options={monacoOptions}
+                        options={{
+                            ...monacoOptions,
+                            ariaLabel: l10n.t('Filter: Enter the DocumentDB query filter in JSON format'),
+                        }}
                     />
                 </div>
                 <div className="queryEditorActions">
@@ -517,7 +520,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                         setProjectValue(editor.getValue());
                                     });
                                 }}
-                                options={monacoOptions}
+                                options={{
+                                    ...monacoOptions,
+                                    ariaLabel: l10n.t('Project: Specify which fields to include or exclude'),
+                                }}
                             />
                         </div>
                     </div>
@@ -545,7 +551,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                         setSortValue(editor.getValue());
                                     });
                                 }}
-                                options={monacoOptions}
+                                options={{
+                                    ...monacoOptions,
+                                    ariaLabel: l10n.t('Sort: Specify sort order for query results'),
+                                }}
                             />
                         </div>
                         <div className="field fieldNarrow">
