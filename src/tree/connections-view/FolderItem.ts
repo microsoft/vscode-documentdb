@@ -11,6 +11,7 @@ import {
     type ConnectionItem,
     type ConnectionType,
 } from '../../services/connectionStorageService';
+import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -120,6 +121,20 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
         });
 
         // Return folders first, then connections
-        return [...folderElements, ...connectionElements];
+        const result = [...folderElements, ...connectionElements];
+
+        // If folder is empty, return a placeholder element with context menu
+        if (result.length === 0) {
+            return [
+                createGenericElementWithContext({
+                    id: `${this.id}/emptyFolderPlaceholder`,
+                    contextValue: 'treeItem_emptyFolderPlaceholder',
+                    label: vscode.l10n.t('empty'),
+                    iconPath: new vscode.ThemeIcon('indent'),
+                }),
+            ];
+        }
+
+        return result;
     }
 }

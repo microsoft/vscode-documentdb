@@ -5,9 +5,11 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { ext } from '../../../extensionVariables';
 import { ConnectionType } from '../../../services/connectionStorageService';
 import { type FolderItem } from '../../../tree/connections-view/FolderItem';
 import { type LocalEmulatorsItem } from '../../../tree/connections-view/LocalEmulators/LocalEmulatorsItem';
+import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { newConnectionInClusterFolder } from '../../newConnection/newConnection';
 import { newLocalConnectionInFolder } from '../../newLocalConnection/newLocalConnection';
@@ -15,13 +17,27 @@ import { newLocalConnectionInFolder } from '../../newLocalConnection/newLocalCon
 /**
  * Command to create a new connection inside a folder.
  * Routes to the appropriate wizard based on the folder's connection type.
+ * Also supports being invoked from an empty folder placeholder.
  */
 export async function newConnectionInFolder(
     context: IActionContext,
-    folder: FolderItem | LocalEmulatorsItem,
+    treeItem: FolderItem | LocalEmulatorsItem | TreeElement,
 ): Promise<void> {
-    if (!folder) {
+    if (!treeItem) {
         throw new Error(l10n.t('No folder selected.'));
+    }
+
+    // If the tree item is an empty folder placeholder, get its parent folder
+    const itemContextValue = 'contextValue' in treeItem ? treeItem.contextValue : undefined;
+    let folder: FolderItem | LocalEmulatorsItem;
+    if (itemContextValue?.includes('treeItem_emptyFolderPlaceholder')) {
+        const parent = ext.connectionsBranchDataProvider.getParent(treeItem);
+        if (!parent) {
+            throw new Error(l10n.t('Could not find parent folder.'));
+        }
+        folder = parent as FolderItem | LocalEmulatorsItem;
+    } else {
+        folder = treeItem as FolderItem | LocalEmulatorsItem;
     }
 
     // Check if it's a LocalEmulatorsItem by inspecting contextValue

@@ -609,13 +609,13 @@
         {
           "//": "Create Subfolder in Folder...",
           "command": "vscode-documentdb.command.connectionsView.createSubfolder",
-          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators)\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i",
           "group": "0@1"
         },
         {
           "//": "New Connection in Folder...",
           "command": "vscode-documentdb.command.connectionsView.newConnectionInFolder",
-          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators)\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i",
           "group": "0@2"
         },
         {

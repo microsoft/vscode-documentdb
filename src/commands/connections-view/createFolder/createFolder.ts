@@ -9,6 +9,7 @@ import { ext } from '../../../extensionVariables';
 import { ConnectionType } from '../../../services/connectionStorageService';
 import { type FolderItem } from '../../../tree/connections-view/FolderItem';
 import { type LocalEmulatorsItem } from '../../../tree/connections-view/LocalEmulators/LocalEmulatorsItem';
+import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { type CreateFolderWizardContext } from './CreateFolderWizardContext';
 import { ExecuteStep } from './ExecuteStep';
@@ -94,13 +95,27 @@ export async function createFolder(context: IActionContext): Promise<void> {
 /**
  * Command to create a subfolder within an existing folder.
  * Invoked from the folder's context menu (right-click).
+ * Also supports being invoked from an empty folder placeholder.
  */
 export async function createSubfolder(
     context: IActionContext,
-    parentFolder: FolderItem | LocalEmulatorsItem,
+    treeItem: FolderItem | LocalEmulatorsItem | TreeElement,
 ): Promise<void> {
-    if (!parentFolder) {
+    if (!treeItem) {
         throw new Error(l10n.t('No parent folder selected.'));
+    }
+
+    // If the tree item is an empty folder placeholder, get its parent folder
+    const itemContextValue = 'contextValue' in treeItem ? treeItem.contextValue : undefined;
+    let parentFolder: FolderItem | LocalEmulatorsItem;
+    if (itemContextValue?.includes('treeItem_emptyFolderPlaceholder')) {
+        const parent = ext.connectionsBranchDataProvider.getParent(treeItem);
+        if (!parent) {
+            throw new Error(l10n.t('Could not find parent folder.'));
+        }
+        parentFolder = parent as FolderItem | LocalEmulatorsItem;
+    } else {
+        parentFolder = treeItem as FolderItem | LocalEmulatorsItem;
     }
 
     await executeCreateFolderWizard(context, parentFolder);
