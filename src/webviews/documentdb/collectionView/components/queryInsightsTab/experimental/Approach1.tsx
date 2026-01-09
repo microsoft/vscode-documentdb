@@ -31,7 +31,7 @@ import './Approach1.scss';
 
 /**
  * Metric card with info button for Approach 1
- * Updated to mount tooltip on the card instead of the button
+ * Tooltip wraps the entire card (like MetricBase.tsx) for consistent behavior
  */
 interface MetricCardApproach1Props {
     metric: MockMetricData;
@@ -39,43 +39,49 @@ interface MetricCardApproach1Props {
 
 const MetricCardApproach1: React.FC<MetricCardApproach1Props> = ({ metric }) => {
     const [tooltipOpen, setTooltipOpen] = useState(false);
-    const cardRef = React.useRef<HTMLDivElement>(null);
 
-    return (
-        <Card className="metricCard approach1-metricCard" appearance="filled" ref={cardRef}>
+    const cardContent = (
+        <Card className="metricCard approach1-metricCard" appearance="filled">
             <div className="approach1-metricHeader">
                 <div className="dataHeader">{metric.label}</div>
                 {metric.tooltipExplanation && (
-                    <>
-                        <Tooltip
-                            content={{
-                                children: (
-                                    <div className="approach1-metricTooltip">
-                                        <div className="approach1-tooltipHeader">{metric.label}</div>
-                                        <div className="approach1-tooltipContent">{metric.tooltipExplanation}</div>
-                                    </div>
-                                ),
-                            }}
-                            positioning="below"
-                            relationship="description"
-                            visible={tooltipOpen}
-                            onVisibleChange={(_e, data) => setTooltipOpen(data.visible)}
-                            mountNode={cardRef.current}
-                        >
-                            <Button
-                                appearance="transparent"
-                                icon={<InfoRegular />}
-                                size="small"
-                                aria-label={`More information about ${metric.label}`}
-                                className="approach1-infoButton"
-                            />
-                        </Tooltip>
-                    </>
+                    <Button
+                        appearance="transparent"
+                        icon={<InfoRegular />}
+                        size="small"
+                        aria-label={`More information about ${metric.label}`}
+                        className="approach1-infoButton"
+                        onClick={() => setTooltipOpen(!tooltipOpen)}
+                    />
                 )}
             </div>
             <div className="dataValue">{metric.value}</div>
         </Card>
     );
+
+    // If tooltip exists, wrap the card with Tooltip (like MetricBase.tsx)
+    if (metric.tooltipExplanation) {
+        return (
+            <Tooltip
+                content={{
+                    children: (
+                        <div className="approach1-metricTooltip">
+                            <div className="approach1-tooltipHeader">{metric.label}</div>
+                            <div className="approach1-tooltipContent">{metric.tooltipExplanation}</div>
+                        </div>
+                    ),
+                }}
+                positioning="below"
+                relationship="description"
+                visible={tooltipOpen}
+                onVisibleChange={(_e, data) => setTooltipOpen(data.visible)}
+            >
+                {cardContent}
+            </Tooltip>
+        );
+    }
+
+    return cardContent;
 };
 
 /**
