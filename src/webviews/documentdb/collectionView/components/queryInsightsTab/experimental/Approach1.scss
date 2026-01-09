@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-@use '../../queryInsights.scss' as *;
+@use '../queryInsights.scss' as *;
 
 /* Approach 1 Styles */
 .approach1-container {
@@ -65,7 +65,7 @@
 .approach1-infoButton {
     min-width: 24px;
     padding: 4px;
-    
+
     &:focus-visible {
         outline: 2px solid var(--vscode-focusBorder);
         outline-offset: 2px;
@@ -121,7 +121,7 @@
 .approach1-badgeInfoButton {
     min-width: 20px;
     padding: 2px;
-    
+
     &:focus-visible {
         outline: 2px solid var(--vscode-focusBorder);
         outline-offset: 2px;
