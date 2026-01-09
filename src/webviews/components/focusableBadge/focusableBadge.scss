@@ -5,14 +5,14 @@
 
 /**
  * Focusable Badge Styling
- * 
+ *
  * This style makes Fluent UI Badge components keyboard accessible by adding focus indicators
  * that match VS Code's focus styling. Apply this class to Badge components that have tabIndex={0}.
- * 
+ *
  * The focus indicator uses Fluent UI's data-fui-focus-visible attribute which is automatically
  * managed by Fluent UI's tabster focus system. This ensures focus indicators only appear on
  * keyboard navigation (Tab, Shift+Tab) and not on mouse clicks.
- * 
+ *
  * Usage: Add the className="focusableBadge" to any Badge component with tabIndex={0}
  */
 
@@ -28,12 +28,11 @@
         border: 2px solid transparent;
     }
 
-    /* 
+    /*
      * Focus indicator that activates when Fluent UI adds data-fui-focus-visible
      * This attribute is added automatically on keyboard focus (Tab navigation)
      */
     &[data-fui-focus-visible]::after {
-        border-color: var(--vscode-focusBorder);
         border-color: var(--colorStrokeFocus2);
         border-radius: var(--borderRadiusMedium);
         border-width: 1px;

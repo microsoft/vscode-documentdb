@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
-import { DataUsageRegular, InfoRegular } from '@fluentui/react-icons';
+import { Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
+import { DataUsageRegular } from '@fluentui/react-icons';
 import * as React from 'react';
 import { useRef } from 'react';
 import './MetricsRow.scss';
@@ -80,39 +80,47 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
             ? String(value)
             : '';
 
-    return (
-        <Card className="metricCard" appearance="filled" ref={cardRef}>
+    const cardContent = (
+        <Card
+            className="metricCard"
+            appearance="filled"
+            ref={cardRef}
+            // All metric cards are keyboard focusable for consistent tab navigation
+            // Focus indicators are automatically handled by Fluent UI's Card component
+            // via its built-in tabster focus management system (data-fui-focus-visible)
+            tabIndex={0}
+            aria-label={tooltipExplanation ? `${label}. More information available` : label}
+        >
             <div className="metricCardHeader">
                 <div className="dataHeader">{label}</div>
-                {tooltipExplanation && (
-                    <Tooltip
-                        content={{
-                            children: (
-                                <div className="metricTooltip">
-                                    <div className="tooltipHeader">{label}</div>
-                                    <div className="tooltipContent">{tooltipExplanation}</div>
-                                    {valueText && (
-                                        <div className="tooltipValue">
-                                            <DataUsageRegular fontSize={24} /> {valueText}
-                                        </div>
-                                    )}
-                                </div>
-                            ),
-                        }}
-                        positioning={{ target: cardRef.current, position: 'below' }}
-                        relationship="description"
-                    >
-                        <Button
-                            appearance="transparent"
-                            icon={<InfoRegular />}
-                            size="small"
-                            aria-label={`More information about ${label}`}
-                            className="metricInfoButton"
-                        />
-                    </Tooltip>
-                )}
             </div>
             <div className="dataValue">{renderValue()}</div>
         </Card>
     );
+
+    if (tooltipExplanation) {
+        return (
+            <Tooltip
+                content={{
+                    children: (
+                        <div className="metricTooltip">
+                            <div className="tooltipHeader">{label}</div>
+                            <div className="tooltipContent">{tooltipExplanation}</div>
+                            {valueText && (
+                                <div className="tooltipValue">
+                                    <DataUsageRegular fontSize={24} /> {valueText}
+                                </div>
+                            )}
+                        </div>
+                    ),
+                }}
+                positioning="below"
+                relationship="description"
+            >
+                {cardContent}
+            </Tooltip>
+        );
+    }
+
+    return cardContent;
 };
