@@ -31,6 +31,7 @@ import './Approach1.scss';
 
 /**
  * Metric card with info button for Approach 1
+ * Updated to mount tooltip on the card instead of the button
  */
 interface MetricCardApproach1Props {
     metric: MockMetricData;
@@ -38,33 +39,39 @@ interface MetricCardApproach1Props {
 
 const MetricCardApproach1: React.FC<MetricCardApproach1Props> = ({ metric }) => {
     const [tooltipOpen, setTooltipOpen] = useState(false);
+    const cardRef = React.useRef<HTMLDivElement>(null);
 
     return (
-        <Card className="metricCard approach1-metricCard" appearance="filled">
+        <Card className="metricCard approach1-metricCard" appearance="filled" ref={cardRef}>
             <div className="approach1-metricHeader">
                 <div className="dataHeader">{metric.label}</div>
-                <Tooltip
-                    content={{
-                        children: (
-                            <div className="approach1-metricTooltip">
-                                <div className="approach1-tooltipHeader">{metric.label}</div>
-                                <div className="approach1-tooltipContent">{metric.tooltipExplanation}</div>
-                            </div>
-                        ),
-                    }}
-                    positioning="below"
-                    relationship="description"
-                    visible={tooltipOpen}
-                    onVisibleChange={(_e, data) => setTooltipOpen(data.visible)}
-                >
-                    <Button
-                        appearance="transparent"
-                        icon={<InfoRegular />}
-                        size="small"
-                        aria-label={`More information about ${metric.label}`}
-                        className="approach1-infoButton"
-                    />
-                </Tooltip>
+                {metric.tooltipExplanation && (
+                    <>
+                        <Tooltip
+                            content={{
+                                children: (
+                                    <div className="approach1-metricTooltip">
+                                        <div className="approach1-tooltipHeader">{metric.label}</div>
+                                        <div className="approach1-tooltipContent">{metric.tooltipExplanation}</div>
+                                    </div>
+                                ),
+                            }}
+                            positioning="below"
+                            relationship="description"
+                            visible={tooltipOpen}
+                            onVisibleChange={(_e, data) => setTooltipOpen(data.visible)}
+                            mountNode={cardRef.current}
+                        >
+                            <Button
+                                appearance="transparent"
+                                icon={<InfoRegular />}
+                                size="small"
+                                aria-label={`More information about ${metric.label}`}
+                                className="approach1-infoButton"
+                            />
+                        </Tooltip>
+                    </>
+                )}
             </div>
             <div className="dataValue">{metric.value}</div>
         </Card>
@@ -73,6 +80,7 @@ const MetricCardApproach1: React.FC<MetricCardApproach1Props> = ({ metric }) => 
 
 /**
  * Performance rating with focusable badges for Approach 1
+ * Updated to make badges themselves focusable instead of separate info buttons
  */
 const PerformanceRatingApproach1: React.FC = () => {
     const { score, diagnostics } = mockPerformanceRating;
@@ -109,41 +117,43 @@ const PerformanceRatingApproach1: React.FC = () => {
             {diagnostics && diagnostics.length > 0 && (
                 <div className="approach1-diagnosticBadges">
                     {diagnostics.map((diagnostic, index) => (
-                        <div key={index} className="approach1-badgeWithInfo">
+                        <Tooltip
+                            key={index}
+                            content={{
+                                children: (
+                                    <div className="approach1-badgeTooltip">
+                                        <div className="approach1-tooltipHeader">{diagnostic.message}</div>
+                                        <div className="approach1-tooltipContent">{diagnostic.details}</div>
+                                    </div>
+                                ),
+                            }}
+                            positioning="above-start"
+                            relationship="description"
+                            visible={openTooltips[index] ?? false}
+                            onVisibleChange={(_e, data) => {
+                                setOpenTooltips((prev) => ({ ...prev, [index]: data.visible }));
+                            }}
+                        >
                             <Badge
                                 appearance="tint"
                                 color={diagnostic.type === 'positive' ? 'success' : 'informative'}
                                 size="small"
                                 shape="rounded"
                                 icon={<InfoRegular />}
+                                tabIndex={0}
+                                aria-label={`${diagnostic.message}. Press Enter or Space for details.`}
+                                className="approach1-focusableBadge"
+                                role="button"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        setOpenTooltips((prev) => ({ ...prev, [index]: !prev[index] }));
+                                    }
+                                }}
                             >
                                 {diagnostic.message}
                             </Badge>
-                            <Tooltip
-                                content={{
-                                    children: (
-                                        <div className="approach1-badgeTooltip">
-                                            <div className="approach1-tooltipHeader">{diagnostic.message}</div>
-                                            <div className="approach1-tooltipContent">{diagnostic.details}</div>
-                                        </div>
-                                    ),
-                                }}
-                                positioning="above-start"
-                                relationship="description"
-                                visible={openTooltips[index] ?? false}
-                                onVisibleChange={(_e, data) => {
-                                    setOpenTooltips((prev) => ({ ...prev, [index]: data.visible }));
-                                }}
-                            >
-                                <Button
-                                    appearance="transparent"
-                                    icon={<InfoRegular />}
-                                    size="small"
-                                    aria-label={`More information about ${diagnostic.message}`}
-                                    className="approach1-badgeInfoButton"
-                                />
-                            </Tooltip>
-                        </div>
+                        </Tooltip>
                     ))}
                 </div>
             )}
@@ -163,7 +173,7 @@ export const QueryInsightsApproach1: React.FC = () => {
                 </Text>
                 <Text size={300} className="approach1-description">
                     {l10n.t(
-                        'Each metric and badge has a dedicated info button (ⓘ) that can be focused with Tab and activated with Enter or Space.',
+                        'Metrics have info buttons (ⓘ) that can be focused with Tab. Performance badges are directly focusable - press Enter or Space to show tooltips.',
                     )}
                 </Text>
             </div>
