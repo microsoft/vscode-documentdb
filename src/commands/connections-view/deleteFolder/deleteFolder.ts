@@ -24,38 +24,12 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
     // Determine connection type - for now, use Clusters as default
     const connectionType = folderItem?.connectionType ?? ConnectionType.Clusters;
 
-    // Recursively get all descendants (folders and connections)
-    async function getAllDescendantsRecursive(parentId: string): Promise<{ id: string; type: ItemType }[]> {
-        const children = await ConnectionStorageService.getChildren(parentId, connectionType);
-        const descendants: { id: string; type: ItemType }[] = [];
-
-        for (const child of children) {
-            descendants.push({ id: child.id, type: child.properties.type });
-
-            // Recursively get descendants of folders
-            if (child.properties.type === ItemType.Folder) {
-                const childDescendants = await getAllDescendantsRecursive(child.id);
-                descendants.push(...childDescendants);
-            }
-        }
-
-        return descendants;
-    }
-
-    const allDescendants = await getAllDescendantsRecursive(folderItem.storageId);
-
-    const childFolders = allDescendants.filter((item) => item.type === ItemType.Folder);
-    const connectionsInFolder = allDescendants.filter((item) => item.type === ItemType.Connection);
-
-    let confirmMessage = l10n.t('Delete folder "{folderName}"?', { folderName: folderItem.name });
-
-    if (childFolders.length > 0 || connectionsInFolder.length > 0) {
-        const itemCount = childFolders.length + connectionsInFolder.length;
-        confirmMessage +=
-            '\n' + l10n.t('This folder contains {count} item(s) which will also be deleted.', { count: itemCount });
-    }
-
-    confirmMessage += '\n' + l10n.t('This cannot be undone.');
+    const confirmMessage =
+        l10n.t('Delete folder "{folderName}"?', { folderName: folderItem.name }) +
+        '\n' +
+        l10n.t('All subfolders and connections within this folder will also be deleted.') +
+        '\n' +
+        l10n.t('This cannot be undone.');
 
     const confirmed = await getConfirmationAsInSettings(l10n.t('Are you sure?'), confirmMessage, 'delete');
 
@@ -64,10 +38,22 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
     }
 
     await ext.state.showDeleting(folderItem.id, async () => {
-        // Delete all descendants (connections and child folders)
-        for (const item of allDescendants) {
-            await ConnectionStorageService.delete(connectionType, item.id);
+        // Recursively delete all descendants
+        async function deleteRecursive(parentId: string): Promise<void> {
+            const children = await ConnectionStorageService.getChildren(parentId, connectionType);
+
+            for (const child of children) {
+                // Recursively delete child folders first
+                if (child.properties.type === ItemType.Folder) {
+                    await deleteRecursive(child.id);
+                }
+                // Delete the child item
+                await ConnectionStorageService.delete(connectionType, child.id);
+            }
         }
+
+        // Delete all descendants first
+        await deleteRecursive(folderItem.storageId);
 
         // Delete the folder itself
         await ConnectionStorageService.delete(connectionType, folderItem.storageId);
