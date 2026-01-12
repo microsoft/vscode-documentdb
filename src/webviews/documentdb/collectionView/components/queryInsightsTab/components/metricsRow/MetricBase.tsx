@@ -93,8 +93,8 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
             tabIndex={0}
             aria-label={`${label}${valueText ? `: ${valueText}` : ''}${tooltipExplanation ? `. ${tooltipExplanation}` : ''}`}
         >
-            <div className="metricCardHeader" aria-hidden="true">
-                <div className="dataHeader">{label}</div>
+            <div className="dataHeader" aria-hidden="true">
+                {label}
             </div>
             <div className="dataValue" aria-hidden="true">
                 {renderValue()}

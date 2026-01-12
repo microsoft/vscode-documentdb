@@ -138,11 +138,7 @@ export function StageDetailCard({
                                 color="informative"
                                 tabIndex={0}
                                 className="focusableBadge"
-                                aria-label={
-                                    isTruncated
-                                        ? `${metric.label}: ${displayValue}. Full value: ${valueStr}`
-                                        : `${metric.label}: ${displayValue}`
-                                }
+                                aria-label={`${metric.label}: ${valueStr}`}
                             >
                                 <span aria-hidden="true" className="badge-label">
                                     {metric.label}:&nbsp;
