@@ -8,9 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
-import { ext } from '../../extensionVariables';
 
-import { Views } from '../../documentdb/Views';
 import {
     type ConnectionItem,
     ConnectionStorageService,
@@ -21,6 +19,7 @@ import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsVi
 import {
     buildConnectionsViewTreePath,
     focusAndRevealInConnectionsView,
+    refreshParentInConnectionsView,
     withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
 import { UserFacingError } from '../../utils/commandErrorHandling';
@@ -149,19 +148,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
             await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
 
-            // Refresh the parent to show the new connection (more efficient than full view refresh)
-            if (context.parentTreeId) {
-                // Connection in a subfolder: refresh the parent folder
-                ext.state.notifyChildrenChanged(context.parentTreeId);
-            } else {
-                // Root-level connection: refresh the connections view root
-                ext.state.notifyChildrenChanged(Views.ConnectionsView);
-            }
-
             // Build the reveal path based on whether this is in a subfolder
             const connectionPath = context.parentTreeId
                 ? `${context.parentTreeId}/${storageId}`
                 : buildConnectionsViewTreePath(storageId, false);
+
+            // Refresh the parent to show the new connection
+            refreshParentInConnectionsView(connectionPath);
 
             // Focus and reveal the new connection
             await focusAndRevealInConnectionsView(context, connectionPath);

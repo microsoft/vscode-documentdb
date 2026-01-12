@@ -18,6 +18,7 @@ import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsVi
 import {
     buildConnectionsViewTreePath,
     focusAndRevealInConnectionsView,
+    refreshParentInConnectionsView,
     withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
 import { UserFacingError } from '../../utils/commandErrorHandling';
@@ -177,12 +178,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
 
                 await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);
 
-                // Refresh the parent to show the new connection (more efficient than full view refresh)
-                // parentTreeElementId is either the LocalEmulatorsItem id or a FolderItem id
-                ext.state.notifyChildrenChanged(context.parentTreeElementId);
-
                 // Build the reveal path and focus on the new connection
                 const connectionPath = `${context.parentTreeElementId}/${storageItem.id}`;
+
+                // Refresh the parent to show the new connection
+                refreshParentInConnectionsView(connectionPath);
+
+                // Focus and reveal the new connection
                 await focusAndRevealInConnectionsView(context, connectionPath);
 
                 showConfirmationAsInSettings(l10n.t('New connection has been added.'));
