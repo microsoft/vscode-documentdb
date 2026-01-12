@@ -7,7 +7,6 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
-import { ext } from '../../extensionVariables';
 import {
     type ConnectionItem,
     ConnectionStorageService,
@@ -32,7 +31,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
     public priority: number = 100;
 
     public async execute(context: NewLocalConnectionWizardContext): Promise<void> {
-        const parentId = context.parentTreeElementId;
         const experience = context.experience;
 
         switch (context.mode) {
@@ -103,9 +101,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 : joinedHosts;
 
         return withConnectionsViewProgress(async () => {
-            return ext.state.showCreatingChild(parentId, l10n.t('Creating new connection…'), async () => {
-                await new Promise((resolve) => setTimeout(resolve, 250));
-
                 let isEmulator: boolean = true;
                 let disableEmulatorSecurity: boolean | undefined;
 
@@ -188,7 +183,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 await focusAndRevealInConnectionsView(context, connectionPath);
 
                 showConfirmationAsInSettings(l10n.t('New connection has been added.'));
-            });
         });
     }
 
