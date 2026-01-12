@@ -9,7 +9,7 @@ This style makes Fluent UI `Badge` components keyboard accessible by adding prop
 Use this style when you need to make a Badge component focusable for keyboard accessibility, typically when:
 
 - The badge has a tooltip that needs to be accessible via keyboard
-- The badge is interactive and needs to be part of the tab order
+- The badge displays additional information that should be available to screen readers
 - You're implementing WCAG 2.1.1 (Keyboard) compliance
 
 ## How to Use
@@ -25,39 +25,45 @@ Use this style when you need to make a Badge component focusable for keyboard ac
 ```tsx
 import { Badge, Tooltip } from '@fluentui/react-components';
 
-// Badge with tooltip that's keyboard accessible
-<Tooltip content="Detailed information about this badge">
+// Badge with tooltip and full accessibility support
+<Tooltip content="Additional detailed information shown in tooltip">
   <Badge
     appearance="tint"
     size="small"
     tabIndex={0}
     className="focusableBadge"
-    role="button"
-    aria-label="Badge name. Press Enter or Space for details."
-    onKeyDown={(e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        // Handle keyboard activation (e.g., toggle tooltip)
-      }
-    }}
+    aria-label="Badge text. Additional detailed information shown in tooltip"
   >
-    Badge Text
+    <span aria-hidden="true">Badge text</span>
   </Badge>
 </Tooltip>;
 ```
 
-## Required Props
+## Required Props and Pattern
 
-When using the `focusableBadge` class, the following props are required:
+When using the `focusableBadge` class, follow this pattern:
 
 - `tabIndex={0}` - Makes the badge focusable via keyboard
-- `className="focusableBadge"` - Applies the focusable badge styling
-- `aria-label` - Provides an accessible name, especially if the badge has a tooltip
+- `className="focusableBadge"` - Applies the focus indicator styling
+- `aria-label` - Provides the complete accessible name including both visible text and tooltip content
+- `<span aria-hidden="true">` - Wrap visible text children to prevent double announcement
 
-For interactive badges (e.g., when the badge behaves like a button), you may also want to add:
+### Accessibility Pattern Explanation
 
-- `role="button"` - Indicates that the badge is interactive
-- `onKeyDown` handler - Handles Enter/Space key activation to mirror click behavior
+The key to making tooltips accessible is the combination of `aria-label` and `aria-hidden`:
+
+1. **`aria-label`**: Contains the full context (visible text + tooltip details)
+2. **`aria-hidden="true"` on children**: Hides visible text from screen readers
+3. **Result**: Screen readers announce the complete `aria-label` instead of just the visible text
+
+**Example:**
+
+```tsx
+aria-label="Collection scan detected. This query performs a full collection scan which is inefficient."
+// Visual users see: "Collection scan detected"
+// Screen reader users hear: "Collection scan detected. This query performs a full collection scan which is inefficient."
+```
+
 ## How It Works
 
 ### Focus Management
@@ -80,15 +86,21 @@ The focus indicator matches VS Code's focus styling:
 
 Includes `:focus-visible` fallback for browsers that don't support Fluent UI's focus management.
 
-## Example: Badge with Tooltip
+## Real-World Examples
+
+### Example 1: Diagnostic Badge with Tooltip
 
 ```tsx
-const [tooltipOpen, setTooltipOpen] = useState(false);
-
 <Tooltip
-  content="This is detailed information about the badge"
-  visible={tooltipOpen}
-  onVisibleChange={(_, data) => setTooltipOpen(data.visible)}
+  content={{
+    children: (
+      <div style={{ padding: '8px' }}>
+        <div style={{ fontWeight: 600, marginBottom: '12px' }}>Collection scan detected</div>
+        <div>This query performs a full collection scan which is inefficient...</div>
+      </div>
+    ),
+  }}
+  relationship="description"
 >
   <Badge
     appearance="tint"
@@ -96,26 +108,38 @@ const [tooltipOpen, setTooltipOpen] = useState(false);
     size="small"
     tabIndex={0}
     className="focusableBadge"
-    role="button"
-    aria-label="Information badge. Press Enter or Space for details."
-    onKeyDown={(e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        setTooltipOpen(!tooltipOpen);
-      }
-    }}
+    aria-label="Collection scan detected. This query performs a full collection scan which is inefficient..."
   >
-    Info Badge
+    <span aria-hidden="true">Collection scan detected</span>
+  </Badge>
+</Tooltip>
+```
+
+### Example 2: Metric Badge with Truncated Value
+
+```tsx
+const fullValue = 'very-long-value-that-is-truncated...';
+const displayValue = 'very-long-val...';
+
+<Tooltip content={fullValue} relationship="label">
+  <Badge
+    appearance="outline"
+    size="small"
+    tabIndex={0}
+    className="focusableBadge"
+    aria-label={`Metric name: ${displayValue}. Full value: ${fullValue}`}
+  >
+    <span aria-hidden="true">Metric name: {displayValue}</span>
   </Badge>
 </Tooltip>;
 ```
 
 ## Accessibility Notes
 
-- **WCAG 2.1.1 (Keyboard)**: All functionality accessible via keyboard
-- **WCAG 2.4.7 (Focus Visible)**: Focus indicator clearly visible
-- **Screen Reader Support**: Use proper `aria-label` to describe badge and interaction
-- **Keyboard Interaction**: Enter/Space keys should trigger the same action as click
+- **WCAG 2.1.1 (Keyboard)**: All content accessible via keyboard through tab navigation
+- **WCAG 2.4.7 (Focus Visible)**: Focus indicator clearly visible during keyboard navigation
+- **Screen Reader Support**: Use `aria-label` with full context; wrap visible text in `aria-hidden="true"`
+- **Tooltip Access**: Tooltips automatically show on focus (Fluent UI behavior)
 
 ## Browser Support
 
