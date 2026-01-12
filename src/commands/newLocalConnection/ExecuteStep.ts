@@ -108,74 +108,74 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 let isEmulator: boolean = true;
                 let disableEmulatorSecurity: boolean | undefined;
 
-            // Sanity Check 2/2: is there a connection with the same 'label' in there?
-            // If so, append a number to the label.
-            // This scenario is possible as users are allowed to rename their connections.
+                // Sanity Check 2/2: is there a connection with the same 'label' in there?
+                // If so, append a number to the label.
+                // This scenario is possible as users are allowed to rename their connections.
 
-            let existingDuplicateLabel = existingConnections.find(
-                (connection) => connection.name === newConnectionLabel,
-            );
-            // If a connection with the same label exists, append a number to the label
-            while (existingDuplicateLabel) {
-                /**
-                 * Matches and captures parts of a connection label string.
-                 *
-                 * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
-                 * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
-                 * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
-                 *   which may be preceded by whitespace. For example, " (123)".
-                 *
-                 * Examples:
-                 * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
-                 * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
-                 */
-                const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
-                if (match) {
-                    const baseName = match[1];
-                    const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
-                    newConnectionLabel = `${baseName} (${count})`;
-                }
-                existingDuplicateLabel = existingConnections.find(
+                let existingDuplicateLabel = existingConnections.find(
                     (connection) => connection.name === newConnectionLabel,
                 );
-            }
-
-            // Now, we're safe to create a new connection with the new unique label
-
-            switch (experience.api) {
-                case API.CosmosDBMongoRU:
-                case API.DocumentDB:
-                    {
-                        const mongoConfig = context.mongoEmulatorConfiguration as EmulatorConfiguration;
-                        isEmulator = mongoConfig?.isEmulator ?? true;
-                        disableEmulatorSecurity = mongoConfig?.disableEmulatorSecurity;
+                // If a connection with the same label exists, append a number to the label
+                while (existingDuplicateLabel) {
+                    /**
+                     * Matches and captures parts of a connection label string.
+                     *
+                     * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
+                     * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
+                     * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
+                     *   which may be preceded by whitespace. For example, " (123)".
+                     *
+                     * Examples:
+                     * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
+                     * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
+                     */
+                    const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
+                    if (match) {
+                        const baseName = match[1];
+                        const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
+                        newConnectionLabel = `${baseName} (${count})`;
                     }
-                    break;
-                // Add additional cases here for APIs that require different handling
-                default: {
-                    isEmulator = context.isCoreEmulator ?? true;
-                    break;
+                    existingDuplicateLabel = existingConnections.find(
+                        (connection) => connection.name === newConnectionLabel,
+                    );
                 }
-            }
 
-            const connectionString = newConnectionStringParsed.toString();
+                // Now, we're safe to create a new connection with the new unique label
 
-            const storageItem: ConnectionItem = {
-                id: generateDocumentDBStorageId(connectionString),
-                name: newConnectionLabel,
-                properties: {
-                    type: ItemType.Connection,
-                    api: experience.api === API.DocumentDB ? API.DocumentDB : experience.api,
-                    parentId: context.parentStorageId, // Set parent folder ID if in a subfolder
-                    emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
-                    availableAuthMethods: [],
-                },
-                secrets: {
-                    connectionString: nonNullValue(connectionString, 'secrets.connectionString', 'ExecuteStep.ts'),
-                },
-            };
+                switch (experience.api) {
+                    case API.CosmosDBMongoRU:
+                    case API.DocumentDB:
+                        {
+                            const mongoConfig = context.mongoEmulatorConfiguration as EmulatorConfiguration;
+                            isEmulator = mongoConfig?.isEmulator ?? true;
+                            disableEmulatorSecurity = mongoConfig?.disableEmulatorSecurity;
+                        }
+                        break;
+                    // Add additional cases here for APIs that require different handling
+                    default: {
+                        isEmulator = context.isCoreEmulator ?? true;
+                        break;
+                    }
+                }
 
-            await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);
+                const connectionString = newConnectionStringParsed.toString();
+
+                const storageItem: ConnectionItem = {
+                    id: generateDocumentDBStorageId(connectionString),
+                    name: newConnectionLabel,
+                    properties: {
+                        type: ItemType.Connection,
+                        api: experience.api === API.DocumentDB ? API.DocumentDB : experience.api,
+                        parentId: context.parentStorageId, // Set parent folder ID if in a subfolder
+                        emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
+                        availableAuthMethods: [],
+                    },
+                    secrets: {
+                        connectionString: nonNullValue(connectionString, 'secrets.connectionString', 'ExecuteStep.ts'),
+                    },
+                };
+
+                await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);
 
                 // Refresh the parent to show the new connection (more efficient than full view refresh)
                 // parentTreeElementId is either the LocalEmulatorsItem id or a FolderItem id

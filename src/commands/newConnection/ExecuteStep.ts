@@ -36,138 +36,137 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             const api = context.experience?.api ?? API.DocumentDB;
             const parentId = context.parentId;
 
-                const newConnectionString = context.connectionString!;
+            const newConnectionString = context.connectionString!;
 
-                const newPassword = context.nativeAuthConfig?.connectionPassword;
-                const newUsername = context.nativeAuthConfig?.connectionUser;
+            const newPassword = context.nativeAuthConfig?.connectionPassword;
+            const newUsername = context.nativeAuthConfig?.connectionUser;
 
-                const newAuthenticationMethod = context.selectedAuthenticationMethod;
-                const newAvailableAuthenticationMethods =
-                    context.availableAuthenticationMethods ??
-                    (newAuthenticationMethod ? [newAuthenticationMethod] : []);
+            const newAuthenticationMethod = context.selectedAuthenticationMethod;
+            const newAvailableAuthenticationMethods =
+                context.availableAuthenticationMethods ?? (newAuthenticationMethod ? [newAuthenticationMethod] : []);
 
-                const newParsedCS = new DocumentDBConnectionString(newConnectionString);
-                const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
+            const newParsedCS = new DocumentDBConnectionString(newConnectionString);
+            const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
 
-                //  Sanity Check 1/2: is there a connection with the same username + host in there?
-                const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
+            //  Sanity Check 1/2: is there a connection with the same username + host in there?
+            const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
-                const existingDuplicateConnection = existingConnections.find((existingConnection) => {
-                    const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
-                    const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-                    // Use nativeAuthConfig for comparison
-                    const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+            const existingDuplicateConnection = existingConnections.find((existingConnection) => {
+                const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
+                const existingHostsJoined = [...existingCS.hosts].sort().join(',');
+                // Use nativeAuthConfig for comparison
+                const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
 
-                    return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
+                return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
+            });
+
+            if (existingDuplicateConnection) {
+                // Reveal the existing duplicate connection
+                const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
+                await revealConnectionsViewElement(context, connectionPath, {
+                    select: true,
+                    focus: false,
+                    expand: false, // Don't expand to avoid login prompts
                 });
 
-                if (existingDuplicateConnection) {
-                    // Reveal the existing duplicate connection
-                    const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
-                    await revealConnectionsViewElement(context, connectionPath, {
-                        select: true,
-                        focus: false,
-                        expand: false, // Don't expand to avoid login prompts
-                    });
+                throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
+                    details: l10n.t(
+                        'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
+                        existingDuplicateConnection.name,
+                    ),
+                });
+            }
 
-                    throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
-                        details: l10n.t(
-                            'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
-                            existingDuplicateConnection.name,
-                        ),
-                    });
+            // remove obsolete authMechanism entry
+            if (newParsedCS.searchParams.get('authMechanism') === 'SCRAM-SHA-256') {
+                newParsedCS.searchParams.delete('authMechanism');
+            }
+            newParsedCS.username = '';
+            newParsedCS.password = '';
+
+            let newConnectionLabel =
+                newUsername && newUsername.length > 0 ? `${newUsername}@${newJoinedHosts}` : newJoinedHosts;
+
+            // Sanity Check 2/2: is there a connection with the same 'label' in there?
+            // If so, append a number to the label.
+            // This scenario is possible as users are allowed to rename their connections.
+            let existingDuplicateLabel = existingConnections.find(
+                (connection) => connection.name === newConnectionLabel,
+            );
+
+            // If a connection with the same label exists, append a number to the label
+            while (existingDuplicateLabel) {
+                /**
+                 * Matches and captures parts of a connection label string.
+                 *
+                 * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
+                 * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
+                 * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
+                 *   which may be preceded by whitespace. For example, " (123)".
+                 *
+                 * Examples:
+                 * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
+                 * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
+                 */
+                const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
+                if (match) {
+                    const baseName = match[1];
+                    const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
+                    newConnectionLabel = `${baseName} (${count})`;
                 }
-
-                // remove obsolete authMechanism entry
-                if (newParsedCS.searchParams.get('authMechanism') === 'SCRAM-SHA-256') {
-                    newParsedCS.searchParams.delete('authMechanism');
-                }
-                newParsedCS.username = '';
-                newParsedCS.password = '';
-
-                let newConnectionLabel =
-                    newUsername && newUsername.length > 0 ? `${newUsername}@${newJoinedHosts}` : newJoinedHosts;
-
-                // Sanity Check 2/2: is there a connection with the same 'label' in there?
-                // If so, append a number to the label.
-                // This scenario is possible as users are allowed to rename their connections.
-                let existingDuplicateLabel = existingConnections.find(
+                existingDuplicateLabel = existingConnections.find(
                     (connection) => connection.name === newConnectionLabel,
                 );
+            }
 
-                // If a connection with the same label exists, append a number to the label
-                while (existingDuplicateLabel) {
-                    /**
-                     * Matches and captures parts of a connection label string.
-                     *
-                     * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
-                     * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
-                     * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
-                     *   which may be preceded by whitespace. For example, " (123)".
-                     *
-                     * Examples:
-                     * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
-                     * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
-                     */
-                    const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
-                    if (match) {
-                        const baseName = match[1];
-                        const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
-                        newConnectionLabel = `${baseName} (${count})`;
-                    }
-                    existingDuplicateLabel = existingConnections.find(
-                        (connection) => connection.name === newConnectionLabel,
-                    );
-                }
+            // Now, we're safe to create a new connection with the new unique label
 
-                // Now, we're safe to create a new connection with the new unique label
+            const storageId = generateDocumentDBStorageId(newParsedCS.toString());
 
-                const storageId = generateDocumentDBStorageId(newParsedCS.toString());
+            const storageItem: ConnectionItem = {
+                id: storageId,
+                name: newConnectionLabel,
+                properties: {
+                    type: ItemType.Connection,
+                    api: api,
+                    parentId: parentId || undefined, // Set parent folder ID if in a subfolder
+                    availableAuthMethods: newAvailableAuthenticationMethods,
+                    selectedAuthMethod: newAuthenticationMethod,
+                },
+                secrets: {
+                    connectionString: newParsedCS.toString(),
+                    nativeAuthConfig:
+                        context.nativeAuthConfig ??
+                        (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
+                            ? {
+                                  connectionUser: newUsername ?? '',
+                                  connectionPassword: newPassword,
+                              }
+                            : undefined),
+                    entraIdAuthConfig: context.entraIdAuthConfig,
+                },
+            };
 
-                const storageItem: ConnectionItem = {
-                    id: storageId,
-                    name: newConnectionLabel,
-                    properties: {
-                        type: ItemType.Connection,
-                        api: api,
-                        parentId: parentId || undefined, // Set parent folder ID if in a subfolder
-                        availableAuthMethods: newAvailableAuthenticationMethods,
-                        selectedAuthMethod: newAuthenticationMethod,
-                    },
-                    secrets: {
-                        connectionString: newParsedCS.toString(),
-                        nativeAuthConfig:
-                            context.nativeAuthConfig ??
-                            (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
-                                ? {
-                                      connectionUser: newUsername ?? '',
-                                      connectionPassword: newPassword,
-                                  }
-                                : undefined),
-                        entraIdAuthConfig: context.entraIdAuthConfig,
-                    },
-                };
+            await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
 
-                await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
+            // Refresh the parent to show the new connection (more efficient than full view refresh)
+            if (context.parentTreeId) {
+                // Connection in a subfolder: refresh the parent folder
+                ext.state.notifyChildrenChanged(context.parentTreeId);
+            } else {
+                // Root-level connection: refresh the connections view root
+                ext.state.notifyChildrenChanged(Views.ConnectionsView);
+            }
 
-                // Refresh the parent to show the new connection (more efficient than full view refresh)
-                if (context.parentTreeId) {
-                    // Connection in a subfolder: refresh the parent folder
-                    ext.state.notifyChildrenChanged(context.parentTreeId);
-                } else {
-                    // Root-level connection: refresh the connections view root
-                    ext.state.notifyChildrenChanged(Views.ConnectionsView);
-                }
+            // Build the reveal path based on whether this is in a subfolder
+            const connectionPath = context.parentTreeId
+                ? `${context.parentTreeId}/${storageId}`
+                : buildConnectionsViewTreePath(storageId, false);
 
-                // Build the reveal path based on whether this is in a subfolder
-                const connectionPath = context.parentTreeId
-                    ? `${context.parentTreeId}/${storageId}`
-                    : buildConnectionsViewTreePath(storageId, false);
+            // Focus and reveal the new connection
+            await focusAndRevealInConnectionsView(context, connectionPath);
 
-                // Focus and reveal the new connection
-                await focusAndRevealInConnectionsView(context, connectionPath);
-
-                showConfirmationAsInSettings(l10n.t('New connection has been added.'));
+            showConfirmationAsInSettings(l10n.t('New connection has been added.'));
         });
     }
 
