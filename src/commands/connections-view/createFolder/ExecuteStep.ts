@@ -23,57 +23,54 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateFolderWizardContex
         const folderName = nonNullOrEmptyValue(context.folderName, 'context.folderName', 'ExecuteStep.ts');
         const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'ExecuteStep.ts');
 
-        const folderId = randomUtils.getRandomUUID();
+        // Use the parent tree ID for showing progress, or the view root if creating at root level
+        const progressNodeId = context.parentTreeId ?? Views.ConnectionsView;
 
-        // Create folder as a ConnectionItem with type 'folder'
-        await ConnectionStorageService.save(
-            connectionType,
-            {
-                id: folderId,
-                name: folderName,
-                properties: {
-                    type: ItemType.Folder,
-                    parentId: context.parentFolderId,
-                    api: API.DocumentDB,
-                    availableAuthMethods: [],
+        // Show progress indicator on the parent folder while creating and revealing
+        // The automatic refresh on completion clears the temporary description
+        await ext.state.runWithTemporaryDescription(progressNodeId, l10n.t('Working…'), async () => {
+            const folderId = randomUtils.getRandomUUID();
+
+            // Create folder as a ConnectionItem with type 'folder'
+            await ConnectionStorageService.save(
+                connectionType,
+                {
+                    id: folderId,
+                    name: folderName,
+                    properties: {
+                        type: ItemType.Folder,
+                        parentId: context.parentFolderId,
+                        api: API.DocumentDB,
+                        availableAuthMethods: [],
+                    },
+                    secrets: {
+                        connectionString: '',
+                    },
                 },
-                secrets: {
-                    connectionString: '',
-                },
-            },
-            false,
-        );
+                false,
+            );
 
-        // Store the created folder ID for later reveal
-        const createdFolderId = folderId;
+            ext.outputChannel.trace(
+                l10n.t('Created new folder: {folderName} in folder with ID {parentFolderId}', {
+                    folderName: folderName,
+                    parentFolderId: context.parentFolderId ?? 'root',
+                }),
+            );
 
-        ext.outputChannel.trace(
-            l10n.t('Created new folder: {folderName} in folder with ID {parentFolderId}', {
-                folderName: folderName,
-                parentFolderId: context.parentFolderId ?? 'root',
-            }),
-        );
+            // Focus and reveal the new folder
+            await vscode.commands.executeCommand(`connectionsView.focus`);
+            await waitForConnectionsViewReady(context);
 
-        // Refresh the parent to show the new folder (more efficient than full view refresh)
-        await vscode.commands.executeCommand(`connectionsView.focus`);
-        if (context.parentTreeId) {
-            // Folder in a subfolder: refresh the parent folder
-            ext.state.notifyChildrenChanged(context.parentTreeId);
-        } else {
-            // Root-level folder: refresh the connections view root
-            ext.state.notifyChildrenChanged(Views.ConnectionsView);
-        }
-        await waitForConnectionsViewReady(context);
+            // Build the reveal path based on whether this is in a subfolder
+            const folderPath = context.parentTreeId
+                ? `${context.parentTreeId}/${folderId}`
+                : `${Views.ConnectionsView}/${folderId}`;
 
-        // Build the reveal path based on whether this is in a subfolder
-        const folderPath = context.parentTreeId
-            ? `${context.parentTreeId}/${createdFolderId}`
-            : `${Views.ConnectionsView}/${createdFolderId}`;
-
-        await revealConnectionsViewElement(context, folderPath, {
-            select: true,
-            focus: true,
-            expand: false,
+            await revealConnectionsViewElement(context, folderPath, {
+                select: true,
+                focus: true,
+                expand: false,
+            });
         });
     }
 

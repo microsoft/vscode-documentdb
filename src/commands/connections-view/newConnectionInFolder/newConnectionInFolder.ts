@@ -43,6 +43,8 @@ export async function newConnectionInFolder(
     // Check if it's a LocalEmulatorsItem by inspecting contextValue
     const contextValue = (folder as TreeElementWithContextValue).contextValue;
 
+    // Route to the appropriate wizard based on folder type
+    // Note: Progress indicators should be added in the respective execute steps
     if (contextValue?.includes('treeItem_LocalEmulators')) {
         // LocalEmulatorsItem - create emulator connection
         await newLocalConnectionInFolder(context, folder as LocalEmulatorsItem);
