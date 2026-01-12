@@ -41,7 +41,7 @@ export const ToolbarDocuments = ({
             <Tooltip content={l10n.t('Check document syntax')} relationship="description" withArrow>
                 <ToolbarButton
                     onClick={onValidateRequest}
-                    aria-label={l10n.t('Check document syntax')}
+                    aria-label={l10n.t('Validate document syntax')}
                     icon={<TextGrammarCheckmarkRegular />}
                     disabled={true}
                 >
@@ -56,7 +56,7 @@ export const ToolbarDocuments = ({
             >
                 <ToolbarButton
                     onClick={onRefreshRequest}
-                    aria-label={l10n.t('Reload original document from the database')}
+                    aria-label={l10n.t('Refresh: Reload original document from the database')}
                     icon={<ArrowClockwiseRegular />}
                 >
                     {l10n.t('Refresh')}
