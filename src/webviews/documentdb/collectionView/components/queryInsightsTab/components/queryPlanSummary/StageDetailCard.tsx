@@ -62,7 +62,7 @@ export interface StageDetailCardProps {
  * Stage detail card component for displaying query execution plan stage information.
  * Uses bordered grid cells for primary metrics (Returned + Execution Time).
  * Supports ref forwarding for use with animation libraries.
- * Badges with tooltips are keyboard accessible.
+ * Badges are keyboard accessible.
  */
 export function StageDetailCard({
     stageType,
@@ -134,9 +134,9 @@ export function StageDetailCard({
                                 size="small"
                                 shape="rounded"
                                 color="informative"
-                                tabIndex={isTruncated ? 0 : undefined}
-                                className={isTruncated ? 'focusableBadge' : undefined}
-                                aria-label={isTruncated ? `${metric.label}: ${displayValue}` : undefined}
+                                tabIndex={0}
+                                className="focusableBadge"
+                                aria-label={`${metric.label}: ${displayValue}`}
                             >
                                 <span className="badge-label">{metric.label}:&nbsp;</span>
                                 <span className="badge-value">{displayValue}</span>

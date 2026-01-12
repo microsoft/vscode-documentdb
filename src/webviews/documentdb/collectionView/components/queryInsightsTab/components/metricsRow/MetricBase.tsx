@@ -15,7 +15,7 @@ import './MetricsRow.scss';
  *
  * All metric components extend this to inherit:
  * - Consistent card styling
- * - Tooltip support with info button for keyboard accessibility
+ * - Tooltip support
  * - Placeholder handling (loading skeleton vs null value placeholder)
  * - Label/value layout
  *
@@ -40,7 +40,7 @@ export interface MetricBaseProps {
     /** What to display when value is explicitly null (data unavailable) */
     nullValuePlaceholder?: string;
 
-    /** Optional tooltip explanation shown on hover and via info button */
+    /** Optional tooltip explanation shown on hover */
     tooltipExplanation?: string;
 }
 
@@ -89,7 +89,7 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
             // Focus indicators are automatically handled by Fluent UI's Card component
             // via its built-in tabster focus management system (data-fui-focus-visible)
             tabIndex={0}
-            aria-label={tooltipExplanation ? `${label}. More information available` : label}
+            aria-label={label}
         >
             <div className="metricCardHeader">
                 <div className="dataHeader">{label}</div>

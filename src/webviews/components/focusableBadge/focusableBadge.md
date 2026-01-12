@@ -7,6 +7,7 @@ This style makes Fluent UI `Badge` components keyboard accessible by adding prop
 ## When to Use
 
 Use this style when you need to make a Badge component focusable for keyboard accessibility, typically when:
+
 - The badge has a tooltip that needs to be accessible via keyboard
 - The badge is interactive and needs to be part of the tab order
 - You're implementing WCAG 2.1.1 (Keyboard) compliance
@@ -16,7 +17,7 @@ Use this style when you need to make a Badge component focusable for keyboard ac
 ### 1. Import the SCSS
 
 ```scss
-@import '../../../../webviews/components/focusableBadge/focusableBadge.scss';
+@import '../path/to/components/focusableBadge/focusableBadge.scss';
 ```
 
 ### 2. Apply to Badge Component
@@ -26,23 +27,23 @@ import { Badge, Tooltip } from '@fluentui/react-components';
 
 // Badge with tooltip that's keyboard accessible
 <Tooltip content="Detailed information about this badge">
-    <Badge
-        appearance="tint"
-        size="small"
-        tabIndex={0}
-        className="focusableBadge"
-        role="button"
-        aria-label="Badge name. Press Enter or Space for details."
-        onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                // Handle keyboard activation (e.g., toggle tooltip)
-            }
-        }}
-    >
-        Badge Text
-    </Badge>
-</Tooltip>
+  <Badge
+    appearance="tint"
+    size="small"
+    tabIndex={0}
+    className="focusableBadge"
+    role="button"
+    aria-label="Badge name. Press Enter or Space for details."
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        // Handle keyboard activation (e.g., toggle tooltip)
+      }
+    }}
+  >
+    Badge Text
+  </Badge>
+</Tooltip>;
 ```
 
 ## Required Props
@@ -67,7 +68,7 @@ The style uses Fluent UI's `data-fui-focus-visible` attribute, which is automati
 ### Visual Design
 
 The focus indicator matches VS Code's focus styling:
-- Uses `var(--vscode-focusBorder)` for theme consistency
+
 - Also uses `var(--colorStrokeFocus2)` for Fluent UI consistency
 - Applies border radius, outline, and box-shadow as per Fluent UI Button pattern
 - Positioned with `inset: -4px` to appear outside the badge
@@ -82,28 +83,28 @@ Includes `:focus-visible` fallback for browsers that don't support Fluent UI's f
 const [tooltipOpen, setTooltipOpen] = useState(false);
 
 <Tooltip
-    content="This is detailed information about the badge"
-    visible={tooltipOpen}
-    onVisibleChange={(_, data) => setTooltipOpen(data.visible)}
+  content="This is detailed information about the badge"
+  visible={tooltipOpen}
+  onVisibleChange={(_, data) => setTooltipOpen(data.visible)}
 >
-    <Badge
-        appearance="tint"
-        color="informative"
-        size="small"
-        tabIndex={0}
-        className="focusableBadge"
-        role="button"
-        aria-label="Information badge. Press Enter or Space for details."
-        onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setTooltipOpen(!tooltipOpen);
-            }
-        }}
-    >
-        Info Badge
-    </Badge>
-</Tooltip>
+  <Badge
+    appearance="tint"
+    color="informative"
+    size="small"
+    tabIndex={0}
+    className="focusableBadge"
+    role="button"
+    aria-label="Information badge. Press Enter or Space for details."
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setTooltipOpen(!tooltipOpen);
+      }
+    }}
+  >
+    Info Badge
+  </Badge>
+</Tooltip>;
 ```
 
 ## Accessibility Notes
