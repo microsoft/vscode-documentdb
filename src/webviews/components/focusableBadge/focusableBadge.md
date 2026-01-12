@@ -48,13 +48,16 @@ import { Badge, Tooltip } from '@fluentui/react-components';
 
 ## Required Props
 
-When using the `focusableBadge` class, ensure you also set:
+When using the `focusableBadge` class, the following props are required:
 
 - `tabIndex={0}` - Makes the badge focusable via keyboard
-- `role="button"` - Indicates the badge is interactive (when applicable)
-- `aria-label` - Provides accessible name, especially if badge has tooltip
-- `onKeyDown` handler - Handles Enter/Space key activation (when applicable)
+- `className="focusableBadge"` - Applies the focusable badge styling
+- `aria-label` - Provides an accessible name, especially if the badge has a tooltip
 
+For interactive badges (e.g., when the badge behaves like a button), you may also want to add:
+
+- `role="button"` - Indicates that the badge is interactive
+- `onKeyDown` handler - Handles Enter/Space key activation to mirror click behavior
 ## How It Works
 
 ### Focus Management
