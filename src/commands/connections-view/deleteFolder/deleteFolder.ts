@@ -7,7 +7,10 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, ItemType } from '../../../services/connectionStorageService';
-import { refreshParentInConnectionsView } from '../../../tree/connections-view/connectionsViewHelpers';
+import {
+    refreshParentInConnectionsView,
+    withConnectionsViewProgress,
+} from '../../../tree/connections-view/connectionsViewHelpers';
 import { type FolderItem } from '../../../tree/connections-view/FolderItem';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
@@ -37,29 +40,31 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
         throw new UserCancelledError();
     }
 
-    await ext.state.showDeleting(folderItem.id, async () => {
-        // Recursively delete all descendants
-        async function deleteRecursive(parentId: string): Promise<void> {
-            const children = await ConnectionStorageService.getChildren(parentId, connectionType);
+    await withConnectionsViewProgress(async () => {
+        await ext.state.showDeleting(folderItem.id, async () => {
+            // Recursively delete all descendants
+            async function deleteRecursive(parentId: string): Promise<void> {
+                const children = await ConnectionStorageService.getChildren(parentId, connectionType);
 
-            for (const child of children) {
-                // Recursively delete child folders first
-                if (child.properties.type === ItemType.Folder) {
-                    await deleteRecursive(child.id);
+                for (const child of children) {
+                    // Recursively delete child folders first
+                    if (child.properties.type === ItemType.Folder) {
+                        await deleteRecursive(child.id);
+                    }
+                    // Delete the child item
+                    await ConnectionStorageService.delete(connectionType, child.id);
                 }
-                // Delete the child item
-                await ConnectionStorageService.delete(connectionType, child.id);
             }
-        }
 
-        // Delete all descendants first
-        await deleteRecursive(folderItem.storageId);
+            // Delete all descendants first
+            await deleteRecursive(folderItem.storageId);
 
-        // Delete the folder itself
-        await ConnectionStorageService.delete(connectionType, folderItem.storageId);
+            // Delete the folder itself
+            await ConnectionStorageService.delete(connectionType, folderItem.storageId);
+        });
+
+        refreshParentInConnectionsView(folderItem.id);
     });
-
-    refreshParentInConnectionsView(folderItem.id);
 
     showConfirmationAsInSettings(l10n.t('The selected folder has been removed.'));
 }

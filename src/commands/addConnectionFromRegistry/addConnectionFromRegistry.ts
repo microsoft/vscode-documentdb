@@ -16,10 +16,10 @@ import {
     ItemType,
     type ConnectionItem,
 } from '../../services/connectionStorageService';
-import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,
-    waitForConnectionsViewReady,
+    focusAndRevealInConnectionsView,
+    withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { UserFacingError } from '../../utils/commandErrorHandling';
@@ -60,13 +60,8 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
         }
     }
 
-    return vscode.window.withProgress(
-        {
-            location: { viewId: Views.ConnectionsView },
-            cancellable: false,
-        },
-        async () => {
-            const credentials = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
+    return withConnectionsViewProgress(async () => {
+        const credentials = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
                 context.telemetry.properties.experience = node.experience.api;
 
                 return node.getCredentials();
@@ -95,12 +90,9 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
 
             if (existingDuplicateConnection) {
                 // Reveal the existing duplicate connection
-                await vscode.commands.executeCommand(`connectionsView.focus`);
                 ext.connectionsBranchDataProvider.refresh();
-                await waitForConnectionsViewReady(context);
-
                 const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
-                await revealConnectionsViewElement(context, connectionPath, {
+                await focusAndRevealInConnectionsView(context, connectionPath, {
                     select: true,
                     focus: false,
                     expand: false, // Don't expand to avoid login prompts
@@ -169,19 +161,15 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
 
             await ConnectionStorageService.save(ConnectionType.Clusters, connectionItem, true);
 
-            await vscode.commands.executeCommand(`connectionsView.focus`);
+            // Refresh and reveal the new connection
             ext.connectionsBranchDataProvider.refresh();
-            await waitForConnectionsViewReady(context);
-
-            // Reveal the connection
             const connectionPath = buildConnectionsViewTreePath(connectionItem.id, false);
-            await revealConnectionsViewElement(context, connectionPath, {
+            await focusAndRevealInConnectionsView(context, connectionPath, {
                 select: true,
                 focus: false,
                 expand: false, // Don't expand immediately to avoid login prompts
             });
 
             showConfirmationAsInSettings(l10n.t('New connection has been added to your DocumentDB Connections.'));
-        },
-    );
+    });
 }

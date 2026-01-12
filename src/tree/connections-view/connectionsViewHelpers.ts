@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { revealConnectionsViewElement } from '../api/revealConnectionsViewElement';
@@ -129,6 +130,57 @@ export function refreshParentInConnectionsView(treeElementId: string): void {
         // No slash found (shouldn't happen with proper tree IDs), refresh the whole branch
         ext.connectionsBranchDataProvider.refresh();
     }
+}
+
+/**
+ * Wraps an async operation with a progress indicator on the Connections View.
+ *
+ * This utility ensures consistent visual feedback across all operations that modify
+ * the Connections View (adding/removing connections, folders, etc.).
+ *
+ * @param callback - The async operation to execute while showing progress
+ * @returns The result of the callback
+ */
+export async function withConnectionsViewProgress<T>(callback: () => Promise<T>): Promise<T> {
+    return vscode.window.withProgress(
+        {
+            location: { viewId: Views.ConnectionsView },
+            cancellable: false,
+        },
+        async () => {
+            return callback();
+        },
+    );
+}
+
+/**
+ * Refreshes the parent element and reveals a newly created element in the Connections View.
+ *
+ * This is a convenience function that combines the common pattern of:
+ * 1. Focusing the Connections View
+ * 2. Waiting for the view to be ready
+ * 3. Revealing and selecting the new element
+ *
+ * @param context - The action context for telemetry tracking
+ * @param elementPath - The full tree path to the element to reveal
+ * @param options - Optional reveal options (defaults to select, focus, no expand)
+ */
+export async function focusAndRevealInConnectionsView(
+    context: IActionContext,
+    elementPath: string,
+    options?: {
+        select?: boolean;
+        focus?: boolean;
+        expand?: boolean;
+    },
+): Promise<void> {
+    await vscode.commands.executeCommand(`connectionsView.focus`);
+    await waitForConnectionsViewReady(context);
+    await revealConnectionsViewElement(context, elementPath, {
+        select: options?.select ?? true,
+        focus: options?.focus ?? true,
+        expand: options?.expand ?? false,
+    });
 }
 
 /**

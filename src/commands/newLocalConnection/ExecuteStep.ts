@@ -15,7 +15,11 @@ import {
     ItemType,
 } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
-import { buildConnectionsViewTreePath } from '../../tree/connections-view/connectionsViewHelpers';
+import {
+    buildConnectionsViewTreePath,
+    focusAndRevealInConnectionsView,
+    withConnectionsViewProgress,
+} from '../../tree/connections-view/connectionsViewHelpers';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
@@ -97,11 +101,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 ? `${newConnectionStringParsed.username}@${joinedHosts}`
                 : joinedHosts;
 
-        return ext.state.showCreatingChild(parentId, l10n.t('Creating new connection…'), async () => {
-            await new Promise((resolve) => setTimeout(resolve, 250));
+        return withConnectionsViewProgress(async () => {
+            return ext.state.showCreatingChild(parentId, l10n.t('Creating new connection…'), async () => {
+                await new Promise((resolve) => setTimeout(resolve, 250));
 
-            let isEmulator: boolean = true;
-            let disableEmulatorSecurity: boolean | undefined;
+                let isEmulator: boolean = true;
+                let disableEmulatorSecurity: boolean | undefined;
 
             // Sanity Check 2/2: is there a connection with the same 'label' in there?
             // If so, append a number to the label.
@@ -172,11 +177,16 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
 
             await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);
 
-            // Refresh the parent to show the new connection (more efficient than full view refresh)
-            // parentTreeElementId is either the LocalEmulatorsItem id or a FolderItem id
-            ext.state.notifyChildrenChanged(context.parentTreeElementId);
+                // Refresh the parent to show the new connection (more efficient than full view refresh)
+                // parentTreeElementId is either the LocalEmulatorsItem id or a FolderItem id
+                ext.state.notifyChildrenChanged(context.parentTreeElementId);
 
-            showConfirmationAsInSettings(l10n.t('New connection has been added.'));
+                // Build the reveal path and focus on the new connection
+                const connectionPath = `${context.parentTreeElementId}/${storageItem.id}`;
+                await focusAndRevealInConnectionsView(context, connectionPath);
+
+                showConfirmationAsInSettings(l10n.t('New connection has been added.'));
+            });
         });
     }
 

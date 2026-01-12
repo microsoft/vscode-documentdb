@@ -5,7 +5,6 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
@@ -21,7 +20,8 @@ import {
 import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
     buildConnectionsViewTreePath,
-    waitForConnectionsViewReady,
+    focusAndRevealInConnectionsView,
+    withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -32,14 +32,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
     public priority: number = 100;
 
     public async execute(context: NewConnectionWizardContext): Promise<void> {
-        return vscode.window.withProgress(
-            {
-                location: { viewId: Views.ConnectionsView },
-                cancellable: false,
-            },
-            async () => {
-                const api = context.experience?.api ?? API.DocumentDB;
-                const parentId = context.parentId;
+        return withConnectionsViewProgress(async () => {
+            const api = context.experience?.api ?? API.DocumentDB;
+            const parentId = context.parentId;
 
                 const newConnectionString = context.connectionString!;
 
@@ -156,7 +151,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
 
                 // Refresh the parent to show the new connection (more efficient than full view refresh)
-                await vscode.commands.executeCommand(`connectionsView.focus`);
                 if (context.parentTreeId) {
                     // Connection in a subfolder: refresh the parent folder
                     ext.state.notifyChildrenChanged(context.parentTreeId);
@@ -164,27 +158,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     // Root-level connection: refresh the connections view root
                     ext.state.notifyChildrenChanged(Views.ConnectionsView);
                 }
-                await waitForConnectionsViewReady(context);
 
                 // Build the reveal path based on whether this is in a subfolder
-                let connectionPath: string;
-                if (context.parentTreeId) {
-                    // Connection in a subfolder: append to parent's tree ID
-                    connectionPath = `${context.parentTreeId}/${storageId}`;
-                } else {
-                    // Root-level connection
-                    connectionPath = buildConnectionsViewTreePath(storageId, false);
-                }
+                const connectionPath = context.parentTreeId
+                    ? `${context.parentTreeId}/${storageId}`
+                    : buildConnectionsViewTreePath(storageId, false);
 
-                await revealConnectionsViewElement(context, connectionPath, {
-                    select: true,
-                    focus: true,
-                    expand: false, // Don't expand immediately to avoid login prompts
-                });
+                // Focus and reveal the new connection
+                await focusAndRevealInConnectionsView(context, connectionPath);
 
                 showConfirmationAsInSettings(l10n.t('New connection has been added.'));
-            },
-        );
+        });
     }
 
     public shouldExecute(context: NewConnectionWizardContext): boolean {
