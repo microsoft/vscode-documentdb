@@ -127,6 +127,8 @@ export function StageDetailCard({
                         const isTruncated = valueStr.length > maxLength;
                         const displayValue = isTruncated ? valueStr.substring(0, maxLength) + '...' : valueStr;
 
+                        // Accessibility pattern: aria-label provides full context (including full value
+                        // for truncated text), while aria-hidden on children prevents double announcement.
                         const badgeContent = (
                             <Badge
                                 key={index}
@@ -136,10 +138,18 @@ export function StageDetailCard({
                                 color="informative"
                                 tabIndex={0}
                                 className="focusableBadge"
-                                aria-label={`${metric.label}: ${displayValue}`}
+                                aria-label={
+                                    isTruncated
+                                        ? `${metric.label}: ${displayValue}. Full value: ${valueStr}`
+                                        : `${metric.label}: ${displayValue}`
+                                }
                             >
-                                <span className="badge-label">{metric.label}:&nbsp;</span>
-                                <span className="badge-value">{displayValue}</span>
+                                <span aria-hidden="true" className="badge-label">
+                                    {metric.label}:&nbsp;
+                                </span>
+                                <span aria-hidden="true" className="badge-value">
+                                    {displayValue}
+                                </span>
                             </Badge>
                         );
 

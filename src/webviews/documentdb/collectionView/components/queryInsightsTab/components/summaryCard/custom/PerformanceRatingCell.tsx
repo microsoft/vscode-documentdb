@@ -138,7 +138,11 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                         children: (
                                             <div style={{ padding: '8px' }}>
                                                 <div
-                                                    style={{ fontWeight: 600, marginBottom: '12px', fontSize: '16px' }}
+                                                    style={{
+                                                        fontWeight: 600,
+                                                        marginBottom: '12px',
+                                                        fontSize: '16px',
+                                                    }}
                                                 >
                                                     {diagnostic.message}
                                                 </div>
@@ -149,6 +153,9 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                     positioning="above-start"
                                     relationship="description"
                                 >
+                                    {/* Accessibility pattern: aria-label provides full context for screen readers,
+                                        while aria-hidden on children prevents double announcement of visible text.
+                                        Screen readers announce: "message. details" instead of just "message" */}
                                     <Badge
                                         appearance="tint"
                                         color={diagnostic.type === 'positive' ? 'success' : 'informative'}
@@ -157,9 +164,9 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                         icon={<InfoRegular />}
                                         tabIndex={0}
                                         className="focusableBadge"
-                                        aria-label={diagnostic.message}
+                                        aria-label={`${diagnostic.message}. ${diagnostic.details}`}
                                     >
-                                        {diagnostic.message}
+                                        <span aria-hidden="true">{diagnostic.message}</span>
                                     </Badge>
                                 </Tooltip>
                             ))}

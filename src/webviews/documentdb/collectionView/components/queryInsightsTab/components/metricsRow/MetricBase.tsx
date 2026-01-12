@@ -80,6 +80,8 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
             ? String(value)
             : '';
 
+    // Accessibility pattern: aria-label provides complete context (label, value, and tooltip),
+    // while aria-hidden on children prevents double announcement of visible text.
     const cardContent = (
         <Card
             className="metricCard"
@@ -89,12 +91,14 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
             // Focus indicators are automatically handled by Fluent UI's Card component
             // via its built-in tabster focus management system (data-fui-focus-visible)
             tabIndex={0}
-            aria-label={label}
+            aria-label={`${label}${valueText ? `: ${valueText}` : ''}${tooltipExplanation ? `. ${tooltipExplanation}` : ''}`}
         >
-            <div className="metricCardHeader">
+            <div className="metricCardHeader" aria-hidden="true">
                 <div className="dataHeader">{label}</div>
             </div>
-            <div className="dataValue">{renderValue()}</div>
+            <div className="dataValue" aria-hidden="true">
+                {renderValue()}
+            </div>
         </Card>
     );
 
