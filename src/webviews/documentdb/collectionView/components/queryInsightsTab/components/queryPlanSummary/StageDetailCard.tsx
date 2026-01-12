@@ -6,6 +6,7 @@
 import { Badge, Card, Text, Tooltip } from '@fluentui/react-components';
 import { WarningRegular } from '@fluentui/react-icons';
 import React from 'react';
+import '../../../../../../components/focusableBadge/focusableBadge.scss';
 import './StageDetailCard.scss';
 
 export type StageType = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
@@ -61,6 +62,7 @@ export interface StageDetailCardProps {
  * Stage detail card component for displaying query execution plan stage information.
  * Uses bordered grid cells for primary metrics (Returned + Execution Time).
  * Supports ref forwarding for use with animation libraries.
+ * Badges are keyboard accessible.
  */
 export function StageDetailCard({
     stageType,
@@ -125,10 +127,25 @@ export function StageDetailCard({
                         const isTruncated = valueStr.length > maxLength;
                         const displayValue = isTruncated ? valueStr.substring(0, maxLength) + '...' : valueStr;
 
+                        // Accessibility pattern: aria-label provides full context (including full value
+                        // for truncated text), while aria-hidden on children prevents double announcement.
                         const badgeContent = (
-                            <Badge key={index} appearance="outline" size="small" shape="rounded" color="informative">
-                                <span className="badge-label">{metric.label}:&nbsp;</span>
-                                <span className="badge-value">{displayValue}</span>
+                            <Badge
+                                key={index}
+                                appearance="outline"
+                                size="small"
+                                shape="rounded"
+                                color="informative"
+                                tabIndex={0}
+                                className="focusableBadge"
+                                aria-label={`${metric.label}: ${valueStr}`}
+                            >
+                                <span aria-hidden="true" className="badge-label">
+                                    {metric.label}:&nbsp;
+                                </span>
+                                <span aria-hidden="true" className="badge-value">
+                                    {displayValue}
+                                </span>
                             </Badge>
                         );
 

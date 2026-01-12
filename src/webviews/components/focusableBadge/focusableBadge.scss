@@ -1,0 +1,53 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/**
+ * Focusable Badge Styling
+ *
+ * This style makes Fluent UI Badge components keyboard accessible by adding focus indicators
+ * that match VS Code's focus styling. Apply this class to Badge components that have tabIndex={0}.
+ *
+ * The focus indicator uses Fluent UI's data-fui-focus-visible attribute which is automatically
+ * managed by Fluent UI's tabster focus system. This ensures focus indicators only appear on
+ * keyboard navigation (Tab, Shift+Tab) and not on mouse clicks.
+ *
+ * Usage: Add the className="focusableBadge" to any Badge component with tabIndex={0}
+ */
+
+.focusableBadge {
+    cursor: default;
+    position: relative;
+
+    /* Prepare the pseudo-element for focus indicator */
+    &::after {
+        content: '';
+        position: absolute;
+        pointer-events: none;
+        border: 2px solid transparent;
+    }
+
+    /*
+     * Focus indicator that activates when Fluent UI adds data-fui-focus-visible
+     * This attribute is added automatically on keyboard focus (Tab navigation)
+     */
+    &[data-fui-focus-visible]::after {
+        border-color: var(--colorStrokeFocus2);
+        border-radius: var(--borderRadiusMedium);
+        border-width: 1px;
+        inset: -4px;
+        outline: var(--strokeWidthThick) solid var(--colorTransparentStroke);
+        box-shadow: 0 0 0 var(--strokeWidthThin) var(--colorStrokeFocus2) inset;
+        z-index: 1;
+    }
+
+    /*
+     * Fallback for browsers that don't support data-fui-focus-visible
+     * Uses standard :focus-visible pseudo-class
+     */
+    &:focus-visible {
+        outline: var(--strokeWidthThick) solid var(--colorTransparentStroke);
+        outline-offset: 4px;
+    }
+}
