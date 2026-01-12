@@ -6,7 +6,6 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { l10n as vscodel10n } from 'vscode';
 import { ConnectionStorageService, ConnectionType } from '../../../services/connectionStorageService';
-import { refreshParentInConnectionsView } from '../../../tree/connections-view/connectionsViewHelpers';
 import { FolderItem } from '../../../tree/connections-view/FolderItem';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptNewFolderNameStep } from './PromptNewFolderNameStep';
@@ -32,6 +31,7 @@ export async function renameFolder(context: IActionContext, folderItem: FolderIt
         originalFolderName: folderItem.name,
         parentFolderId: folderData?.properties.parentId,
         connectionType: connectionType,
+        treeItemPath: folderItem.id,
     };
 
     const wizard = new AzureWizard(wizardContext, {
@@ -42,6 +42,4 @@ export async function renameFolder(context: IActionContext, folderItem: FolderIt
 
     await wizard.prompt();
     await wizard.execute();
-
-    refreshParentInConnectionsView(folderItem.id);
 }

@@ -7,6 +7,10 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n as vscodel10n } from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService } from '../../../services/connectionStorageService';
+import {
+    refreshParentInConnectionsView,
+    withConnectionsViewProgress,
+} from '../../../tree/connections-view/connectionsViewHelpers';
 import { nonNullOrEmptyValue, nonNullValue } from '../../../utils/nonNull';
 import { type RenameFolderWizardContext } from './RenameFolderWizardContext';
 
@@ -28,21 +32,25 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameFolderWizardContex
             return;
         }
 
-        const folder = nonNullValue(
-            await ConnectionStorageService.get(folderId, connectionType),
-            'ConnectionStorageService.get(folderId, connectionType)',
-            'ExecuteStep.ts',
-        );
+        await withConnectionsViewProgress(async () => {
+            const folder = nonNullValue(
+                await ConnectionStorageService.get(folderId, connectionType),
+                'ConnectionStorageService.get(folderId, connectionType)',
+                'ExecuteStep.ts',
+            );
 
-        folder.name = newFolderName;
-        await ConnectionStorageService.save(connectionType, folder, true);
+            folder.name = newFolderName;
+            await ConnectionStorageService.save(connectionType, folder, true);
 
-        ext.outputChannel.appendLine(
-            vscodel10n.t('Renamed folder from "{oldName}" to "{newName}"', {
-                oldName: originalFolderName,
-                newName: newFolderName,
-            }),
-        );
+            ext.outputChannel.appendLine(
+                vscodel10n.t('Renamed folder from "{oldName}" to "{newName}"', {
+                    oldName: originalFolderName,
+                    newName: newFolderName,
+                }),
+            );
+
+            refreshParentInConnectionsView(context.treeItemPath);
+        });
     }
 
     public shouldExecute(context: RenameFolderWizardContext): boolean {

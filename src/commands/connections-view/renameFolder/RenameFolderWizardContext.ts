@@ -12,4 +12,7 @@ export interface RenameFolderWizardContext extends IActionContext {
     newFolderName?: string;
     parentFolderId?: string; // To check for duplicate names at the same level
     connectionType?: ConnectionType;
+
+    /** Tree item path for refresh after rename */
+    treeItemPath: string;
 }
