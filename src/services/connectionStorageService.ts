@@ -143,8 +143,84 @@ export class ConnectionStorageService {
                     );
                 }
             }
+
+            // Start async orphan cleanup (not awaited - runs in background)
+            void this.cleanupOrphanedItems();
         }
         return this._storageService;
+    }
+
+    /**
+     * Cleans up orphaned items (items whose parentId references a non-existent folder).
+     * This can happen if a folder deletion fails to cascade to children.
+     * Runs iteratively until no orphans remain (deleting a parent may orphan its children).
+     * Runs asynchronously on storage initialization.
+     */
+    private static async cleanupOrphanedItems(): Promise<void> {
+        await callWithTelemetryAndErrorHandling('cleanupOrphanedItems', async (context: IActionContext) => {
+            let totalOrphansRemoved = 0;
+            let iteration = 0;
+            const maxIterations = 10; // Safety net to prevent infinite loops
+            let previousIterationCount = -1;
+
+            // Keep iterating until no orphans are found or we hit safety limits
+            while (iteration < maxIterations) {
+                iteration++;
+                let orphansRemovedThisIteration = 0;
+
+                for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
+                    const allItems = await this.getAllItems(connectionType);
+                    const allIds = new Set(allItems.map((item) => item.id));
+
+                    // Find orphaned items: items with a parentId that doesn't exist
+                    const orphanedItems = allItems.filter(
+                        (item) => item.properties.parentId !== undefined && !allIds.has(item.properties.parentId),
+                    );
+
+                    for (const orphan of orphanedItems) {
+                        try {
+                            await this.delete(connectionType, orphan.id);
+                            orphansRemovedThisIteration++;
+                            ext.outputChannel.appendLog(
+                                `Cleaned up orphaned ${orphan.properties.type}: "${orphan.name}" (id: ${orphan.id})`,
+                            );
+                        } catch (error) {
+                            console.debug(
+                                `Failed to delete orphaned item ${orphan.id}:`,
+                                error instanceof Error ? error.message : String(error),
+                            );
+                        }
+                    }
+                }
+
+                totalOrphansRemoved += orphansRemovedThisIteration;
+
+                // Exit if no orphans found this iteration (success)
+                if (orphansRemovedThisIteration === 0) {
+                    break;
+                }
+
+                // Safety net: exit if count didn't change (stuck in a loop)
+                if (orphansRemovedThisIteration === previousIterationCount) {
+                    ext.outputChannel.appendLog(
+                        `Orphan cleanup stopped: same count (${orphansRemovedThisIteration}) for consecutive iterations.`,
+                    );
+                    break;
+                }
+
+                previousIterationCount = orphansRemovedThisIteration;
+            }
+
+            context.telemetry.measurements.orphansRemoved = totalOrphansRemoved;
+            context.telemetry.measurements.cleanupIterations = iteration;
+            context.telemetry.properties.hadOrphans = totalOrphansRemoved > 0 ? 'true' : 'false';
+
+            if (totalOrphansRemoved > 0) {
+                ext.outputChannel.appendLog(
+                    `Orphan cleanup complete: ${totalOrphansRemoved} items removed in ${iteration} iteration(s).`,
+                );
+            }
+        });
     }
 
     /**
@@ -157,10 +233,10 @@ export class ConnectionStorageService {
     }
 
     /**
-     * Internal method to get all items (connections and folders) from storage.
-     * Use getAll() for public API that returns only connections.
+     * Gets all items (connections and folders) from storage.
+     * @param connectionType The type of connection storage (Clusters or Emulators)
      */
-    private static async getAllItems(connectionType: ConnectionType): Promise<ConnectionItem[]> {
+    public static async getAllItems(connectionType: ConnectionType): Promise<ConnectionItem[]> {
         const storageService = await this.getStorageService();
         const items = await storageService.getItems<ConnectionProperties>(connectionType);
         return items.map((item) => this.fromStorageItem(item));

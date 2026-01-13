@@ -41,22 +41,32 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
     }
 
     private async getAvailableFolders(context: MoveItemsWizardContext): Promise<FolderPickItem[]> {
-        // Get all folders in this zone
-        const allFolders = await ConnectionStorageService.getAll(context.connectionType);
+        // Get all folders in this zone (we only need folders for targets and path building)
+        const allFolders = (await ConnectionStorageService.getAllItems(context.connectionType)).filter(
+            (item) => item.properties.type === ItemType.Folder,
+        );
 
         // Get IDs of items being moved and their descendants
         const movingIds = new Set(context.itemsToMove.map((item) => item.id));
         const excludeDescendantIds = await this.getDescendantIds(context);
 
-        // Filter to only folders, exclude:
-        // 1. Items being moved
-        // 2. Descendants of items being moved (prevents circular reference)
+        // Get IDs of parent folders of items being moved (to exclude current location)
+        const currentParentIds = new Set(
+            context.itemsToMove
+                .map((item) => item.properties.parentId)
+                .filter((id): id is string => id !== undefined),
+        );
+
+        // Filter folders to exclude:
+        // 1. Folders being moved (can't move folder into itself)
+        // 2. Descendants of folders being moved (prevents circular reference)
+        // 3. Current parent folders (no point moving to same location)
         const folderItems = allFolders
             .filter(
-                (item) =>
-                    item.properties.type === ItemType.Folder &&
-                    !movingIds.has(item.id) &&
-                    !excludeDescendantIds.has(item.id),
+                (folder) =>
+                    !movingIds.has(folder.id) &&
+                    !excludeDescendantIds.has(folder.id) &&
+                    !currentParentIds.has(folder.id),
             )
             .map((folder) => ({
                 label: this.buildFolderPath(folder, allFolders),
