@@ -23,11 +23,7 @@ export class ConfirmMoveStep extends AzureWizardPromptStep<MoveItemsWizardContex
                 : l10n.t('Move {0} items to "{1}"?', itemCount.toString(), targetName);
 
         const moveButton = l10n.t('Move');
-        const result = await vscode.window.showWarningMessage(
-            confirmMessage,
-            { modal: true },
-            moveButton,
-        );
+        const result = await vscode.window.showWarningMessage(confirmMessage, { modal: true }, moveButton);
 
         if (result !== moveButton) {
             throw new UserCancelledError();

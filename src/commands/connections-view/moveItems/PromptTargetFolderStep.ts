@@ -52,9 +52,7 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
 
         // Get IDs of parent folders of items being moved (to exclude current location)
         const currentParentIds = new Set(
-            context.itemsToMove
-                .map((item) => item.properties.parentId)
-                .filter((id): id is string => id !== undefined),
+            context.itemsToMove.map((item) => item.properties.parentId).filter((id): id is string => id !== undefined),
         );
 
         // Filter folders to exclude:

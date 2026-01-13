@@ -63,9 +63,7 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
      * If no conflicts: throws VerificationCompleteError to proceed.
      * If conflicts: returns options for user to go back or exit.
      */
-    private async verifyNoConflicts(
-        context: MoveItemsWizardContext,
-    ): Promise<IAzureQuickPickItem<ConflictAction>[]> {
+    private async verifyNoConflicts(context: MoveItemsWizardContext): Promise<IAzureQuickPickItem<ConflictAction>[]> {
         // Check for name conflicts in target folder
         context.conflictingNames = [];
 

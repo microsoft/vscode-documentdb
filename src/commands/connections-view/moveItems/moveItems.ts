@@ -40,8 +40,7 @@ export async function moveItems(context: IActionContext, ...selectedItems: TreeE
 
     // Filter to only movable items (connections and folders)
     const movableItems = selectedItems.filter(
-        (item): item is MovableTreeElement =>
-            item instanceof DocumentDBClusterItem || item instanceof FolderItem,
+        (item): item is MovableTreeElement => item instanceof DocumentDBClusterItem || item instanceof FolderItem,
     );
 
     if (movableItems.length === 0) {
@@ -115,9 +114,7 @@ function getConnectionType(item: MovableTreeElement): ConnectionType {
     }
 
     if (item instanceof DocumentDBClusterItem) {
-        return item.cluster.emulatorConfiguration?.isEmulator
-            ? ConnectionType.Emulators
-            : ConnectionType.Clusters;
+        return item.cluster.emulatorConfiguration?.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
     }
 
     // Default fallback

@@ -101,88 +101,88 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 : joinedHosts;
 
         return withConnectionsViewProgress(async () => {
-                let isEmulator: boolean = true;
-                let disableEmulatorSecurity: boolean | undefined;
+            let isEmulator: boolean = true;
+            let disableEmulatorSecurity: boolean | undefined;
 
-                // Sanity Check 2/2: is there a connection with the same 'label' in there?
-                // If so, append a number to the label.
-                // This scenario is possible as users are allowed to rename their connections.
+            // Sanity Check 2/2: is there a connection with the same 'label' in there?
+            // If so, append a number to the label.
+            // This scenario is possible as users are allowed to rename their connections.
 
-                let existingDuplicateLabel = existingConnections.find(
+            let existingDuplicateLabel = existingConnections.find(
+                (connection) => connection.name === newConnectionLabel,
+            );
+            // If a connection with the same label exists, append a number to the label
+            while (existingDuplicateLabel) {
+                /**
+                 * Matches and captures parts of a connection label string.
+                 *
+                 * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
+                 * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
+                 * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
+                 *   which may be preceded by whitespace. For example, " (123)".
+                 *
+                 * Examples:
+                 * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
+                 * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
+                 */
+                const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
+                if (match) {
+                    const baseName = match[1];
+                    const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
+                    newConnectionLabel = `${baseName} (${count})`;
+                }
+                existingDuplicateLabel = existingConnections.find(
                     (connection) => connection.name === newConnectionLabel,
                 );
-                // If a connection with the same label exists, append a number to the label
-                while (existingDuplicateLabel) {
-                    /**
-                     * Matches and captures parts of a connection label string.
-                     *
-                     * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
-                     * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
-                     * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
-                     *   which may be preceded by whitespace. For example, " (123)".
-                     *
-                     * Examples:
-                     * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
-                     * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
-                     */
-                    const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
-                    if (match) {
-                        const baseName = match[1];
-                        const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
-                        newConnectionLabel = `${baseName} (${count})`;
+            }
+
+            // Now, we're safe to create a new connection with the new unique label
+
+            switch (experience.api) {
+                case API.CosmosDBMongoRU:
+                case API.DocumentDB:
+                    {
+                        const mongoConfig = context.mongoEmulatorConfiguration as EmulatorConfiguration;
+                        isEmulator = mongoConfig?.isEmulator ?? true;
+                        disableEmulatorSecurity = mongoConfig?.disableEmulatorSecurity;
                     }
-                    existingDuplicateLabel = existingConnections.find(
-                        (connection) => connection.name === newConnectionLabel,
-                    );
+                    break;
+                // Add additional cases here for APIs that require different handling
+                default: {
+                    isEmulator = context.isCoreEmulator ?? true;
+                    break;
                 }
+            }
 
-                // Now, we're safe to create a new connection with the new unique label
+            const connectionString = newConnectionStringParsed.toString();
 
-                switch (experience.api) {
-                    case API.CosmosDBMongoRU:
-                    case API.DocumentDB:
-                        {
-                            const mongoConfig = context.mongoEmulatorConfiguration as EmulatorConfiguration;
-                            isEmulator = mongoConfig?.isEmulator ?? true;
-                            disableEmulatorSecurity = mongoConfig?.disableEmulatorSecurity;
-                        }
-                        break;
-                    // Add additional cases here for APIs that require different handling
-                    default: {
-                        isEmulator = context.isCoreEmulator ?? true;
-                        break;
-                    }
-                }
+            const storageItem: ConnectionItem = {
+                id: generateDocumentDBStorageId(connectionString),
+                name: newConnectionLabel,
+                properties: {
+                    type: ItemType.Connection,
+                    api: experience.api === API.DocumentDB ? API.DocumentDB : experience.api,
+                    parentId: context.parentStorageId, // Set parent folder ID if in a subfolder
+                    emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
+                    availableAuthMethods: [],
+                },
+                secrets: {
+                    connectionString: nonNullValue(connectionString, 'secrets.connectionString', 'ExecuteStep.ts'),
+                },
+            };
 
-                const connectionString = newConnectionStringParsed.toString();
+            await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);
 
-                const storageItem: ConnectionItem = {
-                    id: generateDocumentDBStorageId(connectionString),
-                    name: newConnectionLabel,
-                    properties: {
-                        type: ItemType.Connection,
-                        api: experience.api === API.DocumentDB ? API.DocumentDB : experience.api,
-                        parentId: context.parentStorageId, // Set parent folder ID if in a subfolder
-                        emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
-                        availableAuthMethods: [],
-                    },
-                    secrets: {
-                        connectionString: nonNullValue(connectionString, 'secrets.connectionString', 'ExecuteStep.ts'),
-                    },
-                };
+            // Build the reveal path and focus on the new connection
+            const connectionPath = `${context.parentTreeElementId}/${storageItem.id}`;
 
-                await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);
+            // Refresh the parent to show the new connection
+            refreshParentInConnectionsView(connectionPath);
 
-                // Build the reveal path and focus on the new connection
-                const connectionPath = `${context.parentTreeElementId}/${storageItem.id}`;
+            // Focus and reveal the new connection
+            await focusAndRevealInConnectionsView(context, connectionPath);
 
-                // Refresh the parent to show the new connection
-                refreshParentInConnectionsView(connectionPath);
-
-                // Focus and reveal the new connection
-                await focusAndRevealInConnectionsView(context, connectionPath);
-
-                showConfirmationAsInSettings(l10n.t('New connection has been added.'));
+            showConfirmationAsInSettings(l10n.t('New connection has been added.'));
         });
     }
 
