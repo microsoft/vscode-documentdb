@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../../services/connectionStorageService';
 import {
-    buildConnectionsViewTreePath,
+    buildFullTreePath,
     focusAndRevealInConnectionsView,
 } from '../../../tree/connections-view/connectionsViewHelpers';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
@@ -30,10 +30,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<MoveItemsWizardContext> 
         // Refresh the tree view
         ext.connectionsBranchDataProvider.refresh();
 
-        // Build path to target folder for reveal
+        // Build path to target folder for reveal (includes full parent hierarchy for nested folders)
         const isEmulator = context.connectionType === ConnectionType.Emulators;
         const targetPath = context.targetFolderId
-            ? buildConnectionsViewTreePath(context.targetFolderId, isEmulator)
+            ? await buildFullTreePath(context.targetFolderId, context.connectionType)
             : // Root level - just reveal the connections view itself
               'connectionsView' + (isEmulator ? '/localEmulators' : '');
 
