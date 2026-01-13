@@ -8,10 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
-import {
-    ConnectionStorageService,
-    type ConnectionType,
-} from '../../services/connectionStorageService';
+import { ConnectionStorageService, type ConnectionType } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../api/revealConnectionsViewElement';
 
 /**

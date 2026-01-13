@@ -30,6 +30,7 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
         const picked = await context.ui.showQuickPick(getQuickPickItems(), {
             placeHolder: l10n.t('Select destination folder'),
             title: l10n.t('Move to Folder...'),
+            suppressPersistence: true,
         });
 
         context.targetFolderId = picked.data?.id;
@@ -79,7 +80,7 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
 
         // Build the root option with folder icon
         const rootOption: FolderPickItem = {
-            label: l10n.t('/ (Root)'),
+            label: l10n.t('/ (top level)'),
             description: l10n.t('Move to top level'),
             iconPath: new vscode.ThemeIcon('folder-library'),
             data: undefined,
