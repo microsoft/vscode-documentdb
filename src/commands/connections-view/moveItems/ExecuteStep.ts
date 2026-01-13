@@ -10,6 +10,7 @@ import { ConnectionStorageService, ConnectionType } from '../../../services/conn
 import {
     buildFullTreePath,
     focusAndRevealInConnectionsView,
+    withConnectionsViewProgress,
 } from '../../../tree/connections-view/connectionsViewHelpers';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 import { type MoveItemsWizardContext } from './MoveItemsWizardContext';
@@ -22,26 +23,28 @@ export class ExecuteStep extends AzureWizardExecuteStep<MoveItemsWizardContext> 
     public priority: number = 100;
 
     public async execute(context: MoveItemsWizardContext): Promise<void> {
-        // Move all items (no conflicts at this point - verified in previous step)
-        for (const item of context.itemsToMove) {
-            await ConnectionStorageService.updateParentId(item.id, context.connectionType, context.targetFolderId);
-        }
+        await withConnectionsViewProgress(async () => {
+            // Move all items (no conflicts at this point - verified in previous step)
+            for (const item of context.itemsToMove) {
+                await ConnectionStorageService.updateParentId(item.id, context.connectionType, context.targetFolderId);
+            }
 
-        // Refresh the tree view
-        ext.connectionsBranchDataProvider.refresh();
+            // Refresh the tree view
+            ext.connectionsBranchDataProvider.refresh();
 
-        // Build path to target folder for reveal (includes full parent hierarchy for nested folders)
-        const isEmulator = context.connectionType === ConnectionType.Emulators;
-        const targetPath = context.targetFolderId
-            ? await buildFullTreePath(context.targetFolderId, context.connectionType)
-            : // Root level - just reveal the connections view itself
-              'connectionsView' + (isEmulator ? '/localEmulators' : '');
+            // Build path to target folder for reveal (includes full parent hierarchy for nested folders)
+            const isEmulator = context.connectionType === ConnectionType.Emulators;
+            const targetPath = context.targetFolderId
+                ? await buildFullTreePath(context.targetFolderId, context.connectionType)
+                : // Root level - just reveal the connections view itself
+                  'connectionsView' + (isEmulator ? '/localEmulators' : '');
 
-        // Reveal target folder
-        await focusAndRevealInConnectionsView(context, targetPath, {
-            select: true,
-            focus: true,
-            expand: true, // Expand to show moved items
+            // Reveal target folder
+            await focusAndRevealInConnectionsView(context, targetPath, {
+                select: true,
+                focus: true,
+                expand: true, // Expand to show moved items
+            });
         });
 
         // Show confirmation message
