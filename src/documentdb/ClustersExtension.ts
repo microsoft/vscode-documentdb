@@ -21,11 +21,9 @@ import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
-import { copyItems } from '../commands/connections-view/clipboard/copyItems';
-import { cutItems } from '../commands/connections-view/clipboard/cutItems';
-import { pasteItems } from '../commands/connections-view/clipboard/pasteItems';
 import { createFolder, createSubfolder } from '../commands/connections-view/createFolder/createFolder';
 import { deleteFolder } from '../commands/connections-view/deleteFolder/deleteFolder';
+import { moveItems } from '../commands/connections-view/moveItems/moveItems';
 import { newConnectionInFolder } from '../commands/connections-view/newConnectionInFolder/newConnectionInFolder';
 import { renameConnection } from '../commands/connections-view/renameConnection/renameConnection';
 import { renameFolder } from '../commands/connections-view/renameFolder/renameFolder';
@@ -306,18 +304,11 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(deleteFolder),
                 );
 
-                //// Clipboard Operations:
-
-                registerCommand('vscode-documentdb.command.connectionsView.cutItems', withCommandCorrelation(cutItems));
+                //// Move Operations:
 
                 registerCommand(
-                    'vscode-documentdb.command.connectionsView.copyItems',
-                    withCommandCorrelation(copyItems),
-                );
-
-                registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.connectionsView.pasteItems',
-                    withTreeNodeCommandCorrelation(pasteItems),
+                    'vscode-documentdb.command.connectionsView.moveItems',
+                    withCommandCorrelation(moveItems),
                 );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:

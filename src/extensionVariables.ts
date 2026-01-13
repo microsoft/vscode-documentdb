@@ -57,16 +57,6 @@ export namespace ext {
 
     export let helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
 
-    /**
-     * Clipboard state for cut/copy/paste operations in the connections view
-     */
-    export interface ClipboardState {
-        items: TreeElement[];
-        operation: 'cut' | 'copy';
-    }
-
-    export let clipboardState: ClipboardState | undefined;
-
     export namespace settingsKeys {
         export const shellPath = 'documentDB.mongoShell.path';
         export const shellArgs = 'documentDB.mongoShell.args';

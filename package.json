@@ -333,6 +333,12 @@
         "title": "Delete Folder…"
       },
       {
+        "//": "[ConnectionsView] Move Items to Folder",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.connectionsView.moveItems",
+        "title": "Move to Folder…"
+      },
+      {
         "//": "[ConnectionsView] Refresh View",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.refresh",
@@ -601,10 +607,16 @@
           "group": "1@4"
         },
         {
+          "//": "Move Connection to Folder...",
+          "command": "vscode-documentdb.command.connectionsView.moveItems",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "group": "1@5"
+        },
+        {
           "//": "Remove Connection...",
           "command": "vscode-documentdb.command.connectionsView.removeConnection",
           "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
-          "group": "1@5"
+          "group": "1@6"
         },
         {
           "//": "New Connection in Folder...",
@@ -625,10 +637,16 @@
           "group": "1@1"
         },
         {
+          "//": "Move Folder to Folder...",
+          "command": "vscode-documentdb.command.connectionsView.moveItems",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
+          "group": "1@2"
+        },
+        {
           "//": "Delete Folder...",
           "command": "vscode-documentdb.command.connectionsView.deleteFolder",
           "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
-          "group": "1@2"
+          "group": "1@3"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
