@@ -31,15 +31,26 @@ interface MovableTreeElement extends TreeElement {
 /**
  * Move selected items to a different folder.
  * Supports both connections and folders, with multi-select.
+ *
+ * VS Code tree view multi-select passes:
+ * - clickedItem: The item that was right-clicked
+ * - selectedItems: Array of all selected items (including clickedItem)
  */
-export async function moveItems(context: IActionContext, ...selectedItems: TreeElement[]): Promise<void> {
-    if (!selectedItems || selectedItems.length === 0) {
+export async function moveItems(
+    context: IActionContext,
+    clickedItem: TreeElement,
+    selectedItems?: TreeElement[],
+): Promise<void> {
+    // Use selectedItems if provided (multi-select), otherwise use just the clicked item
+    const items = selectedItems && selectedItems.length > 0 ? selectedItems : clickedItem ? [clickedItem] : [];
+
+    if (items.length === 0) {
         void vscode.window.showWarningMessage(l10n.t('No items selected to move.'));
         return;
     }
 
     // Filter to only movable items (connections and folders)
-    const movableItems = selectedItems.filter(
+    const movableItems = items.filter(
         (item): item is MovableTreeElement => item instanceof DocumentDBClusterItem || item instanceof FolderItem,
     );
 

@@ -10,6 +10,7 @@ import {
     type IAzureQuickPickItem,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService } from '../../../services/connectionStorageService';
 import { type MoveItemsWizardContext } from './MoveItemsWizardContext';
 
@@ -86,17 +87,27 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
             throw new VerificationCompleteError();
         }
 
-        // Conflicts found - return options for user to choose
+        // Conflicts found - log details to output channel
         const targetName = context.targetFolderPath ?? '/';
+        const conflictCount = context.conflictingNames.length;
 
+        ext.outputChannel.appendLog(
+            l10n.t('Move operation blocked: {0} naming conflict(s) in "{1}":', conflictCount.toString(), targetName),
+        );
+        for (const name of context.conflictingNames) {
+            ext.outputChannel.appendLog(` - ${name}`);
+        }
+        ext.outputChannel.show();
+
+        // Return options for user - show count only (details in output channel)
         return [
             {
                 label: l10n.t('$(arrow-left) Go Back'),
                 description: l10n.t('Choose a different folder'),
                 detail: l10n.t(
-                    'Cannot move - the following items already exist in "{0}": {1}',
+                    '{0} item(s) already exist in "{1}". See Output for details.',
+                    conflictCount.toString(),
                     targetName,
-                    context.conflictingNames.join(', '),
                 ),
                 data: 'back' as const,
             },
