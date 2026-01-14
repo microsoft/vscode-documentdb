@@ -1,19 +1,21 @@
 ---
-name: accessibility-aria-expert
-description: Detects and fixes ARIA accessibility issues in React/Fluent UI webviews. Use when reviewing webview code for screen reader compatibility, fixing double announcements, adding missing aria-labels, or ensuring WCAG compliance for tooltips and badges.
+name: detecting-accessibility-issues
+description: Detects and fixes accessibility issues in React/Fluent UI webviews. Use when reviewing code for screen reader compatibility, fixing ARIA labels, ensuring keyboard navigation, adding live regions for status messages, or managing focus in dialogs.
 ---
 
-# Accessibility ARIA Expert
+# Accessibility Expert for Webviews
 
-Verify and fix ARIA attributes in React/Fluent UI webview components.
+Verify and fix accessibility in React/Fluent UI webview components.
 
 ## When to Use
 
 - Review webview code for accessibility issues
 - Fix double announcements from screen readers
-- Add missing `aria-label` to icon-only buttons
+- Add missing `aria-label` to icon-only buttons or form inputs
 - Make tooltips accessible to keyboard/screen reader users
-- Apply `focusableBadge` pattern for keyboard-navigable badges
+- Announce status changes (loading, search results, errors)
+- Manage focus when dialogs/modals open
+- Group related controls with proper labels
 
 ## Core Pattern: Tooltip Accessibility
 
@@ -121,6 +123,109 @@ Tooltips require `aria-label` + `aria-hidden` to avoid double announcements:
 <ProgressBar thickness="large" aria-hidden={true} />
 ```
 
+### 6. Input Missing Accessible Name
+
+❌ **Problem**: SpinButton/Input without accessible name
+
+```tsx
+<SpinButton value={skipValue} onChange={onSkipChange} />
+<Input placeholder="Enter query..." />
+```
+
+✅ **Fix**: Add aria-label or associate with label element
+
+```tsx
+<SpinButton aria-label="Skip documents" value={skipValue} onChange={onSkipChange} />
+<Label htmlFor="query-input">Query</Label>
+<Input id="query-input" placeholder="Enter query..." />
+```
+
+### 7. Visible Label Not in Accessible Name
+
+❌ **Problem**: aria-label doesn't contain visible text (breaks voice control)
+
+```tsx
+<ToolbarButton aria-label="Reload data" icon={<RefreshIcon />}>
+  Refresh
+</ToolbarButton>
+```
+
+✅ **Fix**: Accessible name must contain visible label exactly
+
+```tsx
+<ToolbarButton aria-label="Refresh data" icon={<RefreshIcon />}>
+  Refresh
+</ToolbarButton>
+```
+
+Voice control users say "click Refresh" – only works if accessible name contains "Refresh".
+
+### 8. Status Changes Not Announced
+
+❌ **Problem**: Screen reader doesn't announce dynamic content
+
+```tsx
+<span>{isLoading ? 'Loading...' : `${count} results`}</span>
+```
+
+✅ **Fix**: Use live region
+
+```tsx
+<span role="status" aria-live="polite">
+  {isLoading ? 'Loading...' : `${count} results`}
+</span>
+```
+
+Use for: search results, loading states, success/error messages.
+
+### 9. Dialog Opens Without Focus Move
+
+❌ **Problem**: Focus stays on trigger when modal opens
+
+```tsx
+{
+  isOpen && <Dialog>...</Dialog>;
+}
+```
+
+✅ **Fix**: Move focus programmatically
+
+```tsx
+const dialogRef = useRef<HTMLDivElement>(null);
+
+useEffect(() => {
+  if (isOpen) dialogRef.current?.focus();
+}, [isOpen]);
+
+{
+  isOpen && (
+    <Dialog ref={dialogRef} tabIndex={-1} aria-modal="true">
+      ...
+    </Dialog>
+  );
+}
+```
+
+### 10. Related Controls Without Group Label
+
+❌ **Problem**: Buttons share visual label but screen reader misses context
+
+```tsx
+<span>How would you rate this?</span>
+<Button>👍</Button>
+<Button>👎</Button>
+```
+
+✅ **Fix**: Use role="group" with aria-labelledby
+
+```tsx
+<div role="group" aria-labelledby="rating-label">
+  <span id="rating-label">How would you rate this?</span>
+  <Button aria-label="I like it">👍</Button>
+  <Button aria-label="I don't like it">👎</Button>
+</div>
+```
+
 ## When to Use aria-hidden
 
 **DO use** on:
@@ -150,15 +255,23 @@ For keyboard-accessible badges with tooltips:
 
 ## Quick Checklist
 
-- [ ] Icon-only buttons have \`aria-label\`
-- [ ] Tooltip content included in \`aria-label\`
-- [ ] Visible text wrapped in \`aria-hidden="true"\` when aria-label duplicates it
+- [ ] Icon-only buttons have `aria-label`
+- [ ] Form inputs have associated labels or `aria-label`
+- [ ] Tooltip content included in `aria-label`
+- [ ] Visible text wrapped in `aria-hidden="true"` when aria-label duplicates it
 - [ ] Redundant aria-labels removed (identical to visible text)
-- [ ] Decorative elements have \`aria-hidden={true}\`
-- [ ] Badges with tooltips use \`focusableBadge\` class + \`tabIndex={0}\`
+- [ ] Visible button labels match accessible name exactly (for voice control)
+- [ ] Decorative elements have `aria-hidden={true}`
+- [ ] Badges with tooltips use `focusableBadge` class + `tabIndex={0}`
+- [ ] Status updates use `role="status"` or `aria-live="polite"`
+- [ ] Focus moves to dialog/modal content when opened
+- [ ] Related controls wrapped in `role="group"` with `aria-labelledby`
 
 ## References
 
 - [WCAG 2.1.1 Keyboard](https://www.w3.org/WAI/WCAG21/Understanding/keyboard.html)
+- [WCAG 2.4.3 Focus Order](https://www.w3.org/WAI/WCAG21/Understanding/focus-order.html)
+- [WCAG 2.5.3 Label in Name](https://www.w3.org/WAI/WCAG21/Understanding/label-in-name.html)
 - [WCAG 4.1.2 Name, Role, Value](https://www.w3.org/WAI/WCAG21/Understanding/name-role-value.html)
-- See \`src/webviews/components/focusableBadge/focusableBadge.md\` for detailed pattern if using the Badge component
+- [WCAG 4.1.3 Status Messages](https://www.w3.org/WAI/WCAG21/Understanding/status-messages.html)
+- See `src/webviews/components/focusableBadge/focusableBadge.md` for the Badge pattern
