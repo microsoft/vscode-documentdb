@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -61,7 +62,18 @@ export class PromptTemplateService {
                     }),
                 );
             } catch (error) {
-                // Log error and fall back to built-in template
+                // Log telemetry for template load operation (automatically includes result='Failed' when error is thrown)
+                void callWithTelemetryAndErrorHandling(
+                    'vscode-documentdb.promptTemplate.load',
+                    async (context: IActionContext) => {
+                        context.errorHandling.suppressDisplay = true;
+                        context.telemetry.properties.templateType = 'indexAdvisor';
+                        context.telemetry.properties.commandType = commandType;
+                        throw error;
+                    },
+                );
+
+                // Fall back to built-in template
                 void vscode.window.showWarningMessage(
                     l10n.t('Failed to load custom prompt template from {path}: {error}. Using built-in template.', {
                         path: customTemplatePath,
@@ -106,6 +118,18 @@ export class PromptTemplateService {
                     }),
                 );
             } catch (error) {
+                // Log telemetry for template load operation (automatically includes result='Failed' when error is thrown)
+                void callWithTelemetryAndErrorHandling(
+                    'vscode-documentdb.promptTemplate.load',
+                    async (context: IActionContext) => {
+                        context.errorHandling.suppressDisplay = true;
+                        context.telemetry.properties.templateType = 'queryGeneration';
+                        context.telemetry.properties.generationType = generationType;
+                        throw error;
+                    },
+                );
+
+                // Fall back to built-in template
                 void vscode.window.showWarningMessage(
                     l10n.t('Failed to load custom prompt template from {path}: {error}. Using built-in template.', {
                         path: customTemplatePath,

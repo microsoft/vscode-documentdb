@@ -354,6 +354,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         contentAfter={<SendButton />}
                         appearance="underline"
                         placeholder={l10n.t('Ask Copilot to generate the query for you')}
+                        aria-label={l10n.t('Ask Copilot to generate the query for you')}
                         indeterminateProgress={isAiActive}
                         onKeyDown={(event) => {
                             if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey) {
@@ -411,7 +412,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 setFilterValue(editor.getValue());
                             });
                         }}
-                        options={monacoOptions}
+                        options={{
+                            ...monacoOptions,
+                            ariaLabel: l10n.t('Filter: Enter the DocumentDB query filter in JSON format'),
+                        }}
                     />
                 </div>
                 <div className="queryEditorActions">
@@ -516,7 +520,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                         setProjectValue(editor.getValue());
                                     });
                                 }}
-                                options={monacoOptions}
+                                options={{
+                                    ...monacoOptions,
+                                    ariaLabel: l10n.t('Project: Specify which fields to include or exclude'),
+                                }}
                             />
                         </div>
                     </div>
@@ -544,11 +551,14 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                         setSortValue(editor.getValue());
                                     });
                                 }}
-                                options={monacoOptions}
+                                options={{
+                                    ...monacoOptions,
+                                    ariaLabel: l10n.t('Sort: Specify sort order for query results'),
+                                }}
                             />
                         </div>
                         <div className="field fieldNarrow">
-                            <Label size="small" weight="semibold">
+                            <Label size="small" weight="semibold" id="skip-label">
                                 {l10n.t('Skip')}
                             </Label>
                             <Input
@@ -559,10 +569,11 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     const value = parseInt(data.value, 10);
                                     setSkipValue(value >= 0 ? value : 0);
                                 }}
+                                aria-labelledby="skip-label"
                             />
                         </div>
                         <div className="field fieldNarrow">
-                            <Label size="small" weight="semibold">
+                            <Label size="small" weight="semibold" id="limit-label">
                                 {l10n.t('Limit')}
                             </Label>
                             <Input
@@ -573,6 +584,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     const value = parseInt(data.value, 10);
                                     setLimitValue(value >= 0 ? value : 0);
                                 }}
+                                aria-labelledby="limit-label"
                             />
                         </div>
                     </div>

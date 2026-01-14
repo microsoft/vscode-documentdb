@@ -6,7 +6,7 @@
 /**
  * This a minimal tRPC server
  */
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../../DocumentDBExperiences';
@@ -32,7 +32,16 @@ import { publicProcedure, router } from '../extension-server/trpc';
 export type BaseRouterContext = {
     dbExperience: API;
     webviewName: string;
+    telemetry?: ITelemetryContext;
     signal?: AbortSignal; // This is a special property that is used to cancel subscriptions
+};
+
+/**
+ * Context type for procedures using publicProcedureWithTelemetry
+ * Telemetry is guaranteed to be present via the trpcToTelemetry middleware
+ */
+export type BaseRouterContextWithTelemetry = BaseRouterContext & {
+    telemetry: ITelemetryContext;
 };
 
 /**

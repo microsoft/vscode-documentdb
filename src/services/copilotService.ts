@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
@@ -52,25 +53,43 @@ export class CopilotService {
         messages: vscode.LanguageModelChatMessage[],
         options?: CopilotMessageOptions,
     ): Promise<CopilotResponse> {
-        // Get all available models from VS Code
-        const availableModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+        const result = await callWithTelemetryAndErrorHandling(
+            'vscode-documentdb.copilot.sendMessage',
+            async (context: IActionContext) => {
+                // Get all available models from VS Code
+                const availableModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
 
-        const preferredModels = this.getPreferredModels(options);
-        const selectedModel = this.selectBestModel(availableModels, preferredModels);
+                const preferredModels = this.getPreferredModels(options);
+                const selectedModel = this.selectBestModel(availableModels, preferredModels);
 
-        if (!selectedModel) {
-            throw new Error(
-                l10n.t(
-                    'No suitable language model found. Please ensure GitHub Copilot is installed and you have an active subscription.',
-                ),
-            );
+                if (!selectedModel) {
+                    throw new Error(
+                        l10n.t(
+                            'No suitable language model found. Please ensure GitHub Copilot is installed and you have an active subscription.',
+                        ),
+                    );
+                }
+
+                context.telemetry.properties.modelUsed = selectedModel.id;
+
+                try {
+                    const response = await this.sendToModel(selectedModel, messages, options);
+                    return {
+                        text: response,
+                        modelUsed: selectedModel.id,
+                    };
+                } catch (error) {
+                    context.telemetry.properties.llmError = 'llmGenerateResponseCallFailed';
+                    throw error;
+                }
+            },
+        );
+
+        if (!result) {
+            throw new Error(l10n.t('Failed to get response from language model'));
         }
 
-        const response = await this.sendToModel(selectedModel, messages, options);
-        return {
-            text: response,
-            modelUsed: selectedModel.id,
-        };
+        return result;
     }
 
     /**

@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.6.3
+
+### Improvements
+
+- **Query Insights**: The Query Insights feature has been updated to use the available `executionStats` instead of running the analysis in the AI context, improving performance and reliability. [#404](https://github.com/microsoft/vscode-documentdb/issues/404), [#423](https://github.com/microsoft/vscode-documentdb/pull/423)
+- **API Telemetry Support**: Enhanced telemetry support in web views for better monitoring and diagnostics. [#429](https://github.com/microsoft/vscode-documentdb/pull/429)
+- **Dependency Security Update**: Updated `tRPC` dependencies to address a security vulnerability. [#430](https://github.com/microsoft/vscode-documentdb/issues/430), [#431](https://github.com/microsoft/vscode-documentdb/pull/431)
+
 ## 0.6.2
 
 ### Fixes
