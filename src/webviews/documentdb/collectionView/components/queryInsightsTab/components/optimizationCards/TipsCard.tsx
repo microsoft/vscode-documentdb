@@ -5,6 +5,7 @@
 
 import { Button, Card, CardHeader, Text, tokens } from '@fluentui/react-components';
 import { ChevronLeftRegular, ChevronRightRegular, DismissRegular, LightbulbRegular } from '@fluentui/react-icons';
+import * as l10n from '@vscode/l10n';
 import { useState } from 'react';
 import { useTrpcClient } from '../../../../../../api/webview-client/useTrpcClient';
 import './baseOptimizationCard.scss';
@@ -132,6 +133,7 @@ export function TipsCard({ title, tips, onDismiss, ref }: TipsCardProps) {
                                     size="small"
                                     onClick={handlePrevious}
                                     disabled={currentIndex <= 0}
+                                    aria-label={l10n.t('Previous tip')}
                                 />
                                 <Button
                                     appearance="subtle"
@@ -139,6 +141,7 @@ export function TipsCard({ title, tips, onDismiss, ref }: TipsCardProps) {
                                     size="small"
                                     onClick={handleNext}
                                     disabled={currentIndex >= tips.length - 1}
+                                    aria-label={l10n.t('Next tip')}
                                 />
                                 {onDismiss && (
                                     <Button
@@ -146,6 +149,7 @@ export function TipsCard({ title, tips, onDismiss, ref }: TipsCardProps) {
                                         icon={<DismissRegular />}
                                         size="small"
                                         onClick={handleDismiss}
+                                        aria-label={l10n.t('Close tips')}
                                     />
                                 )}
                             </div>
