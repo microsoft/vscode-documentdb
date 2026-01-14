@@ -274,34 +274,79 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * Helper method to find the current instance of an element by ID and refresh it.
      * This addresses the issue where stale references won't properly refresh the tree.
      *
-     * @param element Potentially stale element reference
+     * ## How It Works
+     *
+     * When `wrapItemInStateHandling` wraps an element, it registers a listener that captures
+     * the element reference in a closure. When `notifyChildrenChanged(id)` is called, this
+     * listener invokes `refresh(element)` with that captured reference.
+     *
+     * VS Code's TreeView API uses **object identity** (reference equality), not ID equality,
+     * to match elements. Therefore, we must fire `onDidChangeTreeData` with the exact same
+     * object reference that VS Code received from our previous `getChildren()` call.
+     *
+     * ## Current Callers
+     *
+     * All current `refresh(element)` calls receive elements from one of these sources:
+     * 1. **Listener closures**: via `wrapItemInStateHandling(item, () => this.refresh(item))`
+     * 2. **VS Code command arguments**: e.g., `retryAuthentication(context, node)` where VS Code
+     *    passes the exact reference it has internally
+     *
+     * Both sources provide the correct object reference for VS Code to match.
+     *
+     * ## Known Limitations
+     *
+     * 1. **Listener Accumulation**: The TreeElementStateManager library accumulates listeners
+     *    without cleanup. When a tree is refreshed and new objects are created with the same
+     *    IDs, old listeners persist alongside new ones. This causes `refresh()` to be called
+     *    multiple times for the same ID. This is inefficient but functionally correct because
+     *    only the listener with the current reference (matching VS Code's internal tree) will
+     *    trigger a successful refresh.
+     *
+     * 2. **Cache Timing**: After this method clears the cache and fires the refresh event,
+     *    the cache is only repopulated when VS Code calls `getChildren()`. If code attempts
+     *    to use `findNodeById()` before VS Code completes the refresh, the node may not be
+     *    found in the cache. Use `findNodeById(id, true)` with recursive search enabled to
+     *    handle this scenario.
+     *
+     * 3. **ID-based lookups for reveal**: The `revealConnectionsViewElement` and URL handler
+     *    use `findNodeById(id, true)` which triggers `getChildren()` during traversal. This
+     *    properly wraps and caches nodes, so reveal operations work correctly even if the
+     *    node wasn't previously cached.
+     *
+     * @param element The element reference from the listener closure (must be the original
+     *                wrapped element that was returned to VS Code)
      */
     protected async findAndRefreshCurrentElement(element: T): Promise<void> {
         try {
-            // First try to find the current instance with this ID
-            const currentElement = await this.findNodeById(element.id!);
+            // First, look up the cached element BEFORE clearing the cache
+            const cachedElement = await this.findNodeById(element.id!);
 
-            // AFTER finding the element, update the cache:
-            // 1. Clear the cache for this ID to remove any stale references
+            // Clear the cache for this ID to remove any stale references
             // (drops the element and its children)
             this.parentCache.clear(element.id!);
-            // 2. Re-register the node (but not its children)
-            if (currentElement?.id) {
-                this.registerNodeInCache(currentElement);
-            }
 
-            if (currentElement) {
-                // We found the current instance, use it for refresh
-                this.onDidChangeTreeDataEmitter.fire(currentElement);
-            } else {
-                // Current instance not found, fallback to using the provided element
-                // This may not work if it's truly a stale reference, but we've tried our best
-                this.onDidChangeTreeDataEmitter.fire(element);
+            // IMPORTANT: Fire with the ORIGINAL element reference first!
+            // VS Code uses object identity to match elements in its internal tree.
+            // The `element` parameter is typically the original wrapped element from the
+            // listener closure, which is the exact same object reference that VS Code has.
+            this.onDidChangeTreeDataEmitter.fire(element);
+
+            // Also fire with the cached element if it's a DIFFERENT reference.
+            //
+            // This handles scenarios where the `element` reference comes from a stale closure.
+            // For example, LazyMetadataLoader stores element references in a collection and
+            // calls refresh() later when async metadata loading completes. If the tree was
+            // refreshed in between (e.g., user collapsed and re-expanded), new element objects
+            // are created and registered in the cache. The stored element reference is now
+            // stale, but the cache has the current reference that VS Code recognizes.
+            //
+            // By firing both references, we ensure at least one matches VS Code's internal
+            // tree. VS Code will ignore the fire for whichever reference it doesn't recognize.
+            if (cachedElement && cachedElement !== element) {
+                this.onDidChangeTreeDataEmitter.fire(cachedElement);
             }
-        } catch (error) {
-            // If anything goes wrong during the lookup, still attempt the refresh with the original element
-            // and clear the cache for this ID
-            console.log(`Error finding current element for refresh: ${error}`);
+        } catch {
+            // If anything goes wrong, still attempt the refresh with the original element
             this.parentCache.clear(element.id!);
             this.onDidChangeTreeDataEmitter.fire(element);
         }
