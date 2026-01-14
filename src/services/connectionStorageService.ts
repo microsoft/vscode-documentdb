@@ -145,7 +145,10 @@ export class ConnectionStorageService {
             }
 
             // Start async orphan cleanup (not awaited - runs in background)
-            void this.cleanupOrphanedItems();
+            void this.cleanupOrphanedItems().then(() => {
+                // Collect storage stats after cleanup completes (also not awaited)
+                void this.collectStorageStats();
+            });
         }
         return this._storageService;
     }
@@ -249,6 +252,103 @@ export class ConnectionStorageService {
                     `Orphan cleanup complete: ${totalOrphansRemoved} items removed in ${iteration} iteration(s).`,
                 );
             }
+        });
+    }
+
+    /**
+     * Collects and reports storage statistics via telemetry.
+     * This runs asynchronously after orphan cleanup and provides insights into:
+     * - Total connections and folders across all zones
+     * - Maximum folder nesting depth
+     * - Distribution between Clusters and Emulators zones
+     */
+    private static async collectStorageStats(): Promise<void> {
+        await callWithTelemetryAndErrorHandling('connectionStorage.stats', async (context: IActionContext) => {
+            context.telemetry.properties.isActivationEvent = 'true';
+
+            let totalConnections = 0;
+            let totalFolders = 0;
+            let maxDepth = 0;
+
+            // Calculate depth of an item by traversing up the parent chain
+            const calculateDepth = async (
+                item: ConnectionItem,
+                allItems: Map<string, ConnectionItem>,
+                depthCache: Map<string, number>,
+            ): Promise<number> => {
+                // Check cache first
+                const cachedDepth = depthCache.get(item.id);
+                if (cachedDepth !== undefined) {
+                    return cachedDepth;
+                }
+
+                if (!item.properties.parentId) {
+                    depthCache.set(item.id, 1);
+                    return 1; // Root level = depth 1
+                }
+
+                const parent = allItems.get(item.properties.parentId);
+                if (!parent) {
+                    depthCache.set(item.id, 1);
+                    return 1; // Orphaned item, treat as root
+                }
+
+                const parentDepth = await calculateDepth(parent, allItems, depthCache);
+                const depth = parentDepth + 1;
+                depthCache.set(item.id, depth);
+                return depth;
+            };
+
+            for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
+                const allItems = await this.getAllItems(connectionType);
+
+                // Create a map for efficient parent lookup
+                const itemMap = new Map(allItems.map((item) => [item.id, item]));
+                const depthCache = new Map<string, number>();
+
+                let connectionsInZone = 0;
+                let foldersInZone = 0;
+                let rootConnectionsInZone = 0;
+                let rootFoldersInZone = 0;
+                let maxDepthInZone = 0;
+
+                for (const item of allItems) {
+                    const isRootLevel = !item.properties.parentId;
+
+                    if (item.properties.type === ItemType.Connection) {
+                        connectionsInZone++;
+                        if (isRootLevel) {
+                            rootConnectionsInZone++;
+                        }
+                    } else if (item.properties.type === ItemType.Folder) {
+                        foldersInZone++;
+                        if (isRootLevel) {
+                            rootFoldersInZone++;
+                        }
+                        // Calculate depth for folders to find max nesting
+                        const depth = await calculateDepth(item, itemMap, depthCache);
+                        maxDepthInZone = Math.max(maxDepthInZone, depth);
+                    }
+                }
+
+                // Zone-specific measurements
+                const zonePrefix = connectionType === ConnectionType.Clusters ? 'clusters' : 'emulators';
+                context.telemetry.measurements[`${zonePrefix}_Connections`] = connectionsInZone;
+                context.telemetry.measurements[`${zonePrefix}_Folders`] = foldersInZone;
+                context.telemetry.measurements[`${zonePrefix}_RootConnections`] = rootConnectionsInZone;
+                context.telemetry.measurements[`${zonePrefix}_RootFolders`] = rootFoldersInZone;
+                context.telemetry.measurements[`${zonePrefix}_MaxDepth`] = maxDepthInZone;
+                totalConnections += connectionsInZone;
+                totalFolders += foldersInZone;
+                maxDepth = Math.max(maxDepth, maxDepthInZone);
+            }
+
+            // Aggregate measurements
+            context.telemetry.measurements.totalConnections = totalConnections;
+            context.telemetry.measurements.totalFolders = totalFolders;
+            context.telemetry.measurements.maxFolderDepth = maxDepth;
+            context.telemetry.properties.hasFolders = totalFolders > 0 ? 'true' : 'false';
+            context.telemetry.properties.hasConnections = totalConnections > 0 ? 'true' : 'false';
         });
     }
 

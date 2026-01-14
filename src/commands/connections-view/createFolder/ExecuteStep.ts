@@ -25,6 +25,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateFolderWizardContex
         const folderName = nonNullOrEmptyValue(context.folderName, 'context.folderName', 'ExecuteStep.ts');
         const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'ExecuteStep.ts');
 
+        // Set telemetry properties
+        context.telemetry.properties.connectionType = connectionType;
+        context.telemetry.properties.isSubfolder = context.parentFolderId ? 'true' : 'false';
+
         // Show progress indicator on the view while creating and revealing
         await withConnectionsViewProgress(async () => {
             const folderId = randomUtils.getRandomUUID();

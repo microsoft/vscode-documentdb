@@ -67,11 +67,7 @@ jest.mock('@vscode/l10n', () => ({
 }));
 
 // Helper to create a mock folder item (the tree item, not storage item)
-function createMockFolderItem(overrides: {
-    id: string;
-    name: string;
-    connectionType?: ConnectionType;
-}): FolderItem {
+function createMockFolderItem(overrides: { id: string; name: string; connectionType?: ConnectionType }): FolderItem {
     return {
         id: overrides.id,
         storageId: overrides.id,
@@ -81,11 +77,7 @@ function createMockFolderItem(overrides: {
 }
 
 // Helper to create a mock connection item (storage item)
-function createMockConnection(overrides: {
-    id: string;
-    name: string;
-    parentId?: string;
-}): ConnectionItem {
+function createMockConnection(overrides: { id: string; name: string; parentId?: string }): ConnectionItem {
     return {
         id: overrides.id,
         name: overrides.name,
@@ -103,11 +95,7 @@ function createMockConnection(overrides: {
 }
 
 // Helper to create a mock folder (storage item)
-function createMockFolder(overrides: {
-    id: string;
-    name: string;
-    parentId?: string;
-}): ConnectionItem {
+function createMockFolder(overrides: { id: string; name: string; parentId?: string }): ConnectionItem {
     return {
         id: overrides.id,
         name: overrides.name,

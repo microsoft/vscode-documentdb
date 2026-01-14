@@ -55,11 +55,7 @@ jest.mock('@vscode/l10n', () => ({
 }));
 
 // Helper to create a mock folder item
-function createMockFolder(overrides: {
-    id: string;
-    name: string;
-    parentId?: string;
-}): ConnectionItem {
+function createMockFolder(overrides: { id: string; name: string; parentId?: string }): ConnectionItem {
     return {
         id: overrides.id,
         name: overrides.name,
@@ -76,11 +72,7 @@ function createMockFolder(overrides: {
 }
 
 // Helper to create a mock connection item
-function createMockConnection(overrides: {
-    id: string;
-    name: string;
-    parentId?: string;
-}): ConnectionItem {
+function createMockConnection(overrides: { id: string; name: string; parentId?: string }): ConnectionItem {
     return {
         id: overrides.id,
         name: overrides.name,

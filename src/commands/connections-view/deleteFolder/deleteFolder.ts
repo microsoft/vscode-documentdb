@@ -19,13 +19,16 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
  * Command to delete a folder from the connections view.
  * Prompts for confirmation before deletion.
  */
-export async function deleteFolder(_context: IActionContext, folderItem: FolderItem): Promise<void> {
+export async function deleteFolder(context: IActionContext, folderItem: FolderItem): Promise<void> {
     if (!folderItem) {
         throw new Error(l10n.t('No folder selected.'));
     }
 
     // Determine connection type - for now, use Clusters as default
     const connectionType = folderItem?.connectionType ?? ConnectionType.Clusters;
+
+    // Set telemetry properties
+    context.telemetry.properties.connectionType = connectionType;
 
     const confirmMessage =
         l10n.t('Delete folder "{folderName}"?', { folderName: folderItem.name }) +
@@ -40,6 +43,10 @@ export async function deleteFolder(_context: IActionContext, folderItem: FolderI
         throw new UserCancelledError();
     }
 
+    // Track deletion statistics
+    let deletedFolders = 0;
+    let deletedConnections = 0;
+
     await withConnectionsViewProgress(async () => {
         await ext.state.showDeleting(folderItem.id, async () => {
             // Recursively delete all descendants
@@ -50,6 +57,9 @@ export async function deleteFolder(_context: IActionContext, folderItem: FolderI
                     // Recursively delete child folders first
                     if (child.properties.type === ItemType.Folder) {
                         await deleteRecursive(child.id);
+                        deletedFolders++;
+                    } else {
+                        deletedConnections++;
                     }
                     // Delete the child item
                     await ConnectionStorageService.delete(connectionType, child.id);
@@ -59,12 +69,19 @@ export async function deleteFolder(_context: IActionContext, folderItem: FolderI
             // Delete all descendants first
             await deleteRecursive(folderItem.storageId);
 
-            // Delete the folder itself
+            // Delete the folder itself (count as 1 more folder)
             await ConnectionStorageService.delete(connectionType, folderItem.storageId);
+            deletedFolders++;
         });
 
         refreshParentInConnectionsView(folderItem.id);
     });
+
+    // Record telemetry measurements
+    context.telemetry.measurements.deletedFolders = deletedFolders;
+    context.telemetry.measurements.deletedConnections = deletedConnections;
+    context.telemetry.measurements.totalItemsDeleted = deletedFolders + deletedConnections;
+    context.telemetry.properties.hadSubitems = deletedFolders + deletedConnections > 1 ? 'true' : 'false';
 
     showConfirmationAsInSettings(l10n.t('The selected folder has been removed.'));
 }

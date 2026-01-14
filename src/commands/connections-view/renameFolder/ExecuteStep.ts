@@ -27,10 +27,16 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameFolderWizardContex
         );
         const connectionType = nonNullValue(context.connectionType, 'context.connectionType', 'ExecuteStep.ts');
 
+        // Set telemetry properties
+        context.telemetry.properties.connectionType = connectionType;
+
         // Don't do anything if the name hasn't changed
         if (newFolderName === originalFolderName) {
+            context.telemetry.properties.nameChanged = 'false';
             return;
         }
+
+        context.telemetry.properties.nameChanged = 'true';
 
         await withConnectionsViewProgress(async () => {
             const folder = nonNullValue(

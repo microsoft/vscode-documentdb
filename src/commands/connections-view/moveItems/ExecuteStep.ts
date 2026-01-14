@@ -6,7 +6,7 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../../extensionVariables';
-import { ConnectionStorageService, ConnectionType } from '../../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType, ItemType } from '../../../services/connectionStorageService';
 import {
     buildFullTreePath,
     focusAndRevealInConnectionsView,
@@ -53,10 +53,16 @@ export class ExecuteStep extends AzureWizardExecuteStep<MoveItemsWizardContext> 
             l10n.t('Moved {0} item(s) to "{1}".', context.itemsToMove.length.toString(), targetName),
         );
 
-        // Set telemetry
+        // Set telemetry - count folders and connections separately
+        const foldersCount = context.itemsToMove.filter((item) => item.properties.type === ItemType.Folder).length;
+        const connectionsCount = context.itemsToMove.length - foldersCount;
+
         context.telemetry.properties.operation = 'move';
-        context.telemetry.measurements.itemCount = context.itemsToMove.length;
+        context.telemetry.properties.connectionType = context.connectionType;
         context.telemetry.properties.targetType = context.targetFolderId ? 'folder' : 'root';
+        context.telemetry.measurements.itemCount = context.itemsToMove.length;
+        context.telemetry.measurements.foldersCount = foldersCount;
+        context.telemetry.measurements.connectionsCount = connectionsCount;
     }
 
     public shouldExecute(context: MoveItemsWizardContext): boolean {

@@ -43,14 +43,21 @@ export async function newConnectionInFolder(
     // Check if it's a LocalEmulatorsItem by inspecting contextValue
     const contextValue = (folder as TreeElementWithContextValue).contextValue;
 
+    // Set telemetry to track connections created within folders
+    context.telemetry.properties.createdInFolder = 'true';
+
     // Route to the appropriate wizard based on folder type
     // Note: Progress indicators should be added in the respective execute steps
     if (contextValue?.includes('treeItem_LocalEmulators')) {
         // LocalEmulatorsItem - create emulator connection
+        context.telemetry.properties.connectionType = ConnectionType.Emulators;
+        context.telemetry.properties.parentType = 'LocalEmulatorsItem';
         await newLocalConnectionInFolder(context, folder as LocalEmulatorsItem);
     } else if ('connectionType' in folder) {
         // It's a FolderItem
         const folderItem = folder as FolderItem;
+        context.telemetry.properties.connectionType = folderItem.connectionType;
+        context.telemetry.properties.parentType = 'folder';
 
         if (folderItem.connectionType === ConnectionType.Emulators) {
             // Folder in emulators section - create emulator connection
