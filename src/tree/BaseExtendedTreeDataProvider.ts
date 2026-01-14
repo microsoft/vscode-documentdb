@@ -345,7 +345,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             if (cachedElement && cachedElement !== element) {
                 this.onDidChangeTreeDataEmitter.fire(cachedElement);
             }
-        } catch (error) {
+        } catch {
             // If anything goes wrong, still attempt the refresh with the original element
             this.parentCache.clear(element.id!);
             this.onDidChangeTreeDataEmitter.fire(element);

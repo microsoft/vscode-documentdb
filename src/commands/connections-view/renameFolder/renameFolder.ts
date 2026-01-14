@@ -6,7 +6,7 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { l10n as vscodel10n } from 'vscode';
 import { ConnectionStorageService, ConnectionType } from '../../../services/connectionStorageService';
-import { FolderItem } from '../../../tree/connections-view/FolderItem';
+import { type FolderItem } from '../../../tree/connections-view/FolderItem';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptNewFolderNameStep } from './PromptNewFolderNameStep';
 import { type RenameFolderWizardContext } from './RenameFolderWizardContext';

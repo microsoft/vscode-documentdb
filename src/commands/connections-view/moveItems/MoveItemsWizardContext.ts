@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { type ConnectionItem, type ConnectionType } from '../../../services/connectionStorageService';
 
 /**

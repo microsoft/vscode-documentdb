@@ -5,7 +5,7 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { l10n as vscodel10n } from 'vscode';
-import { DocumentDBClusterItem } from '../../../tree/connections-view/DocumentDBClusterItem';
+import { type DocumentDBClusterItem } from '../../../tree/connections-view/DocumentDBClusterItem';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptNewConnectionNameStep } from './PromptNewConnectionNameStep';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';

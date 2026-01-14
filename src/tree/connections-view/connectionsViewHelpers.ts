@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, type ConnectionType } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../api/revealConnectionsViewElement';
 
 /**
@@ -93,8 +93,8 @@ export function buildConnectionsViewTreePath(
  * @returns The full tree path including parent folder IDs
  */
 export async function buildFullTreePath(itemId: string, connectionType: ConnectionType): Promise<string> {
-    const isEmulator = connectionType === 'emulators';
-    let treePath = `${Views.ConnectionsView}`;
+    const isEmulator = connectionType === ConnectionType.Emulators;
+    let treePath: string = Views.ConnectionsView;
 
     if (isEmulator) {
         treePath += '/localEmulators';
@@ -173,7 +173,7 @@ export function refreshParentInConnectionsView(treeElementId: string): void {
         // Root-level elements: "connectionsView/folderId" → parentId = "connectionsView"
         // LocalEmulators root: "connectionsView/localEmulators/emulatorId" → parentId = "connectionsView/localEmulators"
         const isRootLevel =
-            parentId === Views.ConnectionsView || parentId === `${Views.ConnectionsView}/localEmulators`;
+            parentId === 'connectionsView' || parentId === 'connectionsView/localEmulators';
 
         if (isRootLevel) {
             // Root-level element, refresh the whole branch

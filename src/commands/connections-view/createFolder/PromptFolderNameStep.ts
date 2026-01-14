@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ConnectionStorageService, ConnectionType, ItemType } from '../../../services/connectionStorageService';
+import { ConnectionStorageService, ItemType, type ConnectionType } from '../../../services/connectionStorageService';
 import { nonNullValue } from '../../../utils/nonNull';
 import { type CreateFolderWizardContext } from './CreateFolderWizardContext';
 
