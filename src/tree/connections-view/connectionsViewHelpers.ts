@@ -5,8 +5,10 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
+import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { revealConnectionsViewElement } from '../api/revealConnectionsViewElement';
 
 /**
@@ -73,6 +75,166 @@ export function buildConnectionsViewTreePath(
     }
 
     return treePath;
+}
+
+/**
+ * Builds a tree path for a folder or connection, including the full parent folder hierarchy.
+ * This is necessary for proper tree reveal of nested folders.
+ *
+ * For nested structures like:
+ * - Root
+ *   - FolderA (id: 'a123')
+ *     - FolderB (id: 'b456')
+ *
+ * The tree path for FolderB would be: `connectionsView/a123/b456`
+ *
+ * @param itemId - The storage ID of the item to build a path for
+ * @param connectionType - The connection type (Clusters or Emulators)
+ * @returns The full tree path including parent folder IDs
+ */
+export async function buildFullTreePath(itemId: string, connectionType: ConnectionType): Promise<string> {
+    const isEmulator = connectionType === ConnectionType.Emulators;
+    let treePath: string = Views.ConnectionsView;
+
+    if (isEmulator) {
+        treePath += '/localEmulators';
+    }
+
+    // Build the path by traversing from item to root
+    const pathIds = await getAncestorIds(itemId, connectionType);
+
+    // pathIds is ordered from root to item, so join directly
+    for (const id of pathIds) {
+        treePath += `/${id}`;
+    }
+
+    return treePath;
+}
+
+/**
+ * Gets the ancestor IDs from root to the specified item (inclusive).
+ * Returns IDs in order from root ancestor to the item itself.
+ */
+async function getAncestorIds(itemId: string, connectionType: ConnectionType): Promise<string[]> {
+    const item = await ConnectionStorageService.get(itemId, connectionType);
+    if (!item) {
+        return [itemId]; // Fallback: just use the ID even if not found
+    }
+
+    if (!item.properties.parentId) {
+        // Item is at root level
+        return [itemId];
+    }
+
+    // Recursively get parent path, then add this item
+    const parentPath = await getAncestorIds(item.properties.parentId, connectionType);
+    return [...parentPath, itemId];
+}
+
+/**
+ * Refreshes the parent element in the Connections View tree after a child modification.
+ *
+ * This function extracts the parent tree element ID from a child's full tree path
+ * and triggers a selective refresh of that parent's children. This is more efficient
+ * than refreshing the entire connections view.
+ *
+ * **Tree Path Structure:**
+ * Tree element IDs follow the pattern: `connectionsView/[localEmulators/]parentId/childId`
+ * The parent ID is extracted by finding the last `/` separator.
+ *
+ * **Root-Level Detection:**
+ * Elements at the root level have IDs like `connectionsView/folderId` or
+ * `connectionsView/localEmulators/emulatorId`. When the extracted parentId is just
+ * the view prefix (`connectionsView` or `connectionsView/localEmulators`), this indicates
+ * the element is at root level and the entire branch is refreshed instead.
+ *
+ * @param treeElementId - The full tree path of the child element that was modified
+ *
+ * @example
+ * ```typescript
+ * // Nested element - refreshes parent folder:
+ * // treeElementId = 'connectionsView/folderId/connectionId'
+ * // Extracts parentId = 'connectionsView/folderId' → notifyChildrenChanged()
+ * refreshParentInConnectionsView(node.id);
+ *
+ * // Root-level element - refreshes entire branch:
+ * // treeElementId = 'connectionsView/folderId'
+ * // Extracts parentId = 'connectionsView' → full refresh()
+ * refreshParentInConnectionsView(node.id);
+ * ```
+ */
+export function refreshParentInConnectionsView(treeElementId: string): void {
+    const lastSlashIndex = treeElementId.lastIndexOf('/');
+    if (lastSlashIndex !== -1) {
+        const parentId = treeElementId.substring(0, lastSlashIndex);
+
+        // Check if parentId is just the view prefix (e.g., "connectionsView" or "connectionsView/localEmulators")
+        // These are not actual tree element IDs - they indicate the element is at root level
+        // Root-level elements: "connectionsView/folderId" → parentId = "connectionsView"
+        // LocalEmulators root: "connectionsView/localEmulators/emulatorId" → parentId = "connectionsView/localEmulators"
+        const isRootLevel = parentId === 'connectionsView' || parentId === 'connectionsView/localEmulators';
+
+        if (isRootLevel) {
+            // Root-level element, refresh the whole branch
+            ext.connectionsBranchDataProvider.refresh();
+        } else {
+            ext.state.notifyChildrenChanged(parentId);
+        }
+    } else {
+        // No slash found (shouldn't happen with proper tree IDs), refresh the whole branch
+        ext.connectionsBranchDataProvider.refresh();
+    }
+}
+
+/**
+ * Wraps an async operation with a progress indicator on the Connections View.
+ *
+ * This utility ensures consistent visual feedback across all operations that modify
+ * the Connections View (adding/removing connections, folders, etc.).
+ *
+ * @param callback - The async operation to execute while showing progress
+ * @returns The result of the callback
+ */
+export async function withConnectionsViewProgress<T>(callback: () => Promise<T>): Promise<T> {
+    return vscode.window.withProgress(
+        {
+            location: { viewId: Views.ConnectionsView },
+            cancellable: false,
+        },
+        async () => {
+            return callback();
+        },
+    );
+}
+
+/**
+ * Refreshes the parent element and reveals a newly created element in the Connections View.
+ *
+ * This is a convenience function that combines the common pattern of:
+ * 1. Focusing the Connections View
+ * 2. Waiting for the view to be ready
+ * 3. Revealing and selecting the new element
+ *
+ * @param context - The action context for telemetry tracking
+ * @param elementPath - The full tree path to the element to reveal
+ * @param options - Optional reveal options (defaults to select, focus, no expand)
+ */
+export async function focusAndRevealInConnectionsView(
+    context: IActionContext,
+    elementPath: string,
+    options?: {
+        select?: boolean;
+        focus?: boolean;
+        expand?: boolean;
+    },
+): Promise<void> {
+    await vscode.commands.executeCommand(`connectionsView.focus`);
+    await waitForConnectionsViewReady(context);
+    await revealConnectionsViewElement(context, elementPath, {
+        select: options?.select ?? true,
+        focus: options?.focus ?? true,
+        expand: options?.expand ?? false,
+    });
 }
 
 /**
