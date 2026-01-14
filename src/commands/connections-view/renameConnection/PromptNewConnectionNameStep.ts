@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
-
 import * as l10n from '@vscode/l10n';
-import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType } from '../../../services/connectionStorageService';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';
 
 export class PromptNewConnectionNameStep extends AzureWizardPromptStep<RenameConnectionWizardContext> {
     public async prompt(context: RenameConnectionWizardContext): Promise<void> {
         const newConnectionName = await context.ui.showInputBox({
+            title: l10n.t('Rename Connection'),
             prompt: l10n.t('Please enter a new connection name.'),
             value: context.originalConnectionName,
             ignoreFocusOut: true,
