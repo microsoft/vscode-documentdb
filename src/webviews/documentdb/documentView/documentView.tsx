@@ -97,6 +97,11 @@ export const DocumentView = (): JSX.Element => {
 
         handleResize();
 
+        // Accessibility: Set focus to the editor immediately after mount
+        // This ensures keyboard users see a visible focus indicator when the document view opens
+        // Addresses WCAG 2.4.3 Focus Order requirement
+        editor.focus();
+
         // initialize the monaco editor with the schema that's basic
         // as we don't know the schema of the collection available
         // this is a fallback for the case when the autocompletion feature fails.
