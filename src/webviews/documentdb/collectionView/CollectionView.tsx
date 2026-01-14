@@ -500,6 +500,23 @@ export const CollectionView = (): JSX.Element => {
             });
     }
 
+    // Helper function to generate screen reader announcement for query results
+    const getResultsAnnouncement = (): string => {
+        if (currentContext.isLoading || documentCount === undefined) {
+            return '';
+        }
+
+        if (documentCount === 0) {
+            return l10n.t('No results found');
+        }
+
+        if (documentCount === 1) {
+            return l10n.t('1 result found');
+        }
+
+        return l10n.t('{0} results found', documentCount);
+    };
+
     return (
         <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>
             <div className="collectionView">
@@ -509,11 +526,7 @@ export const CollectionView = (): JSX.Element => {
 
                 {/* ARIA live region for screen reader announcements */}
                 <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-                    {!currentContext.isLoading &&
-                        documentCount !== undefined &&
-                        (documentCount === 0
-                            ? l10n.t('No results found')
-                            : l10n.t('{0} {1} found', documentCount, documentCount === 1 ? 'result' : 'results'))}
+                    {getResultsAnnouncement()}
                 </div>
 
                 <div className="toolbarMainView">
