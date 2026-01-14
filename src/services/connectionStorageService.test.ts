@@ -158,12 +158,14 @@ jest.mock('../extensionVariables', () => ({
 }));
 
 // Helper function to create a test connection item
-function createTestConnectionItem(overrides: {
-    id?: string;
-    name?: string;
-    parentId?: string;
-    secrets?: ConnectionItem['secrets'];
-} = {}): ConnectionItem {
+function createTestConnectionItem(
+    overrides: {
+        id?: string;
+        name?: string;
+        parentId?: string;
+        secrets?: ConnectionItem['secrets'];
+    } = {},
+): ConnectionItem {
     return {
         id: overrides.id ?? 'test-connection-id',
         name: overrides.name ?? 'Test Connection',
@@ -189,11 +191,13 @@ function createTestConnectionItem(overrides: {
 }
 
 // Helper function to create a test folder item
-function createTestFolderItem(overrides: {
-    id?: string;
-    name?: string;
-    parentId?: string;
-} = {}): ConnectionItem {
+function createTestFolderItem(
+    overrides: {
+        id?: string;
+        name?: string;
+        parentId?: string;
+    } = {},
+): ConnectionItem {
     return {
         id: overrides.id ?? 'test-folder-id',
         name: overrides.name ?? 'Test Folder',
