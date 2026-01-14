@@ -38,7 +38,7 @@ export const ToolbarDocuments = ({
 
             <ToolbarDividerTransparent />
 
-            <Tooltip content={l10n.t('Check document syntax')} relationship="description" withArrow>
+            <Tooltip content={l10n.t('Validate document syntax')} relationship="description" withArrow>
                 <ToolbarButton
                     onClick={onValidateRequest}
                     aria-label={l10n.t('Validate document syntax')}
