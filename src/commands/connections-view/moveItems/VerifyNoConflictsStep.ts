@@ -109,9 +109,8 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
                 label: l10n.t('$(arrow-left) Go Back'),
                 description: l10n.t('Choose a different folder'),
                 detail: l10n.t(
-                    '{0} item(s) already exist in "{1}". Check the Output panel for details.',
+                    '{0} item(s) already exist in the destination. Check the Output panel for details.',
                     conflictCount.toString(),
-                    targetName,
                 ),
                 data: 'back' as const,
             },

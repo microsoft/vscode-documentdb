@@ -34,7 +34,7 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
             await vscode.window.showWarningMessage(l10n.t('No available folders'), {
                 modal: true,
                 detail: l10n.t(
-                    "It looks like there aren't any other folders to move these items into. You might want to create a new folder first.",
+                    "It looks like there aren't any other folders to move these items into.\nYou might want to create a new folder first.\n\nNote: You can't move items between 'DocumentDB Local' and regular connections.",
                 ),
             });
             throw new UserCancelledError();
