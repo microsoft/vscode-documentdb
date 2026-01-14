@@ -132,6 +132,12 @@ describe('PromptTargetFolderStep', () => {
         mockShowWarningMessage.mockReset();
     });
 
+    describe('shouldPrompt', () => {
+        it('should always return true', () => {
+            expect(step.shouldPrompt()).toBe(true);
+        });
+    });
+
     describe('getDescendantIds (via prompt)', () => {
         it('should recursively collect all descendant folder IDs', async () => {
             // Setup folder hierarchy:

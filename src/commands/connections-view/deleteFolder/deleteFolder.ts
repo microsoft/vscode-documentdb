@@ -19,7 +19,7 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
  * Command to delete a folder from the connections view.
  * Prompts for confirmation before deletion.
  */
-export async function deleteFolder(context: IActionContext, folderItem: FolderItem): Promise<void> {
+export async function deleteFolder(_context: IActionContext, folderItem: FolderItem): Promise<void> {
     if (!folderItem) {
         throw new Error(l10n.t('No folder selected.'));
     }
