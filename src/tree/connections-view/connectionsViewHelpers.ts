@@ -172,8 +172,7 @@ export function refreshParentInConnectionsView(treeElementId: string): void {
         // These are not actual tree element IDs - they indicate the element is at root level
         // Root-level elements: "connectionsView/folderId" → parentId = "connectionsView"
         // LocalEmulators root: "connectionsView/localEmulators/emulatorId" → parentId = "connectionsView/localEmulators"
-        const isRootLevel =
-            parentId === 'connectionsView' || parentId === 'connectionsView/localEmulators';
+        const isRootLevel = parentId === 'connectionsView' || parentId === 'connectionsView/localEmulators';
 
         if (isRootLevel) {
             // Root-level element, refresh the whole branch
