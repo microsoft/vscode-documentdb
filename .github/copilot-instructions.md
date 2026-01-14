@@ -96,5 +96,5 @@ src/commands/yourCommand/
 
 For detailed patterns, see:
 
-- [.github/instructions/typescript.instructions.md](.github/instructions/typescript.instructions.md) - TypeScript patterns and anti-patterns
-- [.github/instructions/wizard.instructions.md](.github/instructions/wizard.instructions.md) - AzureWizard implementation details
+- [instructions/typescript.instructions.md](instructions/typescript.instructions.md) - TypeScript patterns and anti-patterns
+- [instructions/wizard.instructions.md](instructions/wizard.instructions.md) - AzureWizard implementation details
