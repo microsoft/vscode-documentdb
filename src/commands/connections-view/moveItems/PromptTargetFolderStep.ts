@@ -83,7 +83,7 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
             .map((folder) => ({
                 label: this.buildFolderPath(folder, allFolders),
                 description: undefined,
-                iconPath: new vscode.ThemeIcon('folder-library'),
+                iconPath: new vscode.ThemeIcon('folder-opened'),
                 data: folder,
             }))
             .sort((a, b) => a.label.localeCompare(b.label)); // Alphabetical sort
@@ -93,9 +93,9 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
 
         // Build the root option with folder icon
         const rootOption: FolderPickItem = {
-            label: l10n.t('/ (top level)'),
+            label: '/',
             description: l10n.t('Move to top level'),
-            iconPath: new vscode.ThemeIcon('folder-library'),
+            iconPath: new vscode.ThemeIcon('folder-opened'),
             data: undefined,
         };
 
@@ -105,7 +105,9 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
     }
 
     /**
-     * Build the display path for a folder (e.g., "Development / Backend")
+     * Build the display path for a folder with icons.
+     * Parent folders use $(folder-opened), the target folder uses $(folder-library).
+     * Example: "$(folder-opened) Development $(folder-opened) Backend $(folder-library) API"
      */
     private buildFolderPath(folder: ConnectionItem, allFolders: ConnectionItem[]): string {
         const pathParts: string[] = [folder.name];
@@ -121,7 +123,7 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
             }
         }
 
-        return pathParts.join(' / ');
+        return '/ ' + pathParts.join(' / ');
     }
 
     /**
