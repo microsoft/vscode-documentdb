@@ -16,26 +16,28 @@ export interface FeedbackCardProps {
 export const FeedbackCard = ({ onFeedback }: FeedbackCardProps): JSX.Element => {
     return (
         <Card>
-            <Text size={400} weight="semibold" style={{ display: 'block', marginBottom: '12px' }}>
-                {l10n.t('How would you rate Query Insights?')}
-            </Text>
-            <div style={{ display: 'flex', gap: '8px' }}>
-                <Button
-                    appearance="subtle"
-                    size="small"
-                    icon={<ThumbLikeRegular />}
-                    onClick={() => onFeedback('positive')}
-                >
-                    {l10n.t('I like it')}
-                </Button>
-                <Button
-                    appearance="subtle"
-                    size="small"
-                    icon={<ThumbDislikeRegular />}
-                    onClick={() => onFeedback('negative')}
-                >
-                    {l10n.t('It could be better')}
-                </Button>
+            <div role="group" aria-labelledby="query-insights-rating-label">
+                <Text id="query-insights-rating-label" size={400} weight="semibold" style={{ display: 'block', marginBottom: '12px' }}>
+                    {l10n.t('How would you rate Query Insights?')}
+                </Text>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={<ThumbLikeRegular />}
+                        onClick={() => onFeedback('positive')}
+                    >
+                        {l10n.t('I like it')}
+                    </Button>
+                    <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={<ThumbDislikeRegular />}
+                        onClick={() => onFeedback('negative')}
+                    >
+                        {l10n.t('It could be better')}
+                    </Button>
+                </div>
             </div>
         </Card>
     );
