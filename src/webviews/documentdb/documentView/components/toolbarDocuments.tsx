@@ -38,10 +38,10 @@ export const ToolbarDocuments = ({
 
             <ToolbarDividerTransparent />
 
-            <Tooltip content={l10n.t('Check document syntax')} relationship="description" withArrow>
+            <Tooltip content={l10n.t('Validate document syntax')} relationship="description" withArrow>
                 <ToolbarButton
                     onClick={onValidateRequest}
-                    aria-label={l10n.t('Check document syntax')}
+                    aria-label={l10n.t('Validate document syntax')}
                     icon={<TextGrammarCheckmarkRegular />}
                     disabled={true}
                 >
@@ -49,17 +49,13 @@ export const ToolbarDocuments = ({
                 </ToolbarButton>
             </Tooltip>
 
-            <Tooltip
-                content={l10n.t('Reload original document from the database')}
-                relationship="description"
-                withArrow
-            >
+            <Tooltip content={l10n.t('Reload document from the database')} relationship="description" withArrow>
                 <ToolbarButton
                     onClick={onRefreshRequest}
-                    aria-label={l10n.t('Reload original document from the database')}
+                    aria-label={l10n.t('Reload document from the database')}
                     icon={<ArrowClockwiseRegular />}
                 >
-                    {l10n.t('Refresh')}
+                    {l10n.t('Reload')}
                 </ToolbarButton>
             </Tooltip>
         </Toolbar>
