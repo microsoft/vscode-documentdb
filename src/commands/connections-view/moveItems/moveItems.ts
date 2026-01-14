@@ -66,7 +66,7 @@ export async function moveItems(
     if (!allSameZone) {
         void vscode.window.showErrorMessage(
             l10n.t(
-                'Cannot move items between "DocumentDB Local" and regular connections. Please select items from the same zone.',
+                'We can\'t move items between "DocumentDB Local" and regular connections. Please select items from only one of those areas at a time.',
             ),
         );
         return;

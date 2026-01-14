@@ -92,7 +92,11 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
         const conflictCount = context.conflictingNames.length;
 
         ext.outputChannel.appendLog(
-            l10n.t('Move operation blocked: {0} naming conflict(s) in "{1}":', conflictCount.toString(), targetName),
+            l10n.t(
+                'We found {0} naming conflict(s) in "{1}". To move these items, please rename them or choose a different folder:',
+                conflictCount.toString(),
+                targetName,
+            ),
         );
         for (const name of context.conflictingNames) {
             ext.outputChannel.appendLog(` - ${name}`);
@@ -105,7 +109,7 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
                 label: l10n.t('$(arrow-left) Go Back'),
                 description: l10n.t('Choose a different folder'),
                 detail: l10n.t(
-                    '{0} item(s) already exist in "{1}". See Output for details.',
+                    '{0} item(s) already exist in "{1}". Check the Output panel for details.',
                     conflictCount.toString(),
                     targetName,
                 ),

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ConnectionStorageService, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
@@ -27,7 +27,20 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
             return folders;
         };
 
-        const picked = await context.ui.showQuickPick(getQuickPickItems(), {
+        const folders = await getQuickPickItems();
+
+        // Handle case when no destination folders are available
+        if (folders.length === 0) {
+            await vscode.window.showWarningMessage(l10n.t('No available folders'), {
+                modal: true,
+                detail: l10n.t(
+                    "It looks like there aren't any other folders to move these items into. You might want to create a new folder first.",
+                ),
+            });
+            throw new UserCancelledError();
+        }
+
+        const picked = await context.ui.showQuickPick(folders, {
             placeHolder: l10n.t('Select destination folder'),
             title: l10n.t('Move to Folder...'),
             suppressPersistence: true,
