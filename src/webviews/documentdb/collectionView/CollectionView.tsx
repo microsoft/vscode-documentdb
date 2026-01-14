@@ -84,6 +84,9 @@ export const CollectionView = (): JSX.Element => {
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
+    // Track document count for accessibility announcements
+    const [documentCount, setDocumentCount] = useState<number | undefined>(undefined);
+
     // Track which tab is currently active
     const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>('tab_result');
 
@@ -199,7 +202,10 @@ export const CollectionView = (): JSX.Element => {
                 pageSize: currentContext.activeQuery.pageSize,
                 executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
-            .then((_response) => {
+            .then((response) => {
+                // Capture document count for accessibility announcements
+                setDocumentCount(response.documentCount);
+
                 // 2. This is the time to update the auto-completion data
                 //    Since now we do know more about the data returned from the query
                 updateAutoCompletionData();
@@ -497,7 +503,18 @@ export const CollectionView = (): JSX.Element => {
     return (
         <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>
             <div className="collectionView">
-                {currentContext.isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
+                {currentContext.isLoading && (
+                    <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
+                )}
+
+                {/* ARIA live region for screen reader announcements */}
+                <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+                    {!currentContext.isLoading &&
+                        documentCount !== undefined &&
+                        (documentCount === 0
+                            ? l10n.t('No results found')
+                            : l10n.t('{0} {1} found', documentCount, documentCount === 1 ? 'result' : 'results'))}
+                </div>
 
                 <div className="toolbarMainView">
                     <ToolbarMainView />
