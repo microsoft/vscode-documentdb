@@ -146,7 +146,7 @@ export function GetPerformanceInsightsCard({
                     {isLoading ? (
                         <div className="get-performance-insights-card-loading">
                             <Spinner size="small" aria-hidden="true" />
-                            <Text size={300} role="status" aria-live="polite">
+                            <Text size={300} role="status">
                                 {l10n.t('AI is analyzing...')}
                             </Text>
                             <Button appearance="subtle" size="small" onClick={onCancel}>
