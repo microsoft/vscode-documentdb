@@ -366,10 +366,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 // Calculate current progress percentage
                 const progressPercentage =
                     this.sourceDocumentCount > 0
-                        ? Math.min(
-                              100,
-                              Math.round((this.totalProcessedDocuments / this.sourceDocumentCount) * 100),
-                          )
+                        ? Math.min(100, Math.round((this.totalProcessedDocuments / this.sourceDocumentCount) * 100))
                         : undefined;
 
                 // Build suffix with growing dots: "writing batch..." then "writing batch...." etc.
