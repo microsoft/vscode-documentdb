@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { TaskState, type Task, type TaskService } from './taskService/taskService';
+import { isTerminalState, TaskState, type Task, type TaskService } from '../taskService';
 
 /**
  * Interface for managing progress reporting of tasks.
  */
-export interface TaskReportingService {
+export interface TaskProgressReportingService {
     /**
      * Attaches the reporting service to a TaskService instance.
      * This will start monitoring all tasks registered with the service.
@@ -43,10 +43,10 @@ interface ProgressContext {
 }
 
 /**
- * Implementation of TaskReportingService that manages progress notifications
+ * Implementation of TaskProgressReportingService that manages progress notifications
  * for all registered tasks in the TaskService.
  */
-class TaskReportingServiceImpl implements TaskReportingService {
+class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
     private taskService?: TaskService;
     private activeReports = new Map<string, ProgressContext>();
     private subscriptions: vscode.Disposable[] = [];
@@ -104,7 +104,7 @@ class TaskReportingServiceImpl implements TaskReportingService {
         const status = task.getStatus();
 
         // Only start monitoring if task is not in a final state
-        if (this.isFinalState(status.state)) {
+        if (isTerminalState(status.state)) {
             return;
         }
 
@@ -202,7 +202,7 @@ class TaskReportingServiceImpl implements TaskReportingService {
             return;
         }
 
-        if (this.isFinalState(newState)) {
+        if (isTerminalState(newState)) {
             // Show final notification and clean up
             this.showFinalNotification(context.task, newState);
             this.stopMonitoringTask(taskId);
@@ -331,13 +331,9 @@ class TaskReportingServiceImpl implements TaskReportingService {
                 break;
         }
     }
-
-    private isFinalState(state: TaskState): boolean {
-        return [TaskState.Completed, TaskState.Failed, TaskState.Stopped].includes(state);
-    }
 }
 
 /**
- * Singleton instance of the TaskReportingService for managing task progress notifications.
+ * Singleton instance of the TaskProgressReportingService for managing task progress notifications.
  */
-export const TaskReportingService = new TaskReportingServiceImpl();
+export const TaskProgressReportingService = new TaskProgressReportingServiceImpl();

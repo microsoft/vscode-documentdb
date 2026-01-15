@@ -88,6 +88,17 @@ export interface TaskStateChangeEvent {
 }
 
 /**
+ * Checks if the given task state is terminal (task has finished and won't change).
+ * Terminal states are: Completed, Failed, or Stopped.
+ *
+ * @param state The task state to check
+ * @returns true if the state is Completed, Failed, or Stopped
+ */
+export function isTerminalState(state: TaskState): boolean {
+    return state === TaskState.Completed || state === TaskState.Failed || state === TaskState.Stopped;
+}
+
+/**
  * Abstract base class for long-running tasks managed by the TaskService.
  *
  * This class implements the template method pattern to handle complex state
@@ -394,7 +405,7 @@ export abstract class Task {
      * Checks if the task is in a final state (completed, failed, or stopped).
      */
     private isFinalState(): boolean {
-        return [TaskState.Completed, TaskState.Failed, TaskState.Stopped].includes(this._status.state);
+        return isTerminalState(this._status.state);
     }
 
     /**

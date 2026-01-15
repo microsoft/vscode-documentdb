@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
+import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { DocumentDbDocumentReader } from '../../services/taskService/data-api/readers/DocumentDbDocumentReader';
 import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
-import { TaskService, TaskState } from '../../services/taskService/taskService';
+import { isTerminalState, TaskService, TaskState, type Task } from '../../services/taskService/taskService';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
@@ -72,6 +73,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         // Register task with the task service
         TaskService.registerTask(task);
 
+        // Set up tree annotations to show progress on source and target nodes
+        // Annotations are automatically cleared when the task reaches a terminal state
+        if (ext.copiedCollectionNode?.id) {
+            void this.annotateNodeDuringTask(ext.copiedCollectionNode.id, vscode.l10n.t('Copying…'), task);
+        }
+        void this.annotateNodeDuringTask(context.targetNode.id, vscode.l10n.t('Pasting…'), task);
+
         // If the target is a database node, we need to refresh it once the task is working
         // so the new collection appears in the tree view
         if (context.targetNode instanceof DatabaseItem) {
@@ -90,6 +98,23 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
 
         // Start the copy-paste task
         void task.start();
+    }
+
+    /**
+     * Annotates a tree node with a temporary description while the task is running.
+     * The annotation is automatically cleared when the task reaches a terminal state.
+     */
+    private annotateNodeDuringTask(nodeId: string, label: string, task: Task): void {
+        void ext.state.runWithTemporaryDescription(nodeId, label, () => {
+            return new Promise<void>((resolve) => {
+                const subscription = task.onDidChangeState((event) => {
+                    if (isTerminalState(event.newState)) {
+                        subscription.dispose();
+                        resolve();
+                    }
+                });
+            });
+        });
     }
 
     public shouldExecute(context: PasteCollectionWizardContext): boolean {

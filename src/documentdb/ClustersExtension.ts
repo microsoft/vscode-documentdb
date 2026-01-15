@@ -63,9 +63,9 @@ import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
-import { TaskReportingService } from '../services/taskReportingService';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
+import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
@@ -179,8 +179,8 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerDiscoveryTree(activateContext);
                 this.registerHelpAndFeedbackTree(activateContext);
 
-                // Initialize TaskService and TaskReportingService
-                TaskReportingService.attach(TaskService);
+                // Initialize TaskService and TaskProgressReportingService
+                TaskProgressReportingService.attach(TaskService);
 
                 //// General Commands:
 
