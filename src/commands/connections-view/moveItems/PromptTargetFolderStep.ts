@@ -106,8 +106,8 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
 
     /**
      * Build the display path for a folder with icons.
-     * Parent folders use $(folder-opened), the target folder uses $(folder-library).
-     * Example: "$(folder-opened) Development $(folder-opened) Backend $(folder-library) API"
+     * Parent folders use $(folder-opened), the target folder uses $(symbol-folder).
+     * Example: "$(folder-opened) Development $(folder-opened) Backend $(symbol-folder) API"
      */
     private buildFolderPath(folder: ConnectionItem, allFolders: ConnectionItem[]): string {
         const pathParts: string[] = [folder.name];
