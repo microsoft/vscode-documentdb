@@ -5,9 +5,10 @@
 
 import { Button, Card, CardHeader, Text, tokens } from '@fluentui/react-components';
 import { ChevronLeftRegular, ChevronRightRegular, DismissRegular, LightbulbRegular } from '@fluentui/react-icons';
-import { forwardRef, useState } from 'react';
+import * as l10n from '@vscode/l10n';
+import { useState } from 'react';
 import { useTrpcClient } from '../../../../../../api/webview-client/useTrpcClient';
-import './optimizationCard.scss';
+import './baseOptimizationCard.scss';
 import './TipsCard.scss';
 
 export interface Tip {
@@ -35,6 +36,11 @@ export interface TipsCardProps {
      * Optional callback when the copy button is clicked
      */
     onCopy?: () => void;
+
+    /**
+     * Ref to forward to the card element
+     */
+    ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -52,7 +58,7 @@ export interface TipsCardProps {
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips, onDismiss }, ref) => {
+export function TipsCard({ title, tips, onDismiss, ref }: TipsCardProps) {
     const { trpcClient } = useTrpcClient();
     const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -127,6 +133,7 @@ export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips
                                     size="small"
                                     onClick={handlePrevious}
                                     disabled={currentIndex <= 0}
+                                    aria-label={l10n.t('Previous tip')}
                                 />
                                 <Button
                                     appearance="subtle"
@@ -134,6 +141,7 @@ export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips
                                     size="small"
                                     onClick={handleNext}
                                     disabled={currentIndex >= tips.length - 1}
+                                    aria-label={l10n.t('Next tip')}
                                 />
                                 {onDismiss && (
                                     <Button
@@ -141,6 +149,7 @@ export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips
                                         icon={<DismissRegular />}
                                         size="small"
                                         onClick={handleDismiss}
+                                        aria-label={l10n.t('Close tips')}
                                     />
                                 )}
                             </div>
@@ -158,6 +167,4 @@ export const TipsCard = forwardRef<HTMLDivElement, TipsCardProps>(({ title, tips
             </div>
         </Card>
     );
-});
-
-TipsCard.displayName = 'TipsCard';
+}

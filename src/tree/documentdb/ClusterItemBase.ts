@@ -6,6 +6,7 @@
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { type IconPath } from 'vscode';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -55,23 +56,17 @@ export abstract class ClusterItemBase
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_documentdbcluster';
 
+    /**
+     * Correlation ID used for telemetry funnel analysis.
+     * This is for statistics only and does not influence functionality.
+     * It tracks the user's journey through the discovery flow.
+     */
+    public journeyCorrelationId?: string;
+
     protected descriptionOverride?: string;
     protected tooltipOverride?: string | vscode.MarkdownString;
 
-    protected iconPath?:
-        | string
-        | vscode.Uri
-        | {
-              /**
-               * The icon path for the light theme.
-               */
-              light: string | vscode.Uri;
-              /**
-               * The icon path for the dark theme.
-               */
-              dark: string | vscode.Uri;
-          }
-        | vscode.ThemeIcon;
+    protected iconPath?: IconPath;
 
     private readonly experienceContextValue: string = '';
 

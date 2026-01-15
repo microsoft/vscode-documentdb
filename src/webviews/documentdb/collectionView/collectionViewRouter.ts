@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { getKnownFields, type FieldEntry } from '../../../utils/json/mongo/autocomplete/getKnownFields';
-import { publicProcedure, router, trpcToTelemetry } from '../../api/extension-server/trpc';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
 
 import * as l10n from '@vscode/l10n';
 import {
@@ -138,13 +138,12 @@ async function findCollectionNodeInTree(
 }
 
 export const collectionsViewRouter = router({
-    getInfo: publicProcedure.use(trpcToTelemetry).query(({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         return l10n.t('Info from the webview: ') + JSON.stringify(myCtx);
     }),
-    runFindQuery: publicProcedure
-        .use(trpcToTelemetry)
+    runFindQuery: publicProcedureWithTelemetry
         // parameters
         .input(
             z.object({
@@ -160,7 +159,7 @@ export const collectionsViewRouter = router({
         )
         // procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // Track execution intent for telemetry
             const executionIntent = input.executionIntent ?? 'pagination';
@@ -194,11 +193,10 @@ export const collectionsViewRouter = router({
 
             return { documentCount: size };
         }),
-    getAutocompletionSchema: publicProcedure
-        .use(trpcToTelemetry)
+    getAutocompletionSchema: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
 
@@ -215,46 +213,42 @@ export const collectionsViewRouter = router({
 
             return querySchema;
         }),
-    getCurrentPageAsTable: publicProcedure
-        .use(trpcToTelemetry)
-        //parameters
+    getCurrentPageAsTable: publicProcedureWithTelemetry
+        // parameters
         .input(z.array(z.string()))
         // procedure type
         .query(({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
             const tableData = session.getCurrentPageAsTable(input);
 
             return tableData;
         }),
-    getCurrentPageAsTree: publicProcedure
-        .use(trpcToTelemetry)
+    getCurrentPageAsTree: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
             const treeData = session.getCurrentPageAsTree();
 
             return treeData;
         }),
-    getCurrentPageAsJson: publicProcedure
-        .use(trpcToTelemetry)
+    getCurrentPageAsJson: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
             const jsonData = session.getCurrentPageAsJson();
 
             return jsonData;
         }),
-    addDocument: publicProcedure
-        .use(trpcToTelemetry)
+    addDocument: publicProcedureWithTelemetry
         // procedure type
         .mutation(({ ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
@@ -263,13 +257,12 @@ export const collectionsViewRouter = router({
                 mode: 'add',
             });
         }),
-    viewDocumentById: publicProcedure
-        .use(trpcToTelemetry)
+    viewDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
         .mutation(({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
@@ -279,13 +272,12 @@ export const collectionsViewRouter = router({
                 mode: 'view',
             });
         }),
-    editDocumentById: publicProcedure
-        .use(trpcToTelemetry)
+    editDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
         .mutation(({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
@@ -295,13 +287,12 @@ export const collectionsViewRouter = router({
                 mode: 'edit',
             });
         }),
-    deleteDocumentsById: publicProcedure
-        .use(trpcToTelemetry)
-        // parameteres
+    deleteDocumentsById: publicProcedureWithTelemetry
+        // parameters
         .input(z.array(z.string())) // stands for string[]
         // procedure type
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const confirmed = await getConfirmationAsInSettings(
                 l10n.t('Are you sure?'),
@@ -330,8 +321,7 @@ export const collectionsViewRouter = router({
 
             return acknowledged;
         }),
-    exportDocuments: publicProcedure
-        .use(trpcToTelemetry)
+    exportDocuments: publicProcedureWithTelemetry
         // parameters
         .input(
             z.object({
@@ -344,7 +334,7 @@ export const collectionsViewRouter = router({
         )
         //procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
             const collectionTreeNode = await findCollectionNodeInTree(
@@ -373,8 +363,8 @@ export const collectionsViewRouter = router({
             }
         }),
 
-    importDocuments: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    importDocuments: publicProcedureWithTelemetry.query(async ({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
         const collectionTreeNode = await findCollectionNodeInTree(
@@ -392,8 +382,7 @@ export const collectionsViewRouter = router({
         }
     }),
 
-    generateQuery: publicProcedure
-        .use(trpcToTelemetry)
+    generateQuery: publicProcedureWithTelemetry
         // parameters
         .input(
             z.object({
@@ -409,7 +398,7 @@ export const collectionsViewRouter = router({
         )
         // handle generation request
         .query(async ({ input, ctx }) => {
-            const generationCtx = ctx as RouterContext;
+            const generationCtx = ctx as WithTelemetry<RouterContext>;
 
             const result = await callWithTelemetryAndErrorHandling(
                 'vscode-documentdb.collectionView.generateQuery',
@@ -496,8 +485,8 @@ export const collectionsViewRouter = router({
      * Note: This uses queryPlanner verbosity (no query re-execution)
      * Documents returned is NOT available in Stage 1 - only in Stage 2 with executionStats
      */
-    getQueryInsightsStage1: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    getQueryInsightsStage1: publicProcedureWithTelemetry.query(async ({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
         const { sessionId, databaseName, collectionName } = myCtx;
 
         ext.outputChannel.trace(
@@ -520,6 +509,7 @@ export const collectionsViewRouter = router({
         const session: ClusterSession = ClusterSession.getSession(sessionId);
         const clusterMetadata = await session.getClient().getClusterMetadata();
 
+        ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
         if (clusterMetadata?.domainInfo_api === 'RU') {
             // TODO: Platform identification improvements needed
             // 1. Create a centralized platform detection service (ClusterSession.getPlatformType())
@@ -607,8 +597,8 @@ export const collectionsViewRouter = router({
      *
      * Note: This executes the query with executionStats verbosity
      */
-    getQueryInsightsStage2: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    getQueryInsightsStage2: publicProcedureWithTelemetry.query(async ({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
         const { sessionId, databaseName, collectionName } = myCtx;
 
         ext.outputChannel.trace(
@@ -617,9 +607,6 @@ export const collectionsViewRouter = router({
                 collection: collectionName,
             }),
         );
-
-        // Track execution time to ensure minimum duration for better UX
-        const startTime = performance.now();
 
         let analyzed: ExecutionStatsAnalysis;
         let explainResult: Document | undefined;
@@ -634,6 +621,9 @@ export const collectionsViewRouter = router({
         } else {
             // Get ClusterSession
             const session: ClusterSession = ClusterSession.getSession(sessionId);
+
+            const clusterMetadata = await session.getClient().getClusterMetadata();
+            ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
 
             // Get query parameters from session with parsed BSON objects
             const queryParams = session.getCurrentFindQueryParamsWithObjects();
@@ -652,7 +642,7 @@ export const collectionsViewRouter = router({
             );
             const executionStatsDuration = Date.now() - executionStatsStart;
             ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 2] explain(executionStats) completed in {ms}ms', {
+                l10n.t('[Query Insights Stage 2] explain completed in {ms}ms', {
                     ms: executionStatsDuration.toString(),
                 }),
             );
@@ -678,13 +668,6 @@ export const collectionsViewRouter = router({
             );
             const errorResponse = createFailedQueryResponse(analyzed, explainResult);
 
-            // Ensure minimum execution time for better UX
-            const elapsedTime = performance.now() - startTime;
-            const minimumDuration = 1500; // 1.5 seconds
-            if (elapsedTime < minimumDuration) {
-                await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
-            }
-
             ext.outputChannel.trace(l10n.t('Query Insights Stage 2 completed with execution error'));
             return errorResponse;
         }
@@ -692,13 +675,6 @@ export const collectionsViewRouter = router({
         // Transform to UI format (normal successful execution path)
         ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
         const transformed = transformStage2Response(analyzed);
-
-        // Ensure minimum execution time for better UX (avoid jarring instant transitions)
-        const elapsedTime = performance.now() - startTime;
-        const minimumDuration = 1500; // 1.5 seconds
-        if (elapsedTime < minimumDuration) {
-            await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
-        }
 
         ext.outputChannel.trace(
             l10n.t(
@@ -720,14 +696,14 @@ export const collectionsViewRouter = router({
      *
      * This endpoint:
      * 1. Retrieves the current query from ClusterSession (no parameters needed)
-     * 2. Calls AI service with query, database, and collection info
-     * 3. Transforms AI response into UI-friendly format with action buttons
+     * 2. Retrieves cached execution plan from Stage 2
+     * 3. Calls AI service with query, database, collection info, and execution plan
+     * 4. Transforms AI response into UI-friendly format with action buttons
      */
-    getQueryInsightsStage3: publicProcedure
-        .use(trpcToTelemetry)
+    getQueryInsightsStage3: publicProcedureWithTelemetry
         .input(z.object({ requestKey: z.string() }))
         .query(async ({ input, ctx }): Promise<QueryInsightsStage3Response> => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
             const { sessionId, clusterId, databaseName, collectionName } = myCtx;
             const { requestKey } = input;
 
@@ -741,20 +717,33 @@ export const collectionsViewRouter = router({
 
             // Get ClusterSession
             const session: ClusterSession = ClusterSession.getSession(sessionId);
+            const clusterMetadata = await session.getClient().getClusterMetadata();
+            ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
 
             // Get query parameters from session (current query)
             const queryParams = session.getCurrentFindQueryParams();
 
+            // Get cached execution plan from Stage 2
+            const cachedExecutionPlan = session.getRawExplainOutput(databaseName, collectionName);
+            if (cachedExecutionPlan) {
+                ext.outputChannel.trace(
+                    l10n.t('[Query Insights Stage 3] Using cached execution plan from Stage 2 (requestKey: {key})', {
+                        key: requestKey,
+                    }),
+                );
+            }
+
             // Create AI service instance
             const aiService = new QueryInsightsAIService();
 
-            // Call AI service
+            // Call AI service with execution plan
             const aiServiceStart = Date.now();
             const aiRecommendations = await aiService.getOptimizationRecommendations(
                 sessionId,
                 queryParams,
                 databaseName,
                 collectionName,
+                cachedExecutionPlan ?? undefined,
             );
             const aiServiceDuration = Date.now() - aiServiceStart;
             ext.outputChannel.trace(
@@ -763,6 +752,11 @@ export const collectionsViewRouter = router({
                     key: requestKey,
                 }),
             );
+
+            ctx.telemetry.measurements.recommendationCount = aiRecommendations.improvements.length;
+            ctx.telemetry.measurements.actionableRecommendationCount = aiRecommendations.improvements.filter(
+                (rec) => rec.action !== 'none',
+            ).length;
 
             // Transform AI response to UI format with button payloads
             const transformed = transformAIResponseForUI(aiRecommendations, {
@@ -786,8 +780,7 @@ export const collectionsViewRouter = router({
      * Takes actionId and payload from the button click and routes to appropriate handler
      * in QueryInsightsAIService
      */
-    executeQueryInsightsAction: publicProcedure
-        .use(trpcToTelemetry)
+    executeQueryInsightsAction: publicProcedureWithTelemetry
         .input(
             z.object({
                 actionId: z.string(),
@@ -795,7 +788,7 @@ export const collectionsViewRouter = router({
             }),
         )
         .mutation(async ({ ctx, input }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
             const { sessionId, clusterId } = myCtx;
             const { actionId, payload } = input;
 
@@ -812,8 +805,8 @@ export const collectionsViewRouter = router({
      * View Raw Explain Output
      * Opens the raw explain plan output in a new VS Code document
      */
-    viewRawExplainOutput: publicProcedure.use(trpcToTelemetry).mutation(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    viewRawExplainOutput: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
         const { sessionId, databaseName, collectionName } = myCtx;
 
         // Get ClusterSession

@@ -226,20 +226,34 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         return null;
     }
 
-    private async addDiscoveryProviderPromotionIfNeeded(providerId: string): Promise<void> {
+    /**
+     * Adds a discovery provider promotion if the user has already explored discovery.
+     * This method is public only for testing purposes.
+     *
+     * Logic:
+     * - If promotion already shown: skip
+     * - If user has NO active providers: skip (they never used discovery OR removed all)
+     * - If provider doesn't exist: skip
+     * - If user has active providers: add this provider to promote it to existing users
+     */
+    public async addDiscoveryProviderPromotionIfNeeded(providerId: string): Promise<void> {
         const promotionFlagKey = `discoveryProviderPromotionProcessed:${providerId}`;
-        const promotionAlreadyShown = ext.context.globalState.get<boolean>(promotionFlagKey, false);
+        const promotionProcessed = ext.context.globalState.get<boolean>(promotionFlagKey, false);
 
-        if (promotionAlreadyShown) {
+        if (promotionProcessed) {
             // Already shown/processed previously — do nothing.
             return;
         }
 
-        // If there are no registered discovery providers at all, mark the promotion as shown
-        // and return early. The goal is to only show the promotion to users who have some
-        // discovery providers active/installed.
-        const registeredProviders = DiscoveryService.listProviders();
-        if (!registeredProviders || registeredProviders.length === 0) {
+        // Read current active provider IDs
+        const activeProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
+
+        // If there are no active discovery providers, mark the promotion as shown
+        // and return early. The goal is to only show the promotion to users who have
+        // already added discovery providers (indicating they've explored the feature).
+        // We can't distinguish between new users and users who removed all providers,
+        // so we err on the side of not promoting to avoid cluttering the UI for new users.
+        if (!activeProviderIds || activeProviderIds.length === 0) {
             try {
                 await ext.context.globalState.update(promotionFlagKey, true);
             } catch {
@@ -254,9 +268,6 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             // Provider not registered with DiscoveryService; skip for now.
             return;
         }
-
-        // Read current active provider IDs
-        const activeProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
 
         // If not present, register it
         if (!activeProviderIds.includes(providerId)) {

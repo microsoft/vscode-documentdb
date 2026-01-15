@@ -21,6 +21,14 @@ import './documentView.scss';
 
 loader.config({ monaco: monacoEditor });
 
+// ===========================================
+// ACCESSIBILITY: Programmatic Names for Monaco Editors
+// ===========================================
+// Monaco Editor natively supports the `ariaLabel` property in its
+// IStandaloneEditorConstructionOptions interface. This sets the aria-label
+// attribute on the editor's internal textarea, allowing screen readers to
+// announce a meaningful description of the editor's purpose.
+// ===========================================
 const monacoOptions = {
     minimap: {
         enabled: true,
@@ -29,6 +37,8 @@ const monacoOptions = {
 
     readOnly: false,
     automaticLayout: false,
+    // Accessibility: aria-label for screen readers
+    ariaLabel: l10n.t('Document Editor: Edit the document in JSON format'),
 };
 
 export const DocumentView = (): JSX.Element => {

@@ -21,6 +21,12 @@ import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
+import { createFolder, createSubfolder } from '../commands/connections-view/createFolder/createFolder';
+import { deleteFolder } from '../commands/connections-view/deleteFolder/deleteFolder';
+import { moveItems } from '../commands/connections-view/moveItems/moveItems';
+import { newConnectionInFolder } from '../commands/connections-view/newConnectionInFolder/newConnectionInFolder';
+import { renameConnection } from '../commands/connections-view/renameConnection/renameConnection';
+import { renameFolder } from '../commands/connections-view/renameFolder/renameFolder';
 import { copyCollection } from '../commands/copyCollection/copyCollection';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
@@ -47,7 +53,6 @@ import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeEl
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
-import { renameConnection } from '../commands/renameConnection/renameConnection';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
@@ -72,6 +77,7 @@ import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
+import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
 import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
 import { Views } from './Views';
 
@@ -178,90 +184,139 @@ export class ClustersExtension implements vscode.Disposable {
 
                 //// General Commands:
 
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.refresh', refreshTreeElement);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.refresh',
+                    withTreeNodeCommandCorrelation(refreshTreeElement),
+                );
 
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.createDatabase', createAzureDatabase);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.createDatabase',
+                    withTreeNodeCommandCorrelation(createAzureDatabase),
+                );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.copyConnectionString',
-                    copyAzureConnectionString,
+                    withTreeNodeCommandCorrelation(copyAzureConnectionString),
                 );
 
                 //// Connections View Commands:
                 registerCommandWithModalErrors(
                     'vscode-documentdb.command.connectionsView.newConnection',
-                    newConnection,
+                    withCommandCorrelation(newConnection),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.updateCredentials',
-                    updateCredentials,
+                    withTreeNodeCommandCorrelation(updateCredentials),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.updateConnectionString',
-                    updateConnectionString,
+                    withTreeNodeCommandCorrelation(updateConnectionString),
                 );
 
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.connectionsView.newEmulatorConnection',
-                    newLocalConnection,
+                    withTreeNodeCommandCorrelation(newLocalConnection),
                 );
 
-                registerCommand('vscode-documentdb.command.connectionsView.refresh', (context: IActionContext) => {
-                    return refreshView(context, Views.ConnectionsView);
-                });
+                registerCommand(
+                    'vscode-documentdb.command.connectionsView.refresh',
+                    withCommandCorrelation((context: IActionContext) => {
+                        return refreshView(context, Views.ConnectionsView);
+                    }),
+                );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.chooseDataMigrationExtension',
-                    chooseDataMigrationExtension,
+                    withTreeNodeCommandCorrelation(chooseDataMigrationExtension),
                 );
 
                 //// Registry Commands:
 
-                registerCommand('vscode-documentdb.command.discoveryView.addRegistry', addDiscoveryRegistry);
+                registerCommand(
+                    'vscode-documentdb.command.discoveryView.addRegistry',
+                    withCommandCorrelation(addDiscoveryRegistry),
+                );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.removeRegistry',
-                    removeDiscoveryRegistry,
+                    withTreeNodeCommandCorrelation(removeDiscoveryRegistry),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.filterProviderContent',
-                    filterProviderContent,
+                    withTreeNodeCommandCorrelation(filterProviderContent),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.manageCredentials',
-                    manageCredentials,
+                    withTreeNodeCommandCorrelation(manageCredentials),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
-                    learnMoreAboutServiceProvider,
+                    withTreeNodeCommandCorrelation(learnMoreAboutServiceProvider),
                 );
 
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.discoveryView.addConnectionToConnectionsView',
-                    addConnectionFromRegistry,
+                    withTreeNodeCommandCorrelation(addConnectionFromRegistry),
                 );
 
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView',
-                    addConnectionFromRegistry,
+                    withTreeNodeCommandCorrelation(addConnectionFromRegistry),
                 );
 
-                registerCommand('vscode-documentdb.command.discoveryView.refresh', (context: IActionContext) => {
-                    return refreshView(context, Views.DiscoveryView);
-                });
+                registerCommand(
+                    'vscode-documentdb.command.discoveryView.refresh',
+                    withCommandCorrelation((context: IActionContext) => {
+                        return refreshView(context, Views.DiscoveryView);
+                    }),
+                );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.removeConnection',
-                    removeConnection,
+                    withTreeNodeCommandCorrelation(removeConnection),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.renameConnection',
-                    renameConnection,
+                    withTreeNodeCommandCorrelation(renameConnection),
+                );
+
+                //// Folder Management Commands:
+
+                registerCommandWithModalErrors(
+                    'vscode-documentdb.command.connectionsView.createFolder',
+                    withCommandCorrelation(createFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.createSubfolder',
+                    withTreeNodeCommandCorrelation(createSubfolder),
+                );
+
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
+                    'vscode-documentdb.command.connectionsView.newConnectionInFolder',
+                    withTreeNodeCommandCorrelation(newConnectionInFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.renameFolder',
+                    withTreeNodeCommandCorrelation(renameFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.deleteFolder',
+                    withTreeNodeCommandCorrelation(deleteFolder),
+                );
+
+                //// Move Operations:
+
+                registerCommand(
+                    'vscode-documentdb.command.connectionsView.moveItems',
+                    withCommandCorrelation(moveItems),
                 );
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.copyCollection', copyCollection);
@@ -280,33 +335,75 @@ export class ClustersExtension implements vscode.Disposable {
                  * It was possible to merge the two commands into one, but it would result in code that is
                  * harder to understand and maintain.
                  */
-                registerCommand('vscode-documentdb.command.internal.containerView.open', openCollectionViewInternal);
+                registerCommand(
+                    'vscode-documentdb.command.internal.containerView.open',
+                    withCommandCorrelation(openCollectionViewInternal),
+                );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.containerView.open',
-                    openCollectionView,
+                    withTreeNodeCommandCorrelation(openCollectionView),
                 );
 
-                registerCommand('vscode-documentdb.command.internal.documentView.open', openDocumentView);
+                registerCommand(
+                    'vscode-documentdb.command.internal.documentView.open',
+                    withCommandCorrelation(openDocumentView),
+                );
 
-                registerCommand('vscode-documentdb.command.internal.helpAndFeedback.openUrl', openHelpAndFeedbackUrl);
+                registerCommand(
+                    'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
+                    withCommandCorrelation(openHelpAndFeedbackUrl),
+                );
 
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.internal.retry', retryAuthentication);
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.internal.revealView', revealView);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.internal.retry',
+                    withTreeNodeCommandCorrelation(retryAuthentication),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.internal.revealView',
+                    withTreeNodeCommandCorrelation(revealView),
+                );
 
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.launchShell', launchShell);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.launchShell',
+                    withTreeNodeCommandCorrelation(launchShell),
+                );
 
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropCollection', deleteCollection);
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropDatabase', deleteAzureDatabase);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.dropCollection',
+                    withTreeNodeCommandCorrelation(deleteCollection),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.dropDatabase',
+                    withTreeNodeCommandCorrelation(deleteAzureDatabase),
+                );
 
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.hideIndex', hideIndex);
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.unhideIndex', unhideIndex);
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.dropIndex', dropIndex);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.hideIndex',
+                    withTreeNodeCommandCorrelation(hideIndex),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.unhideIndex',
+                    withTreeNodeCommandCorrelation(unhideIndex),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.dropIndex',
+                    withTreeNodeCommandCorrelation(dropIndex),
+                );
 
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.createCollection', createCollection);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.createCollection',
+                    withTreeNodeCommandCorrelation(createCollection),
+                );
 
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.createDocument', createMongoDocument);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.createDocument',
+                    withTreeNodeCommandCorrelation(createMongoDocument),
+                );
 
-                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.importDocuments', importDocuments);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.importDocuments',
+                    withTreeNodeCommandCorrelation(importDocuments),
+                );
 
                 registerScrapbookCommands();
 
@@ -320,10 +417,13 @@ export class ClustersExtension implements vscode.Disposable {
                  * It was possible to merge the two commands into one, but it would result in code that is
                  * harder to understand and maintain.
                  */
-                registerCommand('vscode-documentdb.command.internal.exportDocuments', exportQueryResults);
+                registerCommand(
+                    'vscode-documentdb.command.internal.exportDocuments',
+                    withCommandCorrelation(exportQueryResults),
+                );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.exportDocuments',
-                    exportEntireCollection,
+                    withTreeNodeCommandCorrelation(exportEntireCollection),
                 );
 
                 // Testing command for DemoTask

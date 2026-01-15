@@ -12,7 +12,7 @@ import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
-export const ToolbarViewNavigation = (): JSX.Element => {
+export const ToolbarViewNavigation = (): React.JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */
@@ -174,6 +174,7 @@ export const ToolbarViewNavigation = (): JSX.Element => {
                     style={{ minWidth: '100px', maxWidth: '100px' }}
                     value={currentContext.activeQuery.pageSize.toString()}
                     selectedOptions={[currentContext.activeQuery.pageSize.toString()]}
+                    aria-label={l10n.t('Change page size')}
                 >
                     <Option key="10">10</Option>
                     <Option key="50">50</Option>

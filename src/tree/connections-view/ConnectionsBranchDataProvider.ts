@@ -103,32 +103,61 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
      * Helper function to get the root items of the connections tree.
      */
     private async getRootItems(parentId: string): Promise<TreeElement[] | null | undefined> {
-        const connectionItems = await ConnectionStorageService.getAll(ConnectionType.Clusters);
+        // Check if there are any connections at all (for welcome screen logic)
+        const allConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
+        const allEmulators = await ConnectionStorageService.getAll(ConnectionType.Emulators);
 
-        if (connectionItems.length === 0) {
+        if (allConnections.length === 0 && allEmulators.length === 0) {
             /**
              * we have a special case here as we want to show a "welcome screen" in the case when no connections were found.
-             * However, we need to lookup the emulator items as well, so we need to check if there are any emulators.
              */
-            const emulatorItems = await ConnectionStorageService.getAll(ConnectionType.Emulators);
-            if (emulatorItems.length === 0) {
-                return null;
-            }
+            return null;
         }
+
+        // Import FolderItem and ItemType
+        const { FolderItem } = await import('./FolderItem');
+        const { ItemType } = await import('../../services/connectionStorageService');
+
+        // Get root-level items (parentId = undefined) for clusters only
+        // Emulators are handled by LocalEmulatorsItem and should not be at root
+        const rootFoldersClusters = await ConnectionStorageService.getChildren(
+            undefined,
+            ConnectionType.Clusters,
+            ItemType.Folder,
+        );
+        const rootConnectionsClusters = await ConnectionStorageService.getChildren(
+            undefined,
+            ConnectionType.Clusters,
+            ItemType.Connection,
+        );
+
+        const clusterFolderItems = rootFoldersClusters.map(
+            (folder) => new FolderItem(folder, parentId, ConnectionType.Clusters),
+        );
+
+        const clusterItems = rootConnectionsClusters.map((connection: ConnectionItem) => {
+            const model: ClusterModelWithStorage = {
+                id: `${parentId}/${connection.id}`,
+                storageId: connection.id,
+                name: connection.name,
+                dbExperience: DocumentDBExperience,
+                connectionString: connection?.secrets?.connectionString ?? undefined,
+                emulatorConfiguration: connection.properties.emulatorConfiguration,
+            };
+
+            return new DocumentDBClusterItem(model);
+        });
+
+        // Sort folders alphabetically by name
+        clusterFolderItems.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Sort connections alphabetically by name
+        clusterItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
 
         const rootItems = [
             new LocalEmulatorsItem(parentId),
-            ...connectionItems.map((connection: ConnectionItem) => {
-                const model: ClusterModelWithStorage = {
-                    id: `${parentId}/${connection.id}`,
-                    storageId: connection.id,
-                    name: connection.name,
-                    dbExperience: DocumentDBExperience,
-                    connectionString: connection?.secrets?.connectionString ?? undefined,
-                };
-
-                return new DocumentDBClusterItem(model);
-            }),
+            ...clusterFolderItems,
+            ...clusterItems,
             new NewConnectionItemCV(parentId),
         ];
 

@@ -9,6 +9,10 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
+import {
+    refreshParentInConnectionsView,
+    withConnectionsViewProgress,
+} from '../../tree/connections-view/connectionsViewHelpers';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -50,18 +54,20 @@ export async function removeConnection(context: IActionContext, node: DocumentDB
 
     // continue with deletion
 
-    await ext.state.showDeleting(node.id, async () => {
-        if ((node as DocumentDBClusterItem).cluster.emulatorConfiguration?.isEmulator) {
-            await ConnectionStorageService.delete(ConnectionType.Emulators, node.storageId);
-        } else {
-            await ConnectionStorageService.delete(ConnectionType.Clusters, node.storageId);
-        }
+    await withConnectionsViewProgress(async () => {
+        await ext.state.showDeleting(node.id, async () => {
+            if ((node as DocumentDBClusterItem).cluster.emulatorConfiguration?.isEmulator) {
+                await ConnectionStorageService.delete(ConnectionType.Emulators, node.storageId);
+            } else {
+                await ConnectionStorageService.delete(ConnectionType.Clusters, node.storageId);
+            }
+        });
+
+        // delete cached credentials from memory
+        CredentialCache.deleteCredentials(node.id);
+
+        refreshParentInConnectionsView(node.id);
     });
-
-    // delete cached credentials from memory
-    CredentialCache.deleteCredentials(node.id);
-
-    ext.connectionsBranchDataProvider.refresh();
 
     showConfirmationAsInSettings(l10n.t('The selected connection has been removed.'));
 }

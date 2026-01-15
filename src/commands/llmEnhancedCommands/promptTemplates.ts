@@ -91,6 +91,9 @@ Follow these strict instructions (must obey):
 16. **Do note drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
 17. **Be brave to say no** — if you confirm an index change is not beneficial, or not relates to the query, feel free to return empty improvements.
 18. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics.\n"
+19. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
+  - Allowed: \`###\` headings, paragraphs, lists, blockquotes, \`---\` rules, links, inline code, fenced code blocks (triple backticks).
+  - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (\`$\`/\`$$\`), mermaid/diagrams, callouts/admonitions (\`> [!NOTE]\`, \`:::\`).
 
 Thinking / analysis tips (useful signals to form recommendations; don't output these tips themselves):
 - Check **which index(es)** the winning plan used (or whether a \`COLLSCAN\` occurred) and whether \`totalKeysExamined\` is much smaller than \`totalDocsExamined\`.
@@ -229,6 +232,9 @@ Follow these strict instructions (must obey):
 15. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate \`{collectionStats}\`, \`{indexStats}\`, or \`{executionStats}\`—just include them as-is (and add computed helper fields if needed).
 16. **Be brave to say no** — if you confirm an index change is not beneficial, or not relates to the query, feel free to return empty improvements.
 17. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics.\n"
+18. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
+  - Allowed: \`###\` headings, paragraphs, lists, blockquotes, \`---\` rules, links, inline code, fenced code blocks (triple backticks).
+  - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (\`$\`/\`$$\`), mermaid/diagrams, callouts/admonitions (\`> [!NOTE]\`, \`:::\`).
 
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **\\$match priority**: Place match stages early and check if indexes can accelerate filtering.

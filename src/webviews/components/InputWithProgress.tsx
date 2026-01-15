@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ProgressBar } from '@fluentui/react-components';
-import { forwardRef, type JSX } from 'react';
+import { type JSX } from 'react';
 import { InputWithHistory, type InputWithHistoryProps } from './InputWithHistory';
 import './inputWithProgress.scss';
 
@@ -47,30 +47,26 @@ interface InputWithProgressProps extends InputWithHistoryProps {
  * />
  * ```
  */
-export const InputWithProgress = forwardRef<HTMLInputElement, InputWithProgressProps>(
-    ({ indeterminateProgress, ...inputProps }, ref): JSX.Element => {
-        return (
-            <div className={`inputWithProgress${indeterminateProgress ? ' progress-active' : ''}`}>
-                <InputWithHistory ref={ref} {...inputProps} style={{ ...inputProps.style, width: '100%' }} />
-                {indeterminateProgress ? (
-                    <ProgressBar
-                        thickness="large"
-                        shape="rounded"
-                        className="progressBar"
-                        style={{
-                            position: 'absolute',
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            top: 'auto',
-                            pointerEvents: 'none',
-                        }}
-                        aria-hidden={true}
-                    />
-                ) : null}
-            </div>
-        );
-    },
-);
-
-InputWithProgress.displayName = 'InputWithProgress';
+export function InputWithProgress({ indeterminateProgress, ref, ...inputProps }: InputWithProgressProps): JSX.Element {
+    return (
+        <div className={`inputWithProgress${indeterminateProgress ? ' progress-active' : ''}`}>
+            <InputWithHistory ref={ref} {...inputProps} style={{ ...inputProps.style, width: '100%' }} />
+            {indeterminateProgress ? (
+                <ProgressBar
+                    thickness="large"
+                    shape="rounded"
+                    className="progressBar"
+                    style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        top: 'auto',
+                        pointerEvents: 'none',
+                    }}
+                    aria-hidden={true}
+                />
+            ) : null}
+        </div>
+    );
+}

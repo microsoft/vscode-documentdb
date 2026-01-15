@@ -12,4 +12,7 @@ export interface RenameConnectionWizardContext extends IActionContext {
 
     originalConnectionName: string;
     newConnectionName?: string;
+
+    /** Tree item path for refresh after rename */
+    treeItemPath: string;
 }
