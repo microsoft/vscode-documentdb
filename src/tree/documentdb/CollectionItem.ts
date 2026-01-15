@@ -44,7 +44,7 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
             id: this.id,
             contextValue: this.contextValue,
             label: this.collectionInfo.name,
-            iconPath: new vscode.ThemeIcon('folder-opened'),
+            iconPath: new vscode.ThemeIcon('folder-library'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
