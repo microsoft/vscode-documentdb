@@ -32,7 +32,17 @@ export enum ConnectionType {
     Emulators = 'emulators',
 }
 
+/**
+ * Item type discriminator for unified storage
+ */
+export enum ItemType {
+    Connection = 'connection',
+    Folder = 'folder',
+}
+
 export interface ConnectionProperties extends Record<string, unknown> {
+    type: ItemType; // Discriminator for item type
+    parentId?: string; // Parent folder ID for hierarchy (undefined = root level)
     api: API;
     emulatorConfiguration?: {
         /**
@@ -133,11 +143,229 @@ export class ConnectionStorageService {
                     );
                 }
             }
+
+            // Start async orphan cleanup (not awaited - runs in background)
+            void this.cleanupOrphanedItems().then(() => {
+                // Collect storage stats after cleanup completes (also not awaited)
+                void this.collectStorageStats();
+            });
         }
         return this._storageService;
     }
 
+    /**
+     * Cleans up orphaned items (items whose parentId references a non-existent folder).
+     * This can happen if a folder deletion fails to cascade to children.
+     * Runs iteratively until no orphans remain (deleting a parent may orphan its children).
+     * Runs asynchronously on storage initialization.
+     */
+    private static async cleanupOrphanedItems(): Promise<void> {
+        await callWithTelemetryAndErrorHandling('cleanupOrphanedItems', async (context: IActionContext) => {
+            context.telemetry.properties.isActivationEvent = 'true';
+
+            let totalOrphansRemoved = 0;
+            let iteration = 0;
+            const maxIterations = 20; // Safety net to prevent infinite loops
+            let previousIterationCount = -1;
+            let consecutiveSameCount = 0;
+            const maxConsecutiveSameCount = 5; // Require 5 consecutive same counts before aborting
+            let terminationReason: 'complete' | 'maxIterations' | 'consecutiveSameCount' = 'complete';
+
+            // Keep iterating until no orphans are found or we hit safety limits
+            while (iteration < maxIterations) {
+                iteration++;
+                let orphansRemovedThisIteration = 0;
+
+                for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
+                    const allItems = await this.getAllItems(connectionType);
+                    const allIds = new Set(allItems.map((item) => item.id));
+
+                    // Build set of valid parent IDs (only folders can be parents)
+                    const validParentIds = new Set(
+                        allItems.filter((item) => item.properties.type === ItemType.Folder).map((item) => item.id),
+                    );
+
+                    // Find orphaned items:
+                    // 1. Items with a parentId that doesn't exist
+                    // 2. Items with a parentId pointing to a non-folder (bug - parentId should only reference folders)
+                    const orphanedItems = allItems.filter(
+                        (item) =>
+                            item.properties.parentId !== undefined &&
+                            (!allIds.has(item.properties.parentId) || !validParentIds.has(item.properties.parentId)),
+                    );
+
+                    for (const orphan of orphanedItems) {
+                        try {
+                            await this.delete(connectionType, orphan.id);
+                            orphansRemovedThisIteration++;
+                            ext.outputChannel.appendLog(
+                                `Cleaned up orphaned ${orphan.properties.type}: "${orphan.name}" (id: ${orphan.id})`,
+                            );
+                        } catch (error) {
+                            console.debug(
+                                `Failed to delete orphaned item ${orphan.id}:`,
+                                error instanceof Error ? error.message : String(error),
+                            );
+                        }
+                    }
+                }
+
+                totalOrphansRemoved += orphansRemovedThisIteration;
+                context.telemetry.measurements.orphansRemoved = totalOrphansRemoved;
+
+                // Exit if no orphans found this iteration (success)
+                if (orphansRemovedThisIteration === 0) {
+                    terminationReason = 'complete';
+                    break;
+                }
+
+                // Safety net: exit if count has been the same for X consecutive iterations (stuck in a loop)
+                if (orphansRemovedThisIteration === previousIterationCount) {
+                    consecutiveSameCount++;
+                    if (consecutiveSameCount >= maxConsecutiveSameCount) {
+                        terminationReason = 'consecutiveSameCount';
+                        ext.outputChannel.appendLog(
+                            `Orphan cleanup stopped: same count (${orphansRemovedThisIteration}) for ${consecutiveSameCount} consecutive iterations.`,
+                        );
+                        break;
+                    }
+                } else {
+                    consecutiveSameCount = 0;
+                }
+
+                previousIterationCount = orphansRemovedThisIteration;
+            }
+
+            // Check if we exited due to max iterations
+            if (iteration >= maxIterations && terminationReason === 'complete') {
+                terminationReason = 'maxIterations';
+                ext.outputChannel.appendLog(`Orphan cleanup stopped: reached maximum iterations (${maxIterations}).`);
+            }
+
+            context.telemetry.measurements.orphansRemoved = totalOrphansRemoved;
+            context.telemetry.measurements.cleanupIterations = iteration;
+            context.telemetry.properties.hadOrphans = totalOrphansRemoved > 0 ? 'true' : 'false';
+            context.telemetry.properties.terminationReason = terminationReason;
+
+            if (totalOrphansRemoved > 0) {
+                ext.outputChannel.appendLog(
+                    `Orphan cleanup complete: ${totalOrphansRemoved} items removed in ${iteration} iteration(s).`,
+                );
+            }
+        });
+    }
+
+    /**
+     * Collects and reports storage statistics via telemetry.
+     * This runs asynchronously after orphan cleanup and provides insights into:
+     * - Total connections and folders across all zones
+     * - Maximum folder nesting depth
+     * - Distribution between Clusters and Emulators zones
+     */
+    private static async collectStorageStats(): Promise<void> {
+        await callWithTelemetryAndErrorHandling('connectionStorage.stats', async (context: IActionContext) => {
+            context.telemetry.properties.isActivationEvent = 'true';
+
+            let totalConnections = 0;
+            let totalFolders = 0;
+            let maxDepth = 0;
+
+            // Calculate depth of an item by traversing up the parent chain
+            const calculateDepth = async (
+                item: ConnectionItem,
+                allItems: Map<string, ConnectionItem>,
+                depthCache: Map<string, number>,
+            ): Promise<number> => {
+                // Check cache first
+                const cachedDepth = depthCache.get(item.id);
+                if (cachedDepth !== undefined) {
+                    return cachedDepth;
+                }
+
+                if (!item.properties.parentId) {
+                    depthCache.set(item.id, 1);
+                    return 1; // Root level = depth 1
+                }
+
+                const parent = allItems.get(item.properties.parentId);
+                if (!parent) {
+                    depthCache.set(item.id, 1);
+                    return 1; // Orphaned item, treat as root
+                }
+
+                const parentDepth = await calculateDepth(parent, allItems, depthCache);
+                const depth = parentDepth + 1;
+                depthCache.set(item.id, depth);
+                return depth;
+            };
+
+            for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
+                const allItems = await this.getAllItems(connectionType);
+
+                // Create a map for efficient parent lookup
+                const itemMap = new Map(allItems.map((item) => [item.id, item]));
+                const depthCache = new Map<string, number>();
+
+                let connectionsInZone = 0;
+                let foldersInZone = 0;
+                let rootConnectionsInZone = 0;
+                let rootFoldersInZone = 0;
+                let maxDepthInZone = 0;
+
+                for (const item of allItems) {
+                    const isRootLevel = !item.properties.parentId;
+
+                    if (item.properties.type === ItemType.Connection) {
+                        connectionsInZone++;
+                        if (isRootLevel) {
+                            rootConnectionsInZone++;
+                        }
+                    } else if (item.properties.type === ItemType.Folder) {
+                        foldersInZone++;
+                        if (isRootLevel) {
+                            rootFoldersInZone++;
+                        }
+                        // Calculate depth for folders to find max nesting
+                        const depth = await calculateDepth(item, itemMap, depthCache);
+                        maxDepthInZone = Math.max(maxDepthInZone, depth);
+                    }
+                }
+
+                // Zone-specific measurements
+                const zonePrefix = connectionType === ConnectionType.Clusters ? 'clusters' : 'emulators';
+                context.telemetry.measurements[`${zonePrefix}_Connections`] = connectionsInZone;
+                context.telemetry.measurements[`${zonePrefix}_Folders`] = foldersInZone;
+                context.telemetry.measurements[`${zonePrefix}_RootConnections`] = rootConnectionsInZone;
+                context.telemetry.measurements[`${zonePrefix}_RootFolders`] = rootFoldersInZone;
+                context.telemetry.measurements[`${zonePrefix}_MaxDepth`] = maxDepthInZone;
+                totalConnections += connectionsInZone;
+                totalFolders += foldersInZone;
+                maxDepth = Math.max(maxDepth, maxDepthInZone);
+            }
+
+            // Aggregate measurements
+            context.telemetry.measurements.totalConnections = totalConnections;
+            context.telemetry.measurements.totalFolders = totalFolders;
+            context.telemetry.measurements.maxFolderDepth = maxDepth;
+            context.telemetry.properties.hasFolders = totalFolders > 0 ? 'true' : 'false';
+            context.telemetry.properties.hasConnections = totalConnections > 0 ? 'true' : 'false';
+        });
+    }
+
+    /**
+     * Gets all connection items of a given connection type (excludes folders).
+     * @param connectionType The type of connection storage (Clusters or Emulators)
+     */
     public static async getAll(connectionType: ConnectionType): Promise<ConnectionItem[]> {
+        const allItems = await this.getAllItems(connectionType);
+        return allItems.filter((item) => item.properties.type === ItemType.Connection);
+    }
+
+    /**
+     * Gets all items (connections and folders) from storage.
+     * @param connectionType The type of connection storage (Clusters or Emulators)
+     */
+    public static async getAllItems(connectionType: ConnectionType): Promise<ConnectionItem[]> {
         const storageService = await this.getStorageService();
         const items = await storageService.getItems<ConnectionProperties>(connectionType);
         return items.map((item) => this.fromStorageItem(item));
@@ -190,17 +418,33 @@ export class ConnectionStorageService {
         return {
             id: item.id,
             name: item.name,
-            version: '2.0',
+            version: '3.0',
             properties: item.properties,
             secrets: secretsArray,
         };
     }
 
     private static fromStorageItem(item: StorageItem<ConnectionProperties>): ConnectionItem {
-        if (item.version !== '2.0') {
-            return this.migrateToV2(item);
-        }
+        switch (item.version) {
+            case '3.0':
+                // v3.0 - reconstruct directly from storage
+                return this.reconstructConnectionItemFromSecrets(item);
 
+            case '2.0':
+                // v2.0 - convert v2.0 format to intermediate ConnectionItem, then migrate to v3
+                return this.migrateToV3(this.convertV2ToConnectionItem(item));
+
+            default:
+                // v1.0 (no version field) - migrate to v2 then v3
+                return this.migrateToV3(this.migrateToV2(item));
+        }
+    }
+
+    /**
+     * Helper function to reconstruct a ConnectionItem from a StorageItem's secrets array.
+     * This is shared between v2.0 and v3.0 formats since they use the same secrets structure.
+     */
+    private static reconstructConnectionItemFromSecrets(item: StorageItem<ConnectionProperties>): ConnectionItem {
         const secretsArray = item.secrets ?? [];
 
         // Reconstruct native auth config from individual fields
@@ -265,6 +509,8 @@ export class ConnectionStorageService {
             id: item.id,
             name: item.name,
             properties: {
+                type: ItemType.Connection,
+                parentId: undefined,
                 api: (item.properties?.api as API) ?? API.DocumentDB,
                 emulatorConfiguration: {
                     isEmulator: !!item.properties?.isEmulator,
@@ -284,6 +530,112 @@ export class ConnectionStorageService {
                     : undefined,
             },
         };
+    }
+
+    /**
+     * Converts a v2.0 StorageItem directly to ConnectionItem format (without adding v3 fields yet)
+     */
+    private static convertV2ToConnectionItem(item: StorageItem<ConnectionProperties>): ConnectionItem {
+        // v2.0 uses the same secrets structure as v3.0, so we can reuse the helper
+        return this.reconstructConnectionItemFromSecrets(item);
+    }
+
+    /**
+     * Migrates v2 items to v3 by adding type and parentId fields
+     */
+    private static migrateToV3(item: ConnectionItem): ConnectionItem {
+        // Ensure type and parentId exist (defaults for v3)
+        if (!item.properties.type) {
+            item.properties.type = ItemType.Connection;
+        }
+        if (item.properties.parentId === undefined) {
+            item.properties.parentId = undefined; // Explicit root level
+        }
+        return item;
+    }
+
+    /**
+     * Get all children of a parent (folders and connections)
+     * @param parentId The parent folder ID, or undefined for root-level items
+     * @param connectionType The type of connection storage (Clusters or Emulators)
+     * @param filter Optional filter to return only specific item types (ItemType.Connection or ItemType.Folder).
+     *               Default returns all items.
+     */
+    public static async getChildren(
+        parentId: string | undefined,
+        connectionType: ConnectionType,
+        filter?: ItemType,
+    ): Promise<ConnectionItem[]> {
+        const allItems = await this.getAllItems(connectionType);
+        let children = allItems.filter((item) => item.properties.parentId === parentId);
+
+        if (filter !== undefined) {
+            children = children.filter((item) => item.properties.type === filter);
+        }
+
+        return children;
+    }
+
+    /**
+     * Update the parent ID of an item
+     */
+    public static async updateParentId(
+        itemId: string,
+        connectionType: ConnectionType,
+        newParentId: string | undefined,
+    ): Promise<void> {
+        const item = await this.get(itemId, connectionType);
+        if (!item) {
+            throw new Error(`Item with id ${itemId} not found`);
+        }
+
+        // Check for circular reference if moving a folder
+        // Use getPath to detect if we're trying to move into our own subtree
+        if (item.properties.type === ItemType.Folder && newParentId) {
+            const targetPath = await this.getPath(newParentId, connectionType);
+            const sourcePath = await this.getPath(itemId, connectionType);
+
+            // Check if target path starts with source path (would be circular)
+            if (targetPath.startsWith(sourcePath + '/') || targetPath === sourcePath) {
+                throw new Error('Cannot move a folder into itself or one of its descendants');
+            }
+        }
+
+        item.properties.parentId = newParentId;
+        await this.save(connectionType, item, true);
+    }
+
+    /**
+     * Check if a name is a duplicate within the same parent folder
+     */
+    public static async isNameDuplicateInParent(
+        name: string,
+        parentId: string | undefined,
+        connectionType: ConnectionType,
+        itemType: ItemType,
+        excludeId?: string,
+    ): Promise<boolean> {
+        const siblings = await this.getChildren(parentId, connectionType);
+        return siblings.some(
+            (sibling) => sibling.name === name && sibling.properties.type === itemType && sibling.id !== excludeId,
+        );
+    }
+
+    /**
+     * Get the full path of an item (e.g., "Folder1/Folder2/Connection")
+     */
+    public static async getPath(itemId: string, connectionType: ConnectionType): Promise<string> {
+        const item = await this.get(itemId, connectionType);
+        if (!item) {
+            return '';
+        }
+
+        if (!item.properties.parentId) {
+            return item.name;
+        }
+
+        const parentPath = await this.getPath(item.properties.parentId, connectionType);
+        return `${parentPath}/${item.name}`;
     }
 
     /**

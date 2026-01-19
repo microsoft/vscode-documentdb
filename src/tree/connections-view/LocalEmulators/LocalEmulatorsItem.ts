@@ -10,9 +10,10 @@ import { type IconPath } from 'vscode';
 import path from 'path';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import {
+    type ConnectionItem,
     ConnectionStorageService,
     ConnectionType,
-    type ConnectionItem,
+    ItemType,
 } from '../../../services/connectionStorageService';
 import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
 import { getResourcesPath } from '../../../utils/icons';
@@ -20,6 +21,7 @@ import { type ClusterModelWithStorage } from '../../documentdb/ClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
 import { DocumentDBClusterItem } from '../DocumentDBClusterItem';
+import { FolderItem } from '../FolderItem';
 import { NewEmulatorConnectionItemCV } from './NewEmulatorConnectionItemCV';
 
 export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextValue {
@@ -31,28 +33,49 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const emulatorItems = await ConnectionStorageService.getAll(ConnectionType.Emulators);
-        return [
-            ...emulatorItems.map((connection: ConnectionItem) => {
-                // we need to create the emulator configuration object from the typed properties object
-                const emulatorConfiguration: EmulatorConfiguration = {
-                    isEmulator: true,
-                    disableEmulatorSecurity: !!connection.properties?.emulatorConfiguration?.disableEmulatorSecurity,
-                };
+        // Get root-level folders and connections for emulators
+        const rootFolders = await ConnectionStorageService.getChildren(
+            undefined,
+            ConnectionType.Emulators,
+            ItemType.Folder,
+        );
+        const rootConnections = await ConnectionStorageService.getChildren(
+            undefined,
+            ConnectionType.Emulators,
+            ItemType.Connection,
+        );
 
-                const model: ClusterModelWithStorage = {
-                    id: `${this.id}/${connection.id}`,
-                    storageId: connection.id,
-                    name: connection.name,
-                    dbExperience: DocumentDBExperience,
-                    connectionString: connection?.secrets?.connectionString,
-                    emulatorConfiguration: emulatorConfiguration,
-                };
+        // Create folder items
+        const folderItems = rootFolders.map((folder) => new FolderItem(folder, this.id, ConnectionType.Emulators));
 
-                return new DocumentDBClusterItem(model);
-            }),
-            new NewEmulatorConnectionItemCV(this.id),
-        ];
+        // Create connection items
+        const connectionItems = rootConnections.map((connection: ConnectionItem) => {
+            // we need to create the emulator configuration object from the typed properties object
+            const emulatorConfiguration: EmulatorConfiguration = {
+                isEmulator: true,
+                disableEmulatorSecurity: !!connection.properties?.emulatorConfiguration?.disableEmulatorSecurity,
+            };
+
+            const model: ClusterModelWithStorage = {
+                id: `${this.id}/${connection.id}`,
+                storageId: connection.id,
+                name: connection.name,
+                dbExperience: DocumentDBExperience,
+                connectionString: connection?.secrets?.connectionString,
+                emulatorConfiguration: emulatorConfiguration,
+            };
+
+            return new DocumentDBClusterItem(model);
+        });
+
+        // Sort folders alphabetically by name
+        folderItems.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Sort connections alphabetically by name
+        connectionItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
+
+        // Return folders first, then connections, then the "New Emulator Connection" item
+        return [...folderItems, ...connectionItems, new NewEmulatorConnectionItemCV(this.id)];
     }
 
     private iconPath: IconPath = {
