@@ -144,7 +144,7 @@ export function GetPerformanceInsightsCard({
                             </MessageBarBody>
                         </MessageBar>
                     )}
-                    <Announcer when={isLoading} message={l10n.t('AI is analyzing...')} />
+                    <Announcer when={isLoading} politeness="assertive" message={l10n.t('AI is analyzing...')} />
                     {isLoading ? (
                         <div className="get-performance-insights-card-loading">
                             <Spinner size="small" aria-hidden="true" />

@@ -280,8 +280,8 @@ import { Announcer } from '../../api/webview-client/accessibility';
     message={documentCount > 0 ? l10n.t('Results found') : l10n.t('No results found')}
 />
 
-// With polite politeness (default is assertive)
-<Announcer when={hasError} message={l10n.t('Error occurred')} politeness="polite" />
+// With assertive politeness (default is polite)
+<Announcer when={hasError} message={l10n.t('Error occurred')} politeness="assertive" />
 ```
 
 ### Props

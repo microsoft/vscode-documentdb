@@ -513,6 +513,7 @@ export const CollectionView = (): JSX.Element => {
                 {/* Screen reader announcement when query completes */}
                 <Announcer
                     when={!currentContext.isLoading && currentQueryResults?.documentCount !== undefined}
+                    politeness="assertive"
                     message={
                         (currentQueryResults?.documentCount ?? 0) > 0
                             ? l10n.t('Results found')

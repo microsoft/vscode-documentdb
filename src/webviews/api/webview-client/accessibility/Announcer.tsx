@@ -22,7 +22,7 @@ export interface AnnouncerProps {
      * The politeness level of the announcement.
      * - 'polite': Waits for the user to finish their current activity before announcing (default)
      * - 'assertive': Interrupts the user immediately (use sparingly)
-     * @default 'assertive'
+     * @default 'polite'
      */
     politeness?: 'polite' | 'assertive';
 }
@@ -38,7 +38,7 @@ export interface AnnouncerProps {
  * <Announcer when={isLoading} message={l10n.t('AI is analyzing...')} />
  * ```
  */
-export function Announcer({ when, message, politeness = 'assertive' }: AnnouncerProps): React.ReactElement {
+export function Announcer({ when, message, politeness = 'polite' }: AnnouncerProps): React.ReactElement {
     const [announcement, setAnnouncement] = useState('');
     const wasActiveRef = useRef(false);
 
