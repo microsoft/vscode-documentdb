@@ -5,9 +5,10 @@
 
 import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
+import { useAnnounce } from '../../api/webview-client/accessibility';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
@@ -84,8 +85,11 @@ export const CollectionView = (): JSX.Element => {
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
-    // Track document count for accessibility announcements
-    const [documentCount, setDocumentCount] = useState<number | undefined>(undefined);
+    // Track whether results were found for accessibility announcements
+    const [hasResults, setHasResults] = useState<boolean | undefined>(undefined);
+
+    // Screen reader announcements
+    const { announce, AnnouncerElement } = useAnnounce();
 
     // Track which tab is currently active
     const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>('tab_result');
@@ -203,8 +207,8 @@ export const CollectionView = (): JSX.Element => {
                 executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
             .then((response) => {
-                // Capture document count for accessibility announcements
-                setDocumentCount(response.documentCount);
+                // Track whether results exist for accessibility announcements
+                setHasResults(response.documentCount > 0);
 
                 // 2. This is the time to update the auto-completion data
                 //    Since now we do know more about the data returned from the query
@@ -500,22 +504,19 @@ export const CollectionView = (): JSX.Element => {
             });
     }
 
-    // Helper function to generate screen reader announcement for query results
-    const getResultsAnnouncement = (): string => {
-        if (currentContext.isLoading || documentCount === undefined) {
-            return '';
+    // Announce search results to screen readers when query completes
+    const announceResults = useCallback(() => {
+        if (hasResults === undefined) {
+            return;
         }
+        announce(hasResults ? l10n.t('Results found') : l10n.t('No results found'));
+    }, [hasResults, announce]);
 
-        if (documentCount === 0) {
-            return l10n.t('No results found');
+    useEffect(() => {
+        if (!currentContext.isLoading && hasResults !== undefined) {
+            announceResults();
         }
-
-        if (documentCount === 1) {
-            return l10n.t('1 result found');
-        }
-
-        return l10n.t('{0} results found', documentCount);
-    };
+    }, [currentContext.isLoading, hasResults, announceResults]);
 
     return (
         <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>
@@ -524,10 +525,8 @@ export const CollectionView = (): JSX.Element => {
                     <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
                 )}
 
-                {/* ARIA live region for screen reader announcements */}
-                <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-                    {getResultsAnnouncement()}
-                </div>
+                {/* Screen reader announcements via useAnnounce hook */}
+                {AnnouncerElement}
 
                 <div className="toolbarMainView">
                     <ToolbarMainView />

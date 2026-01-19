@@ -168,7 +168,28 @@ Voice control users say "click Refresh" – only works if accessible name contai
 <span>{isLoading ? 'Loading...' : `${count} results`}</span>
 ```
 
-✅ **Fix**: Use live region
+✅ **Fix**: Use the `useAnnounce` hook
+
+```tsx
+import { useAnnounce } from '../../api/webview-client/accessibility';
+
+const { announce, AnnouncerElement } = useAnnounce();
+
+useEffect(() => {
+  if (!isLoading && hasResults !== undefined) {
+    announce(hasResults ? l10n.t('Results found') : l10n.t('No results found'));
+  }
+}, [isLoading, hasResults, announce]);
+
+return (
+  <div>
+    {AnnouncerElement}
+    {/* ... rest of your UI */}
+  </div>
+);
+```
+
+**Alternative (inline live region)**: For simple cases without the hook:
 
 ```tsx
 <span role="status" aria-live="polite">
@@ -253,6 +274,56 @@ For keyboard-accessible badges with tooltips:
 </Badge>
 ```
 
+## useAnnounce Hook
+
+The `useAnnounce` hook provides a clean API for screen reader announcements following WCAG 4.1.3 (Status Messages). Use it for:
+
+- Search results ("Results found" / "No results found")
+- Loading completion
+- Success/error messages
+- Any dynamic status changes
+
+### Location
+
+```tsx
+import { useAnnounce } from '../../api/webview-client/accessibility';
+```
+
+### Basic Usage
+
+```tsx
+const { announce, AnnouncerElement } = useAnnounce();
+
+// Trigger announcement when state changes
+useEffect(() => {
+  if (!isLoading && hasResults !== undefined) {
+    announce(hasResults ? l10n.t('Results found') : l10n.t('No results found'));
+  }
+}, [isLoading, hasResults, announce]);
+
+return (
+  <div>
+    {AnnouncerElement} {/* Place anywhere in JSX - visually hidden */}
+    {/* ... rest of UI */}
+  </div>
+);
+```
+
+### Options
+
+```tsx
+// For urgent announcements that interrupt (use sparingly)
+const { announce, AnnouncerElement } = useAnnounce({ politeness: 'assertive' });
+```
+
+### Key Points
+
+- **Always render `AnnouncerElement`** - it creates the ARIA live region
+- **Use `l10n.t()` for messages** - announcements must be localized
+- **Call `announce('')` to clear** - useful before new operations
+- **Identical messages re-announce** - the hook handles this automatically
+- **Prefer 'polite' (default)** - only use 'assertive' for critical errors
+
 ## Quick Checklist
 
 - [ ] Icon-only buttons have `aria-label`
@@ -263,7 +334,7 @@ For keyboard-accessible badges with tooltips:
 - [ ] Visible button labels match accessible name exactly (for voice control)
 - [ ] Decorative elements have `aria-hidden={true}`
 - [ ] Badges with tooltips use `focusableBadge` class + `tabIndex={0}`
-- [ ] Status updates use `role="status"` or `aria-live="polite"`
+- [ ] Status updates use `useAnnounce` hook or inline `role="status"` with `aria-live="polite"`
 - [ ] Focus moves to dialog/modal content when opened
 - [ ] Related controls wrapped in `role="group"` with `aria-labelledby`
 
