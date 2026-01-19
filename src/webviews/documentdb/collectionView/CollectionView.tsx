@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
+import { useAnnounce } from '../../api/webview-client/accessibility';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
@@ -83,6 +84,9 @@ export const CollectionView = (): JSX.Element => {
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
+
+    // Screen reader announcements
+    const { announce, AnnouncerElement } = useAnnounce();
 
     // Track which tab is currently active
     const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>('tab_result');
@@ -199,7 +203,12 @@ export const CollectionView = (): JSX.Element => {
                 pageSize: currentContext.activeQuery.pageSize,
                 executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
-            .then((_response) => {
+            .then((response) => {
+                // Announce results to screen readers (skip pagination to avoid repetitive announcements)
+                if (currentContext.activeQuery.executionIntent !== 'pagination') {
+                    announce(response.documentCount > 0 ? l10n.t('Results found') : l10n.t('No results found'));
+                }
+
                 // 2. This is the time to update the auto-completion data
                 //    Since now we do know more about the data returned from the query
                 updateAutoCompletionData();
@@ -497,7 +506,12 @@ export const CollectionView = (): JSX.Element => {
     return (
         <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>
             <div className="collectionView">
-                {currentContext.isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
+                {currentContext.isLoading && (
+                    <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
+                )}
+
+                {/* Screen reader announcements via useAnnounce hook */}
+                {AnnouncerElement}
 
                 <div className="toolbarMainView">
                     <ToolbarMainView />
