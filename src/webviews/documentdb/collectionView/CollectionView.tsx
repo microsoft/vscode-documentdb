@@ -5,7 +5,7 @@
 
 import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { useAnnounce } from '../../api/webview-client/accessibility';
@@ -84,9 +84,6 @@ export const CollectionView = (): JSX.Element => {
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
-
-    // Track whether results were found for accessibility announcements
-    const [hasResults, setHasResults] = useState<boolean | undefined>(undefined);
 
     // Screen reader announcements
     const { announce, AnnouncerElement } = useAnnounce();
@@ -207,8 +204,10 @@ export const CollectionView = (): JSX.Element => {
                 executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
             .then((response) => {
-                // Track whether results exist for accessibility announcements
-                setHasResults(response.documentCount > 0);
+                // Announce results to screen readers (skip pagination to avoid repetitive announcements)
+                if (currentContext.activeQuery.executionIntent !== 'pagination') {
+                    announce(response.documentCount > 0 ? l10n.t('Results found') : l10n.t('No results found'));
+                }
 
                 // 2. This is the time to update the auto-completion data
                 //    Since now we do know more about the data returned from the query
@@ -503,20 +502,6 @@ export const CollectionView = (): JSX.Element => {
                 console.debug('Failed to report an event:', error);
             });
     }
-
-    // Announce search results to screen readers when query completes
-    const announceResults = useCallback(() => {
-        if (hasResults === undefined) {
-            return;
-        }
-        announce(hasResults ? l10n.t('Results found') : l10n.t('No results found'));
-    }, [hasResults, announce]);
-
-    useEffect(() => {
-        if (!currentContext.isLoading && hasResults !== undefined) {
-            announceResults();
-        }
-    }, [currentContext.isLoading, hasResults, announceResults]);
 
     return (
         <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>

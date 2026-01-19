@@ -294,12 +294,11 @@ import { useAnnounce } from '../../api/webview-client/accessibility';
 ```tsx
 const { announce, AnnouncerElement } = useAnnounce();
 
-// Trigger announcement when state changes
-useEffect(() => {
-  if (!isLoading && hasResults !== undefined) {
-    announce(hasResults ? l10n.t('Results found') : l10n.t('No results found'));
-  }
-}, [isLoading, hasResults, announce]);
+// Call announce directly in async completion handlers
+// This ensures announcements work even when the result is the same as before
+trpcClient.someQuery.query(params).then((response) => {
+  announce(response.count > 0 ? l10n.t('Results found') : l10n.t('No results found'));
+});
 
 return (
   <div>
@@ -320,9 +319,10 @@ const { announce, AnnouncerElement } = useAnnounce({ politeness: 'assertive' });
 
 - **Always render `AnnouncerElement`** - it creates the ARIA live region
 - **Use `l10n.t()` for messages** - announcements must be localized
-- **Call `announce('')` to clear** - useful before new operations
-- **Identical messages re-announce** - the hook handles this automatically
+- **Call `announce` directly in callbacks** - don't rely on state changes (useEffect won't trigger if state value stays the same)
+- **Identical messages re-announce** - the hook handles this automatically via internal timeout
 - **Prefer 'polite' (default)** - only use 'assertive' for critical errors
+- **Skip repetitive operations** - e.g., suppress during pagination to avoid noise
 
 ## Quick Checklist
 
