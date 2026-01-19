@@ -152,6 +152,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                 return (
                                     <div
                                         key={shard.shardName}
+                                        role="group"
+                                        aria-labelledby={`shard-${shard.shardName}-label`}
                                         style={{
                                             backgroundColor: tokens.colorNeutralBackground1,
                                             borderRadius: '6px',
@@ -166,47 +168,44 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                     >
                                         {/* Shard Summary (always visible) */}
                                         <div style={{ padding: '12px' }}>
-                                            <div role="group" aria-labelledby={`shard-${shard.shardName}-label`}>
-                                                <Text
-                                                    id={`shard-${shard.shardName}-label`}
-                                                    weight="semibold"
-                                                    size={300}
-                                                    style={{ display: 'block', marginBottom: '8px' }}
-                                                >
-                                                    {l10n.t('Shard: {0}', shard.shardName)}
-                                                </Text>
-                                                {/* Stage flow with badges */}
-                                                <div
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '6px',
-                                                        marginBottom: '8px',
-                                                    }}
-                                                >
-                                                    {[...shard.stages].reverse().map((stage, index) => {
-                                                        // Check if this stage has failed (from extended stage info)
-                                                        const stageIndex = [...shard.stages].length - 1 - index; // Original index before reverse
-                                                        const extendedInfo =
-                                                            stage2Data?.extendedStageInfo?.[stageIndex];
-                                                        const hasFailed = extendedInfo?.properties?.['Failed'] === true;
+                                            <Text
+                                                id={`shard-${shard.shardName}-label`}
+                                                weight="semibold"
+                                                size={300}
+                                                style={{ display: 'block', marginBottom: '8px' }}
+                                            >
+                                                {l10n.t('Shard: {0}', shard.shardName)}
+                                            </Text>
+                                            {/* Stage flow with badges */}
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    marginBottom: '8px',
+                                                }}
+                                            >
+                                                {[...shard.stages].reverse().map((stage, index) => {
+                                                    // Check if this stage has failed (from extended stage info)
+                                                    const stageIndex = [...shard.stages].length - 1 - index; // Original index before reverse
+                                                    const extendedInfo = stage2Data?.extendedStageInfo?.[stageIndex];
+                                                    const hasFailed = extendedInfo?.properties?.['Failed'] === true;
 
-                                                        return (
-                                                            <React.Fragment key={index}>
-                                                                {index > 0 && <Text size={200}>→</Text>}
-                                                                <Badge
-                                                                    appearance="tint"
-                                                                    size="small"
-                                                                    shape="rounded"
-                                                                    color={hasFailed ? 'danger' : 'brand'}
-                                                                    icon={hasFailed ? <WarningRegular /> : undefined}
-                                                                >
-                                                                    {stage.stage}
-                                                                </Badge>
-                                                            </React.Fragment>
-                                                        );
-                                                    })}
-                                                </div>
+                                                    return (
+                                                        <React.Fragment key={index}>
+                                                            {index > 0 && <Text size={200}>→</Text>}
+                                                            <Badge
+                                                                appearance="tint"
+                                                                size="small"
+                                                                shape="rounded"
+                                                                color={hasFailed ? 'danger' : 'brand'}
+                                                                icon={hasFailed ? <WarningRegular /> : undefined}
+                                                            >
+                                                                {stage.stage}
+                                                            </Badge>
+                                                        </React.Fragment>
+                                                    );
+                                                })}
                                             </div>
 
                                             {/* Metrics - show skeleton until Stage 2 data is available */}
@@ -298,6 +297,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                     ) : (
                         /* Non-sharded query view */
                         <div
+                            role="group"
+                            aria-labelledby="your-cluster-label"
                             style={{
                                 backgroundColor: tokens.colorNeutralBackground1,
                                 borderRadius: '6px',
@@ -306,47 +307,45 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                         >
                             {/* Summary (always visible from Stage 1) */}
                             <div style={{ padding: '12px' }}>
-                                <div role="group" aria-labelledby="your-cluster-label">
-                                    <Text
-                                        id="your-cluster-label"
-                                        weight="semibold"
-                                        size={400}
-                                        style={{ display: 'block', marginBottom: '8px' }}
-                                    >
-                                        {l10n.t('Your Cluster')}
-                                    </Text>
-                                    {/* Stage flow with badges */}
-                                    <div
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            marginBottom: '8px',
-                                        }}
-                                    >
-                                        {[...stage1Data.stages].reverse().map((stage, index) => {
-                                            // Check if this stage has failed (from extended stage info)
-                                            const stageIndex = [...stage1Data.stages].length - 1 - index; // Original index before reverse
-                                            const extendedInfo = stage2Data?.extendedStageInfo?.[stageIndex];
-                                            const hasFailed = extendedInfo?.properties?.['Failed'] === true;
+                                <Text
+                                    id="your-cluster-label"
+                                    weight="semibold"
+                                    size={400}
+                                    style={{ display: 'block', marginBottom: '8px' }}
+                                >
+                                    {l10n.t('Your Cluster')}
+                                </Text>
+                                {/* Stage flow with badges */}
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        marginBottom: '8px',
+                                    }}
+                                >
+                                    {[...stage1Data.stages].reverse().map((stage, index) => {
+                                        // Check if this stage has failed (from extended stage info)
+                                        const stageIndex = [...stage1Data.stages].length - 1 - index; // Original index before reverse
+                                        const extendedInfo = stage2Data?.extendedStageInfo?.[stageIndex];
+                                        const hasFailed = extendedInfo?.properties?.['Failed'] === true;
 
-                                            return (
-                                                <React.Fragment key={index}>
-                                                    {index > 0 && <Text size={200}>→</Text>}
-                                                    <Badge
-                                                        appearance="tint"
-                                                        size="small"
-                                                        shape="rounded"
-                                                        color={hasFailed ? 'danger' : 'brand'}
-                                                        icon={hasFailed ? <WarningRegular /> : undefined}
-                                                    >
-                                                        {stage.stage}
-                                                    </Badge>
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                    </div>
-                                </div>{' '}
+                                        return (
+                                            <React.Fragment key={index}>
+                                                {index > 0 && <Text size={200}>→</Text>}
+                                                <Badge
+                                                    appearance="tint"
+                                                    size="small"
+                                                    shape="rounded"
+                                                    color={hasFailed ? 'danger' : 'brand'}
+                                                    icon={hasFailed ? <WarningRegular /> : undefined}
+                                                >
+                                                    {stage.stage}
+                                                </Badge>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </div>
                                 {/* Metrics - show skeleton until Stage 2 data is available */}
                                 {(!stage2Data || stage2Loading) && (
                                     <Skeleton>
