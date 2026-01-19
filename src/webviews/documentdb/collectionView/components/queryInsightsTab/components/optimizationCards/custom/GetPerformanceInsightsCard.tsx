@@ -143,10 +143,29 @@ export function GetPerformanceInsightsCard({
                             </MessageBarBody>
                         </MessageBar>
                     )}
+                    {/*
+                      Live region must be always present in the DOM for screen readers to announce changes.
+                      When content changes from empty to text, screen readers announce the new content.
+                      If we conditionally render the live region, it gets created fresh and NVDA won't announce it.
+                    */}
+                    <div
+                        role="status"
+                        aria-live="assertive"
+                        aria-atomic="true"
+                        style={{
+                            position: 'absolute',
+                            width: '1px',
+                            height: '1px',
+                            overflow: 'hidden',
+                            clip: 'rect(0, 0, 0, 0)',
+                        }}
+                    >
+                        {isLoading ? l10n.t('AI is analyzing...') : ''}
+                    </div>
                     {isLoading ? (
                         <div className="get-performance-insights-card-loading">
                             <Spinner size="small" aria-hidden="true" />
-                            <Text size={300} role="status" aria-live="assertive">
+                            <Text size={300} aria-hidden="true">
                                 {l10n.t('AI is analyzing...')}
                             </Text>
                             <Button appearance="subtle" size="small" onClick={onCancel}>
