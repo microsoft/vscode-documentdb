@@ -187,7 +187,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                     {[...shard.stages].reverse().map((stage, index) => {
                                                         // Check if this stage has failed (from extended stage info)
                                                         const stageIndex = [...shard.stages].length - 1 - index; // Original index before reverse
-                                                        const extendedInfo = stage2Data?.extendedStageInfo?.[stageIndex];
+                                                        const extendedInfo =
+                                                            stage2Data?.extendedStageInfo?.[stageIndex];
                                                         const hasFailed = extendedInfo?.properties?.['Failed'] === true;
 
                                                         return (
@@ -315,7 +316,14 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                         {l10n.t('Your Cluster')}
                                     </Text>
                                     {/* Stage flow with badges */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            marginBottom: '8px',
+                                        }}
+                                    >
                                         {[...stage1Data.stages].reverse().map((stage, index) => {
                                             // Check if this stage has failed (from extended stage info)
                                             const stageIndex = [...stage1Data.stages].length - 1 - index; // Original index before reverse
@@ -338,8 +346,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                             );
                                         })}
                                     </div>
-                                </div>
-                                {' '}
+                                </div>{' '}
                                 {/* Metrics - show skeleton until Stage 2 data is available */}
                                 {(!stage2Data || stage2Loading) && (
                                     <Skeleton>
