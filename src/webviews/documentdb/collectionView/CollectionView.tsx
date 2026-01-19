@@ -206,7 +206,19 @@ export const CollectionView = (): JSX.Element => {
             .then((response) => {
                 // Announce results to screen readers (skip pagination to avoid repetitive announcements)
                 if (currentContext.activeQuery.executionIntent !== 'pagination') {
-                    announce(response.documentCount > 0 ? l10n.t('Results found') : l10n.t('No results found'));
+                    const documentCount: number =
+                        typeof response.documentCount === 'number' ? response.documentCount : 0;
+
+                    let announcement: string;
+                    if (documentCount === 0) {
+                        announcement = l10n.t('No results found');
+                    } else if (documentCount === 1) {
+                        announcement = l10n.t('1 result found');
+                    } else {
+                        announcement = l10n.t('{0} results found', documentCount);
+                    }
+
+                    announce(announcement);
                 }
 
                 // 2. This is the time to update the auto-completion data
