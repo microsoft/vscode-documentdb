@@ -16,7 +16,8 @@ import {
 } from '@fluentui/react-components';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import { useAnnounce } from '../../../../../../../api/webview-client/accessibility';
 import '../baseOptimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 
@@ -99,6 +100,25 @@ export function GetPerformanceInsightsCard({
     className,
     ref,
 }: GetPerformanceInsightsCardProps) {
+    // Use the announce hook for screen reader announcements
+    // The hook handles timing to ensure NVDA announces the message properly
+    const { announce, AnnouncerElement } = useAnnounce({ politeness: 'assertive' });
+
+    // Track whether we've announced for the current loading session
+    // Reset when loading ends so the next loading cycle can announce again
+    const hasAnnouncedRef = useRef(false);
+
+    useEffect(() => {
+        if (isLoading && !hasAnnouncedRef.current) {
+            // Loading started and we haven't announced yet
+            announce(l10n.t('AI is analyzing...'));
+            hasAnnouncedRef.current = true;
+        } else if (!isLoading) {
+            // Loading ended - reset for next cycle (e.g., after cancel or completion)
+            hasAnnouncedRef.current = false;
+        }
+    }, [isLoading, announce]);
+
     return (
         <Card
             ref={ref}
@@ -143,25 +163,8 @@ export function GetPerformanceInsightsCard({
                             </MessageBarBody>
                         </MessageBar>
                     )}
-                    {/*
-                      Live region must be always present in the DOM for screen readers to announce changes.
-                      When content changes from empty to text, screen readers announce the new content.
-                      If we conditionally render the live region, it gets created fresh and NVDA won't announce it.
-                    */}
-                    <div
-                        role="status"
-                        aria-live="assertive"
-                        aria-atomic="true"
-                        style={{
-                            position: 'absolute',
-                            width: '1px',
-                            height: '1px',
-                            overflow: 'hidden',
-                            clip: 'rect(0, 0, 0, 0)',
-                        }}
-                    >
-                        {isLoading ? l10n.t('AI is analyzing...') : ''}
-                    </div>
+                    {/* Screen reader announcements via useAnnounce hook */}
+                    {AnnouncerElement}
                     {isLoading ? (
                         <div className="get-performance-insights-card-loading">
                             <Spinner size="small" aria-hidden="true" />
