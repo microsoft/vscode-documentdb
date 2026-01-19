@@ -6,7 +6,7 @@
 import { Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
 import { ArrowClockwiseRegular, SaveRegular, TextGrammarCheckmarkRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
+import { type JSX, type RefObject } from 'react';
 import { ToolbarDividerTransparent } from '../../collectionView/components/toolbar/ToolbarDividerTransparent';
 
 interface ToolbarDocumentsProps {
@@ -14,6 +14,7 @@ interface ToolbarDocumentsProps {
     onValidateRequest: () => void;
     onRefreshRequest: () => void;
     onSaveRequest: () => void;
+    saveButtonRef?: RefObject<HTMLButtonElement>;
 }
 
 export const ToolbarDocuments = ({
@@ -21,11 +22,13 @@ export const ToolbarDocuments = ({
     onValidateRequest,
     onRefreshRequest,
     onSaveRequest,
+    saveButtonRef,
 }: ToolbarDocumentsProps): JSX.Element => {
     return (
         <Toolbar size="small">
             <Tooltip content={l10n.t('Save document to the database')} relationship="description" withArrow>
                 <ToolbarButton
+                    ref={saveButtonRef}
                     onClick={onSaveRequest}
                     aria-label={l10n.t('Save to the database')}
                     icon={<SaveRegular />}

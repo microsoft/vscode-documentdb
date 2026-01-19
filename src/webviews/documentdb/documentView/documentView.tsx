@@ -57,6 +57,9 @@ export const DocumentView = (): JSX.Element => {
     const [isLoading, setIsLoading] = useState(configuration.mode !== 'add');
     const [isDirty, setIsDirty] = useState(true);
 
+    // Ref for the Save button to manage focus
+    const saveButtonRef = useRef<HTMLButtonElement>(null);
+
     useSelectiveContextMenuPrevention();
 
     // a useEffect without a dependency runs only once after the first render only
@@ -97,10 +100,12 @@ export const DocumentView = (): JSX.Element => {
 
         handleResize();
 
-        // Accessibility: Set focus to the editor immediately after mount
-        // This ensures keyboard users see a visible focus indicator when the document view opens
-        // Addresses WCAG 2.4.3 Focus Order requirement
-        editor.focus();
+        // Accessibility: Focus the Save button instead of the editor
+        // Monaco editor captures Tab/Shift-Tab for document editing, making it difficult
+        // for keyboard users to navigate away. Setting focus on the toolbar button
+        // provides better keyboard navigation until Tab navigation from editor is improved.
+        // Addresses WCAG 2.4.3 Focus Order requirement.
+        saveButtonRef.current?.focus();
 
         // initialize the monaco editor with the schema that's basic
         // as we don't know the schema of the collection available
@@ -278,6 +283,7 @@ export const DocumentView = (): JSX.Element => {
                     onSaveRequest={handleOnSaveRequest}
                     onValidateRequest={handleOnValidateRequest}
                     onRefreshRequest={handleOnRefreshRequest}
+                    saveButtonRef={saveButtonRef}
                 />
             </div>
             <div className="monacoContainer">
