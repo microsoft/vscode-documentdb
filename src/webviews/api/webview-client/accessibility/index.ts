@@ -5,5 +5,3 @@
 
 export { Announcer } from './Announcer';
 export type { AnnouncerProps } from './Announcer';
-export { useAnnounce } from './useAnnounce';
-export type { UseAnnounceOptions, UseAnnounceReturn } from './useAnnounce';

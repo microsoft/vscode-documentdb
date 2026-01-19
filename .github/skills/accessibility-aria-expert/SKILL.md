@@ -168,36 +168,22 @@ Voice control users say "click Refresh" – only works if accessible name contai
 <span>{isLoading ? 'Loading...' : `${count} results`}</span>
 ```
 
-✅ **Fix**: Use the `useAnnounce` hook
+✅ **Fix**: Use the `Announcer` component
 
 ```tsx
-import { useAnnounce } from '../../api/webview-client/accessibility';
+import { Announcer } from '../../api/webview-client/accessibility';
 
-const { announce, AnnouncerElement } = useAnnounce();
+// Announces when `when` transitions from false to true
+<Announcer when={isLoading} message={l10n.t('Loading...')} />
 
-useEffect(() => {
-  if (!isLoading && hasResults !== undefined) {
-    announce(hasResults ? l10n.t('Results found') : l10n.t('No results found'));
-  }
-}, [isLoading, hasResults, announce]);
-
-return (
-  <div>
-    {AnnouncerElement}
-    {/* ... rest of your UI */}
-  </div>
-);
+// Dynamic message based on state
+<Announcer
+    when={!isLoading && documentCount !== undefined}
+    message={documentCount > 0 ? l10n.t('Results found') : l10n.t('No results found')}
+/>
 ```
 
-**Alternative (inline live region)**: For simple cases without the hook:
-
-```tsx
-<span role="status" aria-live="polite">
-  {isLoading ? 'Loading...' : `${count} results`}
-</span>
-```
-
-Use for: search results, loading states, success/error messages.
+Use for: loading states, search results, success/error messages.
 
 ### 9. Dialog Opens Without Focus Move
 
@@ -274,55 +260,43 @@ For keyboard-accessible badges with tooltips:
 </Badge>
 ```
 
-## useAnnounce Hook
+## Screen Reader Announcements
 
-The `useAnnounce` hook provides a clean API for screen reader announcements following WCAG 4.1.3 (Status Messages). Use it for:
-
-- Search results ("Results found" / "No results found")
-- Loading completion
-- Success/error messages
-- Any dynamic status changes
-
-### Location
+Use the `Announcer` component for WCAG 4.1.3 (Status Messages) compliance.
 
 ```tsx
-import { useAnnounce } from '../../api/webview-client/accessibility';
+import { Announcer } from '../../api/webview-client/accessibility';
 ```
 
 ### Basic Usage
 
 ```tsx
-const { announce, AnnouncerElement } = useAnnounce();
+// Announces "AI is analyzing..." when isLoading becomes true
+<Announcer when={isLoading} message={l10n.t('AI is analyzing...')} />
 
-// Call announce directly in async completion handlers
-// This ensures announcements work even when the result is the same as before
-trpcClient.someQuery.query(params).then((response) => {
-  announce(response.count > 0 ? l10n.t('Results found') : l10n.t('No results found'));
-});
+// Dynamic message based on state (e.g., query results)
+<Announcer
+    when={!isLoading && documentCount !== undefined}
+    message={documentCount > 0 ? l10n.t('Results found') : l10n.t('No results found')}
+/>
 
-return (
-  <div>
-    {AnnouncerElement} {/* Place anywhere in JSX - visually hidden */}
-    {/* ... rest of UI */}
-  </div>
-);
+// With polite politeness (default is assertive)
+<Announcer when={hasError} message={l10n.t('Error occurred')} politeness="polite" />
 ```
 
-### Options
+### Props
 
-```tsx
-// For urgent announcements that interrupt (use sparingly)
-const { announce, AnnouncerElement } = useAnnounce({ politeness: 'assertive' });
-```
+- `when`: Announces when this transitions from `false` to `true`
+- `message`: The message to announce (use `l10n.t()` for localization)
+- `politeness`: `'assertive'` (default, interrupts) or `'polite'` (waits for idle)
 
 ### Key Points
 
-- **Always render `AnnouncerElement`** - it creates the ARIA live region
+- **Placement doesn't matter** - screen readers monitor all live regions regardless of DOM position; place near related UI for code readability
+- **Store relevant state** (e.g., `documentCount`) to derive dynamic messages
 - **Use `l10n.t()` for messages** - announcements must be localized
-- **Call `announce` directly in callbacks** - don't rely on state changes (useEffect won't trigger if state value stays the same)
-- **Identical messages re-announce** - the hook handles this automatically via internal timeout
-- **Prefer 'polite' (default)** - only use 'assertive' for critical errors
-- **Skip repetitive operations** - e.g., suppress during pagination to avoid noise
+- **Condition resets automatically** - when `when` goes back to `false`, it's ready for the next announcement
+- **Prefer 'assertive'** for user-initiated actions, 'polite' for background updates
 
 ## Quick Checklist
 
@@ -334,7 +308,7 @@ const { announce, AnnouncerElement } = useAnnounce({ politeness: 'assertive' });
 - [ ] Visible button labels match accessible name exactly (for voice control)
 - [ ] Decorative elements have `aria-hidden={true}`
 - [ ] Badges with tooltips use `focusableBadge` class + `tabIndex={0}`
-- [ ] Status updates use `useAnnounce` hook or inline `role="status"` with `aria-live="polite"`
+- [ ] Status updates use `Announcer` component
 - [ ] Focus moves to dialog/modal content when opened
 - [ ] Related controls wrapped in `role="group"` with `aria-labelledby`
 
