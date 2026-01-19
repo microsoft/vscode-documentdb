@@ -16,8 +16,8 @@ import {
 } from '@fluentui/react-components';
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import React, { useEffect, useRef } from 'react';
-import { useAnnounce } from '../../../../../../../api/webview-client/accessibility';
+import React from 'react';
+import { Announcer } from '../../../../../../../api/webview-client/accessibility';
 import '../baseOptimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 
@@ -100,25 +100,6 @@ export function GetPerformanceInsightsCard({
     className,
     ref,
 }: GetPerformanceInsightsCardProps) {
-    // Use the announce hook for screen reader announcements
-    // The hook handles timing to ensure NVDA announces the message properly
-    const { announce, AnnouncerElement } = useAnnounce({ politeness: 'assertive' });
-
-    // Track whether we've announced for the current loading session
-    // Reset when loading ends so the next loading cycle can announce again
-    const hasAnnouncedRef = useRef(false);
-
-    useEffect(() => {
-        if (isLoading && !hasAnnouncedRef.current) {
-            // Loading started and we haven't announced yet
-            announce(l10n.t('AI is analyzing...'));
-            hasAnnouncedRef.current = true;
-        } else if (!isLoading) {
-            // Loading ended - reset for next cycle (e.g., after cancel or completion)
-            hasAnnouncedRef.current = false;
-        }
-    }, [isLoading, announce]);
-
     return (
         <Card
             ref={ref}
@@ -163,8 +144,7 @@ export function GetPerformanceInsightsCard({
                             </MessageBarBody>
                         </MessageBar>
                     )}
-                    {/* Screen reader announcements via useAnnounce hook */}
-                    {AnnouncerElement}
+                    <Announcer when={isLoading} message={l10n.t('AI is analyzing...')} />
                     {isLoading ? (
                         <div className="get-performance-insights-card-loading">
                             <Spinner size="small" aria-hidden="true" />
