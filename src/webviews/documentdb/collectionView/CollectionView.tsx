@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
-import { useAnnounce } from '../../api/webview-client/accessibility';
+import { Announcer } from '../../api/webview-client/accessibility';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
@@ -40,6 +40,9 @@ interface QueryResults {
     treeData?: { [key: string]: unknown }[];
 
     jsonDocuments?: string[];
+
+    /** Number of documents returned by the query (for screen reader announcements) */
+    documentCount?: number;
 }
 
 export const CollectionView = (): JSX.Element => {
@@ -84,9 +87,6 @@ export const CollectionView = (): JSX.Element => {
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
-
-    // Screen reader announcements
-    const { announce, AnnouncerElement } = useAnnounce();
 
     // Track which tab is currently active
     const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>('tab_result');
@@ -204,9 +204,9 @@ export const CollectionView = (): JSX.Element => {
                 executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
             .then((response) => {
-                // Announce results to screen readers (skip pagination to avoid repetitive announcements)
+                // Store document count for screen reader announcements (skip pagination)
                 if (currentContext.activeQuery.executionIntent !== 'pagination') {
-                    announce(response.documentCount > 0 ? l10n.t('Results found') : l10n.t('No results found'));
+                    setCurrentQueryResults((prev) => ({ ...prev, documentCount: response.documentCount }));
                 }
 
                 // 2. This is the time to update the auto-completion data
@@ -510,8 +510,16 @@ export const CollectionView = (): JSX.Element => {
                     <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
                 )}
 
-                {/* Screen reader announcements via useAnnounce hook */}
-                {AnnouncerElement}
+                {/* Screen reader announcement when query completes */}
+                <Announcer
+                    when={!currentContext.isLoading && currentQueryResults?.documentCount !== undefined}
+                    politeness="assertive"
+                    message={
+                        (currentQueryResults?.documentCount ?? 0) > 0
+                            ? l10n.t('Results found')
+                            : l10n.t('No results found')
+                    }
+                />
 
                 <div className="toolbarMainView">
                     <ToolbarMainView />

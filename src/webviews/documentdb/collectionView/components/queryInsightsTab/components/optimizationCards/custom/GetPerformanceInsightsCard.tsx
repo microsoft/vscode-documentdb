@@ -17,6 +17,7 @@ import {
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import React from 'react';
+import { Announcer } from '../../../../../../../api/webview-client/accessibility';
 import '../baseOptimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 
@@ -143,9 +144,10 @@ export function GetPerformanceInsightsCard({
                             </MessageBarBody>
                         </MessageBar>
                     )}
+                    <Announcer when={isLoading} politeness="assertive" message={l10n.t('AI is analyzing...')} />
                     {isLoading ? (
                         <div className="get-performance-insights-card-loading">
-                            <Spinner size="small" />
+                            <Spinner size="small" aria-hidden="true" />
                             <Text size={300}>{l10n.t('AI is analyzing...')}</Text>
                             <Button appearance="subtle" size="small" onClick={onCancel}>
                                 {l10n.t('Cancel')}

@@ -3,5 +3,5 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { useAnnounce } from './useAnnounce';
-export type { UseAnnounceOptions, UseAnnounceReturn } from './useAnnounce';
+export { Announcer } from './Announcer';
+export type { AnnouncerProps } from './Announcer';
