@@ -7,7 +7,7 @@ import { ProgressBar } from '@fluentui/react-components';
 import { loader } from '@monaco-editor/react';
 import * as l10n from '@vscode/l10n';
 import { debounce } from 'es-toolkit';
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 // eslint-disable-next-line import/no-internal-modules
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { UsageImpact } from '../../../utils/surveyTypes';
@@ -57,6 +57,9 @@ export const DocumentView = (): JSX.Element => {
     const [isLoading, setIsLoading] = useState(configuration.mode !== 'add');
     const [isDirty, setIsDirty] = useState(true);
 
+    // Ref for the Save button to manage focus
+    const saveButtonRef = useRef<HTMLButtonElement>(null);
+
     useSelectiveContextMenuPrevention();
 
     // a useEffect without a dependency runs only once after the first render only
@@ -96,6 +99,13 @@ export const DocumentView = (): JSX.Element => {
         editorRef.current = editor;
 
         handleResize();
+
+        // Accessibility: Focus the Save button instead of the editor
+        // Monaco editor captures Tab/Shift-Tab for document editing, making it difficult
+        // for keyboard users to navigate away. Setting focus on the toolbar button
+        // provides better keyboard navigation until Tab navigation from editor is improved.
+        // Addresses WCAG 2.4.3 Focus Order requirement.
+        saveButtonRef.current?.focus();
 
         // initialize the monaco editor with the schema that's basic
         // as we don't know the schema of the collection available
@@ -264,6 +274,11 @@ export const DocumentView = (): JSX.Element => {
 
     function handleOnValidateRequest(): void {}
 
+    // Accessibility: Handle Escape key to exit Monaco editor
+    const handleEscapeEditor = useCallback(() => {
+        saveButtonRef.current?.focus();
+    }, []);
+
     return (
         <div className="documentView">
             <div className="toolbarContainer">
@@ -273,6 +288,7 @@ export const DocumentView = (): JSX.Element => {
                     onSaveRequest={handleOnSaveRequest}
                     onValidateRequest={handleOnValidateRequest}
                     onRefreshRequest={handleOnRefreshRequest}
+                    saveButtonRef={saveButtonRef}
                 />
             </div>
             <div className="monacoContainer">
@@ -283,6 +299,7 @@ export const DocumentView = (): JSX.Element => {
                     options={monacoOptions}
                     value={editorContent}
                     onMount={handleMonacoEditorMount}
+                    onEscapeEditor={handleEscapeEditor}
                     onChange={() => {
                         setIsDirty(true);
                     }}
