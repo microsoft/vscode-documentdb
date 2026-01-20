@@ -249,16 +249,83 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
 
-                void vscode.window.showErrorMessage(
+                // URL-Encoding checks
+                let decodedPassword: string | undefined;
+                try {
+                    decodedPassword = password ? decodeURIComponent(password) : undefined;
+                } catch {
+                    decodedPassword = undefined;
+                }
+
+                const retryButton = l10n.t('Retry with Decoded Password');
+                const buttons: string[] = [];
+
+                let detailMessage: string =
+                    l10n.t('Revisit connection details and try again.') +
+                    '\n\n' +
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) });
+
+                const shouldOfferRetry =
+                    password && /%[0-9A-Fa-f]{2}/.test(password) && decodedPassword && password !== decodedPassword;
+
+                if (shouldOfferRetry) {
+                    detailMessage += '\n\n' + l10n.t('Your password appears to be URL-encoded.');
+                    buttons.push(retryButton);
+                }
+
+                // Offer a one-time retry using the decoded value
+                const result = await vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                    {
-                        modal: true,
-                        detail:
-                            l10n.t('Revisit connection details and try again.') +
-                            '\n\n' +
-                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
-                    },
+                    { modal: true, detail: detailMessage },
+                    ...buttons,
                 );
+
+                if (result === retryButton && decodedPassword && username && authMethod) {
+                    context.valuesToMask.push(decodedPassword);
+
+                    CredentialCache.setAuthCredentials(
+                        this.cluster.clusterId,
+                        authMethod,
+                        connectionString.toString(),
+                        { connectionUser: username, connectionPassword: decodedPassword },
+                        this.cluster.emulatorConfiguration,
+                        connectionCredentials.secrets.entraIdAuthConfig,
+                    );
+
+                    await ClustersClient.deleteClient(this.cluster.clusterId);
+
+                    try {
+                        clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+
+                        connectionCredentials.secrets.nativeAuthConfig = {
+                            connectionUser: username,
+                            connectionPassword: decodedPassword,
+                        };
+                        await ConnectionStorageService.save(connectionType, connectionCredentials, true);
+
+                        ext.outputChannel.appendLine(
+                            l10n.t('Connected to the cluster "{cluster}" using decoded password.', {
+                                cluster: this.cluster.name,
+                            }),
+                        );
+                        return clustersClient;
+                    } catch (retryErr: unknown) {
+                        const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+                        ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
+
+                        // Show final error screen without the URL hint
+                        void vscode.window.showErrorMessage(
+                            l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
+                            {
+                                modal: true,
+                                detail:
+                                    l10n.t('Revisit connection details and try again.') +
+                                    '\n\n' +
+                                    l10n.t('Error: {error}', { error: retryError.message }),
+                            },
+                        );
+                    }
+                }
 
                 // If connection fails, remove cached credentials
                 await ClustersClient.deleteClient(this.cluster.clusterId);
