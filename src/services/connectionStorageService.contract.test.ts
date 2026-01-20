@@ -19,7 +19,13 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { API } from '../DocumentDBExperiences';
-import { ConnectionStorageService, ConnectionType, ItemType, type ConnectionItem } from './connectionStorageService';
+import {
+    ConnectionStorageService,
+    ConnectionType,
+    FOLDER_PLACEHOLDER_CONNECTION_STRING,
+    ItemType,
+    type ConnectionItem,
+} from './connectionStorageService';
 import { type Storage, type StorageItem } from './storageService';
 
 // In-memory mock storage implementation
@@ -198,7 +204,7 @@ function createFolderItem(): ConnectionItem {
             availableAuthMethods: [],
         },
         secrets: {
-            connectionString: '',
+            connectionString: FOLDER_PLACEHOLDER_CONNECTION_STRING,
         },
     };
 }

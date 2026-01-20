@@ -40,6 +40,20 @@ export enum ItemType {
     Folder = 'folder',
 }
 
+/**
+ * Known storage format versions that this code can handle.
+ * Used to skip items with unknown future versions during loading.
+ */
+const KNOWN_STORAGE_VERSIONS = new Set(['1.0', '2.0', '3.0', undefined]);
+
+/**
+ * Placeholder connection string used for folder items.
+ * This ensures backward compatibility with older extension versions that expect
+ * all items to have a connection string. Older versions will see folders as
+ * invalid connections rather than crashing.
+ */
+export const FOLDER_PLACEHOLDER_CONNECTION_STRING = 'mongodb://folder-item-placeholder';
+
 export interface ConnectionProperties extends Record<string, unknown> {
     type: ItemType; // Discriminator for item type
     parentId?: string; // Parent folder ID for hierarchy (undefined = root level)
@@ -154,6 +168,61 @@ export class ConnectionStorageService {
     }
 
     /**
+     * Fixes existing folder items that were created without the placeholder connection string.
+     * This is needed for backward compatibility with older extension versions that expect
+     * all items to have a connection string.
+     *
+     * This function is intended for beta testers who created folders before this fix was added.
+     * It runs once during cleanup and updates folders that have an empty connection string.
+     */
+    private static async fixFolderConnectionStrings(context: IActionContext): Promise<void> {
+        let foldersFixed = 0;
+
+        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
+            const storageService = await this.getStorageService();
+            const items = await storageService.getItems<ConnectionProperties>(connectionType);
+
+            // Find folders without the placeholder connection string
+            // (items created before this fix will have empty string or undefined)
+            const foldersToFix = items.filter(
+                (item) =>
+                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                    item.properties?.type === ItemType.Folder &&
+                    (!item.secrets?.[SecretIndex.ConnectionString] ||
+                        item.secrets[SecretIndex.ConnectionString] === ''),
+            );
+
+            for (const folder of foldersToFix) {
+                try {
+                    // Convert to ConnectionItem (triggers migration if needed)
+                    const connectionItem = this.fromStorageItem(folder);
+
+                    // Re-save to apply the placeholder connection string
+                    // toStorageItem will automatically add FOLDER_PLACEHOLDER_CONNECTION_STRING for folders
+                    await this.save(connectionType, connectionItem, true);
+                    foldersFixed++;
+
+                    ext.outputChannel.appendLog(
+                        `Fixed folder "${folder.name}" (id: ${folder.id}) - added placeholder connection string for backward compatibility.`,
+                    );
+                } catch (error) {
+                    console.debug(
+                        `Failed to fix folder ${folder.id}:`,
+                        error instanceof Error ? error.message : String(error),
+                    );
+                }
+            }
+        }
+
+        context.telemetry.measurements.foldersFixed = foldersFixed;
+        if (foldersFixed > 0) {
+            ext.outputChannel.appendLog(
+                `Fixed ${foldersFixed} folder(s) with placeholder connection string for backward compatibility.`,
+            );
+        }
+    }
+
+    /**
      * Cleans up orphaned items (items whose parentId references a non-existent folder).
      * This can happen if a folder deletion fails to cascade to children.
      * Runs iteratively until no orphans remain (deleting a parent may orphan its children).
@@ -162,6 +231,10 @@ export class ConnectionStorageService {
     private static async cleanupOrphanedItems(): Promise<void> {
         await callWithTelemetryAndErrorHandling('cleanupOrphanedItems', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
+
+            // First, fix any existing folders that don't have the placeholder connection string
+            // This ensures backward compatibility for beta testers who created folders before this fix
+            await this.fixFolderConnectionStrings(context);
 
             let totalOrphansRemoved = 0;
             let iteration = 0;
@@ -363,21 +436,50 @@ export class ConnectionStorageService {
 
     /**
      * Gets all items (connections and folders) from storage.
+     * Filters out items with unknown/future storage versions for forward compatibility.
      * @param connectionType The type of connection storage (Clusters or Emulators)
      */
     public static async getAllItems(connectionType: ConnectionType): Promise<ConnectionItem[]> {
         const storageService = await this.getStorageService();
         const items = await storageService.getItems<ConnectionProperties>(connectionType);
-        return items.map((item) => this.fromStorageItem(item));
+
+        // Filter out items with unknown versions (future-proofing)
+        const knownItems = items.filter((item) => {
+            if (!KNOWN_STORAGE_VERSIONS.has(item.version)) {
+                console.debug(
+                    `Skipping item "${item.id}" with unknown storage version "${item.version}". ` +
+                        `This may be from a newer extension version.`,
+                );
+                return false;
+            }
+            return true;
+        });
+
+        return knownItems.map((item) => this.fromStorageItem(item));
     }
 
     /**
      * Returns a single connection by id, or undefined if not found.
+     * Returns undefined for items with unknown/future storage versions.
      */
     public static async get(connectionId: string, connectionType: ConnectionType): Promise<ConnectionItem | undefined> {
         const storageService = await this.getStorageService();
         const storageItem = await storageService.getItem<ConnectionProperties>(connectionType, connectionId);
-        return storageItem ? this.fromStorageItem(storageItem) : undefined;
+
+        if (!storageItem) {
+            return undefined;
+        }
+
+        // Skip items with unknown versions (future-proofing)
+        if (!KNOWN_STORAGE_VERSIONS.has(storageItem.version)) {
+            console.debug(
+                `Skipping item "${storageItem.id}" with unknown storage version "${storageItem.version}". ` +
+                    `This may be from a newer extension version.`,
+            );
+            return undefined;
+        }
+
+        return this.fromStorageItem(storageItem);
     }
 
     public static async save(connectionType: ConnectionType, item: ConnectionItem, overwrite?: boolean): Promise<void> {
@@ -393,7 +495,13 @@ export class ConnectionStorageService {
     private static toStorageItem(item: ConnectionItem): StorageItem<ConnectionProperties> {
         const secretsArray: string[] = [];
         if (item.secrets) {
-            secretsArray[SecretIndex.ConnectionString] = item.secrets.connectionString;
+            // For folders, use a placeholder connection string for backward compatibility
+            // with older extension versions that expect all items to have a connection string
+            const connectionString =
+                item.properties.type === ItemType.Folder
+                    ? FOLDER_PLACEHOLDER_CONNECTION_STRING
+                    : item.secrets.connectionString;
+            secretsArray[SecretIndex.ConnectionString] = connectionString;
 
             // Store nativeAuthConfig fields individually
             if (item.secrets.nativeAuthConfig) {

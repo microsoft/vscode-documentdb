@@ -8,7 +8,11 @@ import * as l10n from '@vscode/l10n';
 import { Views } from '../../../documentdb/Views';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { ConnectionStorageService, ItemType } from '../../../services/connectionStorageService';
+import {
+    ConnectionStorageService,
+    FOLDER_PLACEHOLDER_CONNECTION_STRING,
+    ItemType,
+} from '../../../services/connectionStorageService';
 import {
     focusAndRevealInConnectionsView,
     refreshParentInConnectionsView,
@@ -46,7 +50,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateFolderWizardContex
                         availableAuthMethods: [],
                     },
                     secrets: {
-                        connectionString: '',
+                        connectionString: FOLDER_PLACEHOLDER_CONNECTION_STRING,
                     },
                 },
                 false,
