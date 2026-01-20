@@ -89,12 +89,12 @@ export const MonacoEditor = ({ onEscapeEditor, onMount, ...props }: MonacoEditor
 
     return (
         <section {...uncontrolledFocus} style={{ width: '100%', height: '100%' }}>
-            {/* Screen reader announcement for escape key hint */}
-            <Announcer when={shouldAnnounce} message={l10n.t('Press Escape to exit editor')} />
             <i
                 // Focus trap bumper element for Fluent UI Tabster integration.
                 // Tabster's checkUncontrolledTrappingFocus checks for this attribute
                 // to identify zones where tab navigation is managed externally.
+                // IMPORTANT: This MUST be the first child element - the check uses
+                // element.firstElementChild?.hasAttribute('data-is-focus-trap-zone-bumper')
                 data-is-focus-trap-zone-bumper={true}
                 style={{
                     position: 'fixed',
@@ -107,7 +107,14 @@ export const MonacoEditor = ({ onEscapeEditor, onMount, ...props }: MonacoEditor
                     left: '0px',
                 }}
             ></i>
-            <Editor {...props} onMount={handleMount} theme={themeState.monaco.themeName} />
+            {/* Screen reader announcement for escape key hint */}
+            <Announcer when={shouldAnnounce} message={l10n.t('Press Escape to exit editor')} />
+            <Editor
+                {...props}
+                data-is-focus-trap-zone-bumper={'true'}
+                onMount={handleMount}
+                theme={themeState.monaco.themeName}
+            />
         </section>
     );
 };
