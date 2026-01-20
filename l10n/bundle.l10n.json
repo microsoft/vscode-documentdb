@@ -614,6 +614,7 @@
   "Port number is required": "Port number is required",
   "Port number must be a number": "Port number must be a number",
   "Port number must be between 1 and 65535": "Port number must be between 1 and 65535",
+  "Press Escape to exit editor": "Press Escape to exit editor",
   "Previous tip": "Previous tip",
   "Privacy Statement": "Privacy Statement",
   "Procedure not found: {name}": "Procedure not found: {name}",

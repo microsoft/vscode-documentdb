@@ -7,7 +7,7 @@ import { ProgressBar } from '@fluentui/react-components';
 import { loader } from '@monaco-editor/react';
 import * as l10n from '@vscode/l10n';
 import { debounce } from 'es-toolkit';
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 // eslint-disable-next-line import/no-internal-modules
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { UsageImpact } from '../../../utils/surveyTypes';
@@ -274,6 +274,11 @@ export const DocumentView = (): JSX.Element => {
 
     function handleOnValidateRequest(): void {}
 
+    // Accessibility: Handle Escape key to exit Monaco editor
+    const handleEscapeEditor = useCallback(() => {
+        saveButtonRef.current?.focus();
+    }, []);
+
     return (
         <div className="documentView">
             <div className="toolbarContainer">
@@ -294,6 +299,7 @@ export const DocumentView = (): JSX.Element => {
                     options={monacoOptions}
                     value={editorContent}
                     onMount={handleMonacoEditorMount}
+                    onEscapeEditor={handleEscapeEditor}
                     onChange={() => {
                         setIsDirty(true);
                     }}
