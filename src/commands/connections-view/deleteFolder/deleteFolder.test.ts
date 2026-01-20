@@ -4,7 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { ConnectionType, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
+import {
+    ConnectionType,
+    FOLDER_PLACEHOLDER_CONNECTION_STRING,
+    ItemType,
+    type ConnectionItem,
+} from '../../../services/connectionStorageService';
 import { type FolderItem } from '../../../tree/connections-view/FolderItem';
 import { deleteFolder } from './deleteFolder';
 
@@ -106,7 +111,7 @@ function createMockFolder(overrides: { id: string; name: string; parentId?: stri
             availableAuthMethods: [],
         },
         secrets: {
-            connectionString: '',
+            connectionString: FOLDER_PLACEHOLDER_CONNECTION_STRING,
         },
     } as ConnectionItem;
 }
@@ -331,9 +336,9 @@ describe('deleteFolder', () => {
 
     describe('user cancellation', () => {
         it('should not delete anything when user cancels confirmation', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { getConfirmationAsInSettings } = require('../../../utils/dialogs/getConfirmation');
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
             getConfirmationAsInSettings.mockResolvedValueOnce(false);
 
             const folderItem = createMockFolderItem({ id: 'folder-1', name: 'Folder 1' });
@@ -360,7 +365,7 @@ describe('deleteFolder', () => {
 
     describe('connection type handling', () => {
         it('should use folder connection type for deletion', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { ConnectionStorageService } = require('../../../services/connectionStorageService');
 
             const folderItem = createMockFolderItem({
@@ -374,7 +379,7 @@ describe('deleteFolder', () => {
             await deleteFolder(createMockContext(), folderItem);
 
             // Verify delete was called with correct connection type
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
             expect(ConnectionStorageService.delete).toHaveBeenCalledWith(ConnectionType.Emulators, 'emulator-folder');
         });
     });

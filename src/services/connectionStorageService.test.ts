@@ -8,6 +8,7 @@ import { API } from '../DocumentDBExperiences';
 import {
     ConnectionStorageService,
     ConnectionType,
+    FOLDER_PLACEHOLDER_CONNECTION_STRING,
     ItemType,
     type ConnectionItem,
     type ConnectionProperties,
@@ -208,7 +209,7 @@ function createTestFolderItem(
             availableAuthMethods: [],
         },
         secrets: {
-            connectionString: '',
+            connectionString: FOLDER_PLACEHOLDER_CONNECTION_STRING,
         },
     };
 }

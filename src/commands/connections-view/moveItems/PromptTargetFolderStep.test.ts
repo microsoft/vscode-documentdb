@@ -3,7 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ConnectionType, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
+import {
+    ConnectionType,
+    FOLDER_PLACEHOLDER_CONNECTION_STRING,
+    ItemType,
+    type ConnectionItem,
+} from '../../../services/connectionStorageService';
 import { type MoveItemsWizardContext } from './MoveItemsWizardContext';
 import { PromptTargetFolderStep } from './PromptTargetFolderStep';
 
@@ -66,7 +71,7 @@ function createMockFolder(overrides: { id: string; name: string; parentId?: stri
             availableAuthMethods: [],
         },
         secrets: {
-            connectionString: '',
+            connectionString: FOLDER_PLACEHOLDER_CONNECTION_STRING,
         },
     } as ConnectionItem;
 }
