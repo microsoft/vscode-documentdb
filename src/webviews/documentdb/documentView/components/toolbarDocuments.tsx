@@ -14,7 +14,9 @@ interface ToolbarDocumentsProps {
     onValidateRequest: () => void;
     onRefreshRequest: () => void;
     onSaveRequest: () => void;
-    saveButtonRef?: RefObject<HTMLButtonElement>;
+    // Must accept null because useRef<HTMLButtonElement>(null) creates RefObject<HTMLButtonElement | null>
+    // See: https://react.dev/reference/react/useRef#typing-the-ref-with-an-initial-null-value
+    saveButtonRef?: RefObject<HTMLButtonElement | null>;
 }
 
 export const ToolbarDocuments = ({
