@@ -14,7 +14,7 @@ interface ToolbarDocumentsProps {
     onValidateRequest: () => void;
     onRefreshRequest: () => void;
     onSaveRequest: () => void;
-    saveButtonRef?: RefObject<HTMLButtonElement | null>;
+    saveButtonRef?: RefObject<HTMLButtonElement>;
 }
 
 export const ToolbarDocuments = ({

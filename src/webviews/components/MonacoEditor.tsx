@@ -51,6 +51,17 @@ export const MonacoEditor = ({ onEscapeEditor, onMount, ...props }: MonacoEditor
     const [shouldAnnounce, setShouldAnnounce] = useState(false);
     const hasAnnouncedRef = useRef(false);
 
+    // Store disposables for cleanup
+    const disposablesRef = useRef<monacoEditor.IDisposable[]>([]);
+
+    // Cleanup disposables on unmount
+    useEffect(() => {
+        return () => {
+            disposablesRef.current.forEach((d) => d.dispose());
+            disposablesRef.current = [];
+        };
+    }, []);
+
     useEffect(() => {
         if (monaco && themeState.monaco.theme) {
             monaco.editor.defineTheme(themeState.monaco.themeName, themeState.monaco.theme);
@@ -60,6 +71,10 @@ export const MonacoEditor = ({ onEscapeEditor, onMount, ...props }: MonacoEditor
 
     const handleMount: OnMount = useCallback(
         (editor, monacoInstance) => {
+            // Dispose any previous listeners (in case of re-mount)
+            disposablesRef.current.forEach((d) => d.dispose());
+            disposablesRef.current = [];
+
             // Register Escape key handler to exit the editor
             if (onEscapeEditor) {
                 editor.addCommand(monacoInstance.KeyCode.Escape, () => {
@@ -68,18 +83,20 @@ export const MonacoEditor = ({ onEscapeEditor, onMount, ...props }: MonacoEditor
             }
 
             // Announce escape hint once when editor gains focus
-            editor.onDidFocusEditorText(() => {
+            const focusDisposable = editor.onDidFocusEditorText(() => {
                 if (!hasAnnouncedRef.current && onEscapeEditor) {
                     setShouldAnnounce(true);
                     hasAnnouncedRef.current = true;
                 }
             });
+            disposablesRef.current.push(focusDisposable);
 
             // Reset announcement tracking when editor loses focus
-            editor.onDidBlurEditorText(() => {
+            const blurDisposable = editor.onDidBlurEditorText(() => {
                 setShouldAnnounce(false);
                 hasAnnouncedRef.current = false;
             });
+            disposablesRef.current.push(blurDisposable);
 
             // Call the original onMount if provided
             onMount?.(editor, monacoInstance);
