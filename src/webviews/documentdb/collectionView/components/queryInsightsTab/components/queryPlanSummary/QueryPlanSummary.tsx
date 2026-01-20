@@ -74,9 +74,11 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
     return (
         <Card className="planSection">
             <div
+                role="group"
+                aria-labelledby="query-plan-summary-label"
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}
             >
-                <Text size={400} weight="semibold">
+                <Text id="query-plan-summary-label" size={400} weight="semibold">
                     {l10n.t('Query Plan Summary')}
                 </Text>
                 {stage2Data && (
@@ -150,6 +152,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                 return (
                                     <div
                                         key={shard.shardName}
+                                        role="group"
+                                        aria-labelledby={`shard-${shard.shardName}-label`}
                                         style={{
                                             backgroundColor: tokens.colorNeutralBackground1,
                                             borderRadius: '6px',
@@ -165,6 +169,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                         {/* Shard Summary (always visible) */}
                                         <div style={{ padding: '12px' }}>
                                             <Text
+                                                id={`shard-${shard.shardName}-label`}
                                                 weight="semibold"
                                                 size={300}
                                                 style={{ display: 'block', marginBottom: '8px' }}
@@ -292,6 +297,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                     ) : (
                         /* Non-sharded query view */
                         <div
+                            role="group"
+                            aria-labelledby="your-cluster-label"
                             style={{
                                 backgroundColor: tokens.colorNeutralBackground1,
                                 borderRadius: '6px',
@@ -300,11 +307,23 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                         >
                             {/* Summary (always visible from Stage 1) */}
                             <div style={{ padding: '12px' }}>
-                                <Text weight="semibold" size={400} style={{ display: 'block', marginBottom: '8px' }}>
+                                <Text
+                                    id="your-cluster-label"
+                                    weight="semibold"
+                                    size={400}
+                                    style={{ display: 'block', marginBottom: '8px' }}
+                                >
                                     {l10n.t('Your Cluster')}
                                 </Text>
                                 {/* Stage flow with badges */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        marginBottom: '8px',
+                                    }}
+                                >
                                     {[...stage1Data.stages].reverse().map((stage, index) => {
                                         // Check if this stage has failed (from extended stage info)
                                         const stageIndex = [...stage1Data.stages].length - 1 - index; // Original index before reverse
@@ -326,7 +345,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                             </React.Fragment>
                                         );
                                     })}
-                                </div>{' '}
+                                </div>
                                 {/* Metrics - show skeleton until Stage 2 data is available */}
                                 {(!stage2Data || stage2Loading) && (
                                     <Skeleton>
