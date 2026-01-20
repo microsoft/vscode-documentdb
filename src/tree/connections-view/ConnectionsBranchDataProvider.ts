@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
@@ -135,13 +135,14 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
             (folder) => new FolderItem(folder, parentId, ConnectionType.Clusters),
         );
 
-        const clusterItems = rootConnectionsClusters.map((connection: ConnectionItem) => {
+        // Filter with type guard to ensure type safety for connection-specific properties
+        const clusterItems = rootConnectionsClusters.filter(isConnection).map((connection) => {
             const model: ClusterModelWithStorage = {
                 id: `${parentId}/${connection.id}`,
                 storageId: connection.id,
                 name: connection.name,
                 dbExperience: DocumentDBExperience,
-                connectionString: connection?.secrets?.connectionString ?? undefined,
+                connectionString: connection.secrets.connectionString,
                 emulatorConfiguration: connection.properties.emulatorConfiguration,
             };
 

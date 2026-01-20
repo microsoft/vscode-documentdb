@@ -6,13 +6,8 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { Views } from '../../../documentdb/Views';
-import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import {
-    ConnectionStorageService,
-    FOLDER_PLACEHOLDER_CONNECTION_STRING,
-    ItemType,
-} from '../../../services/connectionStorageService';
+import { ConnectionStorageService } from '../../../services/connectionStorageService';
 import {
     focusAndRevealInConnectionsView,
     refreshParentInConnectionsView,
@@ -37,21 +32,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateFolderWizardContex
         await withConnectionsViewProgress(async () => {
             const folderId = randomUtils.getRandomUUID();
 
-            // Create folder as a ConnectionItem with type 'folder'
-            await ConnectionStorageService.save(
+            // Create folder using the new type-safe API
+            await ConnectionStorageService.saveFolder(
                 connectionType,
                 {
                     id: folderId,
                     name: folderName,
-                    properties: {
-                        type: ItemType.Folder,
-                        parentId: context.parentFolderId,
-                        api: API.DocumentDB,
-                        availableAuthMethods: [],
-                    },
-                    secrets: {
-                        connectionString: FOLDER_PLACEHOLDER_CONNECTION_STRING,
-                    },
+                    parentId: context.parentFolderId,
                 },
                 false,
             );
