@@ -351,8 +351,8 @@ function generateUniqueLabel(existingLabel: string): string {
         const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
         return `${baseName} (${count})`;
     }
-    // Fallback to prevent endless loop if regex fails - use timestamp for guaranteed uniqueness
-    return `${existingLabel} (${Date.now()})`;
+    // Fallback if regex fails - append (1) to ensure we have a numeric suffix for next iteration
+    return `${existingLabel} (1)`;
 }
 
 // #endregion
