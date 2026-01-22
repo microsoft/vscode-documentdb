@@ -18,13 +18,8 @@ export function formatDocumentCount(count: number): string {
     }
 
     // Use Intl.NumberFormat for compact notation
-    // Try to use the user's VS Code locale, fall back to 'en-US' on failure
-    let locale = 'en-US';
-    try {
-        locale = vscode.env.language || 'en-US';
-    } catch {
-        // Fall back to 'en-US' if vscode.env.language is unavailable
-    }
+    // Try to use the user's VS Code locale, fall back to 'en-US' if unavailable
+    const locale = vscode.env?.language || 'en-US';
 
     const formatter = new Intl.NumberFormat(locale, {
         notation: 'compact',
