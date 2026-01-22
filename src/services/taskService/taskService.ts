@@ -318,7 +318,7 @@ export abstract class Task {
         await callWithTelemetryAndErrorHandling('taskService.taskExecution', async (context: IActionContext) => {
             // Add base task properties with task_ prefix
             context.telemetry.properties.task_id = this.id;
-            context.telemetry.properties.task_type = this.constructor.name;
+            context.telemetry.properties.task_type = this.type;
             context.telemetry.properties.task_name = this.name;
             context.telemetry.properties.task_phase = 'execution';
 
