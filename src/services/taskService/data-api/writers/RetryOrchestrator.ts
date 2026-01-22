@@ -261,12 +261,13 @@ export class RetryOrchestrator {
         const ms = this.calculateDelayMs(attempt);
 
         return new Promise((resolve) => {
+            // Initialize cleanup before setTimeout to avoid potential use-before-assignment
+            let cleanup: () => void = (): void => {};
+
             const timeoutId = setTimeout(() => {
                 cleanup();
                 resolve();
             }, ms);
-
-            let cleanup: () => void;
 
             if (abortSignal) {
                 const abortHandler = (): void => {
