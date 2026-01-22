@@ -343,11 +343,9 @@ export class ClustersClient {
     }
 
     endSession(session: ClientSession): void {
-        try {
-            void session.endSession();
-        } catch (error) {
+        session.endSession().catch((error) => {
             throw new Error(l10n.t('Failed to end session: {0}', parseError(error).message));
-        }
+        });
     }
 
     getUserName() {
