@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as vscode from 'vscode';
+
 /**
  * Formats a document count for display in the tree view.
  * Uses compact notation for large numbers (e.g., "1.2K", "1.5M").
@@ -16,7 +18,10 @@ export function formatDocumentCount(count: number): string {
     }
 
     // Use Intl.NumberFormat for compact notation
-    const formatter = new Intl.NumberFormat('en', {
+    // Try to use the user's VS Code locale, fall back to 'en-US' if unavailable
+    const locale = vscode.env?.language || 'en-US';
+
+    const formatter = new Intl.NumberFormat(locale, {
         notation: 'compact',
         maximumFractionDigits: 1,
     });
