@@ -10,6 +10,7 @@ import {
     ConnectionType,
     ItemType,
     type ConnectionProperties,
+    type FolderProperties,
 } from './connectionStorageService';
 import { type Storage, type StorageItem } from './storageService';
 
@@ -176,13 +177,30 @@ function createV3StorageItem(overrides: {
     name?: string;
     type?: ItemType;
     parentId?: string;
-}): StorageItem<ConnectionProperties> {
+}): StorageItem<FolderProperties | ConnectionProperties> {
+    const itemType = overrides.type ?? ItemType.Connection;
+
+    if (itemType === ItemType.Folder) {
+        return {
+            id: overrides.id,
+            name: overrides.name ?? `Item ${overrides.id}`,
+            version: '3.0',
+            properties: {
+                type: ItemType.Folder,
+                parentId: overrides.parentId,
+                api: API.DocumentDB,
+                availableAuthMethods: ['NativeAuth'],
+            },
+            secrets: [],
+        };
+    }
+
     return {
         id: overrides.id,
         name: overrides.name ?? `Item ${overrides.id}`,
         version: '3.0',
         properties: {
-            type: overrides.type ?? ItemType.Connection,
+            type: ItemType.Connection,
             parentId: overrides.parentId,
             api: API.DocumentDB,
             availableAuthMethods: ['NativeAuth'],
