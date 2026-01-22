@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import {
     refreshParentInConnectionsView,
     withConnectionsViewProgress,
@@ -26,6 +27,19 @@ export async function removeAzureConnection(context: IActionContext, node: Docum
 
 export async function removeConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
+
+    // Check if any running tasks are using this connection
+    const canProceed = await checkCanProceedAndInformUser(
+        {
+            connectionId: node.cluster.id,
+        },
+        l10n.t('remove this connection'),
+    );
+
+    if (!canProceed) {
+        throw new UserCancelledError();
+    }
+
     const confirmed = await getConfirmationAsInSettings(
         l10n.t('Are you sure?'),
         l10n.t('Delete "{connectionName}"?', { connectionName: node.cluster.name }) +

@@ -351,6 +351,7 @@ function generateUniqueLabel(existingLabel: string): string {
         const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
         return `${baseName} (${count})`;
     }
+    // Fallback if regex fails - append (1) to ensure we have a numeric suffix for next iteration
     return `${existingLabel} (1)`;
 }
 

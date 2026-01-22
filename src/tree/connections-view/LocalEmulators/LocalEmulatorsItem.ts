@@ -74,8 +74,12 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
         // Sort connections alphabetically by name
         connectionItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
 
-        // Return folders first, then connections, then the "New Emulator Connection" item
-        return [...folderItems, ...connectionItems, new NewEmulatorConnectionItemCV(this.id)];
+        // Show "New Local Connection" only if there are no folders or connections
+        const hasItems = folderItems.length > 0 || connectionItems.length > 0;
+        const newConnectionItem = hasItems ? [] : [new NewEmulatorConnectionItemCV(this.id)];
+
+        // Return folders first, then connections, then the "New Emulator Connection" item (if no other items)
+        return [...folderItems, ...connectionItems, ...newConnectionItem];
     }
 
     private iconPath: IconPath = {
