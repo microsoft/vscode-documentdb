@@ -1,5 +1,24 @@
 # Change Log
 
+## 0.7.0
+
+### New Features
+
+- **Lightweight Data Migration**: Introduces collection copy-and-paste feature for moving data between collections, databases, and servers. Supports four conflict resolution strategies (abort, skip, overwrite, generate new IDs), memory-efficient streaming with automatic throttle adaptation for RU platforms, real-time progress tracking, and configurable size warnings. Ideal for development workflows and smaller datasets. For production-scale migrations, dedicated migration services are recommended. [#63](https://github.com/microsoft/vscode-documentdb/issues/63), [#170](https://github.com/microsoft/vscode-documentdb/pull/170)
+- **Connection Folders**: Completely redesigns the Connections View to support hierarchical folder organization. Users can create folders and subfolders, move connections and folders using an intuitive wizard with validation, rename and delete items, and benefit from automatic sorting and visual hierarchy. Features boundary protection between emulator and non-emulator connections, and multi-item moving. [#426](https://github.com/microsoft/vscode-documentdb/pull/426)
+
+### Improvements
+
+- **Estimated Document Count**: Collections in the tree view now display an estimated document count.
+- **Copy Connection String with Password**: Adds an option to include the password when copying connection strings from the Connections View. [#436](https://github.com/microsoft/vscode-documentdb/pull/436)
+- **Accessibility**: Delivers nine comprehensive accessibility improvements addressing screen reader support, keyboard navigation, and ARIA labeling. Screen readers now properly announce search results ([#384](https://github.com/microsoft/vscode-documentdb/issues/384)), AI analysis status ([#380](https://github.com/microsoft/vscode-documentdb/issues/380)), and rating button context ([#381](https://github.com/microsoft/vscode-documentdb/issues/381)). Keyboard focus is immediately visible in dialogs ([#385](https://github.com/microsoft/vscode-documentdb/issues/385)), and all tooltips are keyboard-accessible ([#375](https://github.com/microsoft/vscode-documentdb/issues/375)). Fixes include proper labels for query fields ([#379](https://github.com/microsoft/vscode-documentdb/issues/379)), button naming ([#378](https://github.com/microsoft/vscode-documentdb/issues/378)), spin button labels ([#377](https://github.com/microsoft/vscode-documentdb/issues/377)), and label-in-name compliance ([#374](https://github.com/microsoft/vscode-documentdb/issues/374)). Aligns with WCAG 2.1 AA standards for inclusive design.
+
+### Fixes
+
+- **Dark Theme Support**: Resolves UI rendering issues affecting users of dark themes like Nord, where text in certain controls appeared dark-on-dark and invisible. All UI elements now properly respect theme colors for excellent visibility in both light and dark modes. [#457](https://github.com/microsoft/vscode-documentdb/issues/457)
+- **AI Response Formatting**: Corrects markdown formatting in AI-generated responses from the Query Insights feature by restricting formatting options to prevent malformed output. [#428](https://github.com/microsoft/vscode-documentdb/issues/428)
+- **Security Dependency Updates**: Updates `qs` and `express` dependencies to address security vulnerabilities and maintain high security standards. [#434](https://github.com/microsoft/vscode-documentdb/pull/434)
+
 ## 0.6.3
 
 ### Improvements
