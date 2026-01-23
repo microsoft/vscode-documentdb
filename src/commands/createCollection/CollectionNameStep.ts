@@ -6,6 +6,7 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ext } from '../../extensionVariables';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 
 export class CollectionNameStep extends AzureWizardPromptStep<CreateCollectionWizardContext> {
@@ -29,8 +30,6 @@ export class CollectionNameStep extends AzureWizardPromptStep<CreateCollectionWi
     }
 
     public validateInput(collectionName: string | undefined): string | undefined {
-        // https://www.mongodb.com/docs/manual/reference/limits/#mongodb-limit-Restriction-on-Collection-Names
-
         collectionName = collectionName ? collectionName.trim() : '';
 
         if (collectionName.length === 0) {
@@ -76,8 +75,9 @@ export class CollectionNameStep extends AzureWizardPromptStep<CreateCollectionWi
             if (collections.filter((c) => c.name === name).length > 0) {
                 return l10n.t('The collection "{0}" already exists in the database "{1}".', name, context.databaseId);
             }
-        } catch (_error) {
-            console.error(_error); // todo: push it to our telemetry
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(l10n.t('Error validating collection name availability: {0}', errorMessage));
             return undefined; // we don't want to block the user from continuing if we can't validate the name
         }
 

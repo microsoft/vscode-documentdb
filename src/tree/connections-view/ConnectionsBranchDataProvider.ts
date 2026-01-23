@@ -155,11 +155,16 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
         // Sort connections alphabetically by name
         clusterItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
 
+        // Show "New Connection" only if there are no cluster folders or connections
+        // (don't count the LocalEmulatorsItem - it's always shown)
+        const hasClusterItems = clusterFolderItems.length > 0 || clusterItems.length > 0;
+        const newConnectionItem = hasClusterItems ? [] : [new NewConnectionItemCV(parentId)];
+
         const rootItems = [
             new LocalEmulatorsItem(parentId),
             ...clusterFolderItems,
             ...clusterItems,
-            new NewConnectionItemCV(parentId),
+            ...newConnectionItem,
         ];
 
         return rootItems.map(

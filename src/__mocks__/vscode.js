@@ -9,4 +9,19 @@ const vsCodeMock = require('jest-mock-vscode').createVSCodeMock(jest);
 vsCodeMock.l10n = {
     t: jest.fn(),
 };
+
+// CancellationTokenSource mock for AzureWizard
+vsCodeMock.CancellationTokenSource = class CancellationTokenSource {
+    constructor() {
+        this.token = {
+            isCancellationRequested: false,
+            onCancellationRequested: jest.fn(),
+        };
+    }
+    cancel() {
+        this.token.isCancellationRequested = true;
+    }
+    dispose() {}
+};
+
 module.exports = vsCodeMock;
