@@ -3,21 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ext } from '../../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, ItemType } from '../../../services/connectionStorageService';
-import {
-    refreshParentInConnectionsView,
-    withConnectionsViewProgress,
-} from '../../../tree/connections-view/connectionsViewHelpers';
+import { ConnectionType } from '../../../services/connectionStorageService';
 import { type FolderItem } from '../../../tree/connections-view/FolderItem';
-import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
+import { ConfirmDeleteStep } from './ConfirmDeleteStep';
+import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
+import { ExecuteStep } from './ExecuteStep';
+import { VerifyStep } from './VerifyStep';
 
 /**
  * Command to delete a folder from the connections view.
- * Prompts for confirmation before deletion.
+ * Uses a wizard to:
+ * 1. Verify no running tasks are using connections in the folder
+ * 2. Prompt for confirmation
+ * 3. Execute the deletion
  */
 export async function deleteFolder(context: IActionContext, folderItem: FolderItem): Promise<void> {
     if (!folderItem) {
@@ -30,58 +31,31 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
     // Set telemetry properties
     context.telemetry.properties.connectionType = connectionType;
 
-    const confirmMessage =
-        l10n.t('Delete folder "{folderName}"?', { folderName: folderItem.name }) +
-        '\n' +
-        l10n.t('All subfolders and connections within this folder will also be deleted.') +
-        '\n' +
-        l10n.t('This cannot be undone.');
+    // Create wizard context with non-null/undefined initial values for back navigation support
+    const wizardContext: DeleteFolderWizardContext = {
+        ...context,
+        folderItem: {
+            id: folderItem.id,
+            storageId: folderItem.storageId,
+            name: folderItem.name,
+        },
+        connectionType,
+        conflictingTasks: [],
+        foldersToDelete: 0,
+        connectionsToDelete: 0,
+        confirmed: false,
+        deletedFolders: 0,
+        deletedConnections: 0,
+    };
 
-    const confirmed = await getConfirmationAsInSettings(l10n.t('Are you sure?'), confirmMessage, 'delete');
-
-    if (!confirmed) {
-        throw new UserCancelledError();
-    }
-
-    // Track deletion statistics
-    let deletedFolders = 0;
-    let deletedConnections = 0;
-
-    await withConnectionsViewProgress(async () => {
-        await ext.state.showDeleting(folderItem.id, async () => {
-            // Recursively delete all descendants
-            async function deleteRecursive(parentId: string): Promise<void> {
-                const children = await ConnectionStorageService.getChildren(parentId, connectionType);
-
-                for (const child of children) {
-                    // Recursively delete child folders first
-                    if (child.properties.type === ItemType.Folder) {
-                        await deleteRecursive(child.id);
-                        deletedFolders++;
-                    } else {
-                        deletedConnections++;
-                    }
-                    // Delete the child item
-                    await ConnectionStorageService.delete(connectionType, child.id);
-                }
-            }
-
-            // Delete all descendants first
-            await deleteRecursive(folderItem.storageId);
-
-            // Delete the folder itself (count as 1 more folder)
-            await ConnectionStorageService.delete(connectionType, folderItem.storageId);
-            deletedFolders++;
-        });
-
-        refreshParentInConnectionsView(folderItem.id);
+    const wizard = new AzureWizard(wizardContext, {
+        title: l10n.t('Delete Folder'),
+        promptSteps: [new VerifyStep(), new ConfirmDeleteStep()],
+        executeSteps: [new ExecuteStep()],
     });
 
-    // Record telemetry measurements
-    context.telemetry.measurements.deletedFolders = deletedFolders;
-    context.telemetry.measurements.deletedConnections = deletedConnections;
-    context.telemetry.measurements.totalItemsDeleted = deletedFolders + deletedConnections;
-    context.telemetry.properties.hadSubitems = deletedFolders + deletedConnections > 1 ? 'true' : 'false';
+    await wizard.prompt();
+    await wizard.execute();
 
     showConfirmationAsInSettings(l10n.t('The selected folder has been removed.'));
 }

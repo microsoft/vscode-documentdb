@@ -168,15 +168,22 @@ Voice control users say "click Refresh" – only works if accessible name contai
 <span>{isLoading ? 'Loading...' : `${count} results`}</span>
 ```
 
-✅ **Fix**: Use live region
+✅ **Fix**: Use the `Announcer` component
 
 ```tsx
-<span role="status" aria-live="polite">
-  {isLoading ? 'Loading...' : `${count} results`}
-</span>
+import { Announcer } from '../../api/webview-client/accessibility';
+
+// Announces when `when` transitions from false to true
+<Announcer when={isLoading} message={l10n.t('Loading...')} />
+
+// Dynamic message based on state
+<Announcer
+    when={!isLoading && documentCount !== undefined}
+    message={documentCount > 0 ? l10n.t('Results found') : l10n.t('No results found')}
+/>
 ```
 
-Use for: search results, loading states, success/error messages.
+Use for: loading states, search results, success/error messages.
 
 ### 9. Dialog Opens Without Focus Move
 
@@ -253,6 +260,44 @@ For keyboard-accessible badges with tooltips:
 </Badge>
 ```
 
+## Screen Reader Announcements
+
+Use the `Announcer` component for WCAG 4.1.3 (Status Messages) compliance.
+
+```tsx
+import { Announcer } from '../../api/webview-client/accessibility';
+```
+
+### Basic Usage
+
+```tsx
+// Announces "AI is analyzing..." when isLoading becomes true
+<Announcer when={isLoading} message={l10n.t('AI is analyzing...')} />
+
+// Dynamic message based on state (e.g., query results)
+<Announcer
+    when={!isLoading && documentCount !== undefined}
+    message={documentCount > 0 ? l10n.t('Results found') : l10n.t('No results found')}
+/>
+
+// With assertive politeness (default is polite)
+<Announcer when={hasError} message={l10n.t('Error occurred')} politeness="assertive" />
+```
+
+### Props
+
+- `when`: Announces when this transitions from `false` to `true`
+- `message`: The message to announce (use `l10n.t()` for localization)
+- `politeness`: `'assertive'` (default, interrupts) or `'polite'` (waits for idle)
+
+### Key Points
+
+- **Placement doesn't matter** - screen readers monitor all live regions regardless of DOM position; place near related UI for code readability
+- **Store relevant state** (e.g., `documentCount`) to derive dynamic messages
+- **Use `l10n.t()` for messages** - announcements must be localized
+- **Condition resets automatically** - when `when` goes back to `false`, it's ready for the next announcement
+- **Prefer 'assertive'** for user-initiated actions, 'polite' for background updates
+
 ## Quick Checklist
 
 - [ ] Icon-only buttons have `aria-label`
@@ -263,7 +308,7 @@ For keyboard-accessible badges with tooltips:
 - [ ] Visible button labels match accessible name exactly (for voice control)
 - [ ] Decorative elements have `aria-hidden={true}`
 - [ ] Badges with tooltips use `focusableBadge` class + `tabIndex={0}`
-- [ ] Status updates use `role="status"` or `aria-live="polite"`
+- [ ] Status updates use `Announcer` component
 - [ ] Focus moves to dialog/modal content when opened
 - [ ] Related controls wrapped in `role="group"` with `aria-labelledby`
 

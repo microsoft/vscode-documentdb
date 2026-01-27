@@ -119,7 +119,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             }
 
             // Now, we're safe to create a new connection with the new unique label
-
             const storageId = generateDocumentDBStorageId(newParsedCS.toString());
 
             const storageItem: ConnectionItem = {

@@ -56,7 +56,7 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
             label: this.folderData.name,
             // IMPORTANT: Icon choice affects tree item alignment in VS Code!
             //
-            // We use 'folder-library' instead of 'folder' due to VS Code's internal alignment logic.
+            // We use 'symbol-folder' instead of 'folder' due to VS Code's internal alignment logic.
             // VS Code's TreeRenderer uses an Aligner class (in src/vs/workbench/browser/parts/views/treeView.ts)
             // that determines whether to add spacing before non-collapsible items to align them with
             // collapsible siblings (which have a twistie/expand arrow).
@@ -71,11 +71,11 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
             // false for folders but true for action items, the alignment logic produces incorrect results,
             // causing visual misalignment in the tree.
             //
-            // By using 'folder-library' (or any non-file-kind icon), hasIcon() always returns true,
+            // By using 'symbol-folder' (or any non-file-kind icon), hasIcon() always returns true,
             // ensuring consistent alignment between collapsible folders and non-collapsible action items.
             //
             // Reference: VS Code source - src/vs/workbench/browser/parts/views/treeView.ts, Aligner class
-            iconPath: new vscode.ThemeIcon('folder-library'),
+            iconPath: new vscode.ThemeIcon('symbol-folder'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }

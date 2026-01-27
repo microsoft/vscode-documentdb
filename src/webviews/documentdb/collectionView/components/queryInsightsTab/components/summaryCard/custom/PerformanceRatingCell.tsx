@@ -114,6 +114,8 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         customContent = (
             <CollapseRelaxed visible={visible}>
                 <div
+                    role="group"
+                    aria-label={label}
                     className="efficiencyIndicator"
                     style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '8px' }}
                 >
@@ -121,6 +123,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                     <div
                         className="efficiencyDot"
                         style={{ backgroundColor: getRatingColor(rating), alignSelf: 'center' }}
+                        aria-hidden="true"
                     />
                     {/* First row, second column: rating text */}
                     <Text weight="semibold" style={{ alignSelf: 'center' }}>

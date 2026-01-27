@@ -24,7 +24,7 @@ import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/Provi
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
@@ -47,14 +47,14 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             : ConnectionType.Clusters;
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
-        if (!connectionCredentials) {
+        if (!connectionCredentials || !isConnection(connectionCredentials)) {
             return undefined;
         }
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
-            availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
-            selectedAuthMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
+            availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
+            selectedAuthMethod: authMethodFromString(connectionCredentials.properties.selectedAuthMethod),
 
             // Structured auth configurations
             nativeAuthConfig: connectionCredentials.secrets.nativeAuthConfig,
@@ -87,7 +87,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
-            if (!connectionCredentials) {
+            if (!connectionCredentials || !isConnection(connectionCredentials)) {
                 return null;
             }
 
@@ -156,7 +156,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         : ConnectionType.Clusters;
 
                     const connection = await ConnectionStorageService.get(this.storageId, connectionType);
-                    if (connection) {
+                    if (connection && isConnection(connection)) {
                         connection.properties.selectedAuthMethod = authMethod;
                         connection.secrets = {
                             connectionString: connectionString.toString(),
