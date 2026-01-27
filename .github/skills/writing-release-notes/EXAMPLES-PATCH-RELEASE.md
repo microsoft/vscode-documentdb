@@ -118,7 +118,7 @@ This patch release addresses a critical issue with connection string parsing, en
 
 ### What's Changed in v0.5.1
 
-#### **Improved Connection String Parsing** ([#314](https://github.com/microsoft/vscode-documentdb/issues/314), [#316](https://github.com/microsoft/vscode-documentdb/pull/316))
+#### 💠 **Improved Connection String Parsing** ([#314](https://github.com/microsoft/vscode-documentdb/issues/314), [#316](https://github.com/microsoft/vscode-documentdb/pull/316))
 
 We've resolved an issue where connection strings containing special characters (e.g., `@`) in query parameters, such as those from Azure Cosmos DB (`appName=@myaccount@`), would fail to parse. The connection string parser now properly sanitizes query parameters before parsing, ensuring reliable connections even with complex connection strings.
 

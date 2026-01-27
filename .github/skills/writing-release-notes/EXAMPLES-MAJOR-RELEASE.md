@@ -55,7 +55,7 @@ Description of the third feature. Simply [action] to [result]. This direct workf
 ## Changelog
 
 See the full changelog entry for this release:
-➡️ [CHANGELOG.md#XY0](https://github.com/microsoft/vscode-documentdb/blob/main/CHANGELOG.md#XY0)
+➡️ [CHANGELOG.md#XYZ](https://github.com/microsoft/vscode-documentdb/blob/main/CHANGELOG.md#XYZ)
 ```
 
 ---

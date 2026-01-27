@@ -50,7 +50,7 @@ Description of the feature. Explain WHAT it does, WHY it's valuable, and HOW use
 ## Changelog
 
 See the full changelog entry for this release:
-➡️ [CHANGELOG.md#XY0](https://github.com/microsoft/vscode-documentdb/blob/main/CHANGELOG.md#XY0)
+➡️ [CHANGELOG.md#XYZ](https://github.com/microsoft/vscode-documentdb/blob/main/CHANGELOG.md#XYZ)
 ```
 
 ### Patch Release Section (X.Y.Z where Z > 0)
