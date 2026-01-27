@@ -49,6 +49,9 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
             ];
         }
 
+        // Sort collections alphabetically by name
+        collections.sort((a, b) => a.name.localeCompare(b.name));
+
         return collections.map((collection) => {
             const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection);
             // Start loading document count in background (fire-and-forget)
