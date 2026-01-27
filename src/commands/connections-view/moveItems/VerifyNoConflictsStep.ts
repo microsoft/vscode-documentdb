@@ -12,19 +12,14 @@ import {
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService, ItemType } from '../../../services/connectionStorageService';
-import { TaskService } from '../../../services/taskService/taskService';
 import { buildFullTreePath } from '../../../tree/connections-view/connectionsViewHelpers';
+import {
+    findConflictingTasks,
+    logTaskConflicts,
+    VerificationCompleteError,
+    type TreeIdPrefix,
+} from '../verificationUtils';
 import { type MoveItemsWizardContext } from './MoveItemsWizardContext';
-
-/**
- * Custom error to signal that conflict verification completed with no conflicts
- */
-class VerificationCompleteError extends Error {
-    constructor() {
-        super('Conflict verification completed successfully');
-        this.name = 'VerificationCompleteError';
-    }
-}
 
 type ConflictAction = 'back' | 'exit';
 
@@ -92,63 +87,36 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
      * a connection with a tree ID starting with the folder's tree ID is affected.
      */
     private async checkTaskConflicts(context: MoveItemsWizardContext): Promise<IAzureQuickPickItem<ConflictAction>[]> {
-        context.conflictingTasks = [];
-
-        // Get all resources currently used by running tasks
-        const allUsedResources = TaskService.getAllUsedResources();
-        if (allUsedResources.length === 0) {
-            return [];
-        }
-
         // Build tree ID prefixes for each item being moved
-        const itemPrefixes: string[] = [];
+        const prefixes: TreeIdPrefix[] = [];
         for (const item of context.itemsToMove) {
             const treeId = await buildFullTreePath(item.id, context.connectionType);
-            // For folders, we need to match connections that start with "treeId/"
-            // For connections, we need exact match (treeId itself)
-            if (item.properties.type === ItemType.Folder) {
-                itemPrefixes.push(treeId + '/');
-            } else {
-                itemPrefixes.push(treeId);
-            }
+            const isFolder = item.properties.type === ItemType.Folder;
+            prefixes.push({
+                prefix: isFolder ? treeId + '/' : treeId,
+                isFolder,
+            });
         }
 
-        // Check if any running task uses a connection being moved
-        const addedTaskIds = new Set<string>();
-        for (const { task, resources } of allUsedResources) {
-            if (addedTaskIds.has(task.taskId)) {
-                continue;
-            }
-
-            for (const resource of resources) {
-                if (!resource.connectionId) {
-                    continue;
-                }
-
-                // Check if this connection matches any of our items being moved
-                const isAffected = itemPrefixes.some((prefix) => {
-                    // For folders (prefix ends with '/'), check if connectionId starts with prefix
-                    // For connections, check exact match
-                    if (prefix.endsWith('/')) {
-                        return resource.connectionId!.startsWith(prefix);
-                    }
-                    return resource.connectionId === prefix;
-                });
-
-                if (isAffected) {
-                    context.conflictingTasks.push(task);
-                    addedTaskIds.add(task.taskId);
-                    break;
-                }
-            }
-        }
+        // Find conflicting tasks using the common utility
+        context.conflictingTasks = findConflictingTasks(prefixes);
 
         if (context.conflictingTasks.length === 0) {
             return [];
         }
 
         // Conflicts found - log details to output channel
-        this.logTaskConflicts(context);
+        const itemCount = context.itemsToMove.length;
+        const itemWord = itemCount === 1 ? l10n.t('item') : l10n.t('items');
+        logTaskConflicts(
+            l10n.t(
+                'Cannot move {0} {1}. The following {2} task(s) are using connections being moved:',
+                itemCount.toString(),
+                itemWord,
+                context.conflictingTasks.length.toString(),
+            ),
+            context.conflictingTasks,
+        );
 
         // Return option for user - can only cancel (task conflicts cannot be resolved by going back)
         return [
@@ -162,29 +130,6 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
                 data: 'exit' as const,
             },
         ];
-    }
-
-    /**
-     * Logs task conflict details to the output channel.
-     */
-    private logTaskConflicts(context: MoveItemsWizardContext): void {
-        const conflictCount = context.conflictingTasks.length;
-        const itemCount = context.itemsToMove.length;
-        const itemWord = itemCount === 1 ? l10n.t('item') : l10n.t('items');
-
-        ext.outputChannel.appendLog(
-            l10n.t(
-                'Cannot move {0} {1}. The following {2} task(s) are using connections being moved:',
-                itemCount.toString(),
-                itemWord,
-                conflictCount.toString(),
-            ),
-        );
-        for (const task of context.conflictingTasks) {
-            ext.outputChannel.appendLog(` • ${task.taskName} (${task.taskType})`);
-        }
-        ext.outputChannel.appendLog(l10n.t('Please stop these tasks first before proceeding.'));
-        ext.outputChannel.show();
     }
 
     /**

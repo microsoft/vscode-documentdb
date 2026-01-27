@@ -6,7 +6,7 @@
 import { ConnectionType, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
 import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 import { ExecuteStep } from './ExecuteStep';
-import { VerifyStep } from './VerifyStep';
+import { VerifyNoConflictsStep } from './VerifyNoConflictsStep';
 
 // Track deleted items
 const deletedItems: string[] = [];
@@ -317,8 +317,8 @@ describe('deleteFolder', () => {
         });
     });
 
-    describe('VerifyStep', () => {
-        const verifyStep = new VerifyStep();
+    describe('VerifyNoConflictsStep', () => {
+        const verifyStep = new VerifyNoConflictsStep();
 
         describe('shouldPrompt', () => {
             it('should always prompt', () => {
