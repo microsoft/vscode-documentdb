@@ -10,9 +10,11 @@ import { VerifyNoConflictsStep } from './VerifyNoConflictsStep';
 
 // Mock ConnectionStorageService
 const mockIsNameDuplicateInParent = jest.fn();
+const mockGetChildren = jest.fn();
 jest.mock('../../../services/connectionStorageService', () => ({
     ConnectionStorageService: {
         isNameDuplicateInParent: (...args: unknown[]) => mockIsNameDuplicateInParent(...args),
+        getChildren: (...args: unknown[]) => mockGetChildren(...args),
     },
     ConnectionType: {
         Clusters: 'clusters',
@@ -22,6 +24,20 @@ jest.mock('../../../services/connectionStorageService', () => ({
         Connection: 'connection',
         Folder: 'folder',
     },
+}));
+
+// Mock TaskService
+const mockGetAllUsedResources = jest.fn();
+jest.mock('../../../services/taskService/taskService', () => ({
+    TaskService: {
+        getAllUsedResources: () => mockGetAllUsedResources(),
+    },
+}));
+
+// Mock buildFullTreePath
+const mockBuildFullTreePath = jest.fn();
+jest.mock('../../../tree/connections-view/connectionsViewHelpers', () => ({
+    buildFullTreePath: (...args: unknown[]) => mockBuildFullTreePath(...args),
 }));
 
 // Mock extensionVariables
@@ -65,6 +81,23 @@ function createMockConnectionItem(overrides: Partial<ConnectionItem> = {}): Conn
     } as ConnectionItem;
 }
 
+// Helper to create a mock folder item
+function createMockFolderItem(overrides: { id: string; name: string; parentId?: string }): ConnectionItem {
+    return {
+        id: overrides.id,
+        name: overrides.name,
+        properties: {
+            type: ItemType.Folder,
+            parentId: overrides.parentId,
+            api: 'DocumentDB' as never,
+            availableAuthMethods: [],
+        },
+        secrets: {
+            connectionString: '',
+        },
+    } as ConnectionItem;
+}
+
 // Helper to create a mock wizard context
 function createMockContext(overrides: Partial<MoveItemsWizardContext> = {}): MoveItemsWizardContext {
     return {
@@ -85,6 +118,7 @@ function createMockContext(overrides: Partial<MoveItemsWizardContext> = {}): Mov
         targetFolderId: 'targetFolderId' in overrides ? overrides.targetFolderId : 'target-folder-id',
         targetFolderPath: 'targetFolderPath' in overrides ? overrides.targetFolderPath : 'Target Folder',
         cachedFolderList: overrides.cachedFolderList ?? [],
+        conflictingTasks: overrides.conflictingTasks ?? [],
         conflictingNames: overrides.conflictingNames ?? [],
     } as MoveItemsWizardContext;
 }
@@ -96,6 +130,9 @@ describe('VerifyNoConflictsStep', () => {
         jest.clearAllMocks();
         step = new VerifyNoConflictsStep();
         mockIsNameDuplicateInParent.mockReset();
+        mockGetAllUsedResources.mockReturnValue([]);
+        mockGetChildren.mockResolvedValue([]);
+        mockBuildFullTreePath.mockImplementation((id: string) => Promise.resolve(`connectionsView/${id}`));
     });
 
     describe('shouldPrompt', () => {
@@ -324,6 +361,176 @@ describe('VerifyNoConflictsStep', () => {
             // Should proceed without error (no items = no conflicts)
             await expect(step.prompt(context)).resolves.not.toThrow();
             expect(mockIsNameDuplicateInParent).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('task conflict detection', () => {
+        it('should detect task using connection being moved', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' })],
+            });
+
+            // Task is using this connection
+            mockGetAllUsedResources.mockReturnValue([
+                {
+                    task: { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+                    resources: [{ connectionId: 'connectionsView/conn-1' }],
+                },
+            ]);
+
+            const mockShowQuickPick = jest.fn().mockResolvedValue({ data: 'exit' });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
+
+            expect(context.conflictingTasks).toHaveLength(1);
+            expect(context.conflictingTasks[0].taskId).toBe('task-1');
+        });
+
+        it('should detect task using connection inside folder being moved', async () => {
+            const folder = createMockFolderItem({ id: 'folder-1', name: 'Folder 1' });
+
+            const context = createMockContext({
+                itemsToMove: [folder],
+            });
+
+            // Task is using a connection inside the folder (connectionId starts with folder's tree path + '/')
+            mockGetAllUsedResources.mockReturnValue([
+                {
+                    task: { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+                    resources: [{ connectionId: 'connectionsView/folder-1/conn-1' }],
+                },
+            ]);
+
+            const mockShowQuickPick = jest.fn().mockResolvedValue({ data: 'exit' });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
+
+            expect(context.conflictingTasks).toHaveLength(1);
+            expect(context.conflictingTasks[0].taskId).toBe('task-1');
+        });
+
+        it('should not detect task using different connection', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' })],
+            });
+
+            // Task is using a different connection
+            mockGetAllUsedResources.mockReturnValue([
+                {
+                    task: { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+                    resources: [{ connectionId: 'connectionsView/conn-999' }], // Different connection
+                },
+            ]);
+            mockIsNameDuplicateInParent.mockResolvedValue(false);
+
+            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+                async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
+                    await itemsPromise;
+                    return { data: 'back' };
+                },
+            );
+
+            await expect(step.prompt(context)).resolves.not.toThrow();
+            expect(context.conflictingTasks).toHaveLength(0);
+        });
+
+        it('should deduplicate tasks that use multiple connections being moved', async () => {
+            const context = createMockContext({
+                itemsToMove: [
+                    createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' }),
+                    createMockConnectionItem({ id: 'conn-2', name: 'Connection 2' }),
+                ],
+            });
+
+            // Same task uses both connections
+            mockGetAllUsedResources.mockReturnValue([
+                {
+                    task: { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+                    resources: [{ connectionId: 'connectionsView/conn-1' }, { connectionId: 'connectionsView/conn-2' }],
+                },
+            ]);
+
+            const mockShowQuickPick = jest.fn().mockResolvedValue({ data: 'exit' });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
+
+            // Should only have one task even though it uses multiple connections
+            expect(context.conflictingTasks).toHaveLength(1);
+        });
+
+        it('should only offer cancel option for task conflicts (not go back)', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' })],
+            });
+
+            mockGetAllUsedResources.mockReturnValue([
+                {
+                    task: { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+                    resources: [{ connectionId: 'connectionsView/conn-1' }],
+                },
+            ]);
+
+            let capturedOptions: IAzureQuickPickItem<string>[] = [];
+            const mockShowQuickPick = jest
+                .fn()
+                .mockImplementation(async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
+                    capturedOptions = await itemsPromise;
+                    return { data: 'exit' };
+                });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            try {
+                await step.prompt(context);
+            } catch {
+                // Expected
+            }
+
+            // Task conflicts should only have cancel option (no go back)
+            expect(capturedOptions).toHaveLength(1);
+            expect(capturedOptions[0].data).toBe('exit');
+        });
+
+        it('should log task conflict details to output channel', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' })],
+            });
+
+            mockGetAllUsedResources.mockReturnValue([
+                {
+                    task: { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+                    resources: [{ connectionId: 'connectionsView/conn-1' }],
+                },
+            ]);
+
+            const mockShowQuickPick = jest.fn().mockResolvedValue({ data: 'exit' });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            try {
+                await step.prompt(context);
+            } catch {
+                // Expected
+            }
+
+            expect(mockAppendLog).toHaveBeenCalled();
+            expect(mockShow).toHaveBeenCalled();
         });
     });
 });
