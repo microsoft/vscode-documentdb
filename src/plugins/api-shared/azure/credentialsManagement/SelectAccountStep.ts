@@ -166,7 +166,9 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                 info.tenantsWithStatus.push(tenantWithStatus);
             }
 
-            return Array.from(accountMap.values()).sort((a, b) => a.account.label.localeCompare(b.account.label));
+            return Array.from(accountMap.values()).sort((a, b) =>
+                a.account.label.localeCompare(b.account.label, undefined, { numeric: true }),
+            );
         } catch (error) {
             ext.outputChannel.error(
                 l10n.t(

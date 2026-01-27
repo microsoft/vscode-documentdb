@@ -124,7 +124,9 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 context.telemetry.measurements.discoveryResourcesCount = vmItems.length;
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
 
-                return vmItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
+                return vmItems.sort((a, b) =>
+                    a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true }),
+                );
             },
         );
     }

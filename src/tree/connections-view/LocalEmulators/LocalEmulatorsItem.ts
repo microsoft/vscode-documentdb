@@ -69,10 +69,10 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
         });
 
         // Sort folders alphabetically by name
-        folderItems.sort((a, b) => a.name.localeCompare(b.name));
+        folderItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
         // Sort connections alphabetically by name
-        connectionItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
+        connectionItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true }));
 
         // Show "New Local Connection" only if there are no folders or connections
         const hasItems = folderItems.length > 0 || connectionItems.length > 0;

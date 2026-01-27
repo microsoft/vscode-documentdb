@@ -150,10 +150,10 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
         });
 
         // Sort folders alphabetically by name
-        clusterFolderItems.sort((a, b) => a.name.localeCompare(b.name));
+        clusterFolderItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
         // Sort connections alphabetically by name
-        clusterItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
+        clusterItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true }));
 
         // Show "New Connection" only if there are no cluster folders or connections
         // (don't count the LocalEmulatorsItem - it's always shown)

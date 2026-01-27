@@ -157,7 +157,7 @@ export abstract class ClusterItemBase
             }
 
             // Sort databases alphabetically by name
-            databases.sort((a, b) => a.name.localeCompare(b.name));
+            databases.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
             // Map the databases to DatabaseItem elements
             return databases.map((database) => new DatabaseItem(this.cluster, database));
