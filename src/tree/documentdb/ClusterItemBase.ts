@@ -71,7 +71,8 @@ export abstract class ClusterItemBase
     private readonly experienceContextValue: string = '';
 
     protected constructor(public cluster: ClusterModel) {
-        this.id = cluster.id ?? '';
+        // Use treeId for VS Code tree element identification
+        this.id = cluster.treeId ?? '';
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
@@ -114,13 +115,14 @@ export abstract class ClusterItemBase
         let clustersClient: ClustersClient | null;
 
         // Check if credentials are cached, and return the cached client if available
-        if (CredentialCache.hasCredentials(this.id)) {
+        // Use clusterId for cache lookups - stable across folder moves
+        if (CredentialCache.hasCredentials(this.cluster.clusterId)) {
             ext.outputChannel.appendLine(
                 l10n.t('Reusing active connection for "{cluster}".', {
                     cluster: this.cluster.name,
                 }),
             );
-            clustersClient = await ClustersClient.getClient(this.id);
+            clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
         } else {
             // Call to the abstract method to authenticate and connect to the cluster
             clustersClient = await this.authenticateAndConnect();
