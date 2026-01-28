@@ -63,8 +63,8 @@ export async function removeConnection(context: IActionContext, node: DocumentDB
             }
         });
 
-        // delete cached credentials from memory
-        CredentialCache.deleteCredentials(node.id);
+        // delete cached credentials from memory using stable clusterId (not treeId)
+        CredentialCache.deleteCredentials(node.cluster.clusterId);
 
         refreshParentInConnectionsView(node.id);
     });
