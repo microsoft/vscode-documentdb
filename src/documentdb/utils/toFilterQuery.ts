@@ -24,8 +24,8 @@ export function toFilterQueryObj(queryString: string): Filter<Document> {
         throw new QueryError(
             'INVALID_FILTER',
             vscode.l10n.t(
-            'Invalid filter syntax: {0}. Please use valid JSON, for example: { "name": "value" }',
-            cause.message,
+                'Invalid filter syntax: {0}. Please use valid JSON, for example: { "name": "value" }',
+                cause.message,
             ),
             cause,
         );
