@@ -96,7 +96,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
      * This is a bigger change and should be done in a separate PR.
      * So for now, we just refresh the view to make sure the new credentials are used.
      */
-    await ClustersClient.deleteClient(node.cluster.id);
-    CredentialCache.deleteCredentials(node.cluster.id);
+    await ClustersClient.deleteClient(node.cluster.clusterId);
+    CredentialCache.deleteCredentials(node.cluster.clusterId);
     await refreshView(context, Views.ConnectionsView);
 }

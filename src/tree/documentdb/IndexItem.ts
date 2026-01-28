@@ -25,7 +25,7 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
         readonly collectionInfo: CollectionItemModel,
         readonly indexInfo: IndexItemModel,
     ) {
-        this.id = `${cluster.id}/${databaseInfo.name}/${collectionInfo.name}/indexes/${indexInfo.name}`;
+        this.id = `${cluster.treeId}/${databaseInfo.name}/${collectionInfo.name}/indexes/${indexInfo.name}`;
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);

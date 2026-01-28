@@ -292,7 +292,7 @@ async function insertDocumentWithBufferIntoCluster(
 
     // Documents to process could be the current document (if too large)
     // or the contents of the buffer (if it was full)
-    const client = await ClustersClient.getClient(node.cluster.id);
+    const client = await ClustersClient.getClient(node.cluster.clusterId);
     try {
         const insertResult = await client.insertDocuments(
             databaseName,

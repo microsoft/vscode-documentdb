@@ -38,7 +38,7 @@ export class ScrapbookServiceImpl {
      * Sets the current cluster and database, updating the CodeLens provider.
      */
     public async setConnectedCluster(cluster: ClusterModel, database: DatabaseItemModel) {
-        if (CredentialCache.getCredentials(cluster.id)?.authMechanism !== AuthMethodId.NativeAuth) {
+        if (CredentialCache.getCredentials(cluster.clusterId)?.authMechanism !== AuthMethodId.NativeAuth) {
             throw Error(
                 l10n.t('Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.'),
             );
@@ -52,7 +52,7 @@ export class ScrapbookServiceImpl {
         // Update the Language Client/Server
         // The language server needs credentials to connect to the cluster..
         await ext.mongoLanguageClient.connect(
-            CredentialCache.getConnectionStringWithPassword(this._cluster.id),
+            CredentialCache.getConnectionStringWithPassword(this._cluster.clusterId),
             this._database.name,
             cluster.emulatorConfiguration,
         );

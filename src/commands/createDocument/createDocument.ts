@@ -15,7 +15,7 @@ export async function createMongoDocument(context: IActionContext, node: Collect
     }
 
     await vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
-        clusterId: node.cluster.id,
+        clusterId: node.cluster.clusterId,
         databaseName: node.databaseInfo.name,
         collectionName: node.collectionInfo.name,
         mode: 'add',

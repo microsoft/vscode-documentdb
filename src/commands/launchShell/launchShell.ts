@@ -40,13 +40,13 @@ export async function launchShell(
 
     // 1. In case we're connected, we should use the preferred authentication method and settings
     //    This can be true for ClusterItemBase (cluster level), and will for sure be true on the database and the collection level
-    if (ClustersClient.exists(node.cluster.id)) {
-        const activeClient: ClustersClient = await ClustersClient.getClient(node.cluster.id);
+    if (ClustersClient.exists(node.cluster.clusterId)) {
+        const activeClient: ClustersClient = await ClustersClient.getClient(node.cluster.clusterId);
         const clusterCredentials = activeClient.getCredentials();
         if (clusterCredentials) {
             connectionString = clusterCredentials.connectionString;
-            username = CredentialCache.getConnectionUser(node.cluster.id);
-            password = CredentialCache.getConnectionPassword(node.cluster.id);
+            username = CredentialCache.getConnectionUser(node.cluster.clusterId);
+            password = CredentialCache.getConnectionPassword(node.cluster.clusterId);
             authMechanism = clusterCredentials.authMechanism;
         }
     } else {

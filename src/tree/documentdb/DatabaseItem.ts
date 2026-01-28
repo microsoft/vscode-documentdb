@@ -25,14 +25,14 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         readonly cluster: ClusterModel,
         readonly databaseInfo: DatabaseItemModel,
     ) {
-        this.id = `${cluster.id}/${databaseInfo.name}`;
+        this.id = `${cluster.treeId}/${databaseInfo.name}`;
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience?.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const client: ClustersClient = await ClustersClient.getClient(this.cluster.id);
+        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
         const collections = await client.listCollections(this.databaseInfo.name);
 
         if (collections.length === 0) {

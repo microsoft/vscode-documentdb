@@ -26,14 +26,14 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
         readonly databaseInfo: DatabaseItemModel,
         readonly collectionInfo: CollectionItemModel,
     ) {
-        this.id = `${cluster.id}/${databaseInfo.name}/${collectionInfo.name}/indexes`;
+        this.id = `${cluster.treeId}/${databaseInfo.name}/${collectionInfo.name}/indexes`;
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const client: ClustersClient = await ClustersClient.getClient(this.cluster.id);
+        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
         const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
 
         // Try to get search indexes, but silently fail if not supported by the platform

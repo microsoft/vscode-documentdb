@@ -26,7 +26,7 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
     // Check if any running tasks are using this database
     const canProceed = await checkCanProceedAndInformUser(
         {
-            connectionId: node.cluster.id,
+            connectionId: node.cluster.clusterId,
             databaseName: node.databaseInfo.name,
         },
         l10n.t('delete this database'),
@@ -50,7 +50,7 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
     }
 
     try {
-        const client = await ClustersClient.getClient(node.cluster.id);
+        const client = await ClustersClient.getClient(node.cluster.clusterId);
 
         let success = false;
         await ext.state.showDeleting(node.id, async () => {

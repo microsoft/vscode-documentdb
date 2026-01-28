@@ -23,7 +23,7 @@ export async function openCollectionView(context: IActionContext, node: Collecti
     context.telemetry.properties.experience = node?.experience.api;
 
     return openCollectionViewInternal(context, {
-        clusterId: node.cluster.id,
+        clusterId: node.cluster.clusterId,
         databaseName: node.databaseInfo.name,
         collectionName: node.collectionInfo.name,
     });

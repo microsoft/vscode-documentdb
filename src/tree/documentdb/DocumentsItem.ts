@@ -36,7 +36,7 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
         readonly collectionInfo: CollectionItemModel,
         readonly parentCollectionNode: CollectionItem,
     ) {
-        this.id = `${cluster.id}/${databaseInfo.name}/${collectionInfo.name}/documents`;
+        this.id = `${cluster.treeId}/${databaseInfo.name}/${collectionInfo.name}/documents`;
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
@@ -56,7 +56,7 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
                         viewTitle: `${this.collectionInfo.name}`,
                         // viewTitle: `${this.mongoCluster.name}/${this.databaseInfo.name}/${this.collectionInfo.name}`, // using '/' as a separator to use VSCode's "title compression"(?) feature
 
-                        clusterId: this.cluster.id,
+                        clusterId: this.cluster.clusterId,
                         databaseName: this.databaseInfo.name,
                         collectionName: this.collectionInfo.name,
                         collectionTreeItem: this.parentCollectionNode,
