@@ -14,7 +14,7 @@ import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata'
 import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import { FALLBACK_MODELS, PREFERRED_MODEL } from './promptTemplates';
+import { FALLBACK_MODELS, type FilledPromptResult, PREFERRED_MODEL } from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -293,7 +293,7 @@ export function detectCommandType(command: string): CommandType {
  * @param collectionStats Statistics about the collection
  * @param indexes Current indexes on the collection
  * @param executionStats Execution statistics from explain()
- * @returns The filled prompt template
+ * @returns The filled prompt components
  */
 async function fillPromptTemplate(
     templateType: CommandType,
@@ -302,56 +302,28 @@ async function fillPromptTemplate(
     indexes: IndexStats[] | undefined,
     executionStats: string,
     clusterInfo: ClusterMetadata,
-): Promise<string> {
+): Promise<FilledPromptResult> {
     // Get the template for this command type
-    const template = await getPromptTemplate(templateType);
+    const craftedPrompt = await getPromptTemplate(templateType);
 
-    // Note: Query information is currently not passed to the prompt
-    // This may be re-enabled in the future if needed
-    // if (templateType === CommandType.Find && context.queryObject) {
-    //     // Format query object as structured information
-    //     const queryParts: string[] = [];
-    //
-    //     if (context.queryObject.filter) {
-    //         queryParts.push(`**Filter**: \`\`\`json\n${JSON.stringify(context.queryObject.filter, null, 2)}\n\`\`\``);
-    //     }
-    //
-    //     if (context.queryObject.sort) {
-    //         queryParts.push(`**Sort**: \`\`\`json\n${JSON.stringify(context.queryObject.sort, null, 2)}\n\`\`\``);
-    //     }
-    //
-    //     if (context.queryObject.projection) {
-    //         queryParts.push(`**Projection**: \`\`\`json\n${JSON.stringify(context.queryObject.projection, null, 2)}\n\`\`\``);
-    //     }
-    //
-    //     if (context.queryObject.skip !== undefined) {
-    //         queryParts.push(`**Skip**: ${context.queryObject.skip}`);
-    //     }
-    //
-    //     if (context.queryObject.limit !== undefined) {
-    //         queryParts.push(`**Limit**: ${context.queryObject.limit}`);
-    //     }
-    //
-    //     queryInfo = queryParts.join('\n\n');
-    // } else if (context.query) {
-    //     // Fallback to string query for backward compatibility
-    //     queryInfo = context.query;
-    // }
+    // User's original query
+    const userQuery = context.query || 'N/A';
 
-    // Fill the template with actual data
-    const filled = template
-        .replace('{databaseName}', context.databaseName)
-        .replace('{collectionName}', context.collectionName)
-        .replace('{collectionStats}', collectionStats ? JSON.stringify(collectionStats, null, 2) : 'N/A')
-        .replace('{indexStats}', indexes ? JSON.stringify(indexes, null, 2) : 'N/A')
-        .replace('{executionStats}', executionStats)
-        .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2))
-        .replace('{origin_query}', context.query || 'N/A')
-        .replace(
-            '{AzureClusterType}',
-            clusterInfo.domainInfo_isAzure === 'true' ? JSON.stringify(clusterInfo.domainInfo_api, null, 2) : 'N/A',
-        );
-    return filled;
+    // System-retrieved context data
+    const contextData = `## Cluster Information
+- **Is_Azure_Cluster**: ${JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2)}
+- **Azure_Cluster_Type**: ${clusterInfo.domainInfo_isAzure === 'true' ? JSON.stringify(clusterInfo.domainInfo_api, null, 2) : 'N/A'}
+
+## Collection Information
+- **Collection_Stats**: ${collectionStats ? JSON.stringify(collectionStats, null, 2) : 'N/A'}
+
+## Index Information of Current Collection
+- **Indexes_Stats**: ${indexes ? JSON.stringify(indexes, null, 2) : 'N/A'}
+
+## Query Execution Stats
+- **Execution_Stats**: ${executionStats}`;
+
+    return { craftedPrompt, userQuery, contextData };
 }
 
 /**
@@ -575,7 +547,7 @@ export async function optimizeQuery(
 
     // Fill the prompt template
     const commandType = queryContext.commandType;
-    const promptContent = await fillPromptTemplate(
+    const { craftedPrompt, userQuery, contextData } = await fillPromptTemplate(
         commandType,
         queryContext,
         collectionStats,
@@ -595,7 +567,17 @@ export async function optimizeQuery(
             model: preferredModelToUse,
         }),
     );
-    const response = await CopilotService.sendMessage([vscode.LanguageModelChatMessage.User(promptContent)], {
+
+    const messages = [
+        // First message: Assistant message with crafted prompt (instructions)
+        vscode.LanguageModelChatMessage.Assistant(craftedPrompt),
+        // Second message: User's original query (data only)
+        vscode.LanguageModelChatMessage.User(`## User's Original Query\n${userQuery}`),
+        // Third message: System-retrieved context data (data only)
+        vscode.LanguageModelChatMessage.User(contextData),
+    ];
+
+    const response = await CopilotService.sendMessage(messages, {
         preferredModel: preferredModelToUse,
         fallbackModels: fallbackModelsToUse,
     });
@@ -603,7 +585,7 @@ export async function optimizeQuery(
 
     // Track Copilot call performance and response
     context.telemetry.measurements.copilotDurationMs = copilotDuration;
-    context.telemetry.measurements.promptSize = promptContent.length;
+    context.telemetry.measurements.promptSize = craftedPrompt.length + userQuery.length + contextData.length;
     context.telemetry.measurements.responseSize = response.text.length;
     context.telemetry.properties.modelUsed = response.modelUsed;
 

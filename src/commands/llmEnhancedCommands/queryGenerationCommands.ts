@@ -12,7 +12,7 @@ import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { generateSchemaDefinition, type SchemaDefinition } from '../../utils/schemaInference';
-import { FALLBACK_MODELS, PREFERRED_MODEL, getQueryTypeConfig } from './promptTemplates';
+import { FALLBACK_MODELS, PREFERRED_MODEL, getQueryTypeConfig, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of query generation
@@ -78,13 +78,13 @@ async function getPromptTemplate(generationType: QueryGenerationType): Promise<s
  * @param templateType The type of template to use
  * @param context The query generation context
  * @param schemas Collection schemas
- * @returns The filled prompt template
+ * @returns The filled prompt components
  */
 async function fillPromptTemplate(
     templateType: QueryGenerationType,
     context: QueryGenerationContext,
     schemas: Array<SchemaDefinition>,
-): Promise<string> {
+): Promise<FilledPromptResult> {
     // Get the template for this generation type
     const template = await getPromptTemplate(templateType);
 
@@ -112,16 +112,39 @@ async function fillPromptTemplate(
         schemaInfo = `No schema information available.\n\n`;
     }
 
-    const filled = template
-        .replace('{databaseName}', context.databaseName)
-        .replace('{collectionName}', context.collectionName || 'N/A')
+    const craftedPrompt = template
         .replace(/{targetQueryType}/g, targetQueryType)
         .replace('{queryTypeGuidelines}', guidelines)
-        .replace('{outputSchema}', outputSchema)
-        .replace('{schemaInfo}', schemaInfo)
-        .replace('{naturalLanguageQuery}', context.naturalLanguageQuery);
+        .replace('{outputSchema}', outputSchema);
 
-    return filled;
+    // system-retrieved information
+    let contextData: string;
+    if (templateType === QueryGenerationType.CrossCollection) {
+        contextData = `## Database Context
+- **Database Name**: ${context.databaseName}
+
+## Available Collections and Their Schemas
+${schemaInfo}
+
+## Query Type Requirement
+- **Required Query Type**: ${targetQueryType}`;
+    } else {
+        contextData = `## Database Context
+- **Database Name**: ${context.databaseName}
+- **Collection Name**: ${context.collectionName || 'N/A'}
+
+## Collection Schema
+${schemaInfo}
+
+## Query Type Requirement
+- **Required Query Type**: ${targetQueryType}`;
+    }
+
+    return {
+        craftedPrompt,
+        userQuery: context.naturalLanguageQuery,
+        contextData,
+    };
 }
 
 /**
@@ -226,7 +249,11 @@ export async function generateQuery(
     }
 
     // Fill the prompt template
-    const promptContent = await fillPromptTemplate(queryContext.generationType, queryContext, schemas);
+    const { craftedPrompt, userQuery, contextData } = await fillPromptTemplate(
+        queryContext.generationType,
+        queryContext,
+        schemas,
+    );
 
     // Send to Copilot with configured models
     const llmCallStart = Date.now();
@@ -235,10 +262,17 @@ export async function generateQuery(
             model: PREFERRED_MODEL || 'default',
         }),
     );
-    const response = await CopilotService.sendMessage([vscode.LanguageModelChatMessage.User(promptContent)], {
-        preferredModel: PREFERRED_MODEL,
-        fallbackModels: FALLBACK_MODELS,
-    });
+    const response = await CopilotService.sendMessage(
+        [
+            vscode.LanguageModelChatMessage.Assistant(craftedPrompt),
+            vscode.LanguageModelChatMessage.User(`## User Request\n${userQuery}`),
+            vscode.LanguageModelChatMessage.User(contextData),
+        ],
+        {
+            preferredModel: PREFERRED_MODEL,
+            fallbackModels: FALLBACK_MODELS,
+        },
+    );
     context.telemetry.measurements.llmCallDurationMs = Date.now() - llmCallStart;
     ext.outputChannel.trace(
         l10n.t('[Query Generation] Copilot response received in {ms}ms (model: {model})', {
