@@ -10,9 +10,9 @@ import { type IconPath } from 'vscode';
 import path from 'path';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import {
-    type ConnectionItem,
     ConnectionStorageService,
     ConnectionType,
+    isConnection,
     ItemType,
 } from '../../../services/connectionStorageService';
 import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
@@ -48,12 +48,12 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
         // Create folder items
         const folderItems = rootFolders.map((folder) => new FolderItem(folder, this.id, ConnectionType.Emulators));
 
-        // Create connection items
-        const connectionItems = rootConnections.map((connection: ConnectionItem) => {
+        // Create connection items (filter with type guard to ensure type safety)
+        const connectionItems = rootConnections.filter(isConnection).map((connection) => {
             // we need to create the emulator configuration object from the typed properties object
             const emulatorConfiguration: EmulatorConfiguration = {
                 isEmulator: true,
-                disableEmulatorSecurity: !!connection.properties?.emulatorConfiguration?.disableEmulatorSecurity,
+                disableEmulatorSecurity: !!connection.properties.emulatorConfiguration?.disableEmulatorSecurity,
             };
 
             const model: ClusterModelWithStorage = {
@@ -61,7 +61,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                 storageId: connection.id,
                 name: connection.name,
                 dbExperience: DocumentDBExperience,
-                connectionString: connection?.secrets?.connectionString,
+                connectionString: connection.secrets.connectionString,
                 emulatorConfiguration: emulatorConfiguration,
             };
 
@@ -74,8 +74,12 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
         // Sort connections alphabetically by name
         connectionItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
 
-        // Return folders first, then connections, then the "New Emulator Connection" item
-        return [...folderItems, ...connectionItems, new NewEmulatorConnectionItemCV(this.id)];
+        // Show "New Local Connection" only if there are no folders or connections
+        const hasItems = folderItems.length > 0 || connectionItems.length > 0;
+        const newConnectionItem = hasItems ? [] : [new NewEmulatorConnectionItemCV(this.id)];
+
+        // Return folders first, then connections, then the "New Emulator Connection" item (if no other items)
+        return [...folderItems, ...connectionItems, ...newConnectionItem];
     }
 
     private iconPath: IconPath = {

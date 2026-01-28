@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { useFocusFinders } from '@fluentui/react-components';
 import { debounce } from 'es-toolkit';
 import * as React from 'react';
 import { MonacoEditor } from '../../../../components/MonacoEditor';
@@ -25,6 +26,7 @@ const monacoOptions = {
 
 export const DataViewPanelJSON = ({ value }: Props): React.JSX.Element => {
     const editorRef = React.useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    const { findNextFocusable } = useFocusFinders();
 
     React.useEffect(() => {
         // Add ResizeObserver to watch parent container size changes
@@ -59,6 +61,24 @@ export const DataViewPanelJSON = ({ value }: Props): React.JSX.Element => {
         }
     };
 
+    // Handle Escape key: move focus to next focusable element
+    const handleEscapeEditor = React.useCallback(() => {
+        const editorDomNode = editorRef.current?.getDomNode();
+        if (!editorDomNode) {
+            return;
+        }
+
+        const activeElement = document.activeElement as HTMLElement | null;
+        const startElement = activeElement ?? (editorDomNode as HTMLElement);
+        const nextElement = findNextFocusable(startElement);
+
+        if (nextElement) {
+            nextElement.focus();
+        } else {
+            activeElement?.blur();
+        }
+    }, [findNextFocusable]);
+
     return (
         <MonacoEditor
             height={'100%'}
@@ -70,6 +90,7 @@ export const DataViewPanelJSON = ({ value }: Props): React.JSX.Element => {
                 editorRef.current = editor;
                 handleResize();
             }}
+            onEscapeEditor={handleEscapeEditor}
             value={value.join('\n\n')}
         />
     );

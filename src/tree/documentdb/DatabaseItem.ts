@@ -50,7 +50,11 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         }
 
         return collections.map((collection) => {
-            return new CollectionItem(this.cluster, this.databaseInfo, collection);
+            const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection);
+            // Start loading document count in background (fire-and-forget)
+            // This does not block tree expansion
+            collectionItem.loadDocumentCount();
+            return collectionItem;
         });
     }
 

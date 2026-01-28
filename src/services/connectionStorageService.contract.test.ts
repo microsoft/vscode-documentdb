@@ -19,8 +19,20 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { API } from '../DocumentDBExperiences';
-import { ConnectionStorageService, ConnectionType, ItemType, type ConnectionItem } from './connectionStorageService';
+import {
+    ConnectionStorageService,
+    ConnectionType,
+    FOLDER_PLACEHOLDER_CONNECTION_STRING,
+    isConnection,
+    ItemType,
+    type ConnectionItem,
+    type ConnectionProperties,
+    type StoredItem,
+} from './connectionStorageService';
 import { type Storage, type StorageItem } from './storageService';
+
+/** A stored item that is specifically a connection (not a folder) */
+type StoredConnection = StoredItem & { properties: ConnectionProperties };
 
 // In-memory mock storage implementation
 class MockStorage implements Storage {
@@ -157,7 +169,7 @@ jest.mock('../extensionVariables', () => ({
 }));
 
 // Helper to create a complete connection item with all fields
-function createCompleteConnectionItem(): ConnectionItem {
+function createCompleteConnectionItem(): StoredConnection {
     return {
         id: 'contract-test-connection',
         name: 'Contract Test Connection',
@@ -198,7 +210,7 @@ function createFolderItem(): ConnectionItem {
             availableAuthMethods: [],
         },
         secrets: {
-            connectionString: '',
+            connectionString: FOLDER_PLACEHOLDER_CONNECTION_STRING,
         },
     };
 }
@@ -338,15 +350,21 @@ describe('ConnectionStorageService - Contract Tests', () => {
             await ConnectionStorageService.save(ConnectionType.Clusters, original);
             const retrieved = await ConnectionStorageService.get(original.id, ConnectionType.Clusters);
 
-            expect(retrieved?.properties.type).toBe(original.properties.type);
-            expect(retrieved?.properties.parentId).toBe(original.properties.parentId);
-            expect(retrieved?.properties.api).toBe(original.properties.api);
-            expect(retrieved?.properties.availableAuthMethods).toEqual(original.properties.availableAuthMethods);
-            expect(retrieved?.properties.selectedAuthMethod).toBe(original.properties.selectedAuthMethod);
-            expect(retrieved?.properties.emulatorConfiguration?.isEmulator).toBe(
+            expect(retrieved).toBeDefined();
+            expect(isConnection(retrieved!)).toBe(true);
+            // We've verified it's a connection above, so cast is safe
+            const retrievedConnection = retrieved as StoredConnection;
+            expect(retrievedConnection.properties.type).toBe(original.properties.type);
+            expect(retrievedConnection.properties.parentId).toBe(original.properties.parentId);
+            expect(retrievedConnection.properties.api).toBe(original.properties.api);
+            expect(retrievedConnection.properties.availableAuthMethods).toEqual(
+                original.properties.availableAuthMethods,
+            );
+            expect(retrievedConnection.properties.selectedAuthMethod).toBe(original.properties.selectedAuthMethod);
+            expect(retrievedConnection.properties.emulatorConfiguration?.isEmulator).toBe(
                 original.properties.emulatorConfiguration?.isEmulator,
             );
-            expect(retrieved?.properties.emulatorConfiguration?.disableEmulatorSecurity).toBe(
+            expect(retrievedConnection.properties.emulatorConfiguration?.disableEmulatorSecurity).toBe(
                 original.properties.emulatorConfiguration?.disableEmulatorSecurity,
             );
         });
@@ -388,8 +406,12 @@ describe('ConnectionStorageService - Contract Tests', () => {
             await ConnectionStorageService.save(ConnectionType.Emulators, emulator);
             const retrieved = await ConnectionStorageService.get(emulator.id, ConnectionType.Emulators);
 
-            expect(retrieved?.properties.emulatorConfiguration?.isEmulator).toBe(true);
-            expect(retrieved?.properties.emulatorConfiguration?.disableEmulatorSecurity).toBe(true);
+            expect(retrieved).toBeDefined();
+            expect(isConnection(retrieved!)).toBe(true);
+            // We've verified it's a connection above, so cast is safe
+            const retrievedConnection = retrieved as StoredConnection;
+            expect(retrievedConnection.properties.emulatorConfiguration?.isEmulator).toBe(true);
+            expect(retrievedConnection.properties.emulatorConfiguration?.disableEmulatorSecurity).toBe(true);
         });
     });
 

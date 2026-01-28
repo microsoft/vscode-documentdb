@@ -44,6 +44,11 @@ export type MonacoAutoHeightProps = EditorProps & {
      * When false (default), Tab navigation behaves like a standard input and moves focus to the next/previous focusable element.
      */
     trapTabKey?: boolean;
+    /**
+     * Callback invoked when the user presses Escape key to exit the editor.
+     * If not provided, pressing Escape will move focus to the next focusable element.
+     */
+    onEscapeEditor?: () => void;
 };
 
 export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
@@ -80,7 +85,7 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
 
     // These props are intentionally destructured but not used directly - they're handled specially
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { adaptiveHeight, onExecuteRequest, onMount, trapTabKey, ...editorProps } = props;
+    const { adaptiveHeight, onExecuteRequest, onMount, trapTabKey, onEscapeEditor, ...editorProps } = props;
 
     const handleMonacoEditorMount = (
         editor: monacoEditor.editor.IStandaloneCodeEditor,
@@ -262,9 +267,18 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
         }
     };
 
+    // Default escape handler: move focus to next element (like Tab)
+    const handleEscapeEditor = () => {
+        if (propsRef.current.onEscapeEditor) {
+            propsRef.current.onEscapeEditor();
+        } else if (editorRef.current) {
+            moveFocus(editorRef.current, 'next');
+        }
+    };
+
     return (
         <div className="monacoAutoHeightContainer" style={{ height: editorHeight }}>
-            <MonacoEditor {...editorProps} onMount={handleMonacoEditorMount} />
+            <MonacoEditor {...editorProps} onMount={handleMonacoEditorMount} onEscapeEditor={handleEscapeEditor} />
         </div>
     );
 };
