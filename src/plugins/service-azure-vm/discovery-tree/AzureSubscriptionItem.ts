@@ -105,8 +105,9 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         connectionString.protocol = 'mongodb';
 
                         const vmInfo: VirtualMachineModel = {
-                            // For Azure resources, treeId and clusterId are both the Azure Resource ID (vm.id)
-                            treeId: vm.id!,
+                            // treeId: Replace '/' with '-' to avoid path separator issues in tree lookups
+                            // clusterId: Keep as-is (Azure Resource ID) for cache key lookups
+                            treeId: vm.id!.replace(/\//g, '-'),
                             clusterId: vm.id!,
                             id: vm.id!,
                             name: vm.name!,
