@@ -79,9 +79,9 @@ export class RUResourceItem extends ClusterItemBase {
                 this.cluster.name,
             );
 
-            // Cache credentials and attempt connection
+            // Cache credentials and attempt connection using clusterId for stable caching
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 credentials.selectedAuthMethod!,
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'RUCoreResourceItem.ts'),
                 credentials.nativeAuthConfig,
@@ -94,7 +94,7 @@ export class RUResourceItem extends ClusterItemBase {
             );
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -118,8 +118,8 @@ export class RUResourceItem extends ClusterItemBase {
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }

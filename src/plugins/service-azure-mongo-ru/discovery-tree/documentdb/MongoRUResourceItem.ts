@@ -93,16 +93,16 @@ export class MongoRUResourceItem extends ClusterItemBase {
                     );
                 }
 
-                // Cache the credentials for this cluster
+                // Cache the credentials for this cluster using clusterId for stable caching
                 CredentialCache.setAuthCredentials(
-                    this.id,
+                    this.cluster.clusterId,
                     credentials.selectedAuthMethod ?? credentials.availableAuthMethods[0],
                     credentials.connectionString,
                     credentials.nativeAuthConfig,
                 );
 
                 // Connect using the cached credentials
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -135,8 +135,8 @@ export class MongoRUResourceItem extends ClusterItemBase {
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }

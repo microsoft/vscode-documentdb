@@ -119,8 +119,9 @@ export class VCoreResourceItem extends ClusterItemBase {
                       }
                     : wizardContext.nativeAuthConfig;
 
+            // Use clusterId for stable cache lookup across tree moves
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 nonNullValue(
                     wizardContext.selectedAuthMethod,
                     'wizardContext.selectedAuthMethod',
@@ -145,7 +146,7 @@ export class VCoreResourceItem extends ClusterItemBase {
             }
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -169,8 +170,8 @@ export class VCoreResourceItem extends ClusterItemBase {
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }

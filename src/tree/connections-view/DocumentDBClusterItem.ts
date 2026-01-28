@@ -202,9 +202,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                     );
             }
 
-            // Cache the credentials
+            // Cache the credentials using clusterId for stable caching across folder moves
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 authMethod,
                 connectionString.toString(),
                 username && password
@@ -221,7 +221,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             // Attempt to create the client with the provided credentials
             try {
-                clustersClient = await ClustersClient.getClient(this.id);
+                clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
             } catch (error) {
                 ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
 
@@ -237,8 +237,8 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                 );
 
                 // If connection fails, remove cached credentials
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 // Return null to indicate failure
                 return null;
