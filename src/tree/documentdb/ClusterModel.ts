@@ -31,6 +31,18 @@ export type ClusterModel = ResourceModelInUse & {
      * This ID remains constant even if the tree item moves.
      */
     clusterId: string;
+
+    /**
+     * Identifies which tree view this cluster belongs to.
+     *
+     * This is critical for webviews that need to find the tree node later (e.g., for
+     * import/export operations). The same clusterId (Azure Resource ID) can appear in
+     * multiple views (Discovery View, Azure Resources View, Workspace View), so we need
+     * to know which view's branch data provider to query.
+     *
+     * @see Views enum for possible values
+     */
+    viewId?: string;
 };
 
 /**

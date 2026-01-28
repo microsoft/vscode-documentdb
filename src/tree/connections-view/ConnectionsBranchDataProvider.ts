@@ -173,4 +173,31 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
             (item) => ext.state.wrapItemInStateHandling(item, () => this.refresh(item)) as TreeElement,
         );
     }
+
+    /**
+     * Finds a collection node by its cluster's stable identifier (storageId).
+     *
+     * For Connections View, the clusterId is the storageId (UUID like 'storageId-xxx').
+     * This method resolves the current tree path from storage, handling folder moves.
+     *
+     * @param clusterId The stable cluster identifier (storageId)
+     * @param databaseName The database name
+     * @param collectionName The collection name
+     * @returns A Promise that resolves to the found CollectionItem or undefined if not found
+     */
+    async findCollectionByClusterId(
+        clusterId: string,
+        databaseName: string,
+        collectionName: string,
+    ): Promise<TreeElement | undefined> {
+        // Resolve the current tree path from storage - this handles folder moves
+        const { buildFullTreePath } = await import('./connectionsViewHelpers');
+        const treeId = await buildFullTreePath(clusterId, ConnectionType.Clusters);
+
+        // Build the full node ID for the collection
+        const nodeId = `${treeId}/${databaseName}/${collectionName}`;
+
+        // Use the standard findNodeById with recursive search enabled
+        return this.findNodeById(nodeId, true);
+    }
 }

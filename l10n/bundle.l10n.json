@@ -942,6 +942,7 @@
   "The selected connection has been removed.": "The selected connection has been removed.",
   "The selected folder has been removed.": "The selected folder has been removed.",
   "The tag cannot be empty.": "The tag cannot be empty.",
+  "The tree provider for view \"{0}\" does not support finding collections by cluster ID": "The tree provider for view \"{0}\" does not support finding collections by cluster ID",
   "The value must be {0} characters long.": "The value must be {0} characters long.",
   "The value must be {0} characters or greater.": "The value must be {0} characters or greater.",
   "The value must be {0} characters or less.": "The value must be {0} characters or less.",

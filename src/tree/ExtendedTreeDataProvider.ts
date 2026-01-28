@@ -57,6 +57,28 @@ export interface ExtendedTreeDataProvider<T extends TreeElement> extends vscode.
     findNodeById(id: string, enableRecursiveSearch?: boolean): Promise<T | undefined>;
 
     /**
+     * Finds a collection node by its cluster's stable identifier.
+     *
+     * This method is designed to work with the dual-ID architecture where:
+     * - clusterId is the stable identifier (storageId for Connections View, Azure Resource ID for Azure views)
+     * - treeId is the hierarchical path that may change when items are moved
+     *
+     * Each provider implements this differently:
+     * - Connections View: Resolves the current tree path from storage using buildFullTreePath()
+     * - Discovery/Azure Views: Uses clusterId directly (it equals treeId, no folder hierarchy)
+     *
+     * @param clusterId The stable cluster identifier
+     * @param databaseName The database name
+     * @param collectionName The collection name
+     * @returns A Promise that resolves to the found CollectionItem or undefined if not found
+     */
+    findCollectionByClusterId?(
+        clusterId: string,
+        databaseName: string,
+        collectionName: string,
+    ): Promise<T | undefined>;
+
+    /**
      * Refreshes the tree data.
      * This will trigger the view to update the changed element/root and its children recursively (if shown).
      *

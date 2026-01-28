@@ -303,4 +303,27 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             // ignore storage errors for this best-effort write
         }
     }
+
+    /**
+     * Finds a collection node by its cluster's stable identifier.
+     *
+     * For Discovery/Azure views, the clusterId IS the treeId (Azure Resource ID).
+     * There's no folder hierarchy, so we use the clusterId directly.
+     *
+     * @param clusterId The stable cluster identifier (Azure Resource ID)
+     * @param databaseName The database name
+     * @param collectionName The collection name
+     * @returns A Promise that resolves to the found CollectionItem or undefined if not found
+     */
+    async findCollectionByClusterId(
+        clusterId: string,
+        databaseName: string,
+        collectionName: string,
+    ): Promise<TreeElement | undefined> {
+        // For Azure resources, clusterId IS the treeId (no folder hierarchy)
+        const nodeId = `${clusterId}/${databaseName}/${collectionName}`;
+
+        // Use the standard findNodeById with recursive search enabled
+        return this.findNodeById(nodeId, true);
+    }
 }

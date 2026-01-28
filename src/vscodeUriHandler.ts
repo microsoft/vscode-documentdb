@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
+import { Views } from './documentdb/Views';
 import { API } from './DocumentDBExperiences';
 import { ext } from './extensionVariables';
 import {
@@ -451,8 +452,10 @@ async function openDedicatedView(
 ): Promise<void> {
     const clusterId = buildConnectionsViewTreePath(storageId, isEmulator);
 
+    // URI handler always opens from Connections View since connections are added there
     return openCollectionViewInternal(context, {
         clusterId: clusterId,
+        viewId: Views.ConnectionsView,
         databaseName: nonNullValue(database, 'database', 'vscodeUriHandler.ts'),
         collectionName: nonNullValue(collection, 'collection', 'vscodeUriHandler.ts'),
     });
