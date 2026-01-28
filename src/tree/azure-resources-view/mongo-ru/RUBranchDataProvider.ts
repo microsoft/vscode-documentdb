@@ -57,11 +57,15 @@ export class RUBranchDataProvider
 
             const cache = new CaseInsensitiveMap<ClusterModel>();
             ruAccounts.forEach((ruAccount) => {
-                cache.set(nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts'), {
+                const resourceId = nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts');
+                cache.set(resourceId, {
+                    // For Azure resources, treeId and clusterId are the same (Azure Resource ID)
+                    treeId: resourceId,
+                    clusterId: resourceId,
                     dbExperience: CosmosDBMongoRUExperience,
-                    id: ruAccount.id!,
+                    id: resourceId,
                     name: ruAccount.name!,
-                    resourceGroup: getResourceGroupFromId(ruAccount.id!),
+                    resourceGroup: getResourceGroupFromId(resourceId),
                     location: ruAccount.location,
                     serverVersion: ruAccount?.apiProperties?.serverVersion,
                     systemData: {
@@ -126,8 +130,11 @@ export class RUBranchDataProvider
             // Get metadata from cache (may be undefined if not yet loaded)
             const cachedMetadata = this.metadataLoader.getCachedMetadata(resource.id);
 
+            // For Azure resources, treeId and clusterId are both the Azure Resource ID
             let clusterInfo: ClusterModel = {
                 ...resource,
+                treeId: resource.id,
+                clusterId: resource.id,
                 dbExperience: CosmosDBMongoRUExperience,
             } as ClusterModel;
 

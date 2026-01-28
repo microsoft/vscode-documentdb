@@ -94,6 +94,8 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
             } else {
                 // Create connection item
                 const model: ClusterModelWithStorage = {
+                    treeId: `${this.id}/${child.id}`, // Hierarchical tree path
+                    clusterId: child.id, // Stable storageId for cache lookups
                     id: `${this.id}/${child.id}`,
                     storageId: child.id,
                     name: child.name,

@@ -57,6 +57,8 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
             };
 
             const model: ClusterModelWithStorage = {
+                treeId: `${this.id}/${connection.id}`, // Hierarchical tree path
+                clusterId: connection.id, // Stable storageId for cache lookups
                 id: `${this.id}/${connection.id}`,
                 storageId: connection.id,
                 name: connection.name,

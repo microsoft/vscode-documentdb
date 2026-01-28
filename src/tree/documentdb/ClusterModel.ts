@@ -11,7 +11,27 @@ import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 // '|' means that you can only access properties that are common to both types.
 //export type ClusterModel = (MongoCluster | ResourceModelInUse) & ResourceModelInUse;
 // TODO: rethink this, it was not really needed to be that complex.
-export type ClusterModel = ResourceModelInUse;
+export type ClusterModel = ResourceModelInUse & {
+    /**
+     * Hierarchical path for VS Code TreeView navigation.
+     * Format: `viewId/[folderId/]clusterId/[dbName/collName]`
+     *
+     * ⚠️ This ID changes when the item moves between folders.
+     * Do NOT use for caching - use `clusterId` instead.
+     */
+    treeId: string;
+
+    /**
+     * Stable cluster identifier for cache lookups (credentials, clients).
+     *
+     * - Connections View: storageId (UUID from ConnectionStorageService)
+     * - Azure Resources View: Azure Resource ID (e.g., /subscriptions/.../mongoClusters/name)
+     * - Discovery View: Azure Resource ID or constructed identifier
+     *
+     * This ID remains constant even if the tree item moves.
+     */
+    clusterId: string;
+};
 
 /**
  * Represents a cluster model that has been attached to the workspace

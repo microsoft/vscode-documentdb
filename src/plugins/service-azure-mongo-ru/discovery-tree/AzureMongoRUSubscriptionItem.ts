@@ -58,8 +58,11 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureMongoRUSubscriptionItem.ts');
 
+                        // For Azure resources, treeId and clusterId are both the Azure Resource ID
                         const clusterInfo: ClusterModel = {
                             ...account,
+                            treeId: resourceId,
+                            clusterId: resourceId,
                             resourceGroup: getResourceGroupFromId(resourceId),
                             dbExperience: CosmosDBMongoRUExperience,
                         } as ClusterModel;

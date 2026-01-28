@@ -138,6 +138,8 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
         // Filter with type guard to ensure type safety for connection-specific properties
         const clusterItems = rootConnectionsClusters.filter(isConnection).map((connection) => {
             const model: ClusterModelWithStorage = {
+                treeId: `${parentId}/${connection.id}`, // Hierarchical tree path
+                clusterId: connection.id, // Stable storageId for cache lookups
                 id: `${parentId}/${connection.id}`,
                 storageId: connection.id,
                 name: connection.name,

@@ -50,11 +50,20 @@ export class VCoreBranchDataProvider
 
             const cache = new CaseInsensitiveMap<ClusterModel>();
             accounts.forEach((documentDbAccount) => {
-                cache.set(nonNullProp(documentDbAccount, 'id', 'vCoreAccount.id', 'VCoreBranchDataProvider.ts'), {
+                const resourceId = nonNullProp(
+                    documentDbAccount,
+                    'id',
+                    'vCoreAccount.id',
+                    'VCoreBranchDataProvider.ts',
+                );
+                cache.set(resourceId, {
+                    // For Azure resources, treeId and clusterId are the same (Azure Resource ID)
+                    treeId: resourceId,
+                    clusterId: resourceId,
                     dbExperience: DocumentDBExperience,
-                    id: documentDbAccount.id!,
+                    id: resourceId,
                     name: documentDbAccount.name!,
-                    resourceGroup: getResourceGroupFromId(documentDbAccount.id!),
+                    resourceGroup: getResourceGroupFromId(resourceId),
                     location: documentDbAccount.location,
                     serverVersion: documentDbAccount.properties?.serverVersion,
                     systemData: {
@@ -116,8 +125,11 @@ export class VCoreBranchDataProvider
             // Get metadata from cache (may be undefined if not yet loaded)
             const cachedMetadata = this.metadataLoader.getCachedMetadata(resource.id);
 
+            // For Azure resources, treeId and clusterId are both the Azure Resource ID
             let clusterInfo: ClusterModel = {
                 ...resource,
+                treeId: resource.id,
+                clusterId: resource.id,
                 dbExperience: DocumentDBExperience,
             } as ClusterModel;
 

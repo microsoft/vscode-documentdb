@@ -60,8 +60,11 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureSubscriptionItem.ts');
 
+                        // For Azure resources, treeId and clusterId are both the Azure Resource ID
                         const clusterInfo: ClusterModel = {
                             ...account,
+                            treeId: resourceId,
+                            clusterId: resourceId,
                             resourceGroup: getResourceGroupFromId(resourceId),
                             dbExperience: DocumentDBExperience,
                         } as ClusterModel;
