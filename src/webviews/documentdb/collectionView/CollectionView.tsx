@@ -225,7 +225,7 @@ export const CollectionView = (): JSX.Element => {
             .catch((error) => {
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error while running the query'),
-                    modal: false,
+                    modal: true,
                     cause: error instanceof Error ? error.message : String(error),
                 });
             })

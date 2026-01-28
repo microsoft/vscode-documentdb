@@ -36,6 +36,7 @@ import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler'
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
+import { QueryError } from './errors/QueryError';
 import {
     llmEnhancedFeatureApis,
     type CollectionStats,
@@ -498,7 +499,15 @@ export class ClustersClient {
             try {
                 options.projection = EJSON.parse(queryParams.project) as Document;
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -507,7 +516,15 @@ export class ClustersClient {
             try {
                 options.sort = EJSON.parse(queryParams.sort) as Document;
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -617,7 +634,15 @@ export class ClustersClient {
             try {
                 options.projection = EJSON.parse(queryParams.project) as Document;
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -626,7 +651,15 @@ export class ClustersClient {
             try {
                 options.sort = EJSON.parse(queryParams.sort) as Document;
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
