@@ -5,6 +5,12 @@
 
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../extensionVariables';
+import {
+    ConnectionStorageService,
+    ItemType,
+    type ConnectionType,
+    type StoredItem,
+} from '../../services/connectionStorageService';
 import { TaskService } from '../../services/taskService/taskService';
 import { type TaskInfo } from '../../services/taskService/taskServiceResourceTracking';
 
@@ -20,65 +26,91 @@ export class VerificationCompleteError extends Error {
 }
 
 /**
- * Represents a tree ID prefix to match against task resources.
- * - For folders: prefix ends with '/' to match all descendants
- * - For connections: prefix is exact tree ID to match
+ * Finds all tasks that conflict with the given connection IDs.
+ *
+ * This is a convenience wrapper around TaskService.findConflictingTasksForConnections().
+ *
+ * @param connectionIds - Array of connection IDs (clusterIds/storageIds) to check against running tasks
+ * @returns Array of conflicting tasks (deduplicated by taskId)
+ *
+ * @example
+ * ```typescript
+ * // Check a single connection
+ * const conflicts = findConflictingTasks([node.cluster.clusterId]);
+ *
+ * // Check all connections in a folder
+ * const connectionIds = await enumerateConnectionsInFolder(folderId, connectionType);
+ * const conflicts = findConflictingTasks(connectionIds);
+ * ```
  */
-export interface TreeIdPrefix {
-    /** The tree ID prefix string */
-    prefix: string;
-    /** Whether this is a folder (matches descendants) or connection (exact match) */
-    isFolder: boolean;
+export function findConflictingTasks(connectionIds: string[]): TaskInfo[] {
+    return TaskService.findConflictingTasksForConnections(connectionIds);
 }
 
 /**
- * Finds all tasks that conflict with the given tree ID prefixes.
+ * Enumerates all connection storageIds within a folder and its descendants.
+ * Used for conflict checking before folder operations (delete, move).
  *
- * For folders (prefix ends with '/'), matches any connection whose tree ID starts with the prefix.
- * For connections, matches the exact tree ID.
+ * This function walks the folder tree recursively and collects the storageIds
+ * of all connections found. These storageIds are the same values used as
+ * `connectionId` in task resource tracking (cluster.clusterId).
  *
- * @param prefixes - Array of tree ID prefixes to check against running tasks
- * @returns Array of conflicting tasks (deduplicated by taskId)
+ * @param folderId - The storage ID of the folder to enumerate
+ * @param connectionType - The connection type (Clusters or Emulators)
+ * @returns Array of connection storageIds (clusterIds) within the folder
+ *
+ * @example
+ * ```typescript
+ * // Before deleting a folder, find all connections in it
+ * const connectionIds = await enumerateConnectionsInFolder(folderId, ConnectionType.Clusters);
+ * const conflicts = findConflictingTasks(connectionIds);
+ * ```
  */
-export function findConflictingTasks(prefixes: TreeIdPrefix[]): TaskInfo[] {
-    const conflictingTasks: TaskInfo[] = [];
-    const addedTaskIds = new Set<string>();
+export async function enumerateConnectionsInFolder(
+    folderId: string,
+    connectionType: ConnectionType,
+): Promise<string[]> {
+    const connectionIds: string[] = [];
 
-    // Get all resources currently used by running tasks
-    const allUsedResources = TaskService.getAllUsedResources();
-    if (allUsedResources.length === 0) {
-        return [];
-    }
-
-    for (const { task, resources } of allUsedResources) {
-        if (addedTaskIds.has(task.taskId)) {
-            continue;
-        }
-
-        for (const resource of resources) {
-            if (!resource.connectionId) {
-                continue;
-            }
-
-            // Check if this connection matches any of our prefixes
-            const isAffected = prefixes.some(({ prefix, isFolder }) => {
-                if (isFolder) {
-                    // For folders, check if connectionId starts with prefix (which includes trailing '/')
-                    return resource.connectionId!.startsWith(prefix);
-                }
-                // For connections, check exact match
-                return resource.connectionId === prefix;
-            });
-
-            if (isAffected) {
-                conflictingTasks.push(task);
-                addedTaskIds.add(task.taskId);
-                break;
+    async function collectDescendants(parentId: string): Promise<void> {
+        const children = await ConnectionStorageService.getChildren(parentId, connectionType);
+        for (const child of children) {
+            if (child.properties.type === ItemType.Connection) {
+                connectionIds.push(child.id); // storageId = connectionId for tasks
+            } else if (child.properties.type === ItemType.Folder) {
+                await collectDescendants(child.id);
             }
         }
     }
 
-    return conflictingTasks;
+    await collectDescendants(folderId);
+    return connectionIds;
+}
+
+/**
+ * Enumerates all connection storageIds from a list of items (connections and/or folders).
+ * For connections, adds their ID directly. For folders, recursively enumerates all descendant connections.
+ *
+ * @param items - Array of stored items (connections and folders) to enumerate
+ * @param connectionType - The connection type (Clusters or Emulators)
+ * @returns Array of connection storageIds (clusterIds)
+ */
+export async function enumerateConnectionsInItems(
+    items: StoredItem[],
+    connectionType: ConnectionType,
+): Promise<string[]> {
+    const connectionIds: string[] = [];
+
+    for (const item of items) {
+        if (item.properties.type === ItemType.Connection) {
+            connectionIds.push(item.id);
+        } else if (item.properties.type === ItemType.Folder) {
+            const folderConnectionIds = await enumerateConnectionsInFolder(item.id, connectionType);
+            connectionIds.push(...folderConnectionIds);
+        }
+    }
+
+    return connectionIds;
 }
 
 /**

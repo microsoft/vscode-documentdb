@@ -11,13 +11,12 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../../extensionVariables';
-import { ConnectionStorageService, ItemType } from '../../../services/connectionStorageService';
-import { buildFullTreePath } from '../../../tree/connections-view/connectionsViewHelpers';
+import { ConnectionStorageService } from '../../../services/connectionStorageService';
 import {
+    enumerateConnectionsInItems,
     findConflictingTasks,
     logTaskConflicts,
     VerificationCompleteError,
-    type TreeIdPrefix,
 } from '../verificationUtils';
 import { type MoveItemsWizardContext } from './MoveItemsWizardContext';
 
@@ -83,23 +82,15 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
 
     /**
      * Checks if any running tasks are using connections being moved.
-     * Uses prefix matching on tree IDs - if a folder is being moved, any task using
-     * a connection with a tree ID starting with the folder's tree ID is affected.
+     * Enumerates all connection IDs (including descendants of folders) and checks for conflicts.
      */
     private async checkTaskConflicts(context: MoveItemsWizardContext): Promise<IAzureQuickPickItem<ConflictAction>[]> {
-        // Build tree ID prefixes for each item being moved
-        const prefixes: TreeIdPrefix[] = [];
-        for (const item of context.itemsToMove) {
-            const treeId = await buildFullTreePath(item.id, context.connectionType);
-            const isFolder = item.properties.type === ItemType.Folder;
-            prefixes.push({
-                prefix: isFolder ? treeId + '/' : treeId,
-                isFolder,
-            });
-        }
+        // Enumerate all connection IDs from items being moved
+        // For folders, this includes all descendant connections
+        const connectionIds = await enumerateConnectionsInItems(context.itemsToMove, context.connectionType);
 
-        // Find conflicting tasks using the common utility
-        context.conflictingTasks = findConflictingTasks(prefixes);
+        // Find conflicting tasks using simple equality matching on connectionIds
+        context.conflictingTasks = findConflictingTasks(connectionIds);
 
         if (context.conflictingTasks.length === 0) {
             return [];

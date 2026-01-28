@@ -547,6 +547,16 @@ export interface TaskService {
     getConflictingTasks(resource: ResourceDefinition): TaskInfo[];
 
     /**
+     * Finds all tasks that conflict with any of the given connection IDs.
+     * Performs simple equality matching between the provided connectionIds and
+     * the connectionIds used by running tasks.
+     *
+     * @param connectionIds - Array of connection IDs (clusterIds/storageIds) to check
+     * @returns Array of conflicting tasks (deduplicated by taskId)
+     */
+    findConflictingTasksForConnections(connectionIds: string[]): TaskInfo[];
+
+    /**
      * Gets all resources currently in use by all active tasks.
      * Useful for debugging or advanced UI features.
      * Only includes tasks that are currently in non-final states.
@@ -683,6 +693,33 @@ class TaskServiceImpl implements TaskService {
         }
 
         return result;
+    }
+
+    public findConflictingTasksForConnections(connectionIds: string[]): TaskInfo[] {
+        if (connectionIds.length === 0) {
+            return [];
+        }
+
+        const connectionIdSet = new Set(connectionIds);
+        const conflictingTasks: TaskInfo[] = [];
+        const addedTaskIds = new Set<string>();
+
+        const allUsedResources = this.getAllUsedResources();
+        for (const { task, resources } of allUsedResources) {
+            if (addedTaskIds.has(task.taskId)) {
+                continue;
+            }
+
+            for (const resource of resources) {
+                if (resource.connectionId && connectionIdSet.has(resource.connectionId)) {
+                    conflictingTasks.push(task);
+                    addedTaskIds.add(task.taskId);
+                    break;
+                }
+            }
+        }
+
+        return conflictingTasks;
     }
 }
 

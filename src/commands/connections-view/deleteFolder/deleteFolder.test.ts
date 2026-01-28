@@ -3,21 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ConnectionType, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
-import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
-import { ExecuteStep } from './ExecuteStep';
-import { VerifyNoConflictsStep } from './VerifyNoConflictsStep';
-
 // Track deleted items
 const deletedItems: string[] = [];
 const mockChildren = new Map<string, ConnectionItem[]>();
 
+// Create mock functions that can be controlled by tests
+const mockGetChildren = jest.fn();
+const mockEnumerateConnectionsInFolder = jest.fn();
+
 // Mock ConnectionStorageService
 jest.mock('../../../services/connectionStorageService', () => ({
     ConnectionStorageService: {
-        getChildren: jest.fn(async (parentId: string) => {
-            return mockChildren.get(parentId) ?? [];
-        }),
+        getChildren: (...args: unknown[]) => mockGetChildren(...args),
         delete: jest.fn(async (_connectionType: string, itemId: string) => {
             deletedItems.push(itemId);
         }),
@@ -31,6 +28,37 @@ jest.mock('../../../services/connectionStorageService', () => ({
         Folder: 'folder',
     },
 }));
+
+// Mock TaskService - use findConflictingTasksForConnections for simpler control
+const mockFindConflictingTasksForConnections = jest.fn<
+    Array<{ taskId: string; taskName: string; taskType: string }>,
+    [string[]]
+>(() => []);
+jest.mock('../../../services/taskService/taskService', () => ({
+    TaskService: {
+        findConflictingTasksForConnections: (connectionIds: string[]) =>
+            mockFindConflictingTasksForConnections(connectionIds),
+    },
+}));
+
+// Mock verificationUtils - only mock the folder enumeration, let findConflictingTasks use real logic
+jest.mock('../verificationUtils', () => ({
+    VerificationCompleteError: class VerificationCompleteError extends Error {
+        constructor() {
+            super('Conflict verification completed successfully');
+            this.name = 'VerificationCompleteError';
+        }
+    },
+    // findConflictingTasks delegates to TaskService, which is mocked above
+    findConflictingTasks: jest.requireActual('../verificationUtils').findConflictingTasks,
+    enumerateConnectionsInFolder: (...args: unknown[]) => mockEnumerateConnectionsInFolder(...args),
+    logTaskConflicts: jest.fn(),
+}));
+
+import { ConnectionType, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
+import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
+import { ExecuteStep } from './ExecuteStep';
+import { VerifyNoConflictsStep } from './VerifyNoConflictsStep';
 
 // Mock vscode-azext-utils
 jest.mock('@microsoft/vscode-azext-utils', () => ({
@@ -60,20 +88,6 @@ jest.mock('../../../extensionVariables', () => ({
             appendLog: jest.fn(),
             show: jest.fn(),
         },
-    },
-}));
-
-// Mock TaskService
-const mockGetAllUsedResources = jest.fn<
-    Array<{
-        task: { taskId: string; taskName: string; taskType: string };
-        resources: Array<{ connectionId?: string; databaseName?: string; collectionName?: string }>;
-    }>,
-    []
->(() => []);
-jest.mock('../../../services/taskService/taskService', () => ({
-    TaskService: {
-        getAllUsedResources: () => mockGetAllUsedResources(),
     },
 }));
 
@@ -163,12 +177,24 @@ function createMockContext(
     } as unknown as DeleteFolderWizardContext;
 }
 
+// Map to track connections within folders for mockEnumerateConnectionsInFolder
+const mockFolderConnections = new Map<string, string[]>();
+
 describe('deleteFolder', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         deletedItems.length = 0;
         mockChildren.clear();
-        mockGetAllUsedResources.mockReturnValue([]);
+        mockFolderConnections.clear();
+        mockFindConflictingTasksForConnections.mockReturnValue([]);
+        // Set up default behavior for getChildren
+        mockGetChildren.mockImplementation(async (parentId: string) => {
+            return mockChildren.get(parentId) ?? [];
+        });
+        // Set up default behavior for enumerateConnectionsInFolder
+        mockEnumerateConnectionsInFolder.mockImplementation(async (folderId: string) => {
+            return mockFolderConnections.get(folderId) ?? [];
+        });
     });
 
     describe('ExecuteStep', () => {
@@ -328,31 +354,37 @@ describe('deleteFolder', () => {
 
         describe('task conflict detection', () => {
             it('should detect task using connection in folder', async () => {
-                const context = createMockContext('testview/folder-1', 'Folder 1');
+                // Use simple folder-id (not tree path) since we now use storageId
+                const context = createMockContext('folder-1', 'Folder 1');
 
-                // Mock a task using a connection within this folder
-                mockGetAllUsedResources.mockReturnValue([
-                    {
-                        task: { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
-                        resources: [
-                            {
-                                connectionId: 'testview/folder-1/connection-1',
-                                databaseName: 'db1',
-                                collectionName: 'coll1',
-                            },
-                        ],
-                    },
+                // Set up folder with a connection (for counting)
+                const conn1 = createMockConnection({
+                    id: 'connection-1',
+                    name: 'Connection 1',
+                    parentId: 'folder-1',
+                });
+                mockChildren.set('folder-1', [conn1]);
+
+                // Set up enumerated connections (for conflict checking)
+                mockFolderConnections.set('folder-1', ['connection-1']);
+
+                // Mock TaskService to return a conflicting task
+                mockFindConflictingTasksForConnections.mockReturnValue([
+                    { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
                 ]);
 
-                // Mock showQuickPick to return the exit action
-                const mockShowQuickPick = jest.fn().mockResolvedValue({ data: 'exit' });
+                // Mock showQuickPick to await the items promise and return the exit action
+                const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                    await itemsPromise;
+                    return { data: 'exit' };
+                });
                 context.ui = {
                     ...context.ui,
                     showQuickPick: mockShowQuickPick,
                 } as unknown as typeof context.ui;
 
                 // The step should throw UserCancelledError when conflicts are found
-                // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
                 const { UserCancelledError } = require('@microsoft/vscode-azext-utils');
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 await expect(verifyStep.prompt(context)).rejects.toThrow(UserCancelledError);
@@ -363,21 +395,14 @@ describe('deleteFolder', () => {
             });
 
             it('should not detect task using connection outside folder', async () => {
-                const context = createMockContext('testview/folder-1', 'Folder 1');
+                const context = createMockContext('folder-1', 'Folder 1');
 
-                // Mock a task using a connection in a different folder
-                mockGetAllUsedResources.mockReturnValue([
-                    {
-                        task: { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
-                        resources: [
-                            {
-                                connectionId: 'testview/folder-2/connection-1',
-                                databaseName: 'db1',
-                                collectionName: 'coll1',
-                            },
-                        ],
-                    },
-                ]);
+                // Empty folder - no connections
+                mockChildren.set('folder-1', []);
+                mockFolderConnections.set('folder-1', []);
+
+                // No conflicting tasks (TaskService returns empty)
+                mockFindConflictingTasksForConnections.mockReturnValue([]);
 
                 // Mock showQuickPick - the verifyNoTaskConflicts will throw VerificationCompleteError
                 // when no conflicts, and showQuickPick should propagate this error
@@ -394,6 +419,51 @@ describe('deleteFolder', () => {
 
                 // No conflicting tasks
                 expect(context.conflictingTasks).toHaveLength(0);
+            });
+
+            it('should detect task using connection in nested subfolder', async () => {
+                const context = createMockContext('folder-1', 'Folder 1');
+
+                // Set up folder with a subfolder containing a connection (for counting)
+                const subfolder = createMockFolder({
+                    id: 'subfolder-1',
+                    name: 'Subfolder 1',
+                    parentId: 'folder-1',
+                });
+                const nestedConn = createMockConnection({
+                    id: 'nested-connection',
+                    name: 'Nested Connection',
+                    parentId: 'subfolder-1',
+                });
+                mockChildren.set('folder-1', [subfolder]);
+                mockChildren.set('subfolder-1', [nestedConn]);
+
+                // Set up enumerated connections (includes nested connections)
+                mockFolderConnections.set('folder-1', ['nested-connection']);
+
+                // Mock TaskService to return a conflicting task for the nested connection
+                mockFindConflictingTasksForConnections.mockReturnValue([
+                    { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+                ]);
+
+                // Mock showQuickPick to await the items promise and return the exit action
+                const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                    await itemsPromise;
+                    return { data: 'exit' };
+                });
+                context.ui = {
+                    ...context.ui,
+                    showQuickPick: mockShowQuickPick,
+                } as unknown as typeof context.ui;
+
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { UserCancelledError } = require('@microsoft/vscode-azext-utils');
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                await expect(verifyStep.prompt(context)).rejects.toThrow(UserCancelledError);
+
+                // Should detect the conflict with the nested connection
+                expect(context.conflictingTasks).toHaveLength(1);
+                expect(context.conflictingTasks[0].taskId).toBe('task-1');
             });
         });
     });

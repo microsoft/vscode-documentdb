@@ -6,7 +6,12 @@
 import { AzureWizardPromptStep, UserCancelledError, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ConnectionStorageService, ItemType } from '../../../services/connectionStorageService';
-import { findConflictingTasks, logTaskConflicts, VerificationCompleteError } from '../verificationUtils';
+import {
+    enumerateConnectionsInFolder,
+    findConflictingTasks,
+    logTaskConflicts,
+    VerificationCompleteError,
+} from '../verificationUtils';
 import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 
 type ConflictAction = 'exit';
@@ -55,9 +60,10 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<DeleteFolderWiz
         context.foldersToDelete = counts.folders + 1; // +1 for the folder itself
         context.connectionsToDelete = counts.connections;
 
-        // Check for task conflicts using the folder's tree ID as prefix
-        // Any connection inside the folder will have an ID starting with folderItem.id + "/"
-        context.conflictingTasks = findConflictingTasks([{ prefix: context.folderItem.id + '/', isFolder: true }]);
+        // Enumerate all connection IDs within the folder for conflict checking
+        // This uses storageIds (clusterIds) which are stable identifiers used by tasks
+        const connectionIds = await enumerateConnectionsInFolder(context.folderItem.storageId, context.connectionType);
+        context.conflictingTasks = findConflictingTasks(connectionIds);
 
         // If no conflicts, signal completion and proceed
         if (context.conflictingTasks.length === 0) {
