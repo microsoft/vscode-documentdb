@@ -121,7 +121,19 @@ export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
 }
 
 export class ClustersClient {
-    // cache of active/existing clients
+    /**
+     * Cache of active MongoDB clients, keyed by clusterId.
+     *
+     * KEY: `clusterId` - The stable cluster identifier (NOT the tree item ID)
+     *   - Connections View items: Use `cluster.clusterId` (= storageId, stable UUID)
+     *   - Azure Resources View items: Use `cluster.clusterId` (= Azure Resource ID)
+     *
+     * VALUE: ClustersClient instance wrapping a MongoClient
+     *
+     * ⚠️ WARNING: Do NOT use `treeId` as the cache key!
+     * Tree IDs change when items are moved between folders, causing cache misses
+     * and orphaned connections.
+     */
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
@@ -130,7 +142,11 @@ export class ClustersClient {
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
     /**
-     * Use getClient instead of a constructor. Connections/Client are being cached and reused.
+     * Private constructor - use getClient() instead.
+     * Connections/Clients are being cached and reused.
+     *
+     * @param credentialId - The stable cluster ID used to look up credentials in CredentialCache.
+     *   This is NOT the tree item ID - it's the clusterId that remains stable across folder moves.
      */
     private constructor(private readonly credentialId: string) {
         return;

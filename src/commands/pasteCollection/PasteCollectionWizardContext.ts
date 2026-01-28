@@ -12,12 +12,22 @@ export interface PasteCollectionWizardContext extends IActionContext {
     // Source collection details (from copy operation)
     sourceCollectionName: string;
     sourceDatabaseName: string;
+    /**
+     * Source cluster's stable identifier (cluster.clusterId).
+     * Used for credential and client cache lookups.
+     * ⚠️ Use cluster.clusterId, NOT treeId.
+     */
     sourceConnectionId: string;
     sourceConnectionName: string;
     sourceCollectionSize?: number;
 
     // Target details
     targetNode: CollectionItem | DatabaseItem;
+    /**
+     * Target cluster's stable identifier (cluster.clusterId).
+     * Used for credential and client cache lookups.
+     * ⚠️ Use cluster.clusterId, NOT treeId.
+     */
     targetConnectionId: string;
     targetConnectionName: string;
     targetDatabaseName: string;

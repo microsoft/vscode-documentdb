@@ -23,9 +23,22 @@ import { BaseDocumentReader } from './BaseDocumentReader';
  * - Connection management via ClustersClient
  */
 export class DocumentDbDocumentReader extends BaseDocumentReader {
-    /** Connection identifier for accessing the DocumentDB cluster */
+    /**
+     * The stable cluster identifier for accessing the DocumentDB cluster.
+     * Used for ClustersClient lookup.
+     *
+     * ⚠️ This should be `cluster.clusterId`, NOT treeId.
+     */
     private readonly connectionId: string;
 
+    /**
+     * Creates a new DocumentDbDocumentReader.
+     *
+     * @param connectionId - The stable cluster identifier (clusterId) for client lookup.
+     *   ⚠️ Use cluster.clusterId, NOT treeId.
+     * @param databaseName - The name of the database to read from.
+     * @param collectionName - The name of the collection to read from.
+     */
     constructor(connectionId: string, databaseName: string, collectionName: string) {
         super(databaseName, collectionName);
         this.connectionId = connectionId;
