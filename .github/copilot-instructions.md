@@ -92,6 +92,35 @@ src/commands/yourCommand/
 - Use VS Code's secure storage for credentials
 - Validate all user inputs
 
+## Cluster ID Architecture (Dual ID Pattern)
+
+`ClusterModel` has two distinct ID properties - using the wrong one causes bugs:
+
+| Property    | Purpose                          | Stable?                   | Example                           |
+| ----------- | -------------------------------- | ------------------------- | --------------------------------- |
+| `treeId`    | VS Code TreeView element path    | ❌ Changes on folder move | `connectionsView/folder1/abc-123` |
+| `clusterId` | Cache key (credentials, clients) | ✅ Always stable          | `abc-123` or Azure Resource ID    |
+
+### When to Use Each ID
+
+```typescript
+// ✅ Tree element identification (VS Code TreeView)
+this.id = cluster.treeId;
+this.id = `${cluster.treeId}/${databaseInfo.name}`;
+
+// ✅ Cache operations (credentials, clients)
+CredentialCache.hasCredentials(cluster.clusterId);
+ClustersClient.getClient(cluster.clusterId);
+
+// ❌ WRONG - Don't use treeId for caching (breaks on folder move)
+CredentialCache.hasCredentials(this.id); // BUG!
+ClustersClient.getClient(cluster.treeId); // BUG!
+```
+
+### Azure Resources View
+
+For Azure resources, `treeId === clusterId` (both are the Azure Resource ID). This is correct - Azure Resource IDs are already stable.
+
 ## Additional Patterns
 
 For detailed patterns, see:
