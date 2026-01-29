@@ -106,21 +106,24 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         connectionString.hosts = [host + ':27017']; // Set the actual host and default port
                         connectionString.protocol = 'mongodb';
 
+                        // Sanitize Azure Resource ID: replace '/' with '-' for both clusterId and treeId
+                        const sanitizedId = sanitizeAzureResourceIdForTreeId(vm.id!);
+
                         const vmInfo: TreeCluster<VirtualMachineModel> = {
                             // Core cluster data
                             name: vm.name!,
                             connectionString: connectionString.toString(),
                             dbExperience: DocumentDBExperience,
-                            clusterId: vm.id!, // Azure Resource ID - stable cache key
+                            clusterId: sanitizedId, // Sanitized - no '/' characters
                             // Azure-specific data
-                            id: vm.id!,
+                            id: vm.id!, // Keep original Azure Resource ID for ARM API correlation
                             resourceGroup: getResourceGroupFromId(vm.id!),
                             // VM-specific data
                             vmSize: vm.hardwareProfile?.vmSize,
                             publicIpAddress: publicIpAddress,
                             fqdn: fqdn,
-                            // Tree context (MUST sanitize treeId for Discovery View)
-                            treeId: sanitizeAzureResourceIdForTreeId(vm.id!), // Replace '/' with '-'
+                            // Tree context - treeId includes parent hierarchy for findNodeById to work
+                            treeId: `${this.id}/${sanitizedId}`,
                             viewId: Views.DiscoveryView,
                         };
 

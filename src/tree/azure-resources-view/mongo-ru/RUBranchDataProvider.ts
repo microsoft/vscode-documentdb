@@ -16,7 +16,7 @@ import { nonNullProp } from '../../../utils/nonNull';
 import { BaseExtendedTreeDataProvider } from '../../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../../TreeElement';
 import { isTreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
+import { sanitizeAzureResourceIdForTreeId, type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { type TreeCluster } from '../../models/BaseClusterModel';
 import { RUResourceItem } from './RUCoreResourceItem';
 
@@ -59,15 +59,18 @@ export class RUBranchDataProvider
             const cache = new CaseInsensitiveMap<TreeCluster<AzureClusterModel>>();
             ruAccounts.forEach((ruAccount) => {
                 const resourceId = nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts');
-                // For Azure Resources View: treeId === clusterId === Azure Resource ID (no sanitization)
+                // Sanitize Azure Resource ID: replace '/' with '-' for both clusterId and treeId
+                // This ensures clusterId never contains '/' (simplifies cache key handling)
+                const sanitizedId = sanitizeAzureResourceIdForTreeId(resourceId);
+
                 const cluster: TreeCluster<AzureClusterModel> = {
                     // Core cluster data
                     name: ruAccount.name!,
                     connectionString: undefined, // Loaded lazily when connecting
                     dbExperience: CosmosDBMongoRUExperience,
-                    clusterId: resourceId, // Azure Resource ID - stable cache key
+                    clusterId: sanitizedId, // Sanitized - no '/' characters
                     // Azure-specific data
-                    id: resourceId,
+                    id: resourceId, // Keep original Azure Resource ID for ARM API correlation
                     resourceGroup: getResourceGroupFromId(resourceId),
                     location: ruAccount.location,
                     serverVersion: ruAccount?.apiProperties?.serverVersion,
@@ -81,8 +84,8 @@ export class RUBranchDataProvider
                                   .filter((name) => name !== undefined)
                                   .join(', ')
                             : undefined,
-                    // Tree context (treeId === clusterId for flat Azure Resources tree)
-                    treeId: resourceId, // No sanitization needed
+                    // Tree context (clusterId === treeId after sanitization)
+                    treeId: sanitizedId,
                     viewId: Views.AzureResourcesView,
                 };
 
@@ -142,18 +145,20 @@ export class RUBranchDataProvider
             // Get metadata from cache (may be undefined if not yet loaded)
             const cachedMetadata = this.metadataLoader.getCachedMetadata(resource.id);
 
-            // For Azure Resources View: treeId === clusterId === Azure Resource ID (no sanitization)
+            // Sanitize Azure Resource ID: replace '/' with '-' for both clusterId and treeId
+            const sanitizedId = sanitizeAzureResourceIdForTreeId(resource.id);
+
             let clusterInfo: TreeCluster<AzureClusterModel> = {
                 // Core cluster data
                 name: resource.name ?? 'Unknown',
                 connectionString: undefined, // Loaded lazily
                 dbExperience: CosmosDBMongoRUExperience,
-                clusterId: resource.id, // Azure Resource ID - stable cache key
+                clusterId: sanitizedId, // Sanitized - no '/' characters
                 // Azure-specific data
-                id: resource.id,
+                id: resource.id, // Keep original Azure Resource ID for ARM API correlation
                 resourceGroup: undefined, // Will be populated from cache
-                // Tree context (treeId === clusterId for flat Azure Resources tree)
-                treeId: resource.id, // No sanitization needed
+                // Tree context (clusterId === treeId after sanitization)
+                treeId: sanitizedId,
                 viewId: Views.AzureResourcesView,
             };
 

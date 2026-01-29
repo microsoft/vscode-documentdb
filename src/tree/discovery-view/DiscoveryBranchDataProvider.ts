@@ -307,10 +307,16 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
     /**
      * Finds a collection node by its cluster's stable identifier.
      *
-     * For Discovery/Azure views, the clusterId IS the treeId (Azure Resource ID).
-     * There's no folder hierarchy, so we use the clusterId directly.
+     * For Discovery View, the collection's full ID is:
+     *   `${parentPath}/${clusterId}/${databaseName}/${collectionName}`
      *
-     * @param clusterId The stable cluster identifier (Azure Resource ID)
+     * Since clusterId is sanitized (no '/'), we can identify the collection by searching
+     * for a node whose ID ends with `/${clusterId}/${databaseName}/${collectionName}`.
+     *
+     * This method traverses the tree from root, expanding nodes as needed. The tree's
+     * hierarchical structure ensures efficient traversal.
+     *
+     * @param clusterId The stable cluster identifier (sanitized, no '/' characters)
      * @param databaseName The database name
      * @param collectionName The collection name
      * @returns A Promise that resolves to the found CollectionItem or undefined if not found
@@ -320,10 +326,42 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         databaseName: string,
         collectionName: string,
     ): Promise<TreeElement | undefined> {
-        // For Azure resources, clusterId IS the treeId (no folder hierarchy)
-        const nodeId = `${clusterId}/${databaseName}/${collectionName}`;
+        // The collection's ID ends with this suffix (clusterId has no '/' so this is unique)
+        const targetSuffix = `/${clusterId}/${databaseName}/${collectionName}`;
 
-        // Use the standard findNodeById with recursive search enabled
-        return this.findNodeById(nodeId, true);
+        // Recursive search helper that expands the tree
+        const searchInNode = async (node: TreeElement): Promise<TreeElement | undefined> => {
+            // Check if this node matches
+            if (node.id?.endsWith(targetSuffix)) {
+                return node;
+            }
+
+            // Get children and search recursively
+            const children = await this.getChildren(node);
+            if (children) {
+                for (const child of children) {
+                    const result = await searchInNode(child);
+                    if (result) {
+                        return result;
+                    }
+                }
+            }
+            return undefined;
+        };
+
+        // Get root items and search
+        const rootItems = await this.getChildren(undefined as unknown as TreeElement);
+        if (!rootItems) {
+            return undefined;
+        }
+
+        for (const rootItem of rootItems) {
+            const result = await searchInNode(rootItem);
+            if (result) {
+                return result;
+            }
+        }
+
+        return undefined;
     }
 }

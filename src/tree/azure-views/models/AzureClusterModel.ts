@@ -9,18 +9,17 @@ import { type BaseClusterModel } from '../../models/BaseClusterModel';
  * Cluster model for Azure views (Discovery, Azure Resources, Workspace).
  * Includes Azure metadata from ARM API.
  *
- * NOTE: For Discovery View, treeId is sanitized (no '/'), but clusterId
- * keeps the full Azure Resource ID for cache lookups.
- *
- * For Azure Resources View, treeId === clusterId === Azure Resource ID (no sanitization).
+ * NOTE: For Azure views, clusterId is SANITIZED (no '/' characters).
+ * The original Azure Resource ID is preserved in the `id` property for ARM API correlation.
  */
 export interface AzureClusterModel extends BaseClusterModel {
     /**
      * Azure Resource ID (e.g., /subscriptions/xxx/resourceGroups/yyy/...)
      *
-     * ⚠️ This is the original Azure ID with '/' characters.
-     * For Discovery View treeId, this gets sanitized (replace '/' with '-').
-     * For Azure Resources View, treeId === id (no sanitization needed).
+     * ⚠️ This is the ORIGINAL Azure ID with '/' characters.
+     * Use this when correlating with Azure ARM APIs.
+     *
+     * For caching/client lookups, use `clusterId` instead (sanitized, no '/').
      */
     id: string;
 
@@ -66,16 +65,18 @@ export interface AzureClusterModel extends BaseClusterModel {
 }
 
 /**
- * Helper function to sanitize an Azure Resource ID for use as a treeId in Discovery View.
+ * Sanitizes an Azure Resource ID for use as clusterId and treeId.
  *
- * The Discovery View has a nested tree structure where VS Code performs parent resolution
- * by splitting on '/'. Azure Resource IDs contain '/' characters which break this resolution.
+ * Azure Resource IDs contain '/' characters which:
+ * 1. Break VS Code tree parent resolution (splits on '/')
+ * 2. Make cache key handling inconsistent
  *
- * This function replaces '/' with '-' to create a safe treeId.
+ * This function replaces '/' with '_' to create a safe identifier.
+ * Used for BOTH clusterId and treeId in Azure views.
  *
  * @param azureResourceId The Azure Resource ID to sanitize
- * @returns A sanitized string safe for use as treeId in Discovery View
+ * @returns A sanitized string safe for use as clusterId and treeId
  */
 export function sanitizeAzureResourceIdForTreeId(azureResourceId: string): string {
-    return azureResourceId.replace(/\//g, '-');
+    return azureResourceId.replace(/\//g, '_');
 }

@@ -16,7 +16,7 @@ import { nonNullProp } from '../../../utils/nonNull';
 import { BaseExtendedTreeDataProvider } from '../../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../../TreeElement';
 import { isTreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
+import { sanitizeAzureResourceIdForTreeId, type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { type TreeCluster } from '../../models/BaseClusterModel';
 import { VCoreResourceItem } from './VCoreResourceItem';
 
@@ -57,15 +57,18 @@ export class VCoreBranchDataProvider
                     'vCoreAccount.id',
                     'VCoreBranchDataProvider.ts',
                 );
-                // For Azure Resources View: treeId === clusterId === Azure Resource ID (no sanitization)
+                // Sanitize Azure Resource ID: replace '/' with '-' for both clusterId and treeId
+                // This ensures clusterId never contains '/' (simplifies cache key handling)
+                const sanitizedId = sanitizeAzureResourceIdForTreeId(resourceId);
+
                 const cluster: TreeCluster<AzureClusterModel> = {
                     // Core cluster data
                     name: documentDbAccount.name!,
                     connectionString: undefined, // Loaded lazily when connecting
                     dbExperience: DocumentDBExperience,
-                    clusterId: resourceId, // Azure Resource ID - stable cache key
+                    clusterId: sanitizedId, // Sanitized - no '/' characters
                     // Azure-specific data
-                    id: resourceId,
+                    id: resourceId, // Keep original Azure Resource ID for ARM API correlation
                     resourceGroup: getResourceGroupFromId(resourceId),
                     location: documentDbAccount.location,
                     serverVersion: documentDbAccount.properties?.serverVersion,
@@ -76,8 +79,8 @@ export class VCoreBranchDataProvider
                     diskSize: documentDbAccount.properties?.storage?.sizeGb,
                     nodeCount: documentDbAccount.properties?.sharding?.shardCount,
                     enableHa: documentDbAccount.properties?.highAvailability?.targetMode !== 'Disabled',
-                    // Tree context (treeId === clusterId for flat Azure Resources tree)
-                    treeId: resourceId, // No sanitization needed
+                    // Tree context (clusterId === treeId after sanitization)
+                    treeId: sanitizedId,
                     viewId: Views.AzureResourcesView,
                 };
 
@@ -137,18 +140,20 @@ export class VCoreBranchDataProvider
             // Get metadata from cache (may be undefined if not yet loaded)
             const cachedMetadata = this.metadataLoader.getCachedMetadata(resource.id);
 
-            // For Azure Resources View: treeId === clusterId === Azure Resource ID (no sanitization)
+            // Sanitize Azure Resource ID: replace '/' with '-' for both clusterId and treeId
+            const sanitizedId = sanitizeAzureResourceIdForTreeId(resource.id);
+
             let clusterInfo: TreeCluster<AzureClusterModel> = {
                 // Core cluster data
                 name: resource.name ?? 'Unknown',
                 connectionString: undefined, // Loaded lazily
                 dbExperience: DocumentDBExperience,
-                clusterId: resource.id, // Azure Resource ID - stable cache key
+                clusterId: sanitizedId, // Sanitized - no '/' characters
                 // Azure-specific data
-                id: resource.id,
+                id: resource.id, // Keep original Azure Resource ID for ARM API correlation
                 resourceGroup: undefined, // Will be populated from cache
-                // Tree context (treeId === clusterId for flat Azure Resources tree)
-                treeId: resource.id, // No sanitization needed
+                // Tree context (clusterId === treeId after sanitization)
+                treeId: sanitizedId,
                 viewId: Views.AzureResourcesView,
             };
 

@@ -72,13 +72,13 @@ describe('AzureClusterModel', () => {
     });
 
     describe('sanitizeAzureResourceIdForTreeId', () => {
-        it('should replace all forward slashes with hyphens', () => {
+        it('should replace all forward slashes with underscores', () => {
             const azureResourceId =
                 '/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.DocumentDB/mongoClusters/cluster1';
             const result = sanitizeAzureResourceIdForTreeId(azureResourceId);
 
             expect(result).toBe(
-                '-subscriptions-sub1-resourceGroups-rg1-providers-Microsoft.DocumentDB-mongoClusters-cluster1',
+                '_subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1',
             );
             expect(result).not.toContain('/');
         });
@@ -92,11 +92,11 @@ describe('AzureClusterModel', () => {
         });
 
         it('should handle single slash', () => {
-            expect(sanitizeAzureResourceIdForTreeId('/')).toBe('-');
+            expect(sanitizeAzureResourceIdForTreeId('/')).toBe('_');
         });
 
         it('should handle consecutive slashes', () => {
-            expect(sanitizeAzureResourceIdForTreeId('a//b///c')).toBe('a--b---c');
+            expect(sanitizeAzureResourceIdForTreeId('a//b///c')).toBe('a__b___c');
         });
     });
 
@@ -122,7 +122,7 @@ describe('AzureClusterModel', () => {
             // treeId is sanitized for tree structure
             expect(discoveryCluster.treeId).not.toContain('/');
             expect(discoveryCluster.treeId).toBe(
-                '-subscriptions-sub1-resourceGroups-rg1-providers-Microsoft.DocumentDB-mongoClusters-cluster1',
+                '_subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1',
             );
         });
 

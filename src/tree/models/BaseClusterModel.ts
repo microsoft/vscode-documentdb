@@ -33,11 +33,11 @@ export interface BaseClusterModel {
      * Stable identifier for credential and client caching.
      *
      * ⚠️ IMPORTANT: Always use this for CredentialCache and ClustersClient lookups.
+     * ⚠️ CONSTRAINT: Must NOT contain '/' characters (enforced by architecture).
      *
      * Values:
      * - Connections View: `storageId` (UUID from ConnectionStorageService)
-     * - Discovery View: Azure Resource ID (with '/' characters, NOT sanitized)
-     * - Azure Resources View: Azure Resource ID
+     * - Discovery/Azure Views: Sanitized Azure Resource ID (no '/' - replaced with '-')
      */
     clusterId: string;
 }
@@ -57,10 +57,9 @@ export interface ClusterTreeContext {
      * ⚠️ IMPORTANT: This changes when item moves between folders.
      * Do NOT use for caching - use cluster.clusterId instead.
      *
-     * Construction rules (from PR #472):
+     * Construction rules:
      * - Connections View: `${parentId}/${storageId}` (hierarchical)
-     * - Discovery View: `sanitize(azureResourceId)` - replace '/' with '-'
-     * - Azure Resources View: `azureResourceId` (unchanged, flat tree)
+     * - Discovery/Azure Views: Same as clusterId (sanitized Azure Resource ID)
      */
     treeId: string;
 

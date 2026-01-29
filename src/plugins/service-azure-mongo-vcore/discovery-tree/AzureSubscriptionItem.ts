@@ -65,19 +65,21 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureSubscriptionItem.ts');
 
-                        // For Discovery View: treeId must be sanitized (replace '/' with '-')
-                        // clusterId: Keep as-is (Azure Resource ID) for cache key lookups
+                        // Sanitize Azure Resource ID: replace '/' with '-' for both clusterId and treeId
+                        // This ensures clusterId never contains '/' (simplifies cache key handling)
+                        const sanitizedId = sanitizeAzureResourceIdForTreeId(resourceId);
+
                         const clusterInfo: TreeCluster<AzureClusterModel> = {
                             // Core cluster data
                             name: account.name ?? 'Unknown',
                             connectionString: undefined, // Loaded lazily when connecting
                             dbExperience: DocumentDBExperience,
-                            clusterId: resourceId, // Keep original Azure Resource ID for cache
+                            clusterId: sanitizedId, // Sanitized - no '/' characters
                             // Azure-specific data
-                            id: resourceId,
+                            id: resourceId, // Keep original Azure Resource ID for ARM API correlation
                             resourceGroup: getResourceGroupFromId(resourceId),
-                            // Tree context (MUST sanitize treeId for Discovery View)
-                            treeId: sanitizeAzureResourceIdForTreeId(resourceId), // Replace '/' with '-'
+                            // Tree context - treeId includes parent hierarchy for findNodeById to work
+                            treeId: `${this.id}/${sanitizedId}`,
                             viewId: Views.DiscoveryView,
                         };
 

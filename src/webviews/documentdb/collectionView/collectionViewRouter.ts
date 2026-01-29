@@ -139,9 +139,9 @@ async function findCollectionNodeInTree(
         // branchDataProvider remains null, will throw error below
     } else {
         // Fallback: try to infer from clusterId format
-        // - Azure resources: clusterId contains '/providers/' or '/subscriptions/'
+        // - Azure resources: clusterId is sanitized, contains '_providers_' or '_subscriptions_'
         // - Connections View: clusterId is a storageId (UUID like 'storageId-xxx')
-        const isAzureResource = clusterId.includes('/providers/') || clusterId.includes('/subscriptions/');
+        const isAzureResource = clusterId.includes('_providers_') || clusterId.includes('_subscriptions_');
         branchDataProvider = isAzureResource ? ext.discoveryBranchDataProvider : ext.connectionsBranchDataProvider;
     }
 
