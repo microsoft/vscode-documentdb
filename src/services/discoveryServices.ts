@@ -64,6 +64,22 @@ export interface DiscoveryProvider extends ProviderDescription {
      *               When undefined, refreshes the entire discovery tree (wizard context).
      */
     configureCredentials?(context: IActionContext, node?: TreeElement): Promise<void>;
+
+    /**
+     * Determines if this provider "owns" a given clusterId.
+     *
+     * This is used to efficiently route operations (like finding collections) to the
+     * correct provider without loading all providers. Each provider knows its own
+     * resource patterns (e.g., Azure Resource ID patterns).
+     *
+     * @param clusterId The sanitized cluster identifier (e.g., Azure Resource ID with '/' replaced by '_')
+     * @returns true if this provider manages resources with this clusterId pattern
+     *
+     * @example
+     * // vCore provider returns true for: _subscriptions_..._mongoClusters_...
+     * // RU provider returns true for: _subscriptions_..._databaseAccounts_...
+     */
+    ownsClusterId?(clusterId: string): boolean;
 }
 
 /**
@@ -95,6 +111,25 @@ class DiscoveryServiceImpl {
         }));
 
         return providers;
+    }
+
+    /**
+     * Finds the discovery provider that owns a given clusterId.
+     *
+     * This method queries all registered providers to find which one "owns" the
+     * given clusterId. Each provider implements `ownsClusterId()` to check if the
+     * clusterId matches its resource patterns.
+     *
+     * @param clusterId The sanitized cluster identifier
+     * @returns The provider that owns this clusterId, or undefined if none found
+     */
+    public findProviderForClusterId(clusterId: string): DiscoveryProvider | undefined {
+        for (const provider of this.serviceProviders.values()) {
+            if (provider.ownsClusterId?.(clusterId)) {
+                return provider;
+            }
+        }
+        return undefined;
     }
 }
 

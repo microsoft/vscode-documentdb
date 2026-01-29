@@ -34,6 +34,19 @@ export class AzureMongoRUDiscoveryProvider extends Disposable implements Discove
         this.azureSubscriptionProvider = new AzureSubscriptionProviderWithFilters();
     }
 
+    /**
+     * Determines if this provider owns the given clusterId.
+     *
+     * RU (Cosmos DB for MongoDB) accounts have Azure Resource IDs like:
+     *   /subscriptions/.../providers/Microsoft.DocumentDB/databaseAccounts/...
+     *
+     * After sanitization (replacing '/' with '_'):
+     *   _subscriptions_..._providers_Microsoft.DocumentDB_databaseAccounts_...
+     */
+    ownsClusterId(clusterId: string): boolean {
+        return clusterId.includes('_databaseAccounts_');
+    }
+
     getDiscoveryTreeRootItem(parentId: string): TreeElement {
         return new AzureMongoRUServiceRootItem(this.azureSubscriptionProvider, parentId);
     }

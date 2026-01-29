@@ -45,6 +45,19 @@ export class AzureVMDiscoveryProvider extends Disposable implements DiscoveryPro
         this.azureSubscriptionProvider = new AzureSubscriptionProviderWithFilters();
     }
 
+    /**
+     * Determines if this provider owns the given clusterId.
+     *
+     * Azure VMs have Azure Resource IDs like:
+     *   /subscriptions/.../providers/Microsoft.Compute/virtualMachines/...
+     *
+     * After sanitization (replacing '/' with '_'):
+     *   _subscriptions_..._providers_Microsoft.Compute_virtualMachines_...
+     */
+    ownsClusterId(clusterId: string): boolean {
+        return clusterId.includes('_virtualMachines_');
+    }
+
     getDiscoveryTreeRootItem(parentId: string): TreeElement {
         // For now, reusing AzureServiceRootItem. This might need to be a new AzureVMServiceRootItem if tree structure diverges significantly.
         return new AzureServiceRootItem(this.azureSubscriptionProvider, parentId);

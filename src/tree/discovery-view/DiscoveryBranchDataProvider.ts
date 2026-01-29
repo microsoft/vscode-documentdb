@@ -316,6 +316,17 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
      * This method traverses the tree from root, expanding nodes as needed. The tree's
      * hierarchical structure ensures efficient traversal.
      *
+     * ## Performance Optimization
+     *
+     * To avoid unnecessarily loading all discovery providers, this method first queries
+     * `DiscoveryService.findProviderForClusterId()` to determine which provider "owns"
+     * this clusterId. Each provider implements `ownsClusterId()` to check if the clusterId
+     * matches its resource patterns (e.g., `_mongoClusters_` for vCore, `_databaseAccounts_`
+     * for RU). If a matching provider is found, only that branch is searched.
+     *
+     * This prevents triggering network calls and authentication to all providers when we can
+     * determine the correct one from the cluster's resource pattern.
+     *
      * @param clusterId The stable cluster identifier (sanitized, no '/' characters)
      * @param databaseName The database name
      * @param collectionName The collection name
@@ -349,12 +360,34 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             return undefined;
         };
 
-        // Get root items and search
+        // Get root items (discovery providers)
         const rootItems = await this.getChildren(undefined as unknown as TreeElement);
         if (!rootItems) {
             return undefined;
         }
 
+        // Ask the DiscoveryService which provider owns this clusterId
+        // Each provider implements ownsClusterId() to check if the clusterId matches its patterns
+        const targetProvider = DiscoveryService.findProviderForClusterId(clusterId);
+
+        if (targetProvider) {
+            // Search only in the targeted provider branch
+            const targetRoot = rootItems.find((item) => item.id?.includes(targetProvider.id));
+            if (targetRoot) {
+                ext.outputChannel.trace(
+                    `[DiscoveryView] findCollectionByClusterId: Targeting provider "${targetProvider.id}" for clusterId="${clusterId}"`,
+                );
+                const result = await searchInNode(targetRoot);
+                if (result) {
+                    return result;
+                }
+            }
+        }
+
+        // Fallback: search all providers if targeted search failed or couldn't determine provider
+        ext.outputChannel.trace(
+            `[DiscoveryView] findCollectionByClusterId: Searching all providers for clusterId="${clusterId}"`,
+        );
         for (const rootItem of rootItems) {
             const result = await searchInNode(rootItem);
             if (result) {

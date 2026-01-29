@@ -35,6 +35,19 @@ export class AzureDiscoveryProvider extends Disposable implements DiscoveryProvi
         this.azureSubscriptionProvider = new AzureSubscriptionProviderWithFilters();
     }
 
+    /**
+     * Determines if this provider owns the given clusterId.
+     *
+     * vCore clusters have Azure Resource IDs like:
+     *   /subscriptions/.../providers/Microsoft.DocumentDB/mongoClusters/...
+     *
+     * After sanitization (replacing '/' with '_'):
+     *   _subscriptions_..._providers_Microsoft.DocumentDB_mongoClusters_...
+     */
+    ownsClusterId(clusterId: string): boolean {
+        return clusterId.includes('_mongoClusters_');
+    }
+
     getDiscoveryTreeRootItem(parentId: string): TreeElement {
         return new AzureServiceRootItem(this.azureSubscriptionProvider, parentId);
     }
