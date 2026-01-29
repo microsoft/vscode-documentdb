@@ -72,9 +72,12 @@ export interface ClusterTreeContext {
      * multiple views (Discovery View, Azure Resources View, Workspace View), so we need
      * to know which view's branch data provider to query.
      *
+     * NOTE: Currently optional for backward compatibility with existing ClusterModel.
+     * Phase 4 cleanup will make this required once all views are migrated.
+     *
      * @see Views enum for possible values
      */
-    viewId: string;
+    viewId?: string;
 }
 
 /**

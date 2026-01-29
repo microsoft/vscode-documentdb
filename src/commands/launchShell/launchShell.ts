@@ -197,12 +197,11 @@ export async function launchShell(
 
     // Determine if TLS certificate validation should be disabled
     // This only applies to emulator connections with security disabled
+    // emulatorConfiguration is only available on ConnectionClusterModel (Connections View)
     const isRegularCloudAccount = node instanceof VCoreResourceItem || node instanceof RUResourceItem;
+    const emulatorConfig = 'emulatorConfiguration' in node.cluster ? node.cluster.emulatorConfiguration : undefined;
     const isEmulatorWithSecurityDisabled =
-        !isRegularCloudAccount &&
-        node.cluster.emulatorConfiguration &&
-        node.cluster.emulatorConfiguration.isEmulator &&
-        node.cluster.emulatorConfiguration.disableEmulatorSecurity;
+        !isRegularCloudAccount && emulatorConfig?.isEmulator && emulatorConfig?.disableEmulatorSecurity;
 
     const tlsConfiguration = isEmulatorWithSecurityDisabled ? '--tlsAllowInvalidCertificates' : '';
 

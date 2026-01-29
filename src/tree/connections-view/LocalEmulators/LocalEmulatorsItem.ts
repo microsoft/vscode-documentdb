@@ -17,11 +17,12 @@ import {
 } from '../../../services/connectionStorageService';
 import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
 import { getResourcesPath } from '../../../utils/icons';
-import { type ClusterModelWithStorage } from '../../documentdb/ClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
 import { DocumentDBClusterItem } from '../DocumentDBClusterItem';
 import { FolderItem } from '../FolderItem';
+import { type ConnectionClusterModel } from '../models/ConnectionClusterModel';
 import { NewEmulatorConnectionItemCV } from './NewEmulatorConnectionItemCV';
 
 export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextValue {
@@ -50,16 +51,18 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
 
         // Create connection items (filter with type guard to ensure type safety)
         const connectionItems = rootConnections.filter(isConnection).map((connection) => {
-            // we need to create the emulator configuration object from the typed properties object
             const emulatorConfiguration: EmulatorConfiguration = {
                 isEmulator: true,
                 disableEmulatorSecurity: !!connection.properties.emulatorConfiguration?.disableEmulatorSecurity,
             };
 
-            const model: ClusterModelWithStorage = {
+            const model: TreeCluster<ConnectionClusterModel> = {
+                // Tree context (computed at runtime)
                 treeId: `${this.id}/${connection.id}`, // Hierarchical tree path
+                viewId: this.parentId, // View ID is the root parent
+
+                // Connection cluster data
                 clusterId: connection.id, // Stable storageId for cache lookups
-                id: `${this.id}/${connection.id}`,
                 storageId: connection.id,
                 name: connection.name,
                 dbExperience: DocumentDBExperience,

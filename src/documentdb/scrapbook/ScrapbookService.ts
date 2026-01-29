@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { EOL } from 'os';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { type ClusterModel } from '../../tree/documentdb/ClusterModel';
+import { type BaseClusterModel, type TreeCluster } from '../../tree/models/BaseClusterModel';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { type DatabaseItemModel } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
@@ -23,7 +23,7 @@ export class ScrapbookServiceImpl {
     // Connection Management
     //--------------------------------------------------------------------------------
 
-    private _cluster: ClusterModel | undefined;
+    private _cluster: TreeCluster<BaseClusterModel> | undefined;
     private _database: DatabaseItemModel | undefined;
     private readonly _mongoCodeLensProvider = new MongoCodeLensProvider();
 
@@ -37,7 +37,7 @@ export class ScrapbookServiceImpl {
     /**
      * Sets the current cluster and database, updating the CodeLens provider.
      */
-    public async setConnectedCluster(cluster: ClusterModel, database: DatabaseItemModel) {
+    public async setConnectedCluster(cluster: TreeCluster<BaseClusterModel>, database: DatabaseItemModel) {
         if (CredentialCache.getCredentials(cluster.clusterId)?.authMechanism !== AuthMethodId.NativeAuth) {
             throw Error(
                 l10n.t('Unsupported authentication mechanism. Only SCRAM-SHA-256 (username/password) is supported.'),
@@ -51,10 +51,15 @@ export class ScrapbookServiceImpl {
 
         // Update the Language Client/Server
         // The language server needs credentials to connect to the cluster..
+        // emulatorConfiguration is only available on ConnectionClusterModel (Connections View)
+        const emulatorConfig =
+            'emulatorConfiguration' in cluster
+                ? (cluster.emulatorConfiguration as EmulatorConfiguration | undefined)
+                : undefined;
         await ext.mongoLanguageClient.connect(
             CredentialCache.getConnectionStringWithPassword(this._cluster.clusterId),
             this._database.name,
-            cluster.emulatorConfiguration,
+            emulatorConfig,
         );
     }
 
@@ -83,10 +88,10 @@ export class ScrapbookServiceImpl {
     }
 
     /**
-     * Returns the current cluster ID.
+     * Returns the current cluster ID (stable identifier for caching).
      */
     public getClusterId(): string | undefined {
-        return this._cluster?.id;
+        return this._cluster?.clusterId;
     }
 
     /**

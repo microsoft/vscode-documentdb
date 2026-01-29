@@ -6,12 +6,12 @@
 import { createContextValue } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ThemeIcon, type TreeItem } from 'vscode';
-import { type Experience } from '../../DocumentDBExperiences';
 import { type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { type Experience } from '../../DocumentDBExperiences';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
-import { type ClusterModel } from './ClusterModel';
 import { type CollectionItem } from './CollectionItem';
 
 export class DocumentsItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
@@ -31,7 +31,7 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
      *                              the collection node to be passed in. This is a workaround that reduces complex changes to the commands used.
      */
     constructor(
-        readonly cluster: ClusterModel,
+        readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
         readonly collectionInfo: CollectionItemModel,
         readonly parentCollectionNode: CollectionItem,

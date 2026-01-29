@@ -5,14 +5,14 @@
 
 import { createContextValue } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { formatDocumentCount } from '../../utils/formatDocumentCount';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
-import { type ClusterModel } from './ClusterModel';
 import { DocumentsItem } from './DocumentsItem';
 import { IndexesItem } from './IndexesItem';
 
@@ -35,7 +35,7 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     private isLoadingCount: boolean = false;
 
     constructor(
-        readonly cluster: ClusterModel,
+        readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
         readonly collectionInfo: CollectionItemModel,
     ) {

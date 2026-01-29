@@ -26,13 +26,14 @@ import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveC
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
-import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
+import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
+import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 
-export class DocumentDBClusterItem extends ClusterItemBase implements TreeElementWithStorageId {
-    public override readonly cluster: ClusterModelWithStorage;
+export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterModel> implements TreeElementWithStorageId {
+    public override readonly cluster: TreeCluster<ConnectionClusterModel>;
 
-    constructor(mongoCluster: ClusterModelWithStorage) {
+    constructor(mongoCluster: TreeCluster<ConnectionClusterModel>) {
         super(mongoCluster);
         this.cluster = mongoCluster; // Explicit initialization
     }
@@ -307,12 +308,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             } else {
                 tooltipMessage = l10n.t('✅ **Security:** TLS/SSL Enabled');
             }
-        } else {
-            // For non-emulator clusters, show SKU if defined
-            if (this.cluster.sku !== undefined) {
-                description = `(${this.cluster.sku})`;
-            }
         }
+        // Note: ConnectionClusterModel doesn't include Azure-specific fields like SKU.
+        // For user-added connections, we only show basic cluster name without Azure metadata.
 
         return {
             id: this.id,
