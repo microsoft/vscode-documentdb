@@ -122,9 +122,10 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 context.valuesToMask.push(wizardContext.password);
             }
 
-            // Cache credentials and attempt connection
+            // Cache credentials using clusterId (stable Azure Resource ID) - NOT this.id (treeId)
+            // The clusterId is used consistently for both storing and retrieving credentials
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 nonNullValue(
                     wizardContext.selectedAuthMethod,
                     'wizardContext.selectedAuthMethod',
@@ -154,7 +155,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             }
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -187,8 +188,8 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }

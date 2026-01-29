@@ -72,11 +72,7 @@ export interface ExtendedTreeDataProvider<T extends TreeElement> extends vscode.
      * @param collectionName The collection name
      * @returns A Promise that resolves to the found CollectionItem or undefined if not found
      */
-    findCollectionByClusterId?(
-        clusterId: string,
-        databaseName: string,
-        collectionName: string,
-    ): Promise<T | undefined>;
+    findCollectionByClusterId?(clusterId: string, databaseName: string, collectionName: string): Promise<T | undefined>;
 
     /**
      * Refreshes the tree data.

@@ -211,7 +211,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
             // Password will be handled by the ClustersClient, not directly in the string for cache
 
             CredentialCache.setCredentials(
-                this.id, // Use the VM resource ID as the cache key
+                this.cluster.clusterId, // Use clusterId (Azure Resource ID) for consistent cache key
                 finalConnectionString.toString(), // Store the string with username for reference, but password separately
                 wizardContext.selectedUserName,
                 wizardContext.password,
@@ -227,7 +227,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
             let clustersClient: ClustersClient;
             try {
                 // GetClient will use the cached credentials including the password
-                clustersClient = await ClustersClient.getClient(this.id).catch((error: Error) => {
+                clustersClient = await ClustersClient.getClient(this.cluster.clusterId).catch((error: Error) => {
                     ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: error.message }));
                     void vscode.window.showErrorMessage(
                         l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
@@ -242,8 +242,8 @@ export class AzureVMResourceItem extends ClusterItemBase {
                     throw error;
                 });
             } catch {
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
                 return null;
             }
 
