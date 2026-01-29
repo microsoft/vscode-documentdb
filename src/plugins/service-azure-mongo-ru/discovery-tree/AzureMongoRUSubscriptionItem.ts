@@ -9,10 +9,15 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { CosmosDBMongoRUExperience } from '../../../DocumentDBExperiences';
+import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
-import { type ClusterModel } from '../../../tree/documentdb/ClusterModel';
+import {
+    type AzureClusterModel,
+    sanitizeAzureResourceIdForTreeId,
+} from '../../../tree/azure-views/models/AzureClusterModel';
+import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullProp } from '../../../utils/nonNull';
 import { DISCOVERY_PROVIDER_ID } from '../config';
@@ -58,15 +63,21 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureMongoRUSubscriptionItem.ts');
 
-                        // treeId: Replace '/' with '-' to avoid path separator issues in tree lookups
+                        // For Discovery View: treeId must be sanitized (replace '/' with '-')
                         // clusterId: Keep as-is (Azure Resource ID) for cache key lookups
-                        const clusterInfo: ClusterModel = {
-                            ...account,
-                            treeId: resourceId.replace(/\//g, '-'),
-                            clusterId: resourceId,
-                            resourceGroup: getResourceGroupFromId(resourceId),
+                        const clusterInfo: TreeCluster<AzureClusterModel> = {
+                            // Core cluster data
+                            name: account.name ?? 'Unknown',
+                            connectionString: undefined, // Loaded lazily when connecting
                             dbExperience: CosmosDBMongoRUExperience,
-                        } as ClusterModel;
+                            clusterId: resourceId, // Keep original Azure Resource ID for cache
+                            // Azure-specific data
+                            id: resourceId,
+                            resourceGroup: getResourceGroupFromId(resourceId),
+                            // Tree context (MUST sanitize treeId for Discovery View)
+                            treeId: sanitizeAzureResourceIdForTreeId(resourceId), // Replace '/' with '-'
+                            viewId: Views.DiscoveryView,
+                        };
 
                         return new MongoRUResourceItem(
                             this.journeyCorrelationId,

@@ -22,13 +22,14 @@ import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/a
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
+import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
 import { DISCOVERY_PROVIDER_ID } from '../../config';
 
-// Define a model for VM, similar to ClusterModel but for VM properties
-export interface VirtualMachineModel extends ClusterModel {
+// Define a model for VM, similar to AzureClusterModel but with VM-specific properties
+export interface VirtualMachineModel extends AzureClusterModel {
     vmSize?: string;
     publicIpAddress?: string;
     fqdn?: string;
@@ -36,7 +37,7 @@ export interface VirtualMachineModel extends ClusterModel {
 
 const DEFAULT_PORT = 27017;
 
-export class AzureVMResourceItem extends ClusterItemBase {
+export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
     iconPath = new vscode.ThemeIcon('server-environment');
 
     constructor(
@@ -46,7 +47,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
          */
         journeyCorrelationId: string,
         readonly subscription: AzureSubscription,
-        readonly cluster: VirtualMachineModel,
+        readonly cluster: TreeCluster<VirtualMachineModel>,
     ) {
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;

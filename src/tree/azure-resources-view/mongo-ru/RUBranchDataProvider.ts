@@ -16,7 +16,8 @@ import { nonNullProp } from '../../../utils/nonNull';
 import { BaseExtendedTreeDataProvider } from '../../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../../TreeElement';
 import { isTreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 import { RUResourceItem } from './RUCoreResourceItem';
 
 // export type VCoreResource = AzureResource &
@@ -33,7 +34,7 @@ export class RUBranchDataProvider
      * This replaces the manual cache management that was previously done with
      * detailsCacheUpdateRequested, detailsCache, and itemsToUpdateInfo properties.
      */
-    private readonly metadataLoader = new LazyMetadataLoader<ClusterModel, RUResourceItem>({
+    private readonly metadataLoader = new LazyMetadataLoader<TreeCluster<AzureClusterModel>, RUResourceItem>({
         cacheDuration: 5 * 60 * 1000, // 5 minutes
         loadMetadata: async (subscription, context) => {
             console.debug(
@@ -55,16 +56,18 @@ export class RUBranchDataProvider
                 ruAccounts.length,
             );
 
-            const cache = new CaseInsensitiveMap<ClusterModel>();
+            const cache = new CaseInsensitiveMap<TreeCluster<AzureClusterModel>>();
             ruAccounts.forEach((ruAccount) => {
                 const resourceId = nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts');
-                cache.set(resourceId, {
-                    // For Azure resources, treeId and clusterId are the same (Azure Resource ID)
-                    treeId: resourceId,
-                    clusterId: resourceId,
-                    dbExperience: CosmosDBMongoRUExperience,
-                    id: resourceId,
+                // For Azure Resources View: treeId === clusterId === Azure Resource ID (no sanitization)
+                const cluster: TreeCluster<AzureClusterModel> = {
+                    // Core cluster data
                     name: ruAccount.name!,
+                    connectionString: undefined, // Loaded lazily when connecting
+                    dbExperience: CosmosDBMongoRUExperience,
+                    clusterId: resourceId, // Azure Resource ID - stable cache key
+                    // Azure-specific data
+                    id: resourceId,
                     resourceGroup: getResourceGroupFromId(resourceId),
                     location: ruAccount.location,
                     serverVersion: ruAccount?.apiProperties?.serverVersion,
@@ -78,7 +81,11 @@ export class RUBranchDataProvider
                                   .filter((name) => name !== undefined)
                                   .join(', ')
                             : undefined,
-                });
+                    // Tree context (treeId === clusterId for flat Azure Resources tree)
+                    treeId: resourceId, // No sanitization needed
+                    viewId: Views.AzureResourcesView,
+                };
+                cache.set(resourceId, cluster);
             });
             return cache;
         },
@@ -130,13 +137,20 @@ export class RUBranchDataProvider
             // Get metadata from cache (may be undefined if not yet loaded)
             const cachedMetadata = this.metadataLoader.getCachedMetadata(resource.id);
 
-            // For Azure resources, treeId and clusterId are both the Azure Resource ID
-            let clusterInfo: ClusterModel = {
-                ...resource,
-                treeId: resource.id,
-                clusterId: resource.id,
+            // For Azure Resources View: treeId === clusterId === Azure Resource ID (no sanitization)
+            let clusterInfo: TreeCluster<AzureClusterModel> = {
+                // Core cluster data
+                name: resource.name ?? 'Unknown',
+                connectionString: undefined, // Loaded lazily
                 dbExperience: CosmosDBMongoRUExperience,
-            } as ClusterModel;
+                clusterId: resource.id, // Azure Resource ID - stable cache key
+                // Azure-specific data
+                id: resource.id,
+                resourceGroup: undefined, // Will be populated from cache
+                // Tree context (treeId === clusterId for flat Azure Resources tree)
+                treeId: resource.id, // No sanitization needed
+                viewId: Views.AzureResourcesView,
+            };
 
             // Merge with cached metadata if available
             if (cachedMetadata) {
