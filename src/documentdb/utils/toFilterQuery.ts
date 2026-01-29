@@ -5,6 +5,8 @@
 
 import { EJSON } from 'bson';
 import { UUID, type Document, type Filter } from 'mongodb';
+import * as vscode from 'vscode';
+import { QueryError } from '../errors/QueryError';
 
 export function toFilterQueryObj(queryString: string): Filter<Document> {
     try {
@@ -14,9 +16,19 @@ export function toFilterQueryObj(queryString: string): Filter<Document> {
         // EJSON.parse will turn Extended JSON into native BSON/JS types (UUID, Date, etc.).
         return EJSON.parse(extendedJsonQuery) as Filter<Document>;
     } catch (error) {
-        // Swallow parsing issues and fall back to empty filter (safe default for callers).
-        console.error('Error parsing filter query', error);
-        return {};
+        if (queryString.trim().length === 0) {
+            return {} as Filter<Document>;
+        }
+
+        const cause = error instanceof Error ? error : new Error(String(error));
+        throw new QueryError(
+            'INVALID_FILTER',
+            vscode.l10n.t(
+                'Invalid filter syntax: {0}. Please use valid JSON, for example: { "name": "value" }',
+                cause.message,
+            ),
+            cause,
+        );
     }
 }
 
