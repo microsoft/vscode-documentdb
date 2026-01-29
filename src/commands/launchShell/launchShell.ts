@@ -18,6 +18,7 @@ import { RUResourceItem } from '../../tree/azure-resources-view/mongo-ru/RUCoreR
 import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
+import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 
 /**
  * Currently it only supports launching the MongoDB shell
@@ -199,7 +200,10 @@ export async function launchShell(
     // This only applies to emulator connections with security disabled
     // emulatorConfiguration is only available on ConnectionClusterModel (Connections View)
     const isRegularCloudAccount = node instanceof VCoreResourceItem || node instanceof RUResourceItem;
-    const emulatorConfig = 'emulatorConfiguration' in node.cluster ? node.cluster.emulatorConfiguration : undefined;
+    const emulatorConfig: EmulatorConfiguration | undefined =
+        'emulatorConfiguration' in node.cluster
+            ? (node.cluster.emulatorConfiguration as EmulatorConfiguration)
+            : undefined;
     const isEmulatorWithSecurityDisabled =
         !isRegularCloudAccount && emulatorConfig?.isEmulator && emulatorConfig?.disableEmulatorSecurity;
 

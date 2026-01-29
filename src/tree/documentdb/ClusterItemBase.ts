@@ -19,8 +19,8 @@ import { type TreeElementWithContextValue } from '../TreeElementWithContextValue
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { type TreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
+import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
-import { type ClusterModel } from './ClusterModel';
 import { DatabaseItem } from './DatabaseItem';
 
 /**
@@ -50,7 +50,7 @@ export type EphemeralClusterCredentials = {
 export type ClusterCredentials = EphemeralClusterCredentials;
 
 // This info will be available at every level in the tree for immediate access
-export abstract class ClusterItemBase<T extends BaseClusterModel = ClusterModel>
+export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterModel>
     implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue, TreeElementWithRetryChildren
 {
     public readonly id: string;
@@ -186,9 +186,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = ClusterModel>
      * @returns The TreeItem object.
      */
     getTreeItem(): vscode.TreeItem {
-        // Cast to access Azure-specific properties that may exist on ClusterModel subtypes
+        // Cast to access Azure-specific properties that may exist on AzureClusterModel subtypes
         // These properties are optional and checked at runtime
-        const azureProps = this.cluster as unknown as Partial<ClusterModel>;
+        const azureProps = this.cluster as unknown as Partial<AzureClusterModel>;
 
         return {
             id: this.id,
