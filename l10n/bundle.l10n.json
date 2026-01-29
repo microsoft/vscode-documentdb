@@ -260,6 +260,7 @@
   "Connecting to the cluster using Entra ID…": "Connecting to the cluster using Entra ID…",
   "connection \"{0}\"": "connection \"{0}\"",
   "Connection String": "Connection String",
+  "Connection string cannot be empty.": "Connection string cannot be empty.",
   "Connection string is not set": "Connection string is not set",
   "Connection updated successfully.": "Connection updated successfully.",
   "Connection: \"{selectedConnectionName}\"\n\nThe connection will be added to the \"Connections View\" in the \"DocumentDB for VS Code\" extension. The \"Connections View\" will be opened once this process completes.\n\nDo you want to continue?": "Connection: \"{selectedConnectionName}\"\n\nThe connection will be added to the \"Connections View\" in the \"DocumentDB for VS Code\" extension. The \"Connections View\" will be opened once this process completes.\n\nDo you want to continue?",
