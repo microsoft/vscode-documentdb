@@ -161,4 +161,86 @@ export class DocumentDBConnectionString extends ConnectionString {
             return false;
         }
     }
+
+    /**
+     * Removes duplicate query parameters from the connection string, keeping only
+     * the last value for each key. This is useful for cleaning up connection strings
+     * that may have been corrupted by bugs in previous versions.
+     *
+     * Some MongoDB parameters (like `readPreferenceTags`) legitimately allow multiple values.
+     * This method preserves those by keeping all unique values for each key.
+     *
+     * @returns A new connection string with deduplicated parameters
+     *
+     * @example
+     * // Input:  mongodb://host/?ssl=true&ssl=true&appName=app
+     * // Output: mongodb://host/?ssl=true&appName=app
+     */
+    public deduplicateQueryParameters(): string {
+        // Get all unique keys
+        const uniqueKeys = [...new Set([...this.searchParams.keys()])];
+
+        // For each key, get unique values (preserving order of first occurrence)
+        const deduplicatedParams: string[] = [];
+        for (const key of uniqueKeys) {
+            const allValues = this.searchParams.getAll(key);
+            // Keep only unique values (in case same key=value appears multiple times)
+            const uniqueValues = [...new Set(allValues)];
+
+            for (const value of uniqueValues) {
+                // Values from searchParams are already decoded, encode them for the URL
+                deduplicatedParams.push(`${key}=${encodeURIComponent(value)}`);
+            }
+        }
+
+        // Reconstruct the connection string
+        const baseUrl = this.toString().split('?')[0];
+        if (deduplicatedParams.length === 0) {
+            return baseUrl;
+        }
+        return `${baseUrl}?${deduplicatedParams.join('&')}`;
+    }
+
+    /**
+     * Checks if the connection string has any duplicate query parameters.
+     *
+     * @returns true if there are duplicate parameters (same key with same value appearing multiple times)
+     */
+    public hasDuplicateParameters(): boolean {
+        const uniqueKeys = [...new Set([...this.searchParams.keys()])];
+
+        for (const key of uniqueKeys) {
+            const allValues = this.searchParams.getAll(key);
+            const uniqueValues = new Set(allValues);
+            if (allValues.length !== uniqueValues.size) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Normalizes a connection string by:
+     * 1. Removing duplicate query parameters (same key=value pairs)
+     * 2. Ensuring consistent encoding
+     *
+     * This is a static factory method that creates a normalized connection string
+     * from an input string, useful for cleaning up potentially corrupted data.
+     *
+     * @param connectionString - The connection string to normalize
+     * @returns A normalized connection string, or the original if parsing fails
+     */
+    public static normalize(connectionString: string): string {
+        if (!connectionString) {
+            return connectionString;
+        }
+
+        try {
+            const parsed = new DocumentDBConnectionString(connectionString);
+            return parsed.deduplicateQueryParameters();
+        } catch {
+            // If parsing fails, return the original string
+            return connectionString;
+        }
+    }
 }

@@ -347,6 +347,75 @@ export class ConnectionStorageService {
     }
 
     /**
+     * Cleans up connection strings with duplicate query parameters.
+     * This can happen due to bugs in previous versions where parameters were doubled
+     * during migration or editing.
+     *
+     * @param context - The action context for telemetry
+     */
+    private static async cleanupDuplicateConnectionStringParameters(context: IActionContext): Promise<void> {
+        let connectionsFixed = 0;
+
+        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
+            const storageService = await this.getStorageService();
+            const items = await storageService.getItems<StoredItemProperties>(connectionType);
+
+            // Find connections (not folders) that might have duplicate parameters
+            const connectionsToCheck = items.filter(
+                (item) =>
+                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                    item.properties?.type === ItemType.Connection &&
+                    item.secrets?.[SecretIndex.ConnectionString],
+            );
+
+            for (const item of connectionsToCheck) {
+                try {
+                    const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
+
+                    // Skip placeholder or empty connection strings
+                    if (!connectionString || connectionString === FOLDER_PLACEHOLDER_CONNECTION_STRING) {
+                        continue;
+                    }
+
+                    // Check if the connection string has duplicate parameters
+                    const parsed = new DocumentDBConnectionString(connectionString);
+                    if (!parsed.hasDuplicateParameters()) {
+                        continue;
+                    }
+
+                    // Normalize the connection string to remove duplicates
+                    const normalizedConnectionString = parsed.deduplicateQueryParameters();
+
+                    // Only update if something changed
+                    if (normalizedConnectionString !== connectionString) {
+                        // Convert to ConnectionItem and update the connection string
+                        const connectionItem = this.fromStorageItem(item);
+                        connectionItem.secrets.connectionString = normalizedConnectionString;
+
+                        // Re-save with the cleaned connection string
+                        await this.save(connectionType, connectionItem, true);
+                        connectionsFixed++;
+
+                        ext.outputChannel.appendLog(
+                            `Fixed connection "${item.name}" (id: ${item.id}) - removed duplicate query parameters.`,
+                        );
+                    }
+                } catch (error) {
+                    console.debug(
+                        `Failed to check/fix connection ${item.id} for duplicate parameters:`,
+                        error instanceof Error ? error.message : String(error),
+                    );
+                }
+            }
+        }
+
+        context.telemetry.measurements.duplicateParamsFixed = connectionsFixed;
+        if (connectionsFixed > 0) {
+            ext.outputChannel.appendLog(`Fixed ${connectionsFixed} connection(s) with duplicate query parameters.`);
+        }
+    }
+
+    /**
      * Cleans up orphaned items (items whose parentId references a non-existent folder).
      * This can happen if a folder deletion fails to cascade to children.
      * Runs iteratively until no orphans remain (deleting a parent may orphan its children).
@@ -359,6 +428,10 @@ export class ConnectionStorageService {
             // First, fix any existing folders that don't have the placeholder connection string
             // This ensures backward compatibility for beta testers who created folders before this fix
             await this.fixFolderConnectionStrings(context);
+
+            // Clean up any connection strings with duplicate query parameters
+            // This fixes corruption from previous bugs in migration or editing
+            await this.cleanupDuplicateConnectionStringParameters(context);
 
             let totalOrphansRemoved = 0;
             let iteration = 0;
@@ -849,6 +922,10 @@ export class ConnectionStorageService {
         parsedCS.username = '';
         parsedCS.password = '';
 
+        // Normalize the connection string to remove any duplicate parameters
+        // that may have been introduced by bugs in previous versions
+        const normalizedConnectionString = parsedCS.deduplicateQueryParameters();
+
         return {
             id: item.id,
             name: item.name,
@@ -864,7 +941,7 @@ export class ConnectionStorageService {
                 selectedAuthMethod: AuthMethodId.NativeAuth,
             },
             secrets: {
-                connectionString: parsedCS.toString(),
+                connectionString: normalizedConnectionString,
                 // Structured auth configuration populated from the same data
                 nativeAuthConfig: username
                     ? {

@@ -697,6 +697,37 @@ describe('ConnectionStorageService', () => {
                 expect(retrieved?.secrets.nativeAuthConfig?.connectionUser).toBe('user');
                 expect(retrieved?.secrets.nativeAuthConfig?.connectionPassword).toBe('pass');
             });
+
+            it('should remove duplicate query parameters during v1 to v3 migration', async () => {
+                // Simulate a v1 storage item with duplicate query parameters
+                const v1ItemWithDuplicates: StorageItem = {
+                    id: 'legacy-duplicate-params',
+                    name: 'Legacy Connection with Duplicates',
+                    properties: {
+                        api: API.DocumentDB,
+                        isEmulator: false,
+                        disableEmulatorSecurity: false,
+                    },
+                    secrets: ['mongodb://user:pass@localhost:27017/?ssl=true&ssl=true&appName=test'],
+                };
+
+                mockStorage.setItem(ConnectionType.Clusters, v1ItemWithDuplicates);
+
+                // @ts-expect-error - accessing private static member for testing
+                ConnectionStorageService._storageService = mockStorage;
+
+                const retrieved = await ConnectionStorageService.get(
+                    'legacy-duplicate-params',
+                    ConnectionType.Clusters,
+                );
+
+                expect(retrieved).toBeDefined();
+                // Connection string should have duplicates removed
+                expect(retrieved?.secrets.connectionString).not.toMatch(/ssl=true.*ssl=true/);
+                // But should still contain the parameters
+                expect(retrieved?.secrets.connectionString).toContain('ssl=true');
+                expect(retrieved?.secrets.connectionString).toContain('appName=test');
+            });
         });
 
         describe('v2 to v3 migration', () => {
@@ -730,6 +761,63 @@ describe('ConnectionStorageService', () => {
                 expect(retrieved?.properties.parentId).toBeUndefined();
                 expect(retrieved?.secrets.nativeAuthConfig?.connectionUser).toBe('testuser');
                 expect(retrieved?.secrets.nativeAuthConfig?.connectionPassword).toBe('testpass');
+            });
+
+            it('should migrate v2 Cosmos DB RU connection string with appName containing @', async () => {
+                // This is the exact format used by Azure Cosmos DB for MongoDB RU connections
+                // In v2, credentials are stored separately, not in the connection string
+                const v2CosmosItem: StorageItem<ConnectionProperties> = {
+                    id: 'v2-cosmos-ru',
+                    name: 'Cosmos DB RU Connection',
+                    version: '2.0',
+                    properties: {
+                        api: API.DocumentDB,
+                        emulatorConfiguration: {
+                            isEmulator: false,
+                            disableEmulatorSecurity: false,
+                        },
+                        availableAuthMethods: ['NativeAuth'],
+                        selectedAuthMethod: 'NativeAuth',
+                    } as ConnectionProperties,
+                    secrets: [
+                        'mongodb://a-server.somewhere.com:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@anapphere@',
+                        'auername',
+                        'weirdpassword',
+                    ],
+                };
+
+                mockStorage.setItem(ConnectionType.Clusters, v2CosmosItem);
+
+                // @ts-expect-error - accessing private static member for testing
+                ConnectionStorageService._storageService = mockStorage;
+
+                const retrieved = await ConnectionStorageService.get('v2-cosmos-ru', ConnectionType.Clusters);
+
+                expect(retrieved).toBeDefined();
+                expect(retrieved?.properties.type).toBe(ItemType.Connection);
+
+                // Credentials should be in nativeAuthConfig
+                expect(retrieved?.secrets.nativeAuthConfig?.connectionUser).toBe('auername');
+                expect(retrieved?.secrets.nativeAuthConfig?.connectionPassword).toBe('weirdpassword');
+
+                // Connection string should preserve all query parameters including appName with @
+                const connectionString = retrieved?.secrets.connectionString ?? '';
+                expect(connectionString).toContain('ssl=true');
+                expect(connectionString).toContain('replicaSet=globaldb');
+                expect(connectionString).toContain('retrywrites=false');
+                expect(connectionString).toContain('maxIdleTimeMS=120000');
+                // appName should be preserved - may be URL encoded or not depending on internal handling
+                expect(connectionString).toMatch(/appName=(%40anapphere%40|@anapphere@)/);
+
+                // No duplicate parameters
+                expect(connectionString).not.toMatch(/ssl=true.*ssl=true/);
+
+                // Verify by parsing the connection string - should correctly decode the appName
+                const { DocumentDBConnectionString } = await import(
+                    '../documentdb/utils/DocumentDBConnectionString'
+                );
+                const parsed = new DocumentDBConnectionString(connectionString);
+                expect(parsed.searchParams.get('appName')).toBe('@anapphere@');
             });
         });
 
