@@ -81,6 +81,10 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             viewId: Views.DiscoveryView,
                         };
 
+                        ext.outputChannel.trace(
+                            `[DiscoveryView/vCore] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}"`,
+                        );
+
                         return new DocumentDBResourceItem(
                             this.journeyCorrelationId,
                             this.subscription.subscription,

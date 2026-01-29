@@ -9,6 +9,7 @@ import { type IconPath } from 'vscode';
 
 import path from 'path';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
 import {
     ConnectionStorageService,
     ConnectionType,
@@ -69,6 +70,10 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                 connectionString: connection.secrets.connectionString,
                 emulatorConfiguration: emulatorConfiguration,
             };
+
+            ext.outputChannel.trace(
+                `[ConnectionsView/Emulators] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}"`,
+            );
 
             return new DocumentDBClusterItem(model);
         });

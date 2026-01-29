@@ -123,6 +123,11 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             treeId: sanitizeAzureResourceIdForTreeId(vm.id!), // Replace '/' with '-'
                             viewId: Views.DiscoveryView,
                         };
+
+                        ext.outputChannel.trace(
+                            `[DiscoveryView/VM] Created cluster model: name="${vmInfo.name}", clusterId="${vmInfo.clusterId}", treeId="${vmInfo.treeId}"`,
+                        );
+
                         vmItems.push(
                             new AzureVMResourceItem(this.journeyCorrelationId, this.subscription.subscription, vmInfo),
                         );

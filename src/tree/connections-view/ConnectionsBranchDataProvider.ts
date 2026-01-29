@@ -152,6 +152,10 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                 emulatorConfiguration: connection.properties.emulatorConfiguration,
             };
 
+            ext.outputChannel.trace(
+                `[ConnectionsView] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}"`,
+            );
+
             return new DocumentDBClusterItem(model);
         });
 

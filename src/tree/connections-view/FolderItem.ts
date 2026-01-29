@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import {
     ConnectionStorageService,
     ItemType,
@@ -107,6 +108,10 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
                     connectionString: child?.secrets?.connectionString ?? undefined,
                     emulatorConfiguration: child.properties.emulatorConfiguration,
                 };
+
+                ext.outputChannel.trace(
+                    `[ConnectionsView/Folder] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}", folderId="${this.folderData.id}"`,
+                );
 
                 connectionElements.push(new DocumentDBClusterItem(model));
             }

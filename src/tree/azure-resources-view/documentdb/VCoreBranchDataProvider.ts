@@ -80,6 +80,11 @@ export class VCoreBranchDataProvider
                     treeId: resourceId, // No sanitization needed
                     viewId: Views.AzureResourcesView,
                 };
+
+                ext.outputChannel.trace(
+                    `[AzureResourcesView/vCore/cache] Created cluster model: name="${cluster.name}", clusterId="${cluster.clusterId}", treeId="${cluster.treeId}"`,
+                );
+
                 cache.set(resourceId, cluster);
             });
             return cache;
@@ -151,6 +156,10 @@ export class VCoreBranchDataProvider
             if (cachedMetadata) {
                 clusterInfo = { ...clusterInfo, ...cachedMetadata };
             }
+
+            ext.outputChannel.trace(
+                `[AzureResourcesView/vCore] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}", hasCachedMetadata=${!!cachedMetadata}`,
+            );
 
             const clusterItem = new VCoreResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));

@@ -79,6 +79,10 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                             viewId: Views.DiscoveryView,
                         };
 
+                        ext.outputChannel.trace(
+                            `[DiscoveryView/MongoRU] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}"`,
+                        );
+
                         return new MongoRUResourceItem(
                             this.journeyCorrelationId,
                             this.subscription.subscription,
