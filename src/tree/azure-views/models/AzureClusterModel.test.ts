@@ -104,7 +104,7 @@ describe('AzureClusterModel', () => {
         const azureResourceId =
             '/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.DocumentDB/mongoClusters/cluster1';
 
-        it('should sanitize treeId for Discovery View', () => {
+        it('should sanitize both clusterId and treeId for Discovery View', () => {
             const sanitizedId = sanitizeAzureResourceIdForTreeId(azureResourceId);
             const discoveryCluster: TreeCluster<AzureClusterModel> = {
                 name: 'discovery-cluster',
@@ -131,7 +131,7 @@ describe('AzureClusterModel', () => {
             expect(discoveryCluster.id).toContain('/');
         });
 
-        it('should sanitize clusterId for Azure Resources View', () => {
+        it('should sanitize both clusterId and treeId for Azure Resources View', () => {
             const sanitizedId = sanitizeAzureResourceIdForTreeId(azureResourceId);
             const azureResourcesCluster: TreeCluster<AzureClusterModel> = {
                 name: 'azure-resources-cluster',
@@ -143,14 +143,16 @@ describe('AzureClusterModel', () => {
                 viewId: Views.AzureResourcesView,
             };
 
-            // clusterId and treeId are both sanitized
+            // clusterId and treeId are both sanitized and equal
             expect(azureResourcesCluster.clusterId).toBe(sanitizedId);
             expect(azureResourcesCluster.treeId).toBe(sanitizedId);
             expect(azureResourcesCluster.clusterId).toBe(azureResourcesCluster.treeId);
             expect(azureResourcesCluster.clusterId).not.toContain('/');
+            expect(azureResourcesCluster.treeId).not.toContain('/');
 
             // Original Azure Resource ID preserved in 'id' for Azure API calls
             expect(azureResourcesCluster.id).toBe(azureResourceId);
+            expect(azureResourcesCluster.id).toContain('/');
         });
     });
 });

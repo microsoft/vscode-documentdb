@@ -38,6 +38,9 @@ export interface BaseClusterModel {
      * Values:
      * - Connections View: `storageId` (UUID from ConnectionStorageService)
      * - Discovery/Azure Views: Sanitized Azure Resource ID (no '/' - replaced with '_')
+     *
+     * Note: For Azure Views, the clusterId is sanitized (all '/' replaced with '_').
+     * The original Azure Resource ID is stored in AzureClusterModel.id.
      */
     clusterId: string;
 }

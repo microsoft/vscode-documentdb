@@ -99,7 +99,7 @@ describe('Credential Cache Stability', () => {
         });
 
         it('should allow treeId === clusterId for Azure resources (both sanitized)', () => {
-            // Azure views: both IDs are the sanitized Azure Resource ID
+            // Azure views: both IDs are the sanitized Azure Resource ID (/ replaced with _)
             const azureResourceId =
                 '/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.DocumentDB/mongoClusters/mycluster';
             const sanitizedId = azureResourceId.replace(/\//g, '_');

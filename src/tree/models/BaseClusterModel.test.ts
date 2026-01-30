@@ -32,7 +32,7 @@ describe('BaseClusterModel', () => {
                 name: 'azure-cluster',
                 connectionString: undefined,
                 dbExperience: DocumentDBExperience,
-                clusterId: sanitizedId,
+                clusterId: sanitizedId, // Sanitized - clusterId must NEVER contain '/'
             };
 
             expect(model.connectionString).toBeUndefined();
@@ -98,7 +98,7 @@ describe('BaseClusterModel', () => {
         });
 
         it('should have clusterId === treeId for Discovery View (both sanitized)', () => {
-            // In Discovery View, both clusterId and treeId are sanitized
+            // In Discovery View, both clusterId and treeId are sanitized (/ replaced with _)
             // The original Azure Resource ID is stored in AzureClusterModel.id
             const azureResourceId =
                 '/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.DocumentDB/mongoClusters/cluster1';
@@ -121,7 +121,7 @@ describe('BaseClusterModel', () => {
         });
 
         it('should have clusterId === treeId for Azure Resources View (both sanitized)', () => {
-            // In Azure Resources View, both clusterId and treeId are sanitized
+            // In Azure Resources View, both clusterId and treeId are sanitized (/ replaced with _)
             const azureResourceId =
                 '/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.DocumentDB/mongoClusters/cluster1';
             const sanitizedId = azureResourceId.replace(/\//g, '_');
