@@ -11,7 +11,7 @@ import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { isTreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
-import { augmentClusterId, extractProviderFromClusterId, isAugmentedClusterId } from './clusterIdAugmentation';
+import { augmentClusterId, isAugmentedClusterId } from './clusterIdAugmentation';
 import { isClusterTreeElement } from './clusterItemTypeGuard';
 
 /**
@@ -385,63 +385,27 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         databaseName: string,
         collectionName: string,
     ): Promise<TreeElement | undefined> {
-        // The collection's ID ends with this suffix (clusterId has no '/' so this is unique)
-        const targetSuffix = `/${clusterId}/${databaseName}/${collectionName}`;
+        // Key insight: clusterId != treeId in this branch
+        // We need to find the cluster's treeId first, then build the collection path
 
-        // Recursive search helper that expands the tree
-        const searchInNode = async (node: TreeElement): Promise<TreeElement | undefined> => {
-            // Check if this node matches
-            if (node.id?.endsWith(targetSuffix)) {
-                return node;
-            }
+        // Step 1: Try to find the cluster node in cache to get its treeId
+        const clusterSuffix = `/${clusterId}`;
+        const clusterNode = this.findNodeBySuffix(clusterSuffix);
 
-            // Get children and search recursively
-            const children = await this.getChildren(node);
-            if (children) {
-                for (const child of children) {
-                    const result = await searchInNode(child);
-                    if (result) {
-                        return result;
-                    }
-                }
-            }
-            return undefined;
-        };
-
-        // Get root items (discovery providers)
-        const rootItems = await this.getChildren(undefined as unknown as TreeElement);
-        if (!rootItems) {
-            return undefined;
+        if (clusterNode?.id) {
+            // Found the cluster - build the full collection path using its treeId
+            const nodeId = `${clusterNode.id}/${databaseName}/${collectionName}`;
+            ext.outputChannel.trace(
+                `[DiscoveryView] findCollectionByClusterId: Found cluster treeId="${clusterNode.id}", looking for "${nodeId}"`,
+            );
+            return this.findNodeById(nodeId, true);
         }
 
-        // Extract provider ID directly from clusterId prefix
-        const targetProviderId = extractProviderFromClusterId(clusterId);
-
-        if (targetProviderId) {
-            // Search only in the targeted provider branch
-            const targetRoot = rootItems.find((item) => item.id?.includes(targetProviderId));
-            if (targetRoot) {
-                ext.outputChannel.trace(
-                    `[DiscoveryView] findCollectionByClusterId: Targeting provider "${targetProviderId}" (from clusterId prefix) for clusterId="${clusterId}"`,
-                );
-                const result = await searchInNode(targetRoot);
-                if (result) {
-                    return result;
-                }
-            }
-        }
-
-        // Fallback: search all providers if targeted search failed or cluster ID not augmented
+        // Step 2: Cluster not in cache - we can't determine the treeId without expanding
+        // This should be rare since the webview is opened from an expanded cluster
         ext.outputChannel.trace(
-            `[DiscoveryView] findCollectionByClusterId: No provider prefix found, searching all providers for clusterId="${clusterId}"`,
+            `[DiscoveryView] findCollectionByClusterId: Cluster "${clusterId}" not in cache, cannot resolve treeId`,
         );
-        for (const rootItem of rootItems) {
-            const result = await searchInNode(rootItem);
-            if (result) {
-                return result;
-            }
-        }
-
         return undefined;
     }
 }
