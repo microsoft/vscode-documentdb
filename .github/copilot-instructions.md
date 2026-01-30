@@ -123,7 +123,7 @@ CredentialCache.hasCredentials(this.id); // BUG!
 - **`AzureClusterModel`** - Azure/Discovery Views (has Azure `id`)
 - **`BaseClusterModel`** - Shared interface (use for generic code)
 
-For Discovery View, `treeId` is sanitized (no `/`), but `clusterId` keeps the original Azure Resource ID.
+For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replaced with `_`). The original Azure Resource ID is stored in `AzureClusterModel.id` for Azure API calls.
 
 > 💡 **Extensibility**: If adding a non-Azure discovery source (e.g., AWS, GCP), consider creating a new model type (e.g., `AwsClusterModel`) extending `BaseClusterModel` with source-specific metadata.
 

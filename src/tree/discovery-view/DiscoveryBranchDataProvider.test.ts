@@ -460,14 +460,10 @@ describe('DiscoveryBranchDataProvider - addDiscoveryProviderPromotionIfNeeded', 
 
 describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
     let dataProvider: DiscoveryBranchDataProvider;
-    let outputChannelWarnMock: jest.Mock;
 
     beforeEach(() => {
         // Clear all mocks
         jest.clearAllMocks();
-
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        outputChannelWarnMock = ext.outputChannel.warn as jest.Mock;
 
         // Create a new instance for each test
         dataProvider = new DiscoveryBranchDataProvider();
@@ -640,7 +636,7 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
 
             // Should throw an error about unexpected prefix
             await expect(dataProvider.getChildren(mockParentElement)).rejects.toThrow(
-                expect.stringMatching(/must start with provider ID.*azure-mongo-vcore-discovery/),
+                /must start with provider ID.*azure-mongo-vcore-discovery/,
             );
         });
     });
