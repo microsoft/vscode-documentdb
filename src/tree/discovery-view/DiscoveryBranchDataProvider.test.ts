@@ -29,6 +29,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
             return await callback(telemetryContextMock);
         },
     ),
+    createContextValue: jest.fn((values: string[]) => values.join(';')),
 }));
 
 // Mock vscode module
@@ -478,7 +479,8 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
                 '_subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1';
             const mockClusterElement = {
                 id: 'cluster-element-id',
-                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
                     clusterId: originalClusterId,
                     name: 'Test Cluster',
@@ -512,7 +514,8 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
                 'azure-mongo-vcore-discovery__subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1';
             const mockClusterElement = {
                 id: 'cluster-element-id',
-                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
                     clusterId: augmentedClusterId, // Already augmented
                     name: 'Test Cluster',
@@ -564,7 +567,8 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
             const originalClusterId2 = '_subscriptions_sub1_clusters_cluster2';
             const mockClusterElement1 = {
                 id: 'cluster-element-id-1',
-                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
                     clusterId: originalClusterId1,
                     name: 'Test Cluster 1',
@@ -572,7 +576,8 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
             };
             const mockClusterElement2 = {
                 id: 'cluster-element-id-2',
-                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
                     clusterId: originalClusterId2,
                     name: 'Test Cluster 2',
@@ -600,7 +605,8 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
             const originalClusterId = '_subscriptions_sub1_clusters_cluster1';
             const mockClusterElement = {
                 id: 'cluster-element-id',
-                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
                     clusterId: originalClusterId,
                     name: 'Test Cluster',
