@@ -71,6 +71,7 @@ jest.mock('../../extensionVariables', () => ({
         },
         outputChannel: {
             trace: jest.fn(),
+            warn: jest.fn(),
         },
     },
 }));
@@ -457,32 +458,32 @@ describe('DiscoveryBranchDataProvider - addDiscoveryProviderPromotionIfNeeded', 
     });
 });
 
-describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
+describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
     let dataProvider: DiscoveryBranchDataProvider;
-    let outputChannelTraceMock: jest.Mock;
+    let outputChannelWarnMock: jest.Mock;
 
     beforeEach(() => {
         // Clear all mocks
         jest.clearAllMocks();
 
         // eslint-disable-next-line @typescript-eslint/unbound-method
-        outputChannelTraceMock = ext.outputChannel.trace as jest.Mock;
+        outputChannelWarnMock = ext.outputChannel.warn as jest.Mock;
 
         // Create a new instance for each test
         dataProvider = new DiscoveryBranchDataProvider();
     });
 
     describe('when getting children from a provider', () => {
-        it('should augment cluster IDs with provider prefix', async () => {
-            // Setup mock provider returning cluster items with non-augmented IDs
-            const originalClusterId =
-                '_subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1';
+        it('should accept cluster IDs with correct provider prefix', async () => {
+            // Plugins must provide prefixed cluster IDs
+            const prefixedClusterId =
+                'azure-mongo-vcore-discovery__subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1';
             const mockClusterElement = {
                 id: 'cluster-element-id',
                 contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
                 getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
-                    clusterId: originalClusterId,
+                    clusterId: prefixedClusterId,
                     name: 'Test Cluster',
                 },
             };
@@ -494,30 +495,26 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
                 getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
             };
 
-            // Call getChildren
+            // Call getChildren - should not throw
             const children = await dataProvider.getChildren(mockParentElement);
 
-            // Verify clusterId was augmented
+            // Verify clusterId remains unchanged (no augmentation)
             expect(children).toBeDefined();
             expect(children![0]).toBeDefined();
             // @ts-expect-error - accessing cluster property on tree element
-            expect(children![0].cluster.clusterId).toBe(`azure-mongo-vcore-discovery_${originalClusterId}`);
-
-            // Verify trace log was called
-            expect(outputChannelTraceMock).toHaveBeenCalledWith(
-                expect.stringContaining('[DiscoveryView] Augmented clusterId:'),
-            );
+            expect(children![0].cluster.clusterId).toBe(prefixedClusterId);
         });
 
-        it('should not double-augment already augmented cluster IDs', async () => {
-            const augmentedClusterId =
-                'azure-mongo-vcore-discovery__subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1';
+        it('should throw error when cluster ID is missing provider prefix', async () => {
+            // Non-prefixed cluster ID (violates the contract)
+            const nonPrefixedClusterId =
+                '_subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1';
             const mockClusterElement = {
                 id: 'cluster-element-id',
                 contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
                 getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
-                    clusterId: augmentedClusterId, // Already augmented
+                    clusterId: nonPrefixedClusterId,
                     name: 'Test Cluster',
                 },
             };
@@ -528,16 +525,9 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
                 getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
             };
 
-            const children = await dataProvider.getChildren(mockParentElement);
-
-            // Should remain unchanged
-            expect(children).toBeDefined();
-            // @ts-expect-error - accessing cluster property on tree element
-            expect(children![0].cluster.clusterId).toBe(augmentedClusterId);
-
-            // Verify trace log was called with "already augmented" message
-            expect(outputChannelTraceMock).toHaveBeenCalledWith(
-                expect.stringContaining('[DiscoveryView] ClusterId already augmented, skipping:'),
+            // Should throw because plugin didn't prefix the clusterId
+            await expect(dataProvider.getChildren(mockParentElement)).rejects.toThrow(
+                /Discovery plugin error.*missing the provider prefix/,
             );
         });
 
@@ -562,15 +552,15 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
             expect(children![0].cluster).toBeUndefined();
         });
 
-        it('should handle multiple cluster children from the same provider', async () => {
-            const originalClusterId1 = '_subscriptions_sub1_clusters_cluster1';
-            const originalClusterId2 = '_subscriptions_sub1_clusters_cluster2';
+        it('should handle multiple cluster children with correct prefixes', async () => {
+            const prefixedClusterId1 = 'azure-mongo-ru-discovery__subscriptions_sub1_clusters_cluster1';
+            const prefixedClusterId2 = 'azure-mongo-ru-discovery__subscriptions_sub1_clusters_cluster2';
             const mockClusterElement1 = {
                 id: 'cluster-element-id-1',
                 contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
                 getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
-                    clusterId: originalClusterId1,
+                    clusterId: prefixedClusterId1,
                     name: 'Test Cluster 1',
                 },
             };
@@ -579,7 +569,7 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
                 contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
                 getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
-                    clusterId: originalClusterId2,
+                    clusterId: prefixedClusterId2,
                     name: 'Test Cluster 2',
                 },
             };
@@ -592,28 +582,29 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
 
             const children = await dataProvider.getChildren(mockParentElement);
 
-            // Both should be augmented with the same provider prefix
+            // Both should remain unchanged (already prefixed correctly)
             expect(children).toBeDefined();
             expect(children!.length).toBe(2);
             // @ts-expect-error - accessing cluster property on tree element
-            expect(children![0].cluster.clusterId).toBe(`azure-mongo-ru-discovery_${originalClusterId1}`);
+            expect(children![0].cluster.clusterId).toBe(prefixedClusterId1);
             // @ts-expect-error - accessing cluster property on tree element
-            expect(children![1].cluster.clusterId).toBe(`azure-mongo-ru-discovery_${originalClusterId2}`);
+            expect(children![1].cluster.clusterId).toBe(prefixedClusterId2);
         });
 
-        it('should not augment when provider ID cannot be extracted from tree ID', async () => {
-            const originalClusterId = '_subscriptions_sub1_clusters_cluster1';
+        it('should skip validation when provider ID cannot be extracted from tree ID', async () => {
+            // Non-prefixed cluster ID - but validation is skipped when provider ID is unknown
+            const nonPrefixedClusterId = '_subscriptions_sub1_clusters_cluster1';
             const mockClusterElement = {
                 id: 'cluster-element-id',
                 contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
                 getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
                 cluster: {
-                    clusterId: originalClusterId,
+                    clusterId: nonPrefixedClusterId,
                     name: 'Test Cluster',
                 },
             };
 
-            // Parent element with invalid tree ID format
+            // Parent element with invalid tree ID format (can't extract provider ID)
             const mockParentElement = {
                 id: 'invalid-tree-id-format',
                 getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'unknown' }),
@@ -622,15 +613,36 @@ describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
 
             const children = await dataProvider.getChildren(mockParentElement);
 
-            // Should remain unchanged because provider ID couldn't be extracted
+            // Should not throw because provider ID couldn't be extracted (validation skipped)
             expect(children).toBeDefined();
             // @ts-expect-error - accessing cluster property on tree element
-            expect(children![0].cluster.clusterId).toBe(originalClusterId);
+            expect(children![0].cluster.clusterId).toBe(nonPrefixedClusterId);
+        });
 
-            // Verify augmentation trace log was NOT called
-            expect(outputChannelTraceMock).not.toHaveBeenCalledWith(
-                expect.stringContaining('[DiscoveryView] Augmented clusterId:'),
-            );
+        it('should warn when cluster ID has unexpected provider prefix', async () => {
+            // Cluster ID with wrong provider prefix
+            const wrongPrefixClusterId = 'wrong-provider__subscriptions_sub1_clusters_cluster1';
+            const mockClusterElement = {
+                id: 'cluster-element-id',
+                contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
+                cluster: {
+                    clusterId: wrongPrefixClusterId,
+                    name: 'Test Cluster',
+                },
+            };
+
+            const mockParentElement = {
+                id: 'discoveryView/azure-mongo-vcore-discovery/subscription1',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'subscription' }),
+                getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
+            };
+
+            const children = await dataProvider.getChildren(mockParentElement);
+
+            // Should not throw, but should warn about unexpected prefix
+            expect(children).toBeDefined();
+            expect(outputChannelWarnMock).toHaveBeenCalledWith(expect.stringContaining('unexpected prefix'));
         });
     });
 });

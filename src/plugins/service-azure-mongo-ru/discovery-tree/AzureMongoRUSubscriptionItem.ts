@@ -63,16 +63,19 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureMongoRUSubscriptionItem.ts');
 
-                        // Sanitize Azure Resource ID: replace '/' with '-' for clusterId
-                        // This ensures clusterId never contains '/' (simplifies cache key handling)
+                        // Sanitize Azure Resource ID: replace '/' with '_' for treeId
+                        // This ensures treeId never contains '/' (simplifies path handling)
                         const sanitizedId = sanitizeAzureResourceIdForTreeId(resourceId);
+
+                        // clusterId must be prefixed with provider ID for uniqueness across plugins
+                        const prefixedClusterId = `${DISCOVERY_PROVIDER_ID}_${sanitizedId}`;
 
                         const clusterInfo: TreeCluster<AzureClusterModel> = {
                             // Core cluster data
                             name: account.name ?? 'Unknown',
                             connectionString: undefined, // Loaded lazily when connecting
                             dbExperience: CosmosDBMongoRUExperience,
-                            clusterId: sanitizedId, // Sanitized - no '/' characters
+                            clusterId: prefixedClusterId, // Prefixed with provider ID for uniqueness
                             // Azure-specific data
                             id: resourceId, // Keep original Azure Resource ID for ARM API correlation
                             resourceGroup: getResourceGroupFromId(resourceId),

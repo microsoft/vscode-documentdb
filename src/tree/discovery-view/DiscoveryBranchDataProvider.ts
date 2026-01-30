@@ -11,7 +11,7 @@ import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { isTreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
-import { augmentClusterId, isAugmentedClusterId } from './clusterIdAugmentation';
+import { extractOriginalClusterId, isAugmentedClusterId } from './clusterIdAugmentation';
 import { isClusterTreeElement } from './clusterItemTypeGuard';
 
 /**
@@ -168,28 +168,30 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
     }
 
     /**
-     * Augments cluster IDs in tree elements with the provider prefix.
-     * Mutates in place for performance.
+     * Validates that cluster IDs have the required provider prefix.
+     * Plugins are responsible for setting the prefix - this just validates.
+     * @throws Error if a cluster item is missing the provider prefix
      */
-    private augmentClusterIdIfNeeded(providerId: string, element: TreeElement): void {
+    private validateClusterIdPrefix(providerId: string, element: TreeElement): void {
         if (!isClusterTreeElement(element)) {
             return;
         }
 
-        const originalClusterId = element.cluster.clusterId;
+        const clusterId = element.cluster.clusterId;
 
-        // Check if already augmented
-        if (isAugmentedClusterId(originalClusterId)) {
-            ext.outputChannel.trace(`[DiscoveryView] ClusterId already augmented, skipping: "${originalClusterId}"`);
-            return;
+        if (!isAugmentedClusterId(clusterId)) {
+            throw new Error(
+                `Discovery plugin error: clusterId "${clusterId}" is missing the provider prefix. ` +
+                    `Plugin "${providerId}" must prefix clusterId with "${providerId}_".`,
+            );
         }
 
-        // Augment with provider prefix
-        element.cluster.clusterId = augmentClusterId(providerId, originalClusterId);
-
-        ext.outputChannel.trace(
-            `[DiscoveryView] Augmented clusterId: "${originalClusterId}" → "${element.cluster.clusterId}"`,
-        );
+        // Optionally validate it starts with the expected provider ID
+        if (!clusterId.startsWith(`${providerId}_`)) {
+            ext.outputChannel.warn(
+                `[DiscoveryView] ClusterId "${clusterId}" has unexpected prefix (expected "${providerId}_")`,
+            );
+        }
     }
 
     /**
@@ -225,14 +227,14 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
                     return [];
                 }
 
-                // 3. Augment cluster IDs before processing children further
+                // 3. Validate cluster IDs have provider prefix (plugins must set this)
                 // Extract provider ID from parent element's tree ID
                 const providerId = this.extractProviderIdFromTreeId(element.id);
 
-                // Augment cluster IDs before wrapping
+                // Validate cluster IDs have the required prefix
                 if (providerId) {
                     for (const child of children) {
-                        this.augmentClusterIdIfNeeded(providerId, child);
+                        this.validateClusterIdPrefix(providerId, child);
                     }
                 }
 
@@ -385,11 +387,15 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         databaseName: string,
         collectionName: string,
     ): Promise<TreeElement | undefined> {
-        // Key insight: clusterId != treeId in this branch
-        // We need to find the cluster's treeId first, then build the collection path
+        // Key insight: clusterId is prefixed (e.g., "azure-mongo-vcore-discovery_sanitizedId")
+        // but treeId uses the original sanitized ID (e.g., "discoveryView/.../sanitizedId")
+        // We need to extract the original to find the cluster by suffix
 
-        // Step 1: Try to find the cluster node in cache to get its treeId
-        const clusterSuffix = `/${clusterId}`;
+        // Extract the original (non-prefixed) clusterId for suffix matching
+        const originalClusterId = extractOriginalClusterId(clusterId);
+        const clusterSuffix = `/${originalClusterId}`;
+
+        // Try to find the cluster node in cache to get its treeId
         const clusterNode = this.findNodeBySuffix(clusterSuffix);
 
         if (clusterNode?.id) {
@@ -401,10 +407,10 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             return this.findNodeById(nodeId, true);
         }
 
-        // Step 2: Cluster not in cache - we can't determine the treeId without expanding
+        // Cluster not in cache - we can't determine the treeId without expanding
         // This should be rare since the webview is opened from an expanded cluster
         ext.outputChannel.trace(
-            `[DiscoveryView] findCollectionByClusterId: Cluster "${clusterId}" not in cache, cannot resolve treeId`,
+            `[DiscoveryView] findCollectionByClusterId: Cluster "${clusterId}" (original: "${originalClusterId}") not in cache, cannot resolve treeId`,
         );
         return undefined;
     }
