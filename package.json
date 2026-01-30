@@ -168,7 +168,7 @@
     "bson": "~7.0.0",
     "denque": "~2.1.0",
     "es-toolkit": "~1.42.0",
-    "monaco-editor": "~0.54.0",
+    "monaco-editor": "~0.52.2",
     "mongodb": "~7.0.0",
     "mongodb-connection-string-url": "~3.0.2",
     "react-hotkeys-hook": "~5.2.1",

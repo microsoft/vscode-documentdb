@@ -36,6 +36,7 @@ import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler'
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
+import { QueryError } from './errors/QueryError';
 import {
     llmEnhancedFeatureApis,
     type CollectionStats,
@@ -514,7 +515,15 @@ export class ClustersClient {
             try {
                 options.projection = EJSON.parse(queryParams.project) as Document;
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -523,7 +532,15 @@ export class ClustersClient {
             try {
                 options.sort = EJSON.parse(queryParams.sort) as Document;
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -564,10 +581,24 @@ export class ClustersClient {
         return documents;
     }
 
+    /**
+     * Counts documents in a collection matching the given filter query.
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param findQuery - Optional filter query string (defaults to '{}')
+     * @returns Number of documents matching the filter
+     *
+     * @throws {QueryError} with code 'INVALID_FILTER' if findQuery contains invalid JSON/BSON syntax.
+     *         Callers should handle this error appropriately - currently this error will propagate
+     *         up the call stack. TODO: Revisit error handling strategy when this function is used
+     *         in more contexts (e.g., UI count displays may want graceful fallback).
+     */
     async countDocuments(databaseName: string, collectionName: string, findQuery: string = '{}'): Promise<number> {
         if (findQuery === undefined || findQuery.trim().length === 0) {
             findQuery = '{}';
         }
+        // NOTE: toFilterQueryObj throws QueryError on invalid input - see JSDoc above
         const findQueryObj: Filter<Document> = toFilterQueryObj(findQuery);
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -633,7 +664,15 @@ export class ClustersClient {
             try {
                 options.projection = EJSON.parse(queryParams.project) as Document;
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -642,7 +681,15 @@ export class ClustersClient {
             try {
                 options.sort = EJSON.parse(queryParams.sort) as Document;
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
