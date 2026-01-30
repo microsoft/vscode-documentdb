@@ -313,19 +313,12 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
      * Since clusterId is sanitized (no '/'), we can identify the collection by searching
      * for a node whose ID ends with `/${clusterId}/${databaseName}/${collectionName}`.
      *
-     * This method traverses the tree from root, expanding nodes as needed. The tree's
-     * hierarchical structure ensures efficient traversal.
-     *
      * ## Performance Optimization
      *
-     * To avoid unnecessarily loading all discovery providers, this method first queries
-     * `DiscoveryService.findProviderForClusterId()` to determine which provider "owns"
-     * this clusterId. Each provider implements `ownsClusterId()` to check if the clusterId
-     * matches its resource patterns (e.g., `_mongoClusters_` for vCore, `_databaseAccounts_`
-     * for RU). If a matching provider is found, only that branch is searched.
-     *
-     * This prevents triggering network calls and authentication to all providers when we can
-     * determine the correct one from the cluster's resource pattern.
+     * To avoid unnecessarily loading all discovery providers, this method first checks
+     * if we already have a cached node for this cluster (from previous tree expansions).
+     * If found, we can extract the provider ID from the cached node's treeId and target
+     * only that provider's branch. This prevents triggering network calls to all providers.
      *
      * @param clusterId The stable cluster identifier (sanitized, no '/' characters)
      * @param databaseName The database name
@@ -366,16 +359,17 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             return undefined;
         }
 
-        // Ask the DiscoveryService which provider owns this clusterId
-        // Each provider implements ownsClusterId() to check if the clusterId matches its patterns
-        const targetProvider = DiscoveryService.findProviderForClusterId(clusterId);
+        // Try to find the target provider from cached nodes
+        // If we've previously expanded this cluster, its node is in the cache and
+        // we can extract the provider ID from its treeId (e.g., "discoveryView/azure-mongo-vcore-discovery/...")
+        const targetProviderId = this.inferProviderFromCache(clusterId);
 
-        if (targetProvider) {
+        if (targetProviderId) {
             // Search only in the targeted provider branch
-            const targetRoot = rootItems.find((item) => item.id?.includes(targetProvider.id));
+            const targetRoot = rootItems.find((item) => item.id?.includes(targetProviderId));
             if (targetRoot) {
                 ext.outputChannel.trace(
-                    `[DiscoveryView] findCollectionByClusterId: Targeting provider "${targetProvider.id}" for clusterId="${clusterId}"`,
+                    `[DiscoveryView] findCollectionByClusterId: Targeting provider "${targetProviderId}" (from cache) for clusterId="${clusterId}"`,
                 );
                 const result = await searchInNode(targetRoot);
                 if (result) {
@@ -384,7 +378,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             }
         }
 
-        // Fallback: search all providers if targeted search failed or couldn't determine provider
+        // Fallback: search all providers if targeted search failed or cluster not in cache
         ext.outputChannel.trace(
             `[DiscoveryView] findCollectionByClusterId: Searching all providers for clusterId="${clusterId}"`,
         );
@@ -392,6 +386,35 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             const result = await searchInNode(rootItem);
             if (result) {
                 return result;
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Infers the discovery provider ID from cached nodes.
+     *
+     * Searches the node cache for any node whose ID contains the clusterId.
+     * If found, extracts the provider ID from the node's hierarchical treeId.
+     *
+     * For example, a cached node with ID:
+     *   "discoveryView/azure-mongo-vcore-discovery/sub-id/cluster-id"
+     * would return "azure-mongo-vcore-discovery"
+     *
+     * @param clusterId The cluster identifier to search for
+     * @returns The provider ID if found in cache, otherwise undefined
+     */
+    private inferProviderFromCache(clusterId: string): string | undefined {
+        // Find any cached node that contains this clusterId in its path
+        const cachedNode = this.findNodeBySuffix(`/${clusterId}`);
+
+        if (cachedNode?.id) {
+            // Extract provider ID from the node's treeId
+            // Format: "discoveryView/{providerId}/..."
+            const parts = cachedNode.id.split('/');
+            if (parts.length >= 2 && parts[0] === (Views.DiscoveryView as string)) {
+                return parts[1]; // The provider ID
             }
         }
 

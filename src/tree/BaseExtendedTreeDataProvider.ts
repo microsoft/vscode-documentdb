@@ -246,6 +246,19 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
     }
 
     /**
+     * Finds a cached node whose ID ends with the given suffix.
+     *
+     * This is useful for finding nodes when you only know part of their ID (e.g., a clusterId)
+     * but not the full hierarchical path. Only searches already-cached nodes.
+     *
+     * @param suffix The suffix to match against node IDs
+     * @returns The first node whose ID ends with the suffix, or undefined if not found
+     */
+    findNodeBySuffix(suffix: string): T | undefined {
+        return this.parentCache.findNodeBySuffix(suffix);
+    }
+
+    /**
      * Refreshes the tree data.
      * This will trigger the view to update the changed element/root and its children recursively (if shown).
      *
