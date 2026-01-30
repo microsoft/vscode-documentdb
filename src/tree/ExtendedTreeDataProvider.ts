@@ -65,7 +65,7 @@ export interface ExtendedTreeDataProvider<T extends TreeElement> extends vscode.
      *
      * ⚠️ IMPORTANT: clusterId is guaranteed to NOT contain '/' characters.
      * - Connections View: storageId (UUID)
-     * - Azure Views: Sanitized Azure Resource ID (/ replaced with -)
+     * - Azure Views: Sanitized Azure Resource ID (/ replaced with _)
      *
      * Each provider implements this differently:
      * - Connections View: Resolves the current tree path from storage using buildFullTreePath()

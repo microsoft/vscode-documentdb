@@ -24,15 +24,20 @@ describe('BaseClusterModel', () => {
         });
 
         it('should allow undefined connectionString for lazy loading', () => {
+            const azureResourceId =
+                '/subscriptions/xxx/resourceGroups/yyy/providers/Microsoft.DocumentDB/mongoClusters/zzz';
+            const sanitizedId = azureResourceId.replace(/\//g, '_');
+
             const model: BaseClusterModel = {
                 name: 'azure-cluster',
                 connectionString: undefined,
                 dbExperience: DocumentDBExperience,
-                clusterId: '/subscriptions/xxx/resourceGroups/yyy/providers/Microsoft.DocumentDB/mongoClusters/zzz',
+                clusterId: sanitizedId,
             };
 
             expect(model.connectionString).toBeUndefined();
-            expect(model.clusterId).toContain('/subscriptions/');
+            expect(model.clusterId).toBe(sanitizedId);
+            expect(model.clusterId).not.toContain('/');
         });
     });
 

@@ -59,7 +59,7 @@ export class RUBranchDataProvider
             const cache = new CaseInsensitiveMap<TreeCluster<AzureClusterModel>>();
             ruAccounts.forEach((ruAccount) => {
                 const resourceId = nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts');
-                // Sanitize Azure Resource ID: replace '/' with '-' for both clusterId and treeId
+                // Sanitize Azure Resource ID: replace '/' with '_' for both clusterId and treeId
                 // This ensures clusterId never contains '/' (simplifies cache key handling)
                 const sanitizedId = sanitizeAzureResourceIdForTreeId(resourceId);
 

@@ -37,7 +37,7 @@ export interface BaseClusterModel {
      *
      * Values:
      * - Connections View: `storageId` (UUID from ConnectionStorageService)
-     * - Discovery/Azure Views: Sanitized Azure Resource ID (no '/' - replaced with '-')
+     * - Discovery/Azure Views: Sanitized Azure Resource ID (no '/' - replaced with '_')
      */
     clusterId: string;
 }
@@ -59,7 +59,7 @@ export interface ClusterTreeContext {
      *
      * Construction rules:
      * - Connections View: `${parentId}/${storageId}` (hierarchical)
-     * - Discovery/Azure Views: Same as clusterId (sanitized Azure Resource ID)
+     * - Discovery/Azure Views: Same as clusterId (sanitized Azure Resource ID with '_' instead of '/')
      */
     treeId: string;
 
