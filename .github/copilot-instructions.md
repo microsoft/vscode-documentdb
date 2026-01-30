@@ -94,32 +94,40 @@ src/commands/yourCommand/
 
 ## Cluster ID Architecture (Dual ID Pattern)
 
-`ClusterModel` has two distinct ID properties - using the wrong one causes bugs:
+> ⚠️ **CRITICAL**: Using the wrong ID causes silent bugs that only appear when users move connections between folders.
 
-| Property    | Purpose                          | Stable?                   | Example                           |
-| ----------- | -------------------------------- | ------------------------- | --------------------------------- |
-| `treeId`    | VS Code TreeView element path    | ❌ Changes on folder move | `connectionsView/folder1/abc-123` |
-| `clusterId` | Cache key (credentials, clients) | ✅ Always stable          | `abc-123` or Azure Resource ID    |
+Cluster models have **two distinct ID properties** with different purposes:
 
-### When to Use Each ID
+| Property    | Purpose                          | Stable?                   | Use For                             |
+| ----------- | -------------------------------- | ------------------------- | ----------------------------------- |
+| `treeId`    | VS Code TreeView element path    | ❌ Changes on folder move | `this.id`, child item paths         |
+| `clusterId` | Cache key (credentials, clients) | ✅ Always stable          | `CredentialCache`, `ClustersClient` |
+
+### Quick Reference
 
 ```typescript
-// ✅ Tree element identification (VS Code TreeView)
+// ✅ Tree element identification
 this.id = cluster.treeId;
-this.id = `${cluster.treeId}/${databaseInfo.name}`;
 
-// ✅ Cache operations (credentials, clients)
+// ✅ Cache operations - ALWAYS use clusterId
 CredentialCache.hasCredentials(cluster.clusterId);
 ClustersClient.getClient(cluster.clusterId);
 
-// ❌ WRONG - Don't use treeId for caching (breaks on folder move)
+// ❌ WRONG - breaks when connection moves to a folder
 CredentialCache.hasCredentials(this.id); // BUG!
-ClustersClient.getClient(cluster.treeId); // BUG!
 ```
 
-### Azure Resources View
+### Model Types
 
-For Azure resources, `treeId === clusterId` (both are the Azure Resource ID). This is correct - Azure Resource IDs are already stable.
+- **`ConnectionClusterModel`** - Connections View (has `storageId`)
+- **`AzureClusterModel`** - Azure/Discovery Views (has Azure `id`)
+- **`BaseClusterModel`** - Shared interface (use for generic code)
+
+For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replaced with `_`). The original Azure Resource ID is stored in `AzureClusterModel.id` for Azure API calls.
+
+> 💡 **Extensibility**: If adding a non-Azure discovery source (e.g., AWS, GCP), consider creating a new model type (e.g., `AwsClusterModel`) extending `BaseClusterModel` with source-specific metadata.
+
+See `src/tree/models/BaseClusterModel.ts` and `docs/analysis/08-cluster-model-simplification-plan.md` for details.
 
 ## Additional Patterns
 

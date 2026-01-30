@@ -11,12 +11,13 @@ import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { Views } from '../../../../documentdb/Views';
 import { ext } from '../../../../extensionVariables';
+import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { DISCOVERY_PROVIDER_ID, RESOURCE_TYPE } from '../../config';
 import { extractCredentialsFromRUAccount } from '../../utils/ruClusterHelpers';
 
-export class MongoRUResourceItem extends ClusterItemBase {
+export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = vscode.Uri.joinPath(
         ext.context.extensionUri,
         'resources',
@@ -35,7 +36,7 @@ export class MongoRUResourceItem extends ClusterItemBase {
          */
         journeyCorrelationId: string,
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;

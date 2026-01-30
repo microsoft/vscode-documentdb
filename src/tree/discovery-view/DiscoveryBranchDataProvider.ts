@@ -11,6 +11,7 @@ import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { isTreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
+import { isClusterTreeElement } from './clusterItemTypeGuard';
 
 /**
  * Tree data provider for the Discovery view.
@@ -149,6 +150,43 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
     }
 
     /**
+     * Extracts the discovery provider ID from a tree element's ID.
+     * Tree IDs follow the format: "discoveryView/{providerId}/..."
+     */
+    private extractProviderIdFromTreeId(elementId: string | undefined): string | undefined {
+        if (!elementId) {
+            return undefined;
+        }
+
+        const parts = elementId.split('/');
+        // Format: discoveryView/{providerId}/...
+        if (parts.length >= 2 && parts[0] === (Views.DiscoveryView as string)) {
+            return parts[1];
+        }
+        return undefined;
+    }
+
+    /**
+     * Validates that cluster IDs have the required provider prefix.
+     * Contract: clusterId must start with providerId.
+     * @throws Error if a cluster item is missing the provider prefix
+     */
+    private validateClusterIdPrefix(providerId: string, element: TreeElement): void {
+        if (!isClusterTreeElement(element)) {
+            return;
+        }
+
+        const clusterId = element.cluster.clusterId;
+
+        if (!clusterId.startsWith(providerId)) {
+            throw new Error(
+                `Discovery plugin error: clusterId "${clusterId}" must start with provider ID "${providerId}". ` +
+                    `Plugin "${providerId}" must prefix clusterId with its provider ID.`,
+            );
+        }
+    }
+
+    /**
      * Helper to get children for a given element.
      */
     private async getElementChildren(
@@ -181,7 +219,18 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
                     return [];
                 }
 
-                // 3. Check if the returned children contain an error node
+                // 3. Validate cluster IDs have provider prefix (plugins must set this)
+                // Extract provider ID from parent element's tree ID
+                const providerId = this.extractProviderIdFromTreeId(element.id);
+
+                // Validate cluster IDs have the required prefix
+                if (providerId) {
+                    for (const child of children) {
+                        this.validateClusterIdPrefix(providerId, child);
+                    }
+                }
+
+                // 4. Check if the returned children contain an error node
                 // This means the operation failed (eg. authentication)
                 if (isTreeElementWithRetryChildren(element) && element.hasRetryNode(children)) {
                     // Store the error node(s) in our cache for future refreshes
@@ -307,10 +356,20 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
     /**
      * Finds a collection node by its cluster's stable identifier.
      *
-     * For Discovery/Azure views, the clusterId IS the treeId (Azure Resource ID).
-     * There's no folder hierarchy, so we use the clusterId directly.
+     * For Discovery View, the collection's full ID is:
+     *   `${parentPath}/${clusterId}/${databaseName}/${collectionName}`
      *
-     * @param clusterId The stable cluster identifier (Azure Resource ID)
+     * Since clusterId is sanitized (no '/'), we can identify the collection by searching
+     * for a node whose ID ends with `/${clusterId}/${databaseName}/${collectionName}`.
+     *
+     * ## Performance Optimization
+     *
+     * To avoid unnecessarily loading all discovery providers, this method first checks
+     * if we already have a cached node for this cluster (from previous tree expansions).
+     * If found, we can extract the provider ID from the cached node's treeId and target
+     * only that provider's branch. This prevents triggering network calls to all providers.
+     *
+     * @param clusterId The stable cluster identifier (sanitized, no '/' characters)
      * @param databaseName The database name
      * @param collectionName The collection name
      * @returns A Promise that resolves to the found CollectionItem or undefined if not found
@@ -320,10 +379,34 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         databaseName: string,
         collectionName: string,
     ): Promise<TreeElement | undefined> {
-        // For Azure resources, clusterId IS the treeId (no folder hierarchy)
-        const nodeId = `${clusterId}/${databaseName}/${collectionName}`;
+        // Key insight: clusterId is prefixed (e.g., "azure-mongo-vcore-discovery_sanitizedId")
+        // but treeId uses the original sanitized ID (e.g., "discoveryView/.../sanitizedId")
+        // We need to extract the original to find the cluster by suffix
 
-        // Use the standard findNodeById with recursive search enabled
-        return this.findNodeById(nodeId, true);
+        // Extract provider ID from clusterId (everything before the first '_')
+        const separatorIndex = clusterId.indexOf('_');
+        const originalClusterId = separatorIndex > 0 ? clusterId.substring(separatorIndex + 1) : clusterId;
+        const clusterSuffix = `/${originalClusterId}`;
+
+        // Try to find the cluster node in cache to get its treeId
+        const clusterNode = this.findNodeBySuffix(clusterSuffix);
+
+        if (clusterNode?.id) {
+            // Found the cluster - build the full collection path using its treeId
+            const nodeId = `${clusterNode.id}/${databaseName}/${collectionName}`;
+            ext.outputChannel.trace(
+                `[DiscoveryView] findCollectionByClusterId: Found cluster treeId="${clusterNode.id}", looking for "${nodeId}"`,
+            );
+            // Use findChildById to search from the cluster node directly.
+            // This prevents ancestor fallback that could expand sibling clusters.
+            return this.findChildById(clusterNode, nodeId);
+        }
+
+        // Cluster not in cache - we can't determine the treeId without expanding
+        // This should be rare since the webview is opened from an expanded cluster
+        ext.outputChannel.trace(
+            `[DiscoveryView] findCollectionByClusterId: Cluster "${clusterId}" (original: "${originalClusterId}") not in cache, cannot resolve treeId`,
+        );
+        return undefined;
     }
 }

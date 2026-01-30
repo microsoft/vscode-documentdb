@@ -28,15 +28,16 @@ import {
 } from '../../../plugins/service-azure-mongo-vcore/utils/clusterHelpers';
 import { getThemeAgnosticIconPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
+import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 
-export class VCoreResourceItem extends ClusterItemBase {
+export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = getThemeAgnosticIconPath('AzureDocumentDb.svg');
 
     constructor(
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
     }

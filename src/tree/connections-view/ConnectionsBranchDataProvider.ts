@@ -11,11 +11,12 @@ import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
-import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
+import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
+import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
 
 /**
@@ -137,16 +138,23 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
 
         // Filter with type guard to ensure type safety for connection-specific properties
         const clusterItems = rootConnectionsClusters.filter(isConnection).map((connection) => {
-            const model: ClusterModelWithStorage = {
+            const model: TreeCluster<ConnectionClusterModel> = {
+                // Tree context (computed at runtime)
                 treeId: `${parentId}/${connection.id}`, // Hierarchical tree path
+                viewId: parentId, // View ID is the root parent
+
+                // Connection cluster data
                 clusterId: connection.id, // Stable storageId for cache lookups
-                id: `${parentId}/${connection.id}`,
                 storageId: connection.id,
                 name: connection.name,
                 dbExperience: DocumentDBExperience,
                 connectionString: connection.secrets.connectionString,
                 emulatorConfiguration: connection.properties.emulatorConfiguration,
             };
+
+            ext.outputChannel.trace(
+                `[ConnectionsView] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}"`,
+            );
 
             return new DocumentDBClusterItem(model);
         });

@@ -16,10 +16,11 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullValue } from '../../../utils/nonNull';
+import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 
-export class RUResourceItem extends ClusterItemBase {
+export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = vscode.Uri.joinPath(
         ext.context.extensionUri,
         'resources',
@@ -33,7 +34,7 @@ export class RUResourceItem extends ClusterItemBase {
 
     constructor(
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
     }

@@ -98,17 +98,19 @@ describe('Credential Cache Stability', () => {
             expect(connectionsModel.treeId).toContain(connectionsModel.clusterId);
         });
 
-        it('should allow treeId === clusterId for Azure resources', () => {
-            // Azure Resources View: both IDs are the Azure Resource ID
+        it('should allow treeId === clusterId for Azure resources (both sanitized)', () => {
+            // Azure views: both IDs are the sanitized Azure Resource ID (/ replaced with _)
             const azureResourceId =
                 '/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.DocumentDB/mongoClusters/mycluster';
+            const sanitizedId = azureResourceId.replace(/\//g, '_');
             const azureModel = {
-                treeId: azureResourceId,
-                clusterId: azureResourceId,
+                treeId: sanitizedId,
+                clusterId: sanitizedId,
                 name: 'mycluster',
             };
 
             expect(azureModel.treeId).toBe(azureModel.clusterId);
+            expect(azureModel.clusterId).not.toContain('/');
         });
 
         it('should change treeId but preserve clusterId when moving between folders', () => {

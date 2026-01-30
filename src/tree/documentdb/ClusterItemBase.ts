@@ -19,7 +19,8 @@ import { type TreeElementWithContextValue } from '../TreeElementWithContextValue
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { type TreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
-import { type ClusterModel } from './ClusterModel';
+import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { DatabaseItem } from './DatabaseItem';
 
 /**
@@ -49,7 +50,7 @@ export type EphemeralClusterCredentials = {
 export type ClusterCredentials = EphemeralClusterCredentials;
 
 // This info will be available at every level in the tree for immediate access
-export abstract class ClusterItemBase
+export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterModel>
     implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue, TreeElementWithRetryChildren
 {
     public readonly id: string;
@@ -70,7 +71,7 @@ export abstract class ClusterItemBase
 
     private readonly experienceContextValue: string = '';
 
-    protected constructor(public cluster: ClusterModel) {
+    protected constructor(public cluster: TreeCluster<T>) {
         // Use treeId for VS Code tree element identification
         this.id = cluster.treeId ?? '';
         this.experience = cluster.dbExperience;
@@ -180,19 +181,25 @@ export abstract class ClusterItemBase
 
     /**
      * Returns the tree item representation of the cluster.
+     * Subclasses can override descriptionOverride and tooltipOverride for custom display.
+     *
      * @returns The TreeItem object.
      */
     getTreeItem(): vscode.TreeItem {
+        // Cast to access Azure-specific properties that may exist on AzureClusterModel subtypes
+        // These properties are optional and checked at runtime
+        const azureProps = this.cluster as unknown as Partial<AzureClusterModel>;
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.cluster.name,
             description: this.descriptionOverride
                 ? this.descriptionOverride
-                : this.cluster.sku !== undefined
-                  ? `(${this.cluster.sku})`
-                  : this.cluster.serverVersion !== undefined
-                    ? `v${this.cluster.serverVersion}`
+                : azureProps.sku !== undefined
+                  ? `(${azureProps.sku})`
+                  : azureProps.serverVersion !== undefined
+                    ? `v${azureProps.serverVersion}`
                     : false,
             iconPath: this.iconPath ?? undefined,
             tooltip: this.tooltipOverride
@@ -200,19 +207,19 @@ export abstract class ClusterItemBase
                 : new vscode.MarkdownString(
                       `### Cluster: ${this.cluster.name}\n\n` +
                           `---\n` +
-                          (this.cluster.location
-                              ? `- Location: **${regionToDisplayName(this.cluster.location)}**\n\n`
+                          (azureProps.location
+                              ? `- Location: **${regionToDisplayName(azureProps.location)}**\n\n`
                               : '') +
-                          (this.cluster.diskSize ? `- Disk Size: **${this.cluster.diskSize}GB**\n` : '') +
-                          (this.cluster.sku ? `- SKU: **${this.cluster.sku}**\n` : '') +
-                          (this.cluster.enableHa !== undefined
-                              ? `- High Availability: **${this.cluster.enableHa ? 'Enabled' : 'Disabled'}**\n`
+                          (azureProps.diskSize ? `- Disk Size: **${azureProps.diskSize}GB**\n` : '') +
+                          (azureProps.sku ? `- SKU: **${azureProps.sku}**\n` : '') +
+                          (azureProps.enableHa !== undefined
+                              ? `- High Availability: **${azureProps.enableHa ? 'Enabled' : 'Disabled'}**\n`
                               : '') +
-                          (this.cluster.nodeCount ? `- Node Count: **${this.cluster.nodeCount}**\n\n` : '') +
-                          (this.cluster.serverVersion ? `- Server Version: **${this.cluster.serverVersion}**\n` : '') +
-                          (this.cluster.capabilities ? `- Capabilities: **${this.cluster.capabilities}**\n` : '') +
-                          (this.cluster.systemData?.createdAt
-                              ? `---\n- Created Date: **${this.cluster.systemData.createdAt.toLocaleString()}**\n`
+                          (azureProps.nodeCount ? `- Node Count: **${azureProps.nodeCount}**\n\n` : '') +
+                          (azureProps.serverVersion ? `- Server Version: **${azureProps.serverVersion}**\n` : '') +
+                          (azureProps.capabilities ? `- Capabilities: **${azureProps.capabilities}**\n` : '') +
+                          (azureProps.systemData?.createdAt
+                              ? `---\n- Created Date: **${azureProps.systemData.createdAt.toLocaleString()}**\n`
                               : ''),
                   ),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,

@@ -6,12 +6,12 @@
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { type Experience } from '../../DocumentDBExperiences';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
-import { type ClusterModel } from './ClusterModel';
 import { CollectionItem } from './CollectionItem';
 
 export class DatabaseItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
@@ -22,7 +22,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     private readonly experienceContextValue: string = '';
 
     constructor(
-        readonly cluster: ClusterModel,
+        readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
     ) {
         this.id = `${cluster.treeId}/${databaseInfo.name}`;

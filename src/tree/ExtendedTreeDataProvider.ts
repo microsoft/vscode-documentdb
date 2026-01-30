@@ -60,14 +60,18 @@ export interface ExtendedTreeDataProvider<T extends TreeElement> extends vscode.
      * Finds a collection node by its cluster's stable identifier.
      *
      * This method is designed to work with the dual-ID architecture where:
-     * - clusterId is the stable identifier (storageId for Connections View, Azure Resource ID for Azure views)
-     * - treeId is the hierarchical path that may change when items are moved
+     * - clusterId is the stable identifier (NEVER contains '/')
+     * - treeId is the hierarchical path used for tree navigation
+     *
+     * ⚠️ IMPORTANT: clusterId is guaranteed to NOT contain '/' characters.
+     * - Connections View: storageId (UUID)
+     * - Azure Views: Sanitized Azure Resource ID (/ replaced with _)
      *
      * Each provider implements this differently:
      * - Connections View: Resolves the current tree path from storage using buildFullTreePath()
-     * - Discovery/Azure Views: Uses clusterId directly (it equals treeId, no folder hierarchy)
+     * - Discovery/Azure Views: clusterId === treeId, use directly
      *
-     * @param clusterId The stable cluster identifier
+     * @param clusterId The stable cluster identifier (never contains '/')
      * @param databaseName The database name
      * @param collectionName The collection name
      * @returns A Promise that resolves to the found CollectionItem or undefined if not found

@@ -22,14 +22,15 @@ import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticat
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
+import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { getThemeAgnosticIconPath } from '../../../../utils/icons';
 import { nonNullValue } from '../../../../utils/nonNull';
 import { DISCOVERY_PROVIDER_ID, RESOURCE_TYPE } from '../../config';
 import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../../utils/clusterHelpers';
 
-export class DocumentDBResourceItem extends ClusterItemBase {
+export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = getThemeAgnosticIconPath('AzureDocumentDb.svg');
 
     constructor(
@@ -39,7 +40,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
          */
         journeyCorrelationId: string,
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;

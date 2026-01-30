@@ -16,7 +16,8 @@ import { nonNullProp } from '../../../utils/nonNull';
 import { BaseExtendedTreeDataProvider } from '../../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../../TreeElement';
 import { isTreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { sanitizeAzureResourceIdForTreeId, type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 import { RUResourceItem } from './RUCoreResourceItem';
 
 // export type VCoreResource = AzureResource &
@@ -33,7 +34,7 @@ export class RUBranchDataProvider
      * This replaces the manual cache management that was previously done with
      * detailsCacheUpdateRequested, detailsCache, and itemsToUpdateInfo properties.
      */
-    private readonly metadataLoader = new LazyMetadataLoader<ClusterModel, RUResourceItem>({
+    private readonly metadataLoader = new LazyMetadataLoader<TreeCluster<AzureClusterModel>, RUResourceItem>({
         cacheDuration: 5 * 60 * 1000, // 5 minutes
         loadMetadata: async (subscription, context) => {
             console.debug(
@@ -55,16 +56,21 @@ export class RUBranchDataProvider
                 ruAccounts.length,
             );
 
-            const cache = new CaseInsensitiveMap<ClusterModel>();
+            const cache = new CaseInsensitiveMap<TreeCluster<AzureClusterModel>>();
             ruAccounts.forEach((ruAccount) => {
                 const resourceId = nonNullProp(ruAccount, 'id', 'ruAccount.id', 'RUBranchDataProvider.ts');
-                cache.set(resourceId, {
-                    // For Azure resources, treeId and clusterId are the same (Azure Resource ID)
-                    treeId: resourceId,
-                    clusterId: resourceId,
-                    dbExperience: CosmosDBMongoRUExperience,
-                    id: resourceId,
+                // Sanitize Azure Resource ID: replace '/' with '_' for both clusterId and treeId
+                // This ensures clusterId never contains '/' (simplifies cache key handling)
+                const sanitizedId = sanitizeAzureResourceIdForTreeId(resourceId);
+
+                const cluster: TreeCluster<AzureClusterModel> = {
+                    // Core cluster data
                     name: ruAccount.name!,
+                    connectionString: undefined, // Loaded lazily when connecting
+                    dbExperience: CosmosDBMongoRUExperience,
+                    clusterId: sanitizedId, // Sanitized - no '/' characters
+                    // Azure-specific data
+                    id: resourceId, // Keep original Azure Resource ID for ARM API correlation
                     resourceGroup: getResourceGroupFromId(resourceId),
                     location: ruAccount.location,
                     serverVersion: ruAccount?.apiProperties?.serverVersion,
@@ -78,7 +84,16 @@ export class RUBranchDataProvider
                                   .filter((name) => name !== undefined)
                                   .join(', ')
                             : undefined,
-                });
+                    // Tree context (clusterId === treeId after sanitization)
+                    treeId: sanitizedId,
+                    viewId: Views.AzureResourcesView,
+                };
+
+                ext.outputChannel.trace(
+                    `[AzureResourcesView/RU/cache] Created cluster model: name="${cluster.name}", clusterId="${cluster.clusterId}", treeId="${cluster.treeId}"`,
+                );
+
+                cache.set(resourceId, cluster);
             });
             return cache;
         },
@@ -130,18 +145,31 @@ export class RUBranchDataProvider
             // Get metadata from cache (may be undefined if not yet loaded)
             const cachedMetadata = this.metadataLoader.getCachedMetadata(resource.id);
 
-            // For Azure resources, treeId and clusterId are both the Azure Resource ID
-            let clusterInfo: ClusterModel = {
-                ...resource,
-                treeId: resource.id,
-                clusterId: resource.id,
+            // Sanitize Azure Resource ID: replace '/' with '_' for both clusterId and treeId
+            const sanitizedId = sanitizeAzureResourceIdForTreeId(resource.id);
+
+            let clusterInfo: TreeCluster<AzureClusterModel> = {
+                // Core cluster data
+                name: resource.name ?? 'Unknown',
+                connectionString: undefined, // Loaded lazily
                 dbExperience: CosmosDBMongoRUExperience,
-            } as ClusterModel;
+                clusterId: sanitizedId, // Sanitized - no '/' characters
+                // Azure-specific data
+                id: resource.id, // Keep original Azure Resource ID for ARM API correlation
+                resourceGroup: undefined, // Will be populated from cache
+                // Tree context (clusterId === treeId after sanitization)
+                treeId: sanitizedId,
+                viewId: Views.AzureResourcesView,
+            };
 
             // Merge with cached metadata if available
             if (cachedMetadata) {
                 clusterInfo = { ...clusterInfo, ...cachedMetadata };
             }
+
+            ext.outputChannel.trace(
+                `[AzureResourcesView/RU] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}", hasCachedMetadata=${!!cachedMetadata}`,
+            );
 
             const clusterItem = new RUResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
