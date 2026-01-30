@@ -102,7 +102,7 @@ describe('BaseClusterModel', () => {
             // The original Azure Resource ID is stored in AzureClusterModel.id
             const azureResourceId =
                 '/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.DocumentDB/mongoClusters/cluster1';
-            const sanitizedId = azureResourceId.replace(/\//g, '-');
+            const sanitizedId = azureResourceId.replace(/\//g, '_');
 
             const cluster: TreeCluster = {
                 name: 'azure-cluster',
@@ -124,7 +124,7 @@ describe('BaseClusterModel', () => {
             // In Azure Resources View, both clusterId and treeId are sanitized
             const azureResourceId =
                 '/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.DocumentDB/mongoClusters/cluster1';
-            const sanitizedId = azureResourceId.replace(/\//g, '-');
+            const sanitizedId = azureResourceId.replace(/\//g, '_');
 
             const cluster: TreeCluster = {
                 name: 'azure-cluster',
