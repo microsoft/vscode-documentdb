@@ -11,6 +11,8 @@ import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { isTreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
+import { augmentClusterId, extractProviderFromClusterId, isAugmentedClusterId } from './clusterIdAugmentation';
+import { isClusterTreeElement } from './clusterItemTypeGuard';
 
 /**
  * Tree data provider for the Discovery view.
@@ -149,6 +151,48 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
     }
 
     /**
+     * Extracts the discovery provider ID from a tree element's ID.
+     * Tree IDs follow the format: "discoveryView/{providerId}/..."
+     */
+    private extractProviderIdFromTreeId(elementId: string | undefined): string | undefined {
+        if (!elementId) {
+            return undefined;
+        }
+
+        const parts = elementId.split('/');
+        // Format: discoveryView/{providerId}/...
+        if (parts.length >= 2 && parts[0] === (Views.DiscoveryView as string)) {
+            return parts[1];
+        }
+        return undefined;
+    }
+
+    /**
+     * Augments cluster IDs in tree elements with the provider prefix.
+     * Mutates in place for performance.
+     */
+    private augmentClusterIdIfNeeded(providerId: string, element: TreeElement): void {
+        if (!isClusterTreeElement(element)) {
+            return;
+        }
+
+        const originalClusterId = element.cluster.clusterId;
+
+        // Check if already augmented
+        if (isAugmentedClusterId(originalClusterId)) {
+            ext.outputChannel.trace(`[DiscoveryView] ClusterId already augmented, skipping: "${originalClusterId}"`);
+            return;
+        }
+
+        // Augment with provider prefix
+        element.cluster.clusterId = augmentClusterId(providerId, originalClusterId);
+
+        ext.outputChannel.trace(
+            `[DiscoveryView] Augmented clusterId: "${originalClusterId}" → "${element.cluster.clusterId}"`,
+        );
+    }
+
+    /**
      * Helper to get children for a given element.
      */
     private async getElementChildren(
@@ -181,7 +225,18 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
                     return [];
                 }
 
-                // 3. Check if the returned children contain an error node
+                // 3. Augment cluster IDs before processing children further
+                // Extract provider ID from parent element's tree ID
+                const providerId = this.extractProviderIdFromTreeId(element.id);
+
+                // Augment cluster IDs before wrapping
+                if (providerId) {
+                    for (const child of children) {
+                        this.augmentClusterIdIfNeeded(providerId, child);
+                    }
+                }
+
+                // 4. Check if the returned children contain an error node
                 // This means the operation failed (eg. authentication)
                 if (isTreeElementWithRetryChildren(element) && element.hasRetryNode(children)) {
                     // Store the error node(s) in our cache for future refreshes
@@ -359,17 +414,15 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             return undefined;
         }
 
-        // Try to find the target provider from cached nodes
-        // If we've previously expanded this cluster, its node is in the cache and
-        // we can extract the provider ID from its treeId (e.g., "discoveryView/azure-mongo-vcore-discovery/...")
-        const targetProviderId = this.inferProviderFromCache(clusterId);
+        // Extract provider ID directly from clusterId prefix
+        const targetProviderId = extractProviderFromClusterId(clusterId);
 
         if (targetProviderId) {
             // Search only in the targeted provider branch
             const targetRoot = rootItems.find((item) => item.id?.includes(targetProviderId));
             if (targetRoot) {
                 ext.outputChannel.trace(
-                    `[DiscoveryView] findCollectionByClusterId: Targeting provider "${targetProviderId}" (from cache) for clusterId="${clusterId}"`,
+                    `[DiscoveryView] findCollectionByClusterId: Targeting provider "${targetProviderId}" (from clusterId prefix) for clusterId="${clusterId}"`,
                 );
                 const result = await searchInNode(targetRoot);
                 if (result) {
@@ -378,43 +431,14 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             }
         }
 
-        // Fallback: search all providers if targeted search failed or cluster not in cache
+        // Fallback: search all providers if targeted search failed or cluster ID not augmented
         ext.outputChannel.trace(
-            `[DiscoveryView] findCollectionByClusterId: Searching all providers for clusterId="${clusterId}"`,
+            `[DiscoveryView] findCollectionByClusterId: No provider prefix found, searching all providers for clusterId="${clusterId}"`,
         );
         for (const rootItem of rootItems) {
             const result = await searchInNode(rootItem);
             if (result) {
                 return result;
-            }
-        }
-
-        return undefined;
-    }
-
-    /**
-     * Infers the discovery provider ID from cached nodes.
-     *
-     * Searches the node cache for any node whose ID contains the clusterId.
-     * If found, extracts the provider ID from the node's hierarchical treeId.
-     *
-     * For example, a cached node with ID:
-     *   "discoveryView/azure-mongo-vcore-discovery/sub-id/cluster-id"
-     * would return "azure-mongo-vcore-discovery"
-     *
-     * @param clusterId The cluster identifier to search for
-     * @returns The provider ID if found in cache, otherwise undefined
-     */
-    private inferProviderFromCache(clusterId: string): string | undefined {
-        // Find any cached node that contains this clusterId in its path
-        const cachedNode = this.findNodeBySuffix(`/${clusterId}`);
-
-        if (cachedNode?.id) {
-            // Extract provider ID from the node's treeId
-            // Format: "discoveryView/{providerId}/..."
-            const parts = cachedNode.id.split('/');
-            if (parts.length >= 2 && parts[0] === (Views.DiscoveryView as string)) {
-                return parts[1]; // The provider ID
             }
         }
 

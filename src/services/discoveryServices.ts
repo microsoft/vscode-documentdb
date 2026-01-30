@@ -7,6 +7,7 @@ import { type IActionContext, type IWizardOptions } from '@microsoft/vscode-azex
 import type * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../commands/newConnection/NewConnectionWizardContext';
 import { type TreeElement } from '../tree/TreeElement';
+import { validateProviderId } from '../tree/discovery-view/clusterIdAugmentation';
 
 /**
  * Represents basic information about a service provider.
@@ -78,7 +79,16 @@ export interface DiscoveryProvider extends ProviderDescription {
 class DiscoveryServiceImpl {
     private serviceProviders: Map<string, DiscoveryProvider> = new Map();
 
-    public registerProvider(provider: DiscoveryProvider) {
+    public registerProvider(provider: DiscoveryProvider): void {
+        // Validate provider ID doesn't contain the separator
+        try {
+            validateProviderId(provider.id);
+        } catch (error) {
+            // Log to debug console for visibility
+            console.error(`[DiscoveryService] ${(error as Error).message}`);
+            throw error;
+        }
+
         this.serviceProviders.set(provider.id, provider);
     }
 
