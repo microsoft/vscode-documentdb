@@ -397,7 +397,9 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             ext.outputChannel.trace(
                 `[DiscoveryView] findCollectionByClusterId: Found cluster treeId="${clusterNode.id}", looking for "${nodeId}"`,
             );
-            return this.findNodeById(nodeId, true);
+            // Use findChildById to search from the cluster node directly.
+            // This prevents ancestor fallback that could expand sibling clusters.
+            return this.findChildById(clusterNode, nodeId);
         }
 
         // Cluster not in cache - we can't determine the treeId without expanding
