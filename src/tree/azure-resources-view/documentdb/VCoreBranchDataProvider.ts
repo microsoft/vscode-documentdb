@@ -140,7 +140,7 @@ export class VCoreBranchDataProvider
             // Get metadata from cache (may be undefined if not yet loaded)
             const cachedMetadata = this.metadataLoader.getCachedMetadata(resource.id);
 
-            // Sanitize Azure Resource ID: replace '/' with '-' for both clusterId and treeId
+            // Sanitize Azure Resource ID: replace '/' with '_' for both clusterId and treeId
             const sanitizedId = sanitizeAzureResourceIdForTreeId(resource.id);
 
             let clusterInfo: TreeCluster<AzureClusterModel> = {

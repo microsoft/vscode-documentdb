@@ -619,7 +619,7 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
             expect(children![0].cluster.clusterId).toBe(nonPrefixedClusterId);
         });
 
-        it('should warn when cluster ID has unexpected provider prefix', async () => {
+        it('should throw when cluster ID has unexpected provider prefix', async () => {
             // Cluster ID with wrong provider prefix
             const wrongPrefixClusterId = 'wrong-provider__subscriptions_sub1_clusters_cluster1';
             const mockClusterElement = {
@@ -638,11 +638,10 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
                 getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
             };
 
-            const children = await dataProvider.getChildren(mockParentElement);
-
-            // Should not throw, but should warn about unexpected prefix
-            expect(children).toBeDefined();
-            expect(outputChannelWarnMock).toHaveBeenCalledWith(expect.stringContaining('unexpected prefix'));
+            // Should throw an error about unexpected prefix
+            await expect(dataProvider.getChildren(mockParentElement)).rejects.toThrow(
+                expect.stringMatching(/must start with provider ID.*azure-mongo-vcore-discovery/),
+            );
         });
     });
 });
