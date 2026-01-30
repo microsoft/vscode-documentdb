@@ -25,9 +25,8 @@ const telemetryContextMock = {
 // Mock vscode-azext-utils module
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: jest.fn(
-        async (_eventName, callback: (context: IActionContext) => Promise<void>) => {
-            await callback(telemetryContextMock);
-            return undefined;
+        async (_eventName, callback: (context: IActionContext) => Promise<unknown>) => {
+            return await callback(telemetryContextMock);
         },
     ),
 }));
@@ -68,6 +67,9 @@ jest.mock('../../extensionVariables', () => ({
         },
         state: {
             wrapItemInStateHandling: jest.fn((item) => item),
+        },
+        outputChannel: {
+            trace: jest.fn(),
         },
     },
 }));
@@ -449,6 +451,179 @@ describe('DiscoveryBranchDataProvider - addDiscoveryProviderPromotionIfNeeded', 
             expect(globalStateUpdateMock).toHaveBeenCalledWith(
                 'discoveryProviderPromotionProcessed:different-provider-id',
                 true,
+            );
+        });
+    });
+});
+
+describe('DiscoveryBranchDataProvider - Cluster ID Augmentation', () => {
+    let dataProvider: DiscoveryBranchDataProvider;
+    let outputChannelTraceMock: jest.Mock;
+
+    beforeEach(() => {
+        // Clear all mocks
+        jest.clearAllMocks();
+
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        outputChannelTraceMock = ext.outputChannel.trace as jest.Mock;
+
+        // Create a new instance for each test
+        dataProvider = new DiscoveryBranchDataProvider();
+    });
+
+    describe('when getting children from a provider', () => {
+        it('should augment cluster IDs with provider prefix', async () => {
+            // Setup mock provider returning cluster items with non-augmented IDs
+            const originalClusterId =
+                '_subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1';
+            const mockClusterElement = {
+                id: 'cluster-element-id',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                cluster: {
+                    clusterId: originalClusterId,
+                    name: 'Test Cluster',
+                },
+            };
+
+            // Mock the parent element that returns the cluster as child
+            const mockParentElement = {
+                id: 'discoveryView/azure-mongo-vcore-discovery/subscription1',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'subscription' }),
+                getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
+            };
+
+            // Call getChildren
+            const children = await dataProvider.getChildren(mockParentElement);
+
+            // Verify clusterId was augmented
+            expect(children).toBeDefined();
+            expect(children![0]).toBeDefined();
+            // @ts-expect-error - accessing cluster property on tree element
+            expect(children![0].cluster.clusterId).toBe(`azure-mongo-vcore-discovery_${originalClusterId}`);
+
+            // Verify trace log was called
+            expect(outputChannelTraceMock).toHaveBeenCalledWith(
+                expect.stringContaining('[DiscoveryView] Augmented clusterId:'),
+            );
+        });
+
+        it('should not double-augment already augmented cluster IDs', async () => {
+            const augmentedClusterId =
+                'azure-mongo-vcore-discovery__subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1';
+            const mockClusterElement = {
+                id: 'cluster-element-id',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                cluster: {
+                    clusterId: augmentedClusterId, // Already augmented
+                    name: 'Test Cluster',
+                },
+            };
+
+            const mockParentElement = {
+                id: 'discoveryView/azure-mongo-vcore-discovery/subscription1',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'subscription' }),
+                getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
+            };
+
+            const children = await dataProvider.getChildren(mockParentElement);
+
+            // Should remain unchanged
+            expect(children).toBeDefined();
+            // @ts-expect-error - accessing cluster property on tree element
+            expect(children![0].cluster.clusterId).toBe(augmentedClusterId);
+
+            // Verify trace log was called with "already augmented" message
+            expect(outputChannelTraceMock).toHaveBeenCalledWith(
+                expect.stringContaining('[DiscoveryView] ClusterId already augmented, skipping:'),
+            );
+        });
+
+        it('should not modify non-cluster elements', async () => {
+            const mockNonClusterElement = {
+                id: 'subscription-element-id',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'subscription' }),
+                // No cluster property
+            };
+
+            const mockParentElement = {
+                id: 'discoveryView/azure-mongo-vcore-discovery',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'provider' }),
+                getChildren: jest.fn().mockResolvedValue([mockNonClusterElement]),
+            };
+
+            const children = await dataProvider.getChildren(mockParentElement);
+
+            // Element should be unchanged (no cluster property added)
+            expect(children).toBeDefined();
+            // @ts-expect-error - checking cluster property doesn't exist
+            expect(children![0].cluster).toBeUndefined();
+        });
+
+        it('should handle multiple cluster children from the same provider', async () => {
+            const originalClusterId1 = '_subscriptions_sub1_clusters_cluster1';
+            const originalClusterId2 = '_subscriptions_sub1_clusters_cluster2';
+            const mockClusterElement1 = {
+                id: 'cluster-element-id-1',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                cluster: {
+                    clusterId: originalClusterId1,
+                    name: 'Test Cluster 1',
+                },
+            };
+            const mockClusterElement2 = {
+                id: 'cluster-element-id-2',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                cluster: {
+                    clusterId: originalClusterId2,
+                    name: 'Test Cluster 2',
+                },
+            };
+
+            const mockParentElement = {
+                id: 'discoveryView/azure-mongo-ru-discovery/subscription1',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'subscription' }),
+                getChildren: jest.fn().mockResolvedValue([mockClusterElement1, mockClusterElement2]),
+            };
+
+            const children = await dataProvider.getChildren(mockParentElement);
+
+            // Both should be augmented with the same provider prefix
+            expect(children).toBeDefined();
+            expect(children!.length).toBe(2);
+            // @ts-expect-error - accessing cluster property on tree element
+            expect(children![0].cluster.clusterId).toBe(`azure-mongo-ru-discovery_${originalClusterId1}`);
+            // @ts-expect-error - accessing cluster property on tree element
+            expect(children![1].cluster.clusterId).toBe(`azure-mongo-ru-discovery_${originalClusterId2}`);
+        });
+
+        it('should not augment when provider ID cannot be extracted from tree ID', async () => {
+            const originalClusterId = '_subscriptions_sub1_clusters_cluster1';
+            const mockClusterElement = {
+                id: 'cluster-element-id',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'azureCluster' }),
+                cluster: {
+                    clusterId: originalClusterId,
+                    name: 'Test Cluster',
+                },
+            };
+
+            // Parent element with invalid tree ID format
+            const mockParentElement = {
+                id: 'invalid-tree-id-format',
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'unknown' }),
+                getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
+            };
+
+            const children = await dataProvider.getChildren(mockParentElement);
+
+            // Should remain unchanged because provider ID couldn't be extracted
+            expect(children).toBeDefined();
+            // @ts-expect-error - accessing cluster property on tree element
+            expect(children![0].cluster.clusterId).toBe(originalClusterId);
+
+            // Verify augmentation trace log was NOT called
+            expect(outputChannelTraceMock).not.toHaveBeenCalledWith(
+                expect.stringContaining('[DiscoveryView] Augmented clusterId:'),
             );
         });
     });
