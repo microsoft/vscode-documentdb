@@ -11,7 +11,6 @@ import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { isTreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
-import { extractOriginalClusterId, isAugmentedClusterId } from './clusterIdAugmentation';
 import { isClusterTreeElement } from './clusterItemTypeGuard';
 
 /**
@@ -169,7 +168,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
 
     /**
      * Validates that cluster IDs have the required provider prefix.
-     * Plugins are responsible for setting the prefix - this just validates.
+     * Contract: clusterId must start with providerId.
      * @throws Error if a cluster item is missing the provider prefix
      */
     private validateClusterIdPrefix(providerId: string, element: TreeElement): void {
@@ -179,17 +178,10 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
 
         const clusterId = element.cluster.clusterId;
 
-        if (!isAugmentedClusterId(clusterId)) {
+        if (!clusterId.startsWith(providerId)) {
             throw new Error(
-                `Discovery plugin error: clusterId "${clusterId}" is missing the provider prefix. ` +
-                    `Plugin "${providerId}" must prefix clusterId with "${providerId}_".`,
-            );
-        }
-
-        // Optionally validate it starts with the expected provider ID
-        if (!clusterId.startsWith(`${providerId}_`)) {
-            ext.outputChannel.warn(
-                `[DiscoveryView] ClusterId "${clusterId}" has unexpected prefix (expected "${providerId}_")`,
+                `Discovery plugin error: clusterId "${clusterId}" must start with provider ID "${providerId}". ` +
+                    `Plugin "${providerId}" must prefix clusterId with its provider ID.`,
             );
         }
     }
@@ -391,8 +383,9 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         // but treeId uses the original sanitized ID (e.g., "discoveryView/.../sanitizedId")
         // We need to extract the original to find the cluster by suffix
 
-        // Extract the original (non-prefixed) clusterId for suffix matching
-        const originalClusterId = extractOriginalClusterId(clusterId);
+        // Extract provider ID from clusterId (everything before the first '_')
+        const separatorIndex = clusterId.indexOf('_');
+        const originalClusterId = separatorIndex > 0 ? clusterId.substring(separatorIndex + 1) : clusterId;
         const clusterSuffix = `/${originalClusterId}`;
 
         // Try to find the cluster node in cache to get its treeId

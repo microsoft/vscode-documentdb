@@ -26,28 +26,6 @@ export function validateProviderId(providerId: string): void {
 }
 
 /**
- * Augments a clusterId with a provider prefix.
- * Idempotent: if already prefixed with THIS provider, returns as-is.
- *
- * @param providerId The discovery provider ID (e.g., "azure-mongo-vcore-discovery")
- * @param originalClusterId The original clusterId from the plugin
- * @returns Augmented clusterId with provider prefix
- *
- * @example
- * augmentClusterId("azure-mongo-vcore-discovery", "_subscriptions_..._mongoClusters_...")
- * // Returns: "azure-mongo-vcore-discovery__subscriptions_..._mongoClusters_..."
- */
-export function augmentClusterId(providerId: string, originalClusterId: string): string {
-    // If already augmented with this provider, return as-is (idempotent)
-    const existingProvider = extractProviderFromClusterId(originalClusterId);
-    if (existingProvider) {
-        return originalClusterId;
-    }
-
-    return `${providerId}${CLUSTER_ID_SEPARATOR}${originalClusterId}`;
-}
-
-/**
  * Extracts the provider prefix from an augmented clusterId.
  * Since provider IDs cannot contain '_', the first '_' is always the separator.
  *

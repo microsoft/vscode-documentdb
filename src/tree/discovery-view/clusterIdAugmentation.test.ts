@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    augmentClusterId,
     CLUSTER_ID_SEPARATOR,
     extractOriginalClusterId,
     extractProviderFromClusterId,
@@ -32,30 +31,6 @@ describe('clusterIdAugmentation', () => {
             expect(() => validateProviderId('invalid_provider')).toThrow(/must not contain/);
             expect(() => validateProviderId('also_invalid_id')).toThrow(/must not contain/);
             expect(() => validateProviderId('_starts-with-separator')).toThrow(/must not contain/);
-        });
-    });
-
-    describe('augmentClusterId', () => {
-        it('should prefix clusterId with provider ID and separator', () => {
-            const result = augmentClusterId(vcoreProviderId, originalVCoreId);
-            expect(result).toBe(`${vcoreProviderId}${CLUSTER_ID_SEPARATOR}${originalVCoreId}`);
-        });
-
-        it('should handle original IDs that start with underscore', () => {
-            const result = augmentClusterId(vcoreProviderId, '_subscriptions_sub1');
-            expect(result).toBe('azure-mongo-vcore-discovery__subscriptions_sub1');
-            // Double underscore is expected: separator + original starting with _
-        });
-
-        it('should be idempotent - not double-prefix if already augmented', () => {
-            const alreadyAugmented = `${vcoreProviderId}${CLUSTER_ID_SEPARATOR}${originalVCoreId}`;
-            const result = augmentClusterId(ruProviderId, alreadyAugmented);
-            expect(result).toBe(alreadyAugmented); // Unchanged
-        });
-
-        it('should handle empty original ID', () => {
-            const result = augmentClusterId(vcoreProviderId, '');
-            expect(result).toBe(`${vcoreProviderId}${CLUSTER_ID_SEPARATOR}`);
         });
     });
 
