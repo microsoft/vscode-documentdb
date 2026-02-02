@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import type * as vscode from 'vscode';
 import { type ConnectionItem, type ConnectionType } from '../../../services/connectionStorageService';
+import { type TaskInfo } from '../../../services/taskService/taskServiceResourceTracking';
 
 /**
  * Quick pick item for folder selection
@@ -34,6 +35,9 @@ export interface MoveItemsWizardContext extends IActionContext {
     // Pre-cached folder list (survives back navigation - initialized as [])
     cachedFolderList: FolderPickItem[];
 
-    // Conflict detection (no resolution - just detection)
+    // Task conflict detection - populated by VerifyNoConflictsStep
+    conflictingTasks: TaskInfo[];
+
+    // Naming conflict detection - populated by VerifyNoConflictsStep
     conflictingNames: string[];
 }

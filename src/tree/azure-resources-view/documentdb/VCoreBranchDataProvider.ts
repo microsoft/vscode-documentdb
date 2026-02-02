@@ -16,7 +16,8 @@ import { nonNullProp } from '../../../utils/nonNull';
 import { BaseExtendedTreeDataProvider } from '../../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../../TreeElement';
 import { isTreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { sanitizeAzureResourceIdForTreeId, type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 import { VCoreResourceItem } from './VCoreResourceItem';
 
 export class VCoreBranchDataProvider
@@ -28,7 +29,7 @@ export class VCoreBranchDataProvider
      * This replaces the manual cache management that was previously done with
      * detailsCacheUpdateRequested, detailsCache, and itemsToUpdateInfo properties.
      */
-    private readonly metadataLoader = new LazyMetadataLoader<ClusterModel, VCoreResourceItem>({
+    private readonly metadataLoader = new LazyMetadataLoader<TreeCluster<AzureClusterModel>, VCoreResourceItem>({
         cacheDuration: 5 * 60 * 1000, // 5 minutes
         loadMetadata: async (subscription, context) => {
             console.debug(
@@ -48,13 +49,27 @@ export class VCoreBranchDataProvider
                 accounts.length,
             );
 
-            const cache = new CaseInsensitiveMap<ClusterModel>();
+            const cache = new CaseInsensitiveMap<TreeCluster<AzureClusterModel>>();
             accounts.forEach((documentDbAccount) => {
-                cache.set(nonNullProp(documentDbAccount, 'id', 'vCoreAccount.id', 'VCoreBranchDataProvider.ts'), {
-                    dbExperience: DocumentDBExperience,
-                    id: documentDbAccount.id!,
+                const resourceId = nonNullProp(
+                    documentDbAccount,
+                    'id',
+                    'vCoreAccount.id',
+                    'VCoreBranchDataProvider.ts',
+                );
+                // Sanitize Azure Resource ID: replace '/' with '_' for both clusterId and treeId
+                // This ensures clusterId never contains '/' (simplifies cache key handling)
+                const sanitizedId = sanitizeAzureResourceIdForTreeId(resourceId);
+
+                const cluster: TreeCluster<AzureClusterModel> = {
+                    // Core cluster data
                     name: documentDbAccount.name!,
-                    resourceGroup: getResourceGroupFromId(documentDbAccount.id!),
+                    connectionString: undefined, // Loaded lazily when connecting
+                    dbExperience: DocumentDBExperience,
+                    clusterId: sanitizedId, // Sanitized - no '/' characters
+                    // Azure-specific data
+                    azureResourceId: resourceId, // Keep original Azure Resource ID for ARM API correlation
+                    resourceGroup: getResourceGroupFromId(resourceId),
                     location: documentDbAccount.location,
                     serverVersion: documentDbAccount.properties?.serverVersion,
                     systemData: {
@@ -64,7 +79,16 @@ export class VCoreBranchDataProvider
                     diskSize: documentDbAccount.properties?.storage?.sizeGb,
                     nodeCount: documentDbAccount.properties?.sharding?.shardCount,
                     enableHa: documentDbAccount.properties?.highAvailability?.targetMode !== 'Disabled',
-                });
+                    // Tree context (clusterId === treeId after sanitization)
+                    treeId: sanitizedId,
+                    viewId: Views.AzureResourcesView,
+                };
+
+                ext.outputChannel.trace(
+                    `[AzureResourcesView/vCore/cache] Created cluster model: name="${cluster.name}", clusterId="${cluster.clusterId}", treeId="${cluster.treeId}"`,
+                );
+
+                cache.set(resourceId, cluster);
             });
             return cache;
         },
@@ -116,15 +140,31 @@ export class VCoreBranchDataProvider
             // Get metadata from cache (may be undefined if not yet loaded)
             const cachedMetadata = this.metadataLoader.getCachedMetadata(resource.id);
 
-            let clusterInfo: ClusterModel = {
-                ...resource,
+            // Sanitize Azure Resource ID: replace '/' with '_' for both clusterId and treeId
+            const sanitizedId = sanitizeAzureResourceIdForTreeId(resource.id);
+
+            let clusterInfo: TreeCluster<AzureClusterModel> = {
+                // Core cluster data
+                name: resource.name ?? 'Unknown',
+                connectionString: undefined, // Loaded lazily
                 dbExperience: DocumentDBExperience,
-            } as ClusterModel;
+                clusterId: sanitizedId, // Sanitized - no '/' characters
+                // Azure-specific data
+                azureResourceId: resource.id, // Keep original Azure Resource ID for ARM API correlation
+                resourceGroup: undefined, // Will be populated from cache
+                // Tree context (clusterId === treeId after sanitization)
+                treeId: sanitizedId,
+                viewId: Views.AzureResourcesView,
+            };
 
             // Merge with cached metadata if available
             if (cachedMetadata) {
                 clusterInfo = { ...clusterInfo, ...cachedMetadata };
             }
+
+            ext.outputChannel.trace(
+                `[AzureResourcesView/vCore] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}", hasCachedMetadata=${!!cachedMetadata}`,
+            );
 
             const clusterItem = new VCoreResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));
@@ -138,5 +178,39 @@ export class VCoreBranchDataProvider
 
             return clusterItem;
         }) as TreeElement | Thenable<TreeElement>; // Cast to ensure correct type;
+    }
+
+    /**
+     * Finds a cluster node by its stable cluster identifier.
+     *
+     * For Azure Resources View (vCore), the clusterId === treeId (both are sanitized Azure Resource IDs).
+     *
+     * @param clusterId The stable cluster identifier (sanitized Azure Resource ID)
+     * @returns A Promise that resolves to the found cluster tree element or undefined
+     */
+    async findClusterNodeByClusterId(clusterId: string): Promise<TreeElement | undefined> {
+        // In Azure Resources View, clusterId === treeId (both are sanitized)
+        return this.findNodeById(clusterId, true);
+    }
+
+    /**
+     * Finds a collection node by its cluster's stable identifier.
+     *
+     * For Azure Resources View (vCore), the clusterId === treeId (both are sanitized Azure Resource IDs).
+     * The collection path is: `${clusterId}/${databaseName}/${collectionName}`
+     *
+     * @param clusterId The stable cluster identifier (sanitized Azure Resource ID)
+     * @param databaseName The database name
+     * @param collectionName The collection name
+     * @returns A Promise that resolves to the found CollectionItem or undefined if not found
+     */
+    async findCollectionByClusterId(
+        clusterId: string,
+        databaseName: string,
+        collectionName: string,
+    ): Promise<TreeElement | undefined> {
+        // In Azure Resources View, clusterId === treeId (both are sanitized)
+        const nodeId = `${clusterId}/${databaseName}/${collectionName}`;
+        return this.findNodeById(nodeId, true);
     }
 }

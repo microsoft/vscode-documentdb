@@ -50,12 +50,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         // Build the configuration for the copy-paste task
         const config: CopyPasteConfig = {
             source: {
-                connectionId: sourceConnectionId,
+                clusterId: sourceConnectionId,
                 databaseName: sourceDatabaseName,
                 collectionName: sourceCollectionName,
             },
             target: {
-                connectionId: targetConnectionId,
+                clusterId: targetConnectionId,
                 databaseName: targetDatabaseName,
                 collectionName: finalTargetCollectionName,
             },

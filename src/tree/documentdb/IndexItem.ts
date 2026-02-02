@@ -5,12 +5,12 @@
 
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { type Experience } from '../../DocumentDBExperiences';
 import { type CollectionItemModel, type DatabaseItemModel, type IndexItemModel } from '../../documentdb/ClustersClient';
+import { type Experience } from '../../DocumentDBExperiences';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
-import { type ClusterModel } from './ClusterModel';
 
 export class IndexItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
     public readonly id: string;
@@ -20,12 +20,12 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
     private readonly experienceContextValue: string = '';
 
     constructor(
-        readonly cluster: ClusterModel,
+        readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
         readonly collectionInfo: CollectionItemModel,
         readonly indexInfo: IndexItemModel,
     ) {
-        this.id = `${cluster.id}/${databaseInfo.name}/${collectionInfo.name}/indexes/${indexInfo.name}`;
+        this.id = `${cluster.treeId}/${databaseInfo.name}/${collectionInfo.name}/indexes/${indexInfo.name}`;
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);

@@ -6,12 +6,12 @@
 import { createContextValue } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ThemeIcon, type TreeItem } from 'vscode';
-import { type Experience } from '../../DocumentDBExperiences';
 import { type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { type Experience } from '../../DocumentDBExperiences';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
-import { type ClusterModel } from './ClusterModel';
 import { type CollectionItem } from './CollectionItem';
 
 export class DocumentsItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
@@ -31,12 +31,12 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
      *                              the collection node to be passed in. This is a workaround that reduces complex changes to the commands used.
      */
     constructor(
-        readonly cluster: ClusterModel,
+        readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
         readonly collectionInfo: CollectionItemModel,
         readonly parentCollectionNode: CollectionItem,
     ) {
-        this.id = `${cluster.id}/${databaseInfo.name}/${collectionInfo.name}/documents`;
+        this.id = `${cluster.treeId}/${databaseInfo.name}/${collectionInfo.name}/documents`;
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
@@ -56,7 +56,8 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
                         viewTitle: `${this.collectionInfo.name}`,
                         // viewTitle: `${this.mongoCluster.name}/${this.databaseInfo.name}/${this.collectionInfo.name}`, // using '/' as a separator to use VSCode's "title compression"(?) feature
 
-                        clusterId: this.cluster.id,
+                        clusterId: this.cluster.clusterId,
+                        viewId: this.cluster.viewId,
                         databaseName: this.databaseInfo.name,
                         collectionName: this.collectionInfo.name,
                         collectionTreeItem: this.parentCollectionNode,

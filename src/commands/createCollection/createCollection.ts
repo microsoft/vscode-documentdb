@@ -21,7 +21,7 @@ export async function createCollection(context: IActionContext, node: DatabaseIt
 
     const wizardContext: CreateCollectionWizardContext = {
         ...context,
-        credentialsId: node.cluster.id,
+        credentialsId: node.cluster.clusterId,
         databaseId: node.databaseInfo.name,
         nodeId: node.id,
     };

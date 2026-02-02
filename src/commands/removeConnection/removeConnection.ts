@@ -31,7 +31,7 @@ export async function removeConnection(context: IActionContext, node: DocumentDB
     // Check if any running tasks are using this connection
     const canProceed = await checkCanProceedAndInformUser(
         {
-            connectionId: node.cluster.id,
+            clusterId: node.cluster.clusterId,
         },
         l10n.t('remove this connection'),
     );
@@ -63,8 +63,8 @@ export async function removeConnection(context: IActionContext, node: DocumentDB
             }
         });
 
-        // delete cached credentials from memory
-        CredentialCache.deleteCredentials(node.id);
+        // delete cached credentials from memory using stable clusterId (not treeId)
+        CredentialCache.deleteCredentials(node.cluster.clusterId);
 
         refreshParentInConnectionsView(node.id);
     });

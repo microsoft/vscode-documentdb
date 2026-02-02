@@ -28,15 +28,16 @@ import {
 } from '../../../plugins/service-azure-mongo-vcore/utils/clusterHelpers';
 import { getThemeAgnosticIconPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
+import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 
-export class VCoreResourceItem extends ClusterItemBase {
+export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = getThemeAgnosticIconPath('AzureDocumentDb.svg');
 
     constructor(
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
     }
@@ -119,8 +120,9 @@ export class VCoreResourceItem extends ClusterItemBase {
                       }
                     : wizardContext.nativeAuthConfig;
 
+            // Use clusterId for stable cache lookup across tree moves
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 nonNullValue(
                     wizardContext.selectedAuthMethod,
                     'wizardContext.selectedAuthMethod',
@@ -145,7 +147,7 @@ export class VCoreResourceItem extends ClusterItemBase {
             }
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -169,8 +171,8 @@ export class VCoreResourceItem extends ClusterItemBase {
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }
