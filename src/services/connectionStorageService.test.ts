@@ -813,9 +813,7 @@ describe('ConnectionStorageService', () => {
                 expect(connectionString).not.toMatch(/ssl=true.*ssl=true/);
 
                 // Verify by parsing the connection string - should correctly decode the appName
-                const { DocumentDBConnectionString } = await import(
-                    '../documentdb/utils/DocumentDBConnectionString'
-                );
+                const { DocumentDBConnectionString } = await import('../documentdb/utils/DocumentDBConnectionString');
                 const parsed = new DocumentDBConnectionString(connectionString);
                 expect(parsed.searchParams.get('appName')).toBe('@anapphere@');
             });
