@@ -522,9 +522,7 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
             };
 
             // Should throw because plugin didn't prefix the clusterId
-            await expect(dataProvider.getChildren(mockParentElement)).rejects.toThrow(
-                /Discovery plugin error.*missing the provider prefix/,
-            );
+            await expect(dataProvider.getChildren(mockParentElement)).rejects.toThrow(/must start with provider ID/i);
         });
 
         it('should not modify non-cluster elements', async () => {
