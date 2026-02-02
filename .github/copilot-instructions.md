@@ -120,10 +120,10 @@ CredentialCache.hasCredentials(this.id); // BUG!
 ### Model Types
 
 - **`ConnectionClusterModel`** - Connections View (has `storageId`)
-- **`AzureClusterModel`** - Azure/Discovery Views (has Azure `id`)
+- **`AzureClusterModel`** - Azure/Discovery Views (has `azureResourceId`)
 - **`BaseClusterModel`** - Shared interface (use for generic code)
 
-For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replaced with `_`). The original Azure Resource ID is stored in `AzureClusterModel.id` for Azure API calls.
+For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replaced with `_`). The original Azure Resource ID is stored in `AzureClusterModel.azureResourceId` for Azure API calls.
 
 > 💡 **Extensibility**: If adding a non-Azure discovery source (e.g., AWS, GCP), consider creating a new model type (e.g., `AwsClusterModel`) extending `BaseClusterModel` with source-specific metadata.
 

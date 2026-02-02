@@ -53,7 +53,7 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
         this.journeyCorrelationId = journeyCorrelationId;
 
         // Construct tooltip and description
-        const tooltipParts: string[] = [`**Name:** ${cluster.name}`, `**ID:** ${cluster.id}`];
+        const tooltipParts: string[] = [`**Name:** ${cluster.name}`, `**ID:** ${cluster.azureResourceId}`];
         if (cluster.vmSize) {
             tooltipParts.push(`**Size:** ${cluster.vmSize}`);
         }

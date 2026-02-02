@@ -437,24 +437,27 @@ function maskSensitiveValuesInTelemetry(context: IActionContext, parsedCS: Docum
  * Opens an appropriate editor for a Cosmos DB connection.
  *
  * @param context The action context.
- * @param parsedConnection The parsed connection information, containing either a Core API connection string or a MongoDB API connection string.
- * @param database The name of the database to connect to. If not provided, it will attempt to use the database name from the connection string.
- * @param container The name of the container (collection) to open.
- * @throws Error if container name is not provided, or if database name is not provided for Core API connections.
+ * @param storageId The stable cluster identifier (storageId) for the connection.
+ * @param _isEmulator Unused - kept for backward compatibility with callers.
+ * @param database The name of the database to connect to.
+ * @param collection The name of the collection to open.
+ * @throws Error if database or collection name is not provided.
  * @returns A promise that resolves when the editor is opened.
  */
 async function openDedicatedView(
     context: IActionContext,
     storageId: string,
-    isEmulator: boolean,
+    _isEmulator: boolean,
     database?: string,
     collection?: string,
 ): Promise<void> {
-    const clusterId = buildConnectionsViewTreePath(storageId, isEmulator);
+    // storageId IS the clusterId (stable identifier for Connections View)
+    // Note: buildConnectionsViewTreePath returns a treeId, NOT a clusterId
+    // openCollectionViewInternal expects the stable clusterId for cache lookups
 
     // URI handler always opens from Connections View since connections are added there
     return openCollectionViewInternal(context, {
-        clusterId: clusterId,
+        clusterId: storageId, // ✅ storageId is the stable clusterId for Connections View
         viewId: Views.ConnectionsView,
         databaseName: nonNullValue(database, 'database', 'vscodeUriHandler.ts'),
         collectionName: nonNullValue(collection, 'collection', 'vscodeUriHandler.ts'),

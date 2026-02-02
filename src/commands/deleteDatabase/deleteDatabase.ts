@@ -26,7 +26,7 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
     // Check if any running tasks are using this database
     const canProceed = await checkCanProceedAndInformUser(
         {
-            connectionId: node.cluster.clusterId,
+            clusterId: node.cluster.clusterId,
             databaseName: node.databaseInfo.name,
         },
         l10n.t('delete this database'),

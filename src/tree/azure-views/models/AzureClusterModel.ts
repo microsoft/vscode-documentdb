@@ -10,7 +10,7 @@ import { type BaseClusterModel } from '../../models/BaseClusterModel';
  * Includes Azure metadata from ARM API.
  *
  * NOTE: For Azure views, clusterId is SANITIZED (no '/' characters).
- * The original Azure Resource ID is preserved in the `id` property for ARM API correlation.
+ * The original Azure Resource ID is preserved in the `azureResourceId` property for ARM API correlation.
  */
 export interface AzureClusterModel extends BaseClusterModel {
     /**
@@ -21,7 +21,7 @@ export interface AzureClusterModel extends BaseClusterModel {
      *
      * For caching/client lookups, use `clusterId` instead (sanitized, no '/').
      */
-    id: string;
+    azureResourceId: string;
 
     /** Resource group name (extracted from Azure Resource ID) */
     resourceGroup?: string;

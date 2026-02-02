@@ -122,45 +122,59 @@ async function findCollectionNodeInTree(
     // Select the branch data provider based on viewId
     // The viewId tells us which tree view the cluster was opened from
     //
-    // Note: Only ConnectionsBranchDataProvider and DiscoveryBranchDataProvider currently
-    // implement findCollectionByClusterId. Other providers (Azure Resources, Workspace)
-    // don't support this operation yet.
-    let branchDataProvider: typeof ext.connectionsBranchDataProvider | typeof ext.discoveryBranchDataProvider | null =
-        null;
+    // Each provider now implements findCollectionByClusterId for the dual-ID architecture.
 
     // Cast viewId to string enum values for comparison
     // (viewId comes from serialized context as a string)
     if (viewId === (Views.ConnectionsView as string)) {
-        branchDataProvider = ext.connectionsBranchDataProvider;
+        return (await ext.connectionsBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
     } else if (viewId === (Views.DiscoveryView as string)) {
-        branchDataProvider = ext.discoveryBranchDataProvider;
-    } else if (viewId === (Views.AzureResourcesView as string) || viewId === (Views.AzureWorkspaceView as string)) {
-        // These providers don't currently implement findCollectionByClusterId
-        // branchDataProvider remains null, will throw error below
+        return (await ext.discoveryBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
+    } else if (viewId === (Views.AzureResourcesView as string)) {
+        // Azure Resources View has two providers: vCore and RU
+        // Try both since we don't know which API type this cluster uses
+        const vcoreResult = await ext.azureResourcesVCoreBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        );
+        if (vcoreResult) {
+            return vcoreResult as CollectionItem | undefined;
+        }
+        return (await ext.azureResourcesRUBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
+    } else if (viewId === (Views.AzureWorkspaceView as string)) {
+        // Azure Workspace View doesn't surface cluster items directly
+        console.warn(`findCollectionNodeInTree: Azure Workspace View does not support collection lookup`);
+        return undefined;
     } else {
         // Fallback: try to infer from clusterId format
         // - Azure resources: clusterId is sanitized, contains '_providers_' or '_subscriptions_'
         // - Connections View: clusterId is a storageId (UUID like 'storageId-xxx')
         const isAzureResource = clusterId.includes('_providers_') || clusterId.includes('_subscriptions_');
-        branchDataProvider = isAzureResource ? ext.discoveryBranchDataProvider : ext.connectionsBranchDataProvider;
-    }
-
-    if (!branchDataProvider?.findCollectionByClusterId) {
-        throw new Error(
-            vscode.l10n.t(
-                'The tree provider for view "{0}" does not support finding collections by cluster ID',
-                viewId,
-            ),
-        );
-    }
-
-    try {
-        // Each provider knows how to resolve the tree path from clusterId
-        const node = await branchDataProvider.findCollectionByClusterId(clusterId, databaseName, collectionName);
-        return node as CollectionItem | undefined;
-    } catch (error) {
-        console.error(`Error finding collection by clusterId '${clusterId}' in view '${viewId}':`, error);
-        return undefined;
+        if (isAzureResource) {
+            return (await ext.discoveryBranchDataProvider.findCollectionByClusterId(
+                clusterId,
+                databaseName,
+                collectionName,
+            )) as CollectionItem | undefined;
+        }
+        return (await ext.connectionsBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
     }
 }
 

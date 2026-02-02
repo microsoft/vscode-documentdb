@@ -16,7 +16,7 @@ export interface CopyPasteConfig {
      * Source collection information
      */
     source: {
-        connectionId: string;
+        clusterId: string;
         databaseName: string;
         collectionName: string;
     };
@@ -25,7 +25,7 @@ export interface CopyPasteConfig {
      * Target collection information
      */
     target: {
-        connectionId: string;
+        clusterId: string;
         databaseName: string;
         collectionName: string;
     };

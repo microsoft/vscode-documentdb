@@ -21,7 +21,7 @@ describe('AzureClusterModel', () => {
                 dbExperience: DocumentDBExperience,
                 clusterId: sanitizeAzureResourceIdForTreeId(azureResourceId),
                 // AzureClusterModel properties
-                id: azureResourceId,
+                azureResourceId: azureResourceId,
                 resourceGroup: 'rg1',
                 location: 'eastus',
                 serverVersion: '6.0',
@@ -31,7 +31,7 @@ describe('AzureClusterModel', () => {
             };
 
             expect(model.name).toBe('azure-cluster');
-            expect(model.id).toBe(azureResourceId);
+            expect(model.azureResourceId).toBe(azureResourceId);
             expect(model.resourceGroup).toBe('rg1');
             expect(model.location).toBe('eastus');
             expect(model.serverVersion).toBe('6.0');
@@ -46,7 +46,7 @@ describe('AzureClusterModel', () => {
                 connectionString: undefined,
                 dbExperience: DocumentDBExperience,
                 clusterId: sanitizeAzureResourceIdForTreeId(azureResourceId),
-                id: azureResourceId,
+                azureResourceId: azureResourceId,
                 resourceGroup: 'rg1',
                 location: 'westeurope',
                 serverVersion: '7.0',
@@ -111,7 +111,7 @@ describe('AzureClusterModel', () => {
                 connectionString: undefined,
                 dbExperience: DocumentDBExperience,
                 clusterId: sanitizedId, // Sanitized - clusterId must NEVER contain '/'
-                id: azureResourceId, // Original Azure Resource ID preserved for Azure API calls
+                azureResourceId: azureResourceId, // Original Azure Resource ID preserved for Azure API calls
                 treeId: sanitizedId, // Sanitized for tree structure
                 viewId: Views.DiscoveryView,
             };
@@ -126,9 +126,9 @@ describe('AzureClusterModel', () => {
                 '_subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1',
             );
 
-            // Original Azure Resource ID preserved in 'id' for Azure API calls
-            expect(discoveryCluster.id).toBe(azureResourceId);
-            expect(discoveryCluster.id).toContain('/');
+            // Original Azure Resource ID preserved in 'azureResourceId' for Azure API calls
+            expect(discoveryCluster.azureResourceId).toBe(azureResourceId);
+            expect(discoveryCluster.azureResourceId).toContain('/');
         });
 
         it('should sanitize both clusterId and treeId for Azure Resources View', () => {
@@ -138,7 +138,7 @@ describe('AzureClusterModel', () => {
                 connectionString: undefined,
                 dbExperience: DocumentDBExperience,
                 clusterId: sanitizedId, // Sanitized - clusterId must NEVER contain '/'
-                id: azureResourceId, // Original Azure Resource ID preserved for Azure API calls
+                azureResourceId: azureResourceId, // Original Azure Resource ID preserved for Azure API calls
                 treeId: sanitizedId, // Sanitized for consistency
                 viewId: Views.AzureResourcesView,
             };
@@ -150,9 +150,9 @@ describe('AzureClusterModel', () => {
             expect(azureResourcesCluster.clusterId).not.toContain('/');
             expect(azureResourcesCluster.treeId).not.toContain('/');
 
-            // Original Azure Resource ID preserved in 'id' for Azure API calls
-            expect(azureResourcesCluster.id).toBe(azureResourceId);
-            expect(azureResourcesCluster.id).toContain('/');
+            // Original Azure Resource ID preserved in 'azureResourceId' for Azure API calls
+            expect(azureResourcesCluster.azureResourceId).toBe(azureResourceId);
+            expect(azureResourcesCluster.azureResourceId).toContain('/');
         });
     });
 });

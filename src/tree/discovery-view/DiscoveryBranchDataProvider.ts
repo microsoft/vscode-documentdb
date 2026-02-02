@@ -379,17 +379,8 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         databaseName: string,
         collectionName: string,
     ): Promise<TreeElement | undefined> {
-        // Key insight: clusterId is prefixed (e.g., "azure-mongo-vcore-discovery_sanitizedId")
-        // but treeId uses the original sanitized ID (e.g., "discoveryView/.../sanitizedId")
-        // We need to extract the original to find the cluster by suffix
-
-        // Extract provider ID from clusterId (everything before the first '_')
-        const separatorIndex = clusterId.indexOf('_');
-        const originalClusterId = separatorIndex > 0 ? clusterId.substring(separatorIndex + 1) : clusterId;
-        const clusterSuffix = `/${originalClusterId}`;
-
-        // Try to find the cluster node in cache to get its treeId
-        const clusterNode = this.findNodeBySuffix(clusterSuffix);
+        // First find the cluster node to get its treeId
+        const clusterNode = await this.findClusterNodeByClusterId(clusterId);
 
         if (clusterNode?.id) {
             // Found the cluster - build the full collection path using its treeId
@@ -405,7 +396,45 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         // Cluster not in cache - we can't determine the treeId without expanding
         // This should be rare since the webview is opened from an expanded cluster
         ext.outputChannel.trace(
-            `[DiscoveryView] findCollectionByClusterId: Cluster "${clusterId}" (original: "${originalClusterId}") not in cache, cannot resolve treeId`,
+            `[DiscoveryView] findCollectionByClusterId: Cluster "${clusterId}" not in cache, cannot resolve treeId`,
+        );
+        return undefined;
+    }
+
+    /**
+     * Finds a cluster node by its stable cluster identifier.
+     *
+     * For Discovery View, the clusterId is prefixed with the provider ID
+     * (e.g., "azure-mongo-vcore-discovery_sanitizedId"), but the treeId uses
+     * the original sanitized ID without the prefix.
+     *
+     * @param clusterId The stable cluster identifier (provider-prefixed)
+     * @returns A Promise that resolves to the found cluster tree element or undefined
+     */
+    async findClusterNodeByClusterId(clusterId: string): Promise<TreeElement | undefined> {
+        // Key insight: clusterId is prefixed (e.g., "azure-mongo-vcore-discovery_sanitizedId")
+        // but treeId uses the original sanitized ID (e.g., "discoveryView/.../sanitizedId")
+        // We need to extract the original to find the cluster by suffix
+
+        // Extract provider ID from clusterId (everything before the first '_')
+        const separatorIndex = clusterId.indexOf('_');
+        const originalClusterId = separatorIndex > 0 ? clusterId.substring(separatorIndex + 1) : clusterId;
+        const clusterSuffix = `/${originalClusterId}`;
+
+        // Try to find the cluster node in cache by its suffix
+        const clusterNode = this.findNodeBySuffix(clusterSuffix);
+
+        if (clusterNode) {
+            ext.outputChannel.trace(
+                `[DiscoveryView] findClusterNodeByClusterId: Found cluster "${clusterId}" (original: "${originalClusterId}") with treeId="${clusterNode.id}"`,
+            );
+            return clusterNode;
+        }
+
+        // Cluster not in cache - we can't determine the treeId without expanding
+        // This should be rare since the webview is opened from an expanded cluster
+        ext.outputChannel.trace(
+            `[DiscoveryView] findClusterNodeByClusterId: Cluster "${clusterId}" (original: "${originalClusterId}") not in cache, cannot resolve treeId`,
         );
         return undefined;
     }

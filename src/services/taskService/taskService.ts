@@ -547,14 +547,14 @@ export interface TaskService {
     getConflictingTasks(resource: ResourceDefinition): TaskInfo[];
 
     /**
-     * Finds all tasks that conflict with any of the given connection IDs.
-     * Performs simple equality matching between the provided connectionIds and
-     * the connectionIds used by running tasks.
+     * Finds all tasks that conflict with any of the given cluster IDs.
+     * Performs simple equality matching between the provided clusterIds and
+     * the clusterIds used by running tasks.
      *
-     * @param connectionIds - Array of connection IDs (clusterIds/storageIds) to check
+     * @param clusterIds - Array of cluster IDs (clusterIds/storageIds) to check
      * @returns Array of conflicting tasks (deduplicated by taskId)
      */
-    findConflictingTasksForConnections(connectionIds: string[]): TaskInfo[];
+    findConflictingTasksForConnections(clusterIds: string[]): TaskInfo[];
 
     /**
      * Gets all resources currently in use by all active tasks.
@@ -695,12 +695,12 @@ class TaskServiceImpl implements TaskService {
         return result;
     }
 
-    public findConflictingTasksForConnections(connectionIds: string[]): TaskInfo[] {
-        if (connectionIds.length === 0) {
+    public findConflictingTasksForConnections(clusterIds: string[]): TaskInfo[] {
+        if (clusterIds.length === 0) {
             return [];
         }
 
-        const connectionIdSet = new Set(connectionIds);
+        const clusterIdSet = new Set(clusterIds);
         const conflictingTasks: TaskInfo[] = [];
         const addedTaskIds = new Set<string>();
 
@@ -711,7 +711,7 @@ class TaskServiceImpl implements TaskService {
             }
 
             for (const resource of resources) {
-                if (resource.connectionId && connectionIdSet.has(resource.connectionId)) {
+                if (resource.clusterId && clusterIdSet.has(resource.clusterId)) {
                     conflictingTasks.push(task);
                     addedTaskIds.add(task.taskId);
                     break;

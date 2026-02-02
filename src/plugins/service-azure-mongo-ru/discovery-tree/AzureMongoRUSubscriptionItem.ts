@@ -77,7 +77,7 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                             dbExperience: CosmosDBMongoRUExperience,
                             clusterId: prefixedClusterId, // Prefixed with provider ID for uniqueness
                             // Azure-specific data
-                            id: resourceId, // Keep original Azure Resource ID for ARM API correlation
+                            azureResourceId: resourceId, // Keep original Azure Resource ID for ARM API correlation
                             resourceGroup: getResourceGroupFromId(resourceId),
                             // Tree context - treeId includes parent hierarchy for findNodeById to work
                             treeId: `${this.id}/${sanitizedId}`,

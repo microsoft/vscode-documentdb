@@ -26,11 +26,11 @@ export class VerificationCompleteError extends Error {
 }
 
 /**
- * Finds all tasks that conflict with the given connection IDs.
+ * Finds all tasks that conflict with the given cluster IDs.
  *
  * This is a convenience wrapper around TaskService.findConflictingTasksForConnections().
  *
- * @param connectionIds - Array of connection IDs (clusterIds/storageIds) to check against running tasks
+ * @param clusterIds - Array of cluster IDs (storageIds from ConnectionStorageService) to check against running tasks
  * @returns Array of conflicting tasks (deduplicated by taskId)
  *
  * @example
@@ -39,12 +39,12 @@ export class VerificationCompleteError extends Error {
  * const conflicts = findConflictingTasks([node.cluster.clusterId]);
  *
  * // Check all connections in a folder
- * const connectionIds = await enumerateConnectionsInFolder(folderId, connectionType);
- * const conflicts = findConflictingTasks(connectionIds);
+ * const clusterIds = await enumerateConnectionsInFolder(folderId, connectionType);
+ * const conflicts = findConflictingTasks(clusterIds);
  * ```
  */
-export function findConflictingTasks(connectionIds: string[]): TaskInfo[] {
-    return TaskService.findConflictingTasksForConnections(connectionIds);
+export function findConflictingTasks(clusterIds: string[]): TaskInfo[] {
+    return TaskService.findConflictingTasksForConnections(clusterIds);
 }
 
 /**

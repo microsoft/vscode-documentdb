@@ -22,7 +22,7 @@ export async function deleteCollection(context: IActionContext, node: Collection
     // Check if any running tasks are using this collection
     const canProceed = await checkCanProceedAndInformUser(
         {
-            connectionId: node.cluster.clusterId,
+            clusterId: node.cluster.clusterId,
             databaseName: node.databaseInfo.name,
             collectionName: node.collectionInfo.name,
         },

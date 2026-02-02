@@ -79,6 +79,24 @@ export interface ExtendedTreeDataProvider<T extends TreeElement> extends vscode.
     findCollectionByClusterId?(clusterId: string, databaseName: string, collectionName: string): Promise<T | undefined>;
 
     /**
+     * Finds a cluster node by its stable cluster identifier.
+     *
+     * This method provides a simpler alternative to findCollectionByClusterId when you need
+     * the cluster node itself (not a specific collection). Useful for:
+     * - Building tree paths for databases/collections
+     * - Accessing cluster metadata from webviews
+     *
+     * ⚠️ IMPORTANT: clusterId is guaranteed to NOT contain '/' characters.
+     * - Connections View: storageId (UUID)
+     * - Discovery View: Provider-prefixed ID (e.g., "azure-mongo-vcore-discovery_sanitizedId")
+     * - Azure Views: Sanitized Azure Resource ID (/ replaced with _)
+     *
+     * @param clusterId The stable cluster identifier (never contains '/')
+     * @returns A Promise that resolves to the cluster tree element or undefined if not found
+     */
+    findClusterNodeByClusterId?(clusterId: string): Promise<T | undefined>;
+
+    /**
      * Refreshes the tree data.
      * This will trigger the view to update the changed element/root and its children recursively (if shown).
      *

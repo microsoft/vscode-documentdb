@@ -119,7 +119,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             dbExperience: DocumentDBExperience,
                             clusterId: prefixedClusterId, // Prefixed with provider ID for uniqueness
                             // Azure-specific data
-                            id: vm.id!, // Keep original Azure Resource ID for ARM API correlation
+                            azureResourceId: vm.id!, // Keep original Azure Resource ID for ARM API correlation
                             resourceGroup: getResourceGroupFromId(vm.id!),
                             // VM-specific data
                             vmSize: vm.hardwareProfile?.vmSize,

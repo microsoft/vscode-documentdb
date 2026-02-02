@@ -70,7 +70,7 @@ export class RUBranchDataProvider
                     dbExperience: CosmosDBMongoRUExperience,
                     clusterId: sanitizedId, // Sanitized - no '/' characters
                     // Azure-specific data
-                    id: resourceId, // Keep original Azure Resource ID for ARM API correlation
+                    azureResourceId: resourceId, // Keep original Azure Resource ID for ARM API correlation
                     resourceGroup: getResourceGroupFromId(resourceId),
                     location: ruAccount.location,
                     serverVersion: ruAccount?.apiProperties?.serverVersion,
@@ -155,7 +155,7 @@ export class RUBranchDataProvider
                 dbExperience: CosmosDBMongoRUExperience,
                 clusterId: sanitizedId, // Sanitized - no '/' characters
                 // Azure-specific data
-                id: resource.id, // Keep original Azure Resource ID for ARM API correlation
+                azureResourceId: resource.id, // Keep original Azure Resource ID for ARM API correlation
                 resourceGroup: undefined, // Will be populated from cache
                 // Tree context (clusterId === treeId after sanitization)
                 treeId: sanitizedId,
@@ -182,5 +182,39 @@ export class RUBranchDataProvider
 
             return clusterItem;
         }) as TreeElement | Thenable<TreeElement>; // Cast to ensure correct type;
+    }
+
+    /**
+     * Finds a cluster node by its stable cluster identifier.
+     *
+     * For Azure Resources View (RU), the clusterId === treeId (both are sanitized Azure Resource IDs).
+     *
+     * @param clusterId The stable cluster identifier (sanitized Azure Resource ID)
+     * @returns A Promise that resolves to the found cluster tree element or undefined
+     */
+    async findClusterNodeByClusterId(clusterId: string): Promise<TreeElement | undefined> {
+        // In Azure Resources View, clusterId === treeId (both are sanitized)
+        return this.findNodeById(clusterId, true);
+    }
+
+    /**
+     * Finds a collection node by its cluster's stable identifier.
+     *
+     * For Azure Resources View (RU), the clusterId === treeId (both are sanitized Azure Resource IDs).
+     * The collection path is: `${clusterId}/${databaseName}/${collectionName}`
+     *
+     * @param clusterId The stable cluster identifier (sanitized Azure Resource ID)
+     * @param databaseName The database name
+     * @param collectionName The collection name
+     * @returns A Promise that resolves to the found CollectionItem or undefined if not found
+     */
+    async findCollectionByClusterId(
+        clusterId: string,
+        databaseName: string,
+        collectionName: string,
+    ): Promise<TreeElement | undefined> {
+        // In Azure Resources View, clusterId === treeId (both are sanitized)
+        const nodeId = `${clusterId}/${databaseName}/${collectionName}`;
+        return this.findNodeById(nodeId, true);
     }
 }

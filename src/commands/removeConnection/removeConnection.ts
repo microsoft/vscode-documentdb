@@ -31,7 +31,7 @@ export async function removeConnection(context: IActionContext, node: DocumentDB
     // Check if any running tasks are using this connection
     const canProceed = await checkCanProceedAndInformUser(
         {
-            connectionId: node.cluster.clusterId,
+            clusterId: node.cluster.clusterId,
         },
         l10n.t('remove this connection'),
     );

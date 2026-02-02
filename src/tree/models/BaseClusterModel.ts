@@ -87,3 +87,34 @@ export interface ClusterTreeContext {
  * computed tree positioning (ClusterTreeContext).
  */
 export type TreeCluster<T extends BaseClusterModel = BaseClusterModel> = T & ClusterTreeContext;
+
+// #region Tree ID Helper Functions
+
+/**
+ * Builds a database tree ID from a cluster's tree ID.
+ *
+ * The tree ID hierarchy is: `${clusterTreeId}/${databaseName}`
+ *
+ * @param clusterTreeId The cluster's tree ID (hierarchical path in the tree)
+ * @param databaseName The database name
+ * @returns The full tree ID for the database
+ */
+export function buildDatabaseTreeId(clusterTreeId: string, databaseName: string): string {
+    return `${clusterTreeId}/${databaseName}`;
+}
+
+/**
+ * Builds a collection tree ID from a cluster's tree ID.
+ *
+ * The tree ID hierarchy is: `${clusterTreeId}/${databaseName}/${collectionName}`
+ *
+ * @param clusterTreeId The cluster's tree ID (hierarchical path in the tree)
+ * @param databaseName The database name
+ * @param collectionName The collection name
+ * @returns The full tree ID for the collection
+ */
+export function buildCollectionTreeId(clusterTreeId: string, databaseName: string, collectionName: string): string {
+    return `${clusterTreeId}/${databaseName}/${collectionName}`;
+}
+
+// #endregion
