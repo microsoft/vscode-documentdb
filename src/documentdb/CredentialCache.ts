@@ -14,7 +14,7 @@ export interface CachedClusterCredentials {
     /**
      * The stable cluster identifier used as the cache key.
      * - Connections View: storageId (UUID, stable across folder moves)
-     * - Azure Resources View: Azure Resource ID
+     * - Azure Resources View: Sanitized Azure Resource ID (/ replaced with _)
      *
      * ⚠️ This is NOT the tree item ID (treeId), which changes when items move.
      */

@@ -127,7 +127,7 @@ export class ClustersClient {
      *
      * KEY: `clusterId` - The stable cluster identifier (NOT the tree item ID)
      *   - Connections View items: Use `cluster.clusterId` (= storageId, stable UUID)
-     *   - Azure Resources View items: Use `cluster.clusterId` (= Azure Resource ID)
+     *   - Azure Resources View items: Use `cluster.clusterId` (= Sanitized Azure Resource ID)
      *
      * VALUE: ClustersClient instance wrapping a MongoClient
      *

@@ -14,7 +14,7 @@ export interface ResourceDefinition {
      * Use `cluster.clusterId` (NOT treeId) to ensure tasks remain valid after folder moves.
      *
      * - Connections View: storageId (UUID from ConnectionStorageService)
-     * - Azure Resources View: Azure Resource ID
+     * - Azure Resources View: Sanitized Azure Resource ID (/ replaced with _)
      */
     clusterId?: string;
 
