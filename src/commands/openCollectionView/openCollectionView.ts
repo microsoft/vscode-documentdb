@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
 import { ClusterSession } from '../../documentdb/ClusterSession';
-import { inferViewIdFromTreeId, Views } from '../../documentdb/Views';
+import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import { CollectionViewController } from '../../webviews/documentdb/collectionView/collectionViewController';
