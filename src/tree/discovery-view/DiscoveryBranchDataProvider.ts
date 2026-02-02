@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
@@ -180,8 +181,12 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
 
         if (!clusterId.startsWith(providerId)) {
             throw new Error(
-                `Discovery plugin error: clusterId "${clusterId}" must start with provider ID "${providerId}". ` +
-                    `Plugin "${providerId}" must prefix clusterId with its provider ID.`,
+                l10n.t(
+                    'Discovery plugin error: clusterId "{0}" must start with provider ID "{1}". Plugin "{2}" must prefix clusterId with its provider ID.',
+                    clusterId,
+                    providerId,
+                    providerId,
+                ),
             );
         }
     }
