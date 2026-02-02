@@ -212,7 +212,7 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
             // Password will be handled by the ClustersClient, not directly in the string for cache
 
             CredentialCache.setCredentials(
-                this.cluster.clusterId, // Use clusterId (Azure Resource ID) for consistent cache key
+                this.cluster.clusterId, // Stable cache key (provider-prefixed sanitized ID)
                 finalConnectionString.toString(), // Store the string with username for reference, but password separately
                 wizardContext.selectedUserName,
                 wizardContext.password,
