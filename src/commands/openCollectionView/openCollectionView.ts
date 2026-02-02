@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
 import { ClusterSession } from '../../documentdb/ClusterSession';
-import { Views } from '../../documentdb/Views';
+import { inferViewIdFromTreeId, Views } from '../../documentdb/Views';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import { CollectionViewController } from '../../webviews/documentdb/collectionView/collectionViewController';
@@ -33,24 +33,6 @@ export async function openCollectionView(context: IActionContext, node: Collecti
         databaseName: node.databaseInfo.name,
         collectionName: node.collectionInfo.name,
     });
-}
-
-/**
- * Infers the viewId from the treeId prefix.
- * This is a fallback for cases where viewId is not explicitly set on the cluster model.
- */
-function inferViewIdFromTreeId(treeId: string): string {
-    if (treeId.startsWith(Views.ConnectionsView)) {
-        return Views.ConnectionsView;
-    } else if (treeId.startsWith(Views.DiscoveryView)) {
-        return Views.DiscoveryView;
-    } else if (treeId.startsWith(Views.AzureResourcesView)) {
-        return Views.AzureResourcesView;
-    } else if (treeId.startsWith(Views.AzureWorkspaceView)) {
-        return Views.AzureWorkspaceView;
-    }
-    // Default fallback - this shouldn't happen in practice
-    return Views.ConnectionsView;
 }
 
 export async function openCollectionViewInternal(

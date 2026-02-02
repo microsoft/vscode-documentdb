@@ -340,6 +340,7 @@
   "detailed execution analysis": "detailed execution analysis",
   "Disable TLS/SSL (Not recommended)": "Disable TLS/SSL (Not recommended)",
   "Disable TLS/SSL checks when connecting.": "Disable TLS/SSL checks when connecting.",
+  "Discovery plugin error: clusterId \"{0}\" must start with provider ID \"{1}\". Plugin \"{2}\" must prefix clusterId with its provider ID.": "Discovery plugin error: clusterId \"{0}\" must start with provider ID \"{1}\". Plugin \"{2}\" must prefix clusterId with its provider ID.",
   "Do not rely on case to distinguish between databases. For example, you cannot use two databases with names like, salesData and SalesData.": "Do not rely on case to distinguish between databases. For example, you cannot use two databases with names like, salesData and SalesData.",
   "Do not save credentials.": "Do not save credentials.",
   "Do you want to include the password in the connection string?": "Do you want to include the password in the connection string?",
