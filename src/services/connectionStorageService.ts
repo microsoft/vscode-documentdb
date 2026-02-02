@@ -282,11 +282,11 @@ export class ConnectionStorageService {
                 }
             }
 
-            // Start async orphan cleanup (not awaited - runs in background)
-            void this.cleanupOrphanedItems().then(() => {
-                // Collect storage stats after cleanup completes (also not awaited)
-                void this.collectStorageStats();
-            });
+            // Resolve critical post-migration errors before proceeding
+            await this.resolvePostMigrationErrors();
+            
+            // Collect storage stats after cleanup completes
+            await this.collectStorageStats();
         }
         return this._storageService;
     }
@@ -416,113 +416,124 @@ export class ConnectionStorageService {
     }
 
     /**
-     * Cleans up orphaned items (items whose parentId references a non-existent folder).
-     * This can happen if a folder deletion fails to cascade to children.
-     * Runs iteratively until no orphans remain (deleting a parent may orphan its children).
-     * Runs asynchronously on storage initialization.
+     * Resolves post-migration errors and inconsistencies.
+     *
+     * Order matters:
+     * 1. Fix folder connection strings for backward compatibility
+     * 2. Deduplicate connection string parameters
+     * 3. Clean up orphaned items
      */
-    private static async cleanupOrphanedItems(): Promise<void> {
-        await callWithTelemetryAndErrorHandling('cleanupOrphanedItems', async (context: IActionContext) => {
+    private static async resolvePostMigrationErrors(): Promise<void> {
+        await callWithTelemetryAndErrorHandling('resolvePostMigrationErrors', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
 
-            // First, fix any existing folders that don't have the placeholder connection string
+            // 1. Fix any existing folders that don't have the placeholder connection string
             // This ensures backward compatibility for beta testers who created folders before this fix
             await this.fixFolderConnectionStrings(context);
 
-            // Clean up any connection strings with duplicate query parameters
+            // 2. Clean up any connection strings with duplicate query parameters
             // This fixes corruption from previous bugs in migration or editing
             await this.cleanupDuplicateConnectionStringParameters(context);
 
-            let totalOrphansRemoved = 0;
-            let iteration = 0;
-            const maxIterations = 20; // Safety net to prevent infinite loops
-            let previousIterationCount = -1;
-            let consecutiveSameCount = 0;
-            const maxConsecutiveSameCount = 5; // Require 5 consecutive same counts before aborting
-            let terminationReason: 'complete' | 'maxIterations' | 'consecutiveSameCount' = 'complete';
+            // 3. Clean up orphaned items after folder and connection string fixes
+            await this.cleanupOrphanedItems(context);
+        });
+    }
 
-            // Keep iterating until no orphans are found or we hit safety limits
-            while (iteration < maxIterations) {
-                iteration++;
-                let orphansRemovedThisIteration = 0;
+    /**
+     * Cleans up orphaned items (items whose parentId references a non-existent folder).
+     * This can happen if a folder deletion fails to cascade to children.
+     * Runs iteratively until no orphans remain (deleting a parent may orphan its children).
+     */
+    private static async cleanupOrphanedItems(context: IActionContext): Promise<void> {
+        let totalOrphansRemoved = 0;
+        let iteration = 0;
+        const maxIterations = 20; // Safety net to prevent infinite loops
+        let previousIterationCount = -1;
+        let consecutiveSameCount = 0;
+        const maxConsecutiveSameCount = 5; // Require 5 consecutive same counts before aborting
+        let terminationReason: 'complete' | 'maxIterations' | 'consecutiveSameCount' = 'complete';
 
-                for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-                    const allItems = await this.getAllItems(connectionType);
-                    const allIds = new Set(allItems.map((item) => item.id));
+        // Keep iterating until no orphans are found or we hit safety limits
+        while (iteration < maxIterations) {
+            iteration++;
+            let orphansRemovedThisIteration = 0;
 
-                    // Build set of valid parent IDs (only folders can be parents)
-                    const validParentIds = new Set(
-                        allItems.filter((item) => item.properties.type === ItemType.Folder).map((item) => item.id),
-                    );
+            for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
+                const allItems = await this.getAllItems(connectionType);
+                const allIds = new Set(allItems.map((item) => item.id));
 
-                    // Find orphaned items:
-                    // 1. Items with a parentId that doesn't exist
-                    // 2. Items with a parentId pointing to a non-folder (bug - parentId should only reference folders)
-                    const orphanedItems = allItems.filter(
-                        (item) =>
-                            item.properties.parentId !== undefined &&
-                            (!allIds.has(item.properties.parentId) || !validParentIds.has(item.properties.parentId)),
-                    );
+                // Build set of valid parent IDs (only folders can be parents)
+                const validParentIds = new Set(
+                    allItems.filter((item) => item.properties.type === ItemType.Folder).map((item) => item.id),
+                );
 
-                    for (const orphan of orphanedItems) {
-                        try {
-                            await this.delete(connectionType, orphan.id);
-                            orphansRemovedThisIteration++;
-                            ext.outputChannel.appendLog(
-                                `Cleaned up orphaned ${orphan.properties.type}: "${orphan.name}" (id: ${orphan.id})`,
-                            );
-                        } catch (error) {
-                            console.debug(
-                                `Failed to delete orphaned item ${orphan.id}:`,
-                                error instanceof Error ? error.message : String(error),
-                            );
-                        }
+                // Find orphaned items:
+                // 1. Items with a parentId that doesn't exist
+                // 2. Items with a parentId pointing to a non-folder (bug - parentId should only reference folders)
+                const orphanedItems = allItems.filter(
+                    (item) =>
+                        item.properties.parentId !== undefined &&
+                        (!allIds.has(item.properties.parentId) || !validParentIds.has(item.properties.parentId)),
+                );
+
+                for (const orphan of orphanedItems) {
+                    try {
+                        await this.delete(connectionType, orphan.id);
+                        orphansRemovedThisIteration++;
+                        ext.outputChannel.appendLog(
+                            `Cleaned up orphaned ${orphan.properties.type}: "${orphan.name}" (id: ${orphan.id})`,
+                        );
+                    } catch (error) {
+                        console.debug(
+                            `Failed to delete orphaned item ${orphan.id}:`,
+                            error instanceof Error ? error.message : String(error),
+                        );
                     }
                 }
+            }
 
-                totalOrphansRemoved += orphansRemovedThisIteration;
-                context.telemetry.measurements.orphansRemoved = totalOrphansRemoved;
+            totalOrphansRemoved += orphansRemovedThisIteration;
 
-                // Exit if no orphans found this iteration (success)
-                if (orphansRemovedThisIteration === 0) {
-                    terminationReason = 'complete';
+            // Exit if no orphans found this iteration (success)
+            if (orphansRemovedThisIteration === 0) {
+                terminationReason = 'complete';
+                break;
+            }
+
+            // Track consecutive iterations with the same count
+            if (orphansRemovedThisIteration === previousIterationCount) {
+                consecutiveSameCount++;
+                if (consecutiveSameCount >= maxConsecutiveSameCount) {
+                    terminationReason = 'consecutiveSameCount';
+                    ext.outputChannel.appendLog(
+                        `Orphan cleanup stopped: same count (${orphansRemovedThisIteration}) for ${consecutiveSameCount} consecutive iterations.`,
+                    );
                     break;
                 }
-
-                // Safety net: exit if count has been the same for X consecutive iterations (stuck in a loop)
-                if (orphansRemovedThisIteration === previousIterationCount) {
-                    consecutiveSameCount++;
-                    if (consecutiveSameCount >= maxConsecutiveSameCount) {
-                        terminationReason = 'consecutiveSameCount';
-                        ext.outputChannel.appendLog(
-                            `Orphan cleanup stopped: same count (${orphansRemovedThisIteration}) for ${consecutiveSameCount} consecutive iterations.`,
-                        );
-                        break;
-                    }
-                } else {
-                    consecutiveSameCount = 0;
-                }
-
-                previousIterationCount = orphansRemovedThisIteration;
+            } else {
+                consecutiveSameCount = 0; // Reset counter on different count
             }
 
-            // Check if we exited due to max iterations
-            if (iteration >= maxIterations && terminationReason === 'complete') {
-                terminationReason = 'maxIterations';
-                ext.outputChannel.appendLog(`Orphan cleanup stopped: reached maximum iterations (${maxIterations}).`);
-            }
+            previousIterationCount = orphansRemovedThisIteration;
+        }
 
-            context.telemetry.measurements.orphansRemoved = totalOrphansRemoved;
-            context.telemetry.measurements.cleanupIterations = iteration;
-            context.telemetry.properties.hadOrphans = totalOrphansRemoved > 0 ? 'true' : 'false';
-            context.telemetry.properties.terminationReason = terminationReason;
+        // Check if we exited due to max iterations
+        if (iteration >= maxIterations && terminationReason === 'complete') {
+            terminationReason = 'maxIterations';
+            ext.outputChannel.appendLog(`Orphan cleanup stopped: reached maximum iterations (${maxIterations}).`);
+        }
 
-            if (totalOrphansRemoved > 0) {
-                ext.outputChannel.appendLog(
-                    `Orphan cleanup complete: ${totalOrphansRemoved} items removed in ${iteration} iteration(s).`,
-                );
-            }
-        });
+        context.telemetry.measurements.orphansRemoved = totalOrphansRemoved;
+        context.telemetry.measurements.cleanupIterations = iteration;
+        context.telemetry.properties.hadOrphans = totalOrphansRemoved > 0 ? 'true' : 'false';
+        context.telemetry.properties.terminationReason = terminationReason;
+
+        if (totalOrphansRemoved > 0) {
+            ext.outputChannel.appendLog(
+                `Orphan cleanup complete: ${totalOrphansRemoved} items removed in ${iteration} iteration(s).`,
+            );
+        }
     }
 
     /**
