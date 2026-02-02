@@ -114,6 +114,7 @@ function createMockContext(overrides: Partial<MoveItemsWizardContext> = {}): Mov
         targetFolderId: 'targetFolderId' in overrides ? overrides.targetFolderId : undefined,
         targetFolderPath: 'targetFolderPath' in overrides ? overrides.targetFolderPath : undefined,
         cachedFolderList: overrides.cachedFolderList ?? [],
+        conflictingTasks: overrides.conflictingTasks ?? [],
         conflictingNames: overrides.conflictingNames ?? [],
     } as MoveItemsWizardContext;
 }

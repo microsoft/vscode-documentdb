@@ -70,13 +70,13 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         return [
             // Source resource
             {
-                connectionId: this.config.source.connectionId,
+                clusterId: this.config.source.clusterId,
                 databaseName: this.config.source.databaseName,
                 collectionName: this.config.source.collectionName,
             },
             // Target resource
             {
-                connectionId: this.config.target.connectionId,
+                clusterId: this.config.target.clusterId,
                 databaseName: this.config.target.databaseName,
                 collectionName: this.config.target.collectionName,
             },
@@ -87,13 +87,13 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * Collects cluster metadata for telemetry purposes.
      * This method attempts to gather cluster information without failing the task if metadata collection fails.
      *
-     * @param connectionId Connection ID to collect metadata for
+     * @param clusterId Cluster ID to collect metadata for
      * @param prefix Prefix for telemetry properties (e.g., 'source' or 'target')
      * @param context Telemetry context to add properties to
      */
-    private async collectClusterMetadata(connectionId: string, prefix: string, context: IActionContext): Promise<void> {
+    private async collectClusterMetadata(clusterId: string, prefix: string, context: IActionContext): Promise<void> {
         try {
-            const client = await ClustersClient.getClient(connectionId);
+            const client = await ClustersClient.getClient(clusterId);
             const metadata = await client.getClusterMetadata();
 
             // Add metadata with prefix to avoid conflicts between source and target
@@ -123,13 +123,13 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         if (context) {
             context.telemetry.properties.onConflict = this.config.onConflict;
             context.telemetry.properties.isCrossConnection = (
-                this.config.source.connectionId !== this.config.target.connectionId
+                this.config.source.clusterId !== this.config.target.clusterId
             ).toString();
 
             // Collect cluster metadata for source and target connections and await their completion (non-blocking for errors)
-            const metadataPromises = [this.collectClusterMetadata(this.config.source.connectionId, 'source', context)];
-            if (this.config.source.connectionId !== this.config.target.connectionId) {
-                metadataPromises.push(this.collectClusterMetadata(this.config.target.connectionId, 'target', context));
+            const metadataPromises = [this.collectClusterMetadata(this.config.source.clusterId, 'source', context)];
+            if (this.config.source.clusterId !== this.config.target.clusterId) {
+                metadataPromises.push(this.collectClusterMetadata(this.config.target.clusterId, 'target', context));
             }
             await Promise.allSettled(metadataPromises);
         }

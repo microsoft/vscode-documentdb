@@ -39,7 +39,7 @@ export async function exportQueryResults(
         return;
     }
 
-    const client = await ClustersClient.getClient(node.cluster.id);
+    const client = await ClustersClient.getClient(node.cluster.clusterId);
 
     const docStreamAbortController = new AbortController();
 

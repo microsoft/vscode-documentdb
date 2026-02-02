@@ -55,4 +55,19 @@ export class ClustersWorkspaceBranchDataProvider
             return wrappedChildren;
         });
     }
+
+    /**
+     * Finds a cluster node by its stable cluster identifier.
+     *
+     * Note: Azure Workspace View currently doesn't surface cluster items directly.
+     * This method is provided for interface consistency but will typically return undefined.
+     *
+     * @param clusterId The stable cluster identifier
+     * @returns A Promise that resolves to undefined (workspace view doesn't have direct cluster nodes)
+     */
+    async findClusterNodeByClusterId(_clusterId: string): Promise<TreeElement | undefined> {
+        // Azure Workspace View doesn't surface cluster items directly
+        // If this changes in the future, implement similar to Azure Resources View
+        return undefined;
+    }
 }
