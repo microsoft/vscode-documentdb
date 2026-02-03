@@ -282,11 +282,11 @@ export class ConnectionStorageService {
                 }
             }
 
-            // Start async orphan cleanup (not awaited - runs in background)
-            void this.cleanupOrphanedItems().then(() => {
-                // Collect storage stats after cleanup completes (also not awaited)
-                void this.collectStorageStats();
-            });
+            // Resolve critical post-migration errors before proceeding
+            await this.resolvePostMigrationErrors();
+
+            // Collect storage stats after cleanup completes
+            await this.collectStorageStats();
         }
         return this._storageService;
     }
@@ -298,12 +298,14 @@ export class ConnectionStorageService {
      *
      * This function is intended for beta testers who created folders before this fix was added.
      * It runs once during cleanup and updates folders that have an empty connection string.
+     *
+     * @param context - The action context for telemetry
+     * @param storageService - The storage service to use (avoids circular getStorageService call)
      */
-    private static async fixFolderConnectionStrings(context: IActionContext): Promise<void> {
+    private static async fixFolderConnectionStrings(context: IActionContext, storageService: Storage): Promise<void> {
         let foldersFixed = 0;
 
         for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-            const storageService = await this.getStorageService();
             const items = await storageService.getItems<StoredItemProperties>(connectionType);
 
             // Find folders without the placeholder connection string
@@ -347,19 +349,113 @@ export class ConnectionStorageService {
     }
 
     /**
+     * Cleans up connection strings with duplicate query parameters.
+     * This can happen due to bugs in previous versions where parameters were doubled
+     * during migration or editing.
+     *
+     * @param context - The action context for telemetry
+     * @param storageService - The storage service to use (avoids circular getStorageService call)
+     */
+    private static async cleanupDuplicateConnectionStringParameters(
+        context: IActionContext,
+        storageService: Storage,
+    ): Promise<void> {
+        let connectionsFixed = 0;
+
+        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
+            const items = await storageService.getItems<StoredItemProperties>(connectionType);
+
+            // Find connections (not folders) that might have duplicate parameters
+            const connectionsToCheck = items.filter(
+                (item) =>
+                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                    item.properties?.type === ItemType.Connection &&
+                    item.secrets?.[SecretIndex.ConnectionString],
+            );
+
+            for (const item of connectionsToCheck) {
+                try {
+                    const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
+
+                    // Skip placeholder or empty connection strings
+                    if (!connectionString || connectionString === FOLDER_PLACEHOLDER_CONNECTION_STRING) {
+                        continue;
+                    }
+
+                    // Check if the connection string has duplicate parameters
+                    const parsed = new DocumentDBConnectionString(connectionString);
+                    if (!parsed.hasDuplicateParameters()) {
+                        continue;
+                    }
+
+                    // Normalize the connection string to remove duplicates
+                    const normalizedConnectionString = parsed.deduplicateQueryParameters();
+
+                    // Only update if something changed
+                    if (normalizedConnectionString !== connectionString) {
+                        // Convert to ConnectionItem and update the connection string
+                        const connectionItem = this.fromStorageItem(item);
+                        connectionItem.secrets.connectionString = normalizedConnectionString;
+
+                        // Re-save with the cleaned connection string
+                        await this.save(connectionType, connectionItem, true);
+                        connectionsFixed++;
+
+                        ext.outputChannel.appendLog(
+                            `Fixed connection "${item.name}" (id: ${item.id}) - removed duplicate query parameters.`,
+                        );
+                    }
+                } catch (error) {
+                    console.debug(
+                        `Failed to check/fix connection ${item.id} for duplicate parameters:`,
+                        error instanceof Error ? error.message : String(error),
+                    );
+                }
+            }
+        }
+
+        context.telemetry.measurements.duplicateParamsFixed = connectionsFixed;
+        if (connectionsFixed > 0) {
+            ext.outputChannel.appendLog(`Fixed ${connectionsFixed} connection(s) with duplicate query parameters.`);
+        }
+    }
+
+    /**
+     * Resolves post-migration errors and inconsistencies.
+     *
+     * Order matters:
+     * 1. Fix folder connection strings for backward compatibility
+     * 2. Deduplicate connection string parameters
+     * 3. Clean up orphaned items
+     */
+    private static async resolvePostMigrationErrors(): Promise<void> {
+        await callWithTelemetryAndErrorHandling('resolvePostMigrationErrors', async (context: IActionContext) => {
+            context.telemetry.properties.isActivationEvent = 'true';
+
+            // Get storage service once to pass to cleanup methods
+            const storageService = await this.getStorageService();
+
+            // 1. Fix any existing folders that don't have the placeholder connection string
+            // This ensures backward compatibility for beta testers who created folders before this fix
+            await this.fixFolderConnectionStrings(context, storageService);
+
+            // 2. Clean up any connection strings with duplicate query parameters
+            // This fixes corruption from previous bugs in migration or editing
+            await this.cleanupDuplicateConnectionStringParameters(context, storageService);
+
+            // 3. Clean up orphaned items after folder and connection string fixes (fire-and-forget)
+            void this.cleanupOrphanedItems();
+        });
+    }
+
+    /**
      * Cleans up orphaned items (items whose parentId references a non-existent folder).
      * This can happen if a folder deletion fails to cascade to children.
      * Runs iteratively until no orphans remain (deleting a parent may orphan its children).
-     * Runs asynchronously on storage initialization.
      */
     private static async cleanupOrphanedItems(): Promise<void> {
         await callWithTelemetryAndErrorHandling('cleanupOrphanedItems', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
-
-            // First, fix any existing folders that don't have the placeholder connection string
-            // This ensures backward compatibility for beta testers who created folders before this fix
-            await this.fixFolderConnectionStrings(context);
-
             let totalOrphansRemoved = 0;
             let iteration = 0;
             const maxIterations = 20; // Safety net to prevent infinite loops
@@ -408,7 +504,6 @@ export class ConnectionStorageService {
                 }
 
                 totalOrphansRemoved += orphansRemovedThisIteration;
-                context.telemetry.measurements.orphansRemoved = totalOrphansRemoved;
 
                 // Exit if no orphans found this iteration (success)
                 if (orphansRemovedThisIteration === 0) {
@@ -416,7 +511,7 @@ export class ConnectionStorageService {
                     break;
                 }
 
-                // Safety net: exit if count has been the same for X consecutive iterations (stuck in a loop)
+                // Track consecutive iterations with the same count
                 if (orphansRemovedThisIteration === previousIterationCount) {
                     consecutiveSameCount++;
                     if (consecutiveSameCount >= maxConsecutiveSameCount) {
@@ -427,7 +522,7 @@ export class ConnectionStorageService {
                         break;
                     }
                 } else {
-                    consecutiveSameCount = 0;
+                    consecutiveSameCount = 0; // Reset counter on different count
                 }
 
                 previousIterationCount = orphansRemovedThisIteration;
@@ -849,6 +944,10 @@ export class ConnectionStorageService {
         parsedCS.username = '';
         parsedCS.password = '';
 
+        // Normalize the connection string to remove any duplicate parameters
+        // that may have been introduced by bugs in previous versions
+        const normalizedConnectionString = parsedCS.deduplicateQueryParameters();
+
         return {
             id: item.id,
             name: item.name,
@@ -864,7 +963,7 @@ export class ConnectionStorageService {
                 selectedAuthMethod: AuthMethodId.NativeAuth,
             },
             secrets: {
-                connectionString: parsedCS.toString(),
+                connectionString: normalizedConnectionString,
                 // Structured auth configuration populated from the same data
                 nativeAuthConfig: username
                     ? {
