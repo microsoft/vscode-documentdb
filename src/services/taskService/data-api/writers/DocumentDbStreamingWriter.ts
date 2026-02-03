@@ -276,8 +276,10 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                 );
                 insertedCount = insertResult.insertedCount ?? 0;
             } catch (error) {
-                // Handle race condition conflicts during insert
-                // Another process may have inserted documents after the pre-filter check
+                // Handle duplicate key errors during insert (code 11000)
+                // These can be either:
+                // 1. Race condition: Another process inserted a document with the same _id after pre-filter
+                // 2. Unique index violation: Document violates a unique index on a non-_id field (e.g., email)
                 if (isBulkWriteError(error)) {
                     const writeErrors = this.extractWriteErrors(error);
                     const duplicateErrors = writeErrors.filter((e) => e?.code === 11000);
@@ -285,7 +287,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                     if (duplicateErrors.length > 0) {
                         ext.outputChannel.warn(
                             l10n.t(
-                                '[DocumentDbStreamingWriter/Skip Strategy] {0} documents were inserted by another process and will be skipped',
+                                '[DocumentDbStreamingWriter/Skip Strategy] {0} document(s) skipped due to duplicate key error(s)',
                                 duplicateErrors.length.toString(),
                             ),
                         );
@@ -295,18 +297,25 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                         insertedCount = rawCounts.insertedCount ?? 0;
                         skippedCount = duplicateErrors.length;
 
-                        // Build errors for the race condition conflicts
+                        // Build errors for the conflicts, including the actual error message
                         for (const writeError of duplicateErrors) {
                             const documentId = this.extractDocumentIdFromWriteError(writeError);
+                            const originalMessage = this.extractErrorMessage(writeError);
+
+                            // Create a descriptive error message that includes the MongoDB error details
+                            const errorMessage = l10n.t('Duplicate key error: {0}', originalMessage);
+
                             errors.push({
                                 documentId: documentId ?? '[unknown]',
-                                error: new Error(l10n.t('Document inserted by another process (skipped)')),
+                                error: new Error(errorMessage),
                             });
 
+                            // Log with the full error message so users can see which index caused the violation
                             ext.outputChannel.warn(
                                 l10n.t(
-                                    '[DocumentDbStreamingWriter/Skip Strategy] Skipping document with _id: {0} (race condition)',
+                                    '[DocumentDbStreamingWriter/Skip Strategy] Skipping document with _id: {0}. {1}',
                                     documentId ?? '[unknown]',
+                                    originalMessage,
                                 ),
                             );
                         }
