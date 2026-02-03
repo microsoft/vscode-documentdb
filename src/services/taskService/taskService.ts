@@ -229,12 +229,14 @@ export abstract class Task {
                 const err = this._status.error instanceof Error ? this._status.error.message : '';
                 // Include error details if available
                 const detail = err ? ` ${vscode.l10n.t('Error: {0}', err)}` : '';
-                ext.outputChannel.appendLine(
+                // Use .error() to ensure task failure is always visible regardless of log level
+                ext.outputChannel.error(
                     vscode.l10n.t("! Task '{taskName}' failed. {message}", {
                         taskName: this.name,
                         message: `${msg}${detail}`.trim(),
                     }),
                 );
+                ext.outputChannel.show();
             }
         }
     }
