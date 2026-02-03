@@ -167,6 +167,9 @@ export class DocumentDBConnectionString extends ConnectionString {
      * According to the MongoDB Connection String Specification, only these parameters
      * are designed to accept multiple values as an ordered list.
      *
+     * Note: Values are stored in lowercase for case-insensitive matching, per MongoDB spec
+     * which normalizes option keys by lowercasing them.
+     *
      * See connection-string-parameters.md for detailed documentation and sources.
      */
     private static readonly MULTI_VALUE_PARAMETERS = new Set(['readpreferencetags']);
