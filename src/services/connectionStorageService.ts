@@ -298,12 +298,14 @@ export class ConnectionStorageService {
      *
      * This function is intended for beta testers who created folders before this fix was added.
      * It runs once during cleanup and updates folders that have an empty connection string.
+     *
+     * @param context - The action context for telemetry
+     * @param storageService - The storage service to use (avoids circular getStorageService call)
      */
-    private static async fixFolderConnectionStrings(context: IActionContext): Promise<void> {
+    private static async fixFolderConnectionStrings(context: IActionContext, storageService: Storage): Promise<void> {
         let foldersFixed = 0;
 
         for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-            const storageService = await this.getStorageService();
             const items = await storageService.getItems<StoredItemProperties>(connectionType);
 
             // Find folders without the placeholder connection string
@@ -352,12 +354,15 @@ export class ConnectionStorageService {
      * during migration or editing.
      *
      * @param context - The action context for telemetry
+     * @param storageService - The storage service to use (avoids circular getStorageService call)
      */
-    private static async cleanupDuplicateConnectionStringParameters(context: IActionContext): Promise<void> {
+    private static async cleanupDuplicateConnectionStringParameters(
+        context: IActionContext,
+        storageService: Storage,
+    ): Promise<void> {
         let connectionsFixed = 0;
 
         for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-            const storageService = await this.getStorageService();
             const items = await storageService.getItems<StoredItemProperties>(connectionType);
 
             // Find connections (not folders) that might have duplicate parameters
@@ -427,13 +432,16 @@ export class ConnectionStorageService {
         await callWithTelemetryAndErrorHandling('resolvePostMigrationErrors', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
 
+            // Get storage service once to pass to cleanup methods
+            const storageService = await this.getStorageService();
+
             // 1. Fix any existing folders that don't have the placeholder connection string
             // This ensures backward compatibility for beta testers who created folders before this fix
-            await this.fixFolderConnectionStrings(context);
+            await this.fixFolderConnectionStrings(context, storageService);
 
             // 2. Clean up any connection strings with duplicate query parameters
             // This fixes corruption from previous bugs in migration or editing
-            await this.cleanupDuplicateConnectionStringParameters(context);
+            await this.cleanupDuplicateConnectionStringParameters(context, storageService);
 
             // 3. Clean up orphaned items after folder and connection string fixes (fire-and-forget)
             void this.cleanupOrphanedItems();

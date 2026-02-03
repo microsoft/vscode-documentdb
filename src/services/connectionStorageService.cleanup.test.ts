@@ -184,7 +184,8 @@ describe('ConnectionStorageService - Cleanup Functions', () => {
             (ConnectionStorageService as any)._storageService = undefined;
             await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
 
-            // Wait for the fire-and-forget cleanup to complete
+            // Wait for the fire-and-forget cleanupOrphanedItems() to complete
+            // (runs inside resolvePostMigrationErrors after the awaited cleanups)
             await new Promise((resolve) => setTimeout(resolve, 500));
 
             // Verify: Connection string should be deduplicated
