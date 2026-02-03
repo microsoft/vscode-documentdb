@@ -80,21 +80,33 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         }
         void this.annotateNodeDuringTask(context.targetNode.id, vscode.l10n.t('Pasting…'), task);
 
-        // If the target is a database node, we need to refresh it once the task is working
-        // so the new collection appears in the tree view
-        if (context.targetNode instanceof DatabaseItem) {
-            // Subscribe to task status updates to know when to refresh the tree
-            const subscription = task.onDidChangeState(async (stateChange) => {
-                // Once the task completes the Initializing state, refresh the database node
-                if (stateChange.previousState === TaskState.Initializing) {
-                    await new Promise<void>((resolve) => setTimeout(() => resolve(), 1000));
-                    // Refresh the database node to show the new collection
-                    ext.state.notifyChildrenChanged(context.targetNode.id);
-                    // Unsubscribe since we only need to refresh once
-                    subscription.dispose();
-                }
-            });
-        }
+        // Subscribe to task status updates to know when to refresh the tree:
+        // 1. When pasting into a database, refresh after Initializing so the new collection appears
+        // 2. When task completes (success or failure), refresh at database level so collection
+        //    descriptions (document counts) update correctly
+        const subscription = task.onDidChangeState(async (stateChange) => {
+            // For database targets: refresh early so new collection appears in tree
+            if (context.targetNode instanceof DatabaseItem && stateChange.previousState === TaskState.Initializing) {
+                await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+                ext.state.notifyChildrenChanged(context.targetNode.id);
+            }
+
+            // On terminal state (success or failure): always refresh at database level
+            // This ensures collection document counts update correctly
+            if (isTerminalState(stateChange.newState)) {
+                // Calculate the database-level ID for refresh
+                const databaseId =
+                    context.targetNode instanceof DatabaseItem
+                        ? context.targetNode.id
+                        : context.targetNode.id.substring(0, context.targetNode.id.lastIndexOf('/'));
+
+                // Small delay to ensure backend has processed changes
+                await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+                ext.state.notifyChildrenChanged(databaseId);
+
+                subscription.dispose();
+            }
+        });
 
         // Start the copy-paste task
         void task.start();
