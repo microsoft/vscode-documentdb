@@ -569,11 +569,11 @@ export async function optimizeQuery(
     );
 
     const messages = [
-        // First message: Assistant message with crafted prompt (instructions)
-        vscode.LanguageModelChatMessage.Assistant(craftedPrompt),
+        // First message: User message with crafted prompt (instructions)
+        vscode.LanguageModelChatMessage.User(craftedPrompt),
         // Second message: User's original query (data only)
         vscode.LanguageModelChatMessage.User(`## User's Original Query\n${userQuery}`),
-        // Third message: System-retrieved context data (data only)
+        // Third message: User message with system-retrieved context data (data only)
         vscode.LanguageModelChatMessage.User(contextData),
     ];
 

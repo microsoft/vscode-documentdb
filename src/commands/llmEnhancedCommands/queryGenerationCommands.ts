@@ -264,7 +264,7 @@ export async function generateQuery(
     );
     const response = await CopilotService.sendMessage(
         [
-            vscode.LanguageModelChatMessage.Assistant(craftedPrompt),
+            vscode.LanguageModelChatMessage.User(craftedPrompt),
             vscode.LanguageModelChatMessage.User(`## User Request\n${userQuery}`),
             vscode.LanguageModelChatMessage.User(contextData),
         ],
