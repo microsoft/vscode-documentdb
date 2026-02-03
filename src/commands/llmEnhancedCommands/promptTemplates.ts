@@ -158,7 +158,7 @@ Follow these strict instructions (must obey):
 13. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
 14. **Verification array requirement** — the \`verification\` field must be an **array** with **exactly one verification item per improvement item**. Each verification item must be a Markdown string containing \`\`\`javascript code blocks\`\`\` with valid mongosh commands to verify that specific improvement. If \`improvements\` is an empty array, \`verification\` must also be an empty array.
 15. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate the provided data—just include them as-is (and add computed helper fields if needed).
-16. **Do note drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
+16. **Do not drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
 17. **Be brave to say no** — if you confirm an index change is not beneficial, or not relates to the query, feel free to return empty improvements.
 18. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics.\n"
 19. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
