@@ -182,13 +182,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
     ): void {
         // Wait for the afterState to be exited, then start the annotation
         const startSubscription = task.onDidChangeState((event) => {
-            if (event.previousState === afterState) {
+            if (isTerminalState(event.newState)) {
+                // Task ended before we could start - clean up
+                startSubscription.dispose();
+            } else if (event.previousState === afterState) {
                 startSubscription.dispose();
                 // Now annotate until terminal state
                 void this.annotateNodeDuringTask(nodeId, label, task, dontRefreshOnRemove);
-            } else if (isTerminalState(event.newState)) {
-                // Task ended before we could start - clean up
-                startSubscription.dispose();
             }
         });
     }
