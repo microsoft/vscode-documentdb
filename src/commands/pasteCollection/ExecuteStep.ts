@@ -73,12 +73,45 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         // Register task with the task service
         TaskService.registerTask(task);
 
+        // Calculate database IDs upfront to determine refresh behavior
+        const targetDatabaseId =
+            context.targetNode instanceof DatabaseItem
+                ? context.targetNode.id
+                : context.targetNode.id.substring(0, context.targetNode.id.lastIndexOf('/'));
+
+        const sourceDatabaseId = ext.copiedCollectionNode?.id
+            ? ext.copiedCollectionNode.id.substring(0, ext.copiedCollectionNode.id.lastIndexOf('/'))
+            : undefined;
+
+        // Determine if source and target are in the same database
+        const isSameDatabase = sourceDatabaseId === targetDatabaseId;
+
         // Set up tree annotations to show progress on source and target nodes
-        // Annotations are automatically cleared when the task reaches a terminal state
+        // For the source: skip auto-refresh if it's in the same database as target (will be covered by target refresh)
         if (ext.copiedCollectionNode?.id) {
-            void this.annotateNodeDuringTask(ext.copiedCollectionNode.id, vscode.l10n.t('Copying…'), task);
+            void this.annotateNodeDuringTask(
+                ext.copiedCollectionNode.id,
+                vscode.l10n.t('Copying…'),
+                task,
+                isSameDatabase,
+            );
         }
-        void this.annotateNodeDuringTask(context.targetNode.id, vscode.l10n.t('Pasting…'), task);
+
+        // For database targets: annotate the new collection once it's created
+        // For collection targets: annotate the collection directly
+        if (context.targetNode instanceof DatabaseItem) {
+            const newCollectionId = `${targetDatabaseId}/${finalTargetCollectionName}`;
+            // Annotate new collection from after Initializing until task ends
+            void this.annotateNodeAfterState(
+                newCollectionId,
+                vscode.l10n.t('Pasting…'),
+                task,
+                TaskState.Initializing,
+                true,
+            );
+        } else {
+            void this.annotateNodeDuringTask(context.targetNode.id, vscode.l10n.t('Pasting…'), task, true);
+        }
 
         // Subscribe to task status updates to know when to refresh the tree:
         // 1. When pasting into a database, refresh after Initializing so the new collection appears
@@ -94,15 +127,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
             // On terminal state (success or failure): always refresh at database level
             // This ensures collection document counts update correctly
             if (isTerminalState(stateChange.newState)) {
-                // Calculate the database-level ID for refresh
-                const databaseId =
-                    context.targetNode instanceof DatabaseItem
-                        ? context.targetNode.id
-                        : context.targetNode.id.substring(0, context.targetNode.id.lastIndexOf('/'));
-
                 // Small delay to ensure backend has processed changes
                 await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-                ext.state.notifyChildrenChanged(databaseId);
+                ext.state.notifyChildrenChanged(targetDatabaseId);
 
                 subscription.dispose();
             }
@@ -115,17 +142,54 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
     /**
      * Annotates a tree node with a temporary description while the task is running.
      * The annotation is automatically cleared when the task reaches a terminal state.
+     * @param nodeId - The ID of the node to annotate
+     * @param label - The temporary description to show
+     * @param task - The task to monitor for completion
+     * @param dontRefreshOnRemove - If true, prevents automatic refresh when the annotation is removed
      */
-    private annotateNodeDuringTask(nodeId: string, label: string, task: Task): void {
-        void ext.state.runWithTemporaryDescription(nodeId, label, () => {
-            return new Promise<void>((resolve) => {
-                const subscription = task.onDidChangeState((event) => {
-                    if (isTerminalState(event.newState)) {
-                        subscription.dispose();
-                        resolve();
-                    }
+    private annotateNodeDuringTask(nodeId: string, label: string, task: Task, dontRefreshOnRemove?: boolean): void {
+        void ext.state.runWithTemporaryDescription(
+            nodeId,
+            label,
+            () => {
+                return new Promise<void>((resolve) => {
+                    const subscription = task.onDidChangeState((event) => {
+                        if (isTerminalState(event.newState)) {
+                            subscription.dispose();
+                            resolve();
+                        }
+                    });
                 });
-            });
+            },
+            dontRefreshOnRemove,
+        );
+    }
+
+    /**
+     * Annotates a tree node with a temporary description starting after a specific state is exited.
+     * @param nodeId - The ID of the node to annotate
+     * @param label - The temporary description to show
+     * @param task - The task to monitor
+     * @param afterState - The state that, when exited, starts the annotation
+     * @param dontRefreshOnRemove - If true, prevents automatic refresh when the annotation is removed
+     */
+    private annotateNodeAfterState(
+        nodeId: string,
+        label: string,
+        task: Task,
+        afterState: TaskState,
+        dontRefreshOnRemove?: boolean,
+    ): void {
+        // Wait for the afterState to be exited, then start the annotation
+        const startSubscription = task.onDidChangeState((event) => {
+            if (event.previousState === afterState) {
+                startSubscription.dispose();
+                // Now annotate until terminal state
+                void this.annotateNodeDuringTask(nodeId, label, task, dontRefreshOnRemove);
+            } else if (isTerminalState(event.newState)) {
+                // Task ended before we could start - clean up
+                startSubscription.dispose();
+            }
         });
     }
 
