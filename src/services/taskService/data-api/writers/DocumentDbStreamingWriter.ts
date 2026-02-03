@@ -199,17 +199,14 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
             return undefined;
         }
 
-        // Log the pre-filtered conflicts with clear messaging
-        ext.outputChannel.debug(
-            l10n.t(
-                '[DocumentDbStreamingWriter] Pre-filter: found {0} existing documents via server query (will skip)',
-                conflictIds.length.toString(),
-            ),
+        // Log the pre-filtered conflicts with clear messaging at warn level so users can see what was skipped
+        ext.outputChannel.warn(
+            l10n.t('[DocumentDbStreamingWriter/Skip Strategy] Found {0} existing documents that will be skipped', conflictIds.length.toString()),
         );
 
         for (const id of conflictIds) {
-            ext.outputChannel.trace(
-                l10n.t('[DocumentDbStreamingWriter] Pre-filtered: _id {0} already exists', this.formatDocumentId(id)),
+            ext.outputChannel.warn(
+                l10n.t('[DocumentDbStreamingWriter/Skip Strategy] Skipping document with _id: {0} (already exists)', this.formatDocumentId(id)),
             );
         }
 
@@ -286,9 +283,9 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                     const duplicateErrors = writeErrors.filter((e) => e?.code === 11000);
 
                     if (duplicateErrors.length > 0) {
-                        ext.outputChannel.debug(
+                        ext.outputChannel.warn(
                             l10n.t(
-                                '[DocumentDbStreamingWriter] Race condition: {0} documents inserted by another process (skipping)',
+                                '[DocumentDbStreamingWriter/Skip Strategy] {0} documents were inserted by another process and will be skipped',
                                 duplicateErrors.length.toString(),
                             ),
                         );
@@ -306,9 +303,9 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                                 error: new Error(l10n.t('Document inserted by another process (skipped)')),
                             });
 
-                            ext.outputChannel.trace(
+                            ext.outputChannel.warn(
                                 l10n.t(
-                                    '[DocumentDbStreamingWriter] Race condition skip: _id {0}',
+                                    '[DocumentDbStreamingWriter/Skip Strategy] Skipping document with _id: {0} (race condition)',
                                     documentId ?? '[unknown]',
                                 ),
                             );
@@ -404,10 +401,6 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                 const writeErrors = this.extractWriteErrors(error);
 
                 if (writeErrors.some((e) => e?.code === 11000)) {
-                    ext.outputChannel.debug(
-                        l10n.t('[DocumentDbStreamingWriter] Handling expected conflicts in Abort strategy'),
-                    );
-
                     const rawCounts = this.extractRawDocumentCounts(error);
                     const conflictErrors = writeErrors
                         .filter((e) => e?.code === 11000)
@@ -429,11 +422,20 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
                             };
                         });
 
+                    // Log conflicts at error level since Abort strategy will fail on these
+                    ext.outputChannel.error(
+                        l10n.t(
+                            '[DocumentDbStreamingWriter/Abort Strategy] Operation aborted due to {0} duplicate key conflict(s)',
+                            conflictErrors.length.toString(),
+                        ),
+                    );
+
                     for (const conflictError of conflictErrors) {
-                        ext.outputChannel.appendLog(
+                        ext.outputChannel.error(
                             l10n.t(
-                                '[DocumentDbStreamingWriter] Conflict for document with _id: {0}',
+                                '[DocumentDbStreamingWriter/Abort Strategy] Conflict for document with _id: {0}. {1}',
                                 conflictError.documentId || '[unknown]',
+                                conflictError.error.message,
                             ),
                         );
                     }
