@@ -12,6 +12,8 @@ import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDB
 import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
+import { sanitizeAzureResourceIdForTreeId } from '../../../tree/azure-views/models/AzureClusterModel';
+import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { createComputeManagementClient, createNetworkManagementClient } from '../../../utils/azureClients';
@@ -104,16 +106,34 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         connectionString.hosts = [host + ':27017']; // Set the actual host and default port
                         connectionString.protocol = 'mongodb';
 
-                        const vmInfo: VirtualMachineModel = {
-                            id: vm.id!,
+                        // Sanitize Azure Resource ID: replace '/' with '_' for treeId
+                        const sanitizedId = sanitizeAzureResourceIdForTreeId(vm.id!);
+
+                        // clusterId must be prefixed with provider ID for uniqueness across plugins
+                        const prefixedClusterId = `${DISCOVERY_PROVIDER_ID}_${sanitizedId}`;
+
+                        const vmInfo: TreeCluster<VirtualMachineModel> = {
+                            // Core cluster data
                             name: vm.name!,
                             connectionString: connectionString.toString(),
+                            dbExperience: DocumentDBExperience,
+                            clusterId: prefixedClusterId, // Prefixed with provider ID for uniqueness
+                            // Azure-specific data
+                            azureResourceId: vm.id!, // Keep original Azure Resource ID for ARM API correlation
                             resourceGroup: getResourceGroupFromId(vm.id!),
+                            // VM-specific data
                             vmSize: vm.hardwareProfile?.vmSize,
                             publicIpAddress: publicIpAddress,
                             fqdn: fqdn,
-                            dbExperience: DocumentDBExperience,
+                            // Tree context - treeId includes parent hierarchy for findNodeById to work
+                            treeId: `${this.id}/${sanitizedId}`,
+                            viewId: Views.DiscoveryView,
                         };
+
+                        ext.outputChannel.trace(
+                            `[DiscoveryView/VM] Created cluster model: name="${vmInfo.name}", clusterId="${vmInfo.clusterId}", treeId="${vmInfo.treeId}"`,
+                        );
+
                         vmItems.push(
                             new AzureVMResourceItem(this.journeyCorrelationId, this.subscription.subscription, vmInfo),
                         );

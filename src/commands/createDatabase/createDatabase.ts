@@ -28,7 +28,7 @@ export async function createDatabase(context: IActionContext, node: ClusterItemB
 async function createMongoDatabase(context: IActionContext, node: ClusterItemBase): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
 
-    if (!CredentialCache.hasCredentials(node.cluster.id)) {
+    if (!CredentialCache.hasCredentials(node.cluster.clusterId)) {
         throw new Error(
             l10n.t(
                 'You are not signed in to the MongoDB Cluster. Please sign in (by expanding the node "{0}") and try again.',
@@ -39,7 +39,7 @@ async function createMongoDatabase(context: IActionContext, node: ClusterItemBas
 
     const wizardContext: CreateDatabaseWizardContext = {
         ...context,
-        credentialsId: node.cluster.id,
+        credentialsId: node.cluster.clusterId,
         clusterName: node.cluster.name,
         nodeId: node.id,
     };

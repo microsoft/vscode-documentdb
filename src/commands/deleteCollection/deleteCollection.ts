@@ -22,7 +22,7 @@ export async function deleteCollection(context: IActionContext, node: Collection
     // Check if any running tasks are using this collection
     const canProceed = await checkCanProceedAndInformUser(
         {
-            connectionId: node.cluster.id,
+            clusterId: node.cluster.clusterId,
             databaseName: node.databaseInfo.name,
             collectionName: node.collectionInfo.name,
         },
@@ -51,7 +51,7 @@ export async function deleteCollection(context: IActionContext, node: Collection
     }
 
     try {
-        const client = await ClustersClient.getClient(node.cluster.id);
+        const client = await ClustersClient.getClient(node.cluster.clusterId);
 
         let success = false;
         await ext.state.showDeleting(node.id, async () => {
