@@ -201,12 +201,18 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
 
         // Log the pre-filtered conflicts with clear messaging at warn level so users can see what was skipped
         ext.outputChannel.warn(
-            l10n.t('[DocumentDbStreamingWriter/Skip Strategy] Found {0} existing documents that will be skipped', conflictIds.length.toString()),
+            l10n.t(
+                '[DocumentDbStreamingWriter/Skip Strategy] Found {0} existing documents that will be skipped',
+                conflictIds.length.toString(),
+            ),
         );
 
         for (const id of conflictIds) {
             ext.outputChannel.warn(
-                l10n.t('[DocumentDbStreamingWriter/Skip Strategy] Skipping document with _id: {0} (already exists)', this.formatDocumentId(id)),
+                l10n.t(
+                    '[DocumentDbStreamingWriter/Skip Strategy] Skipping document with _id: {0} (already exists)',
+                    this.formatDocumentId(id),
+                ),
             );
         }
 
