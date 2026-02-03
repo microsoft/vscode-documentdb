@@ -92,6 +92,43 @@ src/commands/yourCommand/
 - Use VS Code's secure storage for credentials
 - Validate all user inputs
 
+## Cluster ID Architecture (Dual ID Pattern)
+
+> ⚠️ **CRITICAL**: Using the wrong ID causes silent bugs that only appear when users move connections between folders.
+
+Cluster models have **two distinct ID properties** with different purposes:
+
+| Property    | Purpose                          | Stable?                   | Use For                             |
+| ----------- | -------------------------------- | ------------------------- | ----------------------------------- |
+| `treeId`    | VS Code TreeView element path    | ❌ Changes on folder move | `this.id`, child item paths         |
+| `clusterId` | Cache key (credentials, clients) | ✅ Always stable          | `CredentialCache`, `ClustersClient` |
+
+### Quick Reference
+
+```typescript
+// ✅ Tree element identification
+this.id = cluster.treeId;
+
+// ✅ Cache operations - ALWAYS use clusterId
+CredentialCache.hasCredentials(cluster.clusterId);
+ClustersClient.getClient(cluster.clusterId);
+
+// ❌ WRONG - breaks when connection moves to a folder
+CredentialCache.hasCredentials(this.id); // BUG!
+```
+
+### Model Types
+
+- **`ConnectionClusterModel`** - Connections View (has `storageId`)
+- **`AzureClusterModel`** - Azure/Discovery Views (has `azureResourceId`)
+- **`BaseClusterModel`** - Shared interface (use for generic code)
+
+For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replaced with `_`). The original Azure Resource ID is stored in `AzureClusterModel.azureResourceId` for Azure API calls.
+
+> 💡 **Extensibility**: If adding a non-Azure discovery source (e.g., AWS, GCP), consider creating a new model type (e.g., `AwsClusterModel`) extending `BaseClusterModel` with source-specific metadata.
+
+See `src/tree/models/BaseClusterModel.ts` and `docs/analysis/08-cluster-model-simplification-plan.md` for details.
+
 ## Additional Patterns
 
 For detailed patterns, see:

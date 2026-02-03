@@ -10,9 +10,11 @@ import { VerifyNoConflictsStep } from './VerifyNoConflictsStep';
 
 // Mock ConnectionStorageService
 const mockIsNameDuplicateInParent = jest.fn();
+const mockGetChildren = jest.fn();
 jest.mock('../../../services/connectionStorageService', () => ({
     ConnectionStorageService: {
         isNameDuplicateInParent: (...args: unknown[]) => mockIsNameDuplicateInParent(...args),
+        getChildren: (...args: unknown[]) => mockGetChildren(...args),
     },
     ConnectionType: {
         Clusters: 'clusters',
@@ -22,6 +24,37 @@ jest.mock('../../../services/connectionStorageService', () => ({
         Connection: 'connection',
         Folder: 'folder',
     },
+}));
+
+// Mock TaskService
+// Mock TaskService - use findConflictingTasksForConnections for simpler control
+const mockFindConflictingTasksForConnections = jest.fn<
+    Array<{ taskId: string; taskName: string; taskType: string }>,
+    [string[]]
+>(() => []);
+jest.mock('../../../services/taskService/taskService', () => ({
+    TaskService: {
+        findConflictingTasksForConnections: (connectionIds: string[]) =>
+            mockFindConflictingTasksForConnections(connectionIds),
+    },
+}));
+
+// Mock enumerateConnectionsInItems to return controlled data
+const mockEnumerateConnectionsInItems = jest.fn();
+
+// Mock verificationUtils - only mock the enumeration, let findConflictingTasks use real logic
+const mockLogTaskConflicts = jest.fn();
+jest.mock('../verificationUtils', () => ({
+    VerificationCompleteError: class VerificationCompleteError extends Error {
+        constructor() {
+            super('Conflict verification completed successfully');
+            this.name = 'VerificationCompleteError';
+        }
+    },
+    // findConflictingTasks delegates to TaskService, which is mocked above
+    findConflictingTasks: jest.requireActual('../verificationUtils').findConflictingTasks,
+    enumerateConnectionsInItems: (...args: unknown[]) => mockEnumerateConnectionsInItems(...args),
+    logTaskConflicts: (...args: unknown[]) => mockLogTaskConflicts(...args),
 }));
 
 // Mock extensionVariables
@@ -65,6 +98,23 @@ function createMockConnectionItem(overrides: Partial<ConnectionItem> = {}): Conn
     } as ConnectionItem;
 }
 
+// Helper to create a mock folder item
+function createMockFolderItem(overrides: { id: string; name: string; parentId?: string }): ConnectionItem {
+    return {
+        id: overrides.id,
+        name: overrides.name,
+        properties: {
+            type: ItemType.Folder,
+            parentId: overrides.parentId,
+            api: 'DocumentDB' as never,
+            availableAuthMethods: [],
+        },
+        secrets: {
+            connectionString: '',
+        },
+    } as ConnectionItem;
+}
+
 // Helper to create a mock wizard context
 function createMockContext(overrides: Partial<MoveItemsWizardContext> = {}): MoveItemsWizardContext {
     return {
@@ -85,6 +135,7 @@ function createMockContext(overrides: Partial<MoveItemsWizardContext> = {}): Mov
         targetFolderId: 'targetFolderId' in overrides ? overrides.targetFolderId : 'target-folder-id',
         targetFolderPath: 'targetFolderPath' in overrides ? overrides.targetFolderPath : 'Target Folder',
         cachedFolderList: overrides.cachedFolderList ?? [],
+        conflictingTasks: overrides.conflictingTasks ?? [],
         conflictingNames: overrides.conflictingNames ?? [],
     } as MoveItemsWizardContext;
 }
@@ -96,6 +147,12 @@ describe('VerifyNoConflictsStep', () => {
         jest.clearAllMocks();
         step = new VerifyNoConflictsStep();
         mockIsNameDuplicateInParent.mockReset();
+        mockFindConflictingTasksForConnections.mockReturnValue([]);
+        mockGetChildren.mockResolvedValue([]);
+        // Default behavior for enumerateConnectionsInItems: return the item IDs
+        mockEnumerateConnectionsInItems.mockImplementation(async (items: ConnectionItem[]) =>
+            items.map((item) => item.id),
+        );
     });
 
     describe('shouldPrompt', () => {
@@ -324,6 +381,179 @@ describe('VerifyNoConflictsStep', () => {
             // Should proceed without error (no items = no conflicts)
             await expect(step.prompt(context)).resolves.not.toThrow();
             expect(mockIsNameDuplicateInParent).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('task conflict detection', () => {
+        it('should detect task using connection being moved', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' })],
+            });
+
+            // Mock TaskService to return a conflicting task
+            mockFindConflictingTasksForConnections.mockReturnValue([
+                { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+            ]);
+
+            // Mock showQuickPick to await the items promise and return exit
+            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                return { data: 'exit' };
+            });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
+
+            expect(context.conflictingTasks).toHaveLength(1);
+            expect(context.conflictingTasks[0].taskId).toBe('task-1');
+        });
+
+        it('should detect task using connection inside folder being moved', async () => {
+            const folder = createMockFolderItem({ id: 'folder-1', name: 'Folder 1' });
+
+            const context = createMockContext({
+                itemsToMove: [folder],
+            });
+
+            // Set up enumerateConnectionsInItems to return the folder's connections
+            mockEnumerateConnectionsInItems.mockResolvedValue(['conn-in-folder']);
+
+            // Mock TaskService to return a conflicting task
+            mockFindConflictingTasksForConnections.mockReturnValue([
+                { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+            ]);
+
+            // Mock showQuickPick to await the items promise and return exit
+            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                return { data: 'exit' };
+            });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
+
+            expect(context.conflictingTasks).toHaveLength(1);
+            expect(context.conflictingTasks[0].taskId).toBe('task-1');
+        });
+
+        it('should not detect task using different connection', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' })],
+            });
+
+            // No conflicting tasks
+            mockFindConflictingTasksForConnections.mockReturnValue([]);
+            mockIsNameDuplicateInParent.mockResolvedValue(false);
+
+            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+                async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
+                    await itemsPromise;
+                    return { data: 'back' };
+                },
+            );
+
+            await expect(step.prompt(context)).resolves.not.toThrow();
+            expect(context.conflictingTasks).toHaveLength(0);
+        });
+
+        it('should deduplicate tasks that use multiple connections being moved', async () => {
+            const context = createMockContext({
+                itemsToMove: [
+                    createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' }),
+                    createMockConnectionItem({ id: 'conn-2', name: 'Connection 2' }),
+                ],
+            });
+
+            // TaskService returns one task (deduplication happens in TaskService)
+            mockFindConflictingTasksForConnections.mockReturnValue([
+                { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+            ]);
+
+            // Mock showQuickPick to await the items promise and return exit
+            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                return { data: 'exit' };
+            });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
+
+            // Should only have one task even though it uses multiple connections
+            expect(context.conflictingTasks).toHaveLength(1);
+        });
+
+        it('should only offer cancel option for task conflicts (not go back)', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' })],
+            });
+
+            mockFindConflictingTasksForConnections.mockReturnValue([
+                { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+            ]);
+
+            let capturedOptions: IAzureQuickPickItem<string>[] = [];
+            const mockShowQuickPick = jest
+                .fn()
+                .mockImplementation(async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
+                    capturedOptions = await itemsPromise;
+                    return { data: 'exit' };
+                });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            try {
+                await step.prompt(context);
+            } catch {
+                // Expected
+            }
+
+            // Task conflicts should only have cancel option (no go back)
+            expect(capturedOptions).toHaveLength(1);
+            expect(capturedOptions[0].data).toBe('exit');
+        });
+
+        it('should log task conflict details to output channel', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' })],
+            });
+
+            mockFindConflictingTasksForConnections.mockReturnValue([
+                { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+            ]);
+
+            // Mock showQuickPick to await the items promise and return exit
+            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                return { data: 'exit' };
+            });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            try {
+                await step.prompt(context);
+            } catch {
+                // Expected
+            }
+
+            // logTaskConflicts should be called with conflict details
+            expect(mockLogTaskConflicts).toHaveBeenCalled();
+            expect(mockLogTaskConflicts).toHaveBeenCalledWith(
+                expect.stringContaining('task(s) are using connections'),
+                expect.arrayContaining([expect.objectContaining({ taskId: 'task-1' })]),
+            );
         });
     });
 });

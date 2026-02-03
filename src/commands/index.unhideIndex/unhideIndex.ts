@@ -39,7 +39,7 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
     }
 
     try {
-        const client = await ClustersClient.getClient(node.cluster.id);
+        const client = await ClustersClient.getClient(node.cluster.clusterId);
 
         let success = false;
         await ext.state.showCreatingChild(node.id, l10n.t('Unhiding index…'), async () => {

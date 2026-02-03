@@ -36,6 +36,7 @@ import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler'
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
+import { QueryError } from './errors/QueryError';
 import {
     llmEnhancedFeatureApis,
     type CollectionStats,
@@ -121,7 +122,19 @@ export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
 }
 
 export class ClustersClient {
-    // cache of active/existing clients
+    /**
+     * Cache of active MongoDB clients, keyed by clusterId.
+     *
+     * KEY: `clusterId` - The stable cluster identifier (NOT the tree item ID)
+     *   - Connections View items: Use `cluster.clusterId` (= storageId, stable UUID)
+     *   - Azure Resources View items: Use `cluster.clusterId` (= Sanitized Azure Resource ID)
+     *
+     * VALUE: ClustersClient instance wrapping a MongoClient
+     *
+     * ⚠️ WARNING: Do NOT use `treeId` as the cache key!
+     * Tree IDs change when items are moved between folders, causing cache misses
+     * and orphaned connections.
+     */
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
@@ -130,9 +143,13 @@ export class ClustersClient {
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
     /**
-     * Use getClient instead of a constructor. Connections/Client are being cached and reused.
+     * Private constructor - use getClient() instead.
+     * Connections/Clients are being cached and reused.
+     *
+     * @param clusterId - The stable cluster ID used to look up credentials in CredentialCache.
+     *   This is NOT the tree item ID - it's the clusterId that remains stable across folder moves.
      */
-    private constructor(private readonly credentialId: string) {
+    private constructor(private readonly clusterId: string) {
         return;
     }
 
@@ -164,9 +181,9 @@ export class ClustersClient {
     // }
 
     private async initClient(): Promise<void> {
-        const credentials = CredentialCache.getCredentials(this.credentialId);
+        const credentials = CredentialCache.getCredentials(this.clusterId);
         if (!credentials) {
-            throw new Error(l10n.t('No credentials found for id {credentialId}', { credentialId: this.credentialId }));
+            throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
         }
 
         // default to NativeAuth if nothing is configured
@@ -240,25 +257,25 @@ export class ClustersClient {
     }
 
     /**
-     * Retrieves an instance of `ClustersClient` based on the provided `credentialId`.
+     * Retrieves an instance of `ClustersClient` based on the provided `clusterId`.
      *
-     * @param credentialId - A required string used to find the cached connection string to connect.
+     * @param clusterId - A required string used to find the cached connection string to connect.
      * It is also used as a key to reuse existing clients.
      * @returns A promise that resolves to an instance of `ClustersClient`.
      */
-    public static async getClient(credentialId: string): Promise<ClustersClient> {
+    public static async getClient(clusterId: string): Promise<ClustersClient> {
         let client: ClustersClient;
 
-        if (ClustersClient._clients.has(credentialId)) {
-            client = ClustersClient._clients.get(credentialId) as ClustersClient;
+        if (ClustersClient._clients.has(clusterId)) {
+            client = ClustersClient._clients.get(clusterId) as ClustersClient;
 
             // if the client is already connected, it's a NOOP.
             await client._mongoClient.connect();
         } else {
-            client = new ClustersClient(credentialId);
+            client = new ClustersClient(clusterId);
             // Cluster metadata is set in initClient
             await client.initClient();
-            ClustersClient._clients.set(credentialId, client);
+            ClustersClient._clients.set(clusterId, client);
         }
 
         return client;
@@ -349,7 +366,7 @@ export class ClustersClient {
     }
 
     getUserName() {
-        return CredentialCache.getConnectionUser(this.credentialId);
+        return CredentialCache.getConnectionUser(this.clusterId);
     }
 
     /**
@@ -363,11 +380,11 @@ export class ClustersClient {
      * @deprecated Use getCredentials() which returns a CachedClusterCredentials object instead.
      */
     getConnectionStringWithPassword(): string | undefined {
-        return CredentialCache.getConnectionStringWithPassword(this.credentialId);
+        return CredentialCache.getConnectionStringWithPassword(this.clusterId);
     }
 
     public getCredentials(): CachedClusterCredentials | undefined {
-        return CredentialCache.getCredentials(this.credentialId) as CachedClusterCredentials | undefined;
+        return CredentialCache.getCredentials(this.clusterId) as CachedClusterCredentials | undefined;
     }
 
     /**
@@ -498,7 +515,15 @@ export class ClustersClient {
             try {
                 options.projection = EJSON.parse(queryParams.project) as Document;
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -507,7 +532,15 @@ export class ClustersClient {
             try {
                 options.sort = EJSON.parse(queryParams.sort) as Document;
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -548,10 +581,24 @@ export class ClustersClient {
         return documents;
     }
 
+    /**
+     * Counts documents in a collection matching the given filter query.
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param findQuery - Optional filter query string (defaults to '{}')
+     * @returns Number of documents matching the filter
+     *
+     * @throws {QueryError} with code 'INVALID_FILTER' if findQuery contains invalid JSON/BSON syntax.
+     *         Callers should handle this error appropriately - currently this error will propagate
+     *         up the call stack. TODO: Revisit error handling strategy when this function is used
+     *         in more contexts (e.g., UI count displays may want graceful fallback).
+     */
     async countDocuments(databaseName: string, collectionName: string, findQuery: string = '{}'): Promise<number> {
         if (findQuery === undefined || findQuery.trim().length === 0) {
             findQuery = '{}';
         }
+        // NOTE: toFilterQueryObj throws QueryError on invalid input - see JSDoc above
         const findQueryObj: Filter<Document> = toFilterQueryObj(findQuery);
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -617,7 +664,15 @@ export class ClustersClient {
             try {
                 options.projection = EJSON.parse(queryParams.project) as Document;
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -626,7 +681,15 @@ export class ClustersClient {
             try {
                 options.sort = EJSON.parse(queryParams.sort) as Document;
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 

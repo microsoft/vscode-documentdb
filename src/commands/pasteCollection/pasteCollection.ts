@@ -93,7 +93,7 @@ export async function pasteCollection(
     let sourceCollectionSize: number | undefined = undefined;
     try {
         sourceCollectionSize = await (
-            await ClustersClient.getClient(sourceNode.cluster.id)
+            await ClustersClient.getClient(sourceNode.cluster.clusterId)
         ).estimateDocumentCount(sourceNode.databaseInfo.name, sourceNode.collectionInfo.name);
         context.telemetry.measurements.sourceCollectionSize = sourceCollectionSize;
     } catch (error) {
@@ -105,11 +105,11 @@ export async function pasteCollection(
         ...context,
         sourceCollectionName: sourceNode.collectionInfo.name,
         sourceDatabaseName: sourceNode.databaseInfo.name,
-        sourceConnectionId: sourceNode.cluster.id,
+        sourceConnectionId: sourceNode.cluster.clusterId,
         sourceConnectionName: sourceNode.cluster.name,
         sourceCollectionSize,
         targetNode,
-        targetConnectionId: targetNode.cluster.id,
+        targetConnectionId: targetNode.cluster.clusterId,
         targetConnectionName: targetNode.cluster.name,
         targetDatabaseName: targetNode.databaseInfo.name,
         targetCollectionName,

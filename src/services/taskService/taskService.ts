@@ -229,12 +229,14 @@ export abstract class Task {
                 const err = this._status.error instanceof Error ? this._status.error.message : '';
                 // Include error details if available
                 const detail = err ? ` ${vscode.l10n.t('Error: {0}', err)}` : '';
-                ext.outputChannel.appendLine(
+                // Use .error() to ensure task failure is always visible regardless of log level
+                ext.outputChannel.error(
                     vscode.l10n.t("! Task '{taskName}' failed. {message}", {
                         taskName: this.name,
                         message: `${msg}${detail}`.trim(),
                     }),
                 );
+                ext.outputChannel.show();
             }
         }
     }
@@ -547,6 +549,16 @@ export interface TaskService {
     getConflictingTasks(resource: ResourceDefinition): TaskInfo[];
 
     /**
+     * Finds all tasks that conflict with any of the given cluster IDs.
+     * Performs simple equality matching between the provided clusterIds and
+     * the clusterIds used by running tasks.
+     *
+     * @param clusterIds - Array of cluster IDs (clusterIds/storageIds) to check
+     * @returns Array of conflicting tasks (deduplicated by taskId)
+     */
+    findConflictingTasksForConnections(clusterIds: string[]): TaskInfo[];
+
+    /**
      * Gets all resources currently in use by all active tasks.
      * Useful for debugging or advanced UI features.
      * Only includes tasks that are currently in non-final states.
@@ -683,6 +695,33 @@ class TaskServiceImpl implements TaskService {
         }
 
         return result;
+    }
+
+    public findConflictingTasksForConnections(clusterIds: string[]): TaskInfo[] {
+        if (clusterIds.length === 0) {
+            return [];
+        }
+
+        const clusterIdSet = new Set(clusterIds);
+        const conflictingTasks: TaskInfo[] = [];
+        const addedTaskIds = new Set<string>();
+
+        const allUsedResources = this.getAllUsedResources();
+        for (const { task, resources } of allUsedResources) {
+            if (addedTaskIds.has(task.taskId)) {
+                continue;
+            }
+
+            for (const resource of resources) {
+                if (resource.clusterId && clusterIdSet.has(resource.clusterId)) {
+                    conflictingTasks.push(task);
+                    addedTaskIds.add(task.taskId);
+                    break;
+                }
+            }
+        }
+
+        return conflictingTasks;
     }
 }
 

@@ -22,14 +22,15 @@ import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticat
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
+import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { getThemeAgnosticIconPath } from '../../../../utils/icons';
 import { nonNullValue } from '../../../../utils/nonNull';
 import { DISCOVERY_PROVIDER_ID, RESOURCE_TYPE } from '../../config';
 import { extractCredentialsFromCluster, getClusterInformationFromAzure } from '../../utils/clusterHelpers';
 
-export class DocumentDBResourceItem extends ClusterItemBase {
+export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = getThemeAgnosticIconPath('AzureDocumentDb.svg');
 
     constructor(
@@ -39,7 +40,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
          */
         journeyCorrelationId: string,
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;
@@ -122,9 +123,10 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 context.valuesToMask.push(wizardContext.password);
             }
 
-            // Cache credentials and attempt connection
+            // Cache credentials using clusterId (stable Azure Resource ID) - NOT this.id (treeId)
+            // The clusterId is used consistently for both storing and retrieving credentials
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 nonNullValue(
                     wizardContext.selectedAuthMethod,
                     'wizardContext.selectedAuthMethod',
@@ -154,7 +156,7 @@ export class DocumentDBResourceItem extends ClusterItemBase {
             }
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -187,8 +189,8 @@ export class DocumentDBResourceItem extends ClusterItemBase {
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }

@@ -99,14 +99,15 @@ export async function moveItems(
         targetFolderId: undefined,
         targetFolderPath: undefined,
         cachedFolderList: [], // Initialize as [] to survive back navigation
-        conflictingNames: [], // Will be populated by VerifyNoConflictsStep
+        conflictingTasks: [], // Populated by VerifyNoConflictsStep
+        conflictingNames: [], // Populated by VerifyNoConflictsStep
     };
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Move to Folder...'),
         promptSteps: [
             new PromptTargetFolderStep(),
-            new VerifyNoConflictsStep(), // Pre-move verification - back/exit only on conflict
+            new VerifyNoConflictsStep(), // Verify no task or naming conflicts before moving
             new ConfirmMoveStep(),
         ],
         executeSteps: [new ExecuteStep()],

@@ -13,6 +13,12 @@ export type DocumentsViewWebviewConfigurationType = {
     id: string; // move to base type
 
     clusterId: string;
+    /**
+     * Identifies which tree view this cluster belongs to.
+     * Required for finding the tree node if needed.
+     * @see Views enum
+     */
+    viewId: string;
     databaseName: string;
     collectionName: string;
     documentId: string;
@@ -40,6 +46,7 @@ export class DocumentsViewController extends WebviewController<DocumentsViewWebv
             dbExperience: API.DocumentDB,
             webviewName: 'documentView',
             clusterId: initialData.clusterId,
+            viewId: initialData.viewId,
             databaseName: initialData.databaseName,
             collectionName: initialData.collectionName,
             documentId: initialData.documentId,

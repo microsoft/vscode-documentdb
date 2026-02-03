@@ -40,7 +40,7 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
     }
 
     try {
-        const client = await ClustersClient.getClient(node.cluster.id);
+        const client = await ClustersClient.getClient(node.cluster.clusterId);
 
         let success = false;
         await ext.state.showDeleting(node.id, async () => {
