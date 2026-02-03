@@ -187,8 +187,8 @@ function createCompleteConnectionItem(): StoredConnection {
         secrets: {
             connectionString: 'mongodb://contract-test-host:27017/testdb',
             nativeAuthConfig: {
-                connectionUser: 'contractUser',
-                connectionPassword: 'contractPassword123!',
+                connectionUser: 'fake-test-user',
+                connectionPassword: 'not-a-real-password',
             },
             entraIdAuthConfig: {
                 tenantId: 'tenant-abc-123',
@@ -270,8 +270,8 @@ describe('ConnectionStorageService - Contract Tests', () => {
             await ConnectionStorageService.save(ConnectionType.Clusters, original);
             const retrieved = await ConnectionStorageService.get(original.id, ConnectionType.Clusters);
 
-            expect(retrieved?.secrets.nativeAuthConfig?.connectionUser).toBe('contractUser');
-            expect(retrieved?.secrets.nativeAuthConfig?.connectionPassword).toBe('contractPassword123!');
+            expect(retrieved?.secrets.nativeAuthConfig?.connectionUser).toBe('fake-test-user');
+            expect(retrieved?.secrets.nativeAuthConfig?.connectionPassword).toBe('not-a-real-password');
         });
 
         it('should preserve entraIdAuthConfig identifiers', async () => {

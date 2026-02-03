@@ -78,3 +78,34 @@ export const AzureDomains = {
     vCore: 'mongocluster.cosmos.azure.com',
     GeneralAzure: 'azure.com',
 };
+
+/**
+ * Normalizes a connection string by removing duplicate query parameters.
+ * This is useful for cleaning up connection strings that may have been corrupted
+ * by bugs in previous versions.
+ *
+ * @param connectionString - The connection string to normalize
+ * @returns A normalized connection string with duplicate parameters removed
+ */
+export const normalizeConnectionString = (connectionString: string): string => {
+    return DocumentDBConnectionString.normalize(connectionString);
+};
+
+/**
+ * Checks if a connection string has duplicate query parameters.
+ *
+ * @param connectionString - The connection string to check
+ * @returns true if there are duplicate parameters
+ */
+export const hasDuplicateParameters = (connectionString: string): boolean => {
+    if (!connectionString) {
+        return false;
+    }
+
+    try {
+        const parsed = new DocumentDBConnectionString(connectionString);
+        return parsed.hasDuplicateParameters();
+    } catch {
+        return false;
+    }
+};

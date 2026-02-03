@@ -546,4 +546,278 @@ describe('DocumentDBConnectionString', () => {
             expect(connStr.searchParams.get('tag3')).toBe('test#1');
         });
     });
+
+    describe('deduplicateQueryParameters', () => {
+        it('should remove exact duplicate key=value pairs', () => {
+            const uri = 'mongodb://host.example.com:27017/?ssl=true&ssl=true&appName=app';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            expect(deduplicated).toBe('mongodb://host.example.com:27017/?ssl=true&appName=app');
+        });
+
+        it('should preserve different values for the same key', () => {
+            // Some MongoDB parameters legitimately allow multiple values
+            const uri = 'mongodb://host.example.com:27017/?readPreferenceTags=dc:east&readPreferenceTags=dc:west';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            // Both values should be preserved since they are different
+            expect(deduplicated).toContain('readPreferenceTags=dc%3Aeast');
+            expect(deduplicated).toContain('readPreferenceTags=dc%3Awest');
+        });
+
+        it('should handle connection string without query parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/database';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            expect(deduplicated).toBe('mongodb://host.example.com:27017/database');
+        });
+
+        it('should handle multiple duplicates of the same parameter', () => {
+            const uri = 'mongodb://host.example.com:27017/?ssl=true&ssl=true&ssl=true&appName=app&appName=app';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            expect(deduplicated).toBe('mongodb://host.example.com:27017/?ssl=true&appName=app');
+        });
+
+        it('should preserve special characters in values when deduplicating', () => {
+            const uri = 'mongodb://host.example.com:27017/?appName=@user@&appName=@user@&ssl=true';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            // Should have only one appName with encoded @ characters
+            expect(deduplicated).toBe('mongodb://host.example.com:27017/?appName=%40user%40&ssl=true');
+        });
+
+        it('should work correctly after multiple parse/serialize cycles', () => {
+            const original = 'mongodb://host.example.com:27017/?ssl=true&appName=@user@';
+
+            // First cycle
+            const parsed1 = new DocumentDBConnectionString(original);
+            const str1 = parsed1.deduplicateQueryParameters();
+
+            // Second cycle
+            const parsed2 = new DocumentDBConnectionString(str1);
+            const str2 = parsed2.deduplicateQueryParameters();
+
+            // Third cycle
+            const parsed3 = new DocumentDBConnectionString(str2);
+            const str3 = parsed3.deduplicateQueryParameters();
+
+            // All should be identical - no parameter doubling
+            expect(str1).toBe(str2);
+            expect(str2).toBe(str3);
+
+            // Verify the values are still correct
+            expect(parsed3.searchParams.get('ssl')).toBe('true');
+            expect(parsed3.searchParams.get('appName')).toBe('@user@');
+        });
+
+        it('should keep only the last value for non-whitelisted parameters with different values', () => {
+            // Per MongoDB spec, non-whitelisted parameters follow "last value wins" behavior
+            const uri = 'mongodb://host.example.com:27017/?appName=app1&appName=app2&ssl=false&ssl=true';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            // Should only keep the last value for each parameter
+            expect(deduplicated).toBe('mongodb://host.example.com:27017/?appName=app2&ssl=true');
+        });
+
+        it('should preserve all unique values for readPreferenceTags but last value only for other params', () => {
+            // Mixed case: readPreferenceTags (whitelisted) + appName (not whitelisted)
+            const uri =
+                'mongodb://host.example.com:27017/?readPreferenceTags=dc:ny&readPreferenceTags=dc:la&appName=app1&appName=app2';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            // readPreferenceTags should preserve both unique values
+            expect(deduplicated).toContain('readPreferenceTags=dc%3Any');
+            expect(deduplicated).toContain('readPreferenceTags=dc%3Ala');
+            // appName should only keep the last value
+            expect(deduplicated).toContain('appName=app2');
+            expect(deduplicated).not.toContain('appName=app1');
+        });
+
+        it('should handle readPreferenceTags with exact duplicates correctly', () => {
+            // readPreferenceTags with duplicate values should remove the duplicate
+            const uri =
+                'mongodb://host.example.com:27017/?readPreferenceTags=dc:ny&readPreferenceTags=dc:ny&readPreferenceTags=dc:la';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            // Should have only unique values, in order
+            const params = new URLSearchParams(deduplicated.split('?')[1]);
+            const tagValues = params.getAll('readPreferenceTags');
+            expect(tagValues).toEqual(['dc:ny', 'dc:la']);
+        });
+    });
+
+    describe('hasDuplicateParameters', () => {
+        it('should return true when there are duplicate parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?ssl=true&ssl=true';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hasDuplicateParameters()).toBe(true);
+        });
+
+        it('should return false when there are no duplicate parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/?ssl=true&appName=app';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hasDuplicateParameters()).toBe(false);
+        });
+
+        it('should return false when same key has different values', () => {
+            const uri = 'mongodb://host.example.com:27017/?tag=prod&tag=dev';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            // Different values for same key is not considered a duplicate
+            expect(connStr.hasDuplicateParameters()).toBe(false);
+        });
+
+        it('should return false for connection string without query parameters', () => {
+            const uri = 'mongodb://host.example.com:27017/database';
+
+            const connStr = new DocumentDBConnectionString(uri);
+
+            expect(connStr.hasDuplicateParameters()).toBe(false);
+        });
+    });
+
+    describe('normalize static method', () => {
+        it('should normalize a connection string with duplicates', () => {
+            const uri = 'mongodb://host.example.com:27017/?ssl=true&ssl=true&appName=app';
+
+            const normalized = DocumentDBConnectionString.normalize(uri);
+
+            expect(normalized).toBe('mongodb://host.example.com:27017/?ssl=true&appName=app');
+        });
+
+        it('should return original string if parsing fails', () => {
+            const invalidUri = 'not-a-valid-connection-string';
+
+            const normalized = DocumentDBConnectionString.normalize(invalidUri);
+
+            expect(normalized).toBe(invalidUri);
+        });
+
+        it('should return empty string for empty input', () => {
+            expect(DocumentDBConnectionString.normalize('')).toBe('');
+        });
+
+        it('should handle credentials correctly during normalization', () => {
+            const uri = 'mongodb://user:pass@host.example.com:27017/?ssl=true&ssl=true';
+
+            const normalized = DocumentDBConnectionString.normalize(uri);
+
+            // Should preserve credentials and remove duplicates
+            expect(normalized).toContain('user');
+            expect(normalized).toContain('pass');
+            expect(normalized).not.toMatch(/ssl=true.*ssl=true/);
+        });
+    });
+
+    describe('real-world Cosmos DB RU connection string with appName containing @', () => {
+        // This is the exact format used by Azure Cosmos DB for MongoDB RU connections
+        const cosmosRUConnectionString =
+            'mongodb://auername:weirdpassword@a-server.somewhere.com:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@anapphere@';
+
+        it('should parse the connection string correctly', () => {
+            const connStr = new DocumentDBConnectionString(cosmosRUConnectionString);
+
+            expect(connStr.username).toBe('auername');
+            expect(connStr.password).toBe('weirdpassword');
+            expect(connStr.hosts).toEqual(['a-server.somewhere.com:10255']);
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+            expect(connStr.searchParams.get('replicaSet')).toBe('globaldb');
+            expect(connStr.searchParams.get('retrywrites')).toBe('false');
+            expect(connStr.searchParams.get('maxIdleTimeMS')).toBe('120000');
+            expect(connStr.searchParams.get('appName')).toBe('@anapphere@');
+        });
+
+        it('should survive parse/serialize roundtrip', () => {
+            const connStr = new DocumentDBConnectionString(cosmosRUConnectionString);
+            const serialized = connStr.toString();
+
+            const reparsed = new DocumentDBConnectionString(serialized);
+
+            expect(reparsed.username).toBe('auername');
+            expect(reparsed.password).toBe('weirdpassword');
+            expect(reparsed.hosts).toEqual(['a-server.somewhere.com:10255']);
+            expect(reparsed.searchParams.get('ssl')).toBe('true');
+            expect(reparsed.searchParams.get('replicaSet')).toBe('globaldb');
+            expect(reparsed.searchParams.get('appName')).toBe('@anapphere@');
+        });
+
+        it('should survive multiple parse/serialize cycles without parameter doubling', () => {
+            let currentString = cosmosRUConnectionString;
+
+            // Simulate 5 migrations/saves
+            for (let i = 0; i < 5; i++) {
+                const parsed = new DocumentDBConnectionString(currentString);
+                currentString = parsed.deduplicateQueryParameters();
+            }
+
+            const finalParsed = new DocumentDBConnectionString(currentString);
+
+            // All parameters should appear exactly once
+            expect(finalParsed.searchParams.getAll('ssl')).toHaveLength(1);
+            expect(finalParsed.searchParams.getAll('replicaSet')).toHaveLength(1);
+            expect(finalParsed.searchParams.getAll('retrywrites')).toHaveLength(1);
+            expect(finalParsed.searchParams.getAll('maxIdleTimeMS')).toHaveLength(1);
+            expect(finalParsed.searchParams.getAll('appName')).toHaveLength(1);
+
+            // Values should be correct
+            expect(finalParsed.username).toBe('auername');
+            expect(finalParsed.password).toBe('weirdpassword');
+            expect(finalParsed.searchParams.get('appName')).toBe('@anapphere@');
+        });
+
+        it('should work correctly when clearing credentials (v1 to v2 migration pattern)', () => {
+            const connStr = new DocumentDBConnectionString(cosmosRUConnectionString);
+
+            // Extract credentials (like v1 to v2 migration does)
+            const username = connStr.username;
+            const password = connStr.password;
+
+            // Clear credentials
+            connStr.username = '';
+            connStr.password = '';
+
+            // Get normalized connection string
+            const normalizedCS = connStr.deduplicateQueryParameters();
+
+            // Verify credentials were extracted correctly
+            expect(username).toBe('auername');
+            expect(password).toBe('weirdpassword');
+
+            // Verify connection string without credentials is valid
+            const reparsed = new DocumentDBConnectionString(normalizedCS);
+            expect(reparsed.username).toBe('');
+            expect(reparsed.password).toBe('');
+            expect(reparsed.hosts).toEqual(['a-server.somewhere.com:10255']);
+            expect(reparsed.searchParams.get('appName')).toBe('@anapphere@');
+            expect(reparsed.searchParams.get('ssl')).toBe('true');
+        });
+
+        it('should not have duplicate parameters', () => {
+            const connStr = new DocumentDBConnectionString(cosmosRUConnectionString);
+
+            expect(connStr.hasDuplicateParameters()).toBe(false);
+        });
+    });
 });
