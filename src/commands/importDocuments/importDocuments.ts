@@ -63,11 +63,16 @@ export async function importDocuments(
 
     context.telemetry.properties.experience = selectedItem.experience.api;
 
-    await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
-        await importDocumentsWithProgress(selectedItem, uris);
-    });
-
-    ext.state.notifyChildrenChanged(selectedItem.id);
+    try {
+        await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
+            await importDocumentsWithProgress(selectedItem, uris);
+        });
+    } finally {
+        // Always refresh at the database level (parent of the collection) so collection
+        // descriptions (document counts) update correctly, even after partial failures
+        const databaseId = selectedItem.id.substring(0, selectedItem.id.lastIndexOf('/'));
+        ext.state.notifyChildrenChanged(databaseId);
+    }
 }
 
 export async function importDocumentsWithProgress(selectedItem: CollectionItem, uris: vscode.Uri[]): Promise<void> {

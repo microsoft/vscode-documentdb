@@ -16,6 +16,18 @@
     {
       "file": "src\\documentdb\\utils\\DocumentDBConnectionString.test.ts",
       "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "src\\services\\connectionStorageService.cleanup.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "src\\services\\connectionStorageService.contract.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "src\\services\\connectionStorageService.test.ts",
+      "_justification": "Fake credentials used for unit tests."
     }
   ]
 }
