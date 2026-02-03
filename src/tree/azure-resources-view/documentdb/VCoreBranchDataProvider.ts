@@ -151,7 +151,7 @@ export class VCoreBranchDataProvider
                 clusterId: sanitizedId, // Sanitized - no '/' characters
                 // Azure-specific data
                 azureResourceId: resource.id, // Keep original Azure Resource ID for ARM API correlation
-                resourceGroup: undefined, // Will be populated from cache
+                resourceGroup: getResourceGroupFromId(resource.id), // Extract from resource ID, needed even if other metadata is missing or cache lookup fails
                 // Tree context (clusterId === treeId after sanitization)
                 treeId: sanitizedId,
                 viewId: Views.AzureResourcesView,
