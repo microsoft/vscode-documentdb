@@ -121,11 +121,11 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
             // For database targets: refresh early so new collection appears in tree
             if (context.targetNode instanceof DatabaseItem && stateChange.previousState === TaskState.Initializing) {
                 await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-                ext.state.notifyChildrenChanged(context.targetNode.id);
+                ext.state.notifyChildrenChanged(targetDatabaseId);
             }
 
             // On terminal state (success or failure): always refresh at database level
-            // This ensures collection document counts update correctly
+            // This ensures collection document counts update correctly and annotations are cleared
             if (isTerminalState(stateChange.newState)) {
                 // Small delay to ensure backend has processed changes
                 await new Promise<void>((resolve) => setTimeout(resolve, 1000));
