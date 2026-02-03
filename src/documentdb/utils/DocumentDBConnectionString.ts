@@ -163,18 +163,34 @@ export class DocumentDBConnectionString extends ConnectionString {
     }
 
     /**
-     * Removes duplicate query parameters from the connection string, keeping only
-     * the last value for each key. This is useful for cleaning up connection strings
-     * that may have been corrupted by bugs in previous versions.
+     * Parameters that can legitimately appear multiple times in a MongoDB connection string.
+     * According to the MongoDB Connection String Specification, only these parameters
+     * are designed to accept multiple values as an ordered list.
      *
-     * Some MongoDB parameters (like `readPreferenceTags`) legitimately allow multiple values.
-     * This method preserves those by keeping all unique values for each key.
+     * See connection-string-parameters.md for detailed documentation and sources.
+     */
+    private static readonly MULTI_VALUE_PARAMETERS = new Set(['readpreferencetags']);
+
+    /**
+     * Removes duplicate query parameters from the connection string according to MongoDB specifications.
+     *
+     * Behavior:
+     * - For parameters in MULTI_VALUE_PARAMETERS (e.g., readPreferenceTags): Preserves all unique values in order
+     * - For all other parameters: Removes exact duplicate key=value pairs, keeps only the last value per key
+     *   (following "last value wins" behavior per MongoDB spec)
+     *
+     * This is useful for cleaning up connection strings that may have been corrupted by bugs in previous versions.
      *
      * @returns A new connection string with deduplicated parameters
      *
      * @example
      * // Input:  mongodb://host/?ssl=true&ssl=true&appName=app
      * // Output: mongodb://host/?ssl=true&appName=app
+     *
+     * @example
+     * // readPreferenceTags preserves multiple unique values:
+     * // Input:  mongodb://host/?readPreferenceTags=dc:ny&readPreferenceTags=dc:ny&readPreferenceTags=
+     * // Output: mongodb://host/?readPreferenceTags=dc:ny&readPreferenceTags=
      */
     public deduplicateQueryParameters(): string {
         // Get all unique keys
@@ -184,12 +200,19 @@ export class DocumentDBConnectionString extends ConnectionString {
         const deduplicatedParams: string[] = [];
         for (const key of uniqueKeys) {
             const allValues = this.searchParams.getAll(key);
-            // Keep only unique values (in case same key=value appears multiple times)
-            const uniqueValues = [...new Set(allValues)];
+            const normalizedKey = key.toLowerCase();
 
-            for (const value of uniqueValues) {
-                // Values from searchParams are already decoded, encode them for the URL
-                deduplicatedParams.push(`${key}=${encodeURIComponent(value)}`);
+            // Check if this parameter can have multiple values
+            if (DocumentDBConnectionString.MULTI_VALUE_PARAMETERS.has(normalizedKey)) {
+                // For multi-value parameters, keep all unique values in order
+                const uniqueValues = [...new Set(allValues)];
+                for (const value of uniqueValues) {
+                    deduplicatedParams.push(`${key}=${encodeURIComponent(value)}`);
+                }
+            } else {
+                // For single-value parameters, keep only the last value (per MongoDB spec)
+                const lastValue = allValues[allValues.length - 1];
+                deduplicatedParams.push(`${key}=${encodeURIComponent(lastValue)}`);
             }
         }
 

@@ -620,6 +620,47 @@ describe('DocumentDBConnectionString', () => {
             expect(parsed3.searchParams.get('ssl')).toBe('true');
             expect(parsed3.searchParams.get('appName')).toBe('@user@');
         });
+
+        it('should keep only the last value for non-whitelisted parameters with different values', () => {
+            // Per MongoDB spec, non-whitelisted parameters follow "last value wins" behavior
+            const uri = 'mongodb://host.example.com:27017/?appName=app1&appName=app2&ssl=false&ssl=true';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            // Should only keep the last value for each parameter
+            expect(deduplicated).toBe('mongodb://host.example.com:27017/?appName=app2&ssl=true');
+        });
+
+        it('should preserve all unique values for readPreferenceTags but last value only for other params', () => {
+            // Mixed case: readPreferenceTags (whitelisted) + appName (not whitelisted)
+            const uri =
+                'mongodb://host.example.com:27017/?readPreferenceTags=dc:ny&readPreferenceTags=dc:la&appName=app1&appName=app2';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            // readPreferenceTags should preserve both unique values
+            expect(deduplicated).toContain('readPreferenceTags=dc%3Any');
+            expect(deduplicated).toContain('readPreferenceTags=dc%3Ala');
+            // appName should only keep the last value
+            expect(deduplicated).toContain('appName=app2');
+            expect(deduplicated).not.toContain('appName=app1');
+        });
+
+        it('should handle readPreferenceTags with exact duplicates correctly', () => {
+            // readPreferenceTags with duplicate values should remove the duplicate
+            const uri =
+                'mongodb://host.example.com:27017/?readPreferenceTags=dc:ny&readPreferenceTags=dc:ny&readPreferenceTags=dc:la';
+
+            const connStr = new DocumentDBConnectionString(uri);
+            const deduplicated = connStr.deduplicateQueryParameters();
+
+            // Should have only unique values, in order
+            const params = new URLSearchParams(deduplicated.split('?')[1]);
+            const tagValues = params.getAll('readPreferenceTags');
+            expect(tagValues).toEqual(['dc:ny', 'dc:la']);
+        });
     });
 
     describe('hasDuplicateParameters', () => {
