@@ -63,6 +63,7 @@ import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
+import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
 import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
@@ -101,6 +102,15 @@ export class ClustersExtension implements vscode.Disposable {
             treeDataProvider: ext.connectionsBranchDataProvider,
         });
         ext.context.subscriptions.push(ext.connectionsTreeView);
+
+        // Show release notes notification when the Connections View becomes visible
+        ext.context.subscriptions.push(
+            ext.connectionsTreeView.onDidChangeVisibility((e) => {
+                if (e.visible) {
+                    void maybeShowReleaseNotesNotification();
+                }
+            }),
+        );
     }
 
     registerDiscoveryTree(_activateContext: IActionContext): void {
