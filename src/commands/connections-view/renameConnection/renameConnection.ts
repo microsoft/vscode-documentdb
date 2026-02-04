@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { l10n as vscodel10n } from 'vscode';
+import * as l10n from '@vscode/l10n';
 import { type DocumentDBClusterItem } from '../../../tree/connections-view/DocumentDBClusterItem';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptNewConnectionNameStep } from './PromptNewConnectionNameStep';
@@ -15,7 +15,7 @@ import { type RenameConnectionWizardContext } from './RenameConnectionWizardCont
  */
 export async function renameConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
-        throw new Error(vscodel10n.t('No node selected.'));
+        throw new Error(l10n.t('No node selected.'));
     }
 
     const wizardContext: RenameConnectionWizardContext = {
@@ -27,7 +27,7 @@ export async function renameConnection(context: IActionContext, node: DocumentDB
     };
 
     const wizard = new AzureWizard(wizardContext, {
-        title: vscodel10n.t('Rename Connection'),
+        title: l10n.t('Rename Connection'),
         promptSteps: [new PromptNewConnectionNameStep()],
         executeSteps: [new ExecuteStep()],
     });
