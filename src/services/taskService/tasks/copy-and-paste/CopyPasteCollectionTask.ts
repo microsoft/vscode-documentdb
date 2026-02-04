@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
@@ -119,6 +120,56 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param context Optional telemetry context for tracking task operations
      */
     protected async onInitialize(signal: AbortSignal, context?: IActionContext): Promise<void> {
+        // Validate source cluster credentials (stale reference protection)
+        if (!CredentialCache.hasCredentials(this.config.source.clusterId)) {
+            // Clear the stale clipboard reference
+            ext.copiedCollectionNode = undefined;
+            void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
+
+            if (context) {
+                context.telemetry.properties.sourceClusterDisconnected = 'true';
+            }
+
+            throw new Error(
+                vscode.l10n.t('The source cluster is no longer connected. Please reconnect and copy the collection again.'),
+            );
+        }
+
+        // Validate source collection still exists
+        this.updateStatus(this.getStatus().state, vscode.l10n.t('Validating source collection...'));
+        try {
+            const sourceClient = await ClustersClient.getClient(this.config.source.clusterId);
+            const collections = await sourceClient.listCollections(this.config.source.databaseName);
+            const collectionExists = collections.some((c) => c.name === this.config.source.collectionName);
+
+            if (!collectionExists) {
+                // Clear the stale clipboard reference
+                ext.copiedCollectionNode = undefined;
+                void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
+
+                if (context) {
+                    context.telemetry.properties.sourceCollectionNotFound = 'true';
+                }
+
+                throw new Error(
+                    vscode.l10n.t(
+                        'The source collection "{0}" no longer exists in database "{1}". It may have been deleted or renamed.',
+                        this.config.source.collectionName,
+                        this.config.source.databaseName,
+                    ),
+                );
+            }
+        } catch (error) {
+            // Re-throw our own validation errors
+            if (error instanceof Error && error.message.includes(vscode.l10n.t('no longer'))) {
+                throw error;
+            }
+            // Wrap other errors (e.g., network issues)
+            throw new Error(
+                vscode.l10n.t('Failed to validate source collection: {0}', error instanceof Error ? error.message : String(error)),
+            );
+        }
+
         // Add copy-paste specific telemetry properties
         if (context) {
             context.telemetry.properties.onConflict = this.config.onConflict;

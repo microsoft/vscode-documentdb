@@ -6,7 +6,6 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
-import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { DocumentDbDocumentReader } from '../../services/taskService/data-api/readers/DocumentDbDocumentReader';
 import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
@@ -70,22 +69,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
 
         // Create the copy-paste task
         const task = new CopyPasteCollectionTask(config, reader, writer);
-
-        // Pre-flight validation: verify source cluster still has credentials (M-1: stale source protection)
-        if (!CredentialCache.hasCredentials(sourceConnectionId)) {
-            // Clear the stale clipboard reference
-            ext.copiedCollectionNode = undefined;
-            void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
-
-            context.telemetry.properties.preFlightValidationFailed = 'true';
-            context.telemetry.properties.wizardFailureReason = 'sourceClusterDisconnectedBeforeExecution';
-
-            throw new Error(
-                vscode.l10n.t(
-                    'The source cluster is no longer connected. Please reconnect and try again.',
-                ),
-            );
-        }
 
         // Register task with the task service
         TaskService.registerTask(task);

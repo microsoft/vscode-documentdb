@@ -6,8 +6,8 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { ext } from '../../extensionVariables';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
