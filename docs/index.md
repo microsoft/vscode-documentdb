@@ -59,6 +59,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 ### Data Management
 
 - [Data Migrations (Experimental)](./user-manual/data-migrations)
+- [Copy and Paste Collections](./user-manual/copy-and-paste.md)
 
 ## Release Notes
 
