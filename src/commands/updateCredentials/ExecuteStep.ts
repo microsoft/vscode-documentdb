@@ -6,6 +6,7 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { ext } from '../../extensionVariables';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -19,7 +20,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
         const connectionCredentials = await ConnectionStorageService.get(context.storageId, resourceType);
 
         if (!connectionCredentials) {
-            console.error(`Connection with ID "${context.storageId}" not found in storage.`);
+            ext.outputChannel.error(l10n.t('Failed to save credentials: connection not found in storage.'));
             void window.showErrorMessage(l10n.t('Failed to save credentials.'));
             return;
         }
@@ -71,7 +72,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
             try {
                 await ConnectionStorageService.save(resourceType, connectionCredentials, true);
             } catch (pushError) {
-                console.error(`Failed to save credentials for connection "${context.storageId}":`, pushError);
+                ext.outputChannel.error(l10n.t('Failed to save credentials: {0}', String(pushError)));
                 void window.showErrorMessage(l10n.t('Failed to save credentials.'));
                 return;
             }
