@@ -134,26 +134,40 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         // 1. When pasting into a database, refresh after Initializing so the new collection appears
         // 2. When task completes (success or failure), refresh at database level so collection
         //    descriptions (document counts) update correctly
-        const subscription = task.onDidChangeState(async (stateChange) => {
-            // For database targets: refresh early so new collection appears in tree
-            if (context.targetNode instanceof DatabaseItem && stateChange.previousState === TaskState.Initializing) {
-                await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-                ext.state.notifyChildrenChanged(targetDatabaseId);
-            }
+        //
+        // Note: We use a try-catch pattern to ensure the subscription is disposed even if an error
+        // occurs during task start. The subscription is disposed either when the task reaches a
+        // terminal state (normal flow) or if an error is thrown (error flow).
+        let subscription: vscode.Disposable | undefined;
+        try {
+            subscription = task.onDidChangeState(async (stateChange) => {
+                // For database targets: refresh early so new collection appears in tree
+                if (
+                    context.targetNode instanceof DatabaseItem &&
+                    stateChange.previousState === TaskState.Initializing
+                ) {
+                    await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+                    ext.state.notifyChildrenChanged(targetDatabaseId);
+                }
 
-            // On terminal state (success or failure): always refresh at database level
-            // This ensures collection document counts update correctly and annotations are cleared
-            if (isTerminalState(stateChange.newState)) {
-                // Small delay to ensure backend has processed changes
-                await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-                ext.state.notifyChildrenChanged(targetDatabaseId);
+                // On terminal state (success or failure): always refresh at database level
+                // This ensures collection document counts update correctly and annotations are cleared
+                if (isTerminalState(stateChange.newState)) {
+                    // Small delay to ensure backend has processed changes
+                    await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+                    ext.state.notifyChildrenChanged(targetDatabaseId);
 
-                subscription.dispose();
-            }
-        });
+                    subscription?.dispose();
+                }
+            });
 
-        // Start the copy-paste task
-        void task.start();
+            // Start the copy-paste task
+            void task.start();
+        } catch (error) {
+            // Ensure subscription is disposed if task start fails
+            subscription?.dispose();
+            throw error;
+        }
     }
 
     /**
