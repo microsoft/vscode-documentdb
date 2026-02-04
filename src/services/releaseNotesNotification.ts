@@ -18,14 +18,6 @@ export const WELCOME_SCREEN_KEY = 'welcomeScreenShown_v0_4_0';
 let remindLaterDeferred = false;
 
 /**
- * Resets the in-memory deferred flag. Only for testing purposes.
- * @internal
- */
-export function _resetRemindLaterDeferred(): void {
-    remindLaterDeferred = false;
-}
-
-/**
  * Telemetry outcomes for the release notes notification.
  */
 type ReleaseNotesOutcome = 'viewedReleaseNotes' | 'remindLater' | 'ignored' | 'dismissed';
