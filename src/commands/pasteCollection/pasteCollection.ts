@@ -7,6 +7,7 @@ import { AzureWizard, type AzureWizardPromptStep, type IActionContext } from '@m
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
@@ -40,6 +41,25 @@ export async function pasteCollection(
                 'No collection has been marked for copy. Please use "Copy Collection..." first to select a source collection.',
             ),
             { modal: true },
+        );
+        return;
+    }
+
+    // Validate that the source cluster still has valid credentials (H-3: stale reference protection)
+    if (!CredentialCache.hasCredentials(sourceNode.cluster.clusterId)) {
+        // Clear the stale clipboard reference
+        ext.copiedCollectionNode = undefined;
+        void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
+
+        context.telemetry.properties.sourceClusterDisconnected = 'true';
+        context.telemetry.properties.wizardCompletedSuccessfully = 'false';
+        context.telemetry.properties.wizardFailureReason = 'sourceClusterDisconnected';
+
+        void vscode.window.showErrorMessage(
+            l10n.t(
+                'The source cluster "{0}" is no longer connected. Please reconnect to the cluster and copy the collection again.',
+                sourceNode.cluster.name,
+            ),
         );
         return;
     }
