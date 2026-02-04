@@ -595,7 +595,13 @@ export const CollectionView = (): JSX.Element => {
                     <Tab id="tab.queryInsights" value="tab_queryInsights">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             Query Insights
-                            <Badge appearance="tint" size="small" shape="rounded" color="brand">
+                            <Badge
+                                appearance="tint"
+                                size="small"
+                                shape="rounded"
+                                color="brand"
+                                aria-label={l10n.t('Query Insights feature is in preview')}
+                            >
                                 PREVIEW
                             </Badge>
                         </div>
