@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as semver from 'semver';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
@@ -14,6 +15,11 @@ const STORAGE_KEY = 'ms-azuretools.vscode-documentdb.releaseNotes/lastShownVersi
  * When true, the notification will not be shown again in this session.
  */
 let remindLaterDeferred = false;
+
+/**
+ * Telemetry outcomes for the release notes notification.
+ */
+type ReleaseNotesOutcome = 'viewedReleaseNotes' | 'remindLater' | 'ignored' | 'dismissed';
 
 /**
  * Shows a notification prompting the user to view release notes when a new major.minor version is detected.
@@ -31,85 +37,114 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
         return;
     }
 
-    try {
-        const packageJSON = ext.context.extension.packageJSON as {
-            version: string;
-            releaseNotesUrl?: string;
-        };
+    await callWithTelemetryAndErrorHandling(
+        'releaseNotesNotification',
+        async (context: IActionContext): Promise<void> => {
+            // Default: notification not shown (filtered out by version check or first install)
+            context.telemetry.properties.notificationShown = 'false';
 
-        const currentVersion = semver.parse(packageJSON.version);
-        if (!currentVersion) {
-            ext.outputChannel.warn(`Release notes: Could not parse current version: ${packageJSON.version}`);
-            return;
-        }
+            const packageJSON = ext.context.extension.packageJSON as {
+                version: string;
+                releaseNotesUrl?: string;
+            };
 
-        const storedVersionString = ext.context.globalState.get<string>(STORAGE_KEY);
-        const storedVersion = storedVersionString ? semver.parse(storedVersionString) : null;
+            const currentVersion = semver.parse(packageJSON.version);
+            if (!currentVersion) {
+                ext.outputChannel.warn(`Release notes: Could not parse current version: ${packageJSON.version}`);
+                context.telemetry.properties.parseError = 'true';
+                return;
+            }
 
-        // First-time install: initialize storage and skip notification
-        if (!storedVersion) {
-            const normalizedVersion = `${currentVersion.major}.${currentVersion.minor}.0`;
-            await ext.context.globalState.update(STORAGE_KEY, normalizedVersion);
-            ext.outputChannel.trace(`Release notes: First-time install, initialized to version ${normalizedVersion}`);
-            return;
-        }
+            const storedVersionString = ext.context.globalState.get<string>(STORAGE_KEY);
+            const storedVersion = storedVersionString ? semver.parse(storedVersionString) : null;
 
-        // Compare major.minor only (ignore patch)
-        const currentMajorMinor = `${currentVersion.major}.${currentVersion.minor}.0`;
-        const storedMajorMinor = `${storedVersion.major}.${storedVersion.minor}.0`;
+            // First-time install: initialize storage and skip notification
+            if (!storedVersion) {
+                const normalizedVersion = `${currentVersion.major}.${currentVersion.minor}.0`;
+                await ext.context.globalState.update(STORAGE_KEY, normalizedVersion);
+                ext.outputChannel.trace(
+                    `Release notes: First-time install, initialized to version ${normalizedVersion}`,
+                );
+                context.telemetry.properties.firstInstall = 'true';
+                return;
+            }
 
-        if (!semver.gt(currentMajorMinor, storedMajorMinor)) {
-            // Same or older version, no notification needed
-            return;
-        }
+            // Compare major.minor only (ignore patch)
+            const currentMajorMinor = `${currentVersion.major}.${currentVersion.minor}.0`;
+            const storedMajorMinor = `${storedVersion.major}.${storedVersion.minor}.0`;
 
-        ext.outputChannel.info(
-            `Release notes: New version detected (${currentMajorMinor} > ${storedMajorMinor}), showing notification`,
-        );
+            context.telemetry.properties.currentVersion = currentMajorMinor;
+            context.telemetry.properties.storedVersion = storedMajorMinor;
 
-        // Define button actions
-        const releaseNotesButton = {
-            title: vscode.l10n.t('Release Notes'),
-            run: async () => {
-                const releaseNotesUrl = packageJSON.releaseNotesUrl;
-                if (releaseNotesUrl) {
-                    await vscode.env.openExternal(vscode.Uri.parse(releaseNotesUrl));
-                }
-                await ext.context.globalState.update(STORAGE_KEY, currentMajorMinor);
-                ext.outputChannel.trace(`Release notes: User viewed release notes, updated to ${currentMajorMinor}`);
-            },
-        };
+            if (!semver.gt(currentMajorMinor, storedMajorMinor)) {
+                // Same or older version, no notification needed
+                return;
+            }
 
-        const remindLaterButton = {
-            title: vscode.l10n.t('Remind Me Later'),
-            run: async () => {
+            ext.outputChannel.info(
+                `Release notes: New version detected (${currentMajorMinor} > ${storedMajorMinor}), showing notification`,
+            );
+
+            // Track that notification was shown
+            context.telemetry.properties.notificationShown = 'true';
+
+            // Define button actions with outcome tracking
+            let outcome: ReleaseNotesOutcome = 'dismissed';
+
+            const releaseNotesButton = {
+                title: vscode.l10n.t('Release Notes'),
+                run: async () => {
+                    outcome = 'viewedReleaseNotes';
+                    const releaseNotesUrl = packageJSON.releaseNotesUrl;
+                    if (releaseNotesUrl) {
+                        await vscode.env.openExternal(vscode.Uri.parse(releaseNotesUrl));
+                    }
+                    await ext.context.globalState.update(STORAGE_KEY, currentMajorMinor);
+                    ext.outputChannel.trace(
+                        `Release notes: User viewed release notes, updated to ${currentMajorMinor}`,
+                    );
+                },
+            };
+
+            const remindLaterButton = {
+                title: vscode.l10n.t('Remind Me Later'),
+                run: async () => {
+                    outcome = 'remindLater';
+                    remindLaterDeferred = true;
+                    ext.outputChannel.trace(
+                        'Release notes: User chose "Remind Me Later", will show again next session',
+                    );
+                },
+            };
+
+            const ignoreButton = {
+                title: vscode.l10n.t('Ignore'),
+                isSecondary: true,
+                run: async () => {
+                    outcome = 'ignored';
+                    await ext.context.globalState.update(STORAGE_KEY, currentMajorMinor);
+                    ext.outputChannel.trace(`Release notes: User ignored, updated to ${currentMajorMinor}`);
+                },
+            };
+
+            const selectedButton = await vscode.window.showInformationMessage(
+                vscode.l10n.t('DocumentDB for VS Code has been updated. View the release notes?'),
+                releaseNotesButton,
+                remindLaterButton,
+                ignoreButton,
+            );
+
+            // Handle response - defaults to "Remind Me Later" if dismissed (but track as dismissed)
+            if (selectedButton) {
+                await selectedButton.run();
+            } else {
+                // User dismissed without clicking a button - treat as remind later behavior
                 remindLaterDeferred = true;
-                ext.outputChannel.trace('Release notes: User chose "Remind Me Later", will show again next session');
-            },
-        };
+                ext.outputChannel.trace('Release notes: User dismissed notification, will show again next session');
+            }
 
-        const ignoreButton = {
-            title: vscode.l10n.t('Ignore'),
-            isSecondary: true,
-            run: async () => {
-                await ext.context.globalState.update(STORAGE_KEY, currentMajorMinor);
-                ext.outputChannel.trace(`Release notes: User ignored, updated to ${currentMajorMinor}`);
-            },
-        };
-
-        const selectedButton = await vscode.window.showInformationMessage(
-            vscode.l10n.t('DocumentDB for VS Code has been updated. View the release notes?'),
-            releaseNotesButton,
-            remindLaterButton,
-            ignoreButton,
-        );
-
-        // Handle response - defaults to "Remind Me Later" if dismissed
-        await (selectedButton ?? remindLaterButton).run();
-    } catch (error) {
-        // Non-critical functionality - log but don't throw
-        ext.outputChannel.error(
-            `Release notes: Error showing notification: ${error instanceof Error ? error.message : String(error)}`,
-        );
-    }
+            // Record the outcome in telemetry
+            context.telemetry.properties.outcome = outcome;
+        },
+    );
 }
