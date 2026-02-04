@@ -18,6 +18,12 @@ export const WELCOME_SCREEN_KEY = 'welcomeScreenShown_v0_4_0';
 let remindLaterDeferred = false;
 
 /**
+ * In-memory flag indicating the user has already handled the notification this session
+ * (viewed release notes or ignored). Skips the storage access and version checks.
+ */
+let notificationHandledThisSession = false;
+
+/**
  * Telemetry outcomes for the release notes notification.
  */
 type ReleaseNotesOutcome = 'viewedReleaseNotes' | 'remindLater' | 'ignored' | 'dismissed';
@@ -127,6 +133,11 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
         return;
     }
 
+    // Skip all checks if user already handled the notification this session
+    if (notificationHandledThisSession) {
+        return;
+    }
+
     await callWithTelemetryAndErrorHandling(
         'releaseNotesNotification',
         async (context: IActionContext): Promise<void> => {
@@ -193,6 +204,7 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
                 title: vscode.l10n.t('Release Notes'),
                 run: async () => {
                     outcome = 'viewedReleaseNotes';
+                    notificationHandledThisSession = true;
                     const releaseNotesUrl = packageJSON.releaseNotesUrl;
                     if (releaseNotesUrl) {
                         await vscode.env.openExternal(vscode.Uri.parse(releaseNotesUrl));
@@ -220,6 +232,7 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
                 isSecondary: true,
                 run: async () => {
                     outcome = 'ignored';
+                    notificationHandledThisSession = true;
                     await ext.context.globalState.update(STORAGE_KEY, currentMajorMinor);
                     ext.outputChannel.trace(`Release notes: User ignored, updated to ${currentMajorMinor}`);
                 },
