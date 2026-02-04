@@ -60,18 +60,47 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
 
             // First-time install: initialize storage and skip notification
             if (!storedVersion) {
-                const normalizedVersion = `${currentVersion.major}.${currentVersion.minor}.0`;
-                await ext.context.globalState.update(STORAGE_KEY, normalizedVersion);
-                ext.outputChannel.trace(
-                    `Release notes: First-time install, initialized to version ${normalizedVersion}`,
-                );
-                context.telemetry.properties.firstInstall = 'true';
-                return;
+                // ================================================================================
+                // TRANSITIONAL CODE FOR 0.7.0 RELEASE - CAN BE REMOVED IN 0.8.0 OR LATER
+                // ================================================================================
+                // Since the release notes feature is being introduced in 0.7.0, we cannot
+                // distinguish between a fresh install and an upgrade from a pre-0.7.0 version
+                // based solely on the release notes storage key (which didn't exist before).
+                //
+                // To detect upgrades from pre-0.7.0 versions, we check for the welcome screen
+                // flag that was set in previous versions. If this flag exists, the user had
+                // a previous version installed and should see the release notes notification.
+                //
+                // Once most users have transitioned to 0.7.0+, this block can be safely removed.
+                // ================================================================================
+                const welcomeScreenShown = ext.context.globalState.get<boolean>('welcomeScreenShown_v0_4_0', false);
+                if (welcomeScreenShown) {
+                    // User upgraded from a pre-0.7.0 version - treat as upgrade, not first install
+                    // Set stored version to 0.0.0 so the version comparison triggers the notification
+                    ext.outputChannel.trace(
+                        'Release notes: Detected upgrade from pre-0.7.0 version (welcome screen flag present)',
+                    );
+                    context.telemetry.properties.upgradeFromPre070 = 'true';
+                    // Continue to the version comparison below with storedVersion as 0.0.0
+                } else {
+                    // Genuine first-time install
+                    const normalizedVersion = `${currentVersion.major}.${currentVersion.minor}.0`;
+                    await ext.context.globalState.update(STORAGE_KEY, normalizedVersion);
+                    ext.outputChannel.trace(
+                        `Release notes: First-time install, initialized to version ${normalizedVersion}`,
+                    );
+                    context.telemetry.properties.firstInstall = 'true';
+                    return;
+                }
+                // ================================================================================
+                // END TRANSITIONAL CODE
+                // ================================================================================
             }
 
             // Compare major.minor only (ignore patch)
             const currentMajorMinor = `${currentVersion.major}.${currentVersion.minor}.0`;
-            const storedMajorMinor = `${storedVersion.major}.${storedVersion.minor}.0`;
+            // For pre-0.7.0 upgrades (transitional), use 0.0.0 to ensure notification is shown
+            const storedMajorMinor = storedVersion ? `${storedVersion.major}.${storedVersion.minor}.0` : '0.0.0';
 
             context.telemetry.properties.currentVersion = currentMajorMinor;
             context.telemetry.properties.storedVersion = storedMajorMinor;
