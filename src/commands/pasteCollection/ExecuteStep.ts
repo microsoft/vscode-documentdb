@@ -144,10 +144,16 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
                 }
             });
 
-            // Start the copy-paste task
-            void task.start();
+            // Start the copy-paste task and handle errors
+            try {
+                await task.start();
+            } catch (error) {
+                // Ensure subscription is disposed if task start fails
+                subscription?.dispose();
+                throw error;
+            }
         } catch (error) {
-            // Ensure subscription is disposed if task start fails
+            // Ensure subscription is disposed if any error occurs
             subscription?.dispose();
             throw error;
         }

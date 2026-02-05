@@ -29,7 +29,7 @@ export class PromptNewConnectionNameStep extends AzureWizardPromptStep<RenameCon
         context: RenameConnectionWizardContext,
         name: string,
     ): Promise<string | undefined> {
-        if (name.length === 0) {
+        if (name.trim().length === 0) {
             return l10n.t('A connection name is required.');
         }
 
