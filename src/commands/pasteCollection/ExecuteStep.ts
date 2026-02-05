@@ -135,8 +135,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
             }
         });
 
-        // Start the copy-paste task
-        void task.start();
+        // Start the copy-paste task without waiting (it can take a long time)
+        void task.start().catch((error) => {
+            subscription.dispose();
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            void vscode.window.showErrorMessage(vscode.l10n.t('Failed to paste collection: {0}', errorMessage));
+        });
     }
 
     /**

@@ -55,6 +55,25 @@ export class DocumentDBConnectionError extends Error {
     this.name = 'DocumentDBConnectionError';
   }
 }
+
+// ✅ Good - Type-safe error message extraction
+try {
+  await someOperation();
+} catch (error) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  void vscode.window.showErrorMessage(vscode.l10n.t('Failed: {0}', errorMessage));
+}
+
+// ✅ Good - In promise catch handlers
+void task.start().catch((error) => {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  void vscode.window.showErrorMessage(vscode.l10n.t('Failed: {0}', errorMessage));
+});
+
+// ❌ Bad - Direct access to error.message (eslint error)
+catch (error) {
+  void vscode.window.showErrorMessage(vscode.l10n.t('Failed: {0}', error.message)); // Unsafe!
+}
 ```
 
 ## VS Code Extension Patterns
@@ -67,7 +86,8 @@ export function registerCommands(context: vscode.ExtensionContext): void {
       try {
         await handleConnect(item);
       } catch (error) {
-        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect: {0}', error.message));
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect: {0}', errorMessage));
       }
     }),
   ];

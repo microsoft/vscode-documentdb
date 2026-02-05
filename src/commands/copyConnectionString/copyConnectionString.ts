@@ -87,12 +87,14 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
                         'credentials.nativeAuthConfig',
                         'copyConnectionString.ts',
                     );
-                    parsedConnectionString.password = nonNullProp(
+                    const password = nonNullProp(
                         nativeAuthConfig,
                         'connectionPassword',
                         'nativeAuthConfig.connectionPassword',
                         'copyConnectionString.ts',
                     );
+                    context.valuesToMask.push(password);
+                    parsedConnectionString.password = password;
                 }
             }
         }

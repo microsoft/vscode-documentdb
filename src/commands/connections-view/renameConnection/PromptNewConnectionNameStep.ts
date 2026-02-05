@@ -5,7 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ConnectionStorageService, ConnectionType } from '../../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType, ItemType } from '../../../services/connectionStorageService';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';
 
 export class PromptNewConnectionNameStep extends AzureWizardPromptStep<RenameConnectionWizardContext> {
@@ -29,16 +29,33 @@ export class PromptNewConnectionNameStep extends AzureWizardPromptStep<RenameCon
         context: RenameConnectionWizardContext,
         name: string,
     ): Promise<string | undefined> {
-        if (name.length === 0) {
+        if (name.trim().length === 0) {
             return l10n.t('A connection name is required.');
         }
 
-        try {
-            const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
-            const items = await ConnectionStorageService.getAll(resourceType);
+        // Don't validate if the name hasn't changed
+        if (name.trim() === context.originalConnectionName) {
+            return undefined;
+        }
 
-            if (items.filter((connection) => 0 === connection.name.localeCompare(name, undefined)).length > 0) {
-                return l10n.t('The connection with the name "{0}" already exists.', name);
+        try {
+            const connectionType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
+
+            // Get the connection's current data to find its parentId
+            const connectionData = await ConnectionStorageService.get(context.storageId, connectionType);
+            const parentId = connectionData?.properties?.parentId;
+
+            // Check for duplicate names only within the same parent folder
+            const isDuplicate = await ConnectionStorageService.isNameDuplicateInParent(
+                name.trim(),
+                parentId,
+                connectionType,
+                ItemType.Connection,
+                context.storageId, // Exclude the current connection from the check
+            );
+
+            if (isDuplicate) {
+                return l10n.t('A connection with this name already exists at this level.');
             }
         } catch (_error) {
             console.error(_error); // todo: push it to our telemetry

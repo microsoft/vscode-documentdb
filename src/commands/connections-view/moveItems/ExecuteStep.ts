@@ -23,6 +23,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<MoveItemsWizardContext> 
     public priority: number = 100;
 
     public async execute(context: MoveItemsWizardContext): Promise<void> {
+        // TODO: [IMPROVEMENT] Add error handling for partial failures (H-1)
+        // Currently, if an operation fails midway, items may be in an inconsistent state.
+        // Consider: 1) Collecting errors and reporting partial success, or 2) Implementing rollback
+
         await withConnectionsViewProgress(async () => {
             // Move all items (no conflicts at this point - verified in previous step)
             for (const item of context.itemsToMove) {

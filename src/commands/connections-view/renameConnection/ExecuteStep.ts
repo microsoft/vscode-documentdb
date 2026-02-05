@@ -6,6 +6,7 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { window } from 'vscode';
+import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../../services/connectionStorageService';
 import {
     refreshParentInConnectionsView,
@@ -37,11 +38,11 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameConnectionWizardCo
                 try {
                     await ConnectionStorageService.save(resourceType, connection, true);
                 } catch (pushError) {
-                    console.error(`Failed to rename the connection "${context.storageId}":`, pushError);
+                    ext.outputChannel.error(l10n.t('Failed to rename connection: {0}', String(pushError)));
                     void window.showErrorMessage(l10n.t('Failed to rename the connection.'));
                 }
             } else {
-                console.error(`Connection with ID "${context.storageId}" not found in storage.`);
+                ext.outputChannel.error(l10n.t('Failed to rename connection: connection not found in storage.'));
                 void window.showErrorMessage(l10n.t('Failed to rename the connection.'));
             }
 
