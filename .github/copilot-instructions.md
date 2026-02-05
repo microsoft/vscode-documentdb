@@ -50,8 +50,13 @@ export function createConnection(config: ConnectionConfig): Promise<Connection> 
   // implementation
 }
 
-// ✅ Good - Localized user-facing string
-void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect: {0}', error.message));
+// ✅ Good - Localized user-facing string with safe error handling
+try {
+  await operation();
+} catch (error) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect: {0}', errorMessage));
+}
 ```
 
 ## Null Safety
@@ -71,6 +76,31 @@ const connectionString = nonNullProp(
 if (!userInput.connectionString) {
   void vscode.window.showErrorMessage(vscode.l10n.t('Connection string is required'));
   return;
+}
+```
+
+## Error Handling
+
+When accessing error properties in catch blocks or error handlers, always check if the error is an instance of `Error` before accessing `.message`:
+
+```typescript
+// ✅ Good - Type-safe error message extraction
+try {
+  await someOperation();
+} catch (error) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  void vscode.window.showErrorMessage(vscode.l10n.t('Operation failed: {0}', errorMessage));
+}
+
+// ✅ Good - In promise catch handlers
+void task.start().catch((error) => {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  void vscode.window.showErrorMessage(vscode.l10n.t('Failed to start: {0}', errorMessage));
+});
+
+// ❌ Bad - Direct access to error.message (eslint error)
+catch (error) {
+  void vscode.window.showErrorMessage(vscode.l10n.t('Failed: {0}', error.message)); // Unsafe!
 }
 ```
 

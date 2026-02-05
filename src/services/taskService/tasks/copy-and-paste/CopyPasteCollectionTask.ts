@@ -142,7 +142,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             }
 
             throw new SourceValidationError(
-                vscode.l10n.t('The source cluster is no longer connected. Please reconnect and copy the collection again.'),
+                vscode.l10n.t(
+                    'The source cluster is no longer connected. Please reconnect and copy the collection again.',
+                ),
             );
         }
 
@@ -177,7 +179,10 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             }
             // Wrap other errors (e.g., network issues)
             throw new Error(
-                vscode.l10n.t('Failed to validate source collection: {0}', error instanceof Error ? error.message : String(error)),
+                vscode.l10n.t(
+                    'Failed to validate source collection: {0}',
+                    error instanceof Error ? error.message : String(error),
+                ),
             );
         }
 
