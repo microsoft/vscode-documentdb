@@ -15,6 +15,17 @@ import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskSe
 import { type CopyPasteConfig } from './copyPasteConfig';
 
 /**
+ * Error thrown when source validation fails for copy-paste operations.
+ * This is used to distinguish user-facing validation errors from other errors (e.g., network issues).
+ */
+class SourceValidationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'SourceValidationError';
+    }
+}
+
+/**
  * Task for copying documents from a source to a target collection.
  *
  * This task uses a database-agnostic approach with `DocumentReader` and `StreamingDocumentWriter`
@@ -130,8 +141,10 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 context.telemetry.properties.sourceClusterDisconnected = 'true';
             }
 
-            throw new Error(
-                vscode.l10n.t('The source cluster is no longer connected. Please reconnect and copy the collection again.'),
+            throw new SourceValidationError(
+                vscode.l10n.t(
+                    'The source cluster is no longer connected. Please reconnect and copy the collection again.',
+                ),
             );
         }
 
@@ -151,7 +164,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                     context.telemetry.properties.sourceCollectionNotFound = 'true';
                 }
 
-                throw new Error(
+                throw new SourceValidationError(
                     vscode.l10n.t(
                         'The source collection "{0}" no longer exists in database "{1}". It may have been deleted or renamed.',
                         this.config.source.collectionName,
@@ -161,12 +174,15 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             }
         } catch (error) {
             // Re-throw our own validation errors
-            if (error instanceof Error && error.message.includes(vscode.l10n.t('no longer'))) {
+            if (error instanceof SourceValidationError) {
                 throw error;
             }
             // Wrap other errors (e.g., network issues)
             throw new Error(
-                vscode.l10n.t('Failed to validate source collection: {0}', error instanceof Error ? error.message : String(error)),
+                vscode.l10n.t(
+                    'Failed to validate source collection: {0}',
+                    error instanceof Error ? error.message : String(error),
+                ),
             );
         }
 
