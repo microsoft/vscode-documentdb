@@ -23,7 +23,6 @@ import {
 } from '../../../commands/llmEnhancedCommands/queryGenerationCommands';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
-import { Views } from '../../../documentdb/Views';
 import {
     ExplainPlanAnalyzer,
     type ExecutionStatsAnalysis,
@@ -36,6 +35,7 @@ import {
     transformStage1Response,
     transformStage2Response,
 } from '../../../documentdb/queryInsights/transformations';
+import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
@@ -49,7 +49,25 @@ import { type QueryInsightsStage3Response } from './types/queryInsights';
 
 export type RouterContext = BaseRouterContext & {
     sessionId: string;
+    /**
+     * Stable cluster identifier for cache/client lookups.
+     * Use this for ClustersClient.getClient() and CredentialCache operations.
+     *
+     * For Connections View: This is the storageId (UUID like 'storageId-xxx')
+     * For Azure/Discovery Views: This is the Azure Resource ID (already a valid tree path)
+     */
     clusterId: string;
+    /**
+     * Identifies which tree view this cluster belongs to.
+     *
+     * Required for finding the correct tree node when the webview needs to interact
+     * with the tree (e.g., import/export). The same Azure Resource ID can appear in
+     * multiple views (Discovery, Azure Resources, Workspace), so we need to know
+     * which branch data provider to query.
+     *
+     * @see Views enum for possible values (e.g., 'connectionsView', 'discoveryView')
+     */
+    viewId: string;
     databaseName: string;
     collectionName: string;
 };
@@ -94,46 +112,69 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
 }
 
 // Helper function to find the collection node based on context
+// Delegates to the appropriate branch data provider's findCollectionByClusterId method
 async function findCollectionNodeInTree(
     clusterId: string,
+    viewId: string,
     databaseName: string,
     collectionName: string,
 ): Promise<CollectionItem | undefined> {
-    let branchDataProvider: { findNodeById(id: string): Promise<unknown> } | undefined;
-    const nodeId = `${clusterId}/${databaseName}/${collectionName}`;
+    // Select the branch data provider based on viewId
+    // The viewId tells us which tree view the cluster was opened from
+    //
+    // Each provider now implements findCollectionByClusterId for the dual-ID architecture.
 
-    // TODO: this should not be necessary in general, let's rebuild this in the near future
-    // There is a lack of consistency with using the parentId in the ID of the tree nodes
-    // This is happening in the discovery and the plugins, it's easy to fix but needs
-    // a bit of work. For now, we'll ignore it as we only have two branchdata providers
-    // but it needs to be fixed when new providers are added.
-
-    if (clusterId.startsWith(Views.ConnectionsView)) {
-        branchDataProvider = ext.connectionsBranchDataProvider;
-    } else {
-        branchDataProvider = ext.discoveryBranchDataProvider;
-    }
-    // } else if (clusterId.startsWith(Views.DiscoveryView)) {
-    //     branchDataProvider = ext.discoveryBranchDataProvider;
-    // } else if (clusterId.startsWith(WorkspaceResourceType.MongoClusters)) {
-    //     branchDataProvider = ext.mongoClustersWorkspaceBranchDataProvider;
-    // } else if (clusterId.includes('/providers/Microsoft.DocumentDB/mongoClusters/')) {
-    //     branchDataProvider = ext.mongoVCoreBranchDataProvider;
-    // }
-
-    if (branchDataProvider) {
-        try {
-            // Assuming findNodeById might return undefined or throw if not found
-            const node = await branchDataProvider.findNodeById(nodeId);
-            // The cast is still necessary if the providers don't share a precise enough common type
-            return node as CollectionItem | undefined;
-        } catch (error) {
-            console.error(`Error finding node by ID '${nodeId}':`, error);
-            return undefined;
+    // Cast viewId to string enum values for comparison
+    // (viewId comes from serialized context as a string)
+    if (viewId === (Views.ConnectionsView as string)) {
+        return (await ext.connectionsBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
+    } else if (viewId === (Views.DiscoveryView as string)) {
+        return (await ext.discoveryBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
+    } else if (viewId === (Views.AzureResourcesView as string)) {
+        // Azure Resources View has two providers: vCore and RU
+        // Try both since we don't know which API type this cluster uses
+        const vcoreResult = await ext.azureResourcesVCoreBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        );
+        if (vcoreResult) {
+            return vcoreResult as CollectionItem | undefined;
         }
-    } else {
-        console.warn(`Could not determine branch data provider for clusterId: ${clusterId}`);
+        return (await ext.azureResourcesRUBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
+    } else if (viewId === (Views.AzureWorkspaceView as string)) {
+        // Azure Workspace View doesn't surface cluster items directly
+        console.warn(`findCollectionNodeInTree: Azure Workspace View does not support collection lookup`);
         return undefined;
+    } else {
+        // Fallback: try to infer from clusterId format
+        // - Azure resources: clusterId is sanitized, contains '_providers_' or '_subscriptions_'
+        // - Connections View: clusterId is a storageId (UUID like 'storageId-xxx')
+        const isAzureResource = clusterId.includes('_providers_') || clusterId.includes('_subscriptions_');
+        if (isAzureResource) {
+            return (await ext.discoveryBranchDataProvider.findCollectionByClusterId(
+                clusterId,
+                databaseName,
+                collectionName,
+            )) as CollectionItem | undefined;
+        }
+        return (await ext.connectionsBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
     }
 }
 
@@ -252,6 +293,7 @@ export const collectionsViewRouter = router({
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
+                viewId: myCtx.viewId,
                 databaseName: myCtx.databaseName,
                 collectionName: myCtx.collectionName,
                 mode: 'add',
@@ -266,6 +308,7 @@ export const collectionsViewRouter = router({
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
+                viewId: myCtx.viewId,
                 databaseName: myCtx.databaseName,
                 collectionName: myCtx.collectionName,
                 documentId: input,
@@ -281,6 +324,7 @@ export const collectionsViewRouter = router({
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
+                viewId: myCtx.viewId,
                 databaseName: myCtx.databaseName,
                 collectionName: myCtx.collectionName,
                 documentId: input,
@@ -339,6 +383,7 @@ export const collectionsViewRouter = router({
             // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
             const collectionTreeNode = await findCollectionNodeInTree(
                 myCtx.clusterId,
+                myCtx.viewId,
                 myCtx.databaseName,
                 myCtx.collectionName,
             );
@@ -369,6 +414,7 @@ export const collectionsViewRouter = router({
         // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
         const collectionTreeNode = await findCollectionNodeInTree(
             myCtx.clusterId,
+            myCtx.viewId,
             myCtx.databaseName,
             myCtx.collectionName,
         );

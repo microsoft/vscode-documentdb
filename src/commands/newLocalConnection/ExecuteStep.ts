@@ -7,8 +7,19 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
-import { ext } from '../../extensionVariables';
-import { type ConnectionItem, ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import {
+    type ConnectionItem,
+    ConnectionStorageService,
+    ConnectionType,
+    ItemType,
+} from '../../services/connectionStorageService';
+import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
+import {
+    buildConnectionsViewTreePath,
+    focusAndRevealInConnectionsView,
+    refreshParentInConnectionsView,
+    withConnectionsViewProgress,
+} from '../../tree/connections-view/connectionsViewHelpers';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
@@ -20,7 +31,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
     public priority: number = 100;
 
     public async execute(context: NewLocalConnectionWizardContext): Promise<void> {
-        const parentId = context.parentTreeElementId;
         const experience = context.experience;
 
         switch (context.mode) {
@@ -69,8 +79,19 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         });
 
         if (existingDuplicateConnection) {
+            // Reveal the existing duplicate connection
+            const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, true);
+            await revealConnectionsViewElement(context, connectionPath, {
+                select: true,
+                focus: false,
+                expand: false, // Don't expand to avoid login prompts
+            });
+
             throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
-                details: l10n.t('The existing connection name:\n"{0}"', existingDuplicateConnection.name),
+                details: l10n.t(
+                    'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
+                    existingDuplicateConnection.name,
+                ),
             });
         }
 
@@ -79,9 +100,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 ? `${newConnectionStringParsed.username}@${joinedHosts}`
                 : joinedHosts;
 
-        return ext.state.showCreatingChild(parentId, l10n.t('Creating new connection…'), async () => {
-            await new Promise((resolve) => setTimeout(resolve, 250));
-
+        return withConnectionsViewProgress(async () => {
             let isEmulator: boolean = true;
             let disableEmulatorSecurity: boolean | undefined;
 
@@ -111,6 +130,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                     const baseName = match[1];
                     const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
                     newConnectionLabel = `${baseName} (${count})`;
+                } else {
+                    // Fallback to prevent endless loop if regex fails - use timestamp for guaranteed uniqueness
+                    newConnectionLabel = `${newConnectionLabel} (${Date.now()})`;
                 }
                 existingDuplicateLabel = existingConnections.find(
                     (connection) => connection.name === newConnectionLabel,
@@ -141,7 +163,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 id: generateDocumentDBStorageId(connectionString),
                 name: newConnectionLabel,
                 properties: {
+                    type: ItemType.Connection,
                     api: experience.api === API.DocumentDB ? API.DocumentDB : experience.api,
+                    parentId: context.parentStorageId, // Set parent folder ID if in a subfolder
                     emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
                     availableAuthMethods: [],
                 },
@@ -152,7 +176,14 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
 
             await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);
 
-            // We're not refreshing the tree here, the new connection is a child node, the parent node will refresh itself
+            // Build the reveal path and focus on the new connection
+            const connectionPath = `${context.parentTreeElementId}/${storageItem.id}`;
+
+            // Refresh the parent to show the new connection
+            refreshParentInConnectionsView(connectionPath);
+
+            // Focus and reveal the new connection
+            await focusAndRevealInConnectionsView(context, connectionPath);
 
             showConfirmationAsInSettings(l10n.t('New connection has been added.'));
         });

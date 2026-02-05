@@ -11,7 +11,7 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
-import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { refreshView } from '../refreshView/refreshView';
 import { PromptAuthMethodStep } from '../updateCredentials/PromptAuthMethodStep';
@@ -35,7 +35,9 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         ? ConnectionType.Emulators
         : ConnectionType.Clusters;
 
-    const connectionCredentials = await ConnectionStorageService.get(node.storageId, resourceType);
+    const storedItem = await ConnectionStorageService.get(node.storageId, resourceType);
+    // Type guard ensures we have connection properties (not a folder)
+    const connectionCredentials = storedItem && isConnection(storedItem) ? storedItem : undefined;
     const connectionString = connectionCredentials?.secrets?.connectionString || '';
     context.valuesToMask.push(connectionString);
 
@@ -94,7 +96,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
      * This is a bigger change and should be done in a separate PR.
      * So for now, we just refresh the view to make sure the new credentials are used.
      */
-    await ClustersClient.deleteClient(node.cluster.id);
-    CredentialCache.deleteCredentials(node.cluster.id);
+    await ClustersClient.deleteClient(node.cluster.clusterId);
+    CredentialCache.deleteCredentials(node.cluster.clusterId);
     await refreshView(context, Views.ConnectionsView);
 }

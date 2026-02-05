@@ -15,6 +15,7 @@ export enum NewEmulatorConnectionMode {
 
 export interface NewLocalConnectionWizardContext extends IActionContext {
     parentTreeElementId: string;
+    parentStorageId?: string; // Storage ID of parent folder (for setting parentId in storage)
 
     emulatorType?: string;
 

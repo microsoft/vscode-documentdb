@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError } from '../../documentdb/ClustersClient';
 import {
     AzureDomains,
     getHostsFromConnectionString,
@@ -17,7 +17,6 @@ import {
 import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { BufferErrorCode, createMongoDbBuffer, type DocumentBuffer } from '../../utils/documentBuffer';
-import { nonNullProp } from '../../utils/nonNull';
 import { getRootPath } from '../../utils/workspacUtils';
 
 export async function importDocuments(
@@ -64,11 +63,16 @@ export async function importDocuments(
 
     context.telemetry.properties.experience = selectedItem.experience.api;
 
-    await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
-        await importDocumentsWithProgress(selectedItem, uris);
-    });
-
-    ext.state.notifyChildrenChanged(selectedItem.id);
+    try {
+        await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
+            await importDocumentsWithProgress(selectedItem, uris);
+        });
+    } finally {
+        // Always refresh at the database level (parent of the collection) so collection
+        // descriptions (document counts) update correctly, even after partial failures
+        const databaseId = selectedItem.id.substring(0, selectedItem.id.lastIndexOf('/'));
+        ext.state.notifyChildrenChanged(databaseId);
+    }
 }
 
 export async function importDocumentsWithProgress(selectedItem: CollectionItem, uris: vscode.Uri[]): Promise<void> {
@@ -115,15 +119,19 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             let count = 0;
             let buffer: DocumentBuffer<unknown> | undefined;
             if (selectedItem instanceof CollectionItem) {
-                const hosts = getHostsFromConnectionString(
-                    nonNullProp(
-                        selectedItem.cluster,
-                        'connectionString',
-                        'selectedItem.cluster.connectionString',
-                        'importDocuments.ts',
-                    ),
-                );
-                const isRuResource = hasDomainSuffix(AzureDomains.RU, ...hosts);
+                // Get the connection string from the ClustersClient, not from the cluster model.
+                // For Discovery View items, the cluster model may not have connectionString populated,
+                // but the ClustersClient will have it after authentication.
+                const client = await ClustersClient.getClient(selectedItem.cluster.clusterId);
+                const connectionString = client.getConnectionString();
+
+                // Determine if this is an Azure MongoDB RU resource
+                // Fall back to non-RU buffer if connection string is unavailable
+                let isRuResource = false;
+                if (connectionString) {
+                    const hosts = getHostsFromConnectionString(connectionString);
+                    isRuResource = hasDomainSuffix(AzureDomains.RU, ...hosts);
+                }
 
                 if (isRuResource) {
                     // For Azure MongoDB RU, we use a buffer with maxDocumentCount = 1
@@ -292,11 +300,32 @@ async function insertDocumentWithBufferIntoCluster(
 
     // Documents to process could be the current document (if too large)
     // or the contents of the buffer (if it was full)
-    const client = await ClustersClient.getClient(node.cluster.id);
-    const insertResult = await client.insertDocuments(databaseName, collectionName, documentsToProcess as Document[]);
-
-    return {
-        count: insertResult.insertedCount,
-        errorOccurred: insertResult.insertedCount < (documentsToProcess?.length || 0),
-    };
+    const client = await ClustersClient.getClient(node.cluster.clusterId);
+    try {
+        const insertResult = await client.insertDocuments(
+            databaseName,
+            collectionName,
+            documentsToProcess as Document[],
+            false,
+        );
+        return {
+            count: insertResult.insertedCount,
+            errorOccurred: false,
+        };
+    } catch (error) {
+        if (isBulkWriteError(error)) {
+            // Handle MongoDB bulk write errors
+            // It could be a partial failure, so we need to check the result
+            return {
+                count: error.result.insertedCount,
+                errorOccurred: true,
+            };
+        } else {
+            // Handle other errors
+            return {
+                count: 0,
+                errorOccurred: true,
+            };
+        }
+    }
 }

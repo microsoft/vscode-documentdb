@@ -6,6 +6,7 @@
 import { Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
 import { DataUsageRegular } from '@fluentui/react-icons';
 import * as React from 'react';
+import { useRef } from 'react';
 import './MetricsRow.scss';
 
 /**
@@ -54,6 +55,8 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
     nullValuePlaceholder = 'N/A',
     tooltipExplanation,
 }) => {
+    const cardRef = useRef<HTMLDivElement>(null);
+
     const renderValue = () => {
         // Explicit null means data is unavailable (e.g., error state, not supported)
         if (value === null) {
@@ -71,20 +74,35 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
         return value;
     };
 
-    const content = (
-        <Card className="metricCard" appearance="filled">
-            <div className="dataHeader">{label}</div>
-            <div className="dataValue">{renderValue()}</div>
+    // Format tooltip content if tooltip explanation is provided
+    const valueText =
+        value !== null && value !== undefined && (typeof value === 'string' || typeof value === 'number')
+            ? String(value)
+            : '';
+
+    // Accessibility pattern: aria-label provides complete context (label, value, and tooltip),
+    // while aria-hidden on children prevents double announcement of visible text.
+    const cardContent = (
+        <Card
+            className="metricCard"
+            appearance="filled"
+            ref={cardRef}
+            // All metric cards are keyboard focusable for consistent tab navigation
+            // Focus indicators are automatically handled by Fluent UI's Card component
+            // via its built-in tabster focus management system (data-fui-focus-visible)
+            tabIndex={0}
+            aria-label={`${label}${valueText ? `: ${valueText}` : ''}${tooltipExplanation ? `. ${tooltipExplanation}` : ''}`}
+        >
+            <div className="dataHeader" aria-hidden="true">
+                {label}
+            </div>
+            <div className="dataValue" aria-hidden="true">
+                {renderValue()}
+            </div>
         </Card>
     );
 
     if (tooltipExplanation) {
-        // Format tooltip with similar styling to performance rating badges
-        const valueText =
-            value !== null && value !== undefined && (typeof value === 'string' || typeof value === 'number')
-                ? String(value)
-                : '';
-
         return (
             <Tooltip
                 content={{
@@ -103,10 +121,10 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
                 positioning="below"
                 relationship="description"
             >
-                {content}
+                {cardContent}
             </Tooltip>
         );
     }
 
-    return content;
+    return cardContent;
 };

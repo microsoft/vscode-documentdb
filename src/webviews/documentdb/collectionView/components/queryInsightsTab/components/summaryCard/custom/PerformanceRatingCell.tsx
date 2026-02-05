@@ -8,6 +8,7 @@ import { InfoRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
+import '../../../../../../../components/focusableBadge/focusableBadge.scss';
 import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
 import './PerformanceRatingCell.scss';
@@ -43,6 +44,8 @@ export interface PerformanceRatingCellProps {
  * - undefined: Shows loading skeleton (data is being fetched)
  * - null: Shows N/A or custom nullValuePlaceholder (data unavailable/error)
  * - PerformanceRating: Displays rating badge with diagnostics
+ *
+ * Diagnostic badges are keyboard accessible with focus indicators.
  *
  * Example usage:
  * ```tsx
@@ -111,6 +114,8 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         customContent = (
             <CollapseRelaxed visible={visible}>
                 <div
+                    role="group"
+                    aria-label={label}
                     className="efficiencyIndicator"
                     style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '8px' }}
                 >
@@ -118,6 +123,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                     <div
                         className="efficiencyDot"
                         style={{ backgroundColor: getRatingColor(rating), alignSelf: 'center' }}
+                        aria-hidden="true"
                     />
                     {/* First row, second column: rating text */}
                     <Text weight="semibold" style={{ alignSelf: 'center' }}>
@@ -135,7 +141,11 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                         children: (
                                             <div style={{ padding: '8px' }}>
                                                 <div
-                                                    style={{ fontWeight: 600, marginBottom: '12px', fontSize: '16px' }}
+                                                    style={{
+                                                        fontWeight: 600,
+                                                        marginBottom: '12px',
+                                                        fontSize: '16px',
+                                                    }}
                                                 >
                                                     {diagnostic.message}
                                                 </div>
@@ -146,14 +156,20 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                     positioning="above-start"
                                     relationship="description"
                                 >
+                                    {/* Accessibility pattern: aria-label provides full context for screen readers,
+                                        while aria-hidden on children prevents double announcement of visible text.
+                                        Screen readers announce: "message. details" instead of just "message" */}
                                     <Badge
                                         appearance="tint"
                                         color={diagnostic.type === 'positive' ? 'success' : 'informative'}
                                         size="small"
                                         shape="rounded"
                                         icon={<InfoRegular />}
+                                        tabIndex={0}
+                                        className="focusableBadge"
+                                        aria-label={`${diagnostic.message}. ${diagnostic.details}`}
                                     >
-                                        {diagnostic.message}
+                                        <span aria-hidden="true">{diagnostic.message}</span>
                                     </Badge>
                                 </Tooltip>
                             ))}

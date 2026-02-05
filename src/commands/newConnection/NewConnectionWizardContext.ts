@@ -16,6 +16,7 @@ export enum ConnectionMode {
 
 export interface NewConnectionWizardContext extends IActionContext {
     parentId: string;
+    parentTreeId?: string; // Full tree ID of parent folder (for reveal after creation)
 
     experience?: Experience;
     connectionString?: string;

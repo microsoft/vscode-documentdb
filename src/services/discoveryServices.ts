@@ -78,7 +78,7 @@ export interface DiscoveryProvider extends ProviderDescription {
 class DiscoveryServiceImpl {
     private serviceProviders: Map<string, DiscoveryProvider> = new Map();
 
-    public registerProvider(provider: DiscoveryProvider) {
+    public registerProvider(provider: DiscoveryProvider): void {
         this.serviceProviders.set(provider.id, provider);
     }
 

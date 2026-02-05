@@ -21,6 +21,13 @@ import * as vscode from 'vscode';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
 import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
+import { createFolder, createSubfolder } from '../commands/connections-view/createFolder/createFolder';
+import { deleteFolder } from '../commands/connections-view/deleteFolder/deleteFolder';
+import { moveItems } from '../commands/connections-view/moveItems/moveItems';
+import { newConnectionInFolder } from '../commands/connections-view/newConnectionInFolder/newConnectionInFolder';
+import { renameConnection } from '../commands/connections-view/renameConnection/renameConnection';
+import { renameFolder } from '../commands/connections-view/renameFolder/renameFolder';
+import { copyCollection } from '../commands/copyCollection/copyCollection';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
@@ -41,11 +48,11 @@ import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
+import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
-import { renameConnection } from '../commands/renameConnection/renameConnection';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
@@ -56,6 +63,10 @@ import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
+import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
+import { DemoTask } from '../services/taskService/tasks/DemoTask';
+import { TaskService } from '../services/taskService/taskService';
+import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
@@ -91,6 +102,15 @@ export class ClustersExtension implements vscode.Disposable {
             treeDataProvider: ext.connectionsBranchDataProvider,
         });
         ext.context.subscriptions.push(ext.connectionsTreeView);
+
+        // Show release notes notification when the Connections View becomes visible
+        ext.context.subscriptions.push(
+            ext.connectionsTreeView.onDidChangeVisibility((e) => {
+                if (e.visible) {
+                    void maybeShowReleaseNotesNotification();
+                }
+            }),
+        );
     }
 
     registerDiscoveryTree(_activateContext: IActionContext): void {
@@ -168,6 +188,9 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
                 this.registerHelpAndFeedbackTree(activateContext);
+
+                // Initialize TaskService and TaskProgressReportingService
+                TaskProgressReportingService.attach(TaskService);
 
                 //// General Commands:
 
@@ -272,6 +295,43 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(renameConnection),
                 );
 
+                //// Folder Management Commands:
+
+                registerCommandWithModalErrors(
+                    'vscode-documentdb.command.connectionsView.createFolder',
+                    withCommandCorrelation(createFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.createSubfolder',
+                    withTreeNodeCommandCorrelation(createSubfolder),
+                );
+
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
+                    'vscode-documentdb.command.connectionsView.newConnectionInFolder',
+                    withTreeNodeCommandCorrelation(newConnectionInFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.renameFolder',
+                    withTreeNodeCommandCorrelation(renameFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.deleteFolder',
+                    withTreeNodeCommandCorrelation(deleteFolder),
+                );
+
+                //// Move Operations:
+
+                registerCommand(
+                    'vscode-documentdb.command.connectionsView.moveItems',
+                    withCommandCorrelation(moveItems),
+                );
+
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.copyCollection', copyCollection);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.pasteCollection', pasteCollection);
+
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling
 
@@ -375,6 +435,36 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.exportDocuments',
                     withTreeNodeCommandCorrelation(exportEntireCollection),
                 );
+
+                // Testing command for DemoTask
+                registerCommand('vscode-documentdb.command.testing.startDemoTask', async (_context: IActionContext) => {
+                    const failureOptions = [
+                        {
+                            label: vscode.l10n.t('$(check) Success'),
+                            description: vscode.l10n.t('Task will complete successfully'),
+                            shouldFail: false,
+                        },
+                        {
+                            label: vscode.l10n.t('$(error) Failure'),
+                            description: vscode.l10n.t('Task will fail at a random step for testing'),
+                            shouldFail: true,
+                        },
+                    ];
+
+                    const selectedOption = await vscode.window.showQuickPick(failureOptions, {
+                        title: vscode.l10n.t('Demo Task Configuration'),
+                        placeHolder: vscode.l10n.t('Choose whether the task should succeed or fail'),
+                    });
+
+                    if (!selectedOption) {
+                        return; // User cancelled
+                    }
+
+                    const task = new DemoTask(vscode.l10n.t('Demo Task {0}', Date.now()), selectedOption.shouldFail);
+                    TaskService.registerTask(task);
+                    void task.start();
+                });
+
                 // This is an optional task - if it fails, we don't want to break extension activation,
                 // but we should log the error for diagnostics
                 try {

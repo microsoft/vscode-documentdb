@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
+import { Announcer } from '../../api/webview-client/accessibility';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
@@ -39,6 +40,9 @@ interface QueryResults {
     treeData?: { [key: string]: unknown }[];
 
     jsonDocuments?: string[];
+
+    /** Number of documents returned by the query (for screen reader announcements) */
+    documentCount?: number;
 }
 
 export const CollectionView = (): JSX.Element => {
@@ -199,7 +203,12 @@ export const CollectionView = (): JSX.Element => {
                 pageSize: currentContext.activeQuery.pageSize,
                 executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
             })
-            .then((_response) => {
+            .then((response) => {
+                // Store document count for screen reader announcements (skip pagination)
+                if (currentContext.activeQuery.executionIntent !== 'pagination') {
+                    setCurrentQueryResults((prev) => ({ ...prev, documentCount: response.documentCount }));
+                }
+
                 // 2. This is the time to update the auto-completion data
                 //    Since now we do know more about the data returned from the query
                 updateAutoCompletionData();
@@ -216,7 +225,7 @@ export const CollectionView = (): JSX.Element => {
             .catch((error) => {
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Error while running the query'),
-                    modal: false,
+                    modal: true,
                     cause: error instanceof Error ? error.message : String(error),
                 });
             })
@@ -497,7 +506,20 @@ export const CollectionView = (): JSX.Element => {
     return (
         <CollectionViewContext.Provider value={[currentContext, setCurrentContext]}>
             <div className="collectionView">
-                {currentContext.isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
+                {currentContext.isLoading && (
+                    <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
+                )}
+
+                {/* Screen reader announcement when query completes */}
+                <Announcer
+                    when={!currentContext.isLoading && currentQueryResults?.documentCount !== undefined}
+                    politeness="assertive"
+                    message={
+                        (currentQueryResults?.documentCount ?? 0) > 0
+                            ? l10n.t('Results found')
+                            : l10n.t('No results found')
+                    }
+                />
 
                 <div className="toolbarMainView">
                     <ToolbarMainView />
@@ -573,7 +595,13 @@ export const CollectionView = (): JSX.Element => {
                     <Tab id="tab.queryInsights" value="tab_queryInsights">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             Query Insights
-                            <Badge appearance="tint" size="small" shape="rounded" color="brand">
+                            <Badge
+                                appearance="tint"
+                                size="small"
+                                shape="rounded"
+                                color="brand"
+                                aria-label={l10n.t('Query Insights feature is in preview')}
+                            >
                                 PREVIEW
                             </Badge>
                         </div>

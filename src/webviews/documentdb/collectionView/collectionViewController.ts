@@ -12,6 +12,12 @@ import { type RouterContext } from './collectionViewRouter';
 export type CollectionViewWebviewConfigurationType = {
     sessionId: string;
     clusterId: string;
+    /**
+     * Identifies which tree view this cluster belongs to.
+     * Required for finding the tree node during import/export operations.
+     * @see Views enum
+     */
+    viewId: string;
     databaseName: string;
     collectionName: string;
     defaultPageSize: number;
@@ -41,6 +47,7 @@ export class CollectionViewController extends WebviewController<CollectionViewWe
             webviewName: 'collectionView',
             sessionId: initialData.sessionId,
             clusterId: initialData.clusterId,
+            viewId: initialData.viewId,
             databaseName: initialData.databaseName,
             collectionName: initialData.collectionName,
         };

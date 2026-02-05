@@ -7,6 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
+import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -22,6 +23,19 @@ export async function deleteAzureDatabase(context: IActionContext, node: Databas
 export async function deleteDatabase(context: IActionContext, node: DatabaseItem): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
 
+    // Check if any running tasks are using this database
+    const canProceed = await checkCanProceedAndInformUser(
+        {
+            clusterId: node.cluster.clusterId,
+            databaseName: node.databaseInfo.name,
+        },
+        l10n.t('delete this database'),
+    );
+
+    if (!canProceed) {
+        return;
+    }
+
     const databaseId = node.databaseInfo.name;
     const confirmed = await getConfirmationAsInSettings(
         l10n.t('Delete "{nodeName}"?', { nodeName: databaseId }),
@@ -36,7 +50,7 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
     }
 
     try {
-        const client = await ClustersClient.getClient(node.cluster.id);
+        const client = await ClustersClient.getClient(node.cluster.clusterId);
 
         let success = false;
         await ext.state.showDeleting(node.id, async () => {

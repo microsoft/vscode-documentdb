@@ -6,12 +6,12 @@
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { type Experience } from '../../DocumentDBExperiences';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
-import { type ClusterModel } from './ClusterModel';
 import { CollectionItem } from './CollectionItem';
 
 export class DatabaseItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
@@ -22,17 +22,17 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     private readonly experienceContextValue: string = '';
 
     constructor(
-        readonly cluster: ClusterModel,
+        readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
     ) {
-        this.id = `${cluster.id}/${databaseInfo.name}`;
+        this.id = `${cluster.treeId}/${databaseInfo.name}`;
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience?.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const client: ClustersClient = await ClustersClient.getClient(this.cluster.id);
+        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
         const collections = await client.listCollections(this.databaseInfo.name);
 
         if (collections.length === 0) {
@@ -50,7 +50,11 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         }
 
         return collections.map((collection) => {
-            return new CollectionItem(this.cluster, this.databaseInfo, collection);
+            const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection);
+            // Start loading document count in background (fire-and-forget)
+            // This does not block tree expansion
+            collectionItem.loadDocumentCount();
+            return collectionItem;
         });
     }
 

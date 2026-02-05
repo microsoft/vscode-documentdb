@@ -8,14 +8,15 @@ import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
-import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
+import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
+import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
 
 /**
@@ -103,37 +104,126 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
      * Helper function to get the root items of the connections tree.
      */
     private async getRootItems(parentId: string): Promise<TreeElement[] | null | undefined> {
-        const connectionItems = await ConnectionStorageService.getAll(ConnectionType.Clusters);
+        // Check if there are any connections at all (for welcome screen logic)
+        const allConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
+        const allEmulators = await ConnectionStorageService.getAll(ConnectionType.Emulators);
 
-        if (connectionItems.length === 0) {
+        if (allConnections.length === 0 && allEmulators.length === 0) {
             /**
              * we have a special case here as we want to show a "welcome screen" in the case when no connections were found.
-             * However, we need to lookup the emulator items as well, so we need to check if there are any emulators.
              */
-            const emulatorItems = await ConnectionStorageService.getAll(ConnectionType.Emulators);
-            if (emulatorItems.length === 0) {
-                return null;
-            }
+            return null;
         }
+
+        // Import FolderItem and ItemType
+        const { FolderItem } = await import('./FolderItem');
+        const { ItemType } = await import('../../services/connectionStorageService');
+
+        // Get root-level items (parentId = undefined) for clusters only
+        // Emulators are handled by LocalEmulatorsItem and should not be at root
+        const rootFoldersClusters = await ConnectionStorageService.getChildren(
+            undefined,
+            ConnectionType.Clusters,
+            ItemType.Folder,
+        );
+        const rootConnectionsClusters = await ConnectionStorageService.getChildren(
+            undefined,
+            ConnectionType.Clusters,
+            ItemType.Connection,
+        );
+
+        const clusterFolderItems = rootFoldersClusters.map(
+            (folder) => new FolderItem(folder, parentId, ConnectionType.Clusters),
+        );
+
+        // Filter with type guard to ensure type safety for connection-specific properties
+        const clusterItems = rootConnectionsClusters.filter(isConnection).map((connection) => {
+            const model: TreeCluster<ConnectionClusterModel> = {
+                // Tree context (computed at runtime)
+                treeId: `${parentId}/${connection.id}`, // Hierarchical tree path
+                viewId: parentId, // View ID is the root parent
+
+                // Connection cluster data
+                clusterId: connection.id, // Stable storageId for cache lookups
+                storageId: connection.id,
+                name: connection.name,
+                dbExperience: DocumentDBExperience,
+                connectionString: connection.secrets.connectionString,
+                emulatorConfiguration: connection.properties.emulatorConfiguration,
+            };
+
+            ext.outputChannel.trace(
+                `[ConnectionsView] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}"`,
+            );
+
+            return new DocumentDBClusterItem(model);
+        });
+
+        // Sort folders alphabetically by name
+        clusterFolderItems.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Sort connections alphabetically by name
+        clusterItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
+
+        // Show "New Connection" only if there are no cluster folders or connections
+        // (don't count the LocalEmulatorsItem - it's always shown)
+        const hasClusterItems = clusterFolderItems.length > 0 || clusterItems.length > 0;
+        const newConnectionItem = hasClusterItems ? [] : [new NewConnectionItemCV(parentId)];
 
         const rootItems = [
             new LocalEmulatorsItem(parentId),
-            ...connectionItems.map((connection: ConnectionItem) => {
-                const model: ClusterModelWithStorage = {
-                    id: `${parentId}/${connection.id}`,
-                    storageId: connection.id,
-                    name: connection.name,
-                    dbExperience: DocumentDBExperience,
-                    connectionString: connection?.secrets?.connectionString ?? undefined,
-                };
-
-                return new DocumentDBClusterItem(model);
-            }),
-            new NewConnectionItemCV(parentId),
+            ...clusterFolderItems,
+            ...clusterItems,
+            ...newConnectionItem,
         ];
 
         return rootItems.map(
             (item) => ext.state.wrapItemInStateHandling(item, () => this.refresh(item)) as TreeElement,
         );
+    }
+
+    /**
+     * Finds a collection node by its cluster's stable identifier (storageId).
+     *
+     * For Connections View, the clusterId is the storageId (UUID like 'storageId-xxx').
+     * This method resolves the current tree path from storage, handling folder moves.
+     *
+     * @param clusterId The stable cluster identifier (storageId)
+     * @param databaseName The database name
+     * @param collectionName The collection name
+     * @returns A Promise that resolves to the found CollectionItem or undefined if not found
+     */
+    async findCollectionByClusterId(
+        clusterId: string,
+        databaseName: string,
+        collectionName: string,
+    ): Promise<TreeElement | undefined> {
+        // Resolve the current tree path from storage - this handles folder moves
+        const { buildFullTreePath } = await import('./connectionsViewHelpers');
+        const treeId = await buildFullTreePath(clusterId, ConnectionType.Clusters);
+
+        // Build the full node ID for the collection
+        const nodeId = `${treeId}/${databaseName}/${collectionName}`;
+
+        // Use the standard findNodeById with recursive search enabled
+        return this.findNodeById(nodeId, true);
+    }
+
+    /**
+     * Finds a cluster node by its stable cluster identifier (storageId).
+     *
+     * For Connections View, the clusterId is the storageId (UUID).
+     * This method resolves the current tree path from storage, handling folder moves.
+     *
+     * @param clusterId The stable cluster identifier (storageId)
+     * @returns A Promise that resolves to the found cluster tree element or undefined
+     */
+    async findClusterNodeByClusterId(clusterId: string): Promise<TreeElement | undefined> {
+        // Resolve the current tree path from storage - this handles folder moves
+        const { buildFullTreePath } = await import('./connectionsViewHelpers');
+        const treeId = await buildFullTreePath(clusterId, ConnectionType.Clusters);
+
+        // Use the standard findNodeById with recursive search enabled
+        return this.findNodeById(treeId, true);
     }
 }

@@ -24,15 +24,16 @@ import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/Provi
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
-import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
+import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
+import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 
-export class DocumentDBClusterItem extends ClusterItemBase implements TreeElementWithStorageId {
-    public override readonly cluster: ClusterModelWithStorage;
+export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterModel> implements TreeElementWithStorageId {
+    public override readonly cluster: TreeCluster<ConnectionClusterModel>;
 
-    constructor(mongoCluster: ClusterModelWithStorage) {
+    constructor(mongoCluster: TreeCluster<ConnectionClusterModel>) {
         super(mongoCluster);
         this.cluster = mongoCluster; // Explicit initialization
     }
@@ -47,14 +48,14 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             : ConnectionType.Clusters;
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
-        if (!connectionCredentials) {
+        if (!connectionCredentials || !isConnection(connectionCredentials)) {
             return undefined;
         }
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
-            availableAuthMethods: authMethodsFromString(connectionCredentials?.properties.availableAuthMethods),
-            selectedAuthMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
+            availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
+            selectedAuthMethod: authMethodFromString(connectionCredentials.properties.selectedAuthMethod),
 
             // Structured auth configurations
             nativeAuthConfig: connectionCredentials.secrets.nativeAuthConfig,
@@ -87,7 +88,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
-            if (!connectionCredentials) {
+            if (!connectionCredentials || !isConnection(connectionCredentials)) {
                 return null;
             }
 
@@ -156,7 +157,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                         : ConnectionType.Clusters;
 
                     const connection = await ConnectionStorageService.get(this.storageId, connectionType);
-                    if (connection) {
+                    if (connection && isConnection(connection)) {
                         connection.properties.selectedAuthMethod = authMethod;
                         connection.secrets = {
                             connectionString: connectionString.toString(),
@@ -202,9 +203,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                     );
             }
 
-            // Cache the credentials
+            // Cache the credentials using clusterId for stable caching across folder moves
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 authMethod,
                 connectionString.toString(),
                 username && password
@@ -221,7 +222,7 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
 
             // Attempt to create the client with the provided credentials
             try {
-                clustersClient = await ClustersClient.getClient(this.id);
+                clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
             } catch (error) {
                 ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
 
@@ -237,8 +238,8 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
                 );
 
                 // If connection fails, remove cached credentials
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 // Return null to indicate failure
                 return null;
@@ -307,12 +308,9 @@ export class DocumentDBClusterItem extends ClusterItemBase implements TreeElemen
             } else {
                 tooltipMessage = l10n.t('✅ **Security:** TLS/SSL Enabled');
             }
-        } else {
-            // For non-emulator clusters, show SKU if defined
-            if (this.cluster.sku !== undefined) {
-                description = `(${this.cluster.sku})`;
-            }
         }
+        // Note: ConnectionClusterModel doesn't include Azure-specific fields like SKU.
+        // For user-added connections, we only show basic cluster name without Azure metadata.
 
         return {
             id: this.id,

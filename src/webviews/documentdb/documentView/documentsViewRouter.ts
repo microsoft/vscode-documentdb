@@ -20,7 +20,22 @@ import {
 } from '../../api/extension-server/trpc';
 
 export type RouterContext = BaseRouterContext & {
+    /**
+     * Stable cluster identifier for cache/client lookups.
+     * Use this for ClustersClient.getClient() and CredentialCache operations.
+     */
     clusterId: string;
+    /**
+     * Identifies which tree view this cluster belongs to.
+     *
+     * Required for finding the correct tree node when the webview needs to interact
+     * with the tree. The same Azure Resource ID can appear in multiple views
+     * (Discovery, Azure Resources, Workspace), so we need to know which branch
+     * data provider to query.
+     *
+     * @see Views enum for possible values (e.g., 'connectionsView', 'discoveryView')
+     */
+    viewId: string;
     databaseName: string;
     collectionName: string;
     documentId: string;

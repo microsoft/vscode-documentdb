@@ -16,19 +16,19 @@ import {
     MongoBulkWriteError,
     MongoClient,
     ObjectId,
+    type ClientSession,
     type Collection,
     type DeleteResult,
     type Document,
     type Filter,
     type FindOptions,
+    type InsertManyResult,
     type ListDatabasesResult,
     type MongoClientOptions,
     type WithId,
     type WithoutId,
-    type WriteError,
 } from 'mongodb';
 import { Links } from '../constants';
-import { ext } from '../extensionVariables';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
@@ -36,6 +36,7 @@ import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler'
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
+import { QueryError } from './errors/QueryError';
 import {
     llmEnhancedFeatureApis,
     type CollectionStats,
@@ -116,15 +117,24 @@ export interface IndexItemModel {
     [key: string]: unknown; // Allow additional index properties
 }
 
-// Currently we only return insertedCount, but we can add more fields in the future if needed
-// Keep the type definition here for future extensibility
-export type InsertDocumentsResult = {
-    /** The number of inserted documents for this operations */
-    insertedCount: number;
-};
+export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
+    return error instanceof MongoBulkWriteError;
+}
 
 export class ClustersClient {
-    // cache of active/existing clients
+    /**
+     * Cache of active MongoDB clients, keyed by clusterId.
+     *
+     * KEY: `clusterId` - The stable cluster identifier (NOT the tree item ID)
+     *   - Connections View items: Use `cluster.clusterId` (= storageId, stable UUID)
+     *   - Azure Resources View items: Use `cluster.clusterId` (= Sanitized Azure Resource ID)
+     *
+     * VALUE: ClustersClient instance wrapping a MongoClient
+     *
+     * ⚠️ WARNING: Do NOT use `treeId` as the cache key!
+     * Tree IDs change when items are moved between folders, causing cache misses
+     * and orphaned connections.
+     */
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
@@ -133,9 +143,13 @@ export class ClustersClient {
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
     /**
-     * Use getClient instead of a constructor. Connections/Client are being cached and reused.
+     * Private constructor - use getClient() instead.
+     * Connections/Clients are being cached and reused.
+     *
+     * @param clusterId - The stable cluster ID used to look up credentials in CredentialCache.
+     *   This is NOT the tree item ID - it's the clusterId that remains stable across folder moves.
      */
-    private constructor(private readonly credentialId: string) {
+    private constructor(private readonly clusterId: string) {
         return;
     }
 
@@ -167,9 +181,9 @@ export class ClustersClient {
     // }
 
     private async initClient(): Promise<void> {
-        const credentials = CredentialCache.getCredentials(this.credentialId);
+        const credentials = CredentialCache.getCredentials(this.clusterId);
         if (!credentials) {
-            throw new Error(l10n.t('No credentials found for id {credentialId}', { credentialId: this.credentialId }));
+            throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
         }
 
         // default to NativeAuth if nothing is configured
@@ -243,25 +257,25 @@ export class ClustersClient {
     }
 
     /**
-     * Retrieves an instance of `ClustersClient` based on the provided `credentialId`.
+     * Retrieves an instance of `ClustersClient` based on the provided `clusterId`.
      *
-     * @param credentialId - A required string used to find the cached connection string to connect.
+     * @param clusterId - A required string used to find the cached connection string to connect.
      * It is also used as a key to reuse existing clients.
      * @returns A promise that resolves to an instance of `ClustersClient`.
      */
-    public static async getClient(credentialId: string): Promise<ClustersClient> {
+    public static async getClient(clusterId: string): Promise<ClustersClient> {
         let client: ClustersClient;
 
-        if (ClustersClient._clients.has(credentialId)) {
-            client = ClustersClient._clients.get(credentialId) as ClustersClient;
+        if (ClustersClient._clients.has(clusterId)) {
+            client = ClustersClient._clients.get(clusterId) as ClustersClient;
 
             // if the client is already connected, it's a NOOP.
             await client._mongoClient.connect();
         } else {
-            client = new ClustersClient(credentialId);
+            client = new ClustersClient(clusterId);
             // Cluster metadata is set in initClient
             await client.initClient();
-            ClustersClient._clients.set(credentialId, client);
+            ClustersClient._clients.set(clusterId, client);
         }
 
         return client;
@@ -297,8 +311,62 @@ export class ClustersClient {
         }
     }
 
+    startTransaction(): ClientSession {
+        try {
+            const session = this._mongoClient.startSession();
+            session.startTransaction();
+            return session;
+        } catch (error) {
+            throw new Error(l10n.t('Failed to start a transaction: {0}', parseError(error).message));
+        }
+    }
+
+    startTransactionWithSession(session: ClientSession): void {
+        try {
+            session.startTransaction();
+        } catch (error) {
+            throw new Error(
+                l10n.t('Failed to start a transaction with the provided session: {0}', parseError(error).message),
+            );
+        }
+    }
+
+    async commitTransaction(session: ClientSession): Promise<void> {
+        try {
+            await session.commitTransaction();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to commit transaction: {0}', parseError(error).message));
+        } finally {
+            this.endSession(session);
+        }
+    }
+
+    async abortTransaction(session: ClientSession): Promise<void> {
+        try {
+            await session.abortTransaction();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to abort transaction: {0}', parseError(error).message));
+        } finally {
+            this.endSession(session);
+        }
+    }
+
+    startSession(): ClientSession {
+        try {
+            return this._mongoClient.startSession();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to start a session: {0}', parseError(error).message));
+        }
+    }
+
+    endSession(session: ClientSession): void {
+        session.endSession().catch((error) => {
+            throw new Error(l10n.t('Failed to end session: {0}', parseError(error).message));
+        });
+    }
+
     getUserName() {
-        return CredentialCache.getConnectionUser(this.credentialId);
+        return CredentialCache.getConnectionUser(this.clusterId);
     }
 
     /**
@@ -312,11 +380,11 @@ export class ClustersClient {
      * @deprecated Use getCredentials() which returns a CachedClusterCredentials object instead.
      */
     getConnectionStringWithPassword(): string | undefined {
-        return CredentialCache.getConnectionStringWithPassword(this.credentialId);
+        return CredentialCache.getConnectionStringWithPassword(this.clusterId);
     }
 
     public getCredentials(): CachedClusterCredentials | undefined {
-        return CredentialCache.getCredentials(this.credentialId) as CachedClusterCredentials | undefined;
+        return CredentialCache.getCredentials(this.clusterId) as CachedClusterCredentials | undefined;
     }
 
     /**
@@ -328,6 +396,21 @@ export class ClustersClient {
             throw new Error(l10n.t('Query Insights APIs not initialized. Client may not be properly connected.'));
         }
         return this._queryInsightsApis;
+    }
+
+    getCollection(databaseName: string, collectionName: string): Collection<Document> {
+        try {
+            return this._mongoClient.db(databaseName).collection(collectionName);
+        } catch (error) {
+            throw new Error(
+                l10n.t(
+                    'Failed to get collection {0} in database {1}: {2}',
+                    collectionName,
+                    databaseName,
+                    parseError(error).message,
+                ),
+            );
+        }
     }
 
     async listDatabases(): Promise<DatabaseItemModel[]> {
@@ -432,7 +515,15 @@ export class ClustersClient {
             try {
                 options.projection = EJSON.parse(queryParams.project) as Document;
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -441,7 +532,15 @@ export class ClustersClient {
             try {
                 options.sort = EJSON.parse(queryParams.sort) as Document;
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -483,6 +582,55 @@ export class ClustersClient {
     }
 
     /**
+     * Counts documents in a collection matching the given filter query.
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param findQuery - Optional filter query string (defaults to '{}')
+     * @returns Number of documents matching the filter
+     *
+     * @throws {QueryError} with code 'INVALID_FILTER' if findQuery contains invalid JSON/BSON syntax.
+     *         Callers should handle this error appropriately - currently this error will propagate
+     *         up the call stack. TODO: Revisit error handling strategy when this function is used
+     *         in more contexts (e.g., UI count displays may want graceful fallback).
+     */
+    async countDocuments(databaseName: string, collectionName: string, findQuery: string = '{}'): Promise<number> {
+        if (findQuery === undefined || findQuery.trim().length === 0) {
+            findQuery = '{}';
+        }
+        // NOTE: toFilterQueryObj throws QueryError on invalid input - see JSDoc above
+        const findQueryObj: Filter<Document> = toFilterQueryObj(findQuery);
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+
+        const count = await collection.countDocuments(findQueryObj, {
+            // Use a read preference of 'primary' to ensure we get the most up-to-date
+            // count, especially important for sharded clusters.
+            readPreference: 'primary',
+        });
+        return count;
+    }
+
+    async estimateDocumentCount(databaseName: string, collectionName: string): Promise<number> {
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+
+        try {
+            return await collection.estimatedDocumentCount();
+        } catch (error) {
+            // Fall back to countDocuments if estimatedDocumentCount is not supported
+            // This can happen with certain MongoDB configurations or versions
+            if (
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                error.code === 115 /* CommandNotSupported */ ||
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                error.code === 235 /* InternalErrorNotSupported */
+            ) {
+                return await this.countDocuments(databaseName, collectionName);
+            }
+            throw error;
+        }
+    }
+
+    /**
      * Streams documents from a collection with full query support (filter, projection, sort, skip, limit).
      *
      * @param databaseName - The name of the database
@@ -516,7 +664,15 @@ export class ClustersClient {
             try {
                 options.projection = EJSON.parse(queryParams.project) as Document;
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -525,7 +681,15 @@ export class ClustersClient {
             try {
                 options.sort = EJSON.parse(queryParams.sort) as Document;
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -677,9 +841,10 @@ export class ClustersClient {
         databaseName: string,
         collectionName: string,
         documents: Document[],
-    ): Promise<InsertDocumentsResult> {
+        ordered: boolean = true,
+    ): Promise<InsertManyResult> {
         if (documents.length === 0) {
-            return { insertedCount: 0 };
+            return { acknowledged: false, insertedIds: {}, insertedCount: 0 };
         }
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -689,37 +854,18 @@ export class ClustersClient {
 
                 // Setting `ordered` to be false allows MongoDB to continue inserting remaining documents even if previous fails.
                 // More details: https://www.mongodb.com/docs/manual/reference/method/db.collection.insertMany/#syntax
-                ordered: false,
+                ordered: ordered,
             });
-            return {
-                insertedCount: insertManyResults.insertedCount,
-            };
+            return insertManyResults;
         } catch (error) {
-            // print error messages to the console
+            // Log error messages to the console
             if (error instanceof MongoBulkWriteError) {
-                const writeErrors: WriteError[] = Array.isArray(error.writeErrors)
-                    ? (error.writeErrors as WriteError[])
-                    : [error.writeErrors as WriteError];
-
-                for (const writeError of writeErrors) {
-                    const generalErrorMessage = parseError(writeError).message;
-                    const descriptiveErrorMessage = writeError.err?.errmsg;
-
-                    const fullErrorMessage = descriptiveErrorMessage
-                        ? `${generalErrorMessage} - ${descriptiveErrorMessage}`
-                        : generalErrorMessage;
-
-                    ext.outputChannel.appendLog(l10n.t('Write error: {0}', fullErrorMessage));
-                }
-                ext.outputChannel.show();
+                throw error;
             } else if (error instanceof Error) {
-                ext.outputChannel.appendLog(l10n.t('Error: {0}', error.message));
-                ext.outputChannel.show();
+                throw error;
             }
 
-            return {
-                insertedCount: error instanceof MongoBulkWriteError ? error.insertedCount || 0 : 0,
-            };
+            throw new Error(l10n.t('An unknown error occurred while inserting documents.'));
         }
     }
 
