@@ -36,7 +36,7 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewConnectionWizar
     }
 
     public validateInput(context: NewConnectionWizardContext, password: string | undefined): string | undefined {
-        password = password ? password.trim() : '';
+        password = password ?? '';
 
         if (password.length === 0) {
             // skip this for now, asyncValidationTask takes care of this case, otherwise it's only warnings the user sees..
