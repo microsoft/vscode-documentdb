@@ -13,10 +13,11 @@
 - **Copy Connection String with Password**: Adds an option to include the password when copying a connection string. [#436](https://github.com/microsoft/vscode-documentdb/pull/436)
 - **Release Notes Notification**: Prompts users to view release notes after upgrading to a new major or minor version. [#487](https://github.com/microsoft/vscode-documentdb/pull/487)
 - **Accessibility**: Improves screen reader announcements, keyboard navigation, and ARIA labeling across Query Insights and document editing. [#374](https://github.com/microsoft/vscode-documentdb/issues/374), [#375](https://github.com/microsoft/vscode-documentdb/issues/375), [#377](https://github.com/microsoft/vscode-documentdb/issues/377), [#378](https://github.com/microsoft/vscode-documentdb/issues/378), [#379](https://github.com/microsoft/vscode-documentdb/issues/379), [#380](https://github.com/microsoft/vscode-documentdb/issues/380), [#381](https://github.com/microsoft/vscode-documentdb/issues/381), [#384](https://github.com/microsoft/vscode-documentdb/issues/384), [#385](https://github.com/microsoft/vscode-documentdb/issues/385)
-- **Alphabetical Collection Sorting**: Sorts collections alphabetically in the tree view. Thanks to [@VanitasBlade](https://github.com/VanitasBlade). [#456](https://github.com/microsoft/vscode-documentdb/issues/456), [#465](https://github.com/microsoft/vscode-documentdb/pull/465)
+- **Alphabetical Collection Sorting**: Sorts collections alphabetically in the tree view. [#456](https://github.com/microsoft/vscode-documentdb/issues/456), [#465](https://github.com/microsoft/vscode-documentdb/pull/465)
 - **Query Insights Prompt Hardening**: Updates the Query Insights model/prompt and adds additional prompt-injection mitigations. [#468](https://github.com/microsoft/vscode-documentdb/pull/468)
 - **Connection String Validation**: Trims and validates connection string input to avoid empty values. [#467](https://github.com/microsoft/vscode-documentdb/pull/467)
 - **Collection Paste Feedback**: Refreshes collection metadata after paste and improves error reporting for failed writes. [#482](https://github.com/microsoft/vscode-documentdb/pull/482), [#484](https://github.com/microsoft/vscode-documentdb/pull/484)
+- **Collection Paste Validation / Input Trimming Consistency**: Fixes inconsistent trimming/validation of user input. [#493](https://github.com/microsoft/vscode-documentdb/pull/493)
 
 ### Fixes
 
