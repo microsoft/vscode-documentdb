@@ -21,6 +21,13 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewConnectionWizar
             password: true,
             value: context.nativeAuthConfig?.connectionPassword,
             validateInput: (password?: string) => this.validateInput(context, password),
+            // eslint-disable-next-line @typescript-eslint/require-await
+            asyncValidationTask: async (password?: string) => {
+                if (!password || password.length === 0) {
+                    return l10n.t('Password cannot be empty');
+                }
+                return undefined;
+            },
         });
 
         context.valuesToMask.push(password);
