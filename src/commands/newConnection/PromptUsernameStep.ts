@@ -32,7 +32,7 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
         // Trim the username to remove leading/trailing whitespace
         const trimmedUsername = username.trim();
 
-        context.valuesToMask.push(trimmedUsername);
+        context.valuesToMask.push(trimmedUsername, username);
         // Update structured config
         context.nativeAuthConfig = {
             connectionUser: trimmedUsername,
