@@ -10,9 +10,13 @@
  */
 export interface ResourceDefinition {
     /**
-     * The connection identifier
+     * The stable cluster identifier for resource tracking.
+     * Use `cluster.clusterId` (NOT treeId) to ensure tasks remain valid after folder moves.
+     *
+     * - Connections View: storageId (UUID from ConnectionStorageService)
+     * - Azure Resources View: Sanitized Azure Resource ID (/ replaced with _)
      */
-    connectionId?: string;
+    clusterId?: string;
 
     /**
      * The database name within the connection
@@ -75,13 +79,13 @@ export interface TaskInfo {
  * @returns true if there's a conflict, false otherwise
  */
 export function hasResourceConflict(requestedResource: ResourceDefinition, usedResource: ResourceDefinition): boolean {
-    // Must have connection IDs to compare
-    if (!requestedResource.connectionId || !usedResource.connectionId) {
+    // Must have cluster IDs to compare
+    if (!requestedResource.clusterId || !usedResource.clusterId) {
         return false;
     }
 
-    // Different connections never conflict
-    if (requestedResource.connectionId !== usedResource.connectionId) {
+    // Different clusters never conflict
+    if (requestedResource.clusterId !== usedResource.clusterId) {
         return false;
     }
 

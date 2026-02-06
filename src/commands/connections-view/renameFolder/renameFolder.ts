@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { l10n as vscodel10n } from 'vscode';
+import * as l10n from '@vscode/l10n';
 import { ConnectionStorageService, ConnectionType } from '../../../services/connectionStorageService';
 import { type FolderItem } from '../../../tree/connections-view/FolderItem';
 import { ExecuteStep } from './ExecuteStep';
@@ -16,7 +16,7 @@ import { type RenameFolderWizardContext } from './RenameFolderWizardContext';
  */
 export async function renameFolder(context: IActionContext, folderItem: FolderItem): Promise<void> {
     if (!folderItem) {
-        throw new Error(vscodel10n.t('No folder selected.'));
+        throw new Error(l10n.t('No folder selected.'));
     }
 
     // Determine connection type - for now, use Clusters as default
@@ -35,7 +35,7 @@ export async function renameFolder(context: IActionContext, folderItem: FolderIt
     };
 
     const wizard = new AzureWizard(wizardContext, {
-        title: vscodel10n.t('Rename Folder'),
+        title: l10n.t('Rename Folder'),
         promptSteps: [new PromptNewFolderNameStep()],
         executeSteps: [new ExecuteStep()],
     });

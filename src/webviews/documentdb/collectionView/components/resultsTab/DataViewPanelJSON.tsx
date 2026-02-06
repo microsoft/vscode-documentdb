@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { useFocusFinders } from '@fluentui/react-components';
+import * as l10n from '@vscode/l10n';
 import { debounce } from 'es-toolkit';
 import * as React from 'react';
 import { MonacoEditor } from '../../../../components/MonacoEditor';
@@ -16,6 +17,7 @@ interface Props {
 }
 
 const monacoOptions = {
+    ariaLabel: l10n.t('JSON results view: Read-only display of query results in JSON format'),
     minimap: {
         enabled: true,
     },

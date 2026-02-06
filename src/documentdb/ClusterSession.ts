@@ -642,8 +642,13 @@ export class ClusterSession {
 
     /**
      * Initializes a new session for the MongoDB DocumentDB cluster.
+     * Initializes a new session for the MongoDB DocumentDB cluster.
      *
-     * @param credentialId - The ID of the credentials used to authenticate the MongoDB client.
+     * @param credentialId - The stable cluster identifier (clusterId) used to
+     *   look up credentials and create a MongoDB client.
+     *   - Connections View: storageId (UUID from ConnectionStorageService)
+     *   - Azure Resources View: Azure Resource ID
+     *   ⚠️ This is NOT the tree item ID - it must be the stable clusterId.
      * @returns A promise that resolves to the session ID of the newly created session.
      *
      * @throws Will throw an error if the client cannot be obtained using the provided credential ID.

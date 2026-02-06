@@ -23,12 +23,25 @@ import { BaseDocumentReader } from './BaseDocumentReader';
  * - Connection management via ClustersClient
  */
 export class DocumentDbDocumentReader extends BaseDocumentReader {
-    /** Connection identifier for accessing the DocumentDB cluster */
-    private readonly connectionId: string;
+    /**
+     * The stable cluster identifier for accessing the DocumentDB cluster.
+     * Used for ClustersClient lookup.
+     *
+     * ⚠️ This should be `cluster.clusterId`, NOT treeId.
+     */
+    private readonly clusterId: string;
 
-    constructor(connectionId: string, databaseName: string, collectionName: string) {
+    /**
+     * Creates a new DocumentDbDocumentReader.
+     *
+     * @param clusterId - The stable cluster identifier (clusterId) for client lookup.
+     *   ⚠️ Use cluster.clusterId, NOT treeId.
+     * @param databaseName - The name of the database to read from.
+     * @param collectionName - The name of the collection to read from.
+     */
+    constructor(clusterId: string, databaseName: string, collectionName: string) {
         super(databaseName, collectionName);
-        this.connectionId = connectionId;
+        this.clusterId = clusterId;
     }
 
     /**
@@ -46,7 +59,7 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
         signal?: AbortSignal,
         _actionContext?: IActionContext,
     ): AsyncIterable<DocumentDetails> {
-        const client = await ClustersClient.getClient(this.connectionId);
+        const client = await ClustersClient.getClient(this.clusterId);
 
         const documentStream = client.streamDocumentsWithQuery(
             this.databaseName,
@@ -76,7 +89,7 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
      * @returns Promise resolving to the estimated document count
      */
     protected async countDocumentsInDatabase(_signal?: AbortSignal, _actionContext?: IActionContext): Promise<number> {
-        const client = await ClustersClient.getClient(this.connectionId);
+        const client = await ClustersClient.getClient(this.clusterId);
         // Currently we use estimatedDocumentCount to get a rough idea of the document count
         // estimatedDocumentCount evaluates document counts based on metadata with O(1) complexity
         // We gain performance benefits by avoiding a full collection scan, especially for large collections

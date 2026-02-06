@@ -246,6 +246,45 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
     }
 
     /**
+     * Finds a cached node whose ID ends with the given suffix.
+     *
+     * This is useful for finding nodes when you only know part of their ID (e.g., a clusterId)
+     * but not the full hierarchical path. Only searches already-cached nodes.
+     *
+     * @param suffix The suffix to match against node IDs
+     * @returns The first node whose ID ends with the suffix, or undefined if not found
+     */
+    findNodeBySuffix(suffix: string): T | undefined {
+        return this.parentCache.findNodeBySuffix(suffix);
+    }
+
+    /**
+     * Searches for a child node by ID starting from a specific parent element.
+     *
+     * **Important behavioral notes:**
+     * - The `parent` element must be provided directly - this method does NOT discover or
+     *   fetch the parent. If the parent is stale or invalid, the search will fail.
+     * - Returns `undefined` immediately if the target `id` doesn't start with `parent.id`
+     *   (i.e., if the target is not a descendant of the parent).
+     * - This method DOES trigger backend discovery by calling `getChildren()` on nodes
+     *   along the path to the target. Only direct ancestors of the target ID are expanded.
+     *
+     * This is more efficient than `findNodeById` when you already have the parent,
+     * as it avoids the ancestor fallback behavior that could expand unrelated branches.
+     *
+     * @param parent The parent element to start searching from (must be already obtained)
+     * @param id The full ID of the child node to find (must be a descendant of parent)
+     * @returns A Promise that resolves to the found node or undefined if not found
+     */
+    async findChildById(parent: T, id: string): Promise<T | undefined> {
+        return this.parentCache.findChildById(
+            parent,
+            id,
+            this.getChildren.bind(this) as (element: T) => Promise<T[] | null | undefined>,
+        );
+    }
+
+    /**
      * Refreshes the tree data.
      * This will trigger the view to update the changed element/root and its children recursively (if shown).
      *

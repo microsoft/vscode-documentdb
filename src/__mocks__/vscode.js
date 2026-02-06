@@ -7,7 +7,14 @@
 const vsCodeMock = require('jest-mock-vscode').createVSCodeMock(jest);
 
 vsCodeMock.l10n = {
-    t: jest.fn(),
+    t: jest.fn((message, ...args) => {
+        // Simple template string replacement for testing
+        let result = message;
+        args.forEach((arg, index) => {
+            result = result.replace(`{${index}}`, String(arg));
+        });
+        return result;
+    }),
 };
 
 // CancellationTokenSource mock for AzureWizard

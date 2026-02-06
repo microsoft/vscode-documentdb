@@ -9,10 +9,15 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
+import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
-import { type ClusterModel } from '../../../tree/documentdb/ClusterModel';
+import {
+    type AzureClusterModel,
+    sanitizeAzureResourceIdForTreeId,
+} from '../../../tree/azure-views/models/AzureClusterModel';
+import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { createResourceManagementClient } from '../../../utils/azureClients';
 import { nonNullProp } from '../../../utils/nonNull';
 import { DISCOVERY_PROVIDER_ID } from '../config';
@@ -60,11 +65,30 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureSubscriptionItem.ts');
 
-                        const clusterInfo: ClusterModel = {
-                            ...account,
-                            resourceGroup: getResourceGroupFromId(resourceId),
+                        // Sanitize Azure Resource ID: replace '/' with '_' for treeId
+                        // This ensures treeId never contains '/' (simplifies path handling)
+                        const sanitizedId = sanitizeAzureResourceIdForTreeId(resourceId);
+
+                        // clusterId must be prefixed with provider ID for uniqueness across plugins
+                        const prefixedClusterId = `${DISCOVERY_PROVIDER_ID}_${sanitizedId}`;
+
+                        const clusterInfo: TreeCluster<AzureClusterModel> = {
+                            // Core cluster data
+                            name: account.name ?? 'Unknown',
+                            connectionString: undefined, // Loaded lazily when connecting
                             dbExperience: DocumentDBExperience,
-                        } as ClusterModel;
+                            clusterId: prefixedClusterId, // Prefixed with provider ID for uniqueness
+                            // Azure-specific data
+                            azureResourceId: resourceId, // Keep original Azure Resource ID for ARM API correlation
+                            resourceGroup: getResourceGroupFromId(resourceId),
+                            // Tree context - treeId includes parent hierarchy for findNodeById to work
+                            treeId: `${this.id}/${sanitizedId}`,
+                            viewId: Views.DiscoveryView,
+                        };
+
+                        ext.outputChannel.trace(
+                            `[DiscoveryView/vCore] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}"`,
+                        );
 
                         return new DocumentDBResourceItem(
                             this.journeyCorrelationId,

@@ -50,8 +50,13 @@ export function createConnection(config: ConnectionConfig): Promise<Connection> 
   // implementation
 }
 
-// ✅ Good - Localized user-facing string
-void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect: {0}', error.message));
+// ✅ Good - Localized user-facing string with safe error handling
+try {
+  await operation();
+} catch (error) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect: {0}', errorMessage));
+}
 ```
 
 ## Null Safety
@@ -74,6 +79,31 @@ if (!userInput.connectionString) {
 }
 ```
 
+## Error Handling
+
+When accessing error properties in catch blocks or error handlers, always check if the error is an instance of `Error` before accessing `.message`:
+
+```typescript
+// ✅ Good - Type-safe error message extraction
+try {
+  await someOperation();
+} catch (error) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  void vscode.window.showErrorMessage(vscode.l10n.t('Operation failed: {0}', errorMessage));
+}
+
+// ✅ Good - In promise catch handlers
+void task.start().catch((error) => {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  void vscode.window.showErrorMessage(vscode.l10n.t('Failed to start: {0}', errorMessage));
+});
+
+// ❌ Bad - Direct access to error.message (eslint error)
+catch (error) {
+  void vscode.window.showErrorMessage(vscode.l10n.t('Failed: {0}', error.message)); // Unsafe!
+}
+```
+
 ## Command Pattern
 
 Each command gets its own folder under `src/commands/`:
@@ -91,6 +121,43 @@ src/commands/yourCommand/
 - Never log passwords, tokens, or connection strings
 - Use VS Code's secure storage for credentials
 - Validate all user inputs
+
+## Cluster ID Architecture (Dual ID Pattern)
+
+> ⚠️ **CRITICAL**: Using the wrong ID causes silent bugs that only appear when users move connections between folders.
+
+Cluster models have **two distinct ID properties** with different purposes:
+
+| Property    | Purpose                          | Stable?                   | Use For                             |
+| ----------- | -------------------------------- | ------------------------- | ----------------------------------- |
+| `treeId`    | VS Code TreeView element path    | ❌ Changes on folder move | `this.id`, child item paths         |
+| `clusterId` | Cache key (credentials, clients) | ✅ Always stable          | `CredentialCache`, `ClustersClient` |
+
+### Quick Reference
+
+```typescript
+// ✅ Tree element identification
+this.id = cluster.treeId;
+
+// ✅ Cache operations - ALWAYS use clusterId
+CredentialCache.hasCredentials(cluster.clusterId);
+ClustersClient.getClient(cluster.clusterId);
+
+// ❌ WRONG - breaks when connection moves to a folder
+CredentialCache.hasCredentials(this.id); // BUG!
+```
+
+### Model Types
+
+- **`ConnectionClusterModel`** - Connections View (has `storageId`)
+- **`AzureClusterModel`** - Azure/Discovery Views (has `azureResourceId`)
+- **`BaseClusterModel`** - Shared interface (use for generic code)
+
+For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replaced with `_`). The original Azure Resource ID is stored in `AzureClusterModel.azureResourceId` for Azure API calls.
+
+> 💡 **Extensibility**: If adding a non-Azure discovery source (e.g., AWS, GCP), consider creating a new model type (e.g., `AwsClusterModel`) extending `BaseClusterModel` with source-specific metadata.
+
+See `src/tree/models/BaseClusterModel.ts` and `docs/analysis/08-cluster-model-simplification-plan.md` for details.
 
 ## Additional Patterns
 

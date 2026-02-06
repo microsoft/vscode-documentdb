@@ -5,6 +5,7 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
+import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { nonNullValue } from '../../utils/nonNull';
@@ -18,8 +19,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
         const connection = await ConnectionStorageService.get(context.storageId, resourceType);
 
         if (!connection || !connection.secrets?.connectionString) {
-            console.error(
-                `Connection with ID "${context.storageId}" not found in storage or missing connection string.`,
+            ext.outputChannel.error(
+                l10n.t('Failed to update connection: connection not found in storage or missing connection string.'),
             );
             void window.showErrorMessage(l10n.t('Failed to update the connection.'));
             return;
@@ -37,7 +38,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
 
             await ConnectionStorageService.save(resourceType, connection, true);
         } catch (pushError) {
-            console.error(`Failed to update the connection "${context.storageId}":`, pushError);
+            ext.outputChannel.error(l10n.t('Failed to update connection: {0}', String(pushError)));
             void window.showErrorMessage(l10n.t('Failed to update the connection.'));
         }
 

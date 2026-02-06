@@ -11,11 +11,12 @@ import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
-import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
+import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
+import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
 
 /**
@@ -137,14 +138,23 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
 
         // Filter with type guard to ensure type safety for connection-specific properties
         const clusterItems = rootConnectionsClusters.filter(isConnection).map((connection) => {
-            const model: ClusterModelWithStorage = {
-                id: `${parentId}/${connection.id}`,
+            const model: TreeCluster<ConnectionClusterModel> = {
+                // Tree context (computed at runtime)
+                treeId: `${parentId}/${connection.id}`, // Hierarchical tree path
+                viewId: parentId, // View ID is the root parent
+
+                // Connection cluster data
+                clusterId: connection.id, // Stable storageId for cache lookups
                 storageId: connection.id,
                 name: connection.name,
                 dbExperience: DocumentDBExperience,
                 connectionString: connection.secrets.connectionString,
                 emulatorConfiguration: connection.properties.emulatorConfiguration,
             };
+
+            ext.outputChannel.trace(
+                `[ConnectionsView] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}"`,
+            );
 
             return new DocumentDBClusterItem(model);
         });
@@ -170,5 +180,50 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
         return rootItems.map(
             (item) => ext.state.wrapItemInStateHandling(item, () => this.refresh(item)) as TreeElement,
         );
+    }
+
+    /**
+     * Finds a collection node by its cluster's stable identifier (storageId).
+     *
+     * For Connections View, the clusterId is the storageId (UUID like 'storageId-xxx').
+     * This method resolves the current tree path from storage, handling folder moves.
+     *
+     * @param clusterId The stable cluster identifier (storageId)
+     * @param databaseName The database name
+     * @param collectionName The collection name
+     * @returns A Promise that resolves to the found CollectionItem or undefined if not found
+     */
+    async findCollectionByClusterId(
+        clusterId: string,
+        databaseName: string,
+        collectionName: string,
+    ): Promise<TreeElement | undefined> {
+        // Resolve the current tree path from storage - this handles folder moves
+        const { buildFullTreePath } = await import('./connectionsViewHelpers');
+        const treeId = await buildFullTreePath(clusterId, ConnectionType.Clusters);
+
+        // Build the full node ID for the collection
+        const nodeId = `${treeId}/${databaseName}/${collectionName}`;
+
+        // Use the standard findNodeById with recursive search enabled
+        return this.findNodeById(nodeId, true);
+    }
+
+    /**
+     * Finds a cluster node by its stable cluster identifier (storageId).
+     *
+     * For Connections View, the clusterId is the storageId (UUID).
+     * This method resolves the current tree path from storage, handling folder moves.
+     *
+     * @param clusterId The stable cluster identifier (storageId)
+     * @returns A Promise that resolves to the found cluster tree element or undefined
+     */
+    async findClusterNodeByClusterId(clusterId: string): Promise<TreeElement | undefined> {
+        // Resolve the current tree path from storage - this handles folder moves
+        const { buildFullTreePath } = await import('./connectionsViewHelpers');
+        const treeId = await buildFullTreePath(clusterId, ConnectionType.Clusters);
+
+        // Use the standard findNodeById with recursive search enabled
+        return this.findNodeById(treeId, true);
     }
 }

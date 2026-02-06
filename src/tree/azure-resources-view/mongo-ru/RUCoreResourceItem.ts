@@ -16,10 +16,11 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullValue } from '../../../utils/nonNull';
+import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 
-export class RUResourceItem extends ClusterItemBase {
+export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = vscode.Uri.joinPath(
         ext.context.extensionUri,
         'resources',
@@ -33,7 +34,7 @@ export class RUResourceItem extends ClusterItemBase {
 
     constructor(
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
     }
@@ -79,9 +80,9 @@ export class RUResourceItem extends ClusterItemBase {
                 this.cluster.name,
             );
 
-            // Cache credentials and attempt connection
+            // Cache credentials and attempt connection using clusterId for stable caching
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 credentials.selectedAuthMethod!,
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'RUCoreResourceItem.ts'),
                 credentials.nativeAuthConfig,
@@ -94,7 +95,7 @@ export class RUResourceItem extends ClusterItemBase {
             );
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -118,8 +119,8 @@ export class RUResourceItem extends ClusterItemBase {
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }

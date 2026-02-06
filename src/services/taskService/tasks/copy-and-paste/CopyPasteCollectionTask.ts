@@ -6,12 +6,24 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
 import { Task } from '../../taskService';
 import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 import { type CopyPasteConfig } from './copyPasteConfig';
+
+/**
+ * Error thrown when source validation fails for copy-paste operations.
+ * This is used to distinguish user-facing validation errors from other errors (e.g., network issues).
+ */
+class SourceValidationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'SourceValidationError';
+    }
+}
 
 /**
  * Task for copying documents from a source to a target collection.
@@ -70,13 +82,13 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         return [
             // Source resource
             {
-                connectionId: this.config.source.connectionId,
+                clusterId: this.config.source.clusterId,
                 databaseName: this.config.source.databaseName,
                 collectionName: this.config.source.collectionName,
             },
             // Target resource
             {
-                connectionId: this.config.target.connectionId,
+                clusterId: this.config.target.clusterId,
                 databaseName: this.config.target.databaseName,
                 collectionName: this.config.target.collectionName,
             },
@@ -87,13 +99,13 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * Collects cluster metadata for telemetry purposes.
      * This method attempts to gather cluster information without failing the task if metadata collection fails.
      *
-     * @param connectionId Connection ID to collect metadata for
+     * @param clusterId Cluster ID to collect metadata for
      * @param prefix Prefix for telemetry properties (e.g., 'source' or 'target')
      * @param context Telemetry context to add properties to
      */
-    private async collectClusterMetadata(connectionId: string, prefix: string, context: IActionContext): Promise<void> {
+    private async collectClusterMetadata(clusterId: string, prefix: string, context: IActionContext): Promise<void> {
         try {
-            const client = await ClustersClient.getClient(connectionId);
+            const client = await ClustersClient.getClient(clusterId);
             const metadata = await client.getClusterMetadata();
 
             // Add metadata with prefix to avoid conflicts between source and target
@@ -119,17 +131,72 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param context Optional telemetry context for tracking task operations
      */
     protected async onInitialize(signal: AbortSignal, context?: IActionContext): Promise<void> {
+        // Validate source cluster credentials (stale reference protection)
+        if (!CredentialCache.hasCredentials(this.config.source.clusterId)) {
+            // Clear the stale clipboard reference
+            ext.copiedCollectionNode = undefined;
+            void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
+
+            if (context) {
+                context.telemetry.properties.sourceClusterDisconnected = 'true';
+            }
+
+            throw new SourceValidationError(
+                vscode.l10n.t(
+                    'The source cluster is no longer connected. Please reconnect and copy the collection again.',
+                ),
+            );
+        }
+
+        // Validate source collection still exists
+        this.updateStatus(this.getStatus().state, vscode.l10n.t('Validating source collection...'));
+        try {
+            const sourceClient = await ClustersClient.getClient(this.config.source.clusterId);
+            const collections = await sourceClient.listCollections(this.config.source.databaseName);
+            const collectionExists = collections.some((c) => c.name === this.config.source.collectionName);
+
+            if (!collectionExists) {
+                // Clear the stale clipboard reference
+                ext.copiedCollectionNode = undefined;
+                void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
+
+                if (context) {
+                    context.telemetry.properties.sourceCollectionNotFound = 'true';
+                }
+
+                throw new SourceValidationError(
+                    vscode.l10n.t(
+                        'The source collection "{0}" no longer exists in database "{1}". It may have been deleted or renamed.',
+                        this.config.source.collectionName,
+                        this.config.source.databaseName,
+                    ),
+                );
+            }
+        } catch (error) {
+            // Re-throw our own validation errors
+            if (error instanceof SourceValidationError) {
+                throw error;
+            }
+            // Wrap other errors (e.g., network issues)
+            throw new Error(
+                vscode.l10n.t(
+                    'Failed to validate source collection: {0}',
+                    error instanceof Error ? error.message : String(error),
+                ),
+            );
+        }
+
         // Add copy-paste specific telemetry properties
         if (context) {
             context.telemetry.properties.onConflict = this.config.onConflict;
             context.telemetry.properties.isCrossConnection = (
-                this.config.source.connectionId !== this.config.target.connectionId
+                this.config.source.clusterId !== this.config.target.clusterId
             ).toString();
 
             // Collect cluster metadata for source and target connections and await their completion (non-blocking for errors)
-            const metadataPromises = [this.collectClusterMetadata(this.config.source.connectionId, 'source', context)];
-            if (this.config.source.connectionId !== this.config.target.connectionId) {
-                metadataPromises.push(this.collectClusterMetadata(this.config.target.connectionId, 'target', context));
+            const metadataPromises = [this.collectClusterMetadata(this.config.source.clusterId, 'source', context)];
+            if (this.config.source.clusterId !== this.config.target.clusterId) {
+                metadataPromises.push(this.collectClusterMetadata(this.config.target.clusterId, 'target', context));
             }
             await Promise.allSettled(metadataPromises);
         }

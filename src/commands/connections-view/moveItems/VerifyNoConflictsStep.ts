@@ -12,24 +12,23 @@ import {
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService } from '../../../services/connectionStorageService';
+import {
+    enumerateConnectionsInItems,
+    findConflictingTasks,
+    logTaskConflicts,
+    VerificationCompleteError,
+} from '../verificationUtils';
 import { type MoveItemsWizardContext } from './MoveItemsWizardContext';
-
-/**
- * Custom error to signal that conflict verification completed with no conflicts
- */
-class VerificationCompleteError extends Error {
-    constructor() {
-        super('Conflict verification completed successfully');
-        this.name = 'VerificationCompleteError';
-    }
-}
 
 type ConflictAction = 'back' | 'exit';
 
 /**
- * Step to verify there are no naming conflicts BEFORE attempting the move.
- * If conflicts are found, the user is informed and can only go back or exit.
- * No rename/skip/continue options are offered - the system is intentionally simple.
+ * Step to verify the move operation can proceed safely.
+ * Checks for:
+ * 1. Running tasks using any connections being moved (including descendants of folders)
+ * 2. Naming conflicts in the target folder
+ *
+ * If conflicts are found, the user is informed and can go back or exit.
  */
 export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizardContext> {
     public async prompt(context: MoveItemsWizardContext): Promise<void> {
@@ -37,7 +36,7 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
             // Use QuickPick with loading state while checking for conflicts
             const result = await context.ui.showQuickPick(this.verifyNoConflicts(context), {
                 placeHolder: l10n.t('Verifying move operation…'),
-                loadingPlaceHolder: l10n.t('Checking for naming conflicts…'),
+                loadingPlaceHolder: l10n.t('Checking for conflicts…'),
                 suppressPersistence: true,
             });
 
@@ -60,12 +59,76 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
     }
 
     /**
-     * Async function that verifies no naming conflicts exist.
+     * Async function that verifies no conflicts exist (task or naming).
      * If no conflicts: throws VerificationCompleteError to proceed.
      * If conflicts: returns options for user to go back or exit.
      */
     private async verifyNoConflicts(context: MoveItemsWizardContext): Promise<IAzureQuickPickItem<ConflictAction>[]> {
-        // Check for name conflicts in target folder
+        // First, check for task conflicts (connections being used by running tasks)
+        const taskConflicts = await this.checkTaskConflicts(context);
+        if (taskConflicts.length > 0) {
+            return taskConflicts;
+        }
+
+        // Then, check for naming conflicts in target folder
+        const namingConflicts = await this.checkNamingConflicts(context);
+        if (namingConflicts.length > 0) {
+            return namingConflicts;
+        }
+
+        // No conflicts - signal completion and proceed
+        throw new VerificationCompleteError();
+    }
+
+    /**
+     * Checks if any running tasks are using connections being moved.
+     * Enumerates all connection IDs (including descendants of folders) and checks for conflicts.
+     */
+    private async checkTaskConflicts(context: MoveItemsWizardContext): Promise<IAzureQuickPickItem<ConflictAction>[]> {
+        // Enumerate all connection IDs from items being moved
+        // For folders, this includes all descendant connections
+        const connectionIds = await enumerateConnectionsInItems(context.itemsToMove, context.connectionType);
+
+        // Find conflicting tasks using simple equality matching on connectionIds
+        context.conflictingTasks = findConflictingTasks(connectionIds);
+
+        if (context.conflictingTasks.length === 0) {
+            return [];
+        }
+
+        // Conflicts found - log details to output channel
+        const itemCount = context.itemsToMove.length;
+        const itemWord = itemCount === 1 ? l10n.t('item') : l10n.t('items');
+        logTaskConflicts(
+            l10n.t(
+                'Cannot move {0} {1}. The following {2} task(s) are using connections being moved:',
+                itemCount.toString(),
+                itemWord,
+                context.conflictingTasks.length.toString(),
+            ),
+            context.conflictingTasks,
+        );
+
+        // Return option for user - can only cancel (task conflicts cannot be resolved by going back)
+        return [
+            {
+                label: l10n.t('$(close) Cancel'),
+                description: l10n.t('Cancel this operation'),
+                detail: l10n.t(
+                    '{0} task(s) are using connections being moved. Check the Output panel for details.',
+                    context.conflictingTasks.length.toString(),
+                ),
+                data: 'exit' as const,
+            },
+        ];
+    }
+
+    /**
+     * Checks for naming conflicts in the target folder.
+     */
+    private async checkNamingConflicts(
+        context: MoveItemsWizardContext,
+    ): Promise<IAzureQuickPickItem<ConflictAction>[]> {
         context.conflictingNames = [];
 
         for (const item of context.itemsToMove) {
@@ -82,9 +145,8 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
             }
         }
 
-        // If no conflicts, signal completion and proceed
         if (context.conflictingNames.length === 0) {
-            throw new VerificationCompleteError();
+            return [];
         }
 
         // Conflicts found - log details to output channel
@@ -103,7 +165,7 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
         }
         ext.outputChannel.show();
 
-        // Return options for user - show count only (details in output channel)
+        // Return options for user - can go back to choose different folder
         return [
             {
                 label: l10n.t('$(arrow-left) Go Back'),

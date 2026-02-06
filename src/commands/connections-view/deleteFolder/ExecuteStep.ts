@@ -20,6 +20,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<DeleteFolderWizardContex
     public priority: number = 100;
 
     public async execute(context: DeleteFolderWizardContext): Promise<void> {
+        // TODO: [IMPROVEMENT] Add error handling for partial failures (H-2)
+        // Currently, if an operation fails midway, items may be in an inconsistent state.
+        // Consider: 1) Collecting errors and reporting partial success, or 2) Implementing rollback
+
         // Initialize counters
         context.deletedFolders = 0;
         context.deletedConnections = 0;

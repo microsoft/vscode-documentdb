@@ -109,13 +109,13 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
                 // We should allow whitelisting extensions trusted by the user to avoid repeated prompts.
                 // This could be done on our own but available for the user to edit in settings.
                 const parsedCS_WithCredentials = new DocumentDBConnectionString(credentials.connectionString);
-                parsedCS_WithCredentials.username = CredentialCache.getConnectionUser(node.cluster.id) ?? '';
-                parsedCS_WithCredentials.password = CredentialCache.getConnectionPassword(node.cluster.id) ?? '';
+                parsedCS_WithCredentials.username = CredentialCache.getConnectionUser(node.cluster.clusterId) ?? '';
+                parsedCS_WithCredentials.password = CredentialCache.getConnectionPassword(node.cluster.clusterId) ?? '';
 
                 const options = {
                     connectionString: parsedCS_WithCredentials.toString(),
                     extendedProperties: {
-                        clusterId: node.cluster.id,
+                        clusterId: node.cluster.clusterId,
                     },
                 };
 
@@ -207,7 +207,7 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
  * @returns Promise<boolean> - true if authentication succeeded, false otherwise
  */
 async function ensureAuthentication(_context: IActionContext, _node: ClusterItemBase): Promise<boolean> {
-    if (CredentialCache.hasCredentials(_node.cluster.id)) {
+    if (CredentialCache.hasCredentials(_node.cluster.clusterId)) {
         return Promise.resolve(true); // Credentials already exist, no need to authenticate again
     }
 

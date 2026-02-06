@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
-import { l10n as vscodel10n } from 'vscode';
+import * as l10n from '@vscode/l10n';
 import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService } from '../../../services/connectionStorageService';
 import {
@@ -49,7 +49,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameFolderWizardContex
             await ConnectionStorageService.save(connectionType, folder, true);
 
             ext.outputChannel.appendLine(
-                vscodel10n.t('Renamed folder from "{oldName}" to "{newName}"', {
+                l10n.t('Renamed folder from "{oldName}" to "{newName}"', {
                     oldName: originalFolderName,
                     newName: newFolderName,
                 }),

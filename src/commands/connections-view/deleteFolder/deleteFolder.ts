@@ -11,7 +11,7 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 import { ConfirmDeleteStep } from './ConfirmDeleteStep';
 import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 import { ExecuteStep } from './ExecuteStep';
-import { VerifyStep } from './VerifyStep';
+import { VerifyNoConflictsStep } from './VerifyNoConflictsStep';
 
 /**
  * Command to delete a folder from the connections view.
@@ -50,7 +50,7 @@ export async function deleteFolder(context: IActionContext, folderItem: FolderIt
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Delete Folder'),
-        promptSteps: [new VerifyStep(), new ConfirmDeleteStep()],
+        promptSteps: [new VerifyNoConflictsStep(), new ConfirmDeleteStep()],
         executeSteps: [new ExecuteStep()],
     });
 

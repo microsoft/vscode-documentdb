@@ -4,7 +4,30 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { MaxKey, MinKey, UUID } from 'mongodb';
+import { QueryError } from '../errors/QueryError';
 import { toFilterQueryObj } from './toFilterQuery';
+
+// Mock vscode
+jest.mock('vscode', () => ({
+    l10n: {
+        t: (message: string, ...args: unknown[]) => {
+            let result = message;
+            args.forEach((arg, index) => {
+                result = result.replace(`{${index}}`, String(arg));
+            });
+            return result;
+        },
+    },
+}));
+
+// Mock extensionVariables
+jest.mock('../../extensionVariables', () => ({
+    ext: {
+        outputChannel: {
+            trace: jest.fn(),
+        },
+    },
+}));
 
 // Basic query examples
 const basicQueries = [
@@ -155,8 +178,55 @@ describe('toFilterQuery', () => {
     });
 
     describe('error handling', () => {
-        test.each(errorTestCases)('handles $description', ({ input }) => {
-            expect(toFilterQueryObj(input)).toEqual({});
+        test.each(errorTestCases)('throws QueryError for $description', ({ input }) => {
+            expect(() => toFilterQueryObj(input)).toThrow(QueryError);
+        });
+
+        it('throws QueryError with INVALID_FILTER code for invalid JSON', () => {
+            let thrownError: QueryError | undefined;
+            try {
+                toFilterQueryObj('{ invalid json }');
+            } catch (error) {
+                thrownError = error as QueryError;
+            }
+            expect(thrownError).toBeDefined();
+            expect(thrownError?.name).toBe('QueryError');
+            expect(thrownError?.code).toBe('INVALID_FILTER');
+        });
+
+        it('throws QueryError with INVALID_FILTER code for invalid UUID', () => {
+            let thrownError: QueryError | undefined;
+            try {
+                toFilterQueryObj('{ "id": UUID("invalid-uuid") }');
+            } catch (error) {
+                thrownError = error as QueryError;
+            }
+            expect(thrownError).toBeDefined();
+            expect(thrownError?.name).toBe('QueryError');
+            expect(thrownError?.code).toBe('INVALID_FILTER');
+        });
+
+        it('includes original error message in QueryError message', () => {
+            let thrownError: QueryError | undefined;
+            try {
+                toFilterQueryObj('{ invalid json }');
+            } catch (error) {
+                thrownError = error as QueryError;
+            }
+            expect(thrownError).toBeDefined();
+            expect(thrownError?.message).toContain('Invalid filter syntax');
+        });
+
+        it('includes helpful JSON example in error message', () => {
+            let thrownError: QueryError | undefined;
+            try {
+                toFilterQueryObj('{ invalid json }');
+            } catch (error) {
+                thrownError = error as QueryError;
+            }
+            expect(thrownError).toBeDefined();
+            expect(thrownError?.message).toContain('Please use valid JSON');
+            expect(thrownError?.message).toContain('"name": "value"');
         });
     });
 });

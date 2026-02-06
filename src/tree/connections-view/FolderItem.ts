@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import {
     ConnectionStorageService,
     ItemType,
@@ -12,10 +13,11 @@ import {
     type ConnectionType,
 } from '../../services/connectionStorageService';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
-import { type ClusterModelWithStorage } from '../documentdb/ClusterModel';
+import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
+import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 
 /**
  * Tree item representing a folder in the Connections View.
@@ -93,14 +95,23 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
                 folderElements.push(new FolderItem(child, this.id, this._connectionType));
             } else {
                 // Create connection item
-                const model: ClusterModelWithStorage = {
-                    id: `${this.id}/${child.id}`,
+                const model: TreeCluster<ConnectionClusterModel> = {
+                    // Tree context (computed at runtime)
+                    treeId: `${this.id}/${child.id}`, // Hierarchical tree path
+                    viewId: this.id.split('/')[0], // Extract view ID from parent path
+
+                    // Connection cluster data
+                    clusterId: child.id, // Stable storageId for cache lookups
                     storageId: child.id,
                     name: child.name,
                     dbExperience: DocumentDBExperience,
                     connectionString: child?.secrets?.connectionString ?? undefined,
                     emulatorConfiguration: child.properties.emulatorConfiguration,
                 };
+
+                ext.outputChannel.trace(
+                    `[ConnectionsView/Folder] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}", folderId="${this.folderData.id}"`,
+                );
 
                 connectionElements.push(new DocumentDBClusterItem(model));
             }

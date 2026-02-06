@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
 import { ClusterSession } from '../../documentdb/ClusterSession';
+import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import { CollectionViewController } from '../../webviews/documentdb/collectionView/collectionViewController';
@@ -22,8 +23,13 @@ export async function openCollectionView(context: IActionContext, node: Collecti
 
     context.telemetry.properties.experience = node?.experience.api;
 
+    // Extract viewId from the cluster model, or infer from treeId prefix
+    // The viewId tells us which branch data provider owns this node
+    const viewId = node.cluster.viewId ?? inferViewIdFromTreeId(node.cluster.treeId);
+
     return openCollectionViewInternal(context, {
-        clusterId: node.cluster.id,
+        clusterId: node.cluster.clusterId,
+        viewId: viewId,
         databaseName: node.databaseInfo.name,
         collectionName: node.collectionInfo.name,
     });
@@ -33,6 +39,7 @@ export async function openCollectionViewInternal(
     _context: IActionContext,
     props: {
         clusterId: string;
+        viewId: string;
         databaseName: string;
         collectionName: string;
     },
@@ -57,6 +64,7 @@ export async function openCollectionViewInternal(
     const view = new CollectionViewController({
         sessionId: sessionId,
         clusterId: props.clusterId,
+        viewId: props.viewId,
         databaseName: props.databaseName,
         collectionName: props.collectionName,
         feedbackSignalsEnabled: feedbackSignalsEnabled,

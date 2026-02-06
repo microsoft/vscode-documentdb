@@ -18,6 +18,7 @@ import { RUResourceItem } from '../../tree/azure-resources-view/mongo-ru/RUCoreR
 import { ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
+import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 
 /**
  * Currently it only supports launching the MongoDB shell
@@ -40,13 +41,13 @@ export async function launchShell(
 
     // 1. In case we're connected, we should use the preferred authentication method and settings
     //    This can be true for ClusterItemBase (cluster level), and will for sure be true on the database and the collection level
-    if (ClustersClient.exists(node.cluster.id)) {
-        const activeClient: ClustersClient = await ClustersClient.getClient(node.cluster.id);
+    if (ClustersClient.exists(node.cluster.clusterId)) {
+        const activeClient: ClustersClient = await ClustersClient.getClient(node.cluster.clusterId);
         const clusterCredentials = activeClient.getCredentials();
         if (clusterCredentials) {
             connectionString = clusterCredentials.connectionString;
-            username = CredentialCache.getConnectionUser(node.cluster.id);
-            password = CredentialCache.getConnectionPassword(node.cluster.id);
+            username = CredentialCache.getConnectionUser(node.cluster.clusterId);
+            password = CredentialCache.getConnectionPassword(node.cluster.clusterId);
             authMechanism = clusterCredentials.authMechanism;
         }
     } else {
@@ -197,12 +198,14 @@ export async function launchShell(
 
     // Determine if TLS certificate validation should be disabled
     // This only applies to emulator connections with security disabled
+    // emulatorConfiguration is only available on ConnectionClusterModel (Connections View)
     const isRegularCloudAccount = node instanceof VCoreResourceItem || node instanceof RUResourceItem;
+    const emulatorConfig: EmulatorConfiguration | undefined =
+        'emulatorConfiguration' in node.cluster
+            ? (node.cluster.emulatorConfiguration as EmulatorConfiguration)
+            : undefined;
     const isEmulatorWithSecurityDisabled =
-        !isRegularCloudAccount &&
-        node.cluster.emulatorConfiguration &&
-        node.cluster.emulatorConfiguration.isEmulator &&
-        node.cluster.emulatorConfiguration.disableEmulatorSecurity;
+        !isRegularCloudAccount && emulatorConfig?.isEmulator && emulatorConfig?.disableEmulatorSecurity;
 
     const tlsConfiguration = isEmulatorWithSecurityDisabled ? '--tlsAllowInvalidCertificates' : '';
 

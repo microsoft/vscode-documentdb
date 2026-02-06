@@ -55,8 +55,8 @@ function getResourceDescription(resource: ResourceDefinition): string {
         return vscode.l10n.t('database "{0}"', resource.databaseName);
     }
 
-    if (resource.connectionId) {
-        return vscode.l10n.t('connection "{0}"', resource.connectionId);
+    if (resource.clusterId) {
+        return vscode.l10n.t('connection "{0}"', resource.clusterId);
     }
 
     return vscode.l10n.t('this resource');
