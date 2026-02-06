@@ -153,6 +153,8 @@ export class PromptNewCollectionNameStep extends AzureWizardPromptStep<PasteColl
         context: PasteCollectionWizardContext,
         name: string,
     ): Promise<string | undefined> {
+        name = name.trim();
+
         if (name.length === 0) {
             return l10n.t('Collection name is required.');
         }
