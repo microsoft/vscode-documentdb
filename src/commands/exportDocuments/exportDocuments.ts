@@ -172,19 +172,6 @@ async function exportDocumentsToFile(
 
         vscode.window.showInformationMessage(l10n.t('Exported document count: {documentCount}', { documentCount }));
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        ext.outputChannel.error(l10n.t('Error exporting documents: {0}', errorMessage));
-
-        void vscode.window
-            .showErrorMessage(
-                l10n.t('Error exporting documents: {error}', { error: parseError(error).message }),
-                l10n.t('Show Output'),
-            )
-            .then((choice) => {
-                if (choice === l10n.t('Show Output')) {
-                    ext.outputChannel.show();
-                }
-            });
         throw error; // Re-throw the error to be caught by the outer error handler
     }
 
