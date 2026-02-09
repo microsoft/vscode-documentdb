@@ -147,7 +147,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         }
 
         // Sort root items by their id for consistent ordering
-        return rootItems.sort((a, b) => a.id?.localeCompare(b.id ?? '') ?? 0);
+        return rootItems.sort((a, b) => a.id?.localeCompare(b.id ?? '', undefined, { numeric: true }) ?? 0);
     }
 
     /**

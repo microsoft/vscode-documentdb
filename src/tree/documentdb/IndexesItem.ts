@@ -48,7 +48,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
         }
 
         // Sort indexes by name
-        indexes.sort((a, b) => a.name.localeCompare(b.name));
+        indexes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
         return indexes.map((index) => {
             return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);

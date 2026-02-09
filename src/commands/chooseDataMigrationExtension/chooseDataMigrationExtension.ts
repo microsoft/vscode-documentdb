@@ -26,7 +26,7 @@ export async function chooseDataMigrationExtension(context: IActionContext, node
             alwaysShow: true,
         }))
         // Sort alphabetically
-        .sort((a, b) => a.label.localeCompare(b.label));
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
     const commonItems = [
         // {

@@ -84,7 +84,7 @@ export class AzureServiceRootItem implements TreeElement, TreeElementWithContext
         return (
             subscriptions
                 // sort by name
-                .sort((a, b) => a.name.localeCompare(b.name))
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
                 // map to AzureSubscriptionItem
                 .map((sub) => {
                     return new AzureSubscriptionItem(

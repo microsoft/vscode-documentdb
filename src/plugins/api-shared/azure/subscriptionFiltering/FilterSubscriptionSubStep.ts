@@ -87,7 +87,7 @@ export class FilterSubscriptionSubStep extends AzureWizardPromptStep<FilteringWi
                     ),
                 };
             })
-            .sort((a, b) => a.label.localeCompare(b.label));
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
         const selectedItems = await context.ui.showQuickPick(subscriptionItems, {
             stepName: 'filterSubscriptions',
