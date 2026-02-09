@@ -371,7 +371,7 @@ async function insertDocumentWithBufferIntoCluster(
             if (error.writeErrors) {
                 const errors = Array.isArray(error.writeErrors) ? error.writeErrors : [error.writeErrors];
                 for (const writeError of errors) {
-                    ext.outputChannel.error(l10n.t('  Write error: {0}', String(writeError)));
+                    ext.outputChannel.error('  ' + l10n.t('Write error: {0}', String(writeError)));
                 }
             }
             return {
