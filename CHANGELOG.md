@@ -18,6 +18,8 @@
 - **Connection String Validation**: Trims and validates connection string input to avoid empty values. [#467](https://github.com/microsoft/vscode-documentdb/pull/467)
 - **Collection Paste Feedback**: Refreshes collection metadata after paste and improves error reporting for failed writes. [#482](https://github.com/microsoft/vscode-documentdb/pull/482), [#484](https://github.com/microsoft/vscode-documentdb/pull/484)
 - **Collection Paste Validation / Input Trimming Consistency**: Fixes inconsistent trimming/validation of user input. [#493](https://github.com/microsoft/vscode-documentdb/pull/493)
+- **Cancellable Imports**: Import operations can now be cancelled. [#496](https://github.com/microsoft/vscode-documentdb/pull/496)
+- **Import/Export Feedback**: Improves user feedback and error handling for import/export operations. [#495](https://github.com/microsoft/vscode-documentdb/pull/495)
 
 ### Fixes
 
