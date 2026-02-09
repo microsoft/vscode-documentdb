@@ -47,7 +47,8 @@ jest.mock('../verificationUtils', () => ({
         }
     },
     findConflictingTasks: jest.requireActual('../verificationUtils').findConflictingTasks,
-    enumerateConnectionsInFolder: (...args: unknown[]) => mockEnumerateConnectionsInFolder(...(args as [string, string])),
+    enumerateConnectionsInFolder: (...args: unknown[]) =>
+        mockEnumerateConnectionsInFolder(...(args as [string, string])),
     logTaskConflicts: (...args: unknown[]) => mockLogTaskConflicts(...args),
 }));
 
@@ -119,12 +120,10 @@ describe('VerifyNoConflictsStep (deleteFolder)', () => {
         it('should proceed without error when no conflicts exist', async () => {
             const context = createMockContext();
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
-                async (itemsPromise: Promise<unknown[]>) => {
-                    await itemsPromise;
-                    return { data: 'exit' };
-                },
-            );
+            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                return { data: 'exit' };
+            });
 
             // Should complete without error (VerificationCompleteError is caught internally)
             await expect(step.prompt(context)).resolves.not.toThrow();
@@ -140,16 +139,12 @@ describe('VerifyNoConflictsStep (deleteFolder)', () => {
                     { id: 'conn-2', properties: { type: ItemType.Connection } },
                     { id: 'subfolder-1', properties: { type: ItemType.Folder } },
                 ])
-                .mockResolvedValueOnce([
-                    { id: 'conn-3', properties: { type: ItemType.Connection } },
-                ]);
+                .mockResolvedValueOnce([{ id: 'conn-3', properties: { type: ItemType.Connection } }]);
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
-                async (itemsPromise: Promise<unknown[]>) => {
-                    await itemsPromise;
-                    return { data: 'exit' };
-                },
-            );
+            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                return { data: 'exit' };
+            });
 
             await step.prompt(context);
 
@@ -167,12 +162,10 @@ describe('VerifyNoConflictsStep (deleteFolder)', () => {
                 { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
             ]);
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
-                async (itemsPromise: Promise<unknown[]>) => {
-                    await itemsPromise;
-                    return { data: 'exit' };
-                },
-            );
+            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                return { data: 'exit' };
+            });
 
             await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
             expect(context.conflictingTasks).toHaveLength(1);
@@ -214,16 +207,14 @@ describe('VerifyNoConflictsStep (deleteFolder)', () => {
             ]);
 
             let callCount = 0;
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
-                async (itemsPromise: Promise<unknown[]>) => {
-                    await itemsPromise;
-                    callCount++;
-                    if (callCount === 1) {
-                        return { data: 'show-output' };
-                    }
-                    return { data: 'exit' };
-                },
-            );
+            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                callCount++;
+                if (callCount === 1) {
+                    return { data: 'show-output' };
+                }
+                return { data: 'exit' };
+            });
 
             await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
 
@@ -241,12 +232,10 @@ describe('VerifyNoConflictsStep (deleteFolder)', () => {
                 { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
             ]);
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
-                async (itemsPromise: Promise<unknown[]>) => {
-                    await itemsPromise;
-                    return { data: 'exit' };
-                },
-            );
+            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                return { data: 'exit' };
+            });
 
             try {
                 await step.prompt(context);
