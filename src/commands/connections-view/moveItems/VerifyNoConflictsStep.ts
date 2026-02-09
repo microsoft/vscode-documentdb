@@ -33,23 +33,25 @@ type ConflictAction = 'back' | 'exit' | 'show-output';
 export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizardContext> {
     public async prompt(context: MoveItemsWizardContext): Promise<void> {
         try {
-            // Use QuickPick with loading state while checking for conflicts
-            const result = await context.ui.showQuickPick(this.verifyNoConflicts(context), {
-                placeHolder: l10n.t('Verifying move operation…'),
-                loadingPlaceHolder: l10n.t('Checking for conflicts…'),
-                suppressPersistence: true,
-            });
+            // Loop to allow re-prompting after "Show Output"
+            while (true) {
+                const result = await context.ui.showQuickPick(this.verifyNoConflicts(context), {
+                    placeHolder: l10n.t('Verifying move operation…'),
+                    loadingPlaceHolder: l10n.t('Checking for conflicts…'),
+                    suppressPersistence: true,
+                });
 
-            // User selected an action (only shown when conflicts exist)
-            if (result.data === 'show-output') {
-                ext.outputChannel.show();
-                throw new GoBackError();
-            } else if (result.data === 'back') {
-                context.targetFolderId = undefined;
-                context.targetFolderPath = undefined;
-                throw new GoBackError();
-            } else {
-                throw new UserCancelledError();
+                // User selected an action (only shown when conflicts exist)
+                if (result.data === 'show-output') {
+                    ext.outputChannel.show();
+                    continue; // Re-prompt after showing output
+                } else if (result.data === 'back') {
+                    context.targetFolderId = undefined;
+                    context.targetFolderPath = undefined;
+                    throw new GoBackError();
+                } else {
+                    throw new UserCancelledError();
+                }
             }
         } catch (error) {
             if (error instanceof VerificationCompleteError) {
