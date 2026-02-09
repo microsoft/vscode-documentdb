@@ -9,26 +9,26 @@
 
 ### Improvements
 
-- **Estimated Document Count**: Shows an estimated document count for collections in the tree view. [#170](https://github.com/microsoft/vscode-documentdb/pull/170)
-- **Copy Connection String with Password**: Adds an option to include the password when copying a connection string. [#436](https://github.com/microsoft/vscode-documentdb/pull/436)
-- **Release Notes Notification**: Prompts users to view release notes after upgrading to a new major or minor version. [#487](https://github.com/microsoft/vscode-documentdb/pull/487)
 - **Accessibility**: Improves screen reader announcements, keyboard navigation, and ARIA labeling across Query Insights and document editing. [#374](https://github.com/microsoft/vscode-documentdb/issues/374), [#375](https://github.com/microsoft/vscode-documentdb/issues/375), [#377](https://github.com/microsoft/vscode-documentdb/issues/377), [#378](https://github.com/microsoft/vscode-documentdb/issues/378), [#379](https://github.com/microsoft/vscode-documentdb/issues/379), [#380](https://github.com/microsoft/vscode-documentdb/issues/380), [#381](https://github.com/microsoft/vscode-documentdb/issues/381), [#384](https://github.com/microsoft/vscode-documentdb/issues/384), [#385](https://github.com/microsoft/vscode-documentdb/issues/385)
 - **Alphabetical Collection Sorting**: Sorts collections alphabetically in the tree view. [#456](https://github.com/microsoft/vscode-documentdb/issues/456), [#465](https://github.com/microsoft/vscode-documentdb/pull/465)
-- **Query Insights Prompt Hardening**: Updates the Query Insights model/prompt and adds additional prompt-injection mitigations. [#468](https://github.com/microsoft/vscode-documentdb/pull/468)
-- **Connection String Validation**: Trims and validates connection string input to avoid empty values. [#467](https://github.com/microsoft/vscode-documentdb/pull/467)
-- **Collection Paste Feedback**: Refreshes collection metadata after paste and improves error reporting for failed writes. [#482](https://github.com/microsoft/vscode-documentdb/pull/482), [#484](https://github.com/microsoft/vscode-documentdb/pull/484)
-- **Collection Paste Validation / Input Trimming Consistency**: Fixes inconsistent trimming/validation of user input. [#493](https://github.com/microsoft/vscode-documentdb/pull/493)
 - **Cancellable Imports**: Import operations can now be cancelled. [#496](https://github.com/microsoft/vscode-documentdb/pull/496)
+- **Collection Paste Feedback**: Refreshes collection metadata after paste and improves error reporting for failed writes. [#482](https://github.com/microsoft/vscode-documentdb/pull/482), [#484](https://github.com/microsoft/vscode-documentdb/pull/484)
+- **Collection Paste Validation and Input Trimming Consistency**: Fixes inconsistent trimming/validation of user input. [#493](https://github.com/microsoft/vscode-documentdb/pull/493)
+- **Connection String Validation**: Trims and validates connection string input to avoid empty values. [#467](https://github.com/microsoft/vscode-documentdb/pull/467)
+- **Copy Connection String with Password**: Adds an option to include the password when copying a connection string. [#436](https://github.com/microsoft/vscode-documentdb/pull/436)
+- **Estimated Document Count**: Shows an estimated document count for collections in the tree view. [#170](https://github.com/microsoft/vscode-documentdb/pull/170)
 - **Import/Export Feedback**: Improves user feedback and error handling for import/export operations. [#495](https://github.com/microsoft/vscode-documentdb/pull/495)
+- **Query Insights Prompt Hardening**: Updates the Query Insights model/prompt and adds additional prompt-injection mitigations. [#468](https://github.com/microsoft/vscode-documentdb/pull/468)
+- **Release Notes Notification**: Prompts users to view release notes after upgrading to a new major or minor version. [#487](https://github.com/microsoft/vscode-documentdb/pull/487)
 
 ### Fixes
 
+- **Azure Resources View Expansion**: Fixes cluster expansion failures in the Azure Resources view by deriving resource group information from resource IDs. [#480](https://github.com/microsoft/vscode-documentdb/pull/480)
 - **Dark Theme Rendering**: Fixes unreadable text in some dark themes by respecting theme colors. [#457](https://github.com/microsoft/vscode-documentdb/issues/457)
-- **Query Insights Markdown Rendering**: Restricts AI output formatting to avoid malformed markdown rendering. [#428](https://github.com/microsoft/vscode-documentdb/issues/428)
+- **Import from Discovery View**: Fixes document import for Azure Cosmos DB for MongoDB (RU) discovery when connection metadata is not yet cached. [#368](https://github.com/microsoft/vscode-documentdb/issues/368), [#479](https://github.com/microsoft/vscode-documentdb/pull/479)
 - **Invalid Query JSON**: Shows a clear error when query JSON fails to parse instead of silently using empty objects. [#458](https://github.com/microsoft/vscode-documentdb/issues/458), [#471](https://github.com/microsoft/vscode-documentdb/pull/471)
 - **Keyboard Paste Shortcuts**: Restores Ctrl+V/Cmd+V in the Query Editor and Document View by pinning Monaco to 0.52.2. [#435](https://github.com/microsoft/vscode-documentdb/issues/435), [#470](https://github.com/microsoft/vscode-documentdb/pull/470)
-- **Import from Discovery View**: Fixes document import for Azure Cosmos DB for MongoDB (RU) discovery when connection metadata is not yet cached. [#368](https://github.com/microsoft/vscode-documentdb/issues/368), [#479](https://github.com/microsoft/vscode-documentdb/pull/479)
-- **Azure Resources View Expansion**: Fixes cluster expansion failures in the Azure Resources view by deriving resource group information from resource IDs. [#480](https://github.com/microsoft/vscode-documentdb/pull/480)
+- **Query Insights Markdown Rendering**: Restricts AI output formatting to avoid malformed markdown rendering. [#428](https://github.com/microsoft/vscode-documentdb/issues/428)
 
 ### Security
 
