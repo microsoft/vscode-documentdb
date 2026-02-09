@@ -125,5 +125,4 @@ export function logTaskConflicts(headerMessage: string, tasks: TaskInfo[]): void
         ext.outputChannel.appendLog(` • ${task.taskName} (${task.taskType})`);
     }
     ext.outputChannel.appendLog(l10n.t('Please stop these tasks first before proceeding.'));
-    ext.outputChannel.show();
 }

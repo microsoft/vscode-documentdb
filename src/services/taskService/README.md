@@ -582,6 +582,21 @@ try {
 }
 ```
 
+### Task Failure Notifications
+
+When a task transitions to `Failed`, the framework handles failure reporting centrally:
+
+1. **Error logging**: The `Task` base class automatically logs the error to the output channel via `ext.outputChannel.error()` — task authors do NOT need to do this manually.
+2. **User notification**: The `TaskProgressReportingService` automatically shows an error notification with a **"Show Output"** button, allowing the user to view error details on demand.
+3. **No auto-show**: The output channel is NOT opened automatically — this avoids disrupting the user's workflow. The user can choose to view it via the button.
+
+Task authors do **not** need to:
+
+- Call `ext.outputChannel.show()` on failure
+- Show their own error notifications via `vscode.window.showErrorMessage()`
+
+Both are handled by the framework. If a task needs custom failure behavior (e.g., logging additional context), it can handle errors in `doWork()` before re-throwing.
+
 ### Error Classification
 
 The `StreamingDocumentWriter` classifies errors for retry decisions:
