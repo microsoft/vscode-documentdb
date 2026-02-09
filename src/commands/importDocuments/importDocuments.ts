@@ -90,8 +90,9 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
         {
             location: vscode.ProgressLocation.Notification,
             title: l10n.t('Importing documents…'),
+            cancellable: true,
         },
-        async (progress) => {
+        async (progress, cancellationToken) => {
             progress.report({ increment: 0, message: l10n.t('Loading documents…') });
 
             ext.outputChannel.info(
@@ -169,7 +170,15 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
                 }
             }
 
+            let wasCancelled = false;
+
             for (let i = 0; i < countDocuments; i++) {
+                if (cancellationToken.isCancellationRequested) {
+                    wasCancelled = true;
+                    ext.outputChannel.warn(l10n.t('Import operation was canceled after {0} document(s).', count));
+                    break;
+                }
+
                 progress.report({
                     increment: incrementDocuments,
                     message: l10n.t('Importing document {num} of {countDocuments}', {
@@ -187,7 +196,7 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             }
 
             // Do insertion for the last batch for bulk insertion
-            if (buffer && buffer.getStats().documentCount > 0) {
+            if (!wasCancelled && buffer && buffer.getStats().documentCount > 0) {
                 const lastBatchFlushResult = await insertDocument(selectedItem, undefined, buffer);
 
                 count += lastBatchFlushResult.count;
@@ -197,9 +206,20 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             // let's make sure we reach 100% progress, useful in case of errors etc.
             progress.report({ increment: 100, message: l10n.t('Finished importing') });
 
-            return { hasErrors, count };
+            return { hasErrors, count, wasCancelled };
         },
     );
+
+    if (result.wasCancelled) {
+        const message = l10n.t('Import canceled. Inserted {0} document(s) before cancellation.', result.count);
+        ext.outputChannel.warn(message);
+        void vscode.window.showWarningMessage(message, l10n.t('Show Output')).then((choice) => {
+            if (choice === l10n.t('Show Output')) {
+                ext.outputChannel.show();
+            }
+        });
+        return;
+    }
 
     const message =
         (result.hasErrors ? l10n.t('Import completed with errors.') : l10n.t('Import successful.')) +
@@ -371,7 +391,21 @@ async function insertDocumentWithBufferIntoCluster(
             if (error.writeErrors) {
                 const errors = Array.isArray(error.writeErrors) ? error.writeErrors : [error.writeErrors];
                 for (const writeError of errors) {
-                    ext.outputChannel.error('  ' + l10n.t('Write error: {0}', String(writeError)));
+                    // Extract error message from WriteError object
+                    // WriteError objects have errmsg property, other errors may have message
+                    let errorMsg = '';
+                    if (typeof writeError === 'object' && writeError !== null) {
+                        if (typeof (writeError as unknown as { errmsg?: string }).errmsg === 'string') {
+                            errorMsg = (writeError as unknown as { errmsg: string }).errmsg;
+                        } else if (typeof (writeError as unknown as { message?: string }).message === 'string') {
+                            errorMsg = (writeError as unknown as { message: string }).message;
+                        } else {
+                            errorMsg = JSON.stringify(writeError);
+                        }
+                    } else {
+                        errorMsg = JSON.stringify(writeError);
+                    }
+                    ext.outputChannel.error('  ' + l10n.t('Write error: {0}', errorMsg));
                 }
             }
             return {
