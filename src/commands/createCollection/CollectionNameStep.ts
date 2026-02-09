@@ -64,6 +64,8 @@ export class CollectionNameStep extends AzureWizardPromptStep<CreateCollectionWi
         context: CreateCollectionWizardContext,
         name: string,
     ): Promise<string | undefined> {
+        name = name.trim();
+
         if (name.length === 0) {
             return l10n.t('Collection name is required.');
         }

@@ -19,14 +19,12 @@ export class PromptPasswordStep extends AzureWizardPromptStep<UpdateCredentialsW
             ignoreFocusOut: true,
         });
 
-        const trimmedPassword = passwordTemp.trim();
-
         // Update structured config
         context.nativeAuthConfig = {
             connectionUser: context.nativeAuthConfig?.connectionUser ?? '',
-            connectionPassword: trimmedPassword,
+            connectionPassword: passwordTemp,
         };
-        context.valuesToMask.push(trimmedPassword);
+        context.valuesToMask.push(passwordTemp);
     }
 
     public shouldPrompt(context: UpdateCredentialsWizardContext): boolean {

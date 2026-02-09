@@ -744,6 +744,7 @@
   "Overwrite existing documents": "Overwrite existing documents",
   "Overwrite existing documents that share the same _id; other write errors will abort the operation.": "Overwrite existing documents that share the same _id; other write errors will abort the operation.",
   "Parsing file {0}: {1}": "Parsing file {0}: {1}",
+  "Password cannot be empty": "Password cannot be empty",
   "Password for {username_at_resource}": "Password for {username_at_resource}",
   "Paste Collection": "Paste Collection",
   "Pasting…": "Pasting…",

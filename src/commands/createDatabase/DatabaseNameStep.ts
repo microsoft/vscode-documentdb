@@ -60,6 +60,8 @@ export class DatabaseNameStep extends AzureWizardPromptStep<CreateDatabaseWizard
         context: CreateDatabaseWizardContext,
         name: string,
     ): Promise<string | undefined> {
+        name = name.trim();
+
         if (name.length === 0) {
             return l10n.t('Database name is required.');
         }
