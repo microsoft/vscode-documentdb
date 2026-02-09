@@ -236,7 +236,6 @@ export abstract class Task {
                         message: `${msg}${detail}`.trim(),
                     }),
                 );
-                ext.outputChannel.show();
             }
         }
     }

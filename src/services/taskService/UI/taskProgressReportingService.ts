@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ext } from '../../../extensionVariables';
 import { isTerminalState, TaskState, type Task, type TaskService } from '../taskService';
 
 /**
@@ -321,13 +322,20 @@ class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
                 void vscode.window.showInformationMessage(vscode.l10n.t('{0} was stopped', task.name));
                 break;
             case TaskState.Failed:
-                void vscode.window.showErrorMessage(
-                    vscode.l10n.t(
-                        '{0} failed: {1}',
-                        task.name,
-                        status.error instanceof Error ? status.error.message : 'Unknown error',
-                    ),
-                );
+                void vscode.window
+                    .showErrorMessage(
+                        vscode.l10n.t(
+                            '{0} failed: {1}',
+                            task.name,
+                            status.error instanceof Error ? status.error.message : 'Unknown error',
+                        ),
+                        vscode.l10n.t('Show Output'),
+                    )
+                    .then((choice) => {
+                        if (choice === vscode.l10n.t('Show Output')) {
+                            ext.outputChannel.show();
+                        }
+                    });
                 break;
         }
     }
