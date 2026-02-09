@@ -112,6 +112,8 @@ async function runExportWithProgressAndDescription(
                                 ext.outputChannel.show();
                             }
                         });
+
+                    throw error;
                 }
                 progress.report({ increment: 100 }); // Complete the progress bar
             },
