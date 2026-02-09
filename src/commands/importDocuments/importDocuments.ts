@@ -50,7 +50,17 @@ export async function importDocuments(
             l10n.t('Ignoring the following files that do not match the "*.json" file name pattern:'),
         );
         ignoredUris.forEach((uri) => ext.outputChannel.warn(`  ${uri.fsPath}`));
-        ext.outputChannel.show();
+
+        void vscode.window
+            .showWarningMessage(
+                l10n.t('{0} file(s) were ignored because they do not match the "*.json" pattern.', ignoredUris.length),
+                l10n.t('Show Output'),
+            )
+            .then((choice) => {
+                if (choice === l10n.t('Show Output')) {
+                    ext.outputChannel.show();
+                }
+            });
     }
 
     if (!selectedItem) {
@@ -198,7 +208,6 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
 
     if (result.hasErrors) {
         ext.outputChannel.warn(message);
-        ext.outputChannel.show();
 
         void vscode.window
             .showWarningMessage(message + ' ' + l10n.t('See output for more details.'), l10n.t('Show Output'))

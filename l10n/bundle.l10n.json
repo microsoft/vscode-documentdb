@@ -87,6 +87,7 @@
   "{0} connections": "{0} connections",
   "{0} created": "{0} created",
   "{0} failed: {1}": "{0} failed: {1}",
+  "{0} file(s) were ignored because they do not match the \"*.json\" pattern.": "{0} file(s) were ignored because they do not match the \"*.json\" pattern.",
   "{0} inserted": "{0} inserted",
   "{0} item(s) already exist in the destination. Check the Output panel for details.": "{0} item(s) already exist in the destination. Check the Output panel for details.",
   "{0} processed": "{0} processed",

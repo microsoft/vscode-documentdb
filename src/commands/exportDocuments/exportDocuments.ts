@@ -104,7 +104,6 @@ async function runExportWithProgressAndDescription(
                             error: parseError(error).message,
                         }),
                     );
-                    ext.outputChannel.show();
 
                     void vscode.window
                         .showErrorMessage(l10n.t('Failed to export documents.'), l10n.t('Show Output'))
@@ -175,7 +174,6 @@ async function exportDocumentsToFile(
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         ext.outputChannel.error(l10n.t('Error exporting documents: {0}', errorMessage));
-        ext.outputChannel.show();
 
         void vscode.window
             .showErrorMessage(
