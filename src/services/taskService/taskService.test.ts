@@ -31,6 +31,9 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
                     properties: {},
                     measurements: {},
                 },
+                errorHandling: {
+                    suppressDisplay: false,
+                },
             };
             return await callback(mockContext);
         },

@@ -826,7 +826,6 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         );
 
         ext.outputChannel.error(vscode.l10n.t('[StreamingWriter] Partial progress: {0}', statsError.getStatsString()));
-        ext.outputChannel.show();
 
         throw statsError;
     }

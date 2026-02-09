@@ -236,7 +236,6 @@ export abstract class Task {
                         message: `${msg}${detail}`.trim(),
                     }),
                 );
-                ext.outputChannel.show();
             }
         }
     }
@@ -341,6 +340,10 @@ export abstract class Task {
                     this.updateStatus(TaskState.Completed, vscode.l10n.t('Task completed successfully'), 100);
                 }
             } catch (error) {
+                // Suppress the default error notification from callWithTelemetryAndErrorHandling
+                // because TaskProgressReportingService shows its own notification with a "Show Output" button
+                context.errorHandling.suppressDisplay = true;
+
                 // Add error information to telemetry
                 context.telemetry.properties.task_error = error instanceof Error ? error.message : 'Unknown error';
 
