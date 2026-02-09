@@ -124,7 +124,7 @@ export class SelectVMStep extends AzureWizardPromptStep<NewConnectionWizardConte
                 );
             }
 
-            return taggedVms.sort((a, b) => a.label.localeCompare(b.label));
+            return taggedVms.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
         };
 
         const selectedVMItem = await context.ui.showQuickPick(getVMQuickPickItems(), {

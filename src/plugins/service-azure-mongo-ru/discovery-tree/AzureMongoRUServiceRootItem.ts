@@ -85,7 +85,7 @@ export class AzureMongoRUServiceRootItem
         return (
             subscriptions
                 // sort by name
-                .sort((a, b) => a.name.localeCompare(b.name))
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
                 // map to AzureMongoRUSubscriptionItem
                 .map((sub) => {
                     return new AzureMongoRUSubscriptionItem(
