@@ -140,7 +140,11 @@ async function exportDocumentsToFile(
             if (cancellationToken.isCancellationRequested) {
                 // Cancel the operation
                 documentStreamAbortController.abort();
-                await vscode.workspace.fs.delete(vscode.Uri.file(filePath)); // Clean up the file if canceled
+                try {
+                    await vscode.workspace.fs.delete(vscode.Uri.file(filePath));
+                } catch {
+                    // Ignore errors if the file doesn't exist yet (canceled before first write)
+                }
                 ext.outputChannel.warn(l10n.t('Export operation was canceled after {0} document(s).', documentCount));
                 vscode.window.showWarningMessage(l10n.t('The export operation was canceled.'));
                 return documentCount;
