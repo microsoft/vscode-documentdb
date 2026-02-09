@@ -132,54 +132,50 @@ async function exportDocumentsToFile(
 
     let documentCount = 0;
 
-    try {
-        // Start the JSON array
-        let buffer = '[\n';
+    // Start the JSON array
+    let buffer = '[\n';
 
-        for await (const doc of documentStream) {
-            if (cancellationToken.isCancellationRequested) {
-                // Cancel the operation
-                documentStreamAbortController.abort();
-                try {
-                    await vscode.workspace.fs.delete(vscode.Uri.file(filePath));
-                } catch {
-                    // Ignore errors if the file doesn't exist yet (canceled before first write)
-                }
-                ext.outputChannel.warn(l10n.t('Export operation was canceled after {0} document(s).', documentCount));
-                vscode.window.showWarningMessage(l10n.t('The export operation was canceled.'));
-                return documentCount;
+    for await (const doc of documentStream) {
+        if (cancellationToken.isCancellationRequested) {
+            // Cancel the operation
+            documentStreamAbortController.abort();
+            try {
+                await vscode.workspace.fs.delete(vscode.Uri.file(filePath));
+            } catch {
+                // Ignore errors if the file doesn't exist yet (canceled before first write)
             }
-
-            documentCount += 1;
-            const docString = EJSON.stringify(doc, undefined, 4);
-
-            // Progress reporting for every 100 documents
-            if (documentCount % 100 === 0) {
-                ext.outputChannel.trace(l10n.t('{documentCount} documents exported…', { documentCount }));
-                progress.report({ message: l10n.t('{documentCount} documents exported…', { documentCount }) });
-            }
-
-            // Prepare buffer for writing
-            buffer += buffer.length > 2 ? ',\n' : ''; // Add a comma and newline for non-first documents
-            buffer += docString;
-
-            if (buffer.length > bufferLimit) {
-                await appendToFile(filePath, buffer);
-                buffer = ''; // Clear the buffer after writing
-            }
+            ext.outputChannel.warn(l10n.t('Export operation was canceled after {0} document(s).', documentCount));
+            vscode.window.showWarningMessage(l10n.t('The export operation was canceled.'));
+            return documentCount;
         }
 
-        // Final buffer flush after the loop
-        if (buffer.length > 0) {
+        documentCount += 1;
+        const docString = EJSON.stringify(doc, undefined, 4);
+
+        // Progress reporting for every 100 documents
+        if (documentCount % 100 === 0) {
+            ext.outputChannel.trace(l10n.t('{documentCount} documents exported…', { documentCount }));
+            progress.report({ message: l10n.t('{documentCount} documents exported…', { documentCount }) });
+        }
+
+        // Prepare buffer for writing
+        buffer += buffer.length > 2 ? ',\n' : ''; // Add a comma and newline for non-first documents
+        buffer += docString;
+
+        if (buffer.length > bufferLimit) {
             await appendToFile(filePath, buffer);
+            buffer = ''; // Clear the buffer after writing
         }
-
-        await appendToFile(filePath, '\n]'); // End the JSON array
-
-        vscode.window.showInformationMessage(l10n.t('Exported document count: {documentCount}', { documentCount }));
-    } catch (error) {
-        throw error; // Re-throw the error to be caught by the outer error handler
     }
+
+    // Final buffer flush after the loop
+    if (buffer.length > 0) {
+        await appendToFile(filePath, buffer);
+    }
+
+    await appendToFile(filePath, '\n]'); // End the JSON array
+
+    vscode.window.showInformationMessage(l10n.t('Exported document count: {documentCount}', { documentCount }));
 
     return documentCount;
 }
