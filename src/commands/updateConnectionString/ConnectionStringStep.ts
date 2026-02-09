@@ -28,8 +28,9 @@ export class ConnectionStringStep extends AzureWizardPromptStep<UpdateCSWizardCo
         connectionString = connectionString ? connectionString.trim() : '';
 
         if (connectionString.length === 0) {
-            // skip this for now, asyncValidationTask takes care of this case, otherwise it's only warnings the user sees..
-            return undefined;
+            return l10n.t('Invalid Connection String: {error}', {
+                error: l10n.t('Connection string cannot be empty.'),
+            });
         }
 
         if (!(connectionString.startsWith('mongodb://') || connectionString.startsWith('mongodb+srv://'))) {

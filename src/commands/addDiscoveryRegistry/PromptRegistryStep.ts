@@ -30,7 +30,7 @@ export class PromptRegistryStep extends AzureWizardPromptStep<AddRegistryWizardC
                 alwaysShow: true,
             }))
             // Sort alphabetically
-            .sort((a, b) => a.label.localeCompare(b.label));
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
         if (promptItems.length === 0) {
             promptItems.push({

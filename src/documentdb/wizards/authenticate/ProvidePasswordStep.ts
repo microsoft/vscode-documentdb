@@ -24,15 +24,13 @@ export class ProvidePasswordStep extends AzureWizardPromptStep<AuthenticateWizar
             ignoreFocusOut: true,
         });
 
-        const trimmedPassword = passwordTemp.trim();
-
         // Update both structured config and legacy field
         context.nativeAuthConfig = {
             connectionUser: context.nativeAuthConfig?.connectionUser ?? context.selectedUserName ?? '',
-            connectionPassword: trimmedPassword,
+            connectionPassword: passwordTemp,
         };
-        context.password = trimmedPassword;
-        context.valuesToMask.push(trimmedPassword);
+        context.password = passwordTemp;
+        context.valuesToMask.push(passwordTemp);
 
         context.isPasswordUpdated = true;
     }
