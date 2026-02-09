@@ -118,7 +118,7 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
         return [
             {
                 label: l10n.t('$(output) Show Output'),
-                description: l10n.t('View conflict details in the Output panel'),
+                detail: l10n.t('View conflict details in the Output panel'),
                 data: 'show-output' as const,
             },
             {
@@ -177,7 +177,7 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
         return [
             {
                 label: l10n.t('$(output) Show Output'),
-                description: l10n.t('View conflict details in the Output panel'),
+                detail: l10n.t('View conflict details in the Output panel'),
                 data: 'show-output' as const,
             },
             {

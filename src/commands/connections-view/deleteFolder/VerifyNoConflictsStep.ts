@@ -29,19 +29,21 @@ type ConflictAction = 'exit' | 'show-output';
 export class VerifyNoConflictsStep extends AzureWizardPromptStep<DeleteFolderWizardContext> {
     public async prompt(context: DeleteFolderWizardContext): Promise<void> {
         try {
-            // Use QuickPick with loading state while verifying
-            const result = await context.ui.showQuickPick(this.verifyAndCount(context), {
-                placeHolder: l10n.t('Verifying folder can be deleted…'),
-                loadingPlaceHolder: l10n.t('Analyzing folder contents…'),
-                suppressPersistence: true,
-            });
+            // Loop to allow re-prompting after "Show Output"
+            while (true) {
+                const result = await context.ui.showQuickPick(this.verifyAndCount(context), {
+                    placeHolder: l10n.t('Verifying folder can be deleted…'),
+                    loadingPlaceHolder: l10n.t('Analyzing folder contents…'),
+                    suppressPersistence: true,
+                });
 
-            // User selected an action (only shown when conflicts exist)
-            if (result.data === 'show-output') {
-                ext.outputChannel.show();
-                throw new UserCancelledError();
-            } else if (result.data === 'exit') {
-                throw new UserCancelledError();
+                // User selected an action (only shown when conflicts exist)
+                if (result.data === 'show-output') {
+                    ext.outputChannel.show();
+                    continue; // Re-prompt after showing output
+                } else if (result.data === 'exit') {
+                    throw new UserCancelledError();
+                }
             }
         } catch (error) {
             if (error instanceof VerificationCompleteError) {
@@ -89,7 +91,7 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<DeleteFolderWiz
         return [
             {
                 label: l10n.t('$(output) Show Output'),
-                description: l10n.t('View conflict details in the Output panel'),
+                detail: l10n.t('View conflict details in the Output panel'),
                 data: 'show-output' as const,
             },
             {
