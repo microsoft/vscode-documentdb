@@ -86,7 +86,7 @@ export class PromptTargetFolderStep extends AzureWizardPromptStep<MoveItemsWizar
                 iconPath: new vscode.ThemeIcon('folder-opened'),
                 data: folder,
             }))
-            .sort((a, b) => a.label.localeCompare(b.label)); // Alphabetical sort
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })); // Alphabetical sort
 
         // Determine if ALL source items are currently at root level
         const allItemsAtRoot = context.itemsToMove.every((item) => item.properties.parentId === undefined);

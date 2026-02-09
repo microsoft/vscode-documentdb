@@ -121,14 +121,14 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
         folderElements.sort((a, b) => {
             const aName = (a as FolderItem).name;
             const bName = (b as FolderItem).name;
-            return aName.localeCompare(bName);
+            return aName.localeCompare(bName, undefined, { numeric: true });
         });
 
         // Sort connections alphabetically by name
         connectionElements.sort((a, b) => {
             const aName = (a as DocumentDBClusterItem).cluster.name;
             const bName = (b as DocumentDBClusterItem).cluster.name;
-            return aName.localeCompare(bName);
+            return aName.localeCompare(bName, undefined, { numeric: true });
         });
 
         // Return folders first, then connections
