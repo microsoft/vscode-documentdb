@@ -5,6 +5,7 @@
 
 import { AzureWizardPromptStep, UserCancelledError, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { ext } from '../../../extensionVariables';
 import { ConnectionStorageService, ItemType } from '../../../services/connectionStorageService';
 import {
     enumerateConnectionsInFolder,
@@ -14,7 +15,7 @@ import {
 } from '../verificationUtils';
 import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 
-type ConflictAction = 'exit';
+type ConflictAction = 'exit' | 'show-output';
 
 /**
  * Step to verify the folder can be deleted and count items to be deleted.
@@ -28,16 +29,21 @@ type ConflictAction = 'exit';
 export class VerifyNoConflictsStep extends AzureWizardPromptStep<DeleteFolderWizardContext> {
     public async prompt(context: DeleteFolderWizardContext): Promise<void> {
         try {
-            // Use QuickPick with loading state while verifying
-            const result = await context.ui.showQuickPick(this.verifyAndCount(context), {
-                placeHolder: l10n.t('Verifying folder can be deleted…'),
-                loadingPlaceHolder: l10n.t('Analyzing folder contents…'),
-                suppressPersistence: true,
-            });
+            // Loop to allow re-prompting after "Show Output"
+            while (true) {
+                const result = await context.ui.showQuickPick(this.verifyAndCount(context), {
+                    placeHolder: l10n.t('Verifying folder can be deleted…'),
+                    loadingPlaceHolder: l10n.t('Analyzing folder contents…'),
+                    suppressPersistence: true,
+                });
 
-            // User selected an action (only shown when conflicts exist)
-            if (result.data === 'exit') {
-                throw new UserCancelledError();
+                // User selected an action (only shown when conflicts exist)
+                if (result.data === 'show-output') {
+                    ext.outputChannel.show();
+                    continue; // Re-prompt after showing output
+                } else if (result.data === 'exit') {
+                    throw new UserCancelledError();
+                }
             }
         } catch (error) {
             if (error instanceof VerificationCompleteError) {
@@ -81,8 +87,13 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<DeleteFolderWiz
             context.conflictingTasks,
         );
 
-        // Return option for user - can only cancel
+        // Return options for user - can show output or cancel
         return [
+            {
+                label: l10n.t('$(output) Show Output'),
+                detail: l10n.t('View conflict details in the Output panel'),
+                data: 'show-output' as const,
+            },
             {
                 label: l10n.t('$(close) Cancel'),
                 description: l10n.t('Cancel this operation'),

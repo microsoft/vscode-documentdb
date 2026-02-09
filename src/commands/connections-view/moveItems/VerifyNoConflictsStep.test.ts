@@ -240,7 +240,7 @@ describe('VerifyNoConflictsStep', () => {
             (context.ui.showQuickPick as jest.Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     const items = await itemsPromise;
-                    expect(items).toHaveLength(2); // 'back' and 'exit' options
+                    expect(items).toHaveLength(3); // 'show-output', 'back' and 'exit' options
                     return { data: 'back' };
                 },
             );
@@ -294,9 +294,8 @@ describe('VerifyNoConflictsStep', () => {
                 // Expected to throw
             }
 
-            // Verify output channel was used
+            // Verify output channel was used for logging (but not auto-shown)
             expect(mockAppendLog).toHaveBeenCalled();
-            expect(mockShow).toHaveBeenCalled();
 
             // Verify conflict names were logged
             const logCalls = mockAppendLog.mock.calls.map((call) => call[0]);
@@ -381,6 +380,35 @@ describe('VerifyNoConflictsStep', () => {
             // Should proceed without error (no items = no conflicts)
             await expect(step.prompt(context)).resolves.not.toThrow();
             expect(mockIsNameDuplicateInParent).not.toHaveBeenCalled();
+        });
+
+        it('should show output and re-prompt when user selects show-output for naming conflicts', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ name: 'Conflicting Item' })],
+                targetFolderId: 'target-folder',
+            });
+
+            // Simulate conflict
+            mockIsNameDuplicateInParent.mockResolvedValue(true);
+
+            let callCount = 0;
+            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+                async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
+                    await itemsPromise;
+                    callCount++;
+                    if (callCount === 1) {
+                        return { data: 'show-output' }; // First call: show output
+                    }
+                    return { data: 'exit' }; // Second call: cancel
+                },
+            );
+
+            await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
+
+            // show-output should have caused re-prompt (2 calls total)
+            expect(callCount).toBe(2);
+            // outputChannel.show() should have been called
+            expect(mockShow).toHaveBeenCalled();
         });
     });
 
@@ -518,9 +546,10 @@ describe('VerifyNoConflictsStep', () => {
                 // Expected
             }
 
-            // Task conflicts should only have cancel option (no go back)
-            expect(capturedOptions).toHaveLength(1);
-            expect(capturedOptions[0].data).toBe('exit');
+            // Task conflicts should have show-output and cancel options (no go back)
+            expect(capturedOptions).toHaveLength(2);
+            expect(capturedOptions[0].data).toBe('show-output');
+            expect(capturedOptions[1].data).toBe('exit');
         });
 
         it('should log task conflict details to output channel', async () => {
@@ -554,6 +583,37 @@ describe('VerifyNoConflictsStep', () => {
                 expect.stringContaining('task(s) are using connections'),
                 expect.arrayContaining([expect.objectContaining({ taskId: 'task-1' })]),
             );
+        });
+
+        it('should show output and re-prompt when user selects show-output for task conflicts', async () => {
+            const context = createMockContext({
+                itemsToMove: [createMockConnectionItem({ id: 'conn-1', name: 'Connection 1' })],
+            });
+
+            mockFindConflictingTasksForConnections.mockReturnValue([
+                { taskId: 'task-1', taskName: 'Copy Task', taskType: 'copy-paste' },
+            ]);
+
+            let callCount = 0;
+            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                await itemsPromise;
+                callCount++;
+                if (callCount === 1) {
+                    return { data: 'show-output' }; // First call: show output
+                }
+                return { data: 'exit' }; // Second call: cancel
+            });
+            context.ui = {
+                ...context.ui,
+                showQuickPick: mockShowQuickPick,
+            } as unknown as typeof context.ui;
+
+            await expect(step.prompt(context)).rejects.toThrow(UserCancelledError);
+
+            // show-output should have caused re-prompt (2 calls total)
+            expect(callCount).toBe(2);
+            // outputChannel.show() should have been called
+            expect(mockShow).toHaveBeenCalled();
         });
     });
 });

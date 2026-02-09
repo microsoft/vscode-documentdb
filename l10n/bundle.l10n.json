@@ -1,5 +1,4 @@
 {
-  "  Write error: {0}": "  Write error: {0}",
   " (Press 'Space' to select and 'Enter' to confirm)": " (Press 'Space' to select and 'Enter' to confirm)",
   " and ": " and ",
   " on GitHub.": " on GitHub.",
@@ -401,7 +400,6 @@
   "Error creating resource: {0}": "Error creating resource: {0}",
   "Error deleting selected documents": "Error deleting selected documents",
   "Error dropping index: {error}": "Error dropping index: {error}",
-  "Error exporting documents: {0}": "Error exporting documents: {0}",
   "Error exporting documents: {error}": "Error exporting documents: {error}",
   "Error generating query": "Error generating query",
   "Error inserting documents into \"{0}.{1}\": {2}": "Error inserting documents into \"{0}.{1}\": {2}",
@@ -1081,6 +1079,7 @@
   "Working...": "Working...",
   "Working…": "Working…",
   "Would you like to open the Collection View?": "Would you like to open the Collection View?",
+  "Write error: {0}": "Write error: {0}",
   "Write operation failed: {0}": "Write operation failed: {0}",
   "writing batch...": "writing batch...",
   "Yes": "Yes",
