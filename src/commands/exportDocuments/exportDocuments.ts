@@ -56,7 +56,7 @@ export async function exportQueryResults(
     );
 
     const filePath = targetUri.fsPath; // Convert `vscode.Uri` to a regular file path
-    ext.outputChannel.appendLog(l10n.t('Exporting data to: {filePath}', { filePath }));
+    ext.outputChannel.info(l10n.t('Starting export to: {filePath}', { filePath }));
 
     let documentCount = 0;
 
@@ -78,7 +78,7 @@ export async function exportQueryResults(
         actionContext.telemetry.measurements.documentCount = documentCount;
     });
 
-    ext.outputChannel.appendLog(l10n.t('Exported document count: {documentCount}', { documentCount }));
+    ext.outputChannel.info(l10n.t('Export complete. Exported document count: {documentCount}', { documentCount }));
 }
 
 async function runExportWithProgressAndDescription(
@@ -99,14 +99,20 @@ async function runExportWithProgressAndDescription(
                 try {
                     await exportFunction(progress, cancellationToken);
                 } catch (error) {
-                    vscode.window.showErrorMessage(
-                        l10n.t('Failed to export documents. Please see the output for details.'),
-                    );
-                    ext.outputChannel.appendLog(
+                    ext.outputChannel.error(
                         l10n.t('Error exporting documents: {error}', {
                             error: parseError(error).message,
                         }),
                     );
+                    ext.outputChannel.show();
+
+                    void vscode.window
+                        .showErrorMessage(l10n.t('Failed to export documents.'), l10n.t('Show Output'))
+                        .then((choice) => {
+                            if (choice === l10n.t('Show Output')) {
+                                ext.outputChannel.show();
+                            }
+                        });
                 }
                 progress.report({ increment: 100 }); // Complete the progress bar
             },
@@ -134,6 +140,7 @@ async function exportDocumentsToFile(
                 // Cancel the operation
                 documentStreamAbortController.abort();
                 await vscode.workspace.fs.delete(vscode.Uri.file(filePath)); // Clean up the file if canceled
+                ext.outputChannel.warn(l10n.t('Export operation was canceled after {0} document(s).', documentCount));
                 vscode.window.showWarningMessage(l10n.t('The export operation was canceled.'));
                 return documentCount;
             }
@@ -143,6 +150,7 @@ async function exportDocumentsToFile(
 
             // Progress reporting for every 100 documents
             if (documentCount % 100 === 0) {
+                ext.outputChannel.trace(l10n.t('{documentCount} documents exported…', { documentCount }));
                 progress.report({ message: l10n.t('{documentCount} documents exported…', { documentCount }) });
             }
 
@@ -165,9 +173,20 @@ async function exportDocumentsToFile(
 
         vscode.window.showInformationMessage(l10n.t('Exported document count: {documentCount}', { documentCount }));
     } catch (error) {
-        vscode.window.showErrorMessage(
-            l10n.t('Error exporting documents: {error}', { error: parseError(error).message }),
-        );
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.error(l10n.t('Error exporting documents: {0}', errorMessage));
+        ext.outputChannel.show();
+
+        void vscode.window
+            .showErrorMessage(
+                l10n.t('Error exporting documents: {error}', { error: parseError(error).message }),
+                l10n.t('Show Output'),
+            )
+            .then((choice) => {
+                if (choice === l10n.t('Show Output')) {
+                    ext.outputChannel.show();
+                }
+            });
         throw error; // Re-throw the error to be caught by the outer error handler
     }
 

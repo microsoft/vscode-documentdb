@@ -46,10 +46,10 @@ export async function importDocuments(
     });
 
     if (ignoredUris.length) {
-        ext.outputChannel.appendLog(
+        ext.outputChannel.warn(
             l10n.t('Ignoring the following files that do not match the "*.json" file name pattern:'),
         );
-        ignoredUris.forEach((uri) => ext.outputChannel.appendLog(`${uri.fsPath}`));
+        ignoredUris.forEach((uri) => ext.outputChannel.warn(`  ${uri.fsPath}`));
         ext.outputChannel.show();
     }
 
@@ -84,6 +84,14 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
         async (progress) => {
             progress.report({ increment: 0, message: l10n.t('Loading documents…') });
 
+            ext.outputChannel.info(
+                l10n.t(
+                    'Starting import of {0} file(s) into collection "{1}"',
+                    uris.length,
+                    selectedItem.collectionInfo.name,
+                ),
+            );
+
             const countUri = uris.length;
             const incrementUri = 25 / (countUri || 1);
             const documents: unknown[] = [];
@@ -96,23 +104,31 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
                     message: l10n.t('Loading document {num} of {countUri}', { num: i + 1, countUri }),
                 });
 
+                ext.outputChannel.trace(l10n.t('Parsing file {0}: {1}', i + 1, uris[i].fsPath));
+
                 const result = await parseAndValidateFile(selectedItem, uris[i]);
 
                 // Note to future maintainers: the validation can return 0 valid documents and still have errors.
 
                 if (result.errors && result.errors.length) {
-                    ext.outputChannel.appendLog(
-                        l10n.t('Errors found in document {path}. Please fix these.', { path: uris[i].path }),
+                    ext.outputChannel.error(
+                        l10n.t('Errors found in file "{path}". Please fix these:', { path: uris[i].path }),
                     );
-                    ext.outputChannel.appendLog(result.errors.join('\n'));
-                    ext.outputChannel.show();
+                    for (const err of result.errors) {
+                        ext.outputChannel.error(`  ${err}`);
+                    }
                     hasErrors = true;
                 }
 
                 if (result.documents && result.documents.length > 0) {
+                    ext.outputChannel.trace(
+                        l10n.t('Loaded {0} document(s) from "{1}"', result.documents.length, uris[i].path),
+                    );
                     documents.push(...result.documents);
                 }
             }
+
+            ext.outputChannel.info(l10n.t('Total documents to import: {0}', documents.length));
 
             const countDocuments = documents.length;
             const incrementDocuments = 75 / (countDocuments || 1);
@@ -171,16 +187,31 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             // let's make sure we reach 100% progress, useful in case of errors etc.
             progress.report({ increment: 100, message: l10n.t('Finished importing') });
 
-            return (
-                (hasErrors ? l10n.t('Import completed with errors.') : l10n.t('Import successful.')) +
-                ' ' +
-                l10n.t('Inserted {0} document(s). See output for more details.', count)
-            );
+            return { hasErrors, count };
         },
     );
 
-    // We should not use await here, otherwise the node status will not be updated until the message is closed
-    vscode.window.showInformationMessage(result);
+    const message =
+        (result.hasErrors ? l10n.t('Import completed with errors.') : l10n.t('Import successful.')) +
+        ' ' +
+        l10n.t('Inserted {0} document(s).', result.count);
+
+    if (result.hasErrors) {
+        ext.outputChannel.warn(message);
+        ext.outputChannel.show();
+
+        void vscode.window
+            .showWarningMessage(message + ' ' + l10n.t('See output for more details.'), l10n.t('Show Output'))
+            .then((choice) => {
+                if (choice === l10n.t('Show Output')) {
+                    ext.outputChannel.show();
+                }
+            });
+    } else {
+        ext.outputChannel.info(message);
+        // We should not use await here, otherwise the node status will not be updated until the message is closed
+        void vscode.window.showInformationMessage(message);
+    }
 }
 
 async function askForDocuments(context: IActionContext): Promise<vscode.Uri[]> {
@@ -257,6 +288,7 @@ async function insertDocument(
     try {
         // Check for valid buffer
         if (!buffer) {
+            ext.outputChannel.error(l10n.t('Import failed: document buffer is not initialized.'));
             return { count: 0, errorOccurred: true };
         }
 
@@ -266,8 +298,11 @@ async function insertDocument(
         }
 
         // Should only reach here if node is neither CollectionItem nor CosmosDBContainerResourceItem
+        ext.outputChannel.error(l10n.t('Import failed: unsupported node type.'));
         return { count: 0, errorOccurred: true };
-    } catch {
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.error(l10n.t('Import failed with unexpected error: {0}', errorMessage));
         return { count: 0, errorOccurred: true };
     }
 }
@@ -316,12 +351,30 @@ async function insertDocumentWithBufferIntoCluster(
         if (isBulkWriteError(error)) {
             // Handle MongoDB bulk write errors
             // It could be a partial failure, so we need to check the result
+            ext.outputChannel.warn(
+                l10n.t(
+                    'Bulk write error during import into "{0}.{1}": {2} document(s) inserted.',
+                    databaseName,
+                    collectionName,
+                    error.result.insertedCount,
+                ),
+            );
+            if (error.writeErrors) {
+                const errors = Array.isArray(error.writeErrors) ? error.writeErrors : [error.writeErrors];
+                for (const writeError of errors) {
+                    ext.outputChannel.error(l10n.t('  Write error: {0}', String(writeError)));
+                }
+            }
             return {
                 count: error.result.insertedCount,
                 errorOccurred: true,
             };
         } else {
             // Handle other errors
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('Error inserting documents into "{0}.{1}": {2}', databaseName, collectionName, errorMessage),
+            );
             return {
                 count: 0,
                 errorOccurred: true,
