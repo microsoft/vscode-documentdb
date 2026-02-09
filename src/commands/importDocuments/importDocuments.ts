@@ -391,7 +391,21 @@ async function insertDocumentWithBufferIntoCluster(
             if (error.writeErrors) {
                 const errors = Array.isArray(error.writeErrors) ? error.writeErrors : [error.writeErrors];
                 for (const writeError of errors) {
-                    ext.outputChannel.error('  ' + l10n.t('Write error: {0}', String(writeError)));
+                    // Extract error message from WriteError object
+                    // WriteError objects have errmsg property, other errors may have message
+                    let errorMsg = '';
+                    if (typeof writeError === 'object' && writeError !== null) {
+                        if (typeof (writeError as unknown as { errmsg?: string }).errmsg === 'string') {
+                            errorMsg = (writeError as unknown as { errmsg: string }).errmsg;
+                        } else if (typeof (writeError as unknown as { message?: string }).message === 'string') {
+                            errorMsg = (writeError as unknown as { message: string }).message;
+                        } else {
+                            errorMsg = JSON.stringify(writeError);
+                        }
+                    } else {
+                        errorMsg = JSON.stringify(writeError);
+                    }
+                    ext.outputChannel.error('  ' + l10n.t('Write error: {0}', errorMsg));
                 }
             }
             return {
