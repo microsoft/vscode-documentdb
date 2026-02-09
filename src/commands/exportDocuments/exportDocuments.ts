@@ -145,7 +145,7 @@ async function exportDocumentsToFile(
                 // Ignore errors if the file doesn't exist yet (canceled before first write)
             }
             ext.outputChannel.warn(l10n.t('Export operation was canceled after {0} document(s).', documentCount));
-            vscode.window.showWarningMessage(l10n.t('The export operation was canceled.'));
+            void vscode.window.showWarningMessage(l10n.t('The export operation was canceled.'));
             return documentCount;
         }
 
@@ -175,7 +175,7 @@ async function exportDocumentsToFile(
 
     await appendToFile(filePath, '\n]'); // End the JSON array
 
-    vscode.window.showInformationMessage(l10n.t('Exported document count: {documentCount}', { documentCount }));
+    void vscode.window.showInformationMessage(l10n.t('Exported document count: {documentCount}', { documentCount }));
 
     return documentCount;
 }
