@@ -33,6 +33,7 @@
 ### Security
 
 - **Dependency Updates**: Updates `qs` and `express` to address security vulnerabilities. [#434](https://github.com/microsoft/vscode-documentdb/pull/434)
+- **Webpack Update**: Bumps `webpack` from 5.103.0 to 5.105.0. [#494](https://github.com/microsoft/vscode-documentdb/pull/494)
 
 ## 0.6.3
 
