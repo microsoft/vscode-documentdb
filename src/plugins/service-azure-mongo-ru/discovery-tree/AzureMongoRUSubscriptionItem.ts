@@ -59,7 +59,7 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
 
                 return accounts
-                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }))
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureMongoRUSubscriptionItem.ts');
 

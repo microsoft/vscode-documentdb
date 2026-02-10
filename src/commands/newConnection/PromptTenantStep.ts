@@ -129,7 +129,7 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
                 // Sort by display name if available, otherwise by tenant ID
                 const aName = a.displayName || a.tenantId || '';
                 const bName = b.displayName || b.tenantId || '';
-                return aName.localeCompare(bName);
+                return aName.localeCompare(bName, undefined, { numeric: true });
             });
         } catch {
             // If we can't load tenants, just return empty array

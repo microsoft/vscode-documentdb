@@ -20,7 +20,7 @@ import {
 } from '../verificationUtils';
 import { type MoveItemsWizardContext } from './MoveItemsWizardContext';
 
-type ConflictAction = 'back' | 'exit';
+type ConflictAction = 'back' | 'exit' | 'show-output';
 
 /**
  * Step to verify the move operation can proceed safely.
@@ -33,20 +33,25 @@ type ConflictAction = 'back' | 'exit';
 export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizardContext> {
     public async prompt(context: MoveItemsWizardContext): Promise<void> {
         try {
-            // Use QuickPick with loading state while checking for conflicts
-            const result = await context.ui.showQuickPick(this.verifyNoConflicts(context), {
-                placeHolder: l10n.t('Verifying move operation…'),
-                loadingPlaceHolder: l10n.t('Checking for conflicts…'),
-                suppressPersistence: true,
-            });
+            // Loop to allow re-prompting after "Show Output"
+            while (true) {
+                const result = await context.ui.showQuickPick(this.verifyNoConflicts(context), {
+                    placeHolder: l10n.t('Verifying move operation…'),
+                    loadingPlaceHolder: l10n.t('Checking for conflicts…'),
+                    suppressPersistence: true,
+                });
 
-            // User selected an action (only shown when conflicts exist)
-            if (result.data === 'back') {
-                context.targetFolderId = undefined;
-                context.targetFolderPath = undefined;
-                throw new GoBackError();
-            } else {
-                throw new UserCancelledError();
+                // User selected an action (only shown when conflicts exist)
+                if (result.data === 'show-output') {
+                    ext.outputChannel.show();
+                    continue; // Re-prompt after showing output
+                } else if (result.data === 'back') {
+                    context.targetFolderId = undefined;
+                    context.targetFolderPath = undefined;
+                    throw new GoBackError();
+                } else {
+                    throw new UserCancelledError();
+                }
             }
         } catch (error) {
             if (error instanceof VerificationCompleteError) {
@@ -109,8 +114,13 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
             context.conflictingTasks,
         );
 
-        // Return option for user - can only cancel (task conflicts cannot be resolved by going back)
+        // Return options for user - can show output or cancel (task conflicts cannot be resolved by going back)
         return [
+            {
+                label: l10n.t('$(output) Show Output'),
+                detail: l10n.t('View conflict details in the Output panel'),
+                data: 'show-output' as const,
+            },
             {
                 label: l10n.t('$(close) Cancel'),
                 description: l10n.t('Cancel this operation'),
@@ -163,10 +173,13 @@ export class VerifyNoConflictsStep extends AzureWizardPromptStep<MoveItemsWizard
         for (const name of context.conflictingNames) {
             ext.outputChannel.appendLog(` - ${name}`);
         }
-        ext.outputChannel.show();
-
-        // Return options for user - can go back to choose different folder
+        // Return options for user - can show output, go back to choose different folder, or cancel
         return [
+            {
+                label: l10n.t('$(output) Show Output'),
+                detail: l10n.t('View conflict details in the Output panel'),
+                data: 'show-output' as const,
+            },
             {
                 label: l10n.t('$(arrow-left) Go Back'),
                 description: l10n.t('Choose a different folder'),

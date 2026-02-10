@@ -82,7 +82,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
                 // Sort by display name if available, otherwise by tenant ID
                 const aName = a.displayName || a.tenantId || '';
                 const bName = b.displayName || b.tenantId || '';
-                return aName.localeCompare(bName);
+                return aName.localeCompare(bName, undefined, { numeric: true });
             });
 
         context.telemetry.measurements.tenantLoadTimeMs = Date.now() - tenantLoadStartTime;
