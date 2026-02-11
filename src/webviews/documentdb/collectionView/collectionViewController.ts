@@ -26,7 +26,9 @@ export type CollectionViewWebviewConfigurationType = {
 };
 
 export class CollectionViewController extends WebviewController<CollectionViewWebviewConfigurationType> {
-    constructor(initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>) {
+    constructor(
+        initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>,
+    ) {
         // ext.context here is the vscode.ExtensionContext required by the ReactWebviewPanelController's original implementation
         // we're not modifying it here in order to be ready for future updates of the webview API.
 

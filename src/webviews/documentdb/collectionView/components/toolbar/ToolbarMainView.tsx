@@ -25,8 +25,8 @@ import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
 import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
-import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { CollectionViewContext } from '../../collectionViewContext';
+import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
