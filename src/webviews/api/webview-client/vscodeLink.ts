@@ -146,6 +146,14 @@ function vscodeLink(options: VSCodeLinkOptions): TRPCLink<AppRouter> {
                  * operation before it is handed to `postMessage`.  The signal is handled
                  * entirely on the client side via the `onAbort` listener below — it must
                  * never be serialized.
+                 *
+                 * Why this exists: tRPC attaches a live `AbortSignal` to `op.signal` on the
+                 * client side. `AbortSignal` is **not** cloneable via the structured-clone
+                 * algorithm, so passing it through `postMessage` would throw a
+                 * `DataCloneError`. All outbound messages therefore go through `sendSafe`,
+                 * which destructures out `signal` before forwarding to the underlying
+                 * `send()` (i.e. `postMessage`). The raw `send()` is never called directly
+                 * for operation messages.
                  */
                 const sendSafe = (message: VsCodeLinkRequestMessage): void => {
                     // eslint-disable-next-line @typescript-eslint/no-unused-vars
