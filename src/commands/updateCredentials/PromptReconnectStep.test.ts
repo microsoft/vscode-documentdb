@@ -16,13 +16,16 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class {},
 }));
 
-function createMockContext(overrides: Partial<UpdateCredentialsWizardContext> = {}): UpdateCredentialsWizardContext {
+function createMockContext(
+    mockShowQuickPick: jest.Mock,
+    overrides: Partial<UpdateCredentialsWizardContext> = {},
+): UpdateCredentialsWizardContext {
     return {
         telemetry: { properties: {}, measurements: {} },
         errorHandling: { issueProperties: {} },
         valuesToMask: [],
         ui: {
-            showQuickPick: jest.fn(),
+            showQuickPick: mockShowQuickPick,
             showInputBox: jest.fn(),
             showWarningMessage: jest.fn(),
             onDidFinishPrompt: jest.fn(),
@@ -40,10 +43,12 @@ function createMockContext(overrides: Partial<UpdateCredentialsWizardContext> = 
 
 describe('PromptReconnectStep', () => {
     let step: PromptReconnectStep;
+    let mockShowQuickPick: jest.Mock;
 
     beforeEach(() => {
         jest.clearAllMocks();
         step = new PromptReconnectStep();
+        mockShowQuickPick = jest.fn();
     });
 
     describe('shouldPrompt', () => {
@@ -54,43 +59,38 @@ describe('PromptReconnectStep', () => {
 
     describe('prompt', () => {
         it('should set shouldReconnect to true when user selects Yes', async () => {
-            const context = createMockContext();
-
-            (context.ui.showQuickPick as jest.Mock).mockResolvedValue({
+            mockShowQuickPick.mockResolvedValue({
                 label: 'Yes',
                 data: true,
             });
+            const context = createMockContext(mockShowQuickPick);
 
             await step.prompt(context);
 
             expect(context.shouldReconnect).toBe(true);
-            expect(context.ui.showQuickPick).toHaveBeenCalledTimes(1);
+            expect(mockShowQuickPick).toHaveBeenCalledTimes(1);
         });
 
         it('should set shouldReconnect to false when user selects No', async () => {
-            const context = createMockContext();
-
-            (context.ui.showQuickPick as jest.Mock).mockResolvedValue({
+            mockShowQuickPick.mockResolvedValue({
                 label: 'No',
                 data: false,
             });
+            const context = createMockContext(mockShowQuickPick);
 
             await step.prompt(context);
 
             expect(context.shouldReconnect).toBe(false);
-            expect(context.ui.showQuickPick).toHaveBeenCalledTimes(1);
+            expect(mockShowQuickPick).toHaveBeenCalledTimes(1);
         });
 
         it('should present two options to the user', async () => {
-            const context = createMockContext();
-
             let capturedItems: Array<{ label: string; data: boolean }> = [];
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
-                (items: Array<{ label: string; data: boolean }>) => {
-                    capturedItems = items;
-                    return Promise.resolve(items[0]);
-                },
-            );
+            mockShowQuickPick.mockImplementation((items: Array<{ label: string; data: boolean }>) => {
+                capturedItems = items;
+                return Promise.resolve(items[0]);
+            });
+            const context = createMockContext(mockShowQuickPick);
 
             await step.prompt(context);
 
@@ -100,16 +100,15 @@ describe('PromptReconnectStep', () => {
         });
 
         it('should pass correct options to showQuickPick', async () => {
-            const context = createMockContext();
-
-            (context.ui.showQuickPick as jest.Mock).mockResolvedValue({
+            mockShowQuickPick.mockResolvedValue({
                 label: 'Yes',
                 data: true,
             });
+            const context = createMockContext(mockShowQuickPick);
 
             await step.prompt(context);
 
-            expect(context.ui.showQuickPick).toHaveBeenCalledWith(
+            expect(mockShowQuickPick).toHaveBeenCalledWith(
                 expect.any(Array),
                 expect.objectContaining({
                     stepName: 'promptReconnect',
