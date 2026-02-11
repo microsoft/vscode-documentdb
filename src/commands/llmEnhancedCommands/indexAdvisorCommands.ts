@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document, type Filter } from 'mongodb';
 import * as vscode from 'vscode';
@@ -14,7 +14,7 @@ import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata'
 import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import { FALLBACK_MODELS, type FilledPromptResult, PREFERRED_MODEL } from './promptTemplates';
+import { FALLBACK_MODELS, PREFERRED_MODEL, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -340,7 +340,7 @@ export async function optimizeQuery(
 ): Promise<OptimizationResult> {
     // Check if the request was already cancelled before starting
     if (queryContext.signal?.aborted) {
-        throw new Error(l10n.t('Operation was cancelled'));
+        throw new UserCancelledError('AbortSignal');
     }
 
     // Check if Copilot is available
@@ -389,7 +389,7 @@ export async function optimizeQuery(
     } else {
         // Check if the request was cancelled before running explain queries
         if (queryContext.signal?.aborted) {
-            throw new Error(l10n.t('Operation was cancelled'));
+            throw new UserCancelledError('AbortSignal');
         }
 
         // Check if we have queryObject or need to parse query string
@@ -468,7 +468,7 @@ export async function optimizeQuery(
 
     // Check if the request was cancelled before fetching stats
     if (queryContext.signal?.aborted) {
-        throw new Error(l10n.t('Operation was cancelled'));
+        throw new UserCancelledError('AbortSignal');
     }
 
     let indexesInfo: IndexItemModel[] | undefined;
@@ -596,7 +596,7 @@ export async function optimizeQuery(
 
     // Check if the request was cancelled before calling Copilot (the most expensive operation)
     if (queryContext.signal?.aborted) {
-        throw new Error(l10n.t('Operation was cancelled'));
+        throw new UserCancelledError('AbortSignal');
     }
 
     const response = await CopilotService.sendMessage(messages, {

@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
@@ -82,6 +86,9 @@ export class CopilotService {
                         modelUsed: selectedModel.id,
                     };
                 } catch (error) {
+                    if (error instanceof UserCancelledError) {
+                        throw error;
+                    }
                     context.telemetry.properties.llmError = 'llmGenerateResponseCallFailed';
                     throw error;
                 }
@@ -89,6 +96,10 @@ export class CopilotService {
         );
 
         if (!result) {
+            // If signal was aborted, propagate cancellation silently
+            if (options?.signal?.aborted) {
+                throw new UserCancelledError('AbortSignal');
+            }
             throw new Error(l10n.t('Failed to get response from language model'));
         }
 
@@ -150,7 +161,7 @@ export class CopilotService {
 
         // If already aborted, throw immediately
         if (signal?.aborted) {
-            throw new Error('Aborted');
+            throw new UserCancelledError('AbortSignal');
         }
 
         // Bridge AbortSignal → vscode.CancellationToken so the LLM API can stop streaming
@@ -175,7 +186,7 @@ export class CopilotService {
             }
 
             if (signal?.aborted) {
-                throw new Error('Aborted');
+                throw new UserCancelledError('AbortSignal');
             }
 
             return fullResponse;

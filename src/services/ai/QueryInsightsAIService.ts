@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document } from 'mongodb';
 import {
@@ -120,6 +124,10 @@ export class QueryInsightsAIService {
         );
 
         if (!result) {
+            // If signal was aborted, propagate cancellation silently
+            if (signal?.aborted) {
+                throw new UserCancelledError('AbortSignal');
+            }
             throw new Error(l10n.t('Failed to get optimization recommendations from index advisor.'));
         }
 
