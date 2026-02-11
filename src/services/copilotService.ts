@@ -10,6 +10,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 
 /**
  * Options for sending a message to the language model
@@ -186,6 +187,7 @@ export class CopilotService {
             }
 
             if (signal?.aborted) {
+                ext.outputChannel.trace(l10n.t('[Query Insights AI] Copilot call cancelled during streaming'));
                 throw new UserCancelledError('AbortSignal');
             }
 
