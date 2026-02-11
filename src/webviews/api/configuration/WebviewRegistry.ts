@@ -10,3 +10,9 @@ export const WebviewRegistry = {
     mongoClustersCollectionView: CollectionView,
     mongoClustersDocumentView: DocumentView,
 } as const;
+
+/**
+ * Union type of all registered webview name keys.
+ * Used by WebviewController to ensure the webviewName matches a registered entry.
+ */
+export type WebviewName = keyof typeof WebviewRegistry;

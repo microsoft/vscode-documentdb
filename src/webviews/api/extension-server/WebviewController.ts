@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { appRouter, type BaseRouterContext } from '../configuration/appRouter';
+import { type WebviewName } from '../configuration/WebviewRegistry';
 import { type VsCodeLinkRequestMessage } from '../webview-client/vscodeLink';
 import { createCallerFactory } from './trpc';
 
@@ -56,7 +57,7 @@ export class WebviewController<Configuration> implements vscode.Disposable {
     constructor(
         protected extensionContext: vscode.ExtensionContext,
         title: string,
-        private _webviewName: string,
+        private _webviewName: WebviewName,
         private configuration: Configuration,
         viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
         private _iconPath?:

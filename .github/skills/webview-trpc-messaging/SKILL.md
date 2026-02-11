@@ -113,6 +113,8 @@ export class MyViewController extends WebviewController<MyViewConfig> {
 
 ### 5. Register in WebviewRegistry
 
+Add your React component to the registry. The key must match the `webviewName` passed to `WebviewController`'s constructor. The `WebviewName` type (exported from the same file) ensures compile-time validation of webview names.
+
 ```typescript
 // src/webviews/api/configuration/WebviewRegistry.ts
 import { MyView } from '../../documentdb/myView/MyView';
@@ -120,8 +122,10 @@ import { MyView } from '../../documentdb/myView/MyView';
 export const WebviewRegistry = {
   mongoClustersCollectionView: CollectionView,
   mongoClustersDocumentView: DocumentView,
-  myViewName: MyView, // <-- must match webviewName in constructor
+  myViewName: MyView, // <-- add your entry
 } as const;
+
+export type WebviewName = keyof typeof WebviewRegistry;
 ```
 
 ## Telemetry: `publicProcedure` vs `publicProcedureWithTelemetry`
