@@ -376,9 +376,23 @@ export class WebviewController<Configuration> implements vscode.Disposable {
 
     /**
      * Disposes the controller and all registered disposables.
+     * Aborts all in-flight operations and subscriptions to prevent orphaned work.
      */
     public dispose(): void {
         this._onDisposed.fire();
+
+        // Abort all active queries/mutations so server-side procedures can stop early
+        for (const controller of this._activeOperations.values()) {
+            controller.abort();
+        }
+        this._activeOperations.clear();
+
+        // Abort all active subscriptions so async generators can terminate
+        for (const controller of this._activeSubscriptions.values()) {
+            controller.abort();
+        }
+        this._activeSubscriptions.clear();
+
         this._disposables.forEach((d) => {
             d.dispose();
         });
