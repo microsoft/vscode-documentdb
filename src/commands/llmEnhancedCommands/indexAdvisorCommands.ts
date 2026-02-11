@@ -340,6 +340,7 @@ export async function optimizeQuery(
 ): Promise<OptimizationResult> {
     // Check if the request was already cancelled before starting
     if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before starting optimization'));
         throw new UserCancelledError('AbortSignal');
     }
 
@@ -389,6 +390,7 @@ export async function optimizeQuery(
     } else {
         // Check if the request was cancelled before running explain queries
         if (queryContext.signal?.aborted) {
+            ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before running explain queries'));
             throw new UserCancelledError('AbortSignal');
         }
 
@@ -468,6 +470,7 @@ export async function optimizeQuery(
 
     // Check if the request was cancelled before fetching stats
     if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before fetching stats'));
         throw new UserCancelledError('AbortSignal');
     }
 
@@ -484,6 +487,12 @@ export async function optimizeQuery(
                     ms: statsDuration.toString(),
                 }),
             );
+
+            // Check if cancelled after getCollectionStats
+            if (queryContext.signal?.aborted) {
+                ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled after getCollectionStats'));
+                throw new UserCancelledError('AbortSignal');
+            }
         } else {
             context.telemetry.properties.fetchedCollectionStats = 'false';
             ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded collection stats'));
@@ -499,6 +508,12 @@ export async function optimizeQuery(
                     ms: indexesInfoDuration.toString(),
                 }),
             );
+
+            // Check if cancelled after listIndexes
+            if (queryContext.signal?.aborted) {
+                ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled after listIndexes'));
+                throw new UserCancelledError('AbortSignal');
+            }
 
             const indexesStatsStart = Date.now();
             const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
@@ -530,6 +545,11 @@ export async function optimizeQuery(
         context.telemetry.properties.hasCollectionStats = collectionStats ? 'true' : 'false';
         context.telemetry.measurements.indexCount = indexes?.length ?? 0;
     } catch (error) {
+        // Re-throw cancellation errors — they must not be swallowed
+        if (error instanceof UserCancelledError) {
+            throw error;
+        }
+
         // They are not critical errors, we can continue without index stats and collection stats
         // If the API calls failed, collectionStats and indexes remain undefined (safe to continue)
         context.telemetry.properties.statsError = 'true';
@@ -596,6 +616,7 @@ export async function optimizeQuery(
 
     // Check if the request was cancelled before calling Copilot (the most expensive operation)
     if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before calling Copilot'));
         throw new UserCancelledError('AbortSignal');
     }
 
