@@ -33,7 +33,7 @@ export type BaseRouterContext = {
     dbExperience: API;
     webviewName: string;
     telemetry?: ITelemetryContext;
-    signal?: AbortSignal; // This is a special property that is used to cancel subscriptions
+    signal?: AbortSignal; // AbortSignal used to cancel in-flight operations (queries, mutations, and subscriptions)
 };
 
 /**

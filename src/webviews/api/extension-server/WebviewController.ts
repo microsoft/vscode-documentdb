@@ -79,6 +79,13 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
     protected _activeSubscriptions = new Map<string, AbortController>();
 
     /**
+     * A map tracking active queries and mutations by their operation ID.
+     * Each operation is associated with an AbortController, allowing the server
+     * side to cancel the operation if the client sends an abort message.
+     */
+    protected _activeOperations = new Map<string, AbortController>();
+
+    /**
      * Sets up tRPC integration for the webview. This includes listening for messages from the webview,
      * parsing them as tRPC operations (queries, mutations, subscriptions, or subscription stops),
      * invoking the appropriate server-side procedures, and returning results or errors.
@@ -98,6 +105,10 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
 
                     case 'subscription.stop':
                         this.handleSubscriptionStopMessage(message);
+                        break;
+
+                    case 'abort':
+                        this.handleAbortMessage(message);
                         break;
 
                     default:
@@ -120,8 +131,15 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
      */
     private async handleSubscriptionMessage(message: VsCodeLinkRequestMessage, context: BaseRouterContext) {
         try {
+            // In v12, tRPC will have better cancellation support. For now, we use AbortController.
+            const abortController = new AbortController();
+            this._activeSubscriptions.set(message.id, abortController);
+
+            // Clone context so the signal is per-operation and does not mutate the shared context object
+            const opContext: BaseRouterContext = { ...context, signal: abortController.signal };
+
             const callerFactory = createCallerFactory(appRouter);
-            const caller = callerFactory(context);
+            const caller = callerFactory(opContext);
 
             // eslint-disable-next-line
             const procedure = caller[message.op.path];
@@ -129,13 +147,6 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
             if (typeof procedure !== 'function') {
                 throw new Error(l10n.t('Procedure not found: {name}', { name: message.op.path }));
             }
-
-            // In v12, tRPC will have better cancellation support. For now, we use AbortController.
-            const abortController = new AbortController();
-            this._activeSubscriptions.set(message.id, abortController);
-
-            // Attach the abort signal to the context for the subscription
-            context.signal = abortController.signal;
 
             // Await the procedure call to get the async iterator (async generator) for the subscription
             // eslint-disable-next-line , @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
@@ -180,6 +191,22 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
     }
 
     /**
+     * Handles the 'abort' message type for queries and mutations.
+     *
+     * Looks up the active operation by ID and aborts it, allowing the server-side
+     * procedure to detect cancellation via `ctx.signal.aborted`.
+     *
+     * @param message - The original message from the webview.
+     */
+    private handleAbortMessage(message: VsCodeLinkRequestMessage) {
+        const abortController = this._activeOperations.get(message.id);
+        if (abortController) {
+            abortController.abort();
+            this._activeOperations.delete(message.id);
+        }
+    }
+
+    /**
      * Handles the default case for messages (i.e., queries and mutations).
      *
      * Calls the specified tRPC procedure and returns a single result.
@@ -189,9 +216,16 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
      * @param caller - The tRPC caller for invoking the procedure.
      */
     private async handleDefaultMessage(message: VsCodeLinkRequestMessage, context: BaseRouterContext) {
+        // In v12, tRPC will have better cancellation support. For now, we use AbortController.
+        const abortController = new AbortController();
+        this._activeOperations.set(message.id, abortController);
+
         try {
+            // Clone context so the signal is per-operation and does not mutate the shared context object
+            const opContext: BaseRouterContext = { ...context, signal: abortController.signal };
+
             const callerFactory = createCallerFactory(appRouter);
-            const caller = callerFactory(context);
+            const caller = callerFactory(opContext);
 
             // eslint-disable-next-line
             const procedure = caller[message.op.path];
@@ -203,13 +237,21 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
             // eslint-disable-next-line , @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
             const result = await procedure(message.op.input);
 
-            // Send the result back to the client
-            // eslint-disable-next-line
-            const response = { id: message.id, result };
-            this._panel.webview.postMessage(response);
+            // Only send the result if the operation was not aborted
+            if (!abortController.signal.aborted) {
+                // Send the result back to the client
+                // eslint-disable-next-line
+                const response = { id: message.id, result };
+                this._panel.webview.postMessage(response);
+            }
         } catch (error) {
-            const trpcErrorMessage = this.wrapInTrpcErrorMessage(error, message.id);
-            this._panel.webview.postMessage(trpcErrorMessage);
+            // Only send error if the operation was not aborted (client already errored locally)
+            if (!abortController.signal.aborted) {
+                const trpcErrorMessage = this.wrapInTrpcErrorMessage(error, message.id);
+                this._panel.webview.postMessage(trpcErrorMessage);
+            }
+        } finally {
+            this._activeOperations.delete(message.id);
         }
     }
 

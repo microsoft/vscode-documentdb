@@ -15,6 +15,7 @@
 
 import { callWithTelemetryAndErrorHandling, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { initTRPC } from '@trpc/server';
+import { type BaseRouterContext } from '../configuration/appRouter';
 
 /**
  * Helper type: transforms a context type to have required (non-optional) telemetry.
@@ -52,6 +53,13 @@ export const trpcToTelemetry = t.middleware(async (opts) => {
                     telemetry: context.telemetry,
                 },
             });
+
+            // Check if the operation was aborted via AbortSignal
+            const signal = (opts.ctx as BaseRouterContext).signal;
+            if (signal?.aborted) {
+                context.telemetry.properties.aborted = 'true';
+                context.telemetry.properties.result = 'Canceled';
+            }
 
             if (!result.ok) {
                 /**

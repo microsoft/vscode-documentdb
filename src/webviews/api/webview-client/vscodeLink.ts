@@ -9,7 +9,7 @@ import { observable } from '@trpc/server/observable'; // Their example uses a re
 import { type AppRouter } from '../configuration/appRouter';
 
 type StopOperation<TInput = unknown> = Omit<Operation<TInput>, 'type'> & {
-    type: 'subscription.stop';
+    type: 'subscription.stop' | 'abort';
 };
 
 /**
@@ -19,6 +19,7 @@ type StopOperation<TInput = unknown> = Omit<Operation<TInput>, 'type'> & {
 export interface VsCodeLinkRequestMessage {
     id: string;
     // TODO, when tRPC v12 is released, 'subscription.stop' should be supported natively, until then, we're adding it manually.
+    // 'abort' is used to cancel in-flight queries and mutations.
     op: Operation<unknown> | StopOperation<unknown>;
 }
 
@@ -100,7 +101,6 @@ function vscodeLink(options: VSCodeLinkOptions): TRPCLink<AppRouter> {
                     if (message.id !== operationId) return;
 
                     if (message.error) {
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                         observer.error(TRPCClientError.from(message.error));
                         return;
                     }
@@ -130,16 +130,45 @@ function vscodeLink(options: VSCodeLinkOptions): TRPCLink<AppRouter> {
                 // Register the message handler to receive messages from the server
                 const unsubscribe = onReceive(handleMessage);
 
+                /**
+                 * Abort signal handling.
+                 *
+                 * tRPC populates `op.signal` when the caller provides `{ signal: AbortSignal }` in
+                 * request options (e.g. `trpcClient.myQuery.query(input, { signal: ac.signal })`).
+                 *
+                 * Note: `op.signal` is a live AbortSignal on the client side — it is NOT serialized
+                 * over postMessage. Instead, when the signal fires, we send an explicit 'abort' message
+                 * to the extension host so it can cancel the server-side operation.
+                 */
+                const onAbort = (): void => {
+                    send({ id: operationId, op: { ...op, type: 'abort' } });
+                    observer.error(TRPCClientError.from(new Error('Aborted')));
+                };
+
+                if (op.signal) {
+                    if (op.signal.aborted) {
+                        // Signal was already aborted before the operation started
+                        onAbort();
+                        return () => {
+                            unsubscribe();
+                        };
+                    }
+                    op.signal.addEventListener('abort', onAbort, { once: true });
+                }
+
                 // Send the operation to the server with a unique ID
                 send({ id: operationId, op });
 
                 // Return a cleanup function that is called when the observable is unsubscribed
-                // This is relevant when working with subscriptions.
                 return () => {
                     // If it's a subscription, send a stop message to the server
                     if (op.type === 'subscription') {
                         send({ id: operationId, op: { ...op, type: 'subscription.stop' } });
                     }
+
+                    // Remove the abort listener to prevent sending abort after cleanup
+                    op.signal?.removeEventListener('abort', onAbort);
+
                     // Cleanup the message handler
                     unsubscribe();
                 };

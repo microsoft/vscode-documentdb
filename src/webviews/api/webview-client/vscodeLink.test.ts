@@ -11,13 +11,19 @@ import { vscodeLink, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessa
  * The `context.trpc.requestId` field is set to a deterministic value
  * so tests can predict the operationId used by the link.
  */
-function createMockOp(type: 'query' | 'mutation' | 'subscription', path: string, requestId: string) {
+function createMockOp(
+    type: 'query' | 'mutation' | 'subscription',
+    path: string,
+    requestId: string,
+    signal?: AbortSignal | null,
+) {
     return {
         id: 0,
         type,
         path,
         input: undefined,
         context: { trpc: { requestId } },
+        signal: signal ?? null,
     };
 }
 
@@ -313,6 +319,108 @@ describe('vscodeLink', () => {
             expect(onNext1).toHaveBeenCalledWith({ result: { data: 'for-op1' } });
             // op2 should still only have 1 call
             expect(onNext2).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('abort signal operations', () => {
+        it('should send an abort message when the signal is aborted after send', () => {
+            const ac = new AbortController();
+            const op = createMockOp('query', 'some.path', 'abort-1', ac.signal);
+            const { sentMessages, onError } = createTestHarness(op);
+
+            // The initial operation should have been sent
+            expect(sentMessages).toHaveLength(1);
+            expect(sentMessages[0].op.type).toBe('query');
+
+            // Abort the signal
+            ac.abort();
+
+            // An abort message should have been sent
+            expect(sentMessages).toHaveLength(2);
+            expect(sentMessages[1].id).toBe('abort-1');
+            expect(sentMessages[1].op.type).toBe('abort');
+            expect(sentMessages[1].op.path).toBe('some.path');
+
+            // The observer should have received an error
+            expect(onError).toHaveBeenCalledTimes(1);
+            const error = onError.mock.calls[0]![0] as TRPCClientError<never>;
+            expect(error).toBeInstanceOf(TRPCClientError);
+            expect(error.message).toBe('Aborted');
+        });
+
+        it('should error immediately when the signal is already aborted', () => {
+            const ac = new AbortController();
+            ac.abort(); // Abort before creating the operation
+
+            const op = createMockOp('query', 'some.path', 'abort-2', ac.signal);
+            const { sentMessages, onError } = createTestHarness(op);
+
+            // An abort message should have been sent (but NOT the original operation)
+            // The abort message is sent first since signal was pre-aborted
+            expect(sentMessages.some((m) => m.op.type === 'abort')).toBe(true);
+
+            // The observer should have received an error
+            expect(onError).toHaveBeenCalledTimes(1);
+            const error = onError.mock.calls[0]![0] as TRPCClientError<never>;
+            expect(error).toBeInstanceOf(TRPCClientError);
+            expect(error.message).toBe('Aborted');
+        });
+
+        it('should send abort for mutations too', () => {
+            const ac = new AbortController();
+            const op = createMockOp('mutation', 'some.mutation', 'abort-3', ac.signal);
+            const { sentMessages, onError } = createTestHarness(op);
+
+            expect(sentMessages).toHaveLength(1);
+            expect(sentMessages[0].op.type).toBe('mutation');
+
+            ac.abort();
+
+            expect(sentMessages).toHaveLength(2);
+            expect(sentMessages[1].op.type).toBe('abort');
+
+            expect(onError).toHaveBeenCalledTimes(1);
+        });
+
+        it('should not send abort message after cleanup/unsubscribe', () => {
+            const ac = new AbortController();
+            const op = createMockOp('query', 'some.path', 'abort-4', ac.signal);
+            const { sentMessages, subscription, simulateResponse } = createTestHarness(op);
+
+            // Complete the query
+            simulateResponse({ id: 'abort-4', result: 'done' });
+            subscription.unsubscribe();
+
+            // Now abort — no abort message should be sent since the listener was cleaned up
+            ac.abort();
+
+            // Only the initial operation send should exist
+            expect(sentMessages).toHaveLength(1);
+            expect(sentMessages[0].op.type).toBe('query');
+        });
+
+        it('should still use subscription.stop for subscriptions, not abort', () => {
+            const op = createMockOp('subscription', 'some.sub', 'abort-5');
+            const { sentMessages, subscription } = createTestHarness(op);
+
+            expect(sentMessages).toHaveLength(1);
+
+            subscription.unsubscribe();
+
+            // Should send subscription.stop, not abort
+            expect(sentMessages).toHaveLength(2);
+            expect(sentMessages[1].op.type).toBe('subscription.stop');
+        });
+
+        it('should not send abort when no signal is provided', () => {
+            const op = createMockOp('query', 'some.path', 'abort-6');
+            const { sentMessages, subscription, simulateResponse } = createTestHarness(op);
+
+            simulateResponse({ id: 'abort-6', result: 'done' });
+            subscription.unsubscribe();
+
+            // Only the initial operation, no abort message
+            expect(sentMessages).toHaveLength(1);
         });
     });
 });
