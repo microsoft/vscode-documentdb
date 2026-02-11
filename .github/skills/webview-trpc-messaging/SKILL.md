@@ -23,9 +23,9 @@ useTrpcClient() hook                      WebviewController
 
 | File                                                     | Purpose                                                                                    |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `src/webviews/api/extension-server/trpc.ts`              | tRPC init, `publicProcedure`, `publicProcedureWithTelemetry`, `trpcToTelemetry` middleware |
+| `src/webviews/api/extension-server/trpc.ts`              | tRPC init, `publicProcedure`, `publicProcedureWithTelemetry`                               |
 | `src/webviews/api/configuration/appRouter.ts`            | Root router bundling all view routers + `commonRouter`                                     |
-| `src/webviews/api/extension-server/WebviewController.ts` | Server-side message dispatcher (queries, mutations, subscriptions, abort)                  |
+| `src/webviews/api/extension-server/WebviewController.ts` | WebviewPanel lifecycle, tRPC message dispatcher (queries, mutations, subscriptions, abort) |
 | `src/webviews/api/webview-client/useTrpcClient.ts`       | React hook providing the tRPC client                                                       |
 | `src/webviews/api/webview-client/vscodeLink.ts`          | Custom tRPC link bridging `postMessage` transport                                          |
 
@@ -96,7 +96,7 @@ import { type RouterContext } from './myViewRouter';
 
 export class MyViewController extends WebviewController<MyViewConfig> {
   constructor(initialData: MyViewConfig) {
-    super(ext.context, API.DocumentDB, title, 'myViewName', initialData);
+    super(ext.context, title, 'myViewName', initialData);
 
     const trpcContext: RouterContext = {
       dbExperience: API.DocumentDB,
@@ -131,7 +131,7 @@ export const WebviewRegistry = {
 | `publicProcedure`              | Fire-and-forget, no external calls, telemetry reported separately            | `undefined`                                 |
 | `publicProcedureWithTelemetry` | **Default choice.** Any procedure touching DB, network, or user-visible work | Guaranteed via `trpcToTelemetry` middleware |
 
-`trpcToTelemetry` wraps the procedure in `callWithTelemetryAndErrorHandling`, auto-generating a telemetry event named `documentDB.rpc.{type}.{path}` and recording errors, duration, and abort status.
+`trpcToTelemetry` (file-local, not exported) wraps the procedure in `callWithTelemetryAndErrorHandling`, auto-generating a telemetry event named `documentDB.rpc.{type}.{path}` and recording errors, duration, and abort status.
 
 Access telemetry safely:
 

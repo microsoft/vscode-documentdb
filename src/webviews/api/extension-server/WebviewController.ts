@@ -34,14 +34,14 @@ export class WebviewController<Configuration> implements vscode.Disposable {
      * Each subscription is associated with an AbortController, allowing the server
      * side to cancel the subscription if requested by the client.
      */
-    protected _activeSubscriptions = new Map<string, AbortController>();
+    private _activeSubscriptions = new Map<string, AbortController>();
 
     /**
      * A map tracking active queries and mutations by their operation ID.
      * Each operation is associated with an AbortController, allowing the server
      * side to cancel the operation if the client sends an abort message.
      */
-    protected _activeOperations = new Map<string, AbortController>();
+    private _activeOperations = new Map<string, AbortController>();
 
     /**
      * Creates a new WebviewController instance.
@@ -57,7 +57,7 @@ export class WebviewController<Configuration> implements vscode.Disposable {
         protected extensionContext: vscode.ExtensionContext,
         title: string,
         private _webviewName: string,
-        protected configuration: Configuration,
+        private configuration: Configuration,
         viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
         private _iconPath?:
             | vscode.Uri
@@ -257,7 +257,7 @@ export class WebviewController<Configuration> implements vscode.Disposable {
      * @param error - The caught error.
      * @param operationId - The operation ID associated with the error.
      */
-    wrapInTrpcErrorMessage(error: unknown, operationId: string) {
+    private wrapInTrpcErrorMessage(error: unknown, operationId: string) {
         const errorEntry = getTRPCErrorFromUnknown(error);
 
         return {
@@ -276,7 +276,7 @@ export class WebviewController<Configuration> implements vscode.Disposable {
      * Generates the full HTML document for the webview, including CSP headers,
      * serialized initial configuration, and the script that boots the React app.
      */
-    protected getDocumentTemplate(webview?: vscode.Webview): string {
+    private getDocumentTemplate(webview?: vscode.Webview): string {
         const devServer = !!process.env.DEVSERVER;
         const isProduction = ext.context.extensionMode === vscode.ExtensionMode.Production;
         const nonce = randomBytes(16).toString('base64');

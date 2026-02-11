@@ -41,7 +41,7 @@ export const createCallerFactory = t.createCallerFactory;
 export const router = t.router;
 export const publicProcedure = t.procedure;
 // Create middleware for logging requests
-export const trpcToTelemetry = t.middleware(async (opts) => {
+const trpcToTelemetry = t.middleware(async (opts) => {
     const result = await callWithTelemetryAndErrorHandling(
         `documentDB.rpc.${opts.type}.${opts.path}`,
         async (context) => {

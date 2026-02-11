@@ -57,14 +57,6 @@ export type BaseRouterContext = {
 };
 
 /**
- * Context type for procedures using publicProcedureWithTelemetry
- * Telemetry is guaranteed to be present via the trpcToTelemetry middleware
- */
-export type BaseRouterContextWithTelemetry = BaseRouterContext & {
-    telemetry: ITelemetryContext;
-};
-
-/**
  * eventName: string,
         properties?: Record<string, string>,
         measurements?: Record<string, number>
