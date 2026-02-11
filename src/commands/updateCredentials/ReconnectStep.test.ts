@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 import { ReconnectStep } from './ReconnectStep';
+import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 // Mock ClustersClient
 const mockDeleteClient = jest.fn().mockResolvedValue(undefined);
@@ -22,16 +22,22 @@ jest.mock('../../documentdb/CredentialCache', () => ({
     },
 }));
 
-// Mock extensionVariables
-const mockRefresh = jest.fn();
-jest.mock('../../extensionVariables', () => ({
-    ext: {
-        connectionsBranchDataProvider: {
-            get refresh() {
-                return mockRefresh;
-            },
-        },
+// Mock refreshView
+const mockRefreshView = jest.fn().mockResolvedValue(undefined);
+jest.mock('../refreshView/refreshView', () => ({
+    refreshView: (...args: unknown[]) => mockRefreshView(...args),
+}));
+
+// Mock Views
+jest.mock('../../documentdb/Views', () => ({
+    Views: {
+        ConnectionsView: 'connectionsView',
     },
+}));
+
+// Mock extensionVariables (needed for refreshView internals)
+jest.mock('../../extensionVariables', () => ({
+    ext: {},
 }));
 
 // Mock @microsoft/vscode-azext-utils
@@ -56,6 +62,7 @@ function createMockContext(overrides: Partial<UpdateCredentialsWizardContext> = 
         storageId: 'test-storage-id',
         clusterId: 'test-cluster-id',
         availableAuthenticationMethods: [],
+        hasActiveSession: false,
         shouldReconnect: false,
         ...overrides,
     } as UpdateCredentialsWizardContext;
@@ -70,37 +77,39 @@ describe('ReconnectStep', () => {
     });
 
     describe('shouldExecute', () => {
-        it('should return true when shouldReconnect is true', () => {
-            const context = createMockContext({ shouldReconnect: true });
-            expect(step.shouldExecute(context)).toBe(true);
-        });
-
-        it('should return false when shouldReconnect is false', () => {
-            const context = createMockContext({ shouldReconnect: false });
-            expect(step.shouldExecute(context)).toBe(false);
+        it('should always return true to ensure cache is cleared after credential update', () => {
+            expect(step.shouldExecute()).toBe(true);
         });
     });
 
     describe('execute', () => {
-        it('should delete cached client and credentials and refresh the view', async () => {
+        it('should always delete cached client and credentials and refresh the view', async () => {
             const context = createMockContext({
                 clusterId: 'my-cluster-id',
-                shouldReconnect: true,
+                shouldReconnect: false,
             });
 
             await step.execute(context);
 
             expect(mockDeleteClient).toHaveBeenCalledWith('my-cluster-id');
             expect(mockDeleteCredentials).toHaveBeenCalledWith('my-cluster-id');
-            expect(mockRefresh).toHaveBeenCalled();
+            expect(mockRefreshView).toHaveBeenCalledWith(context, 'connectionsView');
         });
 
-        it('should set reconnected telemetry property to true', async () => {
+        it('should set reconnected telemetry when shouldReconnect is true', async () => {
             const context = createMockContext({ shouldReconnect: true });
 
             await step.execute(context);
 
             expect(context.telemetry.properties.reconnected).toBe('true');
+        });
+
+        it('should not set reconnected telemetry when shouldReconnect is false', async () => {
+            const context = createMockContext({ shouldReconnect: false });
+
+            await step.execute(context);
+
+            expect(context.telemetry.properties.reconnected).toBeUndefined();
         });
     });
 

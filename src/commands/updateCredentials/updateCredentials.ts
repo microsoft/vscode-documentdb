@@ -6,6 +6,7 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
@@ -60,6 +61,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageId: node.storageId,
         clusterId: node.cluster.clusterId,
+        hasActiveSession: ClustersClient.exists(node.cluster.clusterId),
         shouldReconnect: false,
     };
 

@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 import { PromptReconnectStep } from './PromptReconnectStep';
+import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 // Mock @vscode/l10n
 jest.mock('@vscode/l10n', () => ({
@@ -36,6 +36,7 @@ function createMockContext(
         storageId: 'test-storage-id',
         clusterId: 'test-cluster-id',
         availableAuthenticationMethods: [],
+        hasActiveSession: true,
         shouldReconnect: false,
         ...overrides,
     } as UpdateCredentialsWizardContext;
@@ -52,8 +53,14 @@ describe('PromptReconnectStep', () => {
     });
 
     describe('shouldPrompt', () => {
-        it('should always return true', () => {
-            expect(step.shouldPrompt()).toBe(true);
+        it('should return true when there is an active session', () => {
+            const context = createMockContext(mockShowQuickPick, { hasActiveSession: true });
+            expect(step.shouldPrompt(context)).toBe(true);
+        });
+
+        it('should return false when there is no active session', () => {
+            const context = createMockContext(mockShowQuickPick, { hasActiveSession: false });
+            expect(step.shouldPrompt(context)).toBe(false);
         });
     });
 
@@ -97,6 +104,24 @@ describe('PromptReconnectStep', () => {
             expect(capturedItems).toHaveLength(2);
             expect(capturedItems[0].data).toBe(true);
             expect(capturedItems[1].data).toBe(false);
+        });
+
+        it('should use detail instead of description for QuickPick items', async () => {
+            let capturedItems: Array<{ label: string; detail?: string; description?: string; data: boolean }> = [];
+            mockShowQuickPick.mockImplementation(
+                (items: Array<{ label: string; detail?: string; description?: string; data: boolean }>) => {
+                    capturedItems = items;
+                    return Promise.resolve(items[0]);
+                },
+            );
+            const context = createMockContext(mockShowQuickPick);
+
+            await step.prompt(context);
+
+            for (const item of capturedItems) {
+                expect(item.detail).toBeDefined();
+                expect(item.description).toBeUndefined();
+            }
         });
 
         it('should pass correct options to showQuickPick', async () => {

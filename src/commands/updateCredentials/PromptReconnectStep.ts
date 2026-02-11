@@ -12,12 +12,12 @@ export class PromptReconnectStep extends AzureWizardPromptStep<UpdateCredentials
         const quickPickItems: IAzureQuickPickItem<boolean>[] = [
             {
                 label: l10n.t('Yes'),
-                description: l10n.t('Reconnect now with the updated credentials'),
+                detail: l10n.t('Reconnect now with the updated credentials'),
                 data: true,
             },
             {
                 label: l10n.t('No'),
-                description: l10n.t('Save credentials without reconnecting'),
+                detail: l10n.t('Save credentials without reconnecting'),
                 data: false,
             },
         ];
@@ -31,7 +31,7 @@ export class PromptReconnectStep extends AzureWizardPromptStep<UpdateCredentials
         context.shouldReconnect = selectedItem.data;
     }
 
-    public shouldPrompt(): boolean {
-        return true;
+    public shouldPrompt(context: UpdateCredentialsWizardContext): boolean {
+        return context.hasActiveSession;
     }
 }
