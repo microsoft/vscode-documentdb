@@ -71,6 +71,7 @@ export class QueryInsightsAIService {
         databaseName: string,
         collectionName: string,
         executionPlan?: unknown,
+        signal?: AbortSignal,
     ): Promise<AIOptimizationResponse> {
         const result = await callWithTelemetryAndErrorHandling(
             'vscode-documentdb.queryInsights.getOptimizationRecommendations',
@@ -87,6 +88,7 @@ export class QueryInsightsAIService {
                         queryObject,
                         commandType: CommandType.Find,
                         executionPlan,
+                        signal,
                     };
                 } else {
                     // handle string query for temporary compatibility
@@ -97,6 +99,7 @@ export class QueryInsightsAIService {
                         query,
                         commandType: CommandType.Find,
                         executionPlan,
+                        signal,
                     };
                 }
 

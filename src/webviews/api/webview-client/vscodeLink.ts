@@ -140,8 +140,21 @@ function vscodeLink(options: VSCodeLinkOptions): TRPCLink<AppRouter> {
                  * over postMessage. Instead, when the signal fires, we send an explicit 'abort' message
                  * to the extension host so it can cancel the server-side operation.
                  */
+
+                /**
+                 * Wraps the outer `send` to strip the non-cloneable `AbortSignal` from the
+                 * operation before it is handed to `postMessage`.  The signal is handled
+                 * entirely on the client side via the `onAbort` listener below — it must
+                 * never be serialized.
+                 */
+                const sendSafe = (message: VsCodeLinkRequestMessage): void => {
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                    const { signal: _sig, ...safeOp } = message.op as Operation<unknown> & { signal?: unknown };
+                    send({ ...message, op: safeOp as VsCodeLinkRequestMessage['op'] });
+                };
+
                 const onAbort = (): void => {
-                    send({ id: operationId, op: { ...op, type: 'abort' } });
+                    sendSafe({ id: operationId, op: { ...op, type: 'abort' } });
                     observer.error(TRPCClientError.from(new Error('Aborted')));
                 };
 
@@ -157,13 +170,13 @@ function vscodeLink(options: VSCodeLinkOptions): TRPCLink<AppRouter> {
                 }
 
                 // Send the operation to the server with a unique ID
-                send({ id: operationId, op });
+                sendSafe({ id: operationId, op });
 
                 // Return a cleanup function that is called when the observable is unsubscribed
                 return () => {
                     // If it's a subscription, send a stop message to the server
                     if (op.type === 'subscription') {
-                        send({ id: operationId, op: { ...op, type: 'subscription.stop' } });
+                        sendSafe({ id: operationId, op: { ...op, type: 'subscription.stop' } });
                     }
 
                     // Remove the abort listener to prevent sending abort after cleanup

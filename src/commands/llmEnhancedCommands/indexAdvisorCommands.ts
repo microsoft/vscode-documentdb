@@ -70,6 +70,8 @@ export interface QueryOptimizationContext {
     preferredModel?: string;
     // Fallback LLM models
     fallbackModels?: string[];
+    // AbortSignal for cancellation support
+    signal?: AbortSignal;
 }
 
 /**
@@ -336,6 +338,11 @@ export async function optimizeQuery(
     context: IActionContext,
     queryContext: QueryOptimizationContext,
 ): Promise<OptimizationResult> {
+    // Check if the request was already cancelled before starting
+    if (queryContext.signal?.aborted) {
+        throw new Error(l10n.t('Operation was cancelled'));
+    }
+
     // Check if Copilot is available
     const copilotAvailable = await CopilotService.isAvailable();
     if (!copilotAvailable) {
@@ -380,6 +387,11 @@ export async function optimizeQuery(
 
         ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded execution plan'));
     } else {
+        // Check if the request was cancelled before running explain queries
+        if (queryContext.signal?.aborted) {
+            throw new Error(l10n.t('Operation was cancelled'));
+        }
+
         // Check if we have queryObject or need to parse query string
         if (!queryContext.queryObject && !queryContext.query) {
             throw new Error(l10n.t('query or queryObject is required when not using pre-loaded data'));
@@ -452,6 +464,11 @@ export async function optimizeQuery(
                 }),
             );
         }
+    }
+
+    // Check if the request was cancelled before fetching stats
+    if (queryContext.signal?.aborted) {
+        throw new Error(l10n.t('Operation was cancelled'));
     }
 
     let indexesInfo: IndexItemModel[] | undefined;
@@ -577,9 +594,15 @@ export async function optimizeQuery(
         vscode.LanguageModelChatMessage.User(contextData),
     ];
 
+    // Check if the request was cancelled before calling Copilot (the most expensive operation)
+    if (queryContext.signal?.aborted) {
+        throw new Error(l10n.t('Operation was cancelled'));
+    }
+
     const response = await CopilotService.sendMessage(messages, {
         preferredModel: preferredModelToUse,
         fallbackModels: fallbackModelsToUse,
+        signal: queryContext.signal,
     });
     const copilotDuration = Date.now() - copilotStart;
 
