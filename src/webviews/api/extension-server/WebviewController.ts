@@ -5,71 +5,29 @@
 
 import { getTRPCErrorFromUnknown } from '@trpc/server';
 import * as l10n from '@vscode/l10n';
+import { randomBytes } from 'crypto';
+import * as path from 'path';
 import * as vscode from 'vscode';
-import { type API } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
 import { appRouter, type BaseRouterContext } from '../configuration/appRouter';
 import { type VsCodeLinkRequestMessage } from '../webview-client/vscodeLink';
-import { WebviewBaseController } from './WebviewBaseController';
 import { createCallerFactory } from './trpc';
 
+const DEV_SERVER_HOST = 'http://localhost:18080';
+
 /**
- * WebviewController is a class that manages a vscode.WebviewPanel and provides
- * a way to communicate with it. It uses tRPC to handle incoming requests (queries,
- * mutations, and subscriptions) from the webview. Through this controller, the
- * webview can call server-side procedures defined in the `appRouter`.
+ * WebviewController manages a vscode.WebviewPanel and provides tRPC-based communication
+ * with the React webview. It handles incoming requests (queries, mutations, and subscriptions)
+ * from the webview, routing them to server-side procedures defined in the `appRouter`.
  *
  * @template Configuration - The type of the configuration object that the webview will receive.
  */
-export class WebviewController<Configuration> extends WebviewBaseController<Configuration> {
+export class WebviewController<Configuration> implements vscode.Disposable {
     private _panel: vscode.WebviewPanel;
-
-    /**
-     * Creates a new WebviewController instance.
-     *
-     * @param context      The extension context.
-     * @param dbExperience A reference to the API object associated with this webview.
-     * @param title        The title of the webview panel.
-     * @param webviewName  The identifier/name for the webview resource.
-     * @param initialState The initial state object that the webview will use on startup.
-     * @param viewColumn   The view column in which to show the new webview panel.
-     * @param _iconPath    An optional icon to display in the tab of the webview.
-     */
-    constructor(
-        context: vscode.ExtensionContext,
-        protected dbExperience: API,
-        title: string,
-        webviewName: string,
-        initialState: Configuration,
-        viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
-        private _iconPath?:
-            | vscode.Uri
-            | {
-                  readonly light: vscode.Uri;
-                  readonly dark: vscode.Uri;
-              },
-    ) {
-        super(context, webviewName, initialState);
-
-        // Create the webview panel
-        this._panel = vscode.window.createWebviewPanel('react-webview-' + webviewName, title, viewColumn, {
-            enableScripts: true,
-            retainContextWhenHidden: true,
-            localResourceRoots: [vscode.Uri.file(this.extensionContext.extensionPath)],
-        });
-
-        this._panel.webview.html = this.getDocumentTemplate(this._panel.webview);
-        this._panel.iconPath = this._iconPath;
-
-        // Clean up when the panel is disposed
-        this.registerDisposable(
-            this._panel.onDidDispose(() => {
-                this.dispose();
-            }),
-        );
-
-        // Initializes the base functionality (like sending initial configuration) after creating the panel
-        this.initializeBase();
-    }
+    private _disposables: vscode.Disposable[] = [];
+    private _isDisposed: boolean = false;
+    private _onDisposed: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
+    public readonly onDisposed: vscode.Event<void> = this._onDisposed.event;
 
     /**
      * A map tracking active subscriptions by their operation ID.
@@ -86,12 +44,48 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
     protected _activeOperations = new Map<string, AbortController>();
 
     /**
+     * Creates a new WebviewController instance.
+     *
+     * @param extensionContext The extension context.
+     * @param title            The title of the webview panel.
+     * @param webviewName      The identifier/name for the webview resource.
+     * @param configuration    The initial state object that the webview will use on startup.
+     * @param viewColumn       The view column in which to show the new webview panel.
+     * @param _iconPath        An optional icon to display in the tab of the webview.
+     */
+    constructor(
+        protected extensionContext: vscode.ExtensionContext,
+        title: string,
+        private _webviewName: string,
+        protected configuration: Configuration,
+        viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
+        private _iconPath?:
+            | vscode.Uri
+            | {
+                  readonly light: vscode.Uri;
+                  readonly dark: vscode.Uri;
+              },
+    ) {
+        this._panel = vscode.window.createWebviewPanel('react-webview-' + _webviewName, title, viewColumn, {
+            enableScripts: true,
+            retainContextWhenHidden: true,
+            localResourceRoots: [vscode.Uri.file(this.extensionContext.extensionPath)],
+        });
+
+        this._panel.webview.html = this.getDocumentTemplate(this._panel.webview);
+        this._panel.iconPath = this._iconPath;
+
+        this.registerDisposable(
+            this._panel.onDidDispose(() => {
+                this.dispose();
+            }),
+        );
+    }
+
+    /**
      * Sets up tRPC integration for the webview. This includes listening for messages from the webview,
      * parsing them as tRPC operations (queries, mutations, subscriptions, or subscription stops),
      * invoking the appropriate server-side procedures, and returning results or errors.
-     *
-     * After refactoring, the switch-case is now delegated to separate handler functions
-     * for improved clarity.
      *
      * @param context - The base router context for procedure calls.
      */
@@ -126,7 +120,6 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
      * to the webview. Also handles cancellation via AbortController.
      *
      * @param message - The original message from the webview.
-     * @param caller - The tRPC caller for invoking the subscription procedure.
      * @param context - The base router context, to which we add an abort signal.
      */
     private async handleSubscriptionMessage(message: VsCodeLinkRequestMessage, context: BaseRouterContext) {
@@ -213,7 +206,7 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
      * If the procedure is not found or throws, returns an error message.
      *
      * @param message - The original message from the webview.
-     * @param caller - The tRPC caller for invoking the procedure.
+     * @param context - The base router context.
      */
     private async handleDefaultMessage(message: VsCodeLinkRequestMessage, context: BaseRouterContext) {
         // In v12, tRPC will have better cancellation support. For now, we use AbortController.
@@ -280,11 +273,87 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
     }
 
     /**
-     * Retrieves the vscode.Webview associated with this controller.
-     * @returns The webview being managed by this controller.
+     * Generates the full HTML document for the webview, including CSP headers,
+     * serialized initial configuration, and the script that boots the React app.
      */
-    protected _getWebview(): vscode.Webview {
-        return this._panel.webview;
+    protected getDocumentTemplate(webview?: vscode.Webview): string {
+        const devServer = !!process.env.DEVSERVER;
+        const isProduction = ext.context.extensionMode === vscode.ExtensionMode.Production;
+        const nonce = randomBytes(16).toString('base64');
+
+        const dir = ext.isBundle ? '' : 'out/src/webviews';
+        const filename = ext.isBundle ? 'views.js' : 'index.js';
+        const uri = (...parts: string[]) =>
+            webview?.asWebviewUri(vscode.Uri.file(path.join(ext.context.extensionPath, dir, ...parts))).toString(true);
+
+        const srcUri = isProduction || !devServer ? uri(filename) : `${DEV_SERVER_HOST}/${filename}`;
+
+        const csp = (
+            isProduction
+                ? [
+                      `form-action 'none';`,
+                      `default-src ${webview?.cspSource};`,
+                      `script-src ${webview?.cspSource} 'nonce-${nonce}';`,
+                      `style-src ${webview?.cspSource} vscode-resource: 'unsafe-inline';`,
+                      `img-src ${webview?.cspSource} data: vscode-resource:;`,
+                      `connect-src ${webview?.cspSource} ws:;`,
+                      `font-src ${webview?.cspSource};`,
+                      `worker-src ${webview?.cspSource} blob:;`,
+                  ]
+                : [
+                      `form-action 'none';`,
+                      `default-src ${webview?.cspSource} ${DEV_SERVER_HOST};`,
+                      `script-src ${webview?.cspSource} ${DEV_SERVER_HOST} 'nonce-${nonce}';`,
+                      `style-src ${webview?.cspSource} ${DEV_SERVER_HOST} vscode-resource: 'unsafe-inline';`,
+                      `img-src ${webview?.cspSource} ${DEV_SERVER_HOST} data: vscode-resource:;`,
+                      `connect-src ${webview?.cspSource} ${DEV_SERVER_HOST} ws:;`,
+                      `font-src ${webview?.cspSource} ${DEV_SERVER_HOST};`,
+                      `worker-src ${webview?.cspSource} ${DEV_SERVER_HOST} blob:;`,
+                  ]
+        ).join(' ');
+
+        /**
+         * Note to code maintainers:
+         * encodeURIComponent(JSON.stringify(this.configuration)) below is crucial
+         * We want to avoid the webview from crashing when the configuration object contains 'unsupported' bytes
+         */
+
+        return `<!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <meta // noinspection JSAnnotator
+                        http-equiv="Content-Security-Policy" content="${csp}" />
+                </head>
+                    <body>
+                        <div id="root"></div>
+                            <script nonce="${nonce}">
+                                globalThis.l10n_bundle = ${JSON.stringify(vscode.l10n.bundle ?? {})};
+                            </script>
+                            <script type="module" nonce="${nonce}">
+                                window.config = {
+                                    ...window.config,
+                                    __initialData: '${encodeURIComponent(JSON.stringify(this.configuration))}'
+                                };
+
+                                import { render } from "${srcUri}";
+                                render('${this._webviewName}', acquireVsCodeApi());
+                            </script>
+
+                    </body>
+                </html>`;
+    }
+
+    protected registerDisposable(disposable: vscode.Disposable): void {
+        this._disposables.push(disposable);
+    }
+
+    /**
+     * Gets whether the controller has been disposed.
+     */
+    public get isDisposed(): boolean {
+        return this._isDisposed;
     }
 
     /**
@@ -302,5 +371,16 @@ export class WebviewController<Configuration> extends WebviewBaseController<Conf
      */
     public revealToForeground(viewColumn: vscode.ViewColumn = vscode.ViewColumn.One): void {
         this._panel.reveal(viewColumn, true);
+    }
+
+    /**
+     * Disposes the controller and all registered disposables.
+     */
+    public dispose(): void {
+        this._onDisposed.fire();
+        this._disposables.forEach((d) => {
+            d.dispose();
+        });
+        this._isDisposed = true;
     }
 }
