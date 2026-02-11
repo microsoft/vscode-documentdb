@@ -96,6 +96,7 @@ describe('vscodeLink', () => {
             // The link should have sent the operation (signal is stripped by sendSafe before postMessage)
             expect(sentMessages).toHaveLength(1);
             expect(sentMessages[0].id).toBe('q-1');
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { signal: _sig, ...expectedOp } = op;
             expect(sentMessages[0].op).toEqual(expectedOp);
 
