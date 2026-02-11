@@ -55,9 +55,11 @@ After creating the SKILL.md, register it in [.github/copilot-instructions.md](/.
 <skill>
 <name>my-skill-name</name>
 <description>Same or similar description as in SKILL.md frontmatter</description>
-<file>\home\tomek\github\ms\vscode-documentdb\.github\skills\my-skill-name\SKILL.md</file>
+<file>${workspaceFolder}\.github\skills\my-skill-name\SKILL.md</file>
 </skill>
 ```
+
+> **Note:** Replace `${workspaceFolder}` with the absolute path to the repository root on your machine (e.g. `\home\user\repos\vscode-documentdb`). VS Code resolves skill file paths at runtime and currently requires absolute paths.
 
 Copilot reads skill metadata (name + description) to decide when to trigger. The SKILL.md body is loaded only after triggering.
 
