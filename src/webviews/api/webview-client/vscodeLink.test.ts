@@ -93,10 +93,11 @@ describe('vscodeLink', () => {
             const op = createMockOp('query', 'common.reportEvent', 'q-1');
             const { sentMessages, onNext, onComplete, simulateResponse } = createTestHarness(op);
 
-            // The link should have sent the operation
+            // The link should have sent the operation (signal is stripped by sendSafe before postMessage)
             expect(sentMessages).toHaveLength(1);
             expect(sentMessages[0].id).toBe('q-1');
-            expect(sentMessages[0].op).toEqual(op);
+            const { signal: _sig, ...expectedOp } = op;
+            expect(sentMessages[0].op).toEqual(expectedOp);
 
             // Simulate the server responding
             simulateResponse({ id: 'q-1', result: { text: 'hello' } });
