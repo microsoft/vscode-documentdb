@@ -11,6 +11,7 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
     // target item details
     isEmulator: boolean;
     storageId: string;
+    clusterId: string;
 
     availableAuthenticationMethods: AuthMethodId[];
 
@@ -19,4 +20,7 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
     entraIdAuthConfig?: EntraIdAuthConfig;
 
     selectedAuthenticationMethod?: AuthMethodId;
+
+    // reconnection
+    shouldReconnect: boolean;
 }
