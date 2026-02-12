@@ -1112,6 +1112,15 @@
               500
             ]
           },
+          "documentDB.experimental.enableAIQueryGeneration": {
+            "order": 30,
+            "type": "boolean",
+            "default": false,
+            "tags": [
+              "experimental"
+            ],
+            "markdownDescription": "Enable AI-powered natural language to query translation in the collection view. When enabled, you can type questions in plain language and have them translated into database queries.\n\nNote: Experimental features might not work as expected, and AI-generated content might not always be accurate."
+          },
           "documentDB.aiAssistant.findQueryPromptPath": {
             "type": [
               "string",
