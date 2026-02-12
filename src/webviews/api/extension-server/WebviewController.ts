@@ -387,6 +387,11 @@ export class WebviewController<Configuration> implements vscode.Disposable {
      * panel, so the panel is always already disposed (or disposing) when we get here.
      */
     public dispose(): void {
+        if (this._isDisposed) {
+            return;
+        }
+        this._isDisposed = true;
+
         this._onDisposed.fire();
 
         // Abort all active queries/mutations so server-side procedures can stop early
@@ -404,6 +409,5 @@ export class WebviewController<Configuration> implements vscode.Disposable {
         this._disposables.forEach((d) => {
             d.dispose();
         });
-        this._isDisposed = true;
     }
 }
