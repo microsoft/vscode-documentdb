@@ -36,15 +36,14 @@ function createMockContext(
         storageId: 'test-storage-id',
         clusterId: 'test-cluster-id',
         availableAuthenticationMethods: [],
-        hasActiveSession: true,
-        isInErrorState: false,
+        offerReconnect: true,
         shouldReconnect: false,
         ...overrides,
     } as UpdateCredentialsWizardContext;
 }
 
 describe('PromptReconnectStep', () => {
-    let step: PromptReconnectStep;
+    let step: PromptReconnectStep<UpdateCredentialsWizardContext>;
     let mockShowQuickPick: jest.Mock;
 
     beforeEach(() => {
@@ -54,18 +53,13 @@ describe('PromptReconnectStep', () => {
     });
 
     describe('shouldPrompt', () => {
-        it('should return true when there is an active session', () => {
-            const context = createMockContext(mockShowQuickPick, { hasActiveSession: true, isInErrorState: false });
+        it('should return true when offerReconnect is true', () => {
+            const context = createMockContext(mockShowQuickPick, { offerReconnect: true });
             expect(step.shouldPrompt(context)).toBe(true);
         });
 
-        it('should return true when the node is in error state (error recovery path)', () => {
-            const context = createMockContext(mockShowQuickPick, { hasActiveSession: false, isInErrorState: true });
-            expect(step.shouldPrompt(context)).toBe(true);
-        });
-
-        it('should return false when there is no active session and no error state', () => {
-            const context = createMockContext(mockShowQuickPick, { hasActiveSession: false, isInErrorState: false });
+        it('should return false when offerReconnect is false', () => {
+            const context = createMockContext(mockShowQuickPick, { offerReconnect: false });
             expect(step.shouldPrompt(context)).toBe(false);
         });
     });

@@ -62,15 +62,14 @@ function createMockContext(overrides: Partial<UpdateCredentialsWizardContext> = 
         storageId: 'test-storage-id',
         clusterId: 'test-cluster-id',
         availableAuthenticationMethods: [],
-        hasActiveSession: false,
-        isInErrorState: false,
+        offerReconnect: false,
         shouldReconnect: false,
         ...overrides,
     } as UpdateCredentialsWizardContext;
 }
 
 describe('ReconnectStep', () => {
-    let step: ReconnectStep;
+    let step: ReconnectStep<UpdateCredentialsWizardContext>;
 
     beforeEach(() => {
         jest.clearAllMocks();

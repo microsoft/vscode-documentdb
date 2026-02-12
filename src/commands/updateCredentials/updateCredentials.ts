@@ -53,6 +53,13 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         }
     }
 
+    // Offer a reconnect option when either the user has an active session
+    // (cached client) or the node is in an error state (e.g. triggered from the
+    // error recovery node after a previous connection failure).
+    const offerReconnect =
+        ClustersClient.exists(node.cluster.clusterId) ||
+        (node.id ? ext.connectionsBranchDataProvider.hasNodeErrorState(node.id) : false);
+
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
         nativeAuthConfig: connectionCredentials?.secrets.nativeAuthConfig,
@@ -62,8 +69,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageId: node.storageId,
         clusterId: node.cluster.clusterId,
-        hasActiveSession: ClustersClient.exists(node.cluster.clusterId),
-        isInErrorState: node.id ? ext.connectionsBranchDataProvider.hasNodeErrorState(node.id) : false,
+        offerReconnect,
         shouldReconnect: false,
     };
 

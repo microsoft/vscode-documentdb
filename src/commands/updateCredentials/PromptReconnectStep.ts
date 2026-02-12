@@ -3,12 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardPromptStep, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep, type IActionContext, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
-export class PromptReconnectStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
-    public async prompt(context: UpdateCredentialsWizardContext): Promise<void> {
+export interface ReconnectContext extends IActionContext {
+    offerReconnect: boolean;
+    shouldReconnect: boolean;
+}
+
+export class PromptReconnectStep<T extends ReconnectContext> extends AzureWizardPromptStep<T> {
+    public async prompt(context: T): Promise<void> {
         const quickPickItems: IAzureQuickPickItem<boolean>[] = [
             {
                 label: l10n.t('Yes'),
@@ -31,7 +35,7 @@ export class PromptReconnectStep extends AzureWizardPromptStep<UpdateCredentials
         context.shouldReconnect = selectedItem.data;
     }
 
-    public shouldPrompt(context: UpdateCredentialsWizardContext): boolean {
-        return context.hasActiveSession || context.isInErrorState;
+    public shouldPrompt(context: T): boolean {
+        return context.offerReconnect;
     }
 }

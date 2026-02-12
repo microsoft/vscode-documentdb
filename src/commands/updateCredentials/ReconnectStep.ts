@@ -8,7 +8,11 @@ import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { Views } from '../../documentdb/Views';
 import { refreshView } from '../refreshView/refreshView';
-import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
+import { type ReconnectContext } from './PromptReconnectStep';
+
+export interface ReconnectExecuteContext extends ReconnectContext {
+    clusterId: string;
+}
 
 /**
  * Clears cached client and credentials, then refreshes the Connections view.
@@ -20,10 +24,10 @@ import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardCo
  * When the user had an active session **and** opted to reconnect, the refresh
  * also triggers a new connection attempt with the updated credentials.
  */
-export class ReconnectStep extends AzureWizardExecuteStep<UpdateCredentialsWizardContext> {
+export class ReconnectStep<T extends ReconnectExecuteContext> extends AzureWizardExecuteStep<T> {
     public priority: number = 200;
 
-    public async execute(context: UpdateCredentialsWizardContext): Promise<void> {
+    public async execute(context: T): Promise<void> {
         await ClustersClient.deleteClient(context.clusterId);
         CredentialCache.deleteCredentials(context.clusterId);
         await refreshView(context, Views.ConnectionsView);

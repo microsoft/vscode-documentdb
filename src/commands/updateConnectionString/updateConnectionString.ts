@@ -5,12 +5,13 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
-import { Views } from '../../documentdb/Views';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
-import { refreshView } from '../refreshView/refreshView';
+import { PromptReconnectStep } from '../updateCredentials/PromptReconnectStep';
+import { ReconnectStep } from '../updateCredentials/ReconnectStep';
 import { ConnectionStringStep } from './ConnectionStringStep';
 import { ExecuteStep } from './ExecuteStep';
 import { type UpdateCSWizardContext } from './UpdateCSWizardContext';
@@ -40,21 +41,27 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     parsedCS.username = '';
     parsedCS.password = '';
 
+    // Offer a reconnect option when there is an active session (cached client).
+    // There is no error node path for connection string updates (by design),
+    // so only the active session check applies here.
+    const offerReconnect = ClustersClient.exists(node.cluster.clusterId);
+
     const wizardContext: UpdateCSWizardContext = {
         ...context,
         originalConnectionString: parsedCS.toString(),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageId: node.storageId,
+        clusterId: node.cluster.clusterId,
+        offerReconnect,
+        shouldReconnect: false,
     };
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Update Connection String'),
-        promptSteps: [new ConnectionStringStep()],
-        executeSteps: [new ExecuteStep()],
+        promptSteps: [new ConnectionStringStep(), new PromptReconnectStep()],
+        executeSteps: [new ExecuteStep(), new ReconnectStep()],
     });
 
     await wizard.prompt();
     await wizard.execute();
-
-    await refreshView(context, Views.ConnectionsView);
 }
