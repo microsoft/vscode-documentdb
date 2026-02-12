@@ -67,7 +67,9 @@ const trpcToTelemetry = t.middleware(async (opts) => {
                  * caller of the RPC call handle the error there.
                  */
 
-                context.telemetry.properties.result = 'Failed';
+                if (!signal?.aborted) {
+                    context.telemetry.properties.result = 'Failed';
+                }
                 context.telemetry.properties.error = result.error.name;
                 context.telemetry.properties.errorMessage = result.error.message;
                 context.telemetry.properties.errorStack = result.error.stack;
