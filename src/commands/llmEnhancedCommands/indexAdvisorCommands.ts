@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document, type Filter } from 'mongodb';
 import * as vscode from 'vscode';
@@ -14,7 +14,7 @@ import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata'
 import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import { FALLBACK_MODELS, type FilledPromptResult, PREFERRED_MODEL } from './promptTemplates';
+import { FALLBACK_MODELS, PREFERRED_MODEL, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -70,6 +70,8 @@ export interface QueryOptimizationContext {
     preferredModel?: string;
     // Fallback LLM models
     fallbackModels?: string[];
+    // AbortSignal for cancellation support
+    signal?: AbortSignal;
 }
 
 /**
@@ -336,6 +338,12 @@ export async function optimizeQuery(
     context: IActionContext,
     queryContext: QueryOptimizationContext,
 ): Promise<OptimizationResult> {
+    // Check if the request was already cancelled before starting
+    if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before starting optimization'));
+        throw new UserCancelledError('AbortSignal');
+    }
+
     // Check if Copilot is available
     const copilotAvailable = await CopilotService.isAvailable();
     if (!copilotAvailable) {
@@ -380,6 +388,12 @@ export async function optimizeQuery(
 
         ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded execution plan'));
     } else {
+        // Check if the request was cancelled before running explain queries
+        if (queryContext.signal?.aborted) {
+            ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before running explain queries'));
+            throw new UserCancelledError('AbortSignal');
+        }
+
         // Check if we have queryObject or need to parse query string
         if (!queryContext.queryObject && !queryContext.query) {
             throw new Error(l10n.t('query or queryObject is required when not using pre-loaded data'));
@@ -454,6 +468,12 @@ export async function optimizeQuery(
         }
     }
 
+    // Check if the request was cancelled before fetching stats
+    if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before fetching stats'));
+        throw new UserCancelledError('AbortSignal');
+    }
+
     let indexesInfo: IndexItemModel[] | undefined;
     try {
         if (!collectionStats) {
@@ -467,6 +487,12 @@ export async function optimizeQuery(
                     ms: statsDuration.toString(),
                 }),
             );
+
+            // Check if cancelled after getCollectionStats
+            if (queryContext.signal?.aborted) {
+                ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled after getCollectionStats'));
+                throw new UserCancelledError('AbortSignal');
+            }
         } else {
             context.telemetry.properties.fetchedCollectionStats = 'false';
             ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded collection stats'));
@@ -482,6 +508,12 @@ export async function optimizeQuery(
                     ms: indexesInfoDuration.toString(),
                 }),
             );
+
+            // Check if cancelled after listIndexes
+            if (queryContext.signal?.aborted) {
+                ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled after listIndexes'));
+                throw new UserCancelledError('AbortSignal');
+            }
 
             const indexesStatsStart = Date.now();
             const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
@@ -513,6 +545,11 @@ export async function optimizeQuery(
         context.telemetry.properties.hasCollectionStats = collectionStats ? 'true' : 'false';
         context.telemetry.measurements.indexCount = indexes?.length ?? 0;
     } catch (error) {
+        // Re-throw cancellation errors — they must not be swallowed
+        if (error instanceof UserCancelledError) {
+            throw error;
+        }
+
         // They are not critical errors, we can continue without index stats and collection stats
         // If the API calls failed, collectionStats and indexes remain undefined (safe to continue)
         context.telemetry.properties.statsError = 'true';
@@ -577,9 +614,16 @@ export async function optimizeQuery(
         vscode.LanguageModelChatMessage.User(contextData),
     ];
 
+    // Check if the request was cancelled before calling Copilot (the most expensive operation)
+    if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before calling Copilot'));
+        throw new UserCancelledError('AbortSignal');
+    }
+
     const response = await CopilotService.sendMessage(messages, {
         preferredModel: preferredModelToUse,
         fallbackModels: fallbackModelsToUse,
+        signal: queryContext.signal,
     });
     const copilotDuration = Date.now() - copilotStart;
 

@@ -3,9 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 
 /**
  * Options for sending a message to the language model
@@ -18,6 +23,9 @@ export interface CopilotMessageOptions {
 
     /* List of fallback models */
     fallbackModels?: string[];
+
+    /* AbortSignal for cancellation support */
+    signal?: AbortSignal;
 
     // TODO:
     /* Temperature setting for the model (if supported later) */
@@ -79,6 +87,9 @@ export class CopilotService {
                         modelUsed: selectedModel.id,
                     };
                 } catch (error) {
+                    if (error instanceof UserCancelledError) {
+                        throw error;
+                    }
                     context.telemetry.properties.llmError = 'llmGenerateResponseCallFailed';
                     throw error;
                 }
@@ -86,6 +97,10 @@ export class CopilotService {
         );
 
         if (!result) {
+            // If signal was aborted, propagate cancellation silently
+            if (options?.signal?.aborted) {
+                throw new UserCancelledError('AbortSignal');
+            }
             throw new Error(l10n.t('Failed to get response from language model'));
         }
 
@@ -141,21 +156,46 @@ export class CopilotService {
     private static async sendToModel(
         model: vscode.LanguageModelChat,
         messages: vscode.LanguageModelChatMessage[],
-        _options?: CopilotMessageOptions,
+        options?: CopilotMessageOptions,
     ): Promise<string> {
-        // Github copilot LLM API currently doesn't support temperature or maxTokens in
-        // LanguageModelChatRequestOptions, but we keep them here for potential future use
-        const requestOptions: vscode.LanguageModelChatRequestOptions = {};
+        const signal = options?.signal;
 
-        const chatResponse = await model.sendRequest(messages, requestOptions);
-
-        // Collect the streaming response
-        let fullResponse = '';
-        for await (const fragment of chatResponse.text) {
-            fullResponse += fragment;
+        // If already aborted, throw immediately
+        if (signal?.aborted) {
+            throw new UserCancelledError('AbortSignal');
         }
 
-        return fullResponse;
+        // Bridge AbortSignal → vscode.CancellationToken so the LLM API can stop streaming
+        const cts = new vscode.CancellationTokenSource();
+        const onAbort = () => cts.cancel();
+        signal?.addEventListener('abort', onAbort);
+
+        try {
+            // Github copilot LLM API currently doesn't support temperature or maxTokens in
+            // LanguageModelChatRequestOptions, but we keep them here for potential future use
+            const requestOptions: vscode.LanguageModelChatRequestOptions = {};
+
+            const chatResponse = await model.sendRequest(messages, requestOptions, cts.token);
+
+            // Collect the streaming response, checking for cancellation between chunks
+            let fullResponse = '';
+            for await (const fragment of chatResponse.text) {
+                if (signal?.aborted) {
+                    break;
+                }
+                fullResponse += fragment;
+            }
+
+            if (signal?.aborted) {
+                ext.outputChannel.trace(l10n.t('[Query Insights AI] Copilot call cancelled during streaming'));
+                throw new UserCancelledError('AbortSignal');
+            }
+
+            return fullResponse;
+        } finally {
+            signal?.removeEventListener('abort', onAbort);
+            cts.dispose();
+        }
     }
 
     /**

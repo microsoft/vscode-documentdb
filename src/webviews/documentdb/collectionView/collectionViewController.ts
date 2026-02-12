@@ -48,7 +48,7 @@ export class CollectionViewController extends WebviewController<CollectionViewWe
             enableAIQueryGeneration,
         };
 
-        super(ext.context, API.DocumentDB, title, 'mongoClustersCollectionView', fullInitialData);
+        super(ext.context, title, 'collectionView', fullInitialData);
 
         const trpcContext: RouterContext = {
             dbExperience: API.DocumentDB,

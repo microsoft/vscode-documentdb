@@ -15,6 +15,7 @@
 
 import { callWithTelemetryAndErrorHandling, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { initTRPC } from '@trpc/server';
+import { type BaseRouterContext } from '../configuration/appRouter';
 
 /**
  * Helper type: transforms a context type to have required (non-optional) telemetry.
@@ -40,7 +41,7 @@ export const createCallerFactory = t.createCallerFactory;
 export const router = t.router;
 export const publicProcedure = t.procedure;
 // Create middleware for logging requests
-export const trpcToTelemetry = t.middleware(async (opts) => {
+const trpcToTelemetry = t.middleware(async (opts) => {
     const result = await callWithTelemetryAndErrorHandling(
         `documentDB.rpc.${opts.type}.${opts.path}`,
         async (context) => {
@@ -53,13 +54,22 @@ export const trpcToTelemetry = t.middleware(async (opts) => {
                 },
             });
 
+            // Check if the operation was aborted via AbortSignal
+            const signal = (opts.ctx as BaseRouterContext).signal;
+            if (signal?.aborted) {
+                context.telemetry.properties.aborted = 'true';
+                context.telemetry.properties.result = 'Canceled';
+            }
+
             if (!result.ok) {
                 /**
                  * we're not handling any error here as we just want to log it here and let the
                  * caller of the RPC call handle the error there.
                  */
 
-                context.telemetry.properties.result = 'Failed';
+                if (!signal?.aborted) {
+                    context.telemetry.properties.result = 'Failed';
+                }
                 context.telemetry.properties.error = result.error.name;
                 context.telemetry.properties.errorMessage = result.error.message;
                 context.telemetry.properties.errorStack = result.error.stack;
