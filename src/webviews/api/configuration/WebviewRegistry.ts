@@ -7,8 +7,8 @@ import { CollectionView } from '../../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../../documentdb/documentView/documentView';
 
 export const WebviewRegistry = {
-    mongoClustersCollectionView: CollectionView,
-    mongoClustersDocumentView: DocumentView,
+    collectionView: CollectionView,
+    documentView: DocumentView,
 } as const;
 
 /**

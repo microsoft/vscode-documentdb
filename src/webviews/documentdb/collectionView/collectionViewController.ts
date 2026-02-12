@@ -40,7 +40,7 @@ export class CollectionViewController extends WebviewController<CollectionViewWe
             defaultPageSize,
         };
 
-        super(ext.context, title, 'mongoClustersCollectionView', fullInitialData);
+        super(ext.context, title, 'collectionView', fullInitialData);
 
         const trpcContext: RouterContext = {
             dbExperience: API.DocumentDB,
