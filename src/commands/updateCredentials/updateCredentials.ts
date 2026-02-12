@@ -6,7 +6,6 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
-import { ClustersClient } from '../../documentdb/ClustersClient';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
@@ -53,12 +52,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         }
     }
 
-    // Offer a reconnect option when either the user has an active session
-    // (cached client) or the node is in an error state (e.g. triggered from the
-    // error recovery node after a previous connection failure).
-    const offerReconnect =
-        ClustersClient.exists(node.cluster.clusterId) ||
-        (node.id ? ext.connectionsBranchDataProvider.hasNodeErrorState(node.id) : false);
+    const isErrorState = node.id ? ext.connectionsBranchDataProvider.hasNodeErrorState(node.id) : false;
 
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
@@ -69,8 +63,9 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageId: node.storageId,
         clusterId: node.cluster.clusterId,
-        offerReconnect,
-        shouldReconnect: false,
+        nodeId: node.id,
+        isErrorState,
+        reconnectAfterError: false,
     };
 
     const wizard = new AzureWizard(wizardContext, {

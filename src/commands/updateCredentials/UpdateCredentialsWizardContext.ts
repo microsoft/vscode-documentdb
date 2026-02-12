@@ -21,13 +21,11 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
 
     selectedAuthenticationMethod?: AuthMethodId;
 
-    // reconnection
-    /**
-     * When true, the wizard will offer a reconnect option after saving updated
-     * credentials. Set at wizard initialization time based on whether there is
-     * an active session or the node is in an error state (e.g. previous
-     * connection failure triggered from the error recovery node).
-     */
-    offerReconnect: boolean;
-    shouldReconnect: boolean;
+    /** Tree-view node ID, used to reset error state on reconnect. */
+    nodeId?: string;
+
+    /** True when the wizard was triggered from an error/retry node. */
+    isErrorState: boolean;
+    /** Set by the reconnect prompt; clears error state to trigger a new connection. */
+    reconnectAfterError: boolean;
 }

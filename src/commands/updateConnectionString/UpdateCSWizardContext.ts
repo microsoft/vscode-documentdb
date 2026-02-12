@@ -14,13 +14,11 @@ export interface UpdateCSWizardContext extends IActionContext {
     originalConnectionString: string;
     newConnectionString?: string;
 
-    // reconnection
-    /**
-     * When true, the wizard will offer a reconnect option after saving the
-     * updated connection string. Set at wizard initialization time based on
-     * whether there is an active session. There is no error node path for
-     * connection string updates (by design), so only active sessions apply.
-     */
-    offerReconnect: boolean;
-    shouldReconnect: boolean;
+    /** Tree-view node ID, used to reset error state on reconnect. */
+    nodeId?: string;
+
+    /** Always false for connection string updates (no error-node path). */
+    isErrorState: boolean;
+    /** Always false for connection string updates (no reconnect prompt). */
+    reconnectAfterError: boolean;
 }

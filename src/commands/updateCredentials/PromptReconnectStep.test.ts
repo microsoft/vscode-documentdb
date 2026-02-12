@@ -36,8 +36,8 @@ function createMockContext(
         storageId: 'test-storage-id',
         clusterId: 'test-cluster-id',
         availableAuthenticationMethods: [],
-        offerReconnect: true,
-        shouldReconnect: false,
+        isErrorState: true,
+        reconnectAfterError: false,
         ...overrides,
     } as UpdateCredentialsWizardContext;
 }
@@ -53,19 +53,19 @@ describe('PromptReconnectStep', () => {
     });
 
     describe('shouldPrompt', () => {
-        it('should return true when offerReconnect is true', () => {
-            const context = createMockContext(mockShowQuickPick, { offerReconnect: true });
+        it('should return true when isErrorState is true', () => {
+            const context = createMockContext(mockShowQuickPick, { isErrorState: true });
             expect(step.shouldPrompt(context)).toBe(true);
         });
 
-        it('should return false when offerReconnect is false', () => {
-            const context = createMockContext(mockShowQuickPick, { offerReconnect: false });
+        it('should return false when isErrorState is false', () => {
+            const context = createMockContext(mockShowQuickPick, { isErrorState: false });
             expect(step.shouldPrompt(context)).toBe(false);
         });
     });
 
     describe('prompt', () => {
-        it('should set shouldReconnect to true when user selects Yes', async () => {
+        it('should set reconnectAfterError to true when user selects Yes', async () => {
             mockShowQuickPick.mockResolvedValue({
                 label: 'Yes',
                 data: true,
@@ -74,11 +74,11 @@ describe('PromptReconnectStep', () => {
 
             await step.prompt(context);
 
-            expect(context.shouldReconnect).toBe(true);
+            expect(context.reconnectAfterError).toBe(true);
             expect(mockShowQuickPick).toHaveBeenCalledTimes(1);
         });
 
-        it('should set shouldReconnect to false when user selects No', async () => {
+        it('should set reconnectAfterError to false when user selects No', async () => {
             mockShowQuickPick.mockResolvedValue({
                 label: 'No',
                 data: false,
@@ -87,7 +87,7 @@ describe('PromptReconnectStep', () => {
 
             await step.prompt(context);
 
-            expect(context.shouldReconnect).toBe(false);
+            expect(context.reconnectAfterError).toBe(false);
             expect(mockShowQuickPick).toHaveBeenCalledTimes(1);
         });
 

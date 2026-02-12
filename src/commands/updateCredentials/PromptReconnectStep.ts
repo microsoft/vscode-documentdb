@@ -7,10 +7,16 @@ import { AzureWizardPromptStep, type IActionContext, type IAzureQuickPickItem } 
 import * as l10n from '@vscode/l10n';
 
 export interface ReconnectContext extends IActionContext {
-    offerReconnect: boolean;
-    shouldReconnect: boolean;
+    /** True when the wizard was triggered from an error/retry node. */
+    isErrorState: boolean;
+    /** Set by the prompt; when true the error state is cleared to trigger a reconnect. */
+    reconnectAfterError: boolean;
 }
 
+/**
+ * Asks the user whether to reconnect after updating credentials.
+ * Only shown when the node is in an error state (e.g. previous connection failure).
+ */
 export class PromptReconnectStep<T extends ReconnectContext> extends AzureWizardPromptStep<T> {
     public async prompt(context: T): Promise<void> {
         const quickPickItems: IAzureQuickPickItem<boolean>[] = [
@@ -32,10 +38,10 @@ export class PromptReconnectStep<T extends ReconnectContext> extends AzureWizard
             suppressPersistence: true,
         });
 
-        context.shouldReconnect = selectedItem.data;
+        context.reconnectAfterError = selectedItem.data;
     }
 
     public shouldPrompt(context: T): boolean {
-        return context.offerReconnect;
+        return context.isErrorState;
     }
 }

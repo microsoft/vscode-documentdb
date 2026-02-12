@@ -35,9 +35,14 @@ jest.mock('../../documentdb/Views', () => ({
     },
 }));
 
-// Mock extensionVariables (needed for refreshView internals)
+// Mock extensionVariables (needed for refreshView internals and resetNodeErrorState)
+const mockResetNodeErrorState = jest.fn();
 jest.mock('../../extensionVariables', () => ({
-    ext: {},
+    ext: {
+        connectionsBranchDataProvider: {
+            resetNodeErrorState: (...args: unknown[]) => mockResetNodeErrorState(...args),
+        },
+    },
 }));
 
 // Mock @microsoft/vscode-azext-utils
@@ -62,8 +67,8 @@ function createMockContext(overrides: Partial<UpdateCredentialsWizardContext> = 
         storageId: 'test-storage-id',
         clusterId: 'test-cluster-id',
         availableAuthenticationMethods: [],
-        offerReconnect: false,
-        shouldReconnect: false,
+        isErrorState: false,
+        reconnectAfterError: false,
         ...overrides,
     } as UpdateCredentialsWizardContext;
 }
@@ -86,7 +91,7 @@ describe('ReconnectStep', () => {
         it('should always delete cached client and credentials and refresh the view', async () => {
             const context = createMockContext({
                 clusterId: 'my-cluster-id',
-                shouldReconnect: false,
+                reconnectAfterError: false,
             });
 
             await step.execute(context);
@@ -96,19 +101,24 @@ describe('ReconnectStep', () => {
             expect(mockRefreshView).toHaveBeenCalledWith(context, 'connectionsView');
         });
 
-        it('should set reconnected telemetry when shouldReconnect is true', async () => {
-            const context = createMockContext({ shouldReconnect: true });
+        it('should reset error state and set telemetry when reconnectAfterError is true', async () => {
+            const context = createMockContext({
+                reconnectAfterError: true,
+                nodeId: 'test-node-id',
+            });
 
             await step.execute(context);
 
+            expect(mockResetNodeErrorState).toHaveBeenCalledWith('test-node-id');
             expect(context.telemetry.properties.reconnected).toBe('true');
         });
 
-        it('should not set reconnected telemetry when shouldReconnect is false', async () => {
-            const context = createMockContext({ shouldReconnect: false });
+        it('should not reset error state or set telemetry when reconnectAfterError is false', async () => {
+            const context = createMockContext({ reconnectAfterError: false });
 
             await step.execute(context);
 
+            expect(mockResetNodeErrorState).not.toHaveBeenCalled();
             expect(context.telemetry.properties.reconnected).toBeUndefined();
         });
     });
