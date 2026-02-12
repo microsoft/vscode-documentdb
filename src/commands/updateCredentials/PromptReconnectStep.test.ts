@@ -37,6 +37,7 @@ function createMockContext(
         clusterId: 'test-cluster-id',
         availableAuthenticationMethods: [],
         hasActiveSession: true,
+        isInErrorState: false,
         shouldReconnect: false,
         ...overrides,
     } as UpdateCredentialsWizardContext;
@@ -54,12 +55,17 @@ describe('PromptReconnectStep', () => {
 
     describe('shouldPrompt', () => {
         it('should return true when there is an active session', () => {
-            const context = createMockContext(mockShowQuickPick, { hasActiveSession: true });
+            const context = createMockContext(mockShowQuickPick, { hasActiveSession: true, isInErrorState: false });
             expect(step.shouldPrompt(context)).toBe(true);
         });
 
-        it('should return false when there is no active session', () => {
-            const context = createMockContext(mockShowQuickPick, { hasActiveSession: false });
+        it('should return true when the node is in error state (error recovery path)', () => {
+            const context = createMockContext(mockShowQuickPick, { hasActiveSession: false, isInErrorState: true });
+            expect(step.shouldPrompt(context)).toBe(true);
+        });
+
+        it('should return false when there is no active session and no error state', () => {
+            const context = createMockContext(mockShowQuickPick, { hasActiveSession: false, isInErrorState: false });
             expect(step.shouldPrompt(context)).toBe(false);
         });
     });

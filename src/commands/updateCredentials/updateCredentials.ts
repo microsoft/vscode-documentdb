@@ -9,6 +9,7 @@ import { AuthMethodId, authMethodFromString, authMethodsFromString } from '../..
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { PromptAuthMethodStep } from '../updateCredentials/PromptAuthMethodStep';
@@ -62,6 +63,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         storageId: node.storageId,
         clusterId: node.cluster.clusterId,
         hasActiveSession: ClustersClient.exists(node.cluster.clusterId),
+        isInErrorState: node.id ? ext.connectionsBranchDataProvider.hasNodeErrorState(node.id) : false,
         shouldReconnect: false,
     };
 

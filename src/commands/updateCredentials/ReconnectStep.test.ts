@@ -63,6 +63,7 @@ function createMockContext(overrides: Partial<UpdateCredentialsWizardContext> = 
         clusterId: 'test-cluster-id',
         availableAuthenticationMethods: [],
         hasActiveSession: false,
+        isInErrorState: false,
         shouldReconnect: false,
         ...overrides,
     } as UpdateCredentialsWizardContext;

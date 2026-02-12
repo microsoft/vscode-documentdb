@@ -21,7 +21,10 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
 
     selectedAuthenticationMethod?: AuthMethodId;
 
-    // reconnection — true when there was an active session before credential update
+    // reconnection
+    /** true when there was an active (cached) client before credential update */
     hasActiveSession: boolean;
+    /** true when the node was in an error state (e.g. previous connection failure) */
+    isInErrorState: boolean;
     shouldReconnect: boolean;
 }

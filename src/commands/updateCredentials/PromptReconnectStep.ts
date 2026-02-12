@@ -32,6 +32,6 @@ export class PromptReconnectStep extends AzureWizardPromptStep<UpdateCredentials
     }
 
     public shouldPrompt(context: UpdateCredentialsWizardContext): boolean {
-        return context.hasActiveSession;
+        return context.hasActiveSession || context.isInErrorState;
     }
 }
