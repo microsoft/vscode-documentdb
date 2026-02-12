@@ -31,6 +31,12 @@ import { publicProcedure, router } from '../extension-server/trpc';
 
 export type BaseRouterContext = {
     dbExperience: API;
+    /**
+     * Label used in telemetry event names to identify the source webview
+     * (e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
+     *
+     * This is **not** the same as the registry key passed to the `WebviewController` constructor.
+     */
     webviewName: string;
     telemetry?: ITelemetryContext;
 
