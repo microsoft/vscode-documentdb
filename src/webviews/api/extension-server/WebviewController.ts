@@ -377,6 +377,14 @@ export class WebviewController<Configuration> implements vscode.Disposable {
     /**
      * Disposes the controller and all registered disposables.
      * Aborts all in-flight operations and subscriptions to prevent orphaned work.
+     *
+     * **Panel ownership architecture:** The panel owns the controller, not the
+     * other way around. When the user closes the tab, VS Code disposes the panel,
+     * which fires `onDidDispose`, which calls `this.dispose()`. We intentionally
+     * do NOT dispose the panel from within this method — doing so would create a
+     * circular call chain (`dispose → panel.dispose → onDidDispose → dispose`).
+     * No code path in the codebase disposes the controller independently of the
+     * panel, so the panel is always already disposed (or disposing) when we get here.
      */
     public dispose(): void {
         this._onDisposed.fire();
