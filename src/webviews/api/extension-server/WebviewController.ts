@@ -285,7 +285,9 @@ export class WebviewController<Configuration> implements vscode.Disposable {
         const dir = ext.isBundle ? '' : 'out/src/webviews';
         const filename = ext.isBundle ? 'views.js' : 'index.js';
         const uri = (...parts: string[]) =>
-            webview?.asWebviewUri(vscode.Uri.file(path.join(this.extensionContext.extensionPath, dir, ...parts))).toString(true);
+            webview
+                ?.asWebviewUri(vscode.Uri.file(path.join(this.extensionContext.extensionPath, dir, ...parts)))
+                .toString(true);
 
         const srcUri = isProduction || !devServer ? uri(filename) : `${DEV_SERVER_HOST}/${filename}`;
 
