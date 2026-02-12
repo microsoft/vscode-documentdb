@@ -22,10 +22,13 @@ export type CollectionViewWebviewConfigurationType = {
     collectionName: string;
     defaultPageSize: number;
     feedbackSignalsEnabled: boolean;
+    enableAIQueryGeneration: boolean;
 };
 
 export class CollectionViewController extends WebviewController<CollectionViewWebviewConfigurationType> {
-    constructor(initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize'>) {
+    constructor(
+        initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>,
+    ) {
         // ext.context here is the vscode.ExtensionContext required by the ReactWebviewPanelController's original implementation
         // we're not modifying it here in order to be ready for future updates of the webview API.
 
@@ -35,9 +38,14 @@ export class CollectionViewController extends WebviewController<CollectionViewWe
         const defaultPageSize =
             SettingsService.getSetting<number>(ext.settingsKeys.collectionViewDefaultPageSize) ?? 50;
 
+        // Get the experimental AI query generation setting
+        const enableAIQueryGeneration =
+            SettingsService.getSetting<boolean>(ext.settingsKeys.enableAIQueryGeneration) ?? false;
+
         const fullInitialData: CollectionViewWebviewConfigurationType = {
             ...initialData,
             defaultPageSize,
+            enableAIQueryGeneration,
         };
 
         super(ext.context, title, 'collectionView', fullInitialData);

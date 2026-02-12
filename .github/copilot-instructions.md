@@ -13,6 +13,25 @@ VS Code Extension for Azure Cosmos DB and MongoDB. TypeScript (strict mode), Rea
 
 > ⚠️ **NEVER use `npm run compile`** - always use `npm run build` to build the project.
 
+## PR Completion Checklist
+
+Before finishing work on a PR, agents **must** run the following steps in order:
+
+1. **Localization** — If any user-facing strings were added, modified, or removed, run:
+   ```bash
+   npm run l10n
+   ```
+2. **Formatting** — Run Prettier to ensure all files meet formatting standards:
+   ```bash
+   npm run prettier-fix
+   ```
+3. **Linting** — Run ESLint to confirm there are no linting errors:
+   ```bash
+   npm run lint
+   ```
+
+> ⚠️ **An agent must not finish or terminate until all three steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
+
 ## Project Structure
 
 | Folder          | Purpose                                    |

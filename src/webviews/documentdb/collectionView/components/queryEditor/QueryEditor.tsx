@@ -12,7 +12,8 @@ import { InputWithProgress } from '../../../../components/InputWithProgress';
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
 import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
-import { ENABLE_AI_QUERY_GENERATION } from '../../constants';
+import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
+import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 
 import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
@@ -29,6 +30,7 @@ interface QueryEditorProps {
 
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
     const { trpcClient } = useTrpcClient();
+    const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);
     const [isAiActive, setIsAiActive] = useState(false);
@@ -342,7 +344,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     return (
         <div className="queryEditor">
             {/* Optional AI prompt row */}
-            <Collapse visible={ENABLE_AI_QUERY_GENERATION && currentContext.isAiRowVisible} unmountOnExit>
+            <Collapse visible={configuration.enableAIQueryGeneration && currentContext.isAiRowVisible} unmountOnExit>
                 <div className={`aiRow${isAiActive ? ' ai-active' : ''}`}>
                     <InputWithProgress
                         ref={aiInputRef}

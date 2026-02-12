@@ -1,0 +1,144 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { PromptReconnectStepForErrorNodes } from './PromptReconnectStepForErrorNodes';
+import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
+
+// Mock @vscode/l10n
+jest.mock('@vscode/l10n', () => ({
+    t: jest.fn((str: string) => str),
+}));
+
+// Mock @microsoft/vscode-azext-utils
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    AzureWizardPromptStep: class {},
+}));
+
+function createMockContext(
+    mockShowQuickPick: jest.Mock,
+    overrides: Partial<UpdateCredentialsWizardContext> = {},
+): UpdateCredentialsWizardContext {
+    return {
+        telemetry: { properties: {}, measurements: {} },
+        errorHandling: { issueProperties: {} },
+        valuesToMask: [],
+        ui: {
+            showQuickPick: mockShowQuickPick,
+            showInputBox: jest.fn(),
+            showWarningMessage: jest.fn(),
+            onDidFinishPrompt: jest.fn(),
+            showOpenDialog: jest.fn(),
+            showWorkspaceFolderPick: jest.fn(),
+        },
+        isEmulator: false,
+        storageId: 'test-storage-id',
+        availableAuthenticationMethods: [],
+        isErrorState: true,
+        reconnectAfterError: false,
+        ...overrides,
+    } as UpdateCredentialsWizardContext;
+}
+
+describe('PromptReconnectStepForErrorNodes', () => {
+    let step: PromptReconnectStepForErrorNodes<UpdateCredentialsWizardContext>;
+    let mockShowQuickPick: jest.Mock;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        step = new PromptReconnectStepForErrorNodes();
+        mockShowQuickPick = jest.fn();
+    });
+
+    describe('shouldPrompt', () => {
+        it('should return true when isErrorState is true', () => {
+            const context = createMockContext(mockShowQuickPick, { isErrorState: true });
+            expect(step.shouldPrompt(context)).toBe(true);
+        });
+
+        it('should return false when isErrorState is false', () => {
+            const context = createMockContext(mockShowQuickPick, { isErrorState: false });
+            expect(step.shouldPrompt(context)).toBe(false);
+        });
+    });
+
+    describe('prompt', () => {
+        it('should set reconnectAfterError to true when user selects Yes', async () => {
+            mockShowQuickPick.mockResolvedValue({
+                label: 'Yes',
+                data: true,
+            });
+            const context = createMockContext(mockShowQuickPick);
+
+            await step.prompt(context);
+
+            expect(context.reconnectAfterError).toBe(true);
+            expect(mockShowQuickPick).toHaveBeenCalledTimes(1);
+        });
+
+        it('should set reconnectAfterError to false when user selects No', async () => {
+            mockShowQuickPick.mockResolvedValue({
+                label: 'No',
+                data: false,
+            });
+            const context = createMockContext(mockShowQuickPick);
+
+            await step.prompt(context);
+
+            expect(context.reconnectAfterError).toBe(false);
+            expect(mockShowQuickPick).toHaveBeenCalledTimes(1);
+        });
+
+        it('should present two options to the user', async () => {
+            let capturedItems: Array<{ label: string; data: boolean }> = [];
+            mockShowQuickPick.mockImplementation((items: Array<{ label: string; data: boolean }>) => {
+                capturedItems = items;
+                return Promise.resolve(items[0]);
+            });
+            const context = createMockContext(mockShowQuickPick);
+
+            await step.prompt(context);
+
+            expect(capturedItems).toHaveLength(2);
+            expect(capturedItems[0].data).toBe(true);
+            expect(capturedItems[1].data).toBe(false);
+        });
+
+        it('should use detail instead of description for QuickPick items', async () => {
+            let capturedItems: Array<{ label: string; detail?: string; description?: string; data: boolean }> = [];
+            mockShowQuickPick.mockImplementation(
+                (items: Array<{ label: string; detail?: string; description?: string; data: boolean }>) => {
+                    capturedItems = items;
+                    return Promise.resolve(items[0]);
+                },
+            );
+            const context = createMockContext(mockShowQuickPick);
+
+            await step.prompt(context);
+
+            for (const item of capturedItems) {
+                expect(item.detail).toBeDefined();
+                expect(item.description).toBeUndefined();
+            }
+        });
+
+        it('should pass correct options to showQuickPick', async () => {
+            mockShowQuickPick.mockResolvedValue({
+                label: 'Yes',
+                data: true,
+            });
+            const context = createMockContext(mockShowQuickPick);
+
+            await step.prompt(context);
+
+            expect(mockShowQuickPick).toHaveBeenCalledWith(
+                expect.any(Array),
+                expect.objectContaining({
+                    stepName: 'promptReconnect',
+                    suppressPersistence: true,
+                }),
+            );
+        });
+    });
+});
