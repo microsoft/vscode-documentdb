@@ -6,20 +6,40 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import { ClustersClient } from '../../documentdb/ClustersClient';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { refreshView } from '../refreshView/refreshView';
 import { PromptAuthMethodStep } from '../updateCredentials/PromptAuthMethodStep';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptPasswordStep } from './PromptPasswordStep';
-import { PromptReconnectStep } from './PromptReconnectStep';
+import { PromptReconnectStepForErrorNodes } from './PromptReconnectStepForErrorNodes';
 import { PromptTenantStep } from './PromptTenantStep';
 import { PromptUserNameStep } from './PromptUserNameStep';
-import { ReconnectStep } from './ReconnectStep';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
+/**
+ * Updates the authentication credentials for a cluster connection.
+ *
+ * Architecture:
+ * 1. Loads stored credentials and determines available authentication methods
+ * 2. Runs wizard to collect new credentials from user:
+ *    - PromptAuthMethodStep: Select authentication method
+ *    - PromptTenantStep: Enter tenant ID (if needed)
+ *    - PromptUserNameStep: Enter username (if needed)
+ *    - PromptPasswordStep: Enter password (if needed)
+ *    - PromptReconnectStepForErrorNodes: Ask to reconnect (only for error nodes)
+ * 3. ExecuteStep: Saves updated credentials to storage
+ * 4. Post-wizard: Clears cache and optionally resets error state for reconnection
+ *
+ * For error recovery nodes, prompts whether to reconnect immediately. If user chooses
+ * not to reconnect, the error state is preserved and the node remains as an error node.
+ */
 export async function updateCredentials(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
@@ -62,8 +82,6 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageId: node.storageId,
-        clusterId: node.cluster.clusterId,
-        nodeId: node.id,
         isErrorState,
         reconnectAfterError: false,
     };
@@ -75,12 +93,27 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
             new PromptTenantStep(),
             new PromptUserNameStep(),
             new PromptPasswordStep(),
-            new PromptReconnectStep(),
+            new PromptReconnectStepForErrorNodes(),
         ],
-        executeSteps: [new ExecuteStep(), new ReconnectStep()],
+        executeSteps: [new ExecuteStep()],
         showLoadingPrompt: true,
     });
 
     await wizard.prompt();
     await wizard.execute();
+
+    // Invalidate cached client/credentials so the tree picks up the new values.
+    await ClustersClient.deleteClient(node.cluster.clusterId);
+    CredentialCache.deleteCredentials(node.cluster.clusterId);
+
+    // When the node is in an error state, only clear it if the user chose to reconnect.
+    // Clearing the error state triggers a fresh connection attempt on refresh.
+    if (node.id && wizardContext.isErrorState) {
+        if (wizardContext.reconnectAfterError) {
+            ext.connectionsBranchDataProvider.resetNodeErrorState(node.id);
+            context.telemetry.properties.reconnected = 'true';
+        }
+    }
+
+    await refreshView(context, Views.ConnectionsView);
 }

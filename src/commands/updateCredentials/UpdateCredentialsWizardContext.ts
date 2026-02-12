@@ -11,7 +11,6 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
     // target item details
     isEmulator: boolean;
     storageId: string;
-    clusterId: string;
 
     availableAuthenticationMethods: AuthMethodId[];
 
@@ -21,11 +20,8 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
 
     selectedAuthenticationMethod?: AuthMethodId;
 
-    /** Tree-view node ID, used to reset error state on reconnect. */
-    nodeId?: string;
-
     /** True when the wizard was triggered from an error/retry node. */
     isErrorState: boolean;
-    /** Set by the reconnect prompt; clears error state to trigger a new connection. */
+    /** Set by the reconnect prompt; when true, error state is cleared to trigger a reconnect. */
     reconnectAfterError: boolean;
 }

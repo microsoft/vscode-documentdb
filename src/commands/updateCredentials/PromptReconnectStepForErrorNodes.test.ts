@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PromptReconnectStep } from './PromptReconnectStep';
+import { PromptReconnectStepForErrorNodes } from './PromptReconnectStepForErrorNodes';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 // Mock @vscode/l10n
@@ -34,7 +34,6 @@ function createMockContext(
         },
         isEmulator: false,
         storageId: 'test-storage-id',
-        clusterId: 'test-cluster-id',
         availableAuthenticationMethods: [],
         isErrorState: true,
         reconnectAfterError: false,
@@ -42,13 +41,13 @@ function createMockContext(
     } as UpdateCredentialsWizardContext;
 }
 
-describe('PromptReconnectStep', () => {
-    let step: PromptReconnectStep<UpdateCredentialsWizardContext>;
+describe('PromptReconnectStepForErrorNodes', () => {
+    let step: PromptReconnectStepForErrorNodes<UpdateCredentialsWizardContext>;
     let mockShowQuickPick: jest.Mock;
 
     beforeEach(() => {
         jest.clearAllMocks();
-        step = new PromptReconnectStep();
+        step = new PromptReconnectStepForErrorNodes();
         mockShowQuickPick = jest.fn();
     });
 

@@ -15,9 +15,9 @@ export interface ReconnectContext extends IActionContext {
 
 /**
  * Asks the user whether to reconnect after updating credentials.
- * Only shown when the node is in an error state (e.g. previous connection failure).
+ * Only shown when the node is in an error state (e.g., previous connection failure).
  */
-export class PromptReconnectStep<T extends ReconnectContext> extends AzureWizardPromptStep<T> {
+export class PromptReconnectStepForErrorNodes<T extends ReconnectContext> extends AzureWizardPromptStep<T> {
     public async prompt(context: T): Promise<void> {
         const quickPickItems: IAzureQuickPickItem<boolean>[] = [
             {

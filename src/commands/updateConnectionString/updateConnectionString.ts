@@ -7,13 +7,27 @@ import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils'
 import * as l10n from '@vscode/l10n';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { Views } from '../../documentdb/Views';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
-import { ReconnectStep } from '../updateCredentials/ReconnectStep';
+import { refreshView } from '../refreshView/refreshView';
 import { ConnectionStringStep } from './ConnectionStringStep';
 import { ExecuteStep } from './ExecuteStep';
 import { type UpdateCSWizardContext } from './UpdateCSWizardContext';
 
+/**
+ * Updates the connection string (hosts, ports, etc.) for a cluster connection.
+ *
+ * Architecture:
+ * 1. Loads the current connection string with credentials masked
+ * 2. Runs wizard to collect new connection string:
+ *    - ConnectionStringStep: Enter new connection string
+ * 3. ExecuteStep: Saves updated connection string to storage
+ * 4. Post-wizard: Refreshes the view
+ *
+ * Note: This command does NOT prompt for reconnection or handle error node states.
+ * Use updateCredentials command for error recovery scenarios.
+ */
 export async function updateConnectionString(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
@@ -44,18 +58,16 @@ export async function updateConnectionString(context: IActionContext, node: Docu
         originalConnectionString: parsedCS.toString(),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
         storageId: node.storageId,
-        clusterId: node.cluster.clusterId,
-        nodeId: node.id,
-        isErrorState: false,
-        reconnectAfterError: false,
     };
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Update Connection String'),
         promptSteps: [new ConnectionStringStep()],
-        executeSteps: [new ExecuteStep(), new ReconnectStep()],
+        executeSteps: [new ExecuteStep()],
     });
 
     await wizard.prompt();
     await wizard.execute();
+
+    await refreshView(context, Views.ConnectionsView);
 }
