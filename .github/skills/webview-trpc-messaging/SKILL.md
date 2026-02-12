@@ -111,6 +111,8 @@ export class MyViewController extends WebviewController<MyViewConfig> {
 }
 ```
 
+> **Important:** The `webviewName` in the `WebviewController` constructor is the **registry key** (must match a key in `WebviewRegistry`, e.g. `mongoClustersCollectionView`). The `webviewName` in the tRPC context is a **telemetry label** used in telemetry event names (e.g. `collectionView`). These are intentionally different values — do not confuse them.
+
 ### 5. Register in WebviewRegistry
 
 Add your React component to the registry. The key must match the `webviewName` passed to `WebviewController`'s constructor. The `WebviewName` type (exported from the same file) ensures compile-time validation of webview names.
