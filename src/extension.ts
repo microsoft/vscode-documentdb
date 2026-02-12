@@ -72,9 +72,10 @@ export async function activateInternal(
     });
 
     // Report enabled experimental settings at launch
-    await callWithTelemetryAndErrorHandling('experimentalFeaturesStatus', async (telemetryContext: IActionContext) => {
+    void callWithTelemetryAndErrorHandling('experimentalFeaturesStatus', async (telemetryContext: IActionContext) => {
         telemetryContext.telemetry.properties.isActivationEvent = 'true';
         telemetryContext.errorHandling.suppressDisplay = true;
+        telemetryContext.errorHandling.rethrow = false;
 
         const enableAIQueryGeneration = vscode.workspace
             .getConfiguration()
