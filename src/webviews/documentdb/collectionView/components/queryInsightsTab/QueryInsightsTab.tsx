@@ -538,6 +538,12 @@ export const QueryInsightsMain = (): JSX.Element => {
                 }
                 // Return undefined to satisfy TypeScript without creating unhandled rejection
                 return undefined as never;
+            })
+            .finally(() => {
+                // Clear the ref only if it still points to this request's controller
+                if (stage3AbortControllerRef.current === abortController) {
+                    stage3AbortControllerRef.current = null;
+                }
             });
 
         setQueryInsightsStateHelper((prev) => ({
