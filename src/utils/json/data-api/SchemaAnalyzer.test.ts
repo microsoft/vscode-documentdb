@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type JSONSchema, type JSONSchemaRef } from '../JSONSchema';
-import { getPropertyNamesAtLevel, updateSchemaWithDocument } from './SchemaAnalyzer';
+import { SchemaAnalyzer, getPropertyNamesAtLevel } from './SchemaAnalyzer';
 import {
     arraysWithDifferentDataTypes,
     complexDocument,
@@ -17,15 +17,15 @@ import {
 
 describe('DocumentDB Schema Analyzer', () => {
     it('prints out schema for testing', () => {
-        const schema: JSONSchema = {};
-        updateSchemaWithDocument(schema, embeddedDocumentOnly);
+        const analyzer = SchemaAnalyzer.fromDocument(embeddedDocumentOnly);
+        const schema = analyzer.getSchema();
         console.log(JSON.stringify(schema, null, 2));
         expect(schema).toBeDefined();
     });
 
     it('supports many documents', () => {
-        const schema: JSONSchema = {};
-        sparseDocumentsArray.forEach((doc) => updateSchemaWithDocument(schema, doc));
+        const analyzer = SchemaAnalyzer.fromDocuments(sparseDocumentsArray);
+        const schema = analyzer.getSchema();
         expect(schema).toBeDefined();
 
         // Check that 'x-documentsInspected' is correct
@@ -66,8 +66,8 @@ describe('DocumentDB Schema Analyzer', () => {
     });
 
     it('detects all BSON types from flatDocument', () => {
-        const schema: JSONSchema = {};
-        updateSchemaWithDocument(schema, flatDocument);
+        const analyzer = SchemaAnalyzer.fromDocument(flatDocument);
+        const schema = analyzer.getSchema();
 
         // Check that all fields are detected
         const expectedFields = Object.keys(flatDocument);
@@ -92,8 +92,8 @@ describe('DocumentDB Schema Analyzer', () => {
     });
 
     it('detects embedded objects correctly', () => {
-        const schema: JSONSchema = {};
-        updateSchemaWithDocument(schema, embeddedDocumentOnly);
+        const analyzer = SchemaAnalyzer.fromDocument(embeddedDocumentOnly);
+        const schema = analyzer.getSchema();
 
         // Check that the root properties are detected
         expect(schema.properties).toHaveProperty('personalInfo');
@@ -118,8 +118,8 @@ describe('DocumentDB Schema Analyzer', () => {
     });
 
     it('detects arrays and their element types correctly', () => {
-        const schema: JSONSchema = {};
-        updateSchemaWithDocument(schema, arraysWithDifferentDataTypes);
+        const analyzer = SchemaAnalyzer.fromDocument(arraysWithDifferentDataTypes);
+        const schema = analyzer.getSchema();
 
         // Check that arrays are detected
         expect(schema.properties).toHaveProperty('integersArray');
@@ -150,8 +150,8 @@ describe('DocumentDB Schema Analyzer', () => {
     });
 
     it('handles arrays within objects and objects within arrays', () => {
-        const schema: JSONSchema = {};
-        updateSchemaWithDocument(schema, complexDocument);
+        const analyzer = SchemaAnalyzer.fromDocument(complexDocument);
+        const schema = analyzer.getSchema();
 
         // Access 'user.profile.hobbies'
         const userProfile = schema.properties && schema.properties['user'].anyOf?.[0]?.properties?.['profile'];
@@ -179,8 +179,8 @@ describe('DocumentDB Schema Analyzer', () => {
     });
 
     it('updates schema correctly when processing multiple documents', () => {
-        const schema: JSONSchema = {};
-        complexDocumentsArray.forEach((doc) => updateSchemaWithDocument(schema, doc));
+        const analyzer = SchemaAnalyzer.fromDocuments(complexDocumentsArray);
+        const schema = analyzer.getSchema();
 
         // Check that 'x-documentsInspected' is correct
         expect(schema['x-documentsInspected']).toBe(complexDocumentsArray.length);
@@ -207,8 +207,8 @@ describe('DocumentDB Schema Analyzer', () => {
 
     describe('traverses schema', () => {
         it('with valid paths', () => {
-            const schema: JSONSchema = {};
-            updateSchemaWithDocument(schema, complexDocument);
+            const analyzer = SchemaAnalyzer.fromDocument(complexDocument);
+            const schema = analyzer.getSchema();
 
             let propertiesAtRoot = getPropertyNamesAtLevel(schema, []);
             expect(propertiesAtRoot).toHaveLength(4);
@@ -221,8 +221,8 @@ describe('DocumentDB Schema Analyzer', () => {
         });
 
         it('with broken paths', () => {
-            const schema: JSONSchema = {};
-            updateSchemaWithDocument(schema, complexDocument);
+            const analyzer = SchemaAnalyzer.fromDocument(complexDocument);
+            const schema = analyzer.getSchema();
 
             const propertiesAtRoot = getPropertyNamesAtLevel(schema, []);
             expect(propertiesAtRoot).toHaveLength(4);
@@ -233,9 +233,10 @@ describe('DocumentDB Schema Analyzer', () => {
         });
 
         it('with sparse docs and mixed types', () => {
-            const schema: JSONSchema = {};
-            updateSchemaWithDocument(schema, complexDocument);
-            updateSchemaWithDocument(schema, complexDocumentWithOddTypes);
+            const analyzer = new SchemaAnalyzer();
+            analyzer.addDocument(complexDocument);
+            analyzer.addDocument(complexDocumentWithOddTypes);
+            const schema = analyzer.getSchema();
 
             let propertiesAtRoot = getPropertyNamesAtLevel(schema, []);
             expect(propertiesAtRoot).toHaveLength(4);

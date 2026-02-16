@@ -3,58 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/**
- * This is an example of a JSON Schema document that will be generated from MongoDB documents.
- * It's optimized for the use-case of generating a schema for a table view, the monaco editor, and schema statistics.
- *
- * This is a 'work in progress' and will be updated as we progress with the project.
- *
- * Curent focus is:
- *  - discovery of the document structure
- *  - basic pre for future statistics work
- *
- * Future tasks:
- *  - statistics aggregation
- *  - meaningful 'description' and 'markdownDescription'
- *  - add more properties to the schema, incl. properties like '$id', '$schema', and enable schema sharing/download
- *
-
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://example.com/sample.schema.json",
-  "title": "Sample Document Schema",
-  "type": "object",
-  "properties": {
-    "a-propert-root-level": {
-      "description": "a description as text",
-      "anyOf": [ // anyOf is used to indicate that the value can be of any of the types listed
-        {
-          "type": "string"
-        },
-        {
-          "type": "string"
-        }
-      ]
-    },
-    "isOpen": {
-      "description": "Indicates if the item is open",
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "number"
-        }
-      ]
-    }
-  },
-  "required": ["isOpen"]
-}
-
- *
- *
- */
-
 import * as l10n from '@vscode/l10n';
 import { assert } from 'console';
 import Denque from 'denque';
@@ -62,7 +10,89 @@ import { type Document, type WithId } from 'mongodb';
 import { type JSONSchema } from '../JSONSchema';
 import { BSONTypes } from './BSONTypes';
 
-export function updateSchemaWithDocument(schema: JSONSchema, document: WithId<Document>): void {
+/**
+ * Incremental schema analyzer for documents from the MongoDB API / DocumentDB API.
+ *
+ * Analyzes documents one at a time (or in batches) and builds a cumulative
+ * JSON Schema with statistical extensions (x-occurrence, x-bsonType, etc.).
+ *
+ * The output schema follows JSON Schema draft-07 with custom x- extensions.
+ */
+export class SchemaAnalyzer {
+    private _schema: JSONSchema = {};
+
+    /**
+     * Adds a single document to the accumulated schema.
+     * This is the primary incremental API — call once per document.
+     */
+    addDocument(document: WithId<Document>): void {
+        updateSchemaWithDocumentInternal(this._schema, document);
+    }
+
+    /**
+     * Adds multiple documents to the accumulated schema.
+     * Convenience method equivalent to calling addDocument() for each.
+     */
+    addDocuments(documents: ReadonlyArray<WithId<Document>>): void {
+        for (const doc of documents) {
+            this.addDocument(doc);
+        }
+    }
+
+    /**
+     * Returns the current accumulated JSON Schema.
+     * The returned object is a live reference (not a copy) — do not mutate externally.
+     */
+    getSchema(): JSONSchema {
+        return this._schema;
+    }
+
+    /**
+     * Returns the number of documents analyzed so far.
+     */
+    getDocumentCount(): number {
+        return (this._schema['x-documentsInspected'] as number) ?? 0;
+    }
+
+    /**
+     * Resets the analyzer to its initial empty state.
+     */
+    reset(): void {
+        this._schema = {};
+    }
+
+    /**
+     * Creates a deep copy of this analyzer, including all accumulated schema data.
+     * Useful for aggregation stage branching where each stage needs its own schema state.
+     */
+    clone(): SchemaAnalyzer {
+        const copy = new SchemaAnalyzer();
+        copy._schema = structuredClone(this._schema);
+        return copy;
+    }
+
+    /**
+     * Creates a SchemaAnalyzer from a single document.
+     * Equivalent to creating an instance and calling addDocument() once.
+     */
+    static fromDocument(document: WithId<Document>): SchemaAnalyzer {
+        const analyzer = new SchemaAnalyzer();
+        analyzer.addDocument(document);
+        return analyzer;
+    }
+
+    /**
+     * Creates a SchemaAnalyzer from multiple documents.
+     * Equivalent to creating an instance and calling addDocuments().
+     */
+    static fromDocuments(documents: ReadonlyArray<WithId<Document>>): SchemaAnalyzer {
+        const analyzer = new SchemaAnalyzer();
+        analyzer.addDocuments(documents);
+        return analyzer;
+    }
+}
+
+function updateSchemaWithDocumentInternal(schema: JSONSchema, document: WithId<Document>): void {
     // Initialize schema if it's empty
     if (!schema.properties) {
         schema.properties = {};
@@ -315,159 +345,6 @@ function updateMinMaxStats(schema: JSONSchema, minKey: string, maxKey: string, v
     if (schema[maxKey] === undefined || value > schema[maxKey]) {
         schema[maxKey] = value;
     }
-}
-
-export function getSchemaFromDocument(document: WithId<Document>): JSONSchema {
-    const schema: JSONSchema = {};
-    schema['x-documentsInspected'] = 1; // we're inspecting one document, this will make sense when we start aggregating stats
-    schema.properties = {};
-
-    type WorkItem = {
-        fieldName: string;
-        fieldMongoType: BSONTypes; // the inferred BSON type
-        propertyTypeEntry: JSONSchema; // points to the entry within the 'anyOf' property of the schema
-        fieldValue: unknown;
-        pathSoFar: string; // used for debugging
-    };
-
-    // having some import/require issues with Denque atm
-    // prototype with an array
-    //const fifoQueue = new Denque();
-    const fifoQueue: WorkItem[] = [];
-
-    /**
-     * Push all elements from the root of the document into the queue
-     */
-    for (const [name, value] of Object.entries(document)) {
-        const mongoDatatype = BSONTypes.inferType(value);
-
-        const typeEntry = {
-            type: BSONTypes.toJSONType(mongoDatatype),
-            'x-bsonType': mongoDatatype,
-            'x-typeOccurrence': 1,
-        };
-
-        // please note (1/2): we're adding the type entry to the schema here
-        schema.properties[name] = { anyOf: [typeEntry], 'x-occurrence': 1 };
-
-        fifoQueue.push({
-            fieldName: name,
-            fieldMongoType: mongoDatatype,
-            propertyTypeEntry: typeEntry, // please note (2/2): and we're keeping a reference to it here for further updates
-            fieldValue: value,
-            pathSoFar: name,
-        });
-    }
-
-    /**
-     * Work through the queue, adding elements to the schema as we go.
-     * This is a breadth-first search of the document, do note special
-     * handling on objects/arrays
-     */
-    while (fifoQueue.length > 0) {
-        const item = fifoQueue.shift(); // todo, replace with a proper queue
-        if (item === undefined) {
-            // unexpected, but let's try to continue
-            continue;
-        }
-
-        switch (item.fieldMongoType) {
-            case BSONTypes.Object: {
-                const objKeys = Object.keys(item.fieldValue as object).length;
-                item.propertyTypeEntry['x-maxLength'] = objKeys;
-                item.propertyTypeEntry['x-minLength'] = objKeys;
-
-                // prepare an entry for the object properties
-                item.propertyTypeEntry.properties = {};
-
-                for (const [name, value] of Object.entries(item.fieldValue as object)) {
-                    const mongoDatatype = BSONTypes.inferType(value);
-
-                    const typeEntry = {
-                        type: BSONTypes.toJSONType(mongoDatatype),
-                        'x-bsonType': mongoDatatype,
-                        'x-typeOccurrence': 1,
-                    };
-
-                    // please note (1/2): we're adding the entry to the main schema here
-                    item.propertyTypeEntry.properties[name] = { anyOf: [typeEntry], 'x-occurrence': 1 };
-
-                    fifoQueue.push({
-                        fieldName: name,
-                        fieldMongoType: mongoDatatype,
-                        propertyTypeEntry: typeEntry, // please note (2/2): and we're keeping a reference to it here for further updates to the schema
-                        fieldValue: value,
-                        pathSoFar: `${item.pathSoFar}.${item.fieldName}`,
-                    });
-                }
-                break;
-            }
-            case BSONTypes.Array: {
-                const arrayLength = (item.fieldValue as unknown[]).length;
-                item.propertyTypeEntry['x-maxLength'] = arrayLength;
-                item.propertyTypeEntry['x-minLength'] = arrayLength;
-
-                // preapare the array items entry (in two lines for ts not to compalin about the missing type later on)
-                item.propertyTypeEntry.items = {};
-                item.propertyTypeEntry.items.anyOf = [];
-
-                const encounteredMongoTypes: Map<BSONTypes, JSONSchema> = new Map();
-
-                // iterate over the array and infer the type of each element
-                for (const element of item.fieldValue as unknown[]) {
-                    const elementMongoType = BSONTypes.inferType(element);
-
-                    let itemEntry: JSONSchema;
-
-                    if (!encounteredMongoTypes.has(elementMongoType)) {
-                        itemEntry = {
-                            type: BSONTypes.toJSONType(elementMongoType),
-                            'x-bsonType': elementMongoType,
-                            'x-typeOccurrence': 1, // Initialize type occurrence counter
-                        };
-                        item.propertyTypeEntry.items.anyOf.push(itemEntry);
-                        encounteredMongoTypes.set(elementMongoType, itemEntry);
-
-                        initializeStatsForValue(element, elementMongoType, itemEntry);
-                    } else {
-                        // if we've already encountered this type, we'll just add the type to the existing entry
-                        itemEntry = encounteredMongoTypes.get(elementMongoType) as JSONSchema;
-
-                        if (itemEntry === undefined) continue; // unexpected, but let's try to continue
-
-                        if (itemEntry['x-typeOccurrence'] !== undefined) {
-                            itemEntry['x-typeOccurrence'] += 1;
-                        }
-
-                        // Aggregate stats with the new value
-                        aggregateStatsForValue(element, elementMongoType, itemEntry);
-                    }
-
-                    // an imporant exception for arrays as we have to start adding them already now to the schema
-                    // (if we want to avoid more iterations over the data)
-                    if (elementMongoType === BSONTypes.Object || elementMongoType === BSONTypes.Array) {
-                        fifoQueue.push({
-                            fieldName: '[]', // Array items don't have a field name
-                            fieldMongoType: elementMongoType,
-                            propertyTypeEntry: itemEntry,
-                            fieldValue: element,
-                            pathSoFar: `${item.pathSoFar}.${item.fieldName}.items`,
-                        });
-                    }
-                }
-
-                break;
-            }
-
-            default: {
-                // For all other types, update stats for the value
-                initializeStatsForValue(item.fieldValue, item.fieldMongoType, item.propertyTypeEntry);
-                break;
-            }
-        }
-    }
-
-    return schema;
 }
 
 /**

@@ -5,7 +5,7 @@
 
 import { ObjectId, type Document, type WithId } from 'mongodb';
 import { type JSONSchema } from '../JSONSchema';
-import { updateSchemaWithDocument } from './SchemaAnalyzer';
+import { SchemaAnalyzer } from './SchemaAnalyzer';
 
 /**
  * This test file investigates the array element occurrence/stats problem.
@@ -36,7 +36,7 @@ import { updateSchemaWithDocument } from './SchemaAnalyzer';
  */
 describe('Array element occurrence analysis', () => {
     it('counts element types across multiple documents', () => {
-        const schema: JSONSchema = {};
+        const analyzer = new SchemaAnalyzer();
 
         const doc1: WithId<Document> = {
             _id: new ObjectId(),
@@ -51,9 +51,10 @@ describe('Array element occurrence analysis', () => {
             data: ['z'],
         };
 
-        updateSchemaWithDocument(schema, doc1);
-        updateSchemaWithDocument(schema, doc2);
-        updateSchemaWithDocument(schema, doc3);
+        analyzer.addDocument(doc1);
+        analyzer.addDocument(doc2);
+        analyzer.addDocument(doc3);
+        const schema = analyzer.getSchema();
 
         // data field: array seen in 3 docs
         const dataField = schema.properties?.['data'] as JSONSchema;
@@ -102,7 +103,7 @@ describe('Array element occurrence analysis', () => {
     });
 
     it('tracks min/max array lengths across documents', () => {
-        const schema: JSONSchema = {};
+        const analyzer = new SchemaAnalyzer();
 
         const doc1: WithId<Document> = {
             _id: new ObjectId(),
@@ -117,9 +118,10 @@ describe('Array element occurrence analysis', () => {
             tags: ['p', 'q', 'r', 's', 't'],
         };
 
-        updateSchemaWithDocument(schema, doc1);
-        updateSchemaWithDocument(schema, doc2);
-        updateSchemaWithDocument(schema, doc3);
+        analyzer.addDocument(doc1);
+        analyzer.addDocument(doc2);
+        analyzer.addDocument(doc3);
+        const schema = analyzer.getSchema();
 
         const tagsField = schema.properties?.['tags'] as JSONSchema;
         const arrayEntry = tagsField.anyOf?.find((e) => (e as JSONSchema)['x-bsonType'] === 'array') as JSONSchema;
@@ -129,7 +131,7 @@ describe('Array element occurrence analysis', () => {
     });
 
     it('accumulates nested object properties from objects inside arrays across documents', () => {
-        const schema: JSONSchema = {};
+        const analyzer = new SchemaAnalyzer();
 
         // doc1 has two objects with different properties in the items array
         const doc1: WithId<Document> = {
@@ -146,8 +148,9 @@ describe('Array element occurrence analysis', () => {
             items: [{ name: 'Desk', weight: 50 }],
         };
 
-        updateSchemaWithDocument(schema, doc1);
-        updateSchemaWithDocument(schema, doc2);
+        analyzer.addDocument(doc1);
+        analyzer.addDocument(doc2);
+        const schema = analyzer.getSchema();
 
         const itemsField = schema.properties?.['items'] as JSONSchema;
         const arrayEntry = itemsField.anyOf?.find((e) => (e as JSONSchema)['x-bsonType'] === 'array') as JSONSchema;
@@ -182,7 +185,7 @@ describe('Array element occurrence analysis', () => {
     });
 
     it('handles arrays that ONLY contain primitives (no occurrence complexity)', () => {
-        const schema: JSONSchema = {};
+        const analyzer = new SchemaAnalyzer();
 
         const doc1: WithId<Document> = {
             _id: new ObjectId(),
@@ -193,8 +196,9 @@ describe('Array element occurrence analysis', () => {
             scores: [100, 55],
         };
 
-        updateSchemaWithDocument(schema, doc1);
-        updateSchemaWithDocument(schema, doc2);
+        analyzer.addDocument(doc1);
+        analyzer.addDocument(doc2);
+        const schema = analyzer.getSchema();
 
         const scoresField = schema.properties?.['scores'] as JSONSchema;
         const arrayEntry = scoresField.anyOf?.find((e) => (e as JSONSchema)['x-bsonType'] === 'array') as JSONSchema;
@@ -238,7 +242,7 @@ describe('Array element occurrence analysis', () => {
         // This is a REAL BUG: initializeStatsForValue is called for the first occurrence
         // per array, but the typeEntry already has stats from previous arrays.
 
-        const schema: JSONSchema = {};
+        const analyzer = new SchemaAnalyzer();
 
         const doc1: WithId<Document> = {
             _id: new ObjectId(),
@@ -249,8 +253,9 @@ describe('Array element occurrence analysis', () => {
             scores: [5, 15],
         };
 
-        updateSchemaWithDocument(schema, doc1);
-        updateSchemaWithDocument(schema, doc2);
+        analyzer.addDocument(doc1);
+        analyzer.addDocument(doc2);
+        const schema = analyzer.getSchema();
 
         const scoresField = schema.properties?.['scores'] as JSONSchema;
         const arrayEntry = scoresField.anyOf?.find((e) => (e as JSONSchema)['x-bsonType'] === 'array') as JSONSchema;
@@ -296,7 +301,7 @@ describe('Array probability denominator problem', () => {
         //      formula `x-occurrence / parent.x-documentsInspected` works at every
         //      nesting level.
 
-        const schema: JSONSchema = {};
+        const analyzer = new SchemaAnalyzer();
 
         const doc1: WithId<Document> = {
             _id: new ObjectId(),
@@ -313,8 +318,9 @@ describe('Array probability denominator problem', () => {
             a: objectElements,
         };
 
-        updateSchemaWithDocument(schema, doc1);
-        updateSchemaWithDocument(schema, doc2);
+        analyzer.addDocument(doc1);
+        analyzer.addDocument(doc2);
+        const schema = analyzer.getSchema();
 
         // Root level
         expect(schema['x-documentsInspected']).toBe(2);
@@ -351,7 +357,7 @@ describe('Array probability denominator problem', () => {
         // price: 1/3 = 33%
         // discount: 1/3 = 33%
 
-        const schema: JSONSchema = {};
+        const analyzer = new SchemaAnalyzer();
 
         const doc1: WithId<Document> = {
             _id: new ObjectId(),
@@ -362,8 +368,9 @@ describe('Array probability denominator problem', () => {
             items: [{ name: 'C', discount: true }],
         };
 
-        updateSchemaWithDocument(schema, doc1);
-        updateSchemaWithDocument(schema, doc2);
+        analyzer.addDocument(doc1);
+        analyzer.addDocument(doc2);
+        const schema = analyzer.getSchema();
 
         const itemsField = schema.properties?.['items'] as JSONSchema;
         const arrayEntry = itemsField.anyOf?.find((e) => (e as JSONSchema)['x-bsonType'] === 'array') as JSONSchema;
@@ -389,14 +396,15 @@ describe('Array probability denominator problem', () => {
         // At address.anyOf[object] level: x-documentsInspected = 2
         //   city: 2/2 = 100%, zip: 1/2 = 50%
 
-        const schema: JSONSchema = {};
+        const analyzer = new SchemaAnalyzer();
 
         const doc: WithId<Document> = {
             _id: new ObjectId(),
             items: [{ address: { city: 'NY', zip: '10001' } }, { address: { city: 'LA' } }],
         };
 
-        updateSchemaWithDocument(schema, doc);
+        analyzer.addDocument(doc);
+        const schema = analyzer.getSchema();
 
         const itemsField = schema.properties?.['items'] as JSONSchema;
         const arrayEntry = itemsField.anyOf?.find((e) => (e as JSONSchema)['x-bsonType'] === 'array') as JSONSchema;
@@ -422,7 +430,7 @@ describe('Array probability denominator problem', () => {
     });
 
     it('does NOT change x-documentsInspected at root level (root keeps document count)', () => {
-        const schema: JSONSchema = {};
+        const analyzer = new SchemaAnalyzer();
 
         const doc1: WithId<Document> = {
             _id: new ObjectId(),
@@ -435,8 +443,9 @@ describe('Array probability denominator problem', () => {
             address: { city: 'LA', zip: '90001' },
         };
 
-        updateSchemaWithDocument(schema, doc1);
-        updateSchemaWithDocument(schema, doc2);
+        analyzer.addDocument(doc1);
+        analyzer.addDocument(doc2);
+        const schema = analyzer.getSchema();
 
         // Root x-documentsInspected is document count, not affected by the fix
         expect(schema['x-documentsInspected']).toBe(2);
