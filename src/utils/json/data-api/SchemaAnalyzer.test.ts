@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type JSONSchema, type JSONSchemaRef } from '../JSONSchema';
+import { type JSONSchema, type JSONSchemaMap, type JSONSchemaRef } from '../JSONSchema';
 import { SchemaAnalyzer, getPropertyNamesAtLevel } from './SchemaAnalyzer';
 import {
     arraysWithDifferentDataTypes,
@@ -39,28 +39,28 @@ describe('DocumentDB Schema Analyzer', () => {
         );
 
         // Check that the 'name' field is detected correctly
-        const nameField: JSONSchema = schema.properties?.['name'];
+        const nameField = schema.properties?.['name'] as JSONSchema;
         expect(nameField).toBeDefined();
         expect(nameField?.['x-occurrence']).toBeGreaterThan(0);
 
         // Access 'anyOf' to get the type entries
-        const nameFieldTypes = nameField.anyOf?.map((typeEntry) => typeEntry['type']);
+        const nameFieldTypes = nameField.anyOf?.map((typeEntry) => (typeEntry as JSONSchema)['type']);
         expect(nameFieldTypes).toContain('string');
 
         // Check that the 'age' field has the correct type
-        const ageField: JSONSchema = schema.properties?.['age'];
+        const ageField = schema.properties?.['age'] as JSONSchema;
         expect(ageField).toBeDefined();
-        const ageFieldTypes = ageField.anyOf?.map((typeEntry) => typeEntry['type']);
+        const ageFieldTypes = ageField.anyOf?.map((typeEntry) => (typeEntry as JSONSchema)['type']);
         expect(ageFieldTypes).toContain('number');
 
         // Check that the 'isActive' field is a boolean
-        const isActiveField: JSONSchema = schema.properties?.['isActive'];
+        const isActiveField = schema.properties?.['isActive'] as JSONSchema;
         expect(isActiveField).toBeDefined();
-        const isActiveTypes = isActiveField.anyOf?.map((typeEntry) => typeEntry['type']);
+        const isActiveTypes = isActiveField.anyOf?.map((typeEntry) => (typeEntry as JSONSchema)['type']);
         expect(isActiveTypes).toContain('boolean');
 
         // Check that the 'description' field is optional (occurs in some documents)
-        const descriptionField = schema.properties?.['description'];
+        const descriptionField = schema.properties?.['description'] as JSONSchema | undefined;
         expect(descriptionField).toBeDefined();
         expect(descriptionField?.['x-occurrence']).toBeLessThan(sparseDocumentsArray.length);
     });
@@ -75,9 +75,9 @@ describe('DocumentDB Schema Analyzer', () => {
 
         // Helper function to get the 'x-bsonType' from a field
         function getBsonType(fieldName: string): string | undefined {
-            const field = schema.properties?.[fieldName];
+            const field = schema.properties?.[fieldName] as JSONSchema | undefined;
             const anyOf = field?.anyOf;
-            return anyOf && anyOf[0]?.['x-bsonType'];
+            return anyOf && (anyOf[0] as JSONSchema | undefined)?.['x-bsonType'];
         }
 
         // Check that specific BSON types are correctly identified
@@ -100,8 +100,8 @@ describe('DocumentDB Schema Analyzer', () => {
         expect(schema.properties).toHaveProperty('jobInfo');
 
         // Access 'personalInfo' properties
-        const personalInfoAnyOf = schema.properties && schema.properties['personalInfo']?.anyOf;
-        const personalInfoProperties = personalInfoAnyOf?.[0]?.properties;
+        const personalInfoAnyOf = schema.properties && (schema.properties['personalInfo'] as JSONSchema | undefined)?.anyOf;
+        const personalInfoProperties = (personalInfoAnyOf?.[0] as JSONSchema | undefined)?.properties;
         expect(personalInfoProperties).toBeDefined();
         expect(personalInfoProperties).toHaveProperty('name');
         expect(personalInfoProperties).toHaveProperty('age');
@@ -109,8 +109,8 @@ describe('DocumentDB Schema Analyzer', () => {
         expect(personalInfoProperties).toHaveProperty('address');
 
         // Access 'address' properties within 'personalInfo'
-        const addressAnyOf = personalInfoProperties['address'].anyOf;
-        const addressProperties = addressAnyOf?.[0]?.properties;
+        const addressAnyOf = ((personalInfoProperties as JSONSchemaMap)['address'] as JSONSchema).anyOf;
+        const addressProperties = (addressAnyOf?.[0] as JSONSchema | undefined)?.properties;
         expect(addressProperties).toBeDefined();
         expect(addressProperties).toHaveProperty('street');
         expect(addressProperties).toHaveProperty('city');
@@ -130,10 +130,10 @@ describe('DocumentDB Schema Analyzer', () => {
 
         // Helper function to get item types from an array field
         function getArrayItemTypes(fieldName: string): string[] | undefined {
-            const field = schema.properties?.[fieldName];
+            const field = schema.properties?.[fieldName] as JSONSchema | undefined;
             const anyOf = field?.anyOf;
-            const itemsAnyOf: JSONSchemaRef[] = anyOf?.[0]?.items?.anyOf;
-            return itemsAnyOf?.map((typeEntry) => typeEntry['type']);
+            const itemsAnyOf: JSONSchemaRef[] | undefined = ((anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined)?.anyOf;
+            return itemsAnyOf?.map((typeEntry) => (typeEntry as JSONSchema)['type'] as string);
         }
 
         // Check that 'integersArray' has elements of type 'number'
@@ -154,27 +154,29 @@ describe('DocumentDB Schema Analyzer', () => {
         const schema = analyzer.getSchema();
 
         // Access 'user.profile.hobbies'
-        const userProfile = schema.properties && schema.properties['user'].anyOf?.[0]?.properties?.['profile'];
-        const hobbies = userProfile?.anyOf?.[0]?.properties?.['hobbies'];
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        const hobbiesItemTypes = hobbies?.anyOf?.[0]?.items?.anyOf?.map((typeEntry) => typeEntry['type']);
+        const user = schema.properties?.['user'] as JSONSchema | undefined;
+        const userProfile = (user?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['profile'] as JSONSchema | undefined;
+        const hobbies = (userProfile?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['hobbies'] as JSONSchema | undefined;
+        const hobbiesItems = (hobbies?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined;
+        const hobbiesItemTypes = hobbiesItems?.anyOf?.map((typeEntry) => (typeEntry as JSONSchema).type);
         expect(hobbiesItemTypes).toContain('string');
 
         // Access 'user.profile.addresses'
-        const addresses = userProfile?.anyOf?.[0]?.properties?.['addresses'];
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        const addressItemTypes = addresses?.anyOf?.[0]?.items?.anyOf?.map((typeEntry) => typeEntry['type']);
+        const addresses = (userProfile?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['addresses'] as JSONSchema | undefined;
+        const addressesItems = (addresses?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined;
+        const addressItemTypes = addressesItems?.anyOf?.map((typeEntry) => (typeEntry as JSONSchema).type);
         expect(addressItemTypes).toContain('object');
 
         // Check that 'orders' is an array
-        const orders = schema.properties && schema.properties['orders'];
+        const orders = schema.properties?.['orders'] as JSONSchema | undefined;
         expect(orders).toBeDefined();
-        const ordersType = orders.anyOf?.[0]?.type;
+        const ordersType = (orders?.anyOf?.[0] as JSONSchema | undefined)?.type;
         expect(ordersType).toBe('array');
 
         // Access 'items' within 'orders'
-        const orderItems = orders.anyOf?.[0]?.items?.anyOf?.[0]?.properties?.['items'];
-        const orderItemsType = orderItems?.anyOf?.[0]?.type;
+        const orderItemsParent = (orders?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined;
+        const orderItems = (orderItemsParent?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['items'] as JSONSchema | undefined;
+        const orderItemsType = (orderItems?.anyOf?.[0] as JSONSchema | undefined)?.type;
         expect(orderItemsType).toBe('array');
     });
 
@@ -192,16 +194,18 @@ describe('DocumentDB Schema Analyzer', () => {
         expect(schema.properties).toHaveProperty('user');
 
         // Check that 'integersArray' has correct min and max values
-        const integersArray = schema.properties && schema.properties['integersArray'];
-        const integerItemType = integersArray.anyOf?.[0]?.items?.anyOf?.[0];
+        const integersArray = schema.properties?.['integersArray'] as JSONSchema | undefined;
+        const integerItemType = ((integersArray?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined)?.anyOf?.[0] as JSONSchema | undefined;
         expect(integerItemType?.['x-minValue']).toBe(1);
         expect(integerItemType?.['x-maxValue']).toBe(5);
 
         // Check that 'orders.items.price' is detected as Decimal128
-        const orders = schema.properties && schema.properties['orders'];
-        const orderItems = orders.anyOf?.[0]?.items?.anyOf?.[0]?.properties?.['items'];
-        const priceField = orderItems?.anyOf?.[0]?.items?.anyOf?.[0]?.properties?.['price'];
-        const priceFieldType = priceField?.anyOf?.[0];
+        const orders2 = schema.properties?.['orders'] as JSONSchema | undefined;
+        const orderItemsParent2 = (orders2?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined;
+        const orderItems = (orderItemsParent2?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['items'] as JSONSchema | undefined;
+        const priceFieldParent = ((orderItems?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined)?.anyOf?.[0] as JSONSchema | undefined;
+        const priceField = priceFieldParent?.properties?.['price'] as JSONSchema | undefined;
+        const priceFieldType = priceField?.anyOf?.[0] as JSONSchema | undefined;
         expect(priceFieldType?.['x-bsonType']).toBe('decimal128');
     });
 

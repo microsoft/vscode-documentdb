@@ -24,16 +24,14 @@ export interface JSONSchema {
     $id?: string;
     $schema?: string;
     type?: string | string[];
-    'x-documentsInspected'?: number;
-    'x-occurrence'?: number;
-    'x-typeOccurrence'?: number;
-    'x-bsonType'?: string; // Explicitly declare the key with a dash using quotes
     title?: string;
+    description?: string;
     definitions?: {
         [name: string]: JSONSchema;
     };
-    description?: string;
-    properties?: JSONSchema; // changed from: JSONSchemaMap;
+
+    // Structure
+    properties?: JSONSchemaMap;
     patternProperties?: JSONSchemaMap;
     additionalProperties?: JSONSchemaRef;
     minProperties?: number;
@@ -44,7 +42,6 @@ export interface JSONSchema {
               [prop: string]: string[];
           };
     items?: JSONSchemaRef | JSONSchemaRef[];
-
     required?: string[];
     $ref?: string;
     anyOf?: JSONSchemaRef[];
@@ -58,14 +55,35 @@ export interface JSONSchema {
     propertyNames?: JSONSchemaRef;
     examples?: undefined[];
     $comment?: string;
-
     $defs?: {
         [name: string]: JSONSchema;
     };
+
+    // Monaco extensions
     markdownEnumDescriptions?: string[];
     markdownDescription?: string;
     doNotSuggest?: boolean;
     suggestSortText?: string;
+
+    // SchemaAnalyzer extensions — document/field level
+    'x-documentsInspected'?: number;
+    'x-occurrence'?: number;
+
+    // SchemaAnalyzer extensions — type entry level (on entries in anyOf)
+    'x-bsonType'?: string;
+    'x-typeOccurrence'?: number;
+    'x-minValue'?: number;
+    'x-maxValue'?: number;
+    'x-minLength'?: number;
+    'x-maxLength'?: number;
+    'x-minDate'?: number;
+    'x-maxDate'?: number;
+    'x-trueCount'?: number;
+    'x-falseCount'?: number;
+    'x-minItems'?: number;
+    'x-maxItems'?: number;
+    'x-minProperties'?: number;
+    'x-maxProperties'?: number;
 }
 export interface JSONSchemaMap {
     [name: string]: JSONSchemaRef;
