@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type JSONSchema, type JSONSchemaMap, type JSONSchemaRef } from '../JSONSchema';
-import { SchemaAnalyzer, getPropertyNamesAtLevel } from './SchemaAnalyzer';
+import { getPropertyNamesAtLevel, SchemaAnalyzer } from './SchemaAnalyzer';
 import {
     arraysWithDifferentDataTypes,
     complexDocument,
@@ -100,7 +100,8 @@ describe('DocumentDB Schema Analyzer', () => {
         expect(schema.properties).toHaveProperty('jobInfo');
 
         // Access 'personalInfo' properties
-        const personalInfoAnyOf = schema.properties && (schema.properties['personalInfo'] as JSONSchema | undefined)?.anyOf;
+        const personalInfoAnyOf =
+            schema.properties && (schema.properties['personalInfo'] as JSONSchema | undefined)?.anyOf;
         const personalInfoProperties = (personalInfoAnyOf?.[0] as JSONSchema | undefined)?.properties;
         expect(personalInfoProperties).toBeDefined();
         expect(personalInfoProperties).toHaveProperty('name');
@@ -132,7 +133,9 @@ describe('DocumentDB Schema Analyzer', () => {
         function getArrayItemTypes(fieldName: string): string[] | undefined {
             const field = schema.properties?.[fieldName] as JSONSchema | undefined;
             const anyOf = field?.anyOf;
-            const itemsAnyOf: JSONSchemaRef[] | undefined = ((anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined)?.anyOf;
+            const itemsAnyOf: JSONSchemaRef[] | undefined = (
+                (anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined
+            )?.anyOf;
             return itemsAnyOf?.map((typeEntry) => (typeEntry as JSONSchema)['type'] as string);
         }
 
@@ -155,14 +158,20 @@ describe('DocumentDB Schema Analyzer', () => {
 
         // Access 'user.profile.hobbies'
         const user = schema.properties?.['user'] as JSONSchema | undefined;
-        const userProfile = (user?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['profile'] as JSONSchema | undefined;
-        const hobbies = (userProfile?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['hobbies'] as JSONSchema | undefined;
+        const userProfile = (user?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['profile'] as
+            | JSONSchema
+            | undefined;
+        const hobbies = (userProfile?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['hobbies'] as
+            | JSONSchema
+            | undefined;
         const hobbiesItems = (hobbies?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined;
         const hobbiesItemTypes = hobbiesItems?.anyOf?.map((typeEntry) => (typeEntry as JSONSchema).type);
         expect(hobbiesItemTypes).toContain('string');
 
         // Access 'user.profile.addresses'
-        const addresses = (userProfile?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['addresses'] as JSONSchema | undefined;
+        const addresses = (userProfile?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['addresses'] as
+            | JSONSchema
+            | undefined;
         const addressesItems = (addresses?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined;
         const addressItemTypes = addressesItems?.anyOf?.map((typeEntry) => (typeEntry as JSONSchema).type);
         expect(addressItemTypes).toContain('object');
@@ -175,7 +184,9 @@ describe('DocumentDB Schema Analyzer', () => {
 
         // Access 'items' within 'orders'
         const orderItemsParent = (orders?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined;
-        const orderItems = (orderItemsParent?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['items'] as JSONSchema | undefined;
+        const orderItems = (orderItemsParent?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['items'] as
+            | JSONSchema
+            | undefined;
         const orderItemsType = (orderItems?.anyOf?.[0] as JSONSchema | undefined)?.type;
         expect(orderItemsType).toBe('array');
     });
@@ -195,15 +206,19 @@ describe('DocumentDB Schema Analyzer', () => {
 
         // Check that 'integersArray' has correct min and max values
         const integersArray = schema.properties?.['integersArray'] as JSONSchema | undefined;
-        const integerItemType = ((integersArray?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined)?.anyOf?.[0] as JSONSchema | undefined;
+        const integerItemType = ((integersArray?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined)
+            ?.anyOf?.[0] as JSONSchema | undefined;
         expect(integerItemType?.['x-minValue']).toBe(1);
         expect(integerItemType?.['x-maxValue']).toBe(5);
 
         // Check that 'orders.items.price' is detected as Decimal128
         const orders2 = schema.properties?.['orders'] as JSONSchema | undefined;
         const orderItemsParent2 = (orders2?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined;
-        const orderItems = (orderItemsParent2?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['items'] as JSONSchema | undefined;
-        const priceFieldParent = ((orderItems?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined)?.anyOf?.[0] as JSONSchema | undefined;
+        const orderItems = (orderItemsParent2?.anyOf?.[0] as JSONSchema | undefined)?.properties?.['items'] as
+            | JSONSchema
+            | undefined;
+        const priceFieldParent = ((orderItems?.anyOf?.[0] as JSONSchema | undefined)?.items as JSONSchema | undefined)
+            ?.anyOf?.[0] as JSONSchema | undefined;
         const priceField = priceFieldParent?.properties?.['price'] as JSONSchema | undefined;
         const priceFieldType = priceField?.anyOf?.[0] as JSONSchema | undefined;
         expect(priceFieldType?.['x-bsonType']).toBe('decimal128');

@@ -55,10 +55,10 @@ describe('getKnownFields', () => {
         const fields = getKnownFields(analyzer.getSchema());
 
         const nameField = fields.find((f: FieldEntry) => f.path === 'name');
-        expect(nameField?.isOptional).toBeUndefined(); // present in all docs
+        expect(nameField?.isSparse).toBeUndefined(); // present in all docs
 
         const ageField = fields.find((f: FieldEntry) => f.path === 'age');
-        expect(ageField?.isOptional).toBe(true); // missing in doc2
+        expect(ageField?.isSparse).toBe(true); // missing in doc2
     });
 
     it('returns bsonTypes for polymorphic fields', () => {
@@ -73,9 +73,7 @@ describe('getKnownFields', () => {
         expect(valueField?.bsonTypes).toHaveLength(2);
         expect(valueField?.bsonTypes).toContain('string');
         // Could be 'double' or 'int32'
-        expect(valueField?.bsonTypes?.some((t: string) => ['double', 'int32'].includes(t))).toBe(
-            true,
-        );
+        expect(valueField?.bsonTypes?.some((t: string) => ['double', 'int32'].includes(t))).toBe(true);
     });
 
     it('returns arrayItemBsonType for array fields', () => {
@@ -123,9 +121,9 @@ describe('getKnownFields', () => {
         const fields = getKnownFields(analyzer.getSchema());
 
         const nameField = fields.find((f: FieldEntry) => f.path === 'user.name');
-        expect(nameField?.isOptional).toBeUndefined(); // present in both objects
+        expect(nameField?.isSparse).toBeUndefined(); // present in both objects
 
         const ageField = fields.find((f: FieldEntry) => f.path === 'user.age');
-        expect(ageField?.isOptional).toBe(true); // missing in doc2's user object
+        expect(ageField?.isSparse).toBe(true); // missing in doc2's user object
     });
 });

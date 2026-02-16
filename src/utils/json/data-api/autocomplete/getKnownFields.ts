@@ -15,8 +15,14 @@ export interface FieldEntry {
     bsonType: string;
     /** All observed BSON types for this field (for polymorphic fields) */
     bsonTypes?: string[];
-    /** true if the field is optional (x-occurrence < parent x-documentsInspected) */
-    isOptional?: boolean;
+    /**
+     * True if this field was not present in every inspected document
+     * (x-occurrence < parent x-documentsInspected).
+     *
+     * This is a statistical observation, not a schema constraint — in the
+     * MongoDB API / DocumentDB API all fields are implicitly optional.
+     */
+    isSparse?: boolean;
     /** If the field is an array, the dominant element BSON type */
     arrayItemBsonType?: string;
 }
@@ -73,8 +79,7 @@ export function getKnownFields(schema: JSONSchema): FieldEntry[] {
         if (mostCommonTypeEntry) {
             if (mostCommonTypeEntry.type === 'object' && mostCommonTypeEntry.properties) {
                 // Not a leaf node, enqueue its properties
-                const objectDocumentsInspected =
-                    (mostCommonTypeEntry['x-documentsInspected'] as number) ?? 0;
+                const objectDocumentsInspected = (mostCommonTypeEntry['x-documentsInspected'] as number) ?? 0;
                 for (const childName of Object.keys(mostCommonTypeEntry.properties)) {
                     const childSchema = mostCommonTypeEntry.properties[childName] as JSONSchema;
                     queue.push({
@@ -85,9 +90,7 @@ export function getKnownFields(schema: JSONSchema): FieldEntry[] {
                 }
             } else {
                 // Leaf node, build the FieldEntry
-                const bsonType =
-                    (mostCommonTypeEntry['x-bsonType'] as string) ??
-                    (mostCommonTypeEntry.type as string);
+                const bsonType = (mostCommonTypeEntry['x-bsonType'] as string) ?? (mostCommonTypeEntry.type as string);
 
                 const entry: FieldEntry = {
                     path,
@@ -101,10 +104,10 @@ export function getKnownFields(schema: JSONSchema): FieldEntry[] {
                     entry.bsonTypes = allBsonTypes;
                 }
 
-                // isOptional: compare x-occurrence against parent's x-documentsInspected
+                // isSparse: field was not observed in every document
                 const occurrence = (schemaNode['x-occurrence'] as number) ?? 0;
                 if (parentDocumentsInspected > 0 && occurrence < parentDocumentsInspected) {
-                    entry.isOptional = true;
+                    entry.isSparse = true;
                 }
 
                 // arrayItemBsonType: for array fields, find the dominant element type

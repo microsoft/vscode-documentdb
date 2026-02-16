@@ -177,8 +177,7 @@ export namespace BSONTypes {
                 if (value instanceof DBRef) return BSONTypes.DBRef;
                 if (value instanceof Map) return BSONTypes.Map;
                 if (value instanceof UUID && value.sub_type === Binary.SUBTYPE_UUID) return BSONTypes.UUID;
-                if (value instanceof UUID && value.sub_type === Binary.SUBTYPE_UUID_OLD)
-                    return BSONTypes.UUID_LEGACY;
+                if (value instanceof UUID && value.sub_type === Binary.SUBTYPE_UUID_OLD) return BSONTypes.UUID_LEGACY;
                 if (value instanceof Buffer || value instanceof Binary) return BSONTypes.Binary;
                 if (value instanceof RegExp) return BSONTypes.RegExp;
                 if (value instanceof Code) {
