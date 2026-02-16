@@ -7,7 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
 import { type JSONSchema } from '../utils/json/JSONSchema';
-import { getPropertyNamesAtLevel, updateSchemaWithDocument } from '../utils/json/mongo/SchemaAnalyzer';
+import { getPropertyNamesAtLevel, updateSchemaWithDocument } from '../utils/json/data-api/SchemaAnalyzer';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';

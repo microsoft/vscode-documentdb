@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Document, type ObjectId, type WithId } from 'mongodb';
-import { MongoBSONTypes } from '../../json/mongo/MongoBSONTypes';
-import { valueToDisplayString } from '../../json/mongo/MongoValueFormatters';
+import { BSONTypes } from '../../json/data-api/BSONTypes';
+import { valueToDisplayString } from '../../json/data-api/ValueFormatters';
 
 /**
  * The data structure for a single node entry in the tree data structure for SlickGrid.
@@ -113,10 +113,10 @@ export function documentToSlickGridTree(document: WithId<Document>, idPrefix?: s
             continue;
         }
 
-        const dataType: MongoBSONTypes = MongoBSONTypes.inferType(stackEntry.value);
+        const dataType: BSONTypes = BSONTypes.inferType(stackEntry.value);
 
         switch (dataType) {
-            case MongoBSONTypes.Object: {
+            case BSONTypes.Object: {
                 tree.push({
                     id: globalEntryId,
                     field: `${stackEntry.key}`,
@@ -131,7 +131,7 @@ export function documentToSlickGridTree(document: WithId<Document>, idPrefix?: s
                 });
                 break;
             }
-            case MongoBSONTypes.Array: {
+            case BSONTypes.Array: {
                 const value = stackEntry.value as unknown[];
 
                 tree.push({
@@ -157,7 +157,7 @@ export function documentToSlickGridTree(document: WithId<Document>, idPrefix?: s
                     id: globalEntryId,
                     field: `${stackEntry.key}`,
                     value: valueToDisplayString(stackEntry.value, dataType),
-                    type: MongoBSONTypes.toDisplayString(MongoBSONTypes.inferType(stackEntry.value)),
+                    type: BSONTypes.toDisplayString(BSONTypes.inferType(stackEntry.value)),
                     parentId: stackEntry.parentId,
                 });
                 break;

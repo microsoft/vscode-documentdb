@@ -6,8 +6,8 @@
 import { EJSON } from 'bson';
 import { type Document, type WithId } from 'mongodb';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
-import { MongoBSONTypes } from '../../json/mongo/MongoBSONTypes';
-import { valueToDisplayString } from '../../json/mongo/MongoValueFormatters';
+import { BSONTypes } from '../../json/data-api/BSONTypes';
+import { valueToDisplayString } from '../../json/data-api/ValueFormatters';
 
 /**
  * Extracts data from a list of MongoDB documents at a specified path.
@@ -45,8 +45,8 @@ export function getDataAtPath(documents: WithId<Document>[], path: string[]): Ta
         // we also make sure that the '_id' field is always included in the data!
         if (doc._id) {
             row['_id'] = {
-                value: valueToDisplayString(doc._id, MongoBSONTypes.inferType(doc._id)),
-                type: MongoBSONTypes.inferType(doc._id),
+                value: valueToDisplayString(doc._id, BSONTypes.inferType(doc._id)),
+                type: BSONTypes.inferType(doc._id),
             };
             // TODO: problem here -> what if the user has a field with this name...
             row['x-objectid'] = EJSON.stringify(doc._id, { relaxed: false }); // this is crucial, we need to retain the _id field for future queries from the table view
@@ -72,13 +72,13 @@ export function getDataAtPath(documents: WithId<Document>[], path: string[]): Ta
                     continue;
                 } else {
                     const value: unknown = subdocument[key];
-                    const type: MongoBSONTypes = MongoBSONTypes.inferType(value);
+                    const type: BSONTypes = BSONTypes.inferType(value);
 
                     // eslint-disable-next-line
                     if (value instanceof Array) {
                         row[key] = {
                             value: `array[${value.length}]`,
-                            type: MongoBSONTypes.Array,
+                            type: BSONTypes.Array,
                         };
                     } else {
                         row[key] = { value: valueToDisplayString(value, type), type: type };
