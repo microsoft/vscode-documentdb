@@ -272,4 +272,79 @@ describe('DocumentDB Schema Analyzer', () => {
             expect(propertiesAtRoot).toHaveLength(6);
         });
     });
+
+    describe('SchemaAnalyzer class methods', () => {
+        it('clone() creates an independent deep copy', () => {
+            // Use embeddedDocumentOnly (plain JS types) to avoid structuredClone issues with BSON types
+            const original = SchemaAnalyzer.fromDocument(embeddedDocumentOnly);
+            const cloned = original.clone();
+
+            // Clone has the same document count
+            expect(cloned.getDocumentCount()).toBe(1);
+
+            // Clone has the same properties
+            const originalProps = Object.keys(original.getSchema().properties || {});
+            const clonedProps = Object.keys(cloned.getSchema().properties || {});
+            expect(clonedProps).toEqual(originalProps);
+
+            // Add another document to the original only
+            original.addDocument(arraysWithDifferentDataTypes);
+            expect(original.getDocumentCount()).toBe(2);
+            expect(cloned.getDocumentCount()).toBe(1);
+
+            // Clone's schema was NOT affected by the mutation
+            const originalPropsAfter = Object.keys(original.getSchema().properties || {});
+            const clonedPropsAfter = Object.keys(cloned.getSchema().properties || {});
+            expect(originalPropsAfter).toContain('integersArray');
+            expect(originalPropsAfter).toContain('stringsArray');
+            expect(clonedPropsAfter).not.toContain('integersArray');
+            expect(clonedPropsAfter).not.toContain('stringsArray');
+        });
+
+        it('reset() clears all accumulated state', () => {
+            const analyzer = SchemaAnalyzer.fromDocument(flatDocument);
+            expect(analyzer.getDocumentCount()).toBeGreaterThan(0);
+            expect(Object.keys(analyzer.getSchema().properties || {})).not.toHaveLength(0);
+
+            analyzer.reset();
+
+            expect(analyzer.getDocumentCount()).toBe(0);
+            const schema = analyzer.getSchema();
+            expect(schema.properties).toBeUndefined();
+            expect(schema['x-documentsInspected']).toBeUndefined();
+        });
+
+        it('fromDocument() creates analyzer with single document', () => {
+            const analyzer = SchemaAnalyzer.fromDocument(flatDocument);
+            expect(analyzer.getDocumentCount()).toBe(1);
+
+            const schema = analyzer.getSchema();
+            const expectedFields = Object.keys(flatDocument);
+            expect(Object.keys(schema.properties || {})).toEqual(expect.arrayContaining(expectedFields));
+        });
+
+        it('fromDocuments() creates analyzer with multiple documents', () => {
+            const analyzer = SchemaAnalyzer.fromDocuments(sparseDocumentsArray);
+            expect(analyzer.getDocumentCount()).toBe(sparseDocumentsArray.length);
+
+            // Compare with manually-built analyzer
+            const manual = new SchemaAnalyzer();
+            manual.addDocuments(sparseDocumentsArray);
+
+            expect(JSON.stringify(analyzer.getSchema())).toBe(JSON.stringify(manual.getSchema()));
+        });
+
+        it('addDocuments() is equivalent to multiple addDocument() calls', () => {
+            const batch = new SchemaAnalyzer();
+            batch.addDocuments(complexDocumentsArray);
+
+            const sequential = new SchemaAnalyzer();
+            for (const doc of complexDocumentsArray) {
+                sequential.addDocument(doc);
+            }
+
+            expect(batch.getDocumentCount()).toBe(sequential.getDocumentCount());
+            expect(JSON.stringify(batch.getSchema())).toBe(JSON.stringify(sequential.getSchema()));
+        });
+    });
 });
