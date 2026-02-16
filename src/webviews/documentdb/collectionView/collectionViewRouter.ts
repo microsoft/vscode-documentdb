@@ -12,7 +12,7 @@ import { type JSONSchema } from 'vscode-json-languageservice';
 import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { getKnownFields, type FieldEntry } from '../../../utils/json/data-api/autocomplete/getKnownFields';
+import { type FieldEntry } from '../../../utils/json/data-api/autocomplete/getKnownFields';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
 
 import * as l10n from '@vscode/l10n';
@@ -241,8 +241,7 @@ export const collectionsViewRouter = router({
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
 
-            const _currentJsonSchema = session.getCurrentSchema();
-            const autoCompletionData: FieldEntry[] = getKnownFields(_currentJsonSchema);
+            const autoCompletionData: FieldEntry[] = session.getKnownFields();
 
             let querySchema: JSONSchema;
 

@@ -9,6 +9,7 @@ import Denque from 'denque';
 import { type Document, type WithId } from 'mongodb';
 import { type JSONSchema } from '../JSONSchema';
 import { BSONTypes } from './BSONTypes';
+import { type FieldEntry, getKnownFields as getKnownFieldsFromSchema } from './autocomplete/getKnownFields';
 
 /**
  * Incremental schema analyzer for documents from the MongoDB API / DocumentDB API.
@@ -20,6 +21,18 @@ import { BSONTypes } from './BSONTypes';
  */
 export class SchemaAnalyzer {
     private _schema: JSONSchema = {};
+    private _version: number = 0;
+    private _knownFieldsCache: FieldEntry[] | null = null;
+    private _knownFieldsCacheVersion: number = -1;
+
+    /**
+     * A monotonically increasing version counter. Incremented on every mutation
+     * (addDocument, addDocuments, reset). Adapters can store this value alongside
+     * their cached derived data and recompute only when it changes.
+     */
+    get version(): number {
+        return this._version;
+    }
 
     /**
      * Adds a single document to the accumulated schema.
@@ -27,16 +40,19 @@ export class SchemaAnalyzer {
      */
     addDocument(document: WithId<Document>): void {
         updateSchemaWithDocumentInternal(this._schema, document);
+        this._version++;
     }
 
     /**
      * Adds multiple documents to the accumulated schema.
      * Convenience method equivalent to calling addDocument() for each.
+     * Increments version once for the entire batch — not per document.
      */
     addDocuments(documents: ReadonlyArray<WithId<Document>>): void {
         for (const doc of documents) {
-            this.addDocument(doc);
+            updateSchemaWithDocumentInternal(this._schema, doc);
         }
+        this._version++;
     }
 
     /**
@@ -59,16 +75,30 @@ export class SchemaAnalyzer {
      */
     reset(): void {
         this._schema = {};
+        this._version++;
     }
 
     /**
      * Creates a deep copy of this analyzer, including all accumulated schema data.
      * Useful for aggregation stage branching where each stage needs its own schema state.
+     * The clone starts with version 0, independent from the original.
      */
     clone(): SchemaAnalyzer {
         const copy = new SchemaAnalyzer();
         copy._schema = structuredClone(this._schema);
         return copy;
+    }
+
+    /**
+     * Returns the cached list of known fields (all nesting levels, sorted).
+     * Recomputed only when the schema version has changed since the last call.
+     */
+    getKnownFields(): FieldEntry[] {
+        if (this._knownFieldsCacheVersion !== this._version || this._knownFieldsCache === null) {
+            this._knownFieldsCache = getKnownFieldsFromSchema(this._schema);
+            this._knownFieldsCacheVersion = this._version;
+        }
+        return this._knownFieldsCache;
     }
 
     /**

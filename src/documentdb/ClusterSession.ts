@@ -6,8 +6,10 @@
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
+import { ext } from '../extensionVariables';
 import { type JSONSchema } from '../utils/json/JSONSchema';
 import { SchemaAnalyzer, getPropertyNamesAtLevel } from '../utils/json/data-api/SchemaAnalyzer';
+import { type FieldEntry } from '../utils/json/data-api/autocomplete/getKnownFields';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
@@ -163,6 +165,7 @@ export class ClusterSession {
 
         // The user's query has changed, invalidate all caches
         this._schemaAnalyzer.reset();
+        ext.outputChannel.trace('[SchemaAnalyzer] Reset — query changed');
         this._highestPageAccumulated = 0;
         this._currentPageSize = null;
         this._currentRawDocuments = [];
@@ -186,6 +189,7 @@ export class ClusterSession {
         if (this._currentPageSize !== null && this._currentPageSize !== newPageSize) {
             // Page size changed, reset accumulation tracking
             this._schemaAnalyzer.reset();
+            ext.outputChannel.trace('[SchemaAnalyzer] Reset — page size changed');
             this._highestPageAccumulated = 0;
         }
         this._currentPageSize = newPageSize;
@@ -300,6 +304,10 @@ export class ClusterSession {
         if (pageNumber > this._highestPageAccumulated) {
             this._schemaAnalyzer.addDocuments(this._currentRawDocuments);
             this._highestPageAccumulated = pageNumber;
+
+            ext.outputChannel.trace(
+                `[SchemaAnalyzer] Analyzed ${String(this._schemaAnalyzer.getDocumentCount())} documents, ${String(this._schemaAnalyzer.getKnownFields().length)} known fields`,
+            );
         }
 
         return documents.length;
@@ -364,6 +372,14 @@ export class ClusterSession {
 
     public getCurrentSchema(): JSONSchema {
         return this._schemaAnalyzer.getSchema();
+    }
+
+    /**
+     * Returns the cached list of known fields from the accumulated schema.
+     * Uses SchemaAnalyzer's version-based caching — only recomputed when the schema changes.
+     */
+    public getKnownFields(): FieldEntry[] {
+        return this._schemaAnalyzer.getKnownFields();
     }
 
     // ============================================================================
