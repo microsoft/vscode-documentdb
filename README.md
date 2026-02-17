@@ -84,6 +84,10 @@ This project may contain trademarks or logos for projects, products, or services
 
 VS Code collects usage data and sends it to Microsoft to help improve our products and services. Read our [privacy statement](https://go.microsoft.com/fwlink/?LinkId=521839) to learn more. If you don’t wish to send usage data to Microsoft, you can set the `telemetry.enableTelemetry` setting to `false`. Learn more in our [FAQ](https://code.visualstudio.com/docs/supporting/faq#_how-to-disable-telemetry-reporting).
 
+# Feedback Collection
+
+DocumentDB for VS Code proactively asks for user feedback and provides feedback entry points in the UI. Feedback collection is controlled by VS Code's global telemetry setting. To disable it, set `telemetry.enableTelemetry` to `false`.
+
 # License
 
 [MIT](LICENSE.md)
