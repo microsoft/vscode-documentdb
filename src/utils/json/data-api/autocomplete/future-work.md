@@ -138,3 +138,47 @@ This is a **breaking change** to the `FieldEntry` interface. Affected consumers:
 - `SchemaAnalyzer.ts` (returns `FieldEntry[]` via `getKnownFields`)
 
 **Recommendation:** Defer until the completion provider is built. The ambiguity only matters for fields with literal dots, which are uncommon. When fixing, do it as a single atomic change across all consumers.
+
+---
+
+## 4. TypeScript definition output references undeclared BSON type names
+
+**Severity:** Low — the TS definition is for display/hover only, not compiled or type-checked
+**File:** `toTypeScriptDefinition.ts` — `bsonToTypeScriptMap`
+**When to fix:** Before the TS definition is used in a context where type correctness matters (e.g., Monaco intellisense with an actual TS language service)
+
+### Problem
+
+The BSON-to-TypeScript type mapping emits non-built-in type names such as `ObjectId`, `Binary`, `Timestamp`, `MinKey`, `MaxKey`, `Code`, `DBRef`, and `UUID`. These are MongoDB BSON driver types, but the generated definition string doesn't include `import` statements or `declare` stubs for them.
+
+If the output is ever fed to a TypeScript compiler or language service (e.g., Monaco with full TS checking), it will report "Cannot find name 'ObjectId'" etc.
+
+### Current state
+
+The generated output is used for documentation/hover display only — it's rendered as syntax-highlighted text, not compiled. So this is purely cosmetic today.
+
+### Proposed fix (when needed)
+
+**Option A — Emit `import type`:**
+```typescript
+import type { ObjectId, Binary, Timestamp, MinKey, MaxKey, Code, DBRef, UUID } from 'mongodb';
+```
+Only include types that actually appear in the schema.
+
+**Option B — Emit `declare type` stubs:**
+```typescript
+declare type ObjectId = { toString(): string };
+declare type Binary = { length(): number };
+// ... etc.
+```
+Lightweight, no dependency on the `mongodb` package.
+
+**Option C — Map everything to primitive types:**
+```typescript
+ObjectId → string  // (its string representation)
+Binary → Uint8Array
+Timestamp → { t: number; i: number }
+```
+Loses semantic precision but avoids the undeclared-type problem entirely.
+
+**Recommendation:** Option A is the most correct approach. Collect the set of non-built-in types actually used in the schema, then prepend a single `import type` line. Defer until the output is consumed by a real TS language service.
