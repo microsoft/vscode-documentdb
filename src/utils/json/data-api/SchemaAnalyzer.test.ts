@@ -19,7 +19,6 @@ describe('DocumentDB Schema Analyzer', () => {
     it('prints out schema for testing', () => {
         const analyzer = SchemaAnalyzer.fromDocument(embeddedDocumentOnly);
         const schema = analyzer.getSchema();
-        console.log(JSON.stringify(schema, null, 2));
         expect(schema).toBeDefined();
     });
 
