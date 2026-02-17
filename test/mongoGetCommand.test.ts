@@ -797,7 +797,6 @@ suite('scrapbook parsing Tests', () => {
         const commands: MongoCommand[] = getAllCommandsFromText(text);
         const command: MongoCommand = findCommandAtPosition(commands, new Position(0, 0));
         const generatedRegExp = (<any>nonNullProp(command, 'argumentObjects')[0]).sku;
-        console.log('generatedRegExp', generatedRegExp);
         assert.deepEqual(generatedRegExp.options, 'i');
         assert.deepEqual(generatedRegExp.pattern, '789$');
     });
@@ -838,11 +837,8 @@ suite('scrapbook parsing Tests', () => {
     // The regex parsing tests following this test should help zero-in on which case isn't handled properly.
     test('test regular expression parsing - with many special cases', () => {
         const text = `db.test1.beep.find({ sku:  /^(hello?= world).*[^0-9]+|(world\\b\\*){0,2}$/ })`;
-        console.log(text);
         const commands: MongoCommand[] = getAllCommandsFromText(text);
-        console.log('commands', commands);
         const command: MongoCommand = findCommandAtPosition(commands, new Position(0, 0));
-        console.log('command', command);
         const generatedRegExp = (<any>nonNullProp(command, 'argumentObjects')[0]).sku;
         assert.deepEqual(generatedRegExp.options, '');
         assert.deepEqual(generatedRegExp.pattern, '^(hello?= world).*[^0-9]+|(world\\b\\*){0,2}$');

@@ -4,16 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Binary, type BSONRegExp, type ObjectId } from 'mongodb';
-import { MongoBSONTypes } from './MongoBSONTypes';
+import { BSONTypes } from './BSONTypes';
 
 /**
- * Converts a MongoDB value to its display string representation based on its type.
+ * Converts a MongoDB API value to its display string representation based on its type.
  *
  * @param value - The value to be converted to a display string.
- * @param type - The MongoDB data type of the value.
+ * @param type - The MongoDB API data type of the value.
  * @returns The string representation of the value.
  *
- * The function handles various MongoDB data types including:
+ * The function handles various MongoDB API data types including:
  * - String
  * - Number, Int32, Double, Decimal128, Long
  * - Boolean
@@ -24,60 +24,60 @@ import { MongoBSONTypes } from './MongoBSONTypes';
  *
  * For unsupported or unknown types, the function defaults to JSON stringification.
  */
-export function valueToDisplayString(value: unknown, type: MongoBSONTypes): string {
+export function valueToDisplayString(value: unknown, type: BSONTypes): string {
     switch (type) {
-        case MongoBSONTypes.String: {
+        case BSONTypes.String: {
             return value as string;
         }
-        case MongoBSONTypes.Number:
-        case MongoBSONTypes.Int32:
-        case MongoBSONTypes.Double:
-        case MongoBSONTypes.Decimal128:
-        case MongoBSONTypes.Long: {
+        case BSONTypes.Number:
+        case BSONTypes.Int32:
+        case BSONTypes.Double:
+        case BSONTypes.Decimal128:
+        case BSONTypes.Long: {
             return (value as number).toString();
         }
-        case MongoBSONTypes.Boolean: {
+        case BSONTypes.Boolean: {
             return (value as boolean).toString();
         }
-        case MongoBSONTypes.Date: {
+        case BSONTypes.Date: {
             return (value as Date).toISOString();
         }
-        case MongoBSONTypes.ObjectId: {
+        case BSONTypes.ObjectId: {
             return (value as ObjectId).toHexString();
         }
-        case MongoBSONTypes.Null: {
+        case BSONTypes.Null: {
             return 'null';
         }
-        case MongoBSONTypes.RegExp: {
+        case BSONTypes.RegExp: {
             const v = value as BSONRegExp;
             return `${v.pattern} ${v.options}`;
         }
-        case MongoBSONTypes.Binary: {
+        case BSONTypes.Binary: {
             return `Binary[${(value as Binary).length()}]`;
         }
-        case MongoBSONTypes.Symbol: {
+        case BSONTypes.Symbol: {
             return (value as symbol).toString();
         }
-        case MongoBSONTypes.Timestamp: {
+        case BSONTypes.Timestamp: {
             return (value as { toString: () => string }).toString();
         }
-        case MongoBSONTypes.MinKey: {
+        case BSONTypes.MinKey: {
             return 'MinKey';
         }
-        case MongoBSONTypes.MaxKey: {
+        case BSONTypes.MaxKey: {
             return 'MaxKey';
         }
-        case MongoBSONTypes.Code:
-        case MongoBSONTypes.CodeWithScope: {
+        case BSONTypes.Code:
+        case BSONTypes.CodeWithScope: {
             return JSON.stringify(value);
         }
 
-        case MongoBSONTypes.Array:
-        case MongoBSONTypes.Object:
-        case MongoBSONTypes.Map:
-        case MongoBSONTypes.DBRef:
-        case MongoBSONTypes.Undefined:
-        case MongoBSONTypes._UNKNOWN_:
+        case BSONTypes.Array:
+        case BSONTypes.Object:
+        case BSONTypes.Map:
+        case BSONTypes.DBRef:
+        case BSONTypes.Undefined:
+        case BSONTypes._UNKNOWN_:
         default: {
             return JSON.stringify(value);
         }
