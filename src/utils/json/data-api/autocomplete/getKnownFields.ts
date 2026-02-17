@@ -82,6 +82,16 @@ export function getKnownFields(schema: JSONSchema): FieldEntry[] {
                 const objectDocumentsInspected = (mostCommonTypeEntry['x-documentsInspected'] as number) ?? 0;
                 for (const childName of Object.keys(mostCommonTypeEntry.properties)) {
                     const childSchema = mostCommonTypeEntry.properties[childName] as JSONSchema;
+                    // TODO: Dot-delimited path concatenation is ambiguous when a field name
+                    // itself contains a literal dot. For example, a root-level field named
+                    // "a.b" produces path "a.b", indistinguishable from a nested field
+                    // { a: { b: ... } }. Fields with literal dots in their names were
+                    // prohibited before MongoDB 3.6 and remain rare in practice.
+                    //
+                    // Future improvement: change `path` from `string` to `string[]`
+                    // (segment array) to preserve the distinction between nesting and
+                    // literal dots, pushing escaping/formatting decisions to consumers
+                    // (TS definitions, completion items, aggregation references, etc.).
                     queue.push({
                         path: `${path}.${childName}`,
                         schemaNode: childSchema,

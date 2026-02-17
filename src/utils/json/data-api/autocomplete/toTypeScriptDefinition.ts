@@ -43,6 +43,33 @@ function bsonTypeToTS(bsonType: string): string {
 }
 
 /**
+ * Matches valid JavaScript/TypeScript identifiers.
+ * A valid identifier starts with a letter, underscore, or dollar sign,
+ * followed by zero or more letters, digits, underscores, or dollar signs.
+ */
+const JS_IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
+
+/**
+ * Returns a safe TypeScript property name for use in interface definitions.
+ * If the name is a valid JS identifier, it is returned as-is.
+ * Otherwise, it is wrapped in double quotes with internal quotes and backslashes escaped.
+ *
+ * Examples:
+ *  - "age" → "age" (valid identifier, unchanged)
+ *  - "order-items" → '"order-items"' (dash)
+ *  - "a.b" → '"a.b"' (dot)
+ *  - "my field" → '"my field"' (space)
+ *  - 'say"hi"' → '"say\\"hi\\""' (embedded quotes escaped)
+ */
+function safePropertyName(name: string): string {
+    if (JS_IDENTIFIER_PATTERN.test(name)) {
+        return name;
+    }
+    const escaped = name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return `"${escaped}"`;
+}
+
+/**
  * Converts a collection name to PascalCase and appends "Document".
  * Examples:
  *  - "users" → "UsersDocument"
@@ -96,8 +123,9 @@ function renderProperties(
         const isOptional = isFieldOptional(propSchema, parentDocumentsInspected);
         const optionalMarker = isOptional ? '?' : '';
         const tsType = resolveTypeString(propSchema, indentLevel);
+        const safeName = safePropertyName(propName);
 
-        lines.push(`${indent}${propName}${optionalMarker}: ${tsType};`);
+        lines.push(`${indent}${safeName}${optionalMarker}: ${tsType};`);
     }
 }
 
