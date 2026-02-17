@@ -131,25 +131,31 @@ The generated output is used for documentation/hover display only — it's rende
 ### Proposed fix (when needed)
 
 **Option A — Emit `import type`:**
+
 ```typescript
 import type { ObjectId, Binary, Timestamp, MinKey, MaxKey, Code, DBRef, UUID } from 'mongodb';
 ```
+
 Only include types that actually appear in the schema.
 
 **Option B — Emit `declare type` stubs:**
+
 ```typescript
 declare type ObjectId = { toString(): string };
 declare type Binary = { length(): number };
 // ... etc.
 ```
+
 Lightweight, no dependency on the `mongodb` package.
 
 **Option C — Map everything to primitive types:**
+
 ```typescript
 ObjectId → string  // (its string representation)
 Binary → Uint8Array
 Timestamp → { t: number; i: number }
 ```
+
 Loses semantic precision but avoids the undeclared-type problem entirely.
 
 **Recommendation:** Option A is the most correct approach. Collect the set of non-built-in types actually used in the schema, then prepend a single `import type` line. Defer until the output is consumed by a real TS language service.
