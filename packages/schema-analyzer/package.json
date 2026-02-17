@@ -1,7 +1,7 @@
 {
   "name": "@vscode-documentdb/schema-analyzer",
   "version": "1.0.0",
-  "description": "Incremental JSON Schema analyzer for MongoDB/DocumentDB documents with statistical extensions",
+  "description": "Incremental JSON Schema analyzer for DocumentDB API / MongoDB API documents with statistical extensions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

@@ -1,6 +1,6 @@
 # GitHub Copilot Instructions for vscode-documentdb
 
-VS Code Extension for Azure Cosmos DB and MongoDB. TypeScript (strict mode), React webviews, Jest testing.
+VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mode), React webviews, Jest testing.
 
 ## Critical Build Commands
 

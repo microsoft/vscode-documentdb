@@ -100,7 +100,7 @@ function toInterfaceName(collectionName: string): string {
  * produced by the SchemaAnalyzer.
  *
  * @param schema - The JSON Schema with x- extensions from SchemaAnalyzer
- * @param collectionName - The MongoDB collection name, used to derive the interface name
+ * @param collectionName - The MongoDB API collection name, used to derive the interface name
  * @returns A formatted TypeScript interface definition string
  */
 export function toTypeScriptDefinition(schema: JSONSchema, collectionName: string): string {

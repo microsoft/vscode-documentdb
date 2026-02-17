@@ -19,8 +19,8 @@ export interface FieldEntry {
      * True if this field was not present in every inspected document
      * (x-occurrence < parent x-documentsInspected).
      *
-     * This is a statistical observation, not a schema constraint — in the
-     * MongoDB API / DocumentDB API all fields are implicitly optional.
+     * This is a statistical observation, not a schema constraint — in the MongoDB API / DocumentDB API,
+     * all fields are implicitly optional.
      */
     isSparse?: boolean;
     /** If the field is an array, the dominant element BSON type */
@@ -93,7 +93,7 @@ export function getKnownFields(schema: JSONSchema): FieldEntry[] {
                     // itself contains a literal dot. For example, a root-level field named
                     // "a.b" produces path "a.b", indistinguishable from a nested field
                     // { a: { b: ... } }. Fields with literal dots in their names were
-                    // prohibited before MongoDB 3.6 and remain rare in practice.
+                    // prohibited before MongoDB API 3.6 and remain rare in practice.
                     //
                     // Future improvement: change `path` from `string` to `string[]`
                     // (segment array) to preserve the distinction between nesting and

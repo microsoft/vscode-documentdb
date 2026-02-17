@@ -7,13 +7,13 @@ import { type Binary, type BSONRegExp, type ObjectId } from 'mongodb';
 import { BSONTypes } from './BSONTypes';
 
 /**
- * Converts a MongoDB value to its display string representation based on its type.
+ * Converts a MongoDB API value to its display string representation based on its type.
  *
  * @param value - The value to be converted to a display string.
- * @param type - The MongoDB data type of the value.
+ * @param type - The MongoDB API data type of the value.
  * @returns The string representation of the value.
  *
- * The function handles various MongoDB data types including:
+ * The function handles various MongoDB API data types including:
  * - String
  * - Number, Int32, Double, Decimal128, Long
  * - Boolean

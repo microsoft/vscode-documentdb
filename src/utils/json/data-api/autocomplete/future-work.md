@@ -55,7 +55,7 @@ referenceText: needsQuoting
 
 ## 3. `FieldEntry.path` dot-concatenation is ambiguous for literal dots
 
-**Severity:** Low (rare in practice) — fields with literal dots were prohibited before MongoDB 3.6
+**Severity:** Low (rare in practice) — fields with literal dots were prohibited before MongoDB API 3.6
 **File:** `getKnownFields.ts` — path concatenation at `path: \`${path}.${childName}\``**When to fix:** When we encounter real-world schemas with literal dots, or during the next`FieldEntry` interface revision
 
 ### Problem
@@ -120,7 +120,7 @@ This is a **breaking change** to the `FieldEntry` interface. Affected consumers:
 
 ### Problem
 
-The BSON-to-TypeScript type mapping emits non-built-in type names such as `ObjectId`, `Binary`, `Timestamp`, `MinKey`, `MaxKey`, `Code`, `DBRef`, and `UUID`. These are MongoDB BSON driver types, but the generated definition string doesn't include `import` statements or `declare` stubs for them.
+The BSON-to-TypeScript type mapping emits non-built-in type names such as `ObjectId`, `Binary`, `Timestamp`, `MinKey`, `MaxKey`, `Code`, `DBRef`, and `UUID`. These are MongoDB API BSON driver types, but the generated definition string doesn't include `import` statements or `declare` stubs for them.
 
 If the output is ever fed to a TypeScript compiler or language service (e.g., Monaco with full TS checking), it will report "Cannot find name 'ObjectId'" etc.
 

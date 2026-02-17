@@ -20,8 +20,8 @@ import {
 } from 'mongodb';
 
 /**
- * Represents the different data types that can be stored in a MongoDB document.
- * The string representation is casesensitive and should match the MongoDB documentation.
+ * Represents the different data types that can be stored in a DocumentDB API / MongoDB API document.
+ * The string representation is case-sensitive and should match the MongoDB API documentation.
  * https://www.mongodb.com/docs/manual/reference/bson-types/
  */
 export enum BSONTypes {
@@ -93,8 +93,8 @@ export namespace BSONTypes {
     }
 
     /**
-     * Converts a MongoDB data type to a case sensitive JSON data type
-     * @param type The MongoDB data type
+     * Converts a MongoDB API data type to a case-sensitive JSON data type
+     * @param type The MongoDB API data type
      * @returns A corresponding JSON data type (please note: it's case sensitive)
      */
     export function toJSONType(type: BSONTypes): string {
@@ -141,8 +141,8 @@ export namespace BSONTypes {
     }
 
     /**
-     * Accepts a value from a MongoDB 'Document' object and returns the inferred type.
-     * @param value The value of a field in a MongoDB 'Document' object
+     * Accepts a value from a MongoDB API `Document` object and returns the inferred type.
+     * @param value The value of a field in a MongoDB API `Document` object
      * @returns
      */
     export function inferType(value: unknown): BSONTypes {
