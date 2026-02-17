@@ -70,16 +70,29 @@ function safePropertyName(name: string): string {
 
 /**
  * Converts a collection name to PascalCase and appends "Document".
+ * If the result would start with a digit, a leading `_` is prepended.
+ * If the collection name contains only separators or is empty, falls back to "CollectionDocument".
+ *
  * Examples:
  *  - "users" → "UsersDocument"
  *  - "order_items" → "OrderItemsDocument"
+ *  - "123abc" → "_123abcDocument"
+ *  - "---" → "CollectionDocument"
  */
 function toInterfaceName(collectionName: string): string {
     const pascal = collectionName
         .split(/[_\-\s]+/)
+        .filter((s) => s.length > 0)
         .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
         .join('');
-    return `${pascal}Document`;
+
+    if (pascal.length === 0) {
+        return 'CollectionDocument';
+    }
+
+    // Prefix with _ if the first character is a digit (invalid TS identifier start)
+    const prefix = /^[0-9]/.test(pascal) ? '_' : '';
+    return `${prefix}${pascal}Document`;
 }
 
 /**

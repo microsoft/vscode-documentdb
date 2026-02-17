@@ -207,6 +207,30 @@ describe('toTypeScriptDefinition', () => {
         );
     });
 
+    it('prefixes with _ when collection name starts with a digit', () => {
+        expect(toTypeScriptDefinition({ 'x-documentsInspected': 0 }, '123abc')).toContain(
+            'interface _123abcDocument',
+        );
+        expect(toTypeScriptDefinition({ 'x-documentsInspected': 0 }, '99_bottles')).toContain(
+            'interface _99BottlesDocument',
+        );
+    });
+
+    it('falls back to CollectionDocument when name is only separators', () => {
+        expect(toTypeScriptDefinition({ 'x-documentsInspected': 0 }, '---')).toContain(
+            'interface CollectionDocument',
+        );
+        expect(toTypeScriptDefinition({ 'x-documentsInspected': 0 }, '_ _ _')).toContain(
+            'interface CollectionDocument',
+        );
+    });
+
+    it('falls back to CollectionDocument for empty string', () => {
+        expect(toTypeScriptDefinition({ 'x-documentsInspected': 0 }, '')).toContain(
+            'interface CollectionDocument',
+        );
+    });
+
     describe('special character field names', () => {
         function makeSchemaWithField(fieldName: string): JSONSchema {
             return {
