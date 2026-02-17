@@ -274,6 +274,7 @@ dist
 stats.json
 *.tgz
 *.zip
+*.tsbuildinfo
 
 # Scrapbooks
 *.mongo

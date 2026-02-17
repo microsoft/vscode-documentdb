@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "tsc -p .",
-    "clean": "rimraf dist",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
     "test": "jest --config jest.config.js"
   },
   "repository": {
