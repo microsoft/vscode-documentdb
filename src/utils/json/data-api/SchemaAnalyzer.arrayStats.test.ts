@@ -274,10 +274,6 @@ describe('Array element occurrence analysis', () => {
         //   doc2 second element (15): aggregateStatsForValue → max becomes 15
         //   final: min=5, max=15 ← WRONG (lost 30 from doc1)
 
-        // Let's check what actually happens:
-        console.log('numEntry x-minValue:', numEntry['x-minValue']);
-        console.log('numEntry x-maxValue:', numEntry['x-maxValue']);
-
         // This test documents the actual behavior (might be buggy):
         expect(numEntry['x-minValue']).toBe(5);
         // If the bug exists, this will be 15 instead of 30:
