@@ -58,6 +58,7 @@
     "onUri"
   ],
   "scripts": {
+    "prebuild": "npm run build --workspaces --if-present",
     "build": "tsc",
     "clean": "git clean -dfx",
     "compile": "tsc -watch",
@@ -73,6 +74,7 @@
     "prettier-fix": "prettier -w \"(src|test|l10n|grammar|docs|packages)/**/*.@(js|ts|jsx|tsx|json)\" \"./*.@(js|ts|jsx|tsx|json)\"",
     "pretest": "npm run build",
     "test": "vscode-test",
+    "prejesttest": "npm run build --workspaces --if-present",
     "jesttest": "jest",
     "update-grammar": "antlr4ts -visitor ./grammar/mongo.g4 -o src/documentdb/grammar",
     "webpack-dev": "rimraf ./dist && npm run webpack-dev-ext && npm run webpack-dev-wv",
