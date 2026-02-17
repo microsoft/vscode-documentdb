@@ -58,6 +58,13 @@ export function getKnownFields(schema: JSONSchema): FieldEntry[] {
     const queue: Denque<QueueItem> = new Denque();
 
     // Initialize the queue with root properties
+    //
+    // Note: JSON Schema allows boolean values as schema references (true = accept all,
+    // false = reject all), but our SchemaAnalyzer never produces boolean refs — it always
+    // emits full schema objects. The cast to JSONSchema below is therefore safe for our
+    // use case. If this function were ever reused with externally-sourced schemas, a
+    // `typeof propSchema === 'boolean'` guard should be added here and in the nested
+    // property loop below.
     if (schema.properties) {
         for (const propName of Object.keys(schema.properties)) {
             const propSchema = schema.properties[propName] as JSONSchema;
