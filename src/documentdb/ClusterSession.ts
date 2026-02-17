@@ -3,13 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import {
+    SchemaAnalyzer,
+    getPropertyNamesAtLevel,
+    type FieldEntry,
+    type JSONSchema,
+} from '@vscode-documentdb/schema-analyzer';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
 import { ext } from '../extensionVariables';
-import { type JSONSchema } from '../utils/json/JSONSchema';
-import { SchemaAnalyzer, getPropertyNamesAtLevel } from '../utils/json/data-api/SchemaAnalyzer';
-import { type FieldEntry } from '../utils/json/data-api/autocomplete/getKnownFields';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';

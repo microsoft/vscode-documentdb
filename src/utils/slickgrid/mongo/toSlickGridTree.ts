@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { BSONTypes, valueToDisplayString } from '@vscode-documentdb/schema-analyzer';
 import { type Document, type ObjectId, type WithId } from 'mongodb';
-import { BSONTypes } from '../../json/data-api/BSONTypes';
-import { valueToDisplayString } from '../../json/data-api/ValueFormatters';
 
 /**
  * The data structure for a single node entry in the tree data structure for SlickGrid.

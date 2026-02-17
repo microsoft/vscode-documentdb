@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type JSONSchema } from '../../JSONSchema';
-import { BSONTypes } from '../BSONTypes';
+import { BSONTypes, type JSONSchema } from '@vscode-documentdb/schema-analyzer';
 
 /**
  * Maps a BSON type string to the corresponding TypeScript type representation.

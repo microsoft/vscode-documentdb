@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as fs from 'fs';
 import { type Document } from 'mongodb';
 import * as path from 'path';
@@ -12,7 +13,6 @@ import { type JSONSchema } from 'vscode-json-languageservice';
 import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { type FieldEntry } from '../../../utils/json/data-api/autocomplete/getKnownFields';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
 
 import * as l10n from '@vscode/l10n';

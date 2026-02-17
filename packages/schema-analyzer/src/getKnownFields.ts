@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import Denque from 'denque';
-import { type JSONSchema } from '../../JSONSchema';
+import { type JSONSchema } from './JSONSchema';
 
 export interface FieldEntry {
     /** Dot-notated path (e.g., "user.profile.name") */

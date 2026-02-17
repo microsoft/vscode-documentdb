@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type JSONSchema, type JSONSchemaMap, type JSONSchemaRef } from '../JSONSchema';
-import { getPropertyNamesAtLevel, SchemaAnalyzer } from './SchemaAnalyzer';
+import { type JSONSchema, type JSONSchemaMap, type JSONSchemaRef } from '../src/JSONSchema';
+import { getPropertyNamesAtLevel, SchemaAnalyzer } from '../src/SchemaAnalyzer';
 import {
     arraysWithDifferentDataTypes,
     complexDocument,

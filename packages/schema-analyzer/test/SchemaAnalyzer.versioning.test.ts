@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ObjectId, type Document, type WithId } from 'mongodb';
-import { type JSONSchema } from '../JSONSchema';
-import { SchemaAnalyzer } from './SchemaAnalyzer';
+import { type JSONSchema } from '../src/JSONSchema';
+import { SchemaAnalyzer } from '../src/SchemaAnalyzer';
 
 // ------------------------------------------------------------------
 // Test fixtures

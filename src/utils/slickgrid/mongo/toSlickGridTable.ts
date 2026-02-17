@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { BSONTypes, valueToDisplayString } from '@vscode-documentdb/schema-analyzer';
 import { EJSON } from 'bson';
 import { type Document, type WithId } from 'mongodb';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
-import { BSONTypes } from '../../json/data-api/BSONTypes';
-import { valueToDisplayString } from '../../json/data-api/ValueFormatters';
 
 /**
  * Extracts data from a list of MongoDB documents at a specified path.

@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as l10n from '@vscode/l10n';
 import { assert } from 'console';
 import Denque from 'denque';
 import { type Document, type WithId } from 'mongodb';
-import { type JSONSchema } from '../JSONSchema';
 import { BSONTypes } from './BSONTypes';
-import { type FieldEntry, getKnownFields as getKnownFieldsFromSchema } from './autocomplete/getKnownFields';
+import { type JSONSchema, type JSONSchemaRef } from './JSONSchema';
+import { type FieldEntry, getKnownFields as getKnownFieldsFromSchema } from './getKnownFields';
 
 /**
  * Incremental schema analyzer for documents from the MongoDB API / DocumentDB API.
@@ -369,11 +368,12 @@ function findTypeEntry(anyOfArray: JSONSchema[], bsonType: BSONTypes): JSONSchem
  * Helper function to update min and max stats
  */
 function updateMinMaxStats(schema: JSONSchema, minKey: string, maxKey: string, value: number): void {
-    if (schema[minKey] === undefined || value < schema[minKey]) {
-        schema[minKey] = value;
+    const record = schema as Record<string, unknown>;
+    if (record[minKey] === undefined || value < (record[minKey] as number)) {
+        record[minKey] = value;
     }
-    if (schema[maxKey] === undefined || value > schema[maxKey]) {
-        schema[maxKey] = value;
+    if (record[maxKey] === undefined || value > (record[maxKey] as number)) {
+        record[maxKey] = value;
     }
 }
 
@@ -534,16 +534,11 @@ function aggregateStatsForValue(value: unknown, mongoType: BSONTypes, propertyTy
     }
 }
 
-function getSchemaAtPath(schema: JSONSchema, path: string[]): JSONSchema {
-    let currentNode = schema;
+function getSchemaAtPath(schema: JSONSchema, path: string[]): JSONSchema | undefined {
+    let currentNode: JSONSchema | undefined = schema;
 
     for (let i = 0; i < path.length; i++) {
         const key = path[i];
-
-        // If the current node is an array, we should move to its `items`
-        // if (currentNode.type === 'array' && currentNode.items) {
-        //     currentNode = currentNode.items;
-        // }
 
         // Move to the next property in the schema
         if (currentNode && currentNode.properties && currentNode.properties[key]) {
@@ -553,13 +548,15 @@ function getSchemaAtPath(schema: JSONSchema, path: string[]): JSONSchema {
              * We're looking at the "Object"-one, because these have the properties we're interested in.
              */
             if (nextNode.anyOf && nextNode.anyOf.length > 0) {
-                currentNode = nextNode.anyOf.find((entry: JSONSchema) => entry.type === 'object') as JSONSchema;
+                currentNode = nextNode.anyOf.find(
+                    (entry: JSONSchemaRef): entry is JSONSchema => typeof entry === 'object' && entry.type === 'object',
+                );
             } else {
                 // we can't continue, as we're missing the next node, we abort at the last node we managed to extract
                 return currentNode;
             }
         } else {
-            throw new Error(l10n.t('No properties found in the schema at path "{0}"', path.slice(0, i + 1).join('/')));
+            throw new Error(`No properties found in the schema at path "${path.slice(0, i + 1).join('/')}"`);
         }
     }
 
@@ -570,7 +567,7 @@ export function getPropertyNamesAtLevel(jsonSchema: JSONSchema, path: string[]):
     const headers = new Set<string>();
 
     // Explore the schema and apply the callback to collect headers at the specified path
-    const selectedSchema: JSONSchema = getSchemaAtPath(jsonSchema, path);
+    const selectedSchema = getSchemaAtPath(jsonSchema, path);
 
     if (selectedSchema && selectedSchema.properties) {
         Object.keys(selectedSchema.properties).forEach((key) => {

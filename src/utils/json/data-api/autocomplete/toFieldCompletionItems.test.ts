@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type FieldEntry } from './getKnownFields';
+import { type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import { toFieldCompletionItems } from './toFieldCompletionItems';
 
 describe('toFieldCompletionItems', () => {

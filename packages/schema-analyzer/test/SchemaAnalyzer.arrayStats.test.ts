@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ObjectId, type Document, type WithId } from 'mongodb';
-import { type JSONSchema } from '../JSONSchema';
-import { SchemaAnalyzer } from './SchemaAnalyzer';
+import { type JSONSchema } from '../src/JSONSchema';
+import { SchemaAnalyzer } from '../src/SchemaAnalyzer';
 
 /**
  * This test file investigates the array element occurrence/stats problem.
@@ -158,19 +158,19 @@ describe('Array element occurrence analysis', () => {
             (e) => (e as JSONSchema)['x-bsonType'] === 'object',
         ) as JSONSchema;
 
-        const props = objEntry.properties as JSONSchema;
+        const props = objEntry.properties as Record<string, JSONSchema>;
 
         // "name" appeared in all 3 object elements
-        expect((props['name'] as JSONSchema)['x-occurrence']).toBe(3);
+        expect(props['name']['x-occurrence']).toBe(3);
 
         // "price" appeared in 2 of 3 object elements
-        expect((props['price'] as JSONSchema)['x-occurrence']).toBe(2);
+        expect(props['price']['x-occurrence']).toBe(2);
 
         // "discount" appeared in 1 of 3 object elements
-        expect((props['discount'] as JSONSchema)['x-occurrence']).toBe(1);
+        expect(props['discount']['x-occurrence']).toBe(1);
 
         // "weight" appeared in 1 of 3 object elements
-        expect((props['weight'] as JSONSchema)['x-occurrence']).toBe(1);
+        expect(props['weight']['x-occurrence']).toBe(1);
 
         // Total object elements = 3 (2 from doc1 + 1 from doc2)
         expect(objEntry['x-typeOccurrence']).toBe(3);

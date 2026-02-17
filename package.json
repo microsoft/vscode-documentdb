@@ -46,6 +46,9 @@
     "type": "git",
     "url": "https://github.com/microsoft/vscode-documentdb"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "main": "./main",
   "l10n": "./l10n",
   "activationEvents": [
@@ -67,7 +70,7 @@
     "lint": "eslint --quiet .",
     "lint-fix": "eslint . --fix",
     "prettier": "prettier -c \"(src|test|l10n|grammar|docs)/**/*.@(js|ts|jsx|tsx|json)\" \"./*.@(js|ts|jsx|tsx|json)\"",
-    "prettier-fix": "prettier -w \"(src|test|l10n|grammar|docs)/**/*.@(js|ts|jsx|tsx|json)\" \"./*.@(js|ts|jsx|tsx|json)\"",
+    "prettier-fix": "prettier -w \"(src|test|l10n|grammar|docs|packages)/**/*.@(js|ts|jsx|tsx|json)\" \"./*.@(js|ts|jsx|tsx|json)\"",
     "pretest": "npm run build",
     "test": "vscode-test",
     "jesttest": "jest",
@@ -165,6 +168,7 @@
     "@trpc/client": "~11.10.0",
     "@trpc/server": "~11.10.0",
     "@vscode/l10n": "~0.0.18",
+    "@vscode-documentdb/schema-analyzer": "*",
     "antlr4ts": "^0.5.0-alpha.4",
     "bson": "~7.0.0",
     "denque": "~2.1.0",
