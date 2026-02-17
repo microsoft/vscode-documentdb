@@ -86,7 +86,9 @@ VS Code collects usage data and sends it to Microsoft to help improve our produc
 
 # Feedback Collection
 
-DocumentDB for VS Code proactively asks for user feedback and provides feedback entry points in the UI. Feedback collection is controlled by VS Code's global telemetry setting. To disable it, set `telemetry.enableTelemetry` to `false`.
+DocumentDB for VS Code proactively asks for user feedback and provides feedback entry points in the UI. Feedback collection is controlled by VS Code's global telemetry setting.
+
+To disable feedback, set `telemetry.telemetryLevel` to a value other than `all` (e.g., `error` or `off`). Feedback is only active when the level is set to `all`.
 
 # License
 
