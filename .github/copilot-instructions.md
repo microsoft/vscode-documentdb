@@ -178,6 +178,22 @@ For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replace
 
 See `src/tree/models/BaseClusterModel.ts` and `docs/analysis/08-cluster-model-simplification-plan.md` for details.
 
+## Terminology
+
+This is a **DocumentDB** extension that uses the **MongoDB-compatible wire protocol**.
+
+- Use **"DocumentDB"** when referring to the database service itself.
+- Use **"MongoDB API"** or **"DocumentDB API"** when referring to the wire protocol, query language, or API compatibility layer.
+- **Never use "MongoDB" alone** as a product name in code, comments, docs, or user-facing strings.
+
+| ✅ Do                                                | ❌ Don't                         |
+| ---------------------------------------------------- | -------------------------------- |
+| `// Query operators supported by the DocumentDB API` | `// MongoDB query operators`     |
+| `// BSON types per the MongoDB API spec`             | `// Uses MongoDB's $match stage` |
+| `documentdbQuery` (variable name)                    | `mongoQuery`                     |
+
+This applies to: code comments, JSDoc/TSDoc, naming (prefer `documentdb` prefix), user-facing strings, docs, and test descriptions.
+
 ## Additional Patterns
 
 For detailed patterns, see:
