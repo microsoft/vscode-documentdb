@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { assert } from 'console';
 import Denque from 'denque';
 import { type Document, type WithId } from 'mongodb';
+import assert from 'node:assert/strict';
 import { BSONTypes } from './BSONTypes';
 import { type JSONSchema, type JSONSchemaRef } from './JSONSchema';
 import { type FieldEntry, getKnownFields as getKnownFieldsFromSchema } from './getKnownFields';
