@@ -40,17 +40,14 @@ export interface FieldCompletionData {
 }
 
 /**
- * Characters that require quoting in a field name for insert text.
+ * Matches valid JavaScript/TypeScript identifiers.
+ * A valid identifier starts with a letter, underscore, or dollar sign,
+ * followed by zero or more letters, digits, underscores, or dollar signs.
  *
- * TODO: This pattern currently only catches dots, `$`, and whitespace. It misses other
- * characters that are valid in MongoDB field names but problematic in query expressions:
- * dashes (`-`), brackets (`[`, `]`), quotes (`"`, `'`), and backslashes (`\`).
- * Additionally, the quoting logic (`"${path}"`) does not escape embedded double quotes
- * or backslashes inside the field name. Both gaps should be addressed when the
- * CompletionItemProvider is wired up — the fix is to (1) widen this to a "is valid
- * unquoted identifier" check and (2) escape `"` → `\"` and `\` → `\\` in insertText.
+ * Field names that do NOT match this pattern must be quoted and escaped
+ * in `insertText` to produce valid query expressions.
  */
-const SPECIAL_CHARS_PATTERN = /[.$\s]/;
+const JS_IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
 /**
  * Converts an array of FieldEntry objects into completion-ready FieldCompletionData items.
@@ -61,14 +58,22 @@ const SPECIAL_CHARS_PATTERN = /[.$\s]/;
 export function toFieldCompletionItems(fields: FieldEntry[]): FieldCompletionData[] {
     return fields.map((entry) => {
         const displayType = BSONTypes.toDisplayString(entry.bsonType as BSONTypes);
-        const needsQuoting = SPECIAL_CHARS_PATTERN.test(entry.path);
+        const needsQuoting = !JS_IDENTIFIER_PATTERN.test(entry.path);
+
+        let insertText: string;
+        if (needsQuoting) {
+            const escaped = entry.path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            insertText = `"${escaped}"`;
+        } else {
+            insertText = entry.path;
+        }
 
         return {
             fieldName: entry.path,
             displayType,
             bsonType: entry.bsonType,
             isSparse: entry.isSparse ?? false,
-            insertText: needsQuoting ? `"${entry.path}"` : entry.path,
+            insertText,
             referenceText: `$${entry.path}`,
         };
     });

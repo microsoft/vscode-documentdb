@@ -39,6 +39,50 @@ describe('toFieldCompletionItems', () => {
         expect(result[1].insertText).toBe('"user.profile.bio"');
     });
 
+    it('quotes field names with dashes', () => {
+        const fields: FieldEntry[] = [{ path: 'order-items', type: 'string', bsonType: 'string' }];
+        const result = toFieldCompletionItems(fields);
+        expect(result[0].insertText).toBe('"order-items"');
+        expect(result[0].fieldName).toBe('order-items'); // display stays unescaped
+    });
+
+    it('quotes field names with brackets', () => {
+        const fields: FieldEntry[] = [{ path: 'items[0]', type: 'string', bsonType: 'string' }];
+        const result = toFieldCompletionItems(fields);
+        expect(result[0].insertText).toBe('"items[0]"');
+    });
+
+    it('quotes field names starting with a digit', () => {
+        const fields: FieldEntry[] = [{ path: '123abc', type: 'string', bsonType: 'string' }];
+        const result = toFieldCompletionItems(fields);
+        expect(result[0].insertText).toBe('"123abc"');
+    });
+
+    it('escapes embedded double quotes in insertText', () => {
+        const fields: FieldEntry[] = [{ path: 'say"hi"', type: 'string', bsonType: 'string' }];
+        const result = toFieldCompletionItems(fields);
+        expect(result[0].insertText).toBe('"say\\"hi\\""');
+        expect(result[0].fieldName).toBe('say"hi"'); // display stays unescaped
+    });
+
+    it('escapes backslashes in insertText', () => {
+        const fields: FieldEntry[] = [{ path: 'back\\slash', type: 'string', bsonType: 'string' }];
+        const result = toFieldCompletionItems(fields);
+        expect(result[0].insertText).toBe('"back\\\\slash"');
+    });
+
+    it('does not quote valid identifiers', () => {
+        const fields: FieldEntry[] = [
+            { path: 'name', type: 'string', bsonType: 'string' },
+            { path: '_id', type: 'string', bsonType: 'objectid' },
+            { path: '$type', type: 'string', bsonType: 'string' },
+        ];
+        const result = toFieldCompletionItems(fields);
+        expect(result[0].insertText).toBe('name');
+        expect(result[1].insertText).toBe('_id');
+        expect(result[2].insertText).toBe('$type');
+    });
+
     it('adds $ prefix to referenceText', () => {
         const fields: FieldEntry[] = [
             { path: 'age', type: 'number', bsonType: 'int32' },

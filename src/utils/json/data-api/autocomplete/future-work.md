@@ -5,42 +5,13 @@ These must be resolved before the completion providers ship to users.
 
 ---
 
-## 1. `SPECIAL_CHARS_PATTERN` is incomplete + `insertText` quoting doesn't escape
+## ~~1. `SPECIAL_CHARS_PATTERN` is incomplete + `insertText` quoting doesn't escape~~ ✅ RESOLVED
 
-**Severity:** Medium — will produce broken query expressions for real-world field names
-**File:** `toFieldCompletionItems.ts` — `SPECIAL_CHARS_PATTERN` and `insertText` construction
-**When to fix:** Before the `CompletionItemProvider` is wired up
+**Resolved in:** PR #506 (commit addressing copilot review comment)
 
-### Problem
-
-`SPECIAL_CHARS_PATTERN` (`/[.$\s]/`) only catches dots, `$`, and whitespace. MongoDB field names can also contain:
-
-| Character        | Example field name | Current behavior                                |
-| ---------------- | ------------------ | ----------------------------------------------- |
-| Dash `-`         | `order-items`      | Inserted unquoted → breaks JSON key context     |
-| Brackets `[]`    | `items[0]`         | Inserted unquoted                               |
-| Double quote `"` | `say"hi"`          | Wrapped as `"say"hi""` → broken string          |
-| Single quote `'` | `it's`             | Inserted unquoted (may break some contexts)     |
-| Backslash `\`    | `back\slash`       | Wrapped as `"back\slash"` → unescaped backslash |
-
-Additionally, when quoting _is_ triggered, the current logic (`"${entry.path}"`) does not escape embedded `"` or `\` inside the value.
-
-### Proposed fix
-
-1. Replace `SPECIAL_CHARS_PATTERN` with an identifier check (same as `safePropertyName` in `toTypeScriptDefinition.ts`):
-   ```typescript
-   const JS_IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
-   const needsQuoting = !JS_IDENTIFIER.test(entry.path);
-   ```
-2. When quoting, escape the content:
-   ```typescript
-   const escaped = entry.path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-   insertText: needsQuoting ? `"${escaped}"` : entry.path,
-   ```
-
-### Note on display vs insert
-
-The `fieldName` property intentionally stays unescaped (human-readable) for the completion list label. Only `insertText` gets escaped — this is by design, so users see clean names in the dropdown and the escaped form is inserted on selection.
+Replaced `SPECIAL_CHARS_PATTERN` with `JS_IDENTIFIER_PATTERN` — a proper identifier validity check.
+Added `\` → `\\` and `"` → `\"` escaping when quoting `insertText`.
+Tests cover dashes, brackets, digits, embedded quotes, and backslashes.
 
 ---
 
