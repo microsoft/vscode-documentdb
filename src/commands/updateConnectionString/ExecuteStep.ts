@@ -30,7 +30,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
             connection.secrets = {
                 ...connection.secrets,
                 connectionString: nonNullValue(
-                    context.newConnectionString?.toString(),
+                    context.newConnectionString?.toString().trim(),
                     'context.newConnectionString',
                     'ExecuteStep.ts',
                 ),

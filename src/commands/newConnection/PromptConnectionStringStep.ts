@@ -25,8 +25,12 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             })
         ).trim();
 
+        // Trim the connection string to remove any invisible or whitespace characters
+        // that may have been introduced during copy-paste before any parsing is done
+        const trimmedConnectionString = newConnectionString.trim();
+
         // 1. Parse the connection string and extract credentials
-        const parsedConnectionString = new DocumentDBConnectionString(newConnectionString);
+        const parsedConnectionString = new DocumentDBConnectionString(trimmedConnectionString);
 
         // Extract credentials to structured nativeAuthConfig
         if (parsedConnectionString.username || parsedConnectionString.password) {

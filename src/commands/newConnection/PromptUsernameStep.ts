@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -44,7 +44,7 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
         return context.selectedAuthenticationMethod === AuthMethodId.NativeAuth;
     }
 
-    public validateInput(context: NewConnectionWizardContext, username: string | undefined): string | undefined {
+    public validateInput(_context: NewConnectionWizardContext, username: string | undefined): string | undefined {
         username = username ? username.trim() : '';
 
         if (username.length === 0) {
@@ -52,19 +52,11 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewConnectionWizar
             return undefined;
         }
 
-        try {
-            const parsedConnectionString = new DocumentDBConnectionString(context.connectionString!);
-            parsedConnectionString.username = username;
-
-            const connectionString = parsedConnectionString.toString();
-
-            new DocumentDBConnectionString(connectionString);
-        } catch (error) {
-            if (error instanceof Error && error.name === 'MongoParseError') {
-                return error.message;
-            } else {
-                return l10n.t('Invalid Connection String: {error}', { error: parseError(error).message });
-            }
+        // Validate the username value itself without reconstructing the full connection string.
+        // The connection string was already validated during the connection string prompt step.
+        // Reconstructing it here added unnecessary risk of failure from encoding round-trips.
+        if (!DocumentDBConnectionString.validateUsername(username)) {
+            return l10n.t('Username contains characters that cannot be safely encoded.');
         }
 
         return undefined;
