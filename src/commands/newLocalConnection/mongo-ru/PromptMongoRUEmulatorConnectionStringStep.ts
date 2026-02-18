@@ -24,10 +24,6 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
             })
         ).trim();
 
-        // Trim the connection string to remove any invisible or whitespace characters
-        // that may have been introduced during copy-paste before any parsing is done
-        context.connectionString = context.connectionString.trim();
-
         const parsedConnectionString = new DocumentDBConnectionString(context.connectionString);
         context.userName = parsedConnectionString.username;
         context.password = parsedConnectionString.password;
