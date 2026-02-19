@@ -116,15 +116,22 @@ const BATCH_SIZE = 10;
 // Utilities
 // ---------------------------------------------------------------------------
 
-async function fetchText(url: string): Promise<string | null> {
+interface FetchResult {
+    content: string | null;
+    /** Non-null when content is null — e.g. "404 Not Found" or "NetworkError: ..." */
+    failReason?: string;
+}
+
+async function fetchText(url: string): Promise<FetchResult> {
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            return null;
+            return { content: null, failReason: `${response.status} ${response.statusText}` };
         }
-        return await response.text();
-    } catch {
-        return null;
+        return { content: await response.text() };
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        return { content: null, failReason: `NetworkError: ${msg}` };
     }
 }
 
@@ -208,54 +215,54 @@ async function runVerification(): Promise<VerificationResult> {
 
     // Check 1: Compatibility page is accessible and has expected structure
     console.log('  [1/4] Fetching compatibility page...');
-    const compatContent = await fetchText(COMPAT_PAGE_URL);
-    if (compatContent) {
-        const hasTable = /\|.*\|.*\|/.test(compatContent);
-        const hasOperators = /\$\w+/.test(compatContent);
+    const compatResult = await fetchText(COMPAT_PAGE_URL);
+    if (compatResult.content) {
+        const hasTable = /\|.*\|.*\|/.test(compatResult.content);
+        const hasOperators = /\$\w+/.test(compatResult.content);
         const passed = hasTable && hasOperators;
         checks.push({
             name: 'Compatibility page accessible & has tables + operators',
             passed,
             detail: passed
-                ? `OK — ${(compatContent.length / 1024).toFixed(1)} KB, tables found`
+                ? `OK — ${(compatResult.content.length / 1024).toFixed(1)} KB, tables found`
                 : `FAIL — tables: ${hasTable}, operators: ${hasOperators}`,
         });
     } else {
         checks.push({
             name: 'Compatibility page accessible',
             passed: false,
-            detail: `FAIL — could not fetch ${COMPAT_PAGE_URL}`,
+            detail: `FAIL — could not fetch ${COMPAT_PAGE_URL} (${compatResult.failReason})`,
         });
     }
 
     // Check 2: A known operator doc page exists ($match — aggregation stage)
     console.log('  [2/4] Fetching known operator page ($match)...');
     const matchUrl = `${OPERATOR_DOC_BASE}/aggregation/$match.md`;
-    const matchContent = await fetchText(matchUrl);
-    if (matchContent) {
-        const hasDescription = extractDescription(matchContent) !== undefined;
+    const matchResult = await fetchText(matchUrl);
+    if (matchResult.content) {
+        const hasDescription = extractDescription(matchResult.content) !== undefined;
         checks.push({
             name: '$match doc page has YAML frontmatter with description',
             passed: hasDescription,
             detail: hasDescription
-                ? `OK — description: "${extractDescription(matchContent)}"`
+                ? `OK — description: "${extractDescription(matchResult.content)}"`
                 : 'FAIL — no description in frontmatter',
         });
     } else {
         checks.push({
             name: '$match doc page accessible',
             passed: false,
-            detail: `FAIL — could not fetch ${matchUrl}`,
+            detail: `FAIL — could not fetch ${matchUrl} (${matchResult.failReason})`,
         });
     }
 
     // Check 3: A known query operator doc page exists ($eq — comparison query)
     console.log('  [3/4] Fetching known operator page ($eq)...');
     const eqUrl = `${OPERATOR_DOC_BASE}/comparison-query/$eq.md`;
-    const eqContent = await fetchText(eqUrl);
-    if (eqContent) {
-        const desc = extractDescription(eqContent);
-        const syntax = extractSyntax(eqContent);
+    const eqResult = await fetchText(eqUrl);
+    if (eqResult.content) {
+        const desc = extractDescription(eqResult.content);
+        const syntax = extractSyntax(eqResult.content);
         const passed = desc !== undefined;
         checks.push({
             name: '$eq doc page has frontmatter description',
@@ -268,16 +275,16 @@ async function runVerification(): Promise<VerificationResult> {
         checks.push({
             name: '$eq doc page accessible',
             passed: false,
-            detail: `FAIL — could not fetch ${eqUrl}`,
+            detail: `FAIL — could not fetch ${eqUrl} (${eqResult.failReason})`,
         });
     }
 
     // Check 4: A known accumulator doc page exists ($sum)
     console.log('  [4/4] Fetching known operator page ($sum)...');
     const sumUrl = `${OPERATOR_DOC_BASE}/accumulators/$sum.md`;
-    const sumContent = await fetchText(sumUrl);
-    if (sumContent) {
-        const desc = extractDescription(sumContent);
+    const sumResult = await fetchText(sumUrl);
+    if (sumResult.content) {
+        const desc = extractDescription(sumResult.content);
         const passed = desc !== undefined;
         checks.push({
             name: '$sum doc page has frontmatter description',
@@ -288,7 +295,7 @@ async function runVerification(): Promise<VerificationResult> {
         checks.push({
             name: '$sum doc page accessible',
             passed: false,
-            detail: `FAIL — could not fetch ${sumUrl}`,
+            detail: `FAIL — could not fetch ${sumUrl} (${sumResult.failReason})`,
         });
     }
 
@@ -545,6 +552,8 @@ async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<void> {
     let failed = 0;
     const skipped = operators.filter((op) => op.listed).length - total;
 
+    const failureDetails: { operator: string; category: string; reason: string }[] = [];
+
     console.log(`  Phase 2: Fetching per-operator doc pages (${total} operators, ${skipped} skipped)...`);
     console.log('');
 
@@ -565,14 +574,24 @@ async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<void> {
             // 4. Try global index fallback directory (original casing)
             let content: string | null = null;
             let resolvedDir: string | undefined;
+            let lastFailReason: string | undefined;
 
             if (primaryDir) {
-                content = await fetchText(`${OPERATOR_DOC_BASE}/${primaryDir}/${opNameLower}.md`);
-                if (content) {
+                const result = await fetchText(`${OPERATOR_DOC_BASE}/${primaryDir}/${opNameLower}.md`);
+                if (result.content) {
+                    content = result.content;
                     resolvedDir = primaryDir;
-                } else if (opNameLower !== opNameOriginal) {
-                    content = await fetchText(`${OPERATOR_DOC_BASE}/${primaryDir}/${opNameOriginal}.md`);
-                    if (content) resolvedDir = primaryDir;
+                } else {
+                    lastFailReason = result.failReason;
+                    if (opNameLower !== opNameOriginal) {
+                        const result2 = await fetchText(`${OPERATOR_DOC_BASE}/${primaryDir}/${opNameOriginal}.md`);
+                        if (result2.content) {
+                            content = result2.content;
+                            resolvedDir = primaryDir;
+                        } else {
+                            lastFailReason = result2.failReason;
+                        }
+                    }
                 }
             }
 
@@ -580,9 +599,12 @@ async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<void> {
             if (!content && globalIndex.has(opFileName)) {
                 const fallbackDir = globalIndex.get(opFileName)!;
                 if (fallbackDir !== primaryDir) {
-                    content = await fetchText(`${OPERATOR_DOC_BASE}/${fallbackDir}/${opFileName}`);
-                    if (content) {
+                    const result3 = await fetchText(`${OPERATOR_DOC_BASE}/${fallbackDir}/${opFileName}`);
+                    if (result3.content) {
+                        content = result3.content;
                         resolvedDir = fallbackDir;
+                    } else {
+                        lastFailReason = result3.failReason;
                     }
                 }
             }
@@ -593,6 +615,11 @@ async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<void> {
                 op.docLink = `${DOC_LINK_BASE}/${resolvedDir}/${opNameLower}`;
                 succeeded++;
             } else {
+                failureDetails.push({
+                    operator: op.operator,
+                    category: op.category,
+                    reason: lastFailReason ?? 'Unknown',
+                });
                 failed++;
             }
             fetched++;
@@ -614,15 +641,25 @@ async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<void> {
     console.log(`  Phase 2 complete: ${succeeded}/${total} docs fetched successfully`);
     if (failed > 0) {
         console.log(`  ⚠ ${failed} operators could not be fetched (will have empty descriptions)`);
-        // List the failed operators for debugging
-        const failedOps = fetchable.filter((op) => !op.description && !op.syntax);
-        if (failedOps.length <= 120) {
-            for (const op of failedOps) {
-                const dir = getCategoryDir(op.category) || '???';
-                const fallback = globalIndex.get(op.operator.toLowerCase() + '.md');
+        console.log('');
+
+        // Group failures by reason for a clear summary
+        const byReason = new Map<string, typeof failureDetails>();
+        for (const f of failureDetails) {
+            const list = byReason.get(f.reason) ?? [];
+            list.push(f);
+            byReason.set(f.reason, list);
+        }
+
+        for (const [reason, ops] of byReason) {
+            console.log(`  [${reason}] (${ops.length} operators):`);
+            for (const f of ops) {
+                const dir = getCategoryDir(f.category) || '???';
+                const fallback = globalIndex.get(f.operator.toLowerCase() + '.md');
                 const extra = fallback && fallback !== dir ? ` (also tried ${fallback})` : '';
-                console.log(`     - ${op.operator} (${op.category} → ${dir}${extra})`);
+                console.log(`     - ${f.operator} (${f.category} → ${dir}${extra})`);
             }
+            console.log('');
         }
     }
 }
@@ -737,14 +774,14 @@ async function main(): Promise<void> {
 
     // Phase 1: Fetch and parse compatibility page
     console.log('  Phase 1: Fetching compatibility page...');
-    const compatContent = await fetchText(COMPAT_PAGE_URL);
-    if (!compatContent) {
-        console.error('ERROR: Could not fetch compatibility page');
+    const compatResult = await fetchText(COMPAT_PAGE_URL);
+    if (!compatResult.content) {
+        console.error(`ERROR: Could not fetch compatibility page (${compatResult.failReason})`);
         process.exit(1);
     }
-    console.log(`  Fetched ${(compatContent.length / 1024).toFixed(1)} KB`);
+    console.log(`  Fetched ${(compatResult.content.length / 1024).toFixed(1)} KB`);
 
-    const operators = parseCompatibilityTables(compatContent);
+    const operators = parseCompatibilityTables(compatResult.content);
     const listed = operators.filter((op) => op.listed);
     const notListed = operators.filter((op) => !op.listed);
     console.log(`  Parsed ${operators.length} operators (${listed.length} listed, ${notListed.length} not listed)`);
