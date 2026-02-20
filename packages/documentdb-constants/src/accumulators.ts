@@ -12,10 +12,10 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
+import { type OperatorEntry } from './types';
+import { META_ACCUMULATOR } from './metaTags';
 import { getDocLink } from './docLinks';
 import { registerOperators } from './getFilteredCompletions';
-import { META_ACCUMULATOR } from './metaTags';
-import { type OperatorEntry } from './types';
 
 // ---------------------------------------------------------------------------
 // Accumulators ($group, $bucket, $bucketAuto, $setWindowFields)
@@ -25,10 +25,9 @@ const groupAccumulators: readonly OperatorEntry[] = [
     {
         value: '$addToSet',
         meta: META_ACCUMULATOR,
-        description:
-            "The addToSet operator adds elements to an array if they don't already exist, while ensuring uniqueness of elements within the set.",
+        description: 'The addToSet operator adds elements to an array if they don\'t already exist, while ensuring uniqueness of elements within the set.',
         snippet: '{ $addToSet: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$addtoset',
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$addtoset', // inferred from another category
     },
     {
         value: '$avg',
@@ -40,8 +39,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
     {
         value: '$bottom',
         meta: META_ACCUMULATOR,
-        description:
-            "The $bottom operator returns the last document from the query's result set sorted by one or more fields",
+        description: 'The $bottom operator returns the last document from the query\'s result set sorted by one or more fields',
         snippet: '{ $bottom: { sortBy: { ${1:field}: ${2:1} }, output: "${3:\\$field}" } }',
         link: getDocLink('$bottom', META_ACCUMULATOR),
     },
@@ -55,23 +53,21 @@ const groupAccumulators: readonly OperatorEntry[] = [
     {
         value: '$count',
         meta: META_ACCUMULATOR,
-        description:
-            'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
+        description: 'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
         snippet: '{ $count: {} }',
         link: getDocLink('$count', META_ACCUMULATOR),
     },
     {
         value: '$first',
         meta: META_ACCUMULATOR,
-        description: "The $first operator returns the first value in a group according to the group's sorting order.",
+        description: 'The $first operator returns the first value in a group according to the group\'s sorting order.',
         snippet: '{ $first: "${1:\\$field}" }',
         link: getDocLink('$first', META_ACCUMULATOR),
     },
     {
         value: '$firstN',
         meta: META_ACCUMULATOR,
-        description:
-            'The $firstN operator sorts documents on one or more fields specified by the query and returns the first N document matching the filtering criteria',
+        description: 'The $firstN operator sorts documents on one or more fields specified by the query and returns the first N document matching the filtering criteria',
         snippet: '{ $firstN: { input: "${1:\\$field}", n: ${2:number} } }',
         link: getDocLink('$firstN', META_ACCUMULATOR),
     },
@@ -115,7 +111,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
         meta: META_ACCUMULATOR,
         description: 'The $mergeObjects operator merges multiple documents into a single document',
         snippet: '{ $mergeObjects: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/object-expression/$mergeobjects',
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/object-expression/$mergeobjects', // inferred from another category
     },
     {
         value: '$min',
@@ -127,8 +123,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
     {
         value: '$percentile',
         meta: META_ACCUMULATOR,
-        description:
-            'The $percentile operator calculates the percentile of numerical values that match a filtering criteria',
+        description: 'The $percentile operator calculates the percentile of numerical values that match a filtering criteria',
         snippet: '{ $percentile: { input: "${1:\\$field}", p: [${2:0.5}], method: "approximate" } }',
         link: getDocLink('$percentile', META_ACCUMULATOR),
     },
@@ -137,7 +132,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
         meta: META_ACCUMULATOR,
         description: 'The $push operator adds a specified value to an array within a document.',
         snippet: '{ $push: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$push',
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$push', // inferred from another category
     },
     {
         value: '$stdDevPop',
@@ -149,8 +144,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
     {
         value: '$stdDevSamp',
         meta: META_ACCUMULATOR,
-        description:
-            'The $stddevsamp operator calculates the standard deviation of a specified sample of values and not the entire population',
+        description: 'The $stddevsamp operator calculates the standard deviation of a specified sample of values and not the entire population',
         snippet: '{ $stdDevSamp: "${1:\\$field}" }',
         link: getDocLink('$stdDevSamp', META_ACCUMULATOR),
     },
@@ -181,4 +175,6 @@ const groupAccumulators: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([...groupAccumulators]);
+registerOperators([
+    ...groupAccumulators,
+]);

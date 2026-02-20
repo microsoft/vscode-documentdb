@@ -12,10 +12,12 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
+import { type OperatorEntry } from './types';
+import { META_UPDATE_ARRAY,
+    META_UPDATE_BITWISE,
+    META_UPDATE_FIELD } from './metaTags';
 import { getDocLink } from './docLinks';
 import { registerOperators } from './getFilteredCompletions';
-import { META_UPDATE_ARRAY, META_UPDATE_BITWISE, META_UPDATE_FIELD } from './metaTags';
-import { type OperatorEntry } from './types';
 
 // ---------------------------------------------------------------------------
 // Field Update Operators
@@ -25,8 +27,7 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
     {
         value: '$currentDate',
         meta: META_UPDATE_FIELD,
-        description:
-            'The $currentDate operator sets the value of a field to the current date, either as a Date or a timestamp.',
+        description: 'The $currentDate operator sets the value of a field to the current date, either as a Date or a timestamp.',
         snippet: '{ $currentDate: { "${1:field}": true } }',
         link: getDocLink('$currentDate', META_UPDATE_FIELD),
     },
@@ -42,14 +43,14 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_FIELD,
         description: 'Retrieves the minimum value for a specified field',
         snippet: '{ $min: { "${1:field}": ${2:value} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$min',
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$min', // inferred from another category
     },
     {
         value: '$max',
         meta: META_UPDATE_FIELD,
         description: 'The $max operator returns the maximum value from a set of input values.',
         snippet: '{ $max: { "${1:field}": ${2:value} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$max',
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$max', // inferred from another category
     },
     {
         value: '$mul',
@@ -70,13 +71,12 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_FIELD,
         description: 'The $set operator in Azure DocumentDB updates or creates a new field with a specified value',
         snippet: '{ $set: { "${1:field}": ${2:value} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$set',
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$set', // inferred from another category
     },
     {
         value: '$setOnInsert',
         meta: META_UPDATE_FIELD,
-        description:
-            'The $setOnInsert operator sets field values only when an upsert operation results in an insert of a new document.',
+        description: 'The $setOnInsert operator sets field values only when an upsert operation results in an insert of a new document.',
         snippet: '{ $setOnInsert: { "${1:field}": ${2:value} } }',
         link: getDocLink('$setOnInsert', META_UPDATE_FIELD),
     },
@@ -85,9 +85,10 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_FIELD,
         description: 'The $unset stage in the aggregation pipeline is used to remove specified fields from documents.',
         snippet: '{ $unset: { "${1:field}": ${2:value} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$unset',
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$unset', // inferred from another category
     },
 ];
+
 
 // ---------------------------------------------------------------------------
 // Array Update Operators
@@ -97,8 +98,7 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
     {
         value: '$',
         meta: META_UPDATE_ARRAY,
-        description:
-            'The $ positional operator identifies an element in an array to update without explicitly specifying the position of the element in the array.',
+        description: 'The $ positional operator identifies an element in an array to update without explicitly specifying the position of the element in the array.',
         link: getDocLink('$', META_UPDATE_ARRAY),
     },
     {
@@ -109,14 +109,12 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
     {
         value: '$[identifier]',
         meta: META_UPDATE_ARRAY,
-        description:
-            'Filtered positional operator. Acts as a placeholder to update elements that match an arrayFilters condition.',
+        description: 'Filtered positional operator. Acts as a placeholder to update elements that match an arrayFilters condition.',
     },
     {
         value: '$addToSet',
         meta: META_UPDATE_ARRAY,
-        description:
-            "The addToSet operator adds elements to an array if they don't already exist, while ensuring uniqueness of elements within the set.",
+        description: 'The addToSet operator adds elements to an array if they don\'t already exist, while ensuring uniqueness of elements within the set.',
         snippet: '{ $addToSet: { "${1:field}": ${2:value} } }',
         link: getDocLink('$addToSet', META_UPDATE_ARRAY),
     },
@@ -151,16 +149,14 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
     {
         value: '$each',
         meta: META_UPDATE_ARRAY,
-        description:
-            'The $each operator is used within an `$addToSet`or`$push` operation to add multiple elements to an array field in a single update operation.',
+        description: 'The $each operator is used within an `$addToSet`or`$push` operation to add multiple elements to an array field in a single update operation.',
         snippet: '{ $each: [${1:values}] }',
         link: getDocLink('$each', META_UPDATE_ARRAY),
     },
     {
         value: '$position',
         meta: META_UPDATE_ARRAY,
-        description:
-            'Specifies the position in the array at which the $push operator inserts elements. Used with $each.',
+        description: 'Specifies the position in the array at which the $push operator inserts elements. Used with $each.',
         snippet: '{ $position: ${1:index} }',
     },
     {
@@ -168,17 +164,17 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_ARRAY,
         description: 'The $slice operator returns a subset of an array from any element onwards in the array.',
         snippet: '{ $slice: ${1:number} }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$slice',
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$slice', // inferred from another category
     },
     {
         value: '$sort',
         meta: META_UPDATE_ARRAY,
-        description:
-            'The $sort stage in the aggregation pipeline is used to order the documents in the pipeline by a specified field or fields.',
+        description: 'The $sort stage in the aggregation pipeline is used to order the documents in the pipeline by a specified field or fields.',
         snippet: '{ $sort: { "${1:field}": ${2:1} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$sort',
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$sort', // inferred from another category
     },
 ];
+
 
 // ---------------------------------------------------------------------------
 // Bitwise Update Operators
@@ -198,4 +194,8 @@ const bitwiseUpdateOperators: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([...fieldUpdateOperators, ...arrayUpdateOperators, ...bitwiseUpdateOperators]);
+registerOperators([
+    ...fieldUpdateOperators,
+    ...arrayUpdateOperators,
+    ...bitwiseUpdateOperators,
+]);

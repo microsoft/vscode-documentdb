@@ -144,10 +144,11 @@ export function parseOperatorReference(content: string): ParsedReference {
             continue;
         }
 
-        // Parse doc link: - **Doc Link:** url
+        // Parse doc link: - **Doc Link:** url  ('none' means no page at expected location)
         const linkMatch = trimmed.match(/^- \*\*Doc Link:\*\* (.+)$/);
         if (linkMatch && currentOperator) {
-            currentDocLink = linkMatch[1].trim();
+            const rawLink = linkMatch[1].trim();
+            currentDocLink = rawLink === 'none' ? '' : rawLink;
             continue;
         }
     }

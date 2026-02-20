@@ -231,9 +231,10 @@ function parseDump(content: string): Map<string, ParsedOperator[]> {
             continue;
         }
 
-        // Doc link line
+        // Doc link line ('none' means the scraper found no page at the expected location)
         if (currentOp && line.startsWith('- **Doc Link:**')) {
-            currentOp.docLink = line.replace('- **Doc Link:**', '').trim();
+            const rawLink = line.replace('- **Doc Link:**', '').trim();
+            currentOp.docLink = rawLink === 'none' ? '' : rawLink;
             continue;
         }
     }
@@ -522,6 +523,48 @@ function getApplicableBsonTypes(op: ParsedOperator, meta: string): string[] | un
 }
 
 // ---------------------------------------------------------------------------
+// Cross-reference: resolve missing doc links from other categories
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a map of operator name → URL from all categories.
+ * For operators that appear with a URL in ANY category, we can use that URL
+ * when the same operator appears without one in a different category.
+ *
+ * Returns the number of operators whose links were inferred.
+ */
+function crossReferenceMissingLinks(categorizedOps: Map<string, ParsedOperator[]>): number {
+    // Build global URL lookup: operator name → first known URL
+    const urlLookup = new Map<string, string>();
+    for (const ops of categorizedOps.values()) {
+        for (const op of ops) {
+            if (op.docLink && !urlLookup.has(op.value)) {
+                urlLookup.set(op.value, op.docLink);
+            }
+        }
+    }
+
+    // Fill in missing links from the cross-reference
+    let inferred = 0;
+    for (const [category, ops] of categorizedOps.entries()) {
+        for (const op of ops) {
+            if (!op.docLink) {
+                const altUrl = urlLookup.get(op.value);
+                if (altUrl) {
+                    op.docLink = altUrl;
+                    // Mark as inferred so generateSection can annotate it
+                    (op as ParsedOperator & { inferredLink?: boolean }).inferredLink = true;
+                    inferred++;
+                    console.log(`  Inferred link: ${op.value} (${category}) → ${altUrl}`);
+                }
+            }
+        }
+    }
+
+    return inferred;
+}
+
+// ---------------------------------------------------------------------------
 // File generation
 // ---------------------------------------------------------------------------
 
@@ -595,14 +638,19 @@ function generateSection(spec: FileSpec, snippets: Map<string, Map<string, strin
 
         // Determine the correct link emission strategy:
         // - If dump has a URL that matches what getDocLink() would produce → use getDocLink() (compact)
+        // - If the URL was inferred via cross-reference → emit hardcoded string with comment
         // - If dump has a URL that differs from getDocLink() → emit hardcoded string
         // - If dump has no URL → omit the link property
         const computedLink = getDocLink(op.value, metaStringValue);
         const dumpLink = op.docLink || '';
+        const isInferred = (op as ParsedOperator & { inferredLink?: boolean }).inferredLink === true;
         let linkLine: string;
         if (!dumpLink) {
             // No documentation page exists — omit the link
             linkLine = '';
+        } else if (isInferred) {
+            // Link was inferred from another category via cross-reference
+            linkLine = `        link: '${escapeString(dumpLink)}', // inferred from another category\n`;
         } else if (dumpLink === computedLink) {
             // The computed URL matches — use the compact getDocLink() call
             linkLine = `        link: getDocLink('${escapeString(op.value)}', ${spec.metaImport}),\n`;
@@ -744,6 +792,11 @@ function main(): void {
     } else {
         console.log('ℹ️  No overrides file found, skipping.\n');
     }
+
+    // Cross-reference missing doc links from other categories
+    console.log('🔗 Cross-referencing missing doc links...');
+    const inferred = crossReferenceMissingLinks(categorizedOps);
+    console.log(`  Inferred ${inferred} links from other categories\n`);
 
     // Load snippet templates
     let snippetsMap = new Map<string, Map<string, string>>();

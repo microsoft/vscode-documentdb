@@ -728,14 +728,17 @@ async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<void> {
             if (content) {
                 op.description = extractDescription(content);
                 op.syntax = extractSyntax(content);
-                op.docLink = `${DOC_LINK_BASE}/${resolvedDir}/${opNameLower}`;
 
-                // Record a scraper comment when the doc page was found in a
-                // different directory than the operator's primary category
                 if (primaryDir && resolvedDir !== primaryDir) {
+                    // Doc page found in a different directory — emit 'none'
+                    // so the generator can cross-reference alternative URLs.
+                    // Description/syntax were still scraped from the fallback page.
+                    op.docLink = 'none';
                     op.scraperComment =
                         `Doc page not found in expected directory '${primaryDir}/'. ` +
-                        `Using verified URL from '${resolvedDir}/' instead.`;
+                        `Content scraped from '${resolvedDir}/'.`;
+                } else {
+                    op.docLink = `${DOC_LINK_BASE}/${resolvedDir}/${opNameLower}`;
                 }
                 succeeded++;
             } else {

@@ -30,6 +30,7 @@ interface ParsedEntry {
     value: string;
     description: string;
     category: string;
+    docLink: string;
 }
 
 interface OverrideEntry {
@@ -65,6 +66,7 @@ function parseDump(content: string): ParsedEntry[] {
                     value: currentOp.value!,
                     description: currentOp.description || '',
                     category: currentCategory,
+                    docLink: currentOp.docLink || '',
                 });
             }
             currentOp = null;
@@ -84,19 +86,31 @@ function parseDump(content: string): ParsedEntry[] {
                     value: currentOp.value!,
                     description: currentOp.description || '',
                     category: currentCategory,
+                    docLink: currentOp.docLink || '',
                 });
             }
-            currentOp = { value: h3[1].trim(), description: '', category: currentCategory };
+            currentOp = { value: h3[1].trim(), description: '', docLink: '', category: currentCategory };
             continue;
         }
 
         if (currentOp && line.startsWith('- **Description:**')) {
             currentOp.description = line.replace('- **Description:**', '').trim();
         }
+
+        // Parse doc link ('none' means scraper found no page at expected location)
+        if (currentOp && line.startsWith('- **Doc Link:**')) {
+            const rawLink = line.replace('- **Doc Link:**', '').trim();
+            currentOp.docLink = rawLink === 'none' ? '' : rawLink;
+        }
     }
 
     if (currentOp && currentCategory) {
-        entries.push({ value: currentOp.value!, description: currentOp.description || '', category: currentCategory });
+        entries.push({
+            value: currentOp.value!,
+            description: currentOp.description || '',
+            category: currentCategory,
+            docLink: currentOp.docLink || '',
+        });
     }
 
     return entries;
@@ -386,6 +400,7 @@ function main(): void {
     const gaps: ParsedEntry[] = []; // empty description, no override
     const overridden: { entry: ParsedEntry; override: OverrideEntry; overrideCategory: string }[] = [];
     const redundantOverrides: { entry: ParsedEntry; override: OverrideEntry; overrideCategory: string }[] = [];
+    const docLinkOnlyOverrides: { entry: ParsedEntry; override: OverrideEntry; overrideCategory: string }[] = [];
     const descriptionsOk: ParsedEntry[] = [];
 
     // Collect all dump category names so findOverride can distinguish exact vs cross-category
@@ -396,11 +411,22 @@ function main(): void {
         const hasScrapedDescription = entry.description.trim().length > 0;
 
         if (match) {
-            if (hasScrapedDescription && match.override.description) {
+            const hasDescOverride = !!match.override.description;
+            const hasDocLinkOverride = !!match.override.docLink;
+            const hasSnippetOverride = !!match.override.snippet;
+
+            if (hasScrapedDescription && hasDescOverride) {
                 // Has both scraped description AND an override description
                 redundantOverrides.push({ entry, override: match.override, overrideCategory: match.overrideCategory });
+            } else if (!hasDescOverride && hasDocLinkOverride && !hasSnippetOverride) {
+                // Override provides only a doc link (no description, no snippet)
+                docLinkOnlyOverrides.push({
+                    entry,
+                    override: match.override,
+                    overrideCategory: match.overrideCategory,
+                });
             } else {
-                // Override is filling a gap (or overriding something else)
+                // Override is filling a description gap (or overriding snippet)
                 overridden.push({ entry, override: match.override, overrideCategory: match.overrideCategory });
             }
         } else if (!hasScrapedDescription) {
@@ -478,6 +504,26 @@ function main(): void {
     }
 
     // -----------------------------------------------------------------------
+    // Section 3b: Doc link overrides (operators with 'none' in dump, link provided via override)
+    // -----------------------------------------------------------------------
+    console.log(`${BOLD}${GREEN}═══ DOC LINK OVERRIDES (${docLinkOnlyOverrides.length}) ═══${RESET}`);
+    if (docLinkOnlyOverrides.length === 0) {
+        console.log(`  ${DIM}No doc-link-only overrides.${RESET}\n`);
+    } else {
+        console.log(`  ${DIM}These operators have 'none' in the dump (doc page not at expected directory).${RESET}`);
+        console.log(
+            `  ${DIM}The override provides a doc link that the generator can't infer via cross-reference.${RESET}\n`,
+        );
+        for (const { entry, override, overrideCategory } of docLinkOnlyOverrides) {
+            const dumpLink = entry.docLink || 'none';
+            console.log(`  ${CYAN}${entry.value}${RESET} ${DIM}(${entry.category})${RESET}`);
+            console.log(`    ${DIM}Override (${overrideCategory}):${RESET} ${override.docLink}`);
+            console.log(`    ${DIM}Dump link:${RESET}              ${dumpLink}`);
+            console.log('');
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Section 4: Snippet coverage
     // -----------------------------------------------------------------------
     let snippets = new Map<string, Map<string, string>>();
@@ -526,6 +572,7 @@ function main(): void {
     console.log(`  Total scraped operators:    ${dumpEntries.length}`);
     console.log(`  With scraped description:   ${descriptionsOk.length + redundantOverrides.length}`);
     console.log(`  Filled by override:         ${overridden.length}`);
+    console.log(`  Doc-link-only overrides:    ${docLinkOnlyOverrides.length}`);
     console.log(`  Potentially redundant:      ${YELLOW}${redundantOverrides.length}${RESET}`);
     console.log(`  ${RED}Gaps remaining:${RESET}             ${gaps.length}`);
     console.log(`  Total overrides in file:    ${totalOverrideCount}`);

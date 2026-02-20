@@ -258,3 +258,21 @@
 ### $$KEEP
 
 - **Description:** Used with $redact. Keeps all fields at the current document level without further descending into subdocuments.
+
+## Array Expression Operators
+
+### $minN
+
+- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn
+
+## Comparison Expression Operators
+
+### $cmp
+
+- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$cmp
+
+## Window Operators
+
+### $minN
+
+- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn

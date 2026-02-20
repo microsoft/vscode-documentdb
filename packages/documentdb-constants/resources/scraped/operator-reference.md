@@ -703,8 +703,8 @@ db.collection.updateOne(
 )
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$
-- **Scraper Comment:** Doc page not found in expected directory 'projection/'. Using verified URL from 'array-update/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'projection/'. Content scraped from 'array-update/'.
 
 ### $elemMatch
 
@@ -715,8 +715,8 @@ db.collection.updateOne(
 db.collection.find({ <field>: { $elemMatch: { <query1>, <query2>, ... } } })
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/array-query/$elemmatch
-- **Scraper Comment:** Doc page not found in expected directory 'projection/'. Using verified URL from 'array-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'projection/'. Content scraped from 'array-query/'.
 
 ### $slice
 
@@ -729,8 +729,8 @@ db.collection.find({ <field>: { $elemMatch: { <query1>, <query2>, ... } } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$slice
-- **Scraper Comment:** Doc page not found in expected directory 'projection/'. Using verified URL from 'array-expression/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'projection/'. Content scraped from 'array-expression/'.
 
 ## Miscellaneous Query Operators
 
@@ -819,8 +819,8 @@ db.collection.find({ <field>: { $elemMatch: { <query1>, <query2>, ... } } })
 $min: <expression>
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$min
-- **Scraper Comment:** Doc page not found in expected directory 'field-update/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'field-update/'. Content scraped from 'accumulators/'.
 
 ### $max
 
@@ -831,8 +831,8 @@ $min: <expression>
 $max: <expression>
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$max
-- **Scraper Comment:** Doc page not found in expected directory 'field-update/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'field-update/'. Content scraped from 'accumulators/'.
 
 ### $mul
 
@@ -881,8 +881,8 @@ $max: <expression>
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$set
-- **Scraper Comment:** Doc page not found in expected directory 'field-update/'. Using verified URL from 'aggregation/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'field-update/'. Content scraped from 'aggregation/'.
 
 ### $setOnInsert
 
@@ -912,8 +912,8 @@ $max: <expression>
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$unset
-- **Scraper Comment:** Doc page not found in expected directory 'field-update/'. Using verified URL from 'aggregation/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'field-update/'. Content scraped from 'aggregation/'.
 
 ## Array Update Operators
 
@@ -1040,8 +1040,8 @@ db.collection.update({
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$slice
-- **Scraper Comment:** Doc page not found in expected directory 'array-update/'. Using verified URL from 'array-expression/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'array-update/'. Content scraped from 'array-expression/'.
 
 ### $sort
 
@@ -1057,8 +1057,8 @@ db.collection.update({
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$sort
-- **Scraper Comment:** Doc page not found in expected directory 'array-update/'. Using verified URL from 'aggregation/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'array-update/'. Content scraped from 'aggregation/'.
 
 ## Bitwise Update Operators
 
@@ -1209,8 +1209,8 @@ db.collection.update({
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/evaluation-query/$mod
-- **Scraper Comment:** Doc page not found in expected directory 'arithmetic-expression/'. Using verified URL from 'evaluation-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'arithmetic-expression/'. Content scraped from 'evaluation-query/'.
 
 ### $multiply
 
@@ -1365,8 +1365,8 @@ db.collection.update({
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$firstn
-- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Content scraped from 'accumulators/'.
 
 ### $in
 
@@ -1381,8 +1381,8 @@ db.collection.update({
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$in
-- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Using verified URL from 'comparison-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Content scraped from 'comparison-query/'.
 
 ### $indexOfArray
 
@@ -1429,8 +1429,8 @@ db.collection.update({
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$lastn
-- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Content scraped from 'accumulators/'.
 
 ### $map
 
@@ -1461,8 +1461,8 @@ $maxN: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$maxn
-- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Content scraped from 'accumulators/'.
 
 ### $minN
 
@@ -1476,8 +1476,8 @@ $minN: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn
-- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Content scraped from 'accumulators/'.
 
 ### $objectToArray
 
@@ -1531,8 +1531,8 @@ $reduce: {
 db.collection.find({ <field>: { $size: <number> } })
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/array-query/$size
-- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Using verified URL from 'array-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'array-expression/'. Content scraped from 'array-query/'.
 
 ### $slice
 
@@ -1653,8 +1653,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/logical-query/$and
-- **Scraper Comment:** Doc page not found in expected directory 'boolean-expression/'. Using verified URL from 'logical-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'boolean-expression/'. Content scraped from 'logical-query/'.
 
 ### $not
 
@@ -1671,8 +1671,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/logical-query/$not
-- **Scraper Comment:** Doc page not found in expected directory 'boolean-expression/'. Using verified URL from 'logical-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'boolean-expression/'. Content scraped from 'logical-query/'.
 
 ### $or
 
@@ -1691,8 +1691,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/logical-query/$or
-- **Scraper Comment:** Doc page not found in expected directory 'boolean-expression/'. Using verified URL from 'logical-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'boolean-expression/'. Content scraped from 'logical-query/'.
 
 ## Comparison Expression Operators
 
@@ -1707,8 +1707,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$cmp
-- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Using verified URL from 'comparison-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Content scraped from 'comparison-query/'.
 
 ### $eq
 
@@ -1723,8 +1723,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$eq
-- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Using verified URL from 'comparison-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Content scraped from 'comparison-query/'.
 
 ### $gt
 
@@ -1739,8 +1739,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$gt
-- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Using verified URL from 'comparison-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Content scraped from 'comparison-query/'.
 
 ### $gte
 
@@ -1755,8 +1755,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$gte
-- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Using verified URL from 'comparison-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Content scraped from 'comparison-query/'.
 
 ### $lt
 
@@ -1771,8 +1771,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$lt
-- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Using verified URL from 'comparison-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Content scraped from 'comparison-query/'.
 
 ### $lte
 
@@ -1787,8 +1787,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$lte
-- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Using verified URL from 'comparison-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Content scraped from 'comparison-query/'.
 
 ### $ne
 
@@ -1803,8 +1803,8 @@ db.collection.find({ <field>: { $size: <number> } })
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$ne
-- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Using verified URL from 'comparison-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'comparison-expression/'. Content scraped from 'comparison-query/'.
 
 ## Data Size Operators
 
@@ -2132,8 +2132,8 @@ $dateTrunc: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/type-expression/$todate
-- **Scraper Comment:** Doc page not found in expected directory 'date-expression/'. Using verified URL from 'aggregation/type-expression/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'date-expression/'. Content scraped from 'aggregation/type-expression/'.
 
 ### $week
 
@@ -2206,8 +2206,8 @@ $dateTrunc: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/miscellaneous-query/$rand
-- **Scraper Comment:** Doc page not found in expected directory 'miscellaneous/'. Using verified URL from 'miscellaneous-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'miscellaneous/'. Content scraped from 'miscellaneous-query/'.
 
 ### $sampleRate
 
@@ -2383,8 +2383,8 @@ $dateTrunc: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/date-expression/$datefromstring
-- **Scraper Comment:** Doc page not found in expected directory 'string-expression/'. Using verified URL from 'date-expression/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'string-expression/'. Content scraped from 'date-expression/'.
 
 ### $dateToString
 
@@ -2402,8 +2402,8 @@ $dateTrunc: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/date-expression/$datetostring
-- **Scraper Comment:** Doc page not found in expected directory 'string-expression/'. Using verified URL from 'date-expression/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'string-expression/'. Content scraped from 'date-expression/'.
 
 ### $indexOfBytes
 
@@ -2450,8 +2450,8 @@ $dateTrunc: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/type-expression/$tostring
-- **Scraper Comment:** Doc page not found in expected directory 'string-expression/'. Using verified URL from 'aggregation/type-expression/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'string-expression/'. Content scraped from 'aggregation/type-expression/'.
 
 ### $trim
 
@@ -2666,8 +2666,8 @@ $dateTrunc: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/element-query/$type
-- **Scraper Comment:** Doc page not found in expected directory 'aggregation/type-expression/'. Using verified URL from 'element-query/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'aggregation/type-expression/'. Content scraped from 'element-query/'.
 
 ## Accumulators ($group, $bucket, $bucketAuto, $setWindowFields)
 
@@ -2682,8 +2682,8 @@ $dateTrunc: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$addtoset
-- **Scraper Comment:** Doc page not found in expected directory 'accumulators/'. Using verified URL from 'array-update/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'accumulators/'. Content scraped from 'array-update/'.
 
 ### $avg
 
@@ -2869,8 +2869,8 @@ $maxN: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/object-expression/$mergeobjects
-- **Scraper Comment:** Doc page not found in expected directory 'accumulators/'. Using verified URL from 'object-expression/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'accumulators/'. Content scraped from 'object-expression/'.
 
 ### $min
 
@@ -2915,8 +2915,8 @@ db.collection.update({
 })
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$push
-- **Scraper Comment:** Doc page not found in expected directory 'accumulators/'. Using verified URL from 'array-update/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'accumulators/'. Content scraped from 'array-update/'.
 
 ### $stdDevPop
 
@@ -3173,8 +3173,8 @@ $percentile: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$sum
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $push
 
@@ -3193,8 +3193,8 @@ db.collection.update({
 })
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$push
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'array-update/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'array-update/'.
 
 ### $addToSet
 
@@ -3207,8 +3207,8 @@ db.collection.update({
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$addtoset
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'array-update/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'array-update/'.
 
 ### $count
 
@@ -3221,8 +3221,8 @@ db.collection.update({
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$count
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $max
 
@@ -3233,8 +3233,8 @@ db.collection.update({
 $max: <expression>
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$max
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $min
 
@@ -3245,8 +3245,8 @@ $max: <expression>
 $min: <expression>
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$min
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $avg
 
@@ -3257,8 +3257,8 @@ $min: <expression>
 $avg: <field or expression>
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$avg
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $stdDevPop
 
@@ -3273,8 +3273,8 @@ $avg: <field or expression>
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$stddevpop
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $bottom
 
@@ -3292,8 +3292,8 @@ $avg: <field or expression>
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$bottom
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $bottomN
 
@@ -3312,8 +3312,8 @@ $avg: <field or expression>
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$bottomn
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $covariancePop
 
@@ -3412,8 +3412,8 @@ $avg: <field or expression>
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$first
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $integral
 
@@ -3442,8 +3442,8 @@ $avg: <field or expression>
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$last
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $linearFill
 
@@ -3491,8 +3491,8 @@ $minN: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $rank
 
@@ -3547,8 +3547,8 @@ $minN: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$stddevsamp
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $top
 
@@ -3566,8 +3566,8 @@ $minN: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$top
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ### $topN
 
@@ -3586,8 +3586,8 @@ $minN: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$topn
-- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'window-operators/'. Content scraped from 'accumulators/'.
 
 ## Conditional Expression Operators
 
@@ -3731,8 +3731,8 @@ $minN: {
 }
 ```
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$count
-- **Scraper Comment:** Doc page not found in expected directory 'aggregation/'. Using verified URL from 'accumulators/' instead.
+- **Doc Link:** none
+- **Scraper Comment:** Doc page not found in expected directory 'aggregation/'. Content scraped from 'accumulators/'.
 
 ### $densify
 
