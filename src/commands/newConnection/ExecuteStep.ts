@@ -35,7 +35,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             const api = context.experience?.api ?? API.DocumentDB;
             const parentId = context.parentId;
 
-            const newConnectionString = context.connectionString!;
+            const newConnectionString = context.connectionString!.trim();
 
             const newPassword = context.nativeAuthConfig?.connectionPassword;
             const newUsername = context.nativeAuthConfig?.connectionUser;

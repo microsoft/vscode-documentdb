@@ -52,6 +52,9 @@ export class DocumentDBConnectionString extends ConnectionString {
      * @returns A sanitized connection string safe for the base parser
      */
     private static sanitizeConnectionString(uri: string): string {
+        // Trim whitespace (including BOM, NBSP) that may have been introduced during copy-paste
+        uri = uri.trim();
+
         // Find the query string section (everything after the first '?')
         const queryStartIndex = uri.indexOf('?');
 

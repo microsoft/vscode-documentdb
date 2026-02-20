@@ -48,7 +48,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 throw new Error(l10n.t('Internal error: mode must be defined.'));
         }
 
-        const newConnectionStringParsed = new DocumentDBConnectionString(context.connectionString);
+        const newConnectionStringParsed = new DocumentDBConnectionString(context.connectionString.trim());
         newConnectionStringParsed.username = context.userName ?? '';
         newConnectionStringParsed.password = context.password ?? '';
 
