@@ -170,6 +170,7 @@
     "@trpc/client": "~11.10.0",
     "@trpc/server": "~11.10.0",
     "@vscode/l10n": "~0.0.18",
+    "@vscode-documentdb/documentdb-constants": "*",
     "@vscode-documentdb/schema-analyzer": "*",
     "antlr4ts": "^0.5.0-alpha.4",
     "bson": "~7.0.0",
