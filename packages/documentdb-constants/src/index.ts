@@ -69,3 +69,13 @@ export { getAllCompletions, getFilteredCompletions, registerOperators } from './
 
 // -- Documentation URL helpers --
 export { getDocBase, getDocLink } from './docLinks';
+
+// -- Operator data modules (self-register on import) --
+import './accumulators';
+import './bsonConstructors';
+import './expressionOperators';
+import './queryOperators';
+import './stages';
+import './systemVariables';
+import './updateOperators';
+import './windowOperators';

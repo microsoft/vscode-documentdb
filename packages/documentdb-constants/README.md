@@ -19,7 +19,7 @@ All operator data is derived from the official DocumentDB documentation:
 - **Per-operator docs:** [DocumentDB Operators](https://learn.microsoft.com/en-us/azure/documentdb/operators/) — individual pages with descriptions and syntax for each operator.
 - **Source repository:** [MicrosoftDocs/azure-databases-docs](https://github.com/MicrosoftDocs/azure-databases-docs) — the GitHub repo containing the raw Markdown source for all documentation pages above (under `articles/documentdb/`).
 
-The scraper (`scripts/scrape-operator-docs.ts`) fetches data from these sources and generates the `resources/operator-reference.md` dump file that serves as the contract between the documentation and the TypeScript implementation.
+The scraper (`scripts/scrape-operator-docs.ts`) fetches data from these sources and generates the `resources/operator-reference-scraped.md` dump file that serves as the contract between the documentation and the TypeScript implementation.
 
 ## Usage
 
@@ -57,18 +57,18 @@ This runs the scraper and then formats the output with Prettier. The scraper:
 1. **Verifies** upstream doc structure (early fail-fast)
 2. **Extracts** all operators from the [compatibility page](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language)
 3. **Fetches** per-operator documentation (descriptions, syntax) with a global file index fallback for operators filed in unexpected directories
-4. **Generates** `resources/operator-reference.md` in a structured heading format (`### $operator` with description, syntax, and doc link)
+4. **Generates** `resources/operator-reference-scraped.md` in a structured heading format (`### $operator` with description, syntax, and doc link)
 
 The dump serves as the authoritative reference for the TypeScript implementation. A Jest test (`test/operatorReference.test.ts`) will validate that the implementation matches the dump.
 
 ## Structure
 
-| File                              | Purpose                                      |
-| --------------------------------- | -------------------------------------------- |
-| `src/types.ts`                    | `OperatorEntry` interface and `MetaTag` type |
-| `src/metaTags.ts`                 | Meta tag constants and completion presets    |
-| `src/docLinks.ts`                 | Documentation URL generation                 |
-| `src/getFilteredCompletions.ts`   | Primary consumer API: filter by meta tags    |
-| `src/index.ts`                    | Barrel exports for all public API            |
-| `resources/operator-reference.md` | Scraped operator dump (source of truth)      |
-| `scripts/scrape-operator-docs.ts` | Scraper script                               |
+| File                                      | Purpose                                      |
+| ----------------------------------------- | -------------------------------------------- |
+| `src/types.ts`                            | `OperatorEntry` interface and `MetaTag` type |
+| `src/metaTags.ts`                         | Meta tag constants and completion presets    |
+| `src/docLinks.ts`                         | Documentation URL generation                 |
+| `src/getFilteredCompletions.ts`           | Primary consumer API: filter by meta tags    |
+| `src/index.ts`                            | Barrel exports for all public API            |
+| `resources/operator-reference-scraped.md` | Auto-generated scraped operator dump         |
+| `scripts/scrape-operator-docs.ts`         | Scraper script                               |
