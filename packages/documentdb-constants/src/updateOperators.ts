@@ -41,14 +41,14 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_FIELD,
         description: 'Retrieves the minimum value for a specified field',
         snippet: '{ $min: { "${1:field}": ${2:value} } }',
-        link: getDocLink('$min', META_UPDATE_FIELD),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$min',
     },
     {
         value: '$max',
         meta: META_UPDATE_FIELD,
         description: 'The $max operator returns the maximum value from a set of input values.',
         snippet: '{ $max: { "${1:field}": ${2:value} } }',
-        link: getDocLink('$max', META_UPDATE_FIELD),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$max',
     },
     {
         value: '$mul',
@@ -69,7 +69,7 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_FIELD,
         description: 'The $set operator in Azure DocumentDB updates or creates a new field with a specified value',
         snippet: '{ $set: { "${1:field}": ${2:value} } }',
-        link: getDocLink('$set', META_UPDATE_FIELD),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$set',
     },
     {
         value: '$setOnInsert',
@@ -84,7 +84,7 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_FIELD,
         description: 'The $unset stage in the aggregation pipeline is used to remove specified fields from documents.',
         snippet: '{ $unset: { "${1:field}": ${2:value} } }',
-        link: getDocLink('$unset', META_UPDATE_FIELD),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$unset',
     },
 ];
 
@@ -104,14 +104,12 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
         value: '$[]',
         meta: META_UPDATE_ARRAY,
         description: 'Positional all operator. Acts as a placeholder to update all elements in an array field.',
-        link: getDocLink('$[]', META_UPDATE_ARRAY),
     },
     {
         value: '$[identifier]',
         meta: META_UPDATE_ARRAY,
         description:
             'Filtered positional operator. Acts as a placeholder to update elements that match an arrayFilters condition.',
-        link: getDocLink('$[identifier]', META_UPDATE_ARRAY),
     },
     {
         value: '$addToSet',
@@ -163,14 +161,13 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
         description:
             'Specifies the position in the array at which the $push operator inserts elements. Used with $each.',
         snippet: '{ $position: ${1:index} }',
-        link: getDocLink('$position', META_UPDATE_ARRAY),
     },
     {
         value: '$slice',
         meta: META_UPDATE_ARRAY,
         description: 'The $slice operator returns a subset of an array from any element onwards in the array.',
         snippet: '{ $slice: ${1:number} }',
-        link: getDocLink('$slice', META_UPDATE_ARRAY),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$slice',
     },
     {
         value: '$sort',
@@ -178,7 +175,7 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
         description:
             'The $sort stage in the aggregation pipeline is used to order the documents in the pipeline by a specified field or fields.',
         snippet: '{ $sort: { "${1:field}": ${2:1} } }',
-        link: getDocLink('$sort', META_UPDATE_ARRAY),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$sort',
     },
 ];
 

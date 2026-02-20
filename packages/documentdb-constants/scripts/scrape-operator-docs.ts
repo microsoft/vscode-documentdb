@@ -38,8 +38,15 @@ interface OperatorInfo {
     description?: string;
     /** Syntax snippet from the per-operator doc page */
     syntax?: string;
-    /** Documentation URL */
+    /** Documentation URL (derived from the directory where the .md file was found) */
     docLink?: string;
+    /**
+     * Human-readable note added when the scraper resolves a doc page from a
+     * different directory than the operator's primary category, or when other
+     * notable resolution decisions are made. Written to the dump as
+     * `- **Scraper Comment:**` for traceability.
+     */
+    scraperComment?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +119,12 @@ const BATCH_DELAY_MS = 200;
 /** Number of concurrent requests per batch */
 const BATCH_SIZE = 10;
 
+/** Maximum number of retry attempts for transient HTTP errors */
+const MAX_RETRIES = 3;
+
+/** Base delay for exponential backoff (ms). Doubled on each retry. */
+const BACKOFF_BASE_MS = 1000;
+
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
@@ -122,17 +135,130 @@ interface FetchResult {
     failReason?: string;
 }
 
+/**
+ * Returns true for HTTP status codes that are transient and worth retrying:
+ * - 429 Too Many Requests
+ * - 5xx Server errors
+ */
+function isRetryableStatus(status: number): boolean {
+    return status === 429 || status >= 500;
+}
+
+/**
+ * Fetches a URL as text with exponential backoff for transient errors.
+ *
+ * Retries on 429 (rate-limited) and 5xx (server errors). Respects
+ * Retry-After headers when present. Non-retryable failures (e.g., 404)
+ * are returned immediately without retry.
+ */
 async function fetchText(url: string): Promise<FetchResult> {
-    try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            return { content: null, failReason: `${response.status} ${response.statusText}` };
+    let lastError: string | undefined;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            const response = await fetch(url);
+
+            if (response.ok) {
+                return { content: await response.text() };
+            }
+
+            const reason = `${response.status} ${response.statusText}`;
+
+            if (!isRetryableStatus(response.status)) {
+                // Non-retryable (e.g., 404, 403) — fail immediately
+                return { content: null, failReason: reason };
+            }
+
+            lastError = reason;
+
+            // Calculate backoff: honour Retry-After header if present,
+            // otherwise use exponential backoff
+            const retryAfter = response.headers.get('Retry-After');
+            let delayMs: number;
+            if (retryAfter) {
+                const seconds = Number(retryAfter);
+                delayMs = Number.isNaN(seconds) ? BACKOFF_BASE_MS * 2 ** attempt : seconds * 1000;
+            } else {
+                delayMs = BACKOFF_BASE_MS * 2 ** attempt;
+            }
+
+            if (attempt < MAX_RETRIES) {
+                console.log(
+                    `\n  ⏳ ${reason} for ${url} — retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+                );
+                await sleep(delayMs);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            lastError = `NetworkError: ${msg}`;
+
+            if (attempt < MAX_RETRIES) {
+                const delayMs = BACKOFF_BASE_MS * 2 ** attempt;
+                console.log(`\n  ⏳ ${lastError} — retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+                await sleep(delayMs);
+            }
         }
-        return { content: await response.text() };
-    } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return { content: null, failReason: `NetworkError: ${msg}` };
     }
+
+    return { content: null, failReason: lastError };
+}
+
+interface FetchJsonResult<T> {
+    data: T | null;
+    failReason?: string;
+}
+
+/**
+ * Fetches a URL as JSON with exponential backoff for transient errors.
+ * Same retry semantics as {@link fetchText}.
+ */
+async function fetchJson<T>(url: string): Promise<FetchJsonResult<T>> {
+    let lastError: string | undefined;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            const response = await fetch(url);
+
+            if (response.ok) {
+                return { data: (await response.json()) as T };
+            }
+
+            const reason = `${response.status} ${response.statusText}`;
+
+            if (!isRetryableStatus(response.status)) {
+                return { data: null, failReason: reason };
+            }
+
+            lastError = reason;
+
+            const retryAfter = response.headers.get('Retry-After');
+            let delayMs: number;
+            if (retryAfter) {
+                const seconds = Number(retryAfter);
+                delayMs = Number.isNaN(seconds) ? BACKOFF_BASE_MS * 2 ** attempt : seconds * 1000;
+            } else {
+                delayMs = BACKOFF_BASE_MS * 2 ** attempt;
+            }
+
+            if (attempt < MAX_RETRIES) {
+                console.log(
+                    `\n  ⏳ ${reason} for ${url} — retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+                );
+                await sleep(delayMs);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            lastError = `NetworkError: ${msg}`;
+
+            if (attempt < MAX_RETRIES) {
+                const delayMs = BACKOFF_BASE_MS * 2 ** attempt;
+                console.log(`\n  ⏳ ${lastError} — retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+                await sleep(delayMs);
+            }
+        }
+    }
+
+    return { data: null, failReason: lastError };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -477,53 +603,43 @@ async function buildGlobalFileIndex(): Promise<Map<string, string>> {
     const GITHUB_API_BASE =
         'https://api.github.com/repos/MicrosoftDocs/azure-databases-docs/contents/articles/documentdb/operators';
 
+    type GithubEntry = { name: string; type: string };
     const index = new Map<string, string>();
 
-    try {
-        const response = await fetch(GITHUB_API_BASE);
-        if (!response.ok) {
-            console.log('  ⚠ Could not fetch directory listing from GitHub API — skipping global index');
-            return index;
+    const rootResult = await fetchJson<GithubEntry[]>(GITHUB_API_BASE);
+    if (!rootResult.data) {
+        console.log(
+            `  ⚠ Could not fetch directory listing from GitHub API — skipping global index (${rootResult.failReason})`,
+        );
+        return index;
+    }
+
+    const dirs = rootResult.data.filter((d) => d.type === 'dir' && d.name !== 'includes');
+
+    for (const dir of dirs) {
+        await sleep(300); // Rate limit GitHub API
+
+        const dirResult = await fetchJson<GithubEntry[]>(`${GITHUB_API_BASE}/${dir.name}`);
+        if (!dirResult.data) continue;
+
+        const files = dirResult.data.filter((f) => f.name.endsWith('.md'));
+        const subdirs = dirResult.data.filter((f) => f.type === 'dir');
+
+        for (const file of files) {
+            index.set(file.name.toLowerCase(), dir.name);
         }
 
-        const items = (await response.json()) as Array<{ name: string; type: string }>;
-        const dirs = items.filter((d) => d.type === 'dir' && d.name !== 'includes');
+        // Also check subdirectories (e.g., aggregation/type-expression/)
+        for (const sub of subdirs) {
+            await sleep(300);
 
-        for (const dir of dirs) {
-            await sleep(300); // Rate limit GitHub API
-            try {
-                const dirResponse = await fetch(`${GITHUB_API_BASE}/${dir.name}`);
-                if (!dirResponse.ok) continue;
+            const subResult = await fetchJson<GithubEntry[]>(`${GITHUB_API_BASE}/${dir.name}/${sub.name}`);
+            if (!subResult.data) continue;
 
-                const dirItems = (await dirResponse.json()) as Array<{ name: string; type: string }>;
-                const files = dirItems.filter((f) => f.name.endsWith('.md'));
-                const subdirs = dirItems.filter((f) => f.type === 'dir');
-
-                for (const file of files) {
-                    index.set(file.name.toLowerCase(), dir.name);
-                }
-
-                // Also check subdirectories (e.g., aggregation/type-expression/)
-                for (const sub of subdirs) {
-                    await sleep(300);
-                    try {
-                        const subResponse = await fetch(`${GITHUB_API_BASE}/${dir.name}/${sub.name}`);
-                        if (!subResponse.ok) continue;
-
-                        const subItems = (await subResponse.json()) as Array<{ name: string; type: string }>;
-                        for (const file of subItems.filter((f) => f.name.endsWith('.md'))) {
-                            index.set(file.name.toLowerCase(), `${dir.name}/${sub.name}`);
-                        }
-                    } catch {
-                        // Ignore subdirectory fetch failures
-                    }
-                }
-            } catch {
-                // Ignore individual directory fetch failures
+            for (const file of subResult.data.filter((f) => f.name.endsWith('.md'))) {
+                index.set(file.name.toLowerCase(), `${dir.name}/${sub.name}`);
             }
         }
-    } catch {
-        console.log('  ⚠ GitHub API request failed — skipping global index');
     }
 
     return index;
@@ -613,6 +729,14 @@ async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<void> {
                 op.description = extractDescription(content);
                 op.syntax = extractSyntax(content);
                 op.docLink = `${DOC_LINK_BASE}/${resolvedDir}/${opNameLower}`;
+
+                // Record a scraper comment when the doc page was found in a
+                // different directory than the operator's primary category
+                if (primaryDir && resolvedDir !== primaryDir) {
+                    op.scraperComment =
+                        `Doc page not found in expected directory '${primaryDir}/'. ` +
+                        `Using verified URL from '${resolvedDir}/' instead.`;
+                }
                 succeeded++;
             } else {
                 failureDetails.push({
@@ -733,6 +857,9 @@ function generateDump(operators: OperatorInfo[]): string {
             }
             if (op.docLink) {
                 lines.push(`- **Doc Link:** ${op.docLink}`);
+            }
+            if (op.scraperComment) {
+                lines.push(`- **Scraper Comment:** ${op.scraperComment}`);
             }
             lines.push('');
         }

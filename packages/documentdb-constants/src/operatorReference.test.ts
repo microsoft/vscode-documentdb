@@ -17,7 +17,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAllCompletions } from './index';
-import { parseOperatorReference } from './parseOperatorReference';
+import { parseOperatorReference, type ReferenceOperator } from './parseOperatorReference';
 
 const dumpPath = path.join(__dirname, '..', 'resources', 'operator-reference-scraped.md');
 const dumpContent = fs.readFileSync(dumpPath, 'utf-8');
@@ -130,7 +130,6 @@ describe('operator reference verification', () => {
     });
 
     test('not-listed operators are NOT in the implementation', () => {
-        const implementedValues = new Set(implementedOperators.map((op) => op.value));
         const leaked: string[] = [];
 
         for (const nl of notListedOperators) {
@@ -160,5 +159,201 @@ describe('operator reference verification', () => {
         // The plan lists 16 not-listed operators (§2.1)
         expect(notListedOperators.length).toBeGreaterThanOrEqual(14);
         expect(notListedOperators.length).toBeLessThanOrEqual(20);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Merged dump + overrides verification
+//
+// The generator (scripts/generate-from-reference.ts) merges the scraped dump
+// with manual overrides. These tests verify the implementation matches the
+// MERGED result — catching scenarios where:
+//   - Someone hand-edits a generated .ts file instead of using overrides
+//   - Someone adds an override but forgets to run `npm run generate`
+//   - Someone runs `npm run scrape` but forgets `npm run generate`
+//   - The override file is accidentally truncated
+// ---------------------------------------------------------------------------
+
+const overridesPath = path.join(__dirname, '..', 'resources', 'operator-reference-overrides.md');
+const overridesContent = fs.readFileSync(overridesPath, 'utf-8');
+const parsedOverrides = parseOperatorReference(overridesContent);
+const overrideOperators = parsedOverrides.operators;
+
+/**
+ * Merges dump and override operators. For each (operator, category) pair,
+ * the override description wins if non-empty; otherwise the dump description
+ * is used. This mirrors what the generator does.
+ */
+function getMergedOperators(): readonly ReferenceOperator[] {
+    // Build a lookup: "operator|category" → override entry
+    const overrideLookup = new Map<string, ReferenceOperator>();
+    for (const ov of overrideOperators) {
+        overrideLookup.set(`${ov.operator}|${ov.category}`, ov);
+    }
+
+    return referenceOperators.map((ref) => {
+        const override = overrideLookup.get(`${ref.operator}|${ref.category}`);
+        if (!override) {
+            return ref;
+        }
+        return {
+            operator: ref.operator,
+            category: ref.category,
+            description: override.description || ref.description,
+            docLink: override.docLink || ref.docLink,
+        };
+    });
+}
+
+const mergedOperators = getMergedOperators();
+
+describe('merged dump + overrides verification', () => {
+    test('overrides file exists and has entries', () => {
+        expect(overridesContent.length).toBeGreaterThan(100);
+        expect(overrideOperators.length).toBeGreaterThan(0);
+    });
+
+    test('override count is within expected range (detect truncation)', () => {
+        // Currently 56 overrides. Allow some flex for additions/removals,
+        // but catch catastrophic truncation (e.g., file emptied to <10).
+        expect(overrideOperators.length).toBeGreaterThanOrEqual(40);
+        expect(overrideOperators.length).toBeLessThanOrEqual(80);
+    });
+
+    test('every override targets an operator that exists in the dump', () => {
+        const dumpKeys = new Set(referenceOperators.map((r) => `${r.operator}|${r.category}`));
+        const orphans: string[] = [];
+
+        for (const ov of overrideOperators) {
+            if (!dumpKeys.has(`${ov.operator}|${ov.category}`)) {
+                orphans.push(`${ov.operator} (${ov.category})`);
+            }
+        }
+
+        expect(orphans).toEqual([]);
+    });
+
+    test('descriptions match the merged dump+overrides (detect hand-edits and stale generates)', () => {
+        const mismatches: string[] = [];
+
+        for (const merged of mergedOperators) {
+            if (!merged.description) {
+                continue; // operator with no description in either dump or override
+            }
+
+            const expectedMeta = CATEGORY_TO_META[merged.category];
+            if (!expectedMeta) {
+                continue;
+            }
+
+            const impl = implementedOperators.find((op) => op.value === merged.operator && op.meta === expectedMeta);
+
+            if (impl && impl.description !== merged.description) {
+                mismatches.push(
+                    `${merged.operator} (${merged.category}): ` +
+                        `expected "${merged.description}", got "${impl.description}"`,
+                );
+            }
+        }
+
+        expect(mismatches).toEqual([]);
+    });
+
+    test('doc links from dump match implementation links for single-category operators', () => {
+        // Many operators appear in multiple dump categories (e.g., $eq in both
+        // "Comparison Query" and "Comparison Expression"). The scraper finds the
+        // doc page under whichever category directory it tries first, while the
+        // implementation generates URLs from each operator's meta tag. For
+        // cross-category operators, the dump link and impl link will point to
+        // different (but both valid) doc directories.
+        //
+        // This test only compares links for operators where the dump category
+        // maps to a unique operator — no cross-category ambiguity.
+
+        // Known scraper mismatches: the scraper's global index fallback found
+        // these operators' doc pages under a different directory than their
+        // category implies. The implementation link is correct; the dump link is
+        // a scraper artifact. Update this set when refreshing the dump.
+        //
+        // NOTE: After fixing META_TO_DOC_DIR in docLinks.ts (expr:bool → logical-query,
+        // expr:comparison → comparison-query) and adding smart link emission in the
+        // generator (hardcoded URLs for cross-category fallbacks), this set should
+        // remain empty unless new scraper mismatches are discovered.
+        const KNOWN_SCRAPER_MISMATCHES = new Set<string>([]);
+
+        // Build a set of operators that appear in more than one dump category
+        const operatorCategories = new Map<string, Set<string>>();
+        for (const ref of referenceOperators) {
+            const cats = operatorCategories.get(ref.operator) ?? new Set();
+            cats.add(ref.category);
+            operatorCategories.set(ref.operator, cats);
+        }
+
+        const mismatches: string[] = [];
+
+        for (const ref of referenceOperators) {
+            if (!ref.docLink) {
+                continue;
+            }
+
+            // Skip cross-category operators — their dump link may come from
+            // a different category than the implementation's meta tag
+            const cats = operatorCategories.get(ref.operator);
+            if (cats && cats.size > 1) {
+                continue;
+            }
+
+            // Skip known scraper mismatches (documented above)
+            if (KNOWN_SCRAPER_MISMATCHES.has(ref.operator)) {
+                continue;
+            }
+
+            const expectedMeta = CATEGORY_TO_META[ref.category];
+            if (!expectedMeta) {
+                continue;
+            }
+
+            const impl = implementedOperators.find((op) => op.value === ref.operator && op.meta === expectedMeta);
+
+            if (!impl || !impl.link) {
+                continue;
+            }
+
+            const dumpLink = ref.docLink.toLowerCase();
+            const implLink = impl.link.toLowerCase();
+
+            if (dumpLink !== implLink) {
+                mismatches.push(`${ref.operator} (${ref.category}): ` + `dump="${ref.docLink}", impl="${impl.link}"`);
+            }
+        }
+
+        expect(mismatches).toEqual([]);
+    });
+
+    test('every override with a description was applied (not silently ignored)', () => {
+        const unapplied: string[] = [];
+
+        for (const ov of overrideOperators) {
+            if (!ov.description) {
+                continue;
+            }
+
+            const expectedMeta = CATEGORY_TO_META[ov.category];
+            if (!expectedMeta) {
+                continue;
+            }
+
+            const impl = implementedOperators.find((op) => op.value === ov.operator && op.meta === expectedMeta);
+
+            if (!impl) {
+                unapplied.push(`${ov.operator} (${ov.category}): no implementation entry found`);
+            } else if (impl.description !== ov.description) {
+                unapplied.push(
+                    `${ov.operator} (${ov.category}): override="${ov.description}", ` + `impl="${impl.description}"`,
+                );
+            }
+        }
+
+        expect(unapplied).toEqual([]);
     });
 });

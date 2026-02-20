@@ -27,7 +27,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
         description:
             "The addToSet operator adds elements to an array if they don't already exist, while ensuring uniqueness of elements within the set.",
         snippet: '{ $addToSet: "${1:\\$field}" }',
-        link: getDocLink('$addToSet', META_ACCUMULATOR),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$addtoset',
     },
     {
         value: '$avg',
@@ -114,7 +114,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
         meta: META_ACCUMULATOR,
         description: 'The $mergeObjects operator merges multiple documents into a single document',
         snippet: '{ $mergeObjects: "${1:\\$field}" }',
-        link: getDocLink('$mergeObjects', META_ACCUMULATOR),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/object-expression/$mergeobjects',
     },
     {
         value: '$min',
@@ -136,7 +136,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
         meta: META_ACCUMULATOR,
         description: 'The $push operator adds a specified value to an array within a document.',
         snippet: '{ $push: "${1:\\$field}" }',
-        link: getDocLink('$push', META_ACCUMULATOR),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$push',
     },
     {
         value: '$stdDevPop',

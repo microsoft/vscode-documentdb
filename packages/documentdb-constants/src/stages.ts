@@ -41,7 +41,6 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         description:
             'Categorizes documents into a specified number of groups based on a given expression, automatically determining bucket boundaries.',
         snippet: '{ $bucketAuto: { groupBy: "${1:\\$field}", buckets: ${2:number} } }',
-        link: getDocLink('$bucketAuto', META_STAGE),
     },
     {
         value: '$changeStream',
@@ -64,7 +63,7 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         description:
             'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
         snippet: '{ $count: "${1:countField}" }',
-        link: getDocLink('$count', META_STAGE),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$count',
     },
     {
         value: '$densify',
@@ -112,7 +111,6 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
             'Performs a recursive search on a collection to return documents connected by a specified field relationship.',
         snippet:
             '{ $graphLookup: { from: "${1:collection}", startWith: "${2:\\$field}", connectFromField: "${3:field}", connectToField: "${4:field}", as: "${5:result}" } }',
-        link: getDocLink('$graphLookup', META_STAGE),
     },
     {
         value: '$group',
@@ -134,7 +132,6 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         meta: META_STAGE,
         description: 'Restricts the number of documents passed to the next stage in the pipeline.',
         snippet: '{ $limit: ${1:number} }',
-        link: getDocLink('$limit', META_STAGE),
     },
     {
         value: '$lookup',
@@ -174,7 +171,6 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         meta: META_STAGE,
         description: 'Reshapes documents by including, excluding, or computing new fields.',
         snippet: '{ $project: { ${1:field}: 1 } }',
-        link: getDocLink('$project', META_STAGE),
     },
     {
         value: '$redact',
@@ -189,7 +185,6 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         meta: META_STAGE,
         description: 'Replaces the input document with a specified embedded document, promoting it to the top level.',
         snippet: '{ $replaceRoot: { newRoot: "${1:\\$field}" } }',
-        link: getDocLink('$replaceRoot', META_STAGE),
     },
     {
         value: '$replaceWith',
@@ -211,14 +206,12 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         meta: META_STAGE,
         description: 'Performs full-text search on string fields using Atlas Search or compatible search indexes.',
         snippet: '{ $search: { ${1} } }',
-        link: getDocLink('$search', META_STAGE),
     },
     {
         value: '$searchMeta',
         meta: META_STAGE,
         description: 'Returns metadata about an Atlas Search query without returning the matching documents.',
         snippet: '{ $searchMeta: { ${1} } }',
-        link: getDocLink('$searchMeta', META_STAGE),
     },
     {
         value: '$set',
@@ -234,7 +227,6 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
             'Adds computed fields to documents using window functions over a specified partition and sort order.',
         snippet:
             '{ $setWindowFields: { partitionBy: "${1:\\$field}", sortBy: { ${2:field}: ${3:1} }, output: { ${4:newField}: { ${5:windowFunc} } } } }',
-        link: getDocLink('$setWindowFields', META_STAGE),
     },
     {
         value: '$skip',
@@ -265,7 +257,6 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         meta: META_STAGE,
         description: 'Combines the results of two collections into a single result set, similar to SQL UNION ALL.',
         snippet: '{ $unionWith: { coll: "${1:collection}", pipeline: [${2}] } }',
-        link: getDocLink('$unionWith', META_STAGE),
     },
     {
         value: '$unset',
@@ -287,7 +278,6 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         meta: META_STAGE,
         description: 'Returns information on active and queued operations for the database instance.',
         snippet: '{ $currentOp: { allUsers: true } }',
-        link: getDocLink('$currentOp', META_STAGE),
     },
 ];
 

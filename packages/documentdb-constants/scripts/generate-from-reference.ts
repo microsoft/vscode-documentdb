@@ -26,6 +26,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { getDocLink } from '../src/docLinks';
+import * as MetaTags from '../src/metaTags';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -89,6 +91,17 @@ const CATEGORY_TO_META: Record<string, string> = {
     'Aggregation Pipeline Stages': 'META_STAGE',
     'Variables in Aggregation Expressions': 'META_VARIABLE',
 };
+
+/**
+ * Maps META constant names (like 'META_EXPR_STRING') to their string values
+ * (like 'expr:string') so we can call getDocLink() at generation time to
+ * compare the computed URL against the dump's verified URL.
+ */
+const META_CONST_TO_VALUE: Record<string, string> = Object.fromEntries(
+    Object.entries(MetaTags)
+        .filter(([, v]) => typeof v === 'string')
+        .map(([k, v]) => [k, v as string]),
+);
 
 // Category → output file mapping
 const CATEGORY_TO_FILE: Record<string, string> = {
@@ -833,18 +846,25 @@ function generateFileContent(specs: FileSpec[]): string {
 
     const metaImportsList = [...allMetaImports].sort().join(',\n    ');
 
+    // Pre-generate all sections so we can detect whether getDocLink is used
+    const sections: string[] = [];
+    for (const spec of specs) {
+        sections.push(generateSection(spec));
+    }
+    const sectionsStr = sections.join('\n');
+
+    // Only import getDocLink if at least one operator uses it in this file
+    const needsDocLink = sectionsStr.includes('getDocLink(');
+    const docLinkImport = needsDocLink ? `\nimport { getDocLink } from './docLinks';` : '';
+
     let content = `${copyright}
 import { type OperatorEntry } from './types';
-import { ${metaImportsList} } from './metaTags';
-import { getDocLink } from './docLinks';
+import { ${metaImportsList} } from './metaTags';${docLinkImport}
 import { registerOperators } from './getFilteredCompletions';
 
 `;
 
-    for (const spec of specs) {
-        content += generateSection(spec);
-        content += '\n';
-    }
+    content += sectionsStr;
 
     // Registration call
     const allVarNames = specs.map((s) => `...${s.variableName}`).join(',\n    ');
@@ -863,9 +883,30 @@ function generateSection(spec: FileSpec): string {
 
     section += `const ${spec.variableName}: readonly OperatorEntry[] = [\n`;
 
+    // Resolve the meta tag's string value for runtime getDocLink comparison
+    const metaStringValue = META_CONST_TO_VALUE[spec.metaImport] || '';
+
     for (const op of spec.operators) {
         const snippet = op.snippetOverride || generateSnippet(op, spec.metaImport);
         const bsonTypes = getApplicableBsonTypes(op, spec.metaImport);
+
+        // Determine the correct link emission strategy:
+        // - If dump has a URL that matches what getDocLink() would produce → use getDocLink() (compact)
+        // - If dump has a URL that differs from getDocLink() → emit hardcoded string
+        // - If dump has no URL → omit the link property
+        const computedLink = getDocLink(op.value, metaStringValue);
+        const dumpLink = op.docLink || '';
+        let linkLine: string;
+        if (!dumpLink) {
+            // No documentation page exists — omit the link
+            linkLine = '';
+        } else if (dumpLink === computedLink) {
+            // The computed URL matches — use the compact getDocLink() call
+            linkLine = `        link: getDocLink('${escapeString(op.value)}', ${spec.metaImport}),\n`;
+        } else {
+            // The dump has a verified URL that differs from getDocLink() — emit hardcoded
+            linkLine = `        link: '${escapeString(dumpLink)}',\n`;
+        }
 
         section += `    {\n`;
         section += `        value: '${escapeString(op.value)}',\n`;
@@ -874,7 +915,9 @@ function generateSection(spec: FileSpec): string {
         if (snippet) {
             section += `        snippet: '${escapeString(snippet)}',\n`;
         }
-        section += `        link: getDocLink('${escapeString(op.value)}', ${spec.metaImport}),\n`;
+        if (linkLine) {
+            section += linkLine;
+        }
         if (bsonTypes) {
             section += `        applicableBsonTypes: [${bsonTypes.map((t) => `'${t}'`).join(', ')}],\n`;
         }
