@@ -7,8 +7,9 @@
  * Generates TypeScript operator data files from the scraped reference dump.
  *
  * Reads:
- *   resources/operator-reference-scraped.md   — scraped operator data (primary)
- *   resources/operator-reference-overrides.md — hand-written overrides (wins)
+ *   resources/scraped/operator-reference.md    — scraped operator data (primary)
+ *   resources/overrides/operator-overrides.md  — hand-written overrides (wins)
+ *   resources/overrides/operator-snippets.md   — snippet templates per category
  *
  * Writes:
  *   src/queryOperators.ts, src/updateOperators.ts, src/expressionOperators.ts,
@@ -19,9 +20,16 @@
  * specified in an override entry replaces the corresponding scraped value.
  * Omitted fields keep their scraped values.
  *
+ * Snippets are resolved in order:
+ *   1. Snippet override from operator-overrides.md  (highest priority)
+ *   2. Per-operator snippet from operator-snippets.md
+ *   3. DEFAULT snippet from operator-snippets.md  ({{VALUE}} → operator name)
+ *   4. No snippet
+ *
  * Usage:  npm run generate
  * Note:   This script overwrites the generated src/ files. Do NOT edit
- *         those files by hand — put corrections in the overrides file instead.
+ *         those files by hand — put corrections in the overrides/snippets
+ *         files instead.
  */
 
 import * as fs from 'fs';
@@ -85,6 +93,7 @@ const CATEGORY_TO_META: Record<string, string> = {
     'Type Expression Operators': 'META_EXPR_TYPE',
     'Accumulators ($group, $bucket, $bucketAuto, $setWindowFields)': 'META_ACCUMULATOR',
     'Accumulators (in Other Stages)': 'META_ACCUMULATOR',
+    Accumulators: 'META_ACCUMULATOR',
     'Variable Expression Operators': 'META_EXPR_VARIABLE',
     'Window Operators': 'META_WINDOW',
     'Conditional Expression Operators': 'META_EXPR_CONDITIONAL',
@@ -316,7 +325,11 @@ function parseOverrides(content: string): Map<string, Map<string, OverrideEntry>
             currentOp.entry.docLink = line.replace('- **Doc Link:**', '').trim();
         }
         if (currentOp && line.startsWith('- **Snippet:**')) {
-            currentOp.entry.snippet = line.replace('- **Snippet:**', '').trim();
+            let snippet = line.replace('- **Snippet:**', '').trim();
+            if (snippet.startsWith('`') && snippet.endsWith('`')) {
+                snippet = snippet.slice(1, -1);
+            }
+            currentOp.entry.snippet = snippet;
         }
     }
 
@@ -398,405 +411,94 @@ function mergeOverride(op: ParsedOperator, override: OverrideEntry): void {
 }
 
 // ---------------------------------------------------------------------------
-// Snippet generation
+// Snippet loading (from resources/overrides/operator-snippets.md)
 // ---------------------------------------------------------------------------
 
-function generateSnippet(op: ParsedOperator, meta: string): string | undefined {
-    const v = op.value;
+/**
+ * Parses the operator-snippets.md file into a map of meta-tag → (operator|DEFAULT → snippet).
+ * Uses the same heading conventions as the dump/overrides parsers.
+ */
+function parseSnippets(content: string): Map<string, Map<string, string>> {
+    const lines = content.split('\n');
+    const result = new Map<string, Map<string, string>>();
 
-    // System variables don't need snippets
-    if (meta === 'META_VARIABLE') return undefined;
+    let currentMeta = '';
+    let currentOp = '';
+    let inCodeBlock = false;
 
-    // Stages: wrap in { $stage: { ... } }
-    if (meta === 'META_STAGE') {
-        return getStageSinppet(v);
-    }
-
-    // Query comparison operators: { $op: value }
-    if (meta === 'META_QUERY_COMPARISON') {
-        if (v === '$in' || v === '$nin') {
-            return `{ ${v}: [\${1:value}] }`;
+    for (const line of lines) {
+        if (line.startsWith('```')) {
+            inCodeBlock = !inCodeBlock;
+            continue;
         }
-        return `{ ${v}: \${1:value} }`;
-    }
+        if (inCodeBlock) continue;
 
-    // Logical query operators
-    if (meta === 'META_QUERY_LOGICAL') {
-        if (v === '$not') {
-            return `{ ${v}: { \${1:expression} } }`;
+        // H2 = category
+        const h2 = line.match(/^## (.+)$/);
+        if (h2) {
+            const cat = h2[1].trim();
+            const meta = CATEGORY_TO_META[cat];
+            if (meta) {
+                currentMeta = meta;
+                if (!result.has(currentMeta)) {
+                    result.set(currentMeta, new Map());
+                }
+            } else {
+                currentMeta = '';
+                console.warn(`⚠️  Unknown snippet category: "${cat}"`);
+            }
+            currentOp = '';
+            continue;
         }
-        return `{ ${v}: [{ \${1:expression} }] }`;
-    }
 
-    // Element query operators
-    if (meta === 'META_QUERY_ELEMENT') {
-        if (v === '$exists') return `{ ${v}: \${1:true} }`;
-        if (v === '$type') return `{ ${v}: "\${1:type}" }`;
-        return undefined;
-    }
-
-    // Evaluation query operators
-    if (meta === 'META_QUERY_EVALUATION') {
-        if (v === '$expr') return `{ ${v}: { \${1:expression} } }`;
-        if (v === '$regex') return `{ ${v}: /\${1:pattern}/ }`;
-        if (v === '$mod') return `{ ${v}: [\${1:divisor}, \${2:remainder}] }`;
-        if (v === '$text') return `{ ${v}: { \\$search: "\${1:text}" } }`;
-        if (v === '$jsonSchema') return `{ ${v}: { bsonType: "\${1:object}" } }`;
-        return undefined;
-    }
-
-    // Array query operators
-    if (meta === 'META_QUERY_ARRAY') {
-        if (v === '$all') return `{ ${v}: [\${1:value}] }`;
-        if (v === '$elemMatch') return `{ ${v}: { \${1:query} } }`;
-        if (v === '$size') return `{ ${v}: \${1:number} }`;
-        return undefined;
-    }
-
-    // Bitwise query operators
-    if (meta === 'META_QUERY_BITWISE') {
-        return `{ ${v}: \${1:bitmask} }`;
-    }
-
-    // Geospatial operators
-    if (meta === 'META_QUERY_GEOSPATIAL') {
-        if (v === '$near' || v === '$nearSphere') {
-            return `{ ${v}: { \\$geometry: { type: "Point", coordinates: [\${1:lng}, \${2:lat}] }, \\$maxDistance: \${3:distance} } }`;
+        // H3 = operator name or DEFAULT
+        const h3 = line.match(/^### (.+)$/);
+        if (h3 && currentMeta) {
+            currentOp = h3[1].trim();
+            continue;
         }
-        if (v === '$geoIntersects' || v === '$geoWithin') {
-            return `{ ${v}: { \\$geometry: { type: "\${1:GeoJSON type}", coordinates: \${2:coordinates} } } }`;
+
+        // Snippet value (backticks are stripped if present: `...` → ...)
+        if (currentMeta && currentOp && line.startsWith('- **Snippet:**')) {
+            let snippet = line.replace('- **Snippet:**', '').trim();
+            if (snippet.startsWith('`') && snippet.endsWith('`')) {
+                snippet = snippet.slice(1, -1);
+            }
+            if (snippet) {
+                result.get(currentMeta)!.set(currentOp, snippet);
+            }
+            continue;
         }
-        if (v === '$box') return `[[\${1:bottomLeftX}, \${2:bottomLeftY}], [\${3:upperRightX}, \${4:upperRightY}]]`;
-        if (v === '$center') return `[[\${1:x}, \${2:y}], \${3:radius}]`;
-        if (v === '$centerSphere') return `[[\${1:x}, \${2:y}], \${3:radiusInRadians}]`;
-        if (v === '$geometry') return `{ type: "\${1:Point}", coordinates: [\${2:coordinates}] }`;
-        if (v === '$maxDistance' || v === '$minDistance') return `\${1:distance}`;
-        if (v === '$polygon') return `[[\${1:x1}, \${2:y1}], [\${3:x2}, \${4:y2}], [\${5:x3}, \${6:y3}]]`;
-        return undefined;
     }
 
-    // Projection operators
-    if (meta === 'META_QUERY_PROJECTION') {
-        if (v === '$') return undefined; // Positional, no snippet
-        if (v === '$elemMatch') return `{ ${v}: { \${1:query} } }`;
-        if (v === '$slice') return `{ ${v}: \${1:number} }`;
-        return undefined;
-    }
-
-    // Misc query operators
-    if (meta === 'META_QUERY_MISC') {
-        if (v === '$comment') return `{ ${v}: "\${1:comment}" }`;
-        if (v === '$rand') return `{ ${v}: {} }`;
-        if (v === '$natural') return `{ ${v}: \${1:1} }`;
-        return undefined;
-    }
-
-    // Update field operators
-    if (meta === 'META_UPDATE_FIELD') {
-        if (v === '$rename') return `{ ${v}: { "\${1:oldField}": "\${2:newField}" } }`;
-        if (v === '$currentDate') return `{ ${v}: { "\${1:field}": true } }`;
-        return `{ ${v}: { "\${1:field}": \${2:value} } }`;
-    }
-
-    // Update array operators
-    if (meta === 'META_UPDATE_ARRAY') {
-        if (v === '$' || v === '$[]' || v === '$[identifier]') return undefined; // Positional, no snippet
-        if (v === '$addToSet') return `{ ${v}: { "\${1:field}": \${2:value} } }`;
-        if (v === '$pop') return `{ ${v}: { "\${1:field}": \${2:1} } }`;
-        if (v === '$pull') return `{ ${v}: { "\${1:field}": \${2:condition} } }`;
-        if (v === '$push') return `{ ${v}: { "\${1:field}": \${2:value} } }`;
-        if (v === '$pullAll') return `{ ${v}: { "\${1:field}": [\${2:values}] } }`;
-        if (v === '$each') return `{ ${v}: [\${1:values}] }`;
-        if (v === '$position') return `{ ${v}: \${1:index} }`;
-        if (v === '$slice') return `{ ${v}: \${1:number} }`;
-        if (v === '$sort') return `{ ${v}: { "\${1:field}": \${2:1} } }`;
-        return undefined;
-    }
-
-    // Bitwise update operator
-    if (meta === 'META_UPDATE_BITWISE') {
-        return `{ ${v}: { "\${1:field}": { "\${2:and|or|xor}": \${3:value} } } }`;
-    }
-
-    // Accumulators
-    if (meta === 'META_ACCUMULATOR') {
-        if (v === '$push' || v === '$addToSet') return `{ ${v}: "\${1:\\$field}" }`;
-        if (v === '$mergeObjects') return `{ ${v}: "\${1:\\$field}" }`;
-        if (v === '$count') return `{ ${v}: {} }`;
-        if (v === '$bottom' || v === '$top')
-            return `{ ${v}: { sortBy: { \${1:field}: \${2:1} }, output: "\${3:\\$field}" } }`;
-        if (v === '$bottomN' || v === '$topN')
-            return `{ ${v}: { n: \${1:number}, sortBy: { \${2:field}: \${3:1} }, output: "\${4:\\$field}" } }`;
-        if (v === '$firstN' || v === '$lastN' || v === '$maxN' || v === '$minN')
-            return `{ ${v}: { input: "\${1:\\$field}", n: \${2:number} } }`;
-        if (v === '$percentile') return `{ ${v}: { input: "\${1:\\$field}", p: [\${2:0.5}], method: "approximate" } }`;
-        if (v === '$median') return `{ ${v}: { input: "\${1:\\$field}", method: "approximate" } }`;
-        if (v === '$stdDevPop' || v === '$stdDevSamp') return `{ ${v}: "\${1:\\$field}" }`;
-        return `{ ${v}: "\${1:\\$field}" }`;
-    }
-
-    // Window operators
-    if (meta === 'META_WINDOW') {
-        if (v === '$shift') return `{ ${v}: { output: "\${1:\\$field}", by: \${2:1}, default: \${3:null} } }`;
-        if (v === '$rank' || v === '$denseRank' || v === '$documentNumber') return `{ ${v}: {} }`;
-        if (v === '$linearFill' || v === '$locf') return `{ ${v}: "\${1:\\$field}" }`;
-        if (v === '$expMovingAvg') return `{ ${v}: { input: "\${1:\\$field}", N: \${2:number} } }`;
-        if (v === '$derivative' || v === '$integral')
-            return `{ ${v}: { input: "\${1:\\$field}", unit: "\${2:hour}" } }`;
-        // Window accumulators use accumulator-style snippets
-        return `{ ${v}: "\${1:\\$field}" }`;
-    }
-
-    // Expression operators — general patterns
-    if (meta.startsWith('META_EXPR_')) {
-        return getExpressionSnippet(v, meta);
-    }
-
-    return undefined;
+    return result;
 }
 
-function getExpressionSnippet(v: string, meta: string): string | undefined {
-    // Arithmetic
-    if (meta === 'META_EXPR_ARITH') {
-        if (
-            v === '$abs' ||
-            v === '$ceil' ||
-            v === '$floor' ||
-            v === '$exp' ||
-            v === '$ln' ||
-            v === '$log10' ||
-            v === '$sqrt' ||
-            v === '$trunc'
-        ) {
-            return `{ ${v}: "\${1:\\$field}" }`;
-        }
-        if (v === '$add' || v === '$subtract' || v === '$multiply' || v === '$divide' || v === '$mod' || v === '$pow') {
-            return `{ ${v}: ["\${1:\\$field1}", "\${2:\\$field2}"] }`;
-        }
-        if (v === '$log') return `{ ${v}: ["\${1:\\$number}", \${2:base}] }`;
-        if (v === '$round') return `{ ${v}: ["\${1:\\$field}", \${2:place}] }`;
-        return `{ ${v}: "\${1:\\$field}" }`;
-    }
+/**
+ * Looks up a snippet for an operator from the parsed snippets map.
+ *
+ * Resolution order:
+ *   1. Exact operator match in the category
+ *   2. DEFAULT entry in the category (with {{VALUE}} replaced by operator name)
+ *   3. undefined (no snippet)
+ */
+function lookupSnippet(
+    snippets: Map<string, Map<string, string>>,
+    meta: string,
+    operatorValue: string,
+): string | undefined {
+    const catSnippets = snippets.get(meta);
+    if (!catSnippets) return undefined;
 
-    // Array expressions
-    if (meta === 'META_EXPR_ARRAY') {
-        if (v === '$arrayElemAt') return `{ ${v}: ["\${1:\\$array}", \${2:index}] }`;
-        if (v === '$arrayToObject') return `{ ${v}: "\${1:\\$array}" }`;
-        if (v === '$concatArrays') return `{ ${v}: ["\${1:\\$array1}", "\${2:\\$array2}"] }`;
-        if (v === '$filter')
-            return `{ ${v}: { input: "\${1:\\$array}", as: "\${2:item}", cond: { \${3:expression} } } }`;
-        if (v === '$first' || v === '$last') return `{ ${v}: "\${1:\\$array}" }`;
-        if (v === '$in') return `{ ${v}: ["\${1:\\$field}", "\${2:\\$array}"] }`;
-        if (v === '$indexOfArray') return `{ ${v}: ["\${1:\\$array}", "\${2:value}"] }`;
-        if (v === '$isArray') return `{ ${v}: "\${1:\\$field}" }`;
-        if (v === '$map') return `{ ${v}: { input: "\${1:\\$array}", as: "\${2:item}", in: { \${3:expression} } } }`;
-        if (v === '$objectToArray') return `{ ${v}: "\${1:\\$object}" }`;
-        if (v === '$range') return `{ ${v}: [\${1:start}, \${2:end}, \${3:step}] }`;
-        if (v === '$reduce')
-            return `{ ${v}: { input: "\${1:\\$array}", initialValue: \${2:0}, in: { \${3:expression} } } }`;
-        if (v === '$reverseArray') return `{ ${v}: "\${1:\\$array}" }`;
-        if (v === '$size') return `{ ${v}: "\${1:\\$array}" }`;
-        if (v === '$slice') return `{ ${v}: ["\${1:\\$array}", \${2:n}] }`;
-        if (v === '$sortArray') return `{ ${v}: { input: "\${1:\\$array}", sortBy: { \${2:field}: \${3:1} } } }`;
-        if (v === '$zip') return `{ ${v}: { inputs: ["\${1:\\$array1}", "\${2:\\$array2}"] } }`;
-        if (v === '$maxN' || v === '$minN' || v === '$firstN' || v === '$lastN')
-            return `{ ${v}: { input: "\${1:\\$array}", n: \${2:number} } }`;
-        return `{ ${v}: "\${1:\\$array}" }`;
-    }
+    // Exact operator match
+    const exact = catSnippets.get(operatorValue);
+    if (exact !== undefined) return exact;
 
-    // Boolean expressions
-    if (meta === 'META_EXPR_BOOL') {
-        if (v === '$not') return `{ ${v}: ["\${1:expression}"] }`;
-        return `{ ${v}: ["\${1:expression1}", "\${2:expression2}"] }`;
-    }
-
-    // Comparison expressions
-    if (meta === 'META_EXPR_COMPARISON') {
-        return `{ ${v}: ["\${1:\\$field1}", "\${2:\\$field2}"] }`;
-    }
-
-    // Conditional expressions
-    if (meta === 'META_EXPR_CONDITIONAL') {
-        if (v === '$cond')
-            return `{ ${v}: { if: { \${1:expression} }, then: \${2:trueValue}, else: \${3:falseValue} } }`;
-        if (v === '$ifNull') return `{ ${v}: ["\${1:\\$field}", \${2:replacement}] }`;
-        if (v === '$switch')
-            return `{ ${v}: { branches: [{ case: { \${1:expression} }, then: \${2:value} }], default: \${3:defaultValue} } }`;
-        return undefined;
-    }
-
-    // Date expressions
-    if (meta === 'META_EXPR_DATE') {
-        if (v === '$dateAdd' || v === '$dateSubtract')
-            return `{ ${v}: { startDate: "\${1:\\$dateField}", unit: "\${2:day}", amount: \${3:1} } }`;
-        if (v === '$dateDiff')
-            return `{ ${v}: { startDate: "\${1:\\$startDate}", endDate: "\${2:\\$endDate}", unit: "\${3:day}" } }`;
-        if (v === '$dateFromParts') return `{ ${v}: { year: \${1:2024}, month: \${2:1}, day: \${3:1} } }`;
-        if (v === '$dateToParts') return `{ ${v}: { date: "\${1:\\$dateField}" } }`;
-        if (v === '$dateFromString') return `{ ${v}: { dateString: "\${1:dateString}" } }`;
-        if (v === '$dateToString') return `{ ${v}: { format: "\${1:%Y-%m-%d}", date: "\${2:\\$dateField}" } }`;
-        if (v === '$dateTrunc') return `{ ${v}: { date: "\${1:\\$dateField}", unit: "\${2:day}" } }`;
-        if (v === '$toDate') return `{ ${v}: "\${1:\\$field}" }`;
-        // Date part extractors: $year, $month, $dayOfMonth, etc.
-        return `{ ${v}: "\${1:\\$dateField}" }`;
-    }
-
-    // Object expressions
-    if (meta === 'META_EXPR_OBJECT') {
-        if (v === '$mergeObjects') return `{ ${v}: ["\${1:\\$object1}", "\${2:\\$object2}"] }`;
-        if (v === '$objectToArray') return `{ ${v}: "\${1:\\$object}" }`;
-        if (v === '$setField')
-            return `{ ${v}: { field: "\${1:fieldName}", input: "\${2:\\$object}", value: \${3:value} } }`;
-        return `{ ${v}: "\${1:\\$object}" }`;
-    }
-
-    // Set expressions
-    if (meta === 'META_EXPR_SET') {
-        if (v === '$setIsSubset') return `{ ${v}: ["\${1:\\$set1}", "\${2:\\$set2}"] }`;
-        if (v === '$anyElementTrue' || v === '$allElementsTrue') return `{ ${v}: ["\${1:\\$array}"] }`;
-        return `{ ${v}: ["\${1:\\$set1}", "\${2:\\$set2}"] }`;
-    }
-
-    // String expressions
-    if (meta === 'META_EXPR_STRING') {
-        if (v === '$concat') return `{ ${v}: ["\${1:\\$string1}", "\${2:\\$string2}"] }`;
-        if (v === '$indexOfBytes' || v === '$indexOfCP') return `{ ${v}: ["\${1:\\$string}", "\${2:substring}"] }`;
-        if (v === '$regexFind' || v === '$regexFindAll' || v === '$regexMatch')
-            return `{ ${v}: { input: "\${1:\\$string}", regex: "\${2:pattern}" } }`;
-        if (v === '$replaceOne' || v === '$replaceAll')
-            return `{ ${v}: { input: "\${1:\\$string}", find: "\${2:find}", replacement: "\${3:replacement}" } }`;
-        if (v === '$split') return `{ ${v}: ["\${1:\\$string}", "\${2:delimiter}"] }`;
-        if (v === '$substr' || v === '$substrBytes' || v === '$substrCP')
-            return `{ ${v}: ["\${1:\\$string}", \${2:start}, \${3:length}] }`;
-        if (v === '$strcasecmp') return `{ ${v}: ["\${1:\\$string1}", "\${2:\\$string2}"] }`;
-        if (v === '$trim' || v === '$ltrim' || v === '$rtrim') return `{ ${v}: { input: "\${1:\\$string}" } }`;
-        return `{ ${v}: "\${1:\\$string}" }`;
-    }
-
-    // Trig expressions
-    if (meta === 'META_EXPR_TRIG') {
-        if (v === '$degreesToRadians' || v === '$radiansToDegrees') return `{ ${v}: "\${1:\\$angle}" }`;
-        return `{ ${v}: "\${1:\\$value}" }`;
-    }
-
-    // Type expressions
-    if (meta === 'META_EXPR_TYPE') {
-        if (v === '$convert') return `{ ${v}: { input: "\${1:\\$field}", to: "\${2:type}" } }`;
-        if (v === '$type') return `{ ${v}: "\${1:\\$field}" }`;
-        return `{ ${v}: "\${1:\\$field}" }`;
-    }
-
-    // Data size
-    if (meta === 'META_EXPR_DATASIZE') {
-        return `{ ${v}: "\${1:\\$field}" }`;
-    }
-
-    // Timestamp
-    if (meta === 'META_EXPR_TIMESTAMP') {
-        return `{ ${v}: "\${1:\\$timestampField}" }`;
-    }
-
-    // Bitwise expressions
-    if (meta === 'META_EXPR_BITWISE') {
-        if (v === '$bitNot') return `{ ${v}: "\${1:\\$field}" }`;
-        return `{ ${v}: [\${1:value1}, \${2:value2}] }`;
-    }
-
-    // Literal
-    if (meta === 'META_EXPR_LITERAL') {
-        return `{ ${v}: \${1:value} }`;
-    }
-
-    // Misc expressions
-    if (meta === 'META_EXPR_MISC') {
-        if (v === '$getField') return `{ ${v}: { field: "\${1:fieldName}", input: "\${2:\\$object}" } }`;
-        if (v === '$rand') return `{ ${v}: {} }`;
-        if (v === '$sampleRate') return `{ ${v}: \${1:0.5} }`;
-        return `{ ${v}: \${1:value} }`;
-    }
-
-    // Variable expression
-    if (meta === 'META_EXPR_VARIABLE') {
-        if (v === '$let') return `{ ${v}: { vars: { \${1:var}: \${2:expression} }, in: \${3:expression} } }`;
-        return undefined;
-    }
+    // Fall back to category DEFAULT
+    const def = catSnippets.get('DEFAULT');
+    if (def) return def.replace(/\{\{VALUE\}\}/g, operatorValue);
 
     return undefined;
-}
-
-function getStageSinppet(v: string): string | undefined {
-    switch (v) {
-        case '$match':
-            return `{ ${v}: { \${1:query} } }`;
-        case '$group':
-            return `{ ${v}: { _id: "\${1:\\$field}", \${2:accumulator}: { \${3:\\$sum}: 1 } } }`;
-        case '$project':
-            return `{ ${v}: { \${1:field}: 1 } }`;
-        case '$sort':
-            return `{ ${v}: { \${1:field}: \${2:1} } }`;
-        case '$limit':
-            return `{ ${v}: \${1:number} }`;
-        case '$skip':
-            return `{ ${v}: \${1:number} }`;
-        case '$unwind':
-            return `{ ${v}: "\${1:\\$arrayField}" }`;
-        case '$lookup':
-            return `{ ${v}: { from: "\${1:collection}", localField: "\${2:field}", foreignField: "\${3:field}", as: "\${4:result}" } }`;
-        case '$addFields':
-            return `{ ${v}: { \${1:newField}: \${2:expression} } }`;
-        case '$set':
-            return `{ ${v}: { \${1:field}: \${2:expression} } }`;
-        case '$unset':
-            return `{ ${v}: "\${1:field}" }`;
-        case '$replaceRoot':
-            return `{ ${v}: { newRoot: "\${1:\\$field}" } }`;
-        case '$replaceWith':
-            return `{ ${v}: "\${1:\\$field}" }`;
-        case '$count':
-            return `{ ${v}: "\${1:countField}" }`;
-        case '$out':
-            return `{ ${v}: "\${1:collection}" }`;
-        case '$merge':
-            return `{ ${v}: { into: "\${1:collection}" } }`;
-        case '$bucket':
-            return `{ ${v}: { groupBy: "\${1:\\$field}", boundaries: [\${2:values}], default: "\${3:Other}" } }`;
-        case '$bucketAuto':
-            return `{ ${v}: { groupBy: "\${1:\\$field}", buckets: \${2:number} } }`;
-        case '$facet':
-            return `{ ${v}: { \${1:outputField}: [{ \${2:stage} }] } }`;
-        case '$graphLookup':
-            return `{ ${v}: { from: "\${1:collection}", startWith: "\${2:\\$field}", connectFromField: "\${3:field}", connectToField: "\${4:field}", as: "\${5:result}" } }`;
-        case '$sample':
-            return `{ ${v}: { size: \${1:number} } }`;
-        case '$sortByCount':
-            return `{ ${v}: "\${1:\\$field}" }`;
-        case '$redact':
-            return `{ ${v}: { \\$cond: { if: { \${1:expression} }, then: "\${2:\\$\\$DESCEND}", else: "\${3:\\$\\$PRUNE}" } } }`;
-        case '$unionWith':
-            return `{ ${v}: { coll: "\${1:collection}", pipeline: [\${2}] } }`;
-        case '$setWindowFields':
-            return `{ ${v}: { partitionBy: "\${1:\\$field}", sortBy: { \${2:field}: \${3:1} }, output: { \${4:newField}: { \${5:windowFunc} } } } }`;
-        case '$densify':
-            return `{ ${v}: { field: "\${1:field}", range: { step: \${2:1}, bounds: "full" } } }`;
-        case '$fill':
-            return `{ ${v}: { output: { \${1:field}: { method: "\${2:linear}" } } } }`;
-        case '$documents':
-            return `{ ${v}: [\${1:documents}] }`;
-        case '$changeStream':
-            return `{ ${v}: {} }`;
-        case '$collStats':
-            return `{ ${v}: { storageStats: {} } }`;
-        case '$currentOp':
-            return `{ ${v}: { allUsers: true } }`;
-        case '$indexStats':
-            return `{ ${v}: {} }`;
-        case '$listLocalSessions':
-            return `{ ${v}: { allUsers: true } }`;
-        case '$geoNear':
-            return `{ ${v}: { near: { type: "Point", coordinates: [\${1:lng}, \${2:lat}] }, distanceField: "\${3:distance}" } }`;
-        default:
-            return `{ ${v}: { \${1} } }`;
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -823,7 +525,7 @@ function getApplicableBsonTypes(op: ParsedOperator, meta: string): string[] | un
 // File generation
 // ---------------------------------------------------------------------------
 
-function generateFileContent(specs: FileSpec[]): string {
+function generateFileContent(specs: FileSpec[], snippets: Map<string, Map<string, string>>): string {
     const copyright = `/*---------------------------------------------------------------------------------------------
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -832,10 +534,11 @@ function generateFileContent(specs: FileSpec[]): string {
 // AUTO-GENERATED — DO NOT EDIT BY HAND
 //
 // Generated by: npm run generate  (scripts/generate-from-reference.ts)
-// Sources:      resources/operator-reference-scraped.md
-//               resources/operator-reference-overrides.md
+// Sources:      resources/scraped/operator-reference.md
+//               resources/overrides/operator-overrides.md
+//               resources/overrides/operator-snippets.md
 //
-// To change operator data, edit the overrides file and re-run the generator.
+// To change operator data, edit the overrides/snippets files and re-run the generator.
 `;
 
     // Collect all unique meta imports
@@ -849,7 +552,7 @@ function generateFileContent(specs: FileSpec[]): string {
     // Pre-generate all sections so we can detect whether getDocLink is used
     const sections: string[] = [];
     for (const spec of specs) {
-        sections.push(generateSection(spec));
+        sections.push(generateSection(spec, snippets));
     }
     const sectionsStr = sections.join('\n');
 
@@ -876,7 +579,7 @@ import { registerOperators } from './getFilteredCompletions';
     return content;
 }
 
-function generateSection(spec: FileSpec): string {
+function generateSection(spec: FileSpec, snippets: Map<string, Map<string, string>>): string {
     let section = `// ---------------------------------------------------------------------------\n`;
     section += `// ${spec.operators[0]?.category || spec.variableName}\n`;
     section += `// ---------------------------------------------------------------------------\n\n`;
@@ -887,7 +590,7 @@ function generateSection(spec: FileSpec): string {
     const metaStringValue = META_CONST_TO_VALUE[spec.metaImport] || '';
 
     for (const op of spec.operators) {
-        const snippet = op.snippetOverride || generateSnippet(op, spec.metaImport);
+        const snippet = op.snippetOverride || lookupSnippet(snippets, spec.metaImport, op.value);
         const bsonTypes = getApplicableBsonTypes(op, spec.metaImport);
 
         // Determine the correct link emission strategy:
@@ -1013,8 +716,9 @@ function categoryToVarName(category: string): string {
 // ---------------------------------------------------------------------------
 
 function main(): void {
-    const dumpPath = path.join(__dirname, '..', 'resources', 'operator-reference-scraped.md');
-    const overridePath = path.join(__dirname, '..', 'resources', 'operator-reference-overrides.md');
+    const dumpPath = path.join(__dirname, '..', 'resources', 'scraped', 'operator-reference.md');
+    const overridePath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-overrides.md');
+    const snippetsPath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-snippets.md');
     const srcDir = path.join(__dirname, '..', 'src');
 
     console.log('📖 Reading operator reference dump...');
@@ -1041,6 +745,21 @@ function main(): void {
         console.log('ℹ️  No overrides file found, skipping.\n');
     }
 
+    // Load snippet templates
+    let snippetsMap = new Map<string, Map<string, string>>();
+    if (fs.existsSync(snippetsPath)) {
+        console.log('📋 Reading snippet templates...');
+        const snippetsContent = fs.readFileSync(snippetsPath, 'utf-8');
+        snippetsMap = parseSnippets(snippetsContent);
+        let snippetCount = 0;
+        for (const [, catMap] of snippetsMap) {
+            snippetCount += catMap.size;
+        }
+        console.log(`  Loaded ${snippetCount} snippet entries across ${snippetsMap.size} categories\n`);
+    } else {
+        console.log('ℹ️  No snippets file found, skipping.\n');
+    }
+
     console.log('📁 Building file specs...');
     const fileGroups = buildFileSpecs(categorizedOps);
 
@@ -1049,7 +768,7 @@ function main(): void {
         console.log(
             `✍️  Generating ${fileName}.ts (${specs.reduce((n, s) => n + s.operators.length, 0)} operators)...`,
         );
-        const fileContent = generateFileContent(specs);
+        const fileContent = generateFileContent(specs, snippetsMap);
         fs.writeFileSync(filePath, fileContent, 'utf-8');
     }
 

@@ -157,7 +157,11 @@ function parseOverrides(content: string): Map<string, Map<string, OverrideEntry>
                 currentOp.entry.docLink = line.replace('- **Doc Link:**', '').trim();
             }
             if (line.startsWith('- **Snippet:**')) {
-                currentOp.entry.snippet = line.replace('- **Snippet:**', '').trim();
+                let snippet = line.replace('- **Snippet:**', '').trim();
+                if (snippet.startsWith('`') && snippet.endsWith('`')) {
+                    snippet = snippet.slice(1, -1);
+                }
+                currentOp.entry.snippet = snippet;
             }
         }
     }
@@ -237,12 +241,125 @@ const BOLD = '\x1b[1m';
 const RESET = '\x1b[0m';
 
 // ---------------------------------------------------------------------------
+// Category → meta tag mapping (mirrors generator's CATEGORY_TO_META)
+// ---------------------------------------------------------------------------
+
+const CATEGORY_TO_META: Record<string, string> = {
+    'Comparison Query Operators': 'META_QUERY_COMPARISON',
+    'Logical Query Operators': 'META_QUERY_LOGICAL',
+    'Element Query Operators': 'META_QUERY_ELEMENT',
+    'Evaluation Query Operators': 'META_QUERY_EVALUATION',
+    'Geospatial Operators': 'META_QUERY_GEOSPATIAL',
+    'Array Query Operators': 'META_QUERY_ARRAY',
+    'Bitwise Query Operators': 'META_QUERY_BITWISE',
+    'Projection Operators': 'META_QUERY_PROJECTION',
+    'Miscellaneous Query Operators': 'META_QUERY_MISC',
+    'Field Update Operators': 'META_UPDATE_FIELD',
+    'Array Update Operators': 'META_UPDATE_ARRAY',
+    'Bitwise Update Operators': 'META_UPDATE_BITWISE',
+    'Arithmetic Expression Operators': 'META_EXPR_ARITH',
+    'Array Expression Operators': 'META_EXPR_ARRAY',
+    'Bitwise Operators': 'META_EXPR_BITWISE',
+    'Boolean Expression Operators': 'META_EXPR_BOOL',
+    'Comparison Expression Operators': 'META_EXPR_COMPARISON',
+    'Data Size Operators': 'META_EXPR_DATASIZE',
+    'Date Expression Operators': 'META_EXPR_DATE',
+    'Literal Expression Operator': 'META_EXPR_LITERAL',
+    'Miscellaneous Operators': 'META_EXPR_MISC',
+    'Object Expression Operators': 'META_EXPR_OBJECT',
+    'Set Expression Operators': 'META_EXPR_SET',
+    'String Expression Operators': 'META_EXPR_STRING',
+    'Timestamp Expression Operators': 'META_EXPR_TIMESTAMP',
+    'Trigonometry Expression Operators': 'META_EXPR_TRIG',
+    'Type Expression Operators': 'META_EXPR_TYPE',
+    'Accumulators ($group, $bucket, $bucketAuto, $setWindowFields)': 'META_ACCUMULATOR',
+    'Accumulators (in Other Stages)': 'META_ACCUMULATOR',
+    Accumulators: 'META_ACCUMULATOR',
+    'Variable Expression Operators': 'META_EXPR_VARIABLE',
+    'Window Operators': 'META_WINDOW',
+    'Conditional Expression Operators': 'META_EXPR_CONDITIONAL',
+    'Aggregation Pipeline Stages': 'META_STAGE',
+    'Variables in Aggregation Expressions': 'META_VARIABLE',
+};
+
+// ---------------------------------------------------------------------------
+// Snippet file parser
+// ---------------------------------------------------------------------------
+
+function parseSnippetsFile(content: string): Map<string, Map<string, string>> {
+    const lines = content.split('\n');
+    const result = new Map<string, Map<string, string>>();
+
+    let currentMeta = '';
+    let currentOp = '';
+    let inCodeBlock = false;
+
+    for (const line of lines) {
+        if (line.startsWith('```')) {
+            inCodeBlock = !inCodeBlock;
+            continue;
+        }
+        if (inCodeBlock) continue;
+
+        const h2 = line.match(/^## (.+)$/);
+        if (h2) {
+            const cat = h2[1].trim();
+            const meta = CATEGORY_TO_META[cat];
+            if (meta) {
+                currentMeta = meta;
+                if (!result.has(currentMeta)) {
+                    result.set(currentMeta, new Map());
+                }
+            } else {
+                currentMeta = '';
+            }
+            currentOp = '';
+            continue;
+        }
+
+        const h3 = line.match(/^### (.+)$/);
+        if (h3 && currentMeta) {
+            currentOp = h3[1].trim();
+            continue;
+        }
+
+        if (currentMeta && currentOp && line.startsWith('- **Snippet:**')) {
+            let snippet = line.replace('- **Snippet:**', '').trim();
+            if (snippet.startsWith('`') && snippet.endsWith('`')) {
+                snippet = snippet.slice(1, -1);
+            }
+            if (snippet) {
+                result.get(currentMeta)!.set(currentOp, snippet);
+            }
+            continue;
+        }
+    }
+
+    return result;
+}
+
+function operatorHasSnippet(
+    snippets: Map<string, Map<string, string>>,
+    meta: string,
+    operatorValue: string,
+    overrideSnippet: string | undefined,
+): boolean {
+    if (overrideSnippet) return true;
+    const catSnippets = snippets.get(meta);
+    if (!catSnippets) return false;
+    if (catSnippets.has(operatorValue)) return true;
+    if (catSnippets.has('DEFAULT')) return true;
+    return false;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 function main(): void {
-    const dumpPath = path.join(__dirname, '..', 'resources', 'operator-reference-scraped.md');
-    const overridePath = path.join(__dirname, '..', 'resources', 'operator-reference-overrides.md');
+    const dumpPath = path.join(__dirname, '..', 'resources', 'scraped', 'operator-reference.md');
+    const overridePath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-overrides.md');
+    const snippetsPath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-snippets.md');
 
     if (!fs.existsSync(dumpPath)) {
         console.error(`❌ Scraped dump not found: ${dumpPath}`);
@@ -361,7 +478,49 @@ function main(): void {
     }
 
     // -----------------------------------------------------------------------
-    // Section 4: Summary
+    // Section 4: Snippet coverage
+    // -----------------------------------------------------------------------
+    let snippets = new Map<string, Map<string, string>>();
+    if (fs.existsSync(snippetsPath)) {
+        const snippetsContent = fs.readFileSync(snippetsPath, 'utf-8');
+        snippets = parseSnippetsFile(snippetsContent);
+    }
+
+    const withSnippet: ParsedEntry[] = [];
+    const withoutSnippet: ParsedEntry[] = [];
+
+    for (const entry of dumpEntries) {
+        const meta = CATEGORY_TO_META[entry.category];
+        if (!meta) {
+            withoutSnippet.push(entry);
+            continue;
+        }
+        const match = findOverride(overrides, entry.value, entry.category, dumpCategories);
+        const overrideSnippet = match?.override.snippet;
+        if (operatorHasSnippet(snippets, meta, entry.value, overrideSnippet)) {
+            withSnippet.push(entry);
+        } else {
+            withoutSnippet.push(entry);
+        }
+    }
+
+    console.log(`${BOLD}${CYAN}═══ SNIPPET COVERAGE (${withSnippet.length}/${dumpEntries.length}) ═══${RESET}`);
+    if (withoutSnippet.length === 0) {
+        console.log(`  ${GREEN}✅ All operators have snippet templates.${RESET}\n`);
+    } else {
+        console.log(`  ${DIM}Operators without snippet templates (by category):${RESET}\n`);
+        const byCategory = groupByCategory(withoutSnippet);
+        for (const [cat, ops] of byCategory) {
+            console.log(`  ${CYAN}${cat}${RESET}`);
+            for (const op of ops) {
+                console.log(`    ${DIM}—${RESET}  ${op.value}`);
+            }
+        }
+        console.log('');
+    }
+
+    // -----------------------------------------------------------------------
+    // Section 5: Summary
     // -----------------------------------------------------------------------
     console.log(`${BOLD}═══ SUMMARY ═══${RESET}`);
     console.log(`  Total scraped operators:    ${dumpEntries.length}`);
@@ -370,7 +529,10 @@ function main(): void {
     console.log(`  Potentially redundant:      ${YELLOW}${redundantOverrides.length}${RESET}`);
     console.log(`  ${RED}Gaps remaining:${RESET}             ${gaps.length}`);
     console.log(`  Total overrides in file:    ${totalOverrideCount}`);
-    console.log(`  Coverage:                   ${((1 - gaps.length / dumpEntries.length) * 100).toFixed(1)}%`);
+    console.log(`  With snippet template:      ${withSnippet.length}`);
+    console.log(`  Without snippet:            ${withoutSnippet.length}`);
+    console.log(`  Description coverage:       ${((1 - gaps.length / dumpEntries.length) * 100).toFixed(1)}%`);
+    console.log(`  Snippet coverage:           ${((withSnippet.length / dumpEntries.length) * 100).toFixed(1)}%`);
 }
 
 // ---------------------------------------------------------------------------

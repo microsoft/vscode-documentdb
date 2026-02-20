@@ -7,7 +7,7 @@
  * scrape-operator-docs.ts
  *
  * Scrapes the DocumentDB compatibility page and per-operator documentation
- * to generate the resources/operator-reference-scraped.md dump file.
+ * to generate the resources/scraped/operator-reference.md dump file.
  *
  * Usage:
  *   npx ts-node packages/documentdb-constants/scripts/scrape-operator-docs.ts
@@ -919,15 +919,15 @@ async function main(): Promise<void> {
     console.log('');
 
     // Phase 3: Generate dump
-    console.log('  Phase 3: Generating operator-reference-scraped.md...');
+    console.log('  Phase 3: Generating scraped/operator-reference.md...');
     const dump = generateDump(operators);
 
-    const outputDir = path.join(__dirname, '..', 'resources');
+    const outputDir = path.join(__dirname, '..', 'resources', 'scraped');
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    const outputPath = path.join(outputDir, 'operator-reference-scraped.md');
+    const outputPath = path.join(outputDir, 'operator-reference.md');
     fs.writeFileSync(outputPath, dump, 'utf-8');
 
     console.log(`  Written to: ${outputPath}`);

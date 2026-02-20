@@ -1,7 +1,7 @@
 # DocumentDB Operator Reference — Overrides
 
 <!-- MANUALLY MAINTAINED -->
-<!-- This file provides overrides for operator-reference-scraped.md.            -->
+<!-- This file provides overrides for scraped/operator-reference.md.            -->
 <!-- The generator (scripts/generate-from-reference.ts) merges these on top of -->
 <!-- the scraped data. Any field specified here wins over the scraped value. -->
 <!--                                                                           -->
@@ -11,7 +11,7 @@
 <!--   2. Replace a scraped description with a better hand-written one.        -->
 <!--   3. Add or override snippets for specific operators.                     -->
 <!--                                                                           -->
-<!-- Format: same as operator-reference-scraped.md                             -->
+<!-- Format: same as scraped/operator-reference.md                             -->
 <!--   ## Category Name         (must match a category in the dump exactly)    -->
 <!--   ### $operatorName         (must match an operator in that category)     -->
 <!--   - **Description:** ...   (overrides description)                        -->

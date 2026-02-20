@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Parses the operator-reference-scraped.md dump file into structured data
+ * Parses the scraped/operator-reference.md dump file into structured data
  * for use in the operatorReference verification test.
  *
  * The dump format uses structured headings:
@@ -54,7 +54,7 @@ export interface ParsedReference {
 }
 
 /**
- * Parses the operator-reference-scraped.md content into structured data.
+ * Parses the scraped/operator-reference.md content into structured data.
  *
  * @param content - the full Markdown content of the dump file
  * @returns parsed reference data

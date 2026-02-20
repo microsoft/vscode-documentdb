@@ -7,7 +7,7 @@
  * Dump-vs-implementation verification test.
  *
  * Ensures the TypeScript operator implementation always matches the
- * resource dump (operator-reference-scraped.md). This test is the
+ * resource dump (scraped/operator-reference.md). This test is the
  * enforcing contract between "what does DocumentDB support?" (the dump)
  * and "what does our code provide?" (the implementation).
  *
@@ -19,7 +19,7 @@ import * as path from 'path';
 import { getAllCompletions } from './index';
 import { parseOperatorReference, type ReferenceOperator } from './parseOperatorReference';
 
-const dumpPath = path.join(__dirname, '..', 'resources', 'operator-reference-scraped.md');
+const dumpPath = path.join(__dirname, '..', 'resources', 'scraped', 'operator-reference.md');
 const dumpContent = fs.readFileSync(dumpPath, 'utf-8');
 const parsed = parseOperatorReference(dumpContent);
 const referenceOperators = parsed.operators;
@@ -174,7 +174,7 @@ describe('operator reference verification', () => {
 //   - The override file is accidentally truncated
 // ---------------------------------------------------------------------------
 
-const overridesPath = path.join(__dirname, '..', 'resources', 'operator-reference-overrides.md');
+const overridesPath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-overrides.md');
 const overridesContent = fs.readFileSync(overridesPath, 'utf-8');
 const parsedOverrides = parseOperatorReference(overridesContent);
 const overrideOperators = parsedOverrides.operators;
