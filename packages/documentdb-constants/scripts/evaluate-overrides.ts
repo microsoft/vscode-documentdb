@@ -182,22 +182,41 @@ function saveOverride(
 // Lookup helpers
 // ---------------------------------------------------------------------------
 
-/** Find an override for an operator, checking both exact category match and cross-category fallback. */
+/**
+ * Find an override for a dump entry, mirroring how the generator resolves overrides.
+ *
+ * The generator's `applyOverrides` iterates override categories:
+ *   1. If the override category exists in the dump, it looks for the operator in that exact category.
+ *   2. If the override category does NOT exist in the dump, it falls back to cross-category search.
+ *
+ * So for a dump entry (operatorValue, category), an override matches only if:
+ *   (a) The override is in the same category as the dump entry (exact match), OR
+ *   (b) The override is in a category that doesn't exist in the dump at all, and no
+ *       earlier dump category already claimed this operator via cross-category fallback.
+ *
+ * We pass `dumpCategories` (all category names in the dump) to distinguish (a) from (b).
+ */
 function findOverride(
     overrides: Map<string, Map<string, OverrideEntry>>,
     operatorValue: string,
     category: string,
+    dumpCategories: Set<string>,
 ): { override: OverrideEntry; overrideCategory: string } | undefined {
-    // Exact category match first
+    // Exact category match: override category === dump entry category
     const catOverrides = overrides.get(category);
     if (catOverrides) {
         const entry = catOverrides.get(operatorValue);
         if (entry) return { override: entry, overrideCategory: category };
     }
 
-    // Cross-category fallback
+    // Cross-category fallback: only if override category doesn't exist in the dump.
+    // This mirrors the generator, which only enters the cross-category path when
+    // `categorizedOps.get(category)` returns undefined.
     for (const [overrideCat, opMap] of overrides) {
         if (overrideCat === category) continue;
+        // If this override category exists in the dump, the generator would do an
+        // exact-category-only lookup there — it would NOT spill into other categories.
+        if (dumpCategories.has(overrideCat)) continue;
         const entry = opMap.get(operatorValue);
         if (entry) return { override: entry, overrideCategory: overrideCat };
     }
@@ -252,8 +271,11 @@ function main(): void {
     const redundantOverrides: { entry: ParsedEntry; override: OverrideEntry; overrideCategory: string }[] = [];
     const descriptionsOk: ParsedEntry[] = [];
 
+    // Collect all dump category names so findOverride can distinguish exact vs cross-category
+    const dumpCategories = new Set(dumpEntries.map((e) => e.category));
+
     for (const entry of dumpEntries) {
-        const match = findOverride(overrides, entry.value, entry.category);
+        const match = findOverride(overrides, entry.value, entry.category, dumpCategories);
         const hasScrapedDescription = entry.description.trim().length > 0;
 
         if (match) {
