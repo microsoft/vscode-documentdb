@@ -12,10 +12,10 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
-import { type OperatorEntry } from './types';
-import { META_WINDOW } from './metaTags';
 import { getDocLink } from './docLinks';
 import { registerOperators } from './getFilteredCompletions';
+import { META_WINDOW } from './metaTags';
+import { type OperatorEntry } from './types';
 
 // ---------------------------------------------------------------------------
 // Window Operators
@@ -39,14 +39,16 @@ const windowOperators: readonly OperatorEntry[] = [
     {
         value: '$addToSet',
         meta: META_WINDOW,
-        description: 'The addToSet operator adds elements to an array if they don\'t already exist, while ensuring uniqueness of elements within the set.',
+        description:
+            "The addToSet operator adds elements to an array if they don't already exist, while ensuring uniqueness of elements within the set.",
         snippet: '{ $addToSet: "${1:\\$field}" }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$addtoset', // inferred from another category
     },
     {
         value: '$count',
         meta: META_WINDOW,
-        description: 'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
+        description:
+            'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
         snippet: '{ $count: "${1:\\$field}" }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$count', // inferred from another category
     },
@@ -81,7 +83,8 @@ const windowOperators: readonly OperatorEntry[] = [
     {
         value: '$bottom',
         meta: META_WINDOW,
-        description: 'The $bottom operator returns the last document from the query\'s result set sorted by one or more fields',
+        description:
+            "The $bottom operator returns the last document from the query's result set sorted by one or more fields",
         snippet: '{ $bottom: "${1:\\$field}" }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$bottom', // inferred from another category
     },
@@ -109,42 +112,47 @@ const windowOperators: readonly OperatorEntry[] = [
     {
         value: '$denseRank',
         meta: META_WINDOW,
-        description: 'The $denseRank operator assigns and returns a positional ranking for each document within a partition based on a specified sort order',
+        description:
+            'The $denseRank operator assigns and returns a positional ranking for each document within a partition based on a specified sort order',
         snippet: '{ $denseRank: {} }',
         link: getDocLink('$denseRank', META_WINDOW),
     },
     {
         value: '$derivative',
         meta: META_WINDOW,
-        description: 'The $derivative operator calculates the average rate of change of the value of a field within a specified window.',
+        description:
+            'The $derivative operator calculates the average rate of change of the value of a field within a specified window.',
         snippet: '{ $derivative: { input: "${1:\\$field}", unit: "${2:hour}" } }',
         link: getDocLink('$derivative', META_WINDOW),
     },
     {
         value: '$documentNumber',
         meta: META_WINDOW,
-        description: 'The $documentNumber operator assigns and returns a position for each document within a partition based on a specified sort order',
+        description:
+            'The $documentNumber operator assigns and returns a position for each document within a partition based on a specified sort order',
         snippet: '{ $documentNumber: {} }',
         link: getDocLink('$documentNumber', META_WINDOW),
     },
     {
         value: '$expMovingAvg',
         meta: META_WINDOW,
-        description: 'The $expMovingAvg operator calculates the moving average of a field based on the specified number of documents to hold the highest weight',
+        description:
+            'The $expMovingAvg operator calculates the moving average of a field based on the specified number of documents to hold the highest weight',
         snippet: '{ $expMovingAvg: { input: "${1:\\$field}", N: ${2:number} } }',
         link: getDocLink('$expMovingAvg', META_WINDOW),
     },
     {
         value: '$first',
         meta: META_WINDOW,
-        description: 'The $first operator returns the first value in a group according to the group\'s sorting order.',
+        description: "The $first operator returns the first value in a group according to the group's sorting order.",
         snippet: '{ $first: "${1:\\$field}" }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$first', // inferred from another category
     },
     {
         value: '$integral',
         meta: META_WINDOW,
-        description: 'The $integral operator calculates the area under a curve with the specified range of documents forming the adjacent documents for the calculation.',
+        description:
+            'The $integral operator calculates the area under a curve with the specified range of documents forming the adjacent documents for the calculation.',
         snippet: '{ $integral: { input: "${1:\\$field}", unit: "${2:hour}" } }',
         link: getDocLink('$integral', META_WINDOW),
     },
@@ -158,14 +166,16 @@ const windowOperators: readonly OperatorEntry[] = [
     {
         value: '$linearFill',
         meta: META_WINDOW,
-        description: 'The $linearFill operator interpolates missing values in a sequence of documents using linear interpolation.',
+        description:
+            'The $linearFill operator interpolates missing values in a sequence of documents using linear interpolation.',
         snippet: '{ $linearFill: "${1:\\$field}" }',
         link: getDocLink('$linearFill', META_WINDOW),
     },
     {
         value: '$locf',
         meta: META_WINDOW,
-        description: 'The $locf operator propagates the last observed non-null value forward within a partition in a windowed query.',
+        description:
+            'The $locf operator propagates the last observed non-null value forward within a partition in a windowed query.',
         snippet: '{ $locf: "${1:\\$field}" }',
         link: getDocLink('$locf', META_WINDOW),
     },
@@ -193,7 +203,8 @@ const windowOperators: readonly OperatorEntry[] = [
     {
         value: '$stdDevSamp',
         meta: META_WINDOW,
-        description: 'The $stddevsamp operator calculates the standard deviation of a specified sample of values and not the entire population',
+        description:
+            'The $stddevsamp operator calculates the standard deviation of a specified sample of values and not the entire population',
         snippet: '{ $stdDevSamp: "${1:\\$field}" }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$stddevsamp', // inferred from another category
     },
@@ -217,6 +228,4 @@ const windowOperators: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([
-    ...windowOperators,
-]);
+registerOperators([...windowOperators]);

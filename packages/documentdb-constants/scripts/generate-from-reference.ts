@@ -32,6 +32,7 @@
  *         files instead.
  */
 
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getDocLink } from '../src/docLinks';
@@ -824,6 +825,13 @@ function main(): void {
         const fileContent = generateFileContent(specs, snippetsMap);
         fs.writeFileSync(filePath, fileContent, 'utf-8');
     }
+
+    // Format generated files with Prettier
+    const generatedFiles = [...fileGroups.keys()].map((f) => path.join(srcDir, `${f}.ts`));
+    console.log('\n🎨 Formatting generated files with Prettier...');
+    execSync(`npx prettier --write ${generatedFiles.map((f) => `"${f}"`).join(' ')}`, {
+        stdio: 'inherit',
+    });
 
     console.log('\n✅ Done! Generated files:');
     for (const [fileName, specs] of fileGroups) {

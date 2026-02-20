@@ -12,8 +12,10 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
-import { type OperatorEntry } from './types';
-import { META_EXPR_ARITH,
+import { getDocLink } from './docLinks';
+import { registerOperators } from './getFilteredCompletions';
+import {
+    META_EXPR_ARITH,
     META_EXPR_ARRAY,
     META_EXPR_BITWISE,
     META_EXPR_BOOL,
@@ -29,9 +31,9 @@ import { META_EXPR_ARITH,
     META_EXPR_TIMESTAMP,
     META_EXPR_TRIG,
     META_EXPR_TYPE,
-    META_EXPR_VARIABLE } from './metaTags';
-import { getDocLink } from './docLinks';
-import { registerOperators } from './getFilteredCompletions';
+    META_EXPR_VARIABLE,
+} from './metaTags';
+import { type OperatorEntry } from './types';
 
 // ---------------------------------------------------------------------------
 // Arithmetic Expression Operators
@@ -104,7 +106,8 @@ const arithmeticExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$mod',
         meta: META_EXPR_ARITH,
-        description: 'The $mod operator performs a modulo operation on the value of a field and selects documents with a specified result.',
+        description:
+            'The $mod operator performs a modulo operation on the value of a field and selects documents with a specified result.',
         snippet: '{ $mod: ["${1:\\$field1}", "${2:\\$field2}"] }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/evaluation-query/$mod', // inferred from another category
     },
@@ -118,7 +121,8 @@ const arithmeticExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$pow',
         meta: META_EXPR_ARITH,
-        description: 'The `$pow` operator calculates the value of a numerical value raised to the power of a specified exponent.',
+        description:
+            'The `$pow` operator calculates the value of a numerical value raised to the power of a specified exponent.',
         snippet: '{ $pow: ["${1:\\$field1}", "${2:\\$field2}"] }',
         link: getDocLink('$pow', META_EXPR_ARITH),
     },
@@ -151,7 +155,6 @@ const arithmeticExpressionOperators: readonly OperatorEntry[] = [
         link: getDocLink('$trunc', META_EXPR_ARITH),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Array Expression Operators
@@ -189,7 +192,8 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$firstN',
         meta: META_EXPR_ARRAY,
-        description: 'The $firstN operator sorts documents on one or more fields specified by the query and returns the first N document matching the filtering criteria',
+        description:
+            'The $firstN operator sorts documents on one or more fields specified by the query and returns the first N document matching the filtering criteria',
         snippet: '{ $firstN: { input: "${1:\\$array}", n: ${2:number} } }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$firstn', // inferred from another category
     },
@@ -203,7 +207,8 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$indexOfArray',
         meta: META_EXPR_ARRAY,
-        description: 'The $indexOfArray operator is used to search for an element in an array and return the index of the first occurrence of the element.',
+        description:
+            'The $indexOfArray operator is used to search for an element in an array and return the index of the first occurrence of the element.',
         snippet: '{ $indexOfArray: ["${1:\\$array}", "${2:value}"] }',
         link: getDocLink('$indexOfArray', META_EXPR_ARRAY),
     },
@@ -259,7 +264,8 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$reduce',
         meta: META_EXPR_ARRAY,
-        description: 'The $reduce operator applies an expression to each element in an array & accumulate result as single value.',
+        description:
+            'The $reduce operator applies an expression to each element in an array & accumulate result as single value.',
         snippet: '{ $reduce: { input: "${1:\\$array}", initialValue: ${2:0}, in: { ${3:expression} } } }',
         link: getDocLink('$reduce', META_EXPR_ARRAY),
     },
@@ -273,7 +279,8 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$size',
         meta: META_EXPR_ARRAY,
-        description: 'The $size operator is used to query documents where an array field has a specified number of elements.',
+        description:
+            'The $size operator is used to query documents where an array field has a specified number of elements.',
         snippet: '{ $size: "${1:\\$array}" }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-query/$size', // inferred from another category
     },
@@ -300,7 +307,6 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
     },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Bitwise Operators
 // ---------------------------------------------------------------------------
@@ -309,21 +315,24 @@ const bitwiseOperators: readonly OperatorEntry[] = [
     {
         value: '$bitAnd',
         meta: META_EXPR_BITWISE,
-        description: 'The $bitAnd operator performs a bitwise AND operation on integer values and returns the result as an integer.',
+        description:
+            'The $bitAnd operator performs a bitwise AND operation on integer values and returns the result as an integer.',
         snippet: '{ $bitAnd: [${1:value1}, ${2:value2}] }',
         link: getDocLink('$bitAnd', META_EXPR_BITWISE),
     },
     {
         value: '$bitNot',
         meta: META_EXPR_BITWISE,
-        description: 'The $bitNot operator performs a bitwise NOT operation on integer values and returns the result as an integer.',
+        description:
+            'The $bitNot operator performs a bitwise NOT operation on integer values and returns the result as an integer.',
         snippet: '{ $bitNot: "${1:\\$field}" }',
         link: getDocLink('$bitNot', META_EXPR_BITWISE),
     },
     {
         value: '$bitOr',
         meta: META_EXPR_BITWISE,
-        description: 'The $bitOr operator performs a bitwise OR operation on integer values and returns the result as an integer.',
+        description:
+            'The $bitOr operator performs a bitwise OR operation on integer values and returns the result as an integer.',
         snippet: '{ $bitOr: [${1:value1}, ${2:value2}] }',
         link: getDocLink('$bitOr', META_EXPR_BITWISE),
     },
@@ -336,7 +345,6 @@ const bitwiseOperators: readonly OperatorEntry[] = [
     },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Boolean Expression Operators
 // ---------------------------------------------------------------------------
@@ -345,26 +353,28 @@ const booleanExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$and',
         meta: META_EXPR_BOOL,
-        description: 'The $and operator joins multiple query clauses and returns documents that match all specified conditions.',
+        description:
+            'The $and operator joins multiple query clauses and returns documents that match all specified conditions.',
         snippet: '{ $and: ["${1:expression1}", "${2:expression2}"] }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/logical-query/$and', // inferred from another category
     },
     {
         value: '$not',
         meta: META_EXPR_BOOL,
-        description: 'The $not operator performs a logical NOT operation on a specified expression, selecting documents that don\'t match the expression.',
+        description:
+            "The $not operator performs a logical NOT operation on a specified expression, selecting documents that don't match the expression.",
         snippet: '{ $not: ["${1:expression}"] }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/logical-query/$not', // inferred from another category
     },
     {
         value: '$or',
         meta: META_EXPR_BOOL,
-        description: 'The $or operator joins query clauses with a logical OR and returns documents that match at least one of the specified conditions.',
+        description:
+            'The $or operator joins query clauses with a logical OR and returns documents that match at least one of the specified conditions.',
         snippet: '{ $or: ["${1:expression1}", "${2:expression2}"] }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/logical-query/$or', // inferred from another category
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Comparison Expression Operators
@@ -388,14 +398,16 @@ const comparisonExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$gt',
         meta: META_EXPR_COMPARISON,
-        description: 'The $gt query operator retrieves documents where the value of a field is greater than a specified value',
+        description:
+            'The $gt query operator retrieves documents where the value of a field is greater than a specified value',
         snippet: '{ $gt: ["${1:\\$field1}", "${2:\\$field2}"] }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$gt', // inferred from another category
     },
     {
         value: '$gte',
         meta: META_EXPR_COMPARISON,
-        description: 'The $gte operator retrieves documents where the value of a field is greater than or equal to a specified value',
+        description:
+            'The $gte operator retrieves documents where the value of a field is greater than or equal to a specified value',
         snippet: '{ $gte: ["${1:\\$field1}", "${2:\\$field2}"] }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$gte', // inferred from another category
     },
@@ -409,19 +421,19 @@ const comparisonExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$lte',
         meta: META_EXPR_COMPARISON,
-        description: 'The $lte operator retrieves documents where the value of a field is less than or equal to a specified value',
+        description:
+            'The $lte operator retrieves documents where the value of a field is less than or equal to a specified value',
         snippet: '{ $lte: ["${1:\\$field1}", "${2:\\$field2}"] }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$lte', // inferred from another category
     },
     {
         value: '$ne',
         meta: META_EXPR_COMPARISON,
-        description: 'The $ne operator retrieves documents where the value of a field doesn\'t equal a specified value',
+        description: "The $ne operator retrieves documents where the value of a field doesn't equal a specified value",
         snippet: '{ $ne: ["${1:\\$field1}", "${2:\\$field2}"] }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$ne', // inferred from another category
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Data Size Operators
@@ -444,7 +456,6 @@ const dataSizeOperators: readonly OperatorEntry[] = [
     },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Date Expression Operators
 // ---------------------------------------------------------------------------
@@ -460,7 +471,8 @@ const dateExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$dateDiff',
         meta: META_EXPR_DATE,
-        description: 'The $dateDiff operator calculates the difference between two dates in various units such as years, months, days, etc.',
+        description:
+            'The $dateDiff operator calculates the difference between two dates in various units such as years, months, days, etc.',
         snippet: '{ $dateDiff: { startDate: "${1:\\$startDate}", endDate: "${2:\\$endDate}", unit: "${3:day}" } }',
         link: getDocLink('$dateDiff', META_EXPR_DATE),
     },
@@ -488,7 +500,8 @@ const dateExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$dateToParts',
         meta: META_EXPR_DATE,
-        description: 'The $dateToParts operator decomposes a date into its individual parts such as year, month, day, and more.',
+        description:
+            'The $dateToParts operator decomposes a date into its individual parts such as year, month, day, and more.',
         snippet: '{ $dateToParts: { date: "${1:\\$dateField}" } }',
         link: getDocLink('$dateToParts', META_EXPR_DATE),
     },
@@ -537,21 +550,24 @@ const dateExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$isoDayOfWeek',
         meta: META_EXPR_DATE,
-        description: 'The $isoDayOfWeek operator returns the weekday number in ISO 8601 format, ranging from 1 (Monday) to 7 (Sunday).',
+        description:
+            'The $isoDayOfWeek operator returns the weekday number in ISO 8601 format, ranging from 1 (Monday) to 7 (Sunday).',
         snippet: '{ $isoDayOfWeek: "${1:\\$dateField}" }',
         link: getDocLink('$isoDayOfWeek', META_EXPR_DATE),
     },
     {
         value: '$isoWeek',
         meta: META_EXPR_DATE,
-        description: 'The $isoWeek operator returns the week number of the year in ISO 8601 format, ranging from 1 to 53.',
+        description:
+            'The $isoWeek operator returns the week number of the year in ISO 8601 format, ranging from 1 to 53.',
         snippet: '{ $isoWeek: "${1:\\$dateField}" }',
         link: getDocLink('$isoWeek', META_EXPR_DATE),
     },
     {
         value: '$isoWeekYear',
         meta: META_EXPR_DATE,
-        description: 'The $isoWeekYear operator returns the year number in ISO 8601 format, which can differ from the calendar year for dates at the beginning or end of the year.',
+        description:
+            'The $isoWeekYear operator returns the year number in ISO 8601 format, which can differ from the calendar year for dates at the beginning or end of the year.',
         snippet: '{ $isoWeekYear: "${1:\\$dateField}" }',
         link: getDocLink('$isoWeekYear', META_EXPR_DATE),
     },
@@ -606,7 +622,6 @@ const dateExpressionOperators: readonly OperatorEntry[] = [
     },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Literal Expression Operator
 // ---------------------------------------------------------------------------
@@ -615,12 +630,12 @@ const literalExpressionOperator: readonly OperatorEntry[] = [
     {
         value: '$literal',
         meta: META_EXPR_LITERAL,
-        description: 'The $literal operator returns the specified value without parsing it as an expression, allowing literal values to be used in aggregation pipelines.',
+        description:
+            'The $literal operator returns the specified value without parsing it as an expression, allowing literal values to be used in aggregation pipelines.',
         snippet: '{ $literal: ${1:value} }',
         link: getDocLink('$literal', META_EXPR_LITERAL),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Miscellaneous Operators
@@ -644,12 +659,12 @@ const miscellaneousOperators: readonly OperatorEntry[] = [
     {
         value: '$sampleRate',
         meta: META_EXPR_MISC,
-        description: 'The $sampleRate operator randomly samples documents from a collection based on a specified probability rate, useful for statistical analysis and testing.',
+        description:
+            'The $sampleRate operator randomly samples documents from a collection based on a specified probability rate, useful for statistical analysis and testing.',
         snippet: '{ $sampleRate: ${1:0.5} }',
         link: getDocLink('$sampleRate', META_EXPR_MISC),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Object Expression Operators
@@ -666,7 +681,8 @@ const objectExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$objectToArray',
         meta: META_EXPR_OBJECT,
-        description: 'The objectToArray command is used to transform a document (object) into an array of key-value pairs.',
+        description:
+            'The objectToArray command is used to transform a document (object) into an array of key-value pairs.',
         snippet: '{ $objectToArray: "${1:\\$object}" }',
         link: getDocLink('$objectToArray', META_EXPR_OBJECT),
     },
@@ -678,7 +694,6 @@ const objectExpressionOperators: readonly OperatorEntry[] = [
         link: getDocLink('$setField', META_EXPR_OBJECT),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Set Expression Operators
@@ -695,14 +710,16 @@ const setExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$anyElementTrue',
         meta: META_EXPR_SET,
-        description: 'The $anyElementTrue operator returns true if any element in an array evaluates to a value of true.',
+        description:
+            'The $anyElementTrue operator returns true if any element in an array evaluates to a value of true.',
         snippet: '{ $anyElementTrue: ["${1:\\$array}"] }',
         link: getDocLink('$anyElementTrue', META_EXPR_SET),
     },
     {
         value: '$setDifference',
         meta: META_EXPR_SET,
-        description: 'The $setDifference operator returns a set with elements that exist in one set but not in a second set.',
+        description:
+            'The $setDifference operator returns a set with elements that exist in one set but not in a second set.',
         snippet: '{ $setDifference: ["${1:\\$set1}", "${2:\\$set2}"] }',
         link: getDocLink('$setDifference', META_EXPR_SET),
     },
@@ -730,12 +747,12 @@ const setExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$setUnion',
         meta: META_EXPR_SET,
-        description: 'The $setUnion operator returns an array that contains all the unique elements from the input arrays.',
+        description:
+            'The $setUnion operator returns an array that contains all the unique elements from the input arrays.',
         snippet: '{ $setUnion: ["${1:\\$set1}", "${2:\\$set2}"] }',
         link: getDocLink('$setUnion', META_EXPR_SET),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // String Expression Operators
@@ -843,19 +860,22 @@ const stringExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$substr',
         meta: META_EXPR_STRING,
-        description: 'Returns a substring of a string, starting at a specified index for a specified length. Deprecated — use $substrBytes or $substrCP.',
+        description:
+            'Returns a substring of a string, starting at a specified index for a specified length. Deprecated — use $substrBytes or $substrCP.',
         snippet: '{ $substr: ["${1:\\$string}", ${2:start}, ${3:length}] }',
     },
     {
         value: '$substrBytes',
         meta: META_EXPR_STRING,
-        description: 'Returns a substring of a string by byte index, starting at a specified index for a specified number of bytes.',
+        description:
+            'Returns a substring of a string by byte index, starting at a specified index for a specified number of bytes.',
         snippet: '{ $substrBytes: ["${1:\\$string}", ${2:start}, ${3:length}] }',
     },
     {
         value: '$substrCP',
         meta: META_EXPR_STRING,
-        description: 'Returns a substring of a string by code point index, starting at a specified index for a specified number of code points.',
+        description:
+            'Returns a substring of a string by code point index, starting at a specified index for a specified number of code points.',
         snippet: '{ $substrCP: ["${1:\\$string}", ${2:start}, ${3:length}] }',
     },
     {
@@ -885,7 +905,6 @@ const stringExpressionOperators: readonly OperatorEntry[] = [
     },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Timestamp Expression Operators
 // ---------------------------------------------------------------------------
@@ -906,7 +925,6 @@ const timestampExpressionOperators: readonly OperatorEntry[] = [
         link: getDocLink('$tsSecond', META_EXPR_TIMESTAMP),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Trigonometry Expression Operators
@@ -1005,7 +1023,6 @@ const trigonometryExpressionOperators: readonly OperatorEntry[] = [
     },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Type Expression Operators
 // ---------------------------------------------------------------------------
@@ -1090,7 +1107,6 @@ const typeExpressionOperators: readonly OperatorEntry[] = [
     },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Variable Expression Operators
 // ---------------------------------------------------------------------------
@@ -1099,12 +1115,12 @@ const variableExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$let',
         meta: META_EXPR_VARIABLE,
-        description: 'The $let operator allows defining variables for use in a specified expression, enabling complex calculations and reducing code repetition.',
+        description:
+            'The $let operator allows defining variables for use in a specified expression, enabling complex calculations and reducing code repetition.',
         snippet: '{ $let: { vars: { ${1:var}: ${2:expression} }, in: ${3:expression} } }',
         link: getDocLink('$let', META_EXPR_VARIABLE),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Conditional Expression Operators
@@ -1114,22 +1130,26 @@ const conditionalExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$cond',
         meta: META_EXPR_CONDITIONAL,
-        description: 'The $cond operator is used to evaluate a condition and return one of two expressions based on the result.',
+        description:
+            'The $cond operator is used to evaluate a condition and return one of two expressions based on the result.',
         snippet: '{ $cond: { if: { ${1:expression} }, then: ${2:trueValue}, else: ${3:falseValue} } }',
         link: getDocLink('$cond', META_EXPR_CONDITIONAL),
     },
     {
         value: '$ifNull',
         meta: META_EXPR_CONDITIONAL,
-        description: 'The $ifNull operator is used to evaluate an expression and return a specified value if the expression resolves to null.',
+        description:
+            'The $ifNull operator is used to evaluate an expression and return a specified value if the expression resolves to null.',
         snippet: '{ $ifNull: ["${1:\\$field}", ${2:replacement}] }',
         link: getDocLink('$ifNull', META_EXPR_CONDITIONAL),
     },
     {
         value: '$switch',
         meta: META_EXPR_CONDITIONAL,
-        description: 'The $switch operator is used to evaluate a series of conditions and return a value based on the first condition that evaluates to true.',
-        snippet: '{ $switch: { branches: [{ case: { ${1:expression} }, then: ${2:value} }], default: ${3:defaultValue} } }',
+        description:
+            'The $switch operator is used to evaluate a series of conditions and return a value based on the first condition that evaluates to true.',
+        snippet:
+            '{ $switch: { branches: [{ case: { ${1:expression} }, then: ${2:value} }], default: ${3:defaultValue} } }',
         link: getDocLink('$switch', META_EXPR_CONDITIONAL),
     },
 ];

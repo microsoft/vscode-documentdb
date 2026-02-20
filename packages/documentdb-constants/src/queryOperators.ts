@@ -12,8 +12,10 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
-import { type OperatorEntry } from './types';
-import { META_QUERY_ARRAY,
+import { getDocLink } from './docLinks';
+import { registerOperators } from './getFilteredCompletions';
+import {
+    META_QUERY_ARRAY,
     META_QUERY_BITWISE,
     META_QUERY_COMPARISON,
     META_QUERY_ELEMENT,
@@ -21,9 +23,9 @@ import { META_QUERY_ARRAY,
     META_QUERY_GEOSPATIAL,
     META_QUERY_LOGICAL,
     META_QUERY_MISC,
-    META_QUERY_PROJECTION } from './metaTags';
-import { getDocLink } from './docLinks';
-import { registerOperators } from './getFilteredCompletions';
+    META_QUERY_PROJECTION,
+} from './metaTags';
+import { type OperatorEntry } from './types';
 
 // ---------------------------------------------------------------------------
 // Comparison Query Operators
@@ -40,14 +42,16 @@ const comparisonQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$gt',
         meta: META_QUERY_COMPARISON,
-        description: 'The $gt query operator retrieves documents where the value of a field is greater than a specified value',
+        description:
+            'The $gt query operator retrieves documents where the value of a field is greater than a specified value',
         snippet: '{ $gt: ${1:value} }',
         link: getDocLink('$gt', META_QUERY_COMPARISON),
     },
     {
         value: '$gte',
         meta: META_QUERY_COMPARISON,
-        description: 'The $gte operator retrieves documents where the value of a field is greater than or equal to a specified value',
+        description:
+            'The $gte operator retrieves documents where the value of a field is greater than or equal to a specified value',
         snippet: '{ $gte: ${1:value} }',
         link: getDocLink('$gte', META_QUERY_COMPARISON),
     },
@@ -68,26 +72,26 @@ const comparisonQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$lte',
         meta: META_QUERY_COMPARISON,
-        description: 'The $lte operator retrieves documents where the value of a field is less than or equal to a specified value',
+        description:
+            'The $lte operator retrieves documents where the value of a field is less than or equal to a specified value',
         snippet: '{ $lte: ${1:value} }',
         link: getDocLink('$lte', META_QUERY_COMPARISON),
     },
     {
         value: '$ne',
         meta: META_QUERY_COMPARISON,
-        description: 'The $ne operator retrieves documents where the value of a field doesn\'t equal a specified value',
+        description: "The $ne operator retrieves documents where the value of a field doesn't equal a specified value",
         snippet: '{ $ne: ${1:value} }',
         link: getDocLink('$ne', META_QUERY_COMPARISON),
     },
     {
         value: '$nin',
         meta: META_QUERY_COMPARISON,
-        description: 'The $nin operator retrieves documents where the value of a field doesn\'t match a list of values',
+        description: "The $nin operator retrieves documents where the value of a field doesn't match a list of values",
         snippet: '{ $nin: [${1:value}] }',
         link: getDocLink('$nin', META_QUERY_COMPARISON),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Logical Query Operators
@@ -97,33 +101,36 @@ const logicalQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$and',
         meta: META_QUERY_LOGICAL,
-        description: 'The $and operator joins multiple query clauses and returns documents that match all specified conditions.',
+        description:
+            'The $and operator joins multiple query clauses and returns documents that match all specified conditions.',
         snippet: '{ $and: [{ ${1:expression} }] }',
         link: getDocLink('$and', META_QUERY_LOGICAL),
     },
     {
         value: '$not',
         meta: META_QUERY_LOGICAL,
-        description: 'The $not operator performs a logical NOT operation on a specified expression, selecting documents that don\'t match the expression.',
+        description:
+            "The $not operator performs a logical NOT operation on a specified expression, selecting documents that don't match the expression.",
         snippet: '{ $not: { ${1:expression} } }',
         link: getDocLink('$not', META_QUERY_LOGICAL),
     },
     {
         value: '$nor',
         meta: META_QUERY_LOGICAL,
-        description: 'The $nor operator performs a logical NOR on an array of expressions and retrieves documents that fail all the conditions.',
+        description:
+            'The $nor operator performs a logical NOR on an array of expressions and retrieves documents that fail all the conditions.',
         snippet: '{ $nor: [{ ${1:expression} }] }',
         link: getDocLink('$nor', META_QUERY_LOGICAL),
     },
     {
         value: '$or',
         meta: META_QUERY_LOGICAL,
-        description: 'The $or operator joins query clauses with a logical OR and returns documents that match at least one of the specified conditions.',
+        description:
+            'The $or operator joins query clauses with a logical OR and returns documents that match at least one of the specified conditions.',
         snippet: '{ $or: [{ ${1:expression} }] }',
         link: getDocLink('$or', META_QUERY_LOGICAL),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Element Query Operators
@@ -133,7 +140,8 @@ const elementQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$exists',
         meta: META_QUERY_ELEMENT,
-        description: 'The $exists operator retrieves documents that contain the specified field in their document structure.',
+        description:
+            'The $exists operator retrieves documents that contain the specified field in their document structure.',
         snippet: '{ $exists: ${1:true} }',
         link: getDocLink('$exists', META_QUERY_ELEMENT),
     },
@@ -146,7 +154,6 @@ const elementQueryOperators: readonly OperatorEntry[] = [
     },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Evaluation Query Operators
 // ---------------------------------------------------------------------------
@@ -155,28 +162,32 @@ const evaluationQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$expr',
         meta: META_QUERY_EVALUATION,
-        description: 'The $expr operator allows the use of aggregation expressions within the query language, enabling complex field comparisons and calculations.',
+        description:
+            'The $expr operator allows the use of aggregation expressions within the query language, enabling complex field comparisons and calculations.',
         snippet: '{ $expr: { ${1:expression} } }',
         link: getDocLink('$expr', META_QUERY_EVALUATION),
     },
     {
         value: '$jsonSchema',
         meta: META_QUERY_EVALUATION,
-        description: 'The $jsonSchema operator validates documents against a JSON Schema definition for data validation and structure enforcement. Discover supported features and limitations.',
+        description:
+            'The $jsonSchema operator validates documents against a JSON Schema definition for data validation and structure enforcement. Discover supported features and limitations.',
         snippet: '{ $jsonSchema: { bsonType: "${1:object}" } }',
         link: getDocLink('$jsonSchema', META_QUERY_EVALUATION),
     },
     {
         value: '$mod',
         meta: META_QUERY_EVALUATION,
-        description: 'The $mod operator performs a modulo operation on the value of a field and selects documents with a specified result.',
+        description:
+            'The $mod operator performs a modulo operation on the value of a field and selects documents with a specified result.',
         snippet: '{ $mod: [${1:divisor}, ${2:remainder}] }',
         link: getDocLink('$mod', META_QUERY_EVALUATION),
     },
     {
         value: '$regex',
         meta: META_QUERY_EVALUATION,
-        description: 'The $regex operator provides regular expression capabilities for pattern matching in queries, allowing flexible string matching and searching.',
+        description:
+            'The $regex operator provides regular expression capabilities for pattern matching in queries, allowing flexible string matching and searching.',
         snippet: '{ $regex: /${1:pattern}/ }',
         link: getDocLink('$regex', META_QUERY_EVALUATION),
         applicableBsonTypes: ['string'],
@@ -184,13 +195,13 @@ const evaluationQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$text',
         meta: META_QUERY_EVALUATION,
-        description: 'The $text operator performs text search on the content of indexed string fields, enabling full-text search capabilities.',
+        description:
+            'The $text operator performs text search on the content of indexed string fields, enabling full-text search capabilities.',
         snippet: '{ $text: { \\$search: "${1:text}" } }',
         link: getDocLink('$text', META_QUERY_EVALUATION),
         applicableBsonTypes: ['string'],
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Geospatial Operators
@@ -200,14 +211,16 @@ const geospatialOperators: readonly OperatorEntry[] = [
     {
         value: '$geoIntersects',
         meta: META_QUERY_GEOSPATIAL,
-        description: 'The $geoIntersects operator selects documents whose location field intersects with a specified GeoJSON object.',
+        description:
+            'The $geoIntersects operator selects documents whose location field intersects with a specified GeoJSON object.',
         snippet: '{ $geoIntersects: { \\$geometry: { type: "${1:GeoJSON type}", coordinates: ${2:coordinates} } } }',
         link: getDocLink('$geoIntersects', META_QUERY_GEOSPATIAL),
     },
     {
         value: '$geoWithin',
         meta: META_QUERY_GEOSPATIAL,
-        description: 'The $geoWithin operator selects documents whose location field is completely within a specified geometry.',
+        description:
+            'The $geoWithin operator selects documents whose location field is completely within a specified geometry.',
         snippet: '{ $geoWithin: { \\$geometry: { type: "${1:GeoJSON type}", coordinates: ${2:coordinates} } } }',
         link: getDocLink('$geoWithin', META_QUERY_GEOSPATIAL),
     },
@@ -242,40 +255,46 @@ const geospatialOperators: readonly OperatorEntry[] = [
     {
         value: '$maxDistance',
         meta: META_QUERY_GEOSPATIAL,
-        description: 'The $maxDistance operator specifies the maximum distance that can exist between two points in a geospatial query.',
+        description:
+            'The $maxDistance operator specifies the maximum distance that can exist between two points in a geospatial query.',
         snippet: '${1:distance}',
         link: getDocLink('$maxDistance', META_QUERY_GEOSPATIAL),
     },
     {
         value: '$minDistance',
         meta: META_QUERY_GEOSPATIAL,
-        description: 'The $minDistance operator specifies the minimum distance that must exist between two points in a geospatial query.',
+        description:
+            'The $minDistance operator specifies the minimum distance that must exist between two points in a geospatial query.',
         snippet: '${1:distance}',
         link: getDocLink('$minDistance', META_QUERY_GEOSPATIAL),
     },
     {
         value: '$polygon',
         meta: META_QUERY_GEOSPATIAL,
-        description: 'The $polygon operator defines a polygon for geospatial queries, allowing you to find locations within an irregular shape.',
+        description:
+            'The $polygon operator defines a polygon for geospatial queries, allowing you to find locations within an irregular shape.',
         snippet: '[[${1:x1}, ${2:y1}], [${3:x2}, ${4:y2}], [${5:x3}, ${6:y3}]]',
         link: getDocLink('$polygon', META_QUERY_GEOSPATIAL),
     },
     {
         value: '$near',
         meta: META_QUERY_GEOSPATIAL,
-        description: 'The $near operator returns documents with location fields that are near a specified point, sorted by distance.',
-        snippet: '{ $near: { \\$geometry: { type: "Point", coordinates: [${1:lng}, ${2:lat}] }, \\$maxDistance: ${3:distance} } }',
+        description:
+            'The $near operator returns documents with location fields that are near a specified point, sorted by distance.',
+        snippet:
+            '{ $near: { \\$geometry: { type: "Point", coordinates: [${1:lng}, ${2:lat}] }, \\$maxDistance: ${3:distance} } }',
         link: getDocLink('$near', META_QUERY_GEOSPATIAL),
     },
     {
         value: '$nearSphere',
         meta: META_QUERY_GEOSPATIAL,
-        description: 'The $nearSphere operator returns documents whose location fields are near a specified point on a sphere, sorted by distance on a spherical surface.',
-        snippet: '{ $nearSphere: { \\$geometry: { type: "Point", coordinates: [${1:lng}, ${2:lat}] }, \\$maxDistance: ${3:distance} } }',
+        description:
+            'The $nearSphere operator returns documents whose location fields are near a specified point on a sphere, sorted by distance on a spherical surface.',
+        snippet:
+            '{ $nearSphere: { \\$geometry: { type: "Point", coordinates: [${1:lng}, ${2:lat}] }, \\$maxDistance: ${3:distance} } }',
         link: getDocLink('$nearSphere', META_QUERY_GEOSPATIAL),
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Array Query Operators
@@ -293,7 +312,8 @@ const arrayQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$elemMatch',
         meta: META_QUERY_ARRAY,
-        description: 'The $elemmatch operator returns complete array, qualifying criteria with at least one matching array element.',
+        description:
+            'The $elemmatch operator returns complete array, qualifying criteria with at least one matching array element.',
         snippet: '{ $elemMatch: { ${1:query} } }',
         link: getDocLink('$elemMatch', META_QUERY_ARRAY),
         applicableBsonTypes: ['array'],
@@ -301,13 +321,13 @@ const arrayQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$size',
         meta: META_QUERY_ARRAY,
-        description: 'The $size operator is used to query documents where an array field has a specified number of elements.',
+        description:
+            'The $size operator is used to query documents where an array field has a specified number of elements.',
         snippet: '{ $size: ${1:number} }',
         link: getDocLink('$size', META_QUERY_ARRAY),
         applicableBsonTypes: ['array'],
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Bitwise Query Operators
@@ -317,7 +337,8 @@ const bitwiseQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$bitsAllClear',
         meta: META_QUERY_BITWISE,
-        description: 'The $bitsAllClear operator is used to match documents where all the bit positions specified in a bitmask are clear.',
+        description:
+            'The $bitsAllClear operator is used to match documents where all the bit positions specified in a bitmask are clear.',
         snippet: '{ $bitsAllClear: ${1:bitmask} }',
         link: getDocLink('$bitsAllClear', META_QUERY_BITWISE),
         applicableBsonTypes: ['int', 'long'],
@@ -333,7 +354,8 @@ const bitwiseQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$bitsAnyClear',
         meta: META_QUERY_BITWISE,
-        description: 'The $bitsAnyClear operator matches documents where any of the specified bit positions in a bitmask are clear.',
+        description:
+            'The $bitsAnyClear operator matches documents where any of the specified bit positions in a bitmask are clear.',
         snippet: '{ $bitsAnyClear: ${1:bitmask} }',
         link: getDocLink('$bitsAnyClear', META_QUERY_BITWISE),
         applicableBsonTypes: ['int', 'long'],
@@ -341,13 +363,13 @@ const bitwiseQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$bitsAnySet',
         meta: META_QUERY_BITWISE,
-        description: 'The $bitsAnySet operator returns documents where any of the specified bit positions are set to 1.',
+        description:
+            'The $bitsAnySet operator returns documents where any of the specified bit positions are set to 1.',
         snippet: '{ $bitsAnySet: ${1:bitmask} }',
         link: getDocLink('$bitsAnySet', META_QUERY_BITWISE),
         applicableBsonTypes: ['int', 'long'],
     },
 ];
-
 
 // ---------------------------------------------------------------------------
 // Projection Operators
@@ -357,13 +379,15 @@ const projectionOperators: readonly OperatorEntry[] = [
     {
         value: '$',
         meta: META_QUERY_PROJECTION,
-        description: 'The $ positional operator identifies an element in an array to update without explicitly specifying the position of the element in the array.',
+        description:
+            'The $ positional operator identifies an element in an array to update without explicitly specifying the position of the element in the array.',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$', // inferred from another category
     },
     {
         value: '$elemMatch',
         meta: META_QUERY_PROJECTION,
-        description: 'The $elemmatch operator returns complete array, qualifying criteria with at least one matching array element.',
+        description:
+            'The $elemmatch operator returns complete array, qualifying criteria with at least one matching array element.',
         snippet: '{ $elemMatch: { ${1:query} } }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-query/$elemmatch', // inferred from another category
     },
@@ -376,7 +400,6 @@ const projectionOperators: readonly OperatorEntry[] = [
     },
 ];
 
-
 // ---------------------------------------------------------------------------
 // Miscellaneous Query Operators
 // ---------------------------------------------------------------------------
@@ -385,7 +408,8 @@ const miscellaneousQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$comment',
         meta: META_QUERY_MISC,
-        description: 'The $comment operator adds a comment to a query to help identify the query in logs and profiler output.',
+        description:
+            'The $comment operator adds a comment to a query to help identify the query in logs and profiler output.',
         snippet: '{ $comment: "${1:comment}" }',
         link: getDocLink('$comment', META_QUERY_MISC),
     },
@@ -399,7 +423,8 @@ const miscellaneousQueryOperators: readonly OperatorEntry[] = [
     {
         value: '$natural',
         meta: META_QUERY_MISC,
-        description: 'The $natural operator forces the query to use the natural order of documents in a collection, providing control over document ordering and retrieval.',
+        description:
+            'The $natural operator forces the query to use the natural order of documents in a collection, providing control over document ordering and retrieval.',
         snippet: '{ $natural: ${1:1} }',
         link: getDocLink('$natural', META_QUERY_MISC),
     },

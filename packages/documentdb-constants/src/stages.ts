@@ -12,10 +12,10 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
-import { type OperatorEntry } from './types';
-import { META_STAGE } from './metaTags';
 import { getDocLink } from './docLinks';
 import { registerOperators } from './getFilteredCompletions';
+import { META_STAGE } from './metaTags';
+import { type OperatorEntry } from './types';
 
 // ---------------------------------------------------------------------------
 // Aggregation Pipeline Stages
@@ -39,7 +39,8 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$bucketAuto',
         meta: META_STAGE,
-        description: 'Categorizes documents into a specified number of groups based on a given expression, automatically determining bucket boundaries.',
+        description:
+            'Categorizes documents into a specified number of groups based on a given expression, automatically determining bucket boundaries.',
         snippet: '{ $bucketAuto: { groupBy: "${1:\\$field}", buckets: ${2:number} } }',
     },
     {
@@ -52,14 +53,16 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$collStats',
         meta: META_STAGE,
-        description: 'The $collStats stage in the aggregation pipeline is used to return statistics about a collection.',
+        description:
+            'The $collStats stage in the aggregation pipeline is used to return statistics about a collection.',
         snippet: '{ $collStats: { storageStats: {} } }',
         link: getDocLink('$collStats', META_STAGE),
     },
     {
         value: '$count',
         meta: META_STAGE,
-        description: 'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
+        description:
+            'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
         snippet: '{ $count: "${1:countField}" }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$count', // inferred from another category
     },
@@ -80,34 +83,41 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$facet',
         meta: META_STAGE,
-        description: 'The $facet allows for multiple parallel aggregations to be executed within a single pipeline stage.',
+        description:
+            'The $facet allows for multiple parallel aggregations to be executed within a single pipeline stage.',
         snippet: '{ $facet: { ${1:outputField}: [{ ${2:stage} }] } }',
         link: getDocLink('$facet', META_STAGE),
     },
     {
         value: '$fill',
         meta: META_STAGE,
-        description: 'The $fill stage allows filling missing values in documents based on specified methods and criteria.',
+        description:
+            'The $fill stage allows filling missing values in documents based on specified methods and criteria.',
         snippet: '{ $fill: { output: { ${1:field}: { method: "${2:linear}" } } } }',
         link: getDocLink('$fill', META_STAGE),
     },
     {
         value: '$geoNear',
         meta: META_STAGE,
-        description: 'The $geoNear operator finds and sorts documents by their proximity to a geospatial point, returning distance information for each document.',
-        snippet: '{ $geoNear: { near: { type: "Point", coordinates: [${1:lng}, ${2:lat}] }, distanceField: "${3:distance}" } }',
+        description:
+            'The $geoNear operator finds and sorts documents by their proximity to a geospatial point, returning distance information for each document.',
+        snippet:
+            '{ $geoNear: { near: { type: "Point", coordinates: [${1:lng}, ${2:lat}] }, distanceField: "${3:distance}" } }',
         link: getDocLink('$geoNear', META_STAGE),
     },
     {
         value: '$graphLookup',
         meta: META_STAGE,
-        description: 'Performs a recursive search on a collection to return documents connected by a specified field relationship.',
-        snippet: '{ $graphLookup: { from: "${1:collection}", startWith: "${2:\\$field}", connectFromField: "${3:field}", connectToField: "${4:field}", as: "${5:result}" } }',
+        description:
+            'Performs a recursive search on a collection to return documents connected by a specified field relationship.',
+        snippet:
+            '{ $graphLookup: { from: "${1:collection}", startWith: "${2:\\$field}", connectFromField: "${3:field}", connectToField: "${4:field}", as: "${5:result}" } }',
     },
     {
         value: '$group',
         meta: META_STAGE,
-        description: 'The $group stage groups documents by specified identifier expressions and applies accumulator expressions.',
+        description:
+            'The $group stage groups documents by specified identifier expressions and applies accumulator expressions.',
         snippet: '{ $group: { _id: "${1:\\$field}", ${2:accumulator}: { ${3:\\$sum}: 1 } } }',
         link: getDocLink('$group', META_STAGE),
     },
@@ -127,28 +137,33 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$lookup',
         meta: META_STAGE,
-        description: 'The $lookup stage in the Aggregation Framework is used to perform left outer joins with other collections.',
-        snippet: '{ $lookup: { from: "${1:collection}", localField: "${2:field}", foreignField: "${3:field}", as: "${4:result}" } }',
+        description:
+            'The $lookup stage in the Aggregation Framework is used to perform left outer joins with other collections.',
+        snippet:
+            '{ $lookup: { from: "${1:collection}", localField: "${2:field}", foreignField: "${3:field}", as: "${4:result}" } }',
         link: getDocLink('$lookup', META_STAGE),
     },
     {
         value: '$match',
         meta: META_STAGE,
-        description: 'The $match stage in the aggregation pipeline is used to filter documents that match a specified condition.',
+        description:
+            'The $match stage in the aggregation pipeline is used to filter documents that match a specified condition.',
         snippet: '{ $match: { ${1:query} } }',
         link: getDocLink('$match', META_STAGE),
     },
     {
         value: '$merge',
         meta: META_STAGE,
-        description: 'The $merge stage in an aggregation pipeline writes the results of the aggregation to a specified collection.',
+        description:
+            'The $merge stage in an aggregation pipeline writes the results of the aggregation to a specified collection.',
         snippet: '{ $merge: { into: "${1:collection}" } }',
         link: getDocLink('$merge', META_STAGE),
     },
     {
         value: '$out',
         meta: META_STAGE,
-        description: 'The `$out` stage in an aggregation pipeline writes the resulting documents to a specified collection.',
+        description:
+            'The `$out` stage in an aggregation pipeline writes the resulting documents to a specified collection.',
         snippet: '{ $out: "${1:collection}" }',
         link: getDocLink('$out', META_STAGE),
     },
@@ -162,7 +177,8 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         value: '$redact',
         meta: META_STAGE,
         description: 'Filters the content of the documents based on access rights.',
-        snippet: '{ $redact: { \\$cond: { if: { ${1:expression} }, then: "${2:\\$\\$DESCEND}", else: "${3:\\$\\$PRUNE}" } } }',
+        snippet:
+            '{ $redact: { \\$cond: { if: { ${1:expression} }, then: "${2:\\$\\$DESCEND}", else: "${3:\\$\\$PRUNE}" } } }',
         link: getDocLink('$redact', META_STAGE),
     },
     {
@@ -174,7 +190,8 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$replaceWith',
         meta: META_STAGE,
-        description: 'The $replaceWith operator in Azure DocumentDB returns a document after replacing a document with the specified document',
+        description:
+            'The $replaceWith operator in Azure DocumentDB returns a document after replacing a document with the specified document',
         snippet: '{ $replaceWith: "${1:\\$field}" }',
         link: getDocLink('$replaceWith', META_STAGE),
     },
@@ -207,27 +224,32 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$setWindowFields',
         meta: META_STAGE,
-        description: 'Adds computed fields to documents using window functions over a specified partition and sort order.',
-        snippet: '{ $setWindowFields: { partitionBy: "${1:\\$field}", sortBy: { ${2:field}: ${3:1} }, output: { ${4:newField}: { ${5:windowFunc} } } } }',
+        description:
+            'Adds computed fields to documents using window functions over a specified partition and sort order.',
+        snippet:
+            '{ $setWindowFields: { partitionBy: "${1:\\$field}", sortBy: { ${2:field}: ${3:1} }, output: { ${4:newField}: { ${5:windowFunc} } } } }',
     },
     {
         value: '$skip',
         meta: META_STAGE,
-        description: 'The $skip stage in the aggregation pipeline is used to skip a specified number of documents from the input and pass the remaining documents to the next stage in the pipeline.',
+        description:
+            'The $skip stage in the aggregation pipeline is used to skip a specified number of documents from the input and pass the remaining documents to the next stage in the pipeline.',
         snippet: '{ $skip: ${1:number} }',
         link: getDocLink('$skip', META_STAGE),
     },
     {
         value: '$sort',
         meta: META_STAGE,
-        description: 'The $sort stage in the aggregation pipeline is used to order the documents in the pipeline by a specified field or fields.',
+        description:
+            'The $sort stage in the aggregation pipeline is used to order the documents in the pipeline by a specified field or fields.',
         snippet: '{ $sort: { ${1:field}: ${2:1} } }',
         link: getDocLink('$sort', META_STAGE),
     },
     {
         value: '$sortByCount',
         meta: META_STAGE,
-        description: 'The $sortByCount stage in the aggregation pipeline is used to group documents by a specified expression and then sort the count of documents in each group in descending order.',
+        description:
+            'The $sortByCount stage in the aggregation pipeline is used to group documents by a specified expression and then sort the count of documents in each group in descending order.',
         snippet: '{ $sortByCount: "${1:\\$field}" }',
         link: getDocLink('$sortByCount', META_STAGE),
     },
@@ -247,7 +269,8 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$unwind',
         meta: META_STAGE,
-        description: 'The $unwind stage in the aggregation framework is used to deconstruct an array field from the input documents to output a document for each element.',
+        description:
+            'The $unwind stage in the aggregation framework is used to deconstruct an array field from the input documents to output a document for each element.',
         snippet: '{ $unwind: "${1:\\$arrayField}" }',
         link: getDocLink('$unwind', META_STAGE),
     },
@@ -263,6 +286,4 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([
-    ...aggregationPipelineStages,
-]);
+registerOperators([...aggregationPipelineStages]);

@@ -12,9 +12,9 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
-import { type OperatorEntry } from './types';
-import { META_VARIABLE } from './metaTags';
 import { registerOperators } from './getFilteredCompletions';
+import { META_VARIABLE } from './metaTags';
+import { type OperatorEntry } from './types';
 
 // ---------------------------------------------------------------------------
 // Variables in Aggregation Expressions
@@ -24,37 +24,44 @@ const systemVariables: readonly OperatorEntry[] = [
     {
         value: '$$NOW',
         meta: META_VARIABLE,
-        description: 'Returns the current datetime as a Date object. Constant throughout a single aggregation pipeline.',
+        description:
+            'Returns the current datetime as a Date object. Constant throughout a single aggregation pipeline.',
     },
     {
         value: '$$ROOT',
         meta: META_VARIABLE,
-        description: 'References the root document — the top-level document currently being processed in the pipeline stage.',
+        description:
+            'References the root document — the top-level document currently being processed in the pipeline stage.',
     },
     {
         value: '$$REMOVE',
         meta: META_VARIABLE,
-        description: 'Removes a field from the output document. Used with $project or $addFields to conditionally exclude fields.',
+        description:
+            'Removes a field from the output document. Used with $project or $addFields to conditionally exclude fields.',
     },
     {
         value: '$$CURRENT',
         meta: META_VARIABLE,
-        description: 'References the current document in the pipeline stage. Equivalent to $$ROOT at the start of the pipeline.',
+        description:
+            'References the current document in the pipeline stage. Equivalent to $$ROOT at the start of the pipeline.',
     },
     {
         value: '$$DESCEND',
         meta: META_VARIABLE,
-        description: 'Used with $redact. Returns the document fields at the current level and continues descending into subdocuments.',
+        description:
+            'Used with $redact. Returns the document fields at the current level and continues descending into subdocuments.',
     },
     {
         value: '$$PRUNE',
         meta: META_VARIABLE,
-        description: 'Used with $redact. Excludes all fields at the current document level and stops descending into subdocuments.',
+        description:
+            'Used with $redact. Excludes all fields at the current document level and stops descending into subdocuments.',
     },
     {
         value: '$$KEEP',
         meta: META_VARIABLE,
-        description: 'Used with $redact. Keeps all fields at the current document level without further descending into subdocuments.',
+        description:
+            'Used with $redact. Keeps all fields at the current document level without further descending into subdocuments.',
     },
 ];
 
@@ -62,6 +69,4 @@ const systemVariables: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([
-    ...systemVariables,
-]);
+registerOperators([...systemVariables]);
