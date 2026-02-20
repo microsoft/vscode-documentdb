@@ -46,6 +46,26 @@ npm run generate
 
 > **Do not edit the generated `src/` files by hand.** Put corrections in `resources/operator-reference-overrides.md` instead. The generated files contain a header warning to this effect.
 
+## evaluate-overrides.ts
+
+Evaluates the relationship between scraped data and manual overrides. Produces a color-coded report.
+
+```bash
+npm run evaluate
+```
+
+**When to run:**
+
+- After re-scraping (`npm run scrape`) to see if previously-missing descriptions are now available
+- Periodically, to check coverage and detect redundant overrides
+
+**Report sections:**
+
+1. **GAPS** — operators with empty scraped descriptions and no override (need attention)
+2. **POTENTIALLY REDUNDANT** — operators that have **both** a scraped description and an override description; the override may no longer be needed
+3. **ACTIVE OVERRIDES** — overrides filling real gaps, with both override and scraped values shown
+4. **SUMMARY** — total counts and coverage percentage
+
 ## Workflow
 
 ```
@@ -57,6 +77,8 @@ npm run generate
              │
              ▼
   operator-reference-scraped.md
+             │
+             ├──── npm run evaluate  (check gaps & redundant overrides)
              │
              ├──── operator-reference-overrides.md (manual)
              │
