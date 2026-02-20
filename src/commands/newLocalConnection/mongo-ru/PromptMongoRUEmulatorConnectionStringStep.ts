@@ -14,18 +14,13 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
 
     public async prompt(context: NewLocalConnectionWizardContext): Promise<void> {
         const prompt: string = l10n.t('Enter the connection string of your local connection');
-        context.connectionString = (
-            await context.ui.showInputBox({
-                prompt: prompt,
-                ignoreFocusOut: true,
-                placeHolder: l10n.t('Starts with mongodb:// or mongodb+srv://'),
-                validateInput: (connectionString?: string) => this.validateInput(connectionString),
-                asyncValidationTask: (connectionString: string) => this.validateConnectionString(connectionString),
-            })
-        ).trim();
-
-        // Trim the connection string to remove any invisible or whitespace characters
-        // that may have been introduced during copy-paste before any parsing is done
+        context.connectionString = await context.ui.showInputBox({
+            prompt: prompt,
+            ignoreFocusOut: true,
+            placeHolder: l10n.t('Starts with mongodb:// or mongodb+srv://'),
+            validateInput: (connectionString?: string) => this.validateInput(connectionString),
+            asyncValidationTask: (connectionString: string) => this.validateConnectionString(connectionString),
+        });
         context.connectionString = context.connectionString.trim();
 
         const parsedConnectionString = new DocumentDBConnectionString(context.connectionString);
