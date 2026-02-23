@@ -460,6 +460,16 @@ export class ConnectionStorageService {
      * incomplete migrations, or other storage corruption. Such items block operations like
      * duplicate checking that need to parse every stored connection string.
      *
+     * **Design note — intentional automatic deletion:**
+     * Permanently deleting these items on startup is acceptable because:
+     *   1. An empty/unparseable connection string means the entry is non-functional —
+     *      the user cannot connect, rename, or export it.
+     *   2. The most common cause is an interrupted write (globalState committed but
+     *      SecretStorage did not), which leaves an orphan that would otherwise block
+     *      the duplicate-check loop every session.
+     *   3. All removals are logged at warn level and reported via telemetry
+     *      (`invalidConnectionsRemoved`) so they remain auditable.
+     *
      * @param context - The action context for telemetry
      * @param storageService - The storage service to use (avoids circular getStorageService call)
      */
