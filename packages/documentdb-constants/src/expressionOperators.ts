@@ -109,7 +109,7 @@ const arithmeticExpressionOperators: readonly OperatorEntry[] = [
         description:
             'The $mod operator performs a modulo operation on the value of a field and selects documents with a specified result.',
         snippet: '{ $mod: ["${1:\\$field1}", "${2:\\$field2}"] }',
-        link: getDocLink('$mod', META_EXPR_ARITH),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/evaluation-query/$mod', // inferred from another category
     },
     {
         value: '$multiply',
@@ -195,14 +195,14 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
         description:
             'The $firstN operator sorts documents on one or more fields specified by the query and returns the first N document matching the filtering criteria',
         snippet: '{ $firstN: { input: "${1:\\$array}", n: ${2:number} } }',
-        link: getDocLink('$firstN', META_EXPR_ARRAY),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$firstn', // inferred from another category
     },
     {
         value: '$in',
         meta: META_EXPR_ARRAY,
         description: 'The $in operator matches value of a field against an array of specified values',
         snippet: '{ $in: ["${1:\\$field}", "${2:\\$array}"] }',
-        link: getDocLink('$in', META_EXPR_ARRAY),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$in', // inferred from another category
     },
     {
         value: '$indexOfArray',
@@ -224,7 +224,7 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_ARRAY,
         description: 'The $lastN accumulator operator returns the last N values in a group of documents.',
         snippet: '{ $lastN: { input: "${1:\\$array}", n: ${2:number} } }',
-        link: getDocLink('$lastN', META_EXPR_ARRAY),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$lastn', // inferred from another category
     },
     {
         value: '$map',
@@ -238,7 +238,7 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_ARRAY,
         description: 'Retrieves the top N values based on a specified filtering criteria',
         snippet: '{ $maxN: { input: "${1:\\$array}", n: ${2:number} } }',
-        link: getDocLink('$maxN', META_EXPR_ARRAY),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$maxn', // inferred from another category
     },
     {
         value: '$minN',
@@ -252,7 +252,7 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_ARRAY,
         description: 'Converts an object into an array of key-value pair documents.',
         snippet: '{ $objectToArray: "${1:\\$object}" }',
-        link: getDocLink('$objectToArray', META_EXPR_ARRAY),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/object-expression/$objecttoarray', // inferred from another category
     },
     {
         value: '$range',
@@ -282,7 +282,7 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
         description:
             'The $size operator is used to query documents where an array field has a specified number of elements.',
         snippet: '{ $size: "${1:\\$array}" }',
-        link: getDocLink('$size', META_EXPR_ARRAY),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-query/$size', // inferred from another category
     },
     {
         value: '$slice',
@@ -356,7 +356,7 @@ const booleanExpressionOperators: readonly OperatorEntry[] = [
         description:
             'The $and operator joins multiple query clauses and returns documents that match all specified conditions.',
         snippet: '{ $and: ["${1:expression1}", "${2:expression2}"] }',
-        link: getDocLink('$and', META_EXPR_BOOL),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/logical-query/$and', // inferred from another category
     },
     {
         value: '$not',
@@ -364,7 +364,7 @@ const booleanExpressionOperators: readonly OperatorEntry[] = [
         description:
             "The $not operator performs a logical NOT operation on a specified expression, selecting documents that don't match the expression.",
         snippet: '{ $not: ["${1:expression}"] }',
-        link: getDocLink('$not', META_EXPR_BOOL),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/logical-query/$not', // inferred from another category
     },
     {
         value: '$or',
@@ -372,7 +372,7 @@ const booleanExpressionOperators: readonly OperatorEntry[] = [
         description:
             'The $or operator joins query clauses with a logical OR and returns documents that match at least one of the specified conditions.',
         snippet: '{ $or: ["${1:expression1}", "${2:expression2}"] }',
-        link: getDocLink('$or', META_EXPR_BOOL),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/logical-query/$or', // inferred from another category
     },
 ];
 
@@ -393,7 +393,7 @@ const comparisonExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_COMPARISON,
         description: 'The $eq query operator compares the value of a field to a specified value',
         snippet: '{ $eq: ["${1:\\$field1}", "${2:\\$field2}"] }',
-        link: getDocLink('$eq', META_EXPR_COMPARISON),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$eq', // inferred from another category
     },
     {
         value: '$gt',
@@ -401,7 +401,7 @@ const comparisonExpressionOperators: readonly OperatorEntry[] = [
         description:
             'The $gt query operator retrieves documents where the value of a field is greater than a specified value',
         snippet: '{ $gt: ["${1:\\$field1}", "${2:\\$field2}"] }',
-        link: getDocLink('$gt', META_EXPR_COMPARISON),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$gt', // inferred from another category
     },
     {
         value: '$gte',
@@ -409,14 +409,14 @@ const comparisonExpressionOperators: readonly OperatorEntry[] = [
         description:
             'The $gte operator retrieves documents where the value of a field is greater than or equal to a specified value',
         snippet: '{ $gte: ["${1:\\$field1}", "${2:\\$field2}"] }',
-        link: getDocLink('$gte', META_EXPR_COMPARISON),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$gte', // inferred from another category
     },
     {
         value: '$lt',
         meta: META_EXPR_COMPARISON,
         description: 'The $lt operator retrieves documents where the value of field is less than a specified value',
         snippet: '{ $lt: ["${1:\\$field1}", "${2:\\$field2}"] }',
-        link: getDocLink('$lt', META_EXPR_COMPARISON),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$lt', // inferred from another category
     },
     {
         value: '$lte',
@@ -424,14 +424,14 @@ const comparisonExpressionOperators: readonly OperatorEntry[] = [
         description:
             'The $lte operator retrieves documents where the value of a field is less than or equal to a specified value',
         snippet: '{ $lte: ["${1:\\$field1}", "${2:\\$field2}"] }',
-        link: getDocLink('$lte', META_EXPR_COMPARISON),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$lte', // inferred from another category
     },
     {
         value: '$ne',
         meta: META_EXPR_COMPARISON,
         description: "The $ne operator retrieves documents where the value of a field doesn't equal a specified value",
         snippet: '{ $ne: ["${1:\\$field1}", "${2:\\$field2}"] }',
-        link: getDocLink('$ne', META_EXPR_COMPARISON),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$ne', // inferred from another category
     },
 ];
 
@@ -604,7 +604,7 @@ const dateExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_DATE,
         description: 'The $toDate operator converts supported types to a proper Date object.',
         snippet: '{ $toDate: "${1:\\$field}" }',
-        link: getDocLink('$toDate', META_EXPR_DATE),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/type-expression/$todate', // inferred from another category
     },
     {
         value: '$week',
@@ -654,7 +654,7 @@ const miscellaneousOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_MISC,
         description: 'The $rand operator generates a random float value between 0 and 1.',
         snippet: '{ $rand: {} }',
-        link: getDocLink('$rand', META_EXPR_MISC),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/miscellaneous-query/$rand', // inferred from another category
     },
     {
         value: '$sampleRate',
@@ -770,14 +770,14 @@ const stringExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_STRING,
         description: 'The $dateDiff operator converts a date/time string to a date object.',
         snippet: '{ $dateFromString: "${1:\\$string}" }',
-        link: getDocLink('$dateFromString', META_EXPR_STRING),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/date-expression/$datefromstring', // inferred from another category
     },
     {
         value: '$dateToString',
         meta: META_EXPR_STRING,
         description: 'The $dateToString operator converts a date object into a formatted string.',
         snippet: '{ $dateToString: "${1:\\$string}" }',
-        link: getDocLink('$dateToString', META_EXPR_STRING),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/date-expression/$datetostring', // inferred from another category
     },
     {
         value: '$indexOfBytes',
@@ -889,7 +889,7 @@ const stringExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_STRING,
         description: 'The $toString operator converts an expression into a String',
         snippet: '{ $toString: "${1:\\$string}" }',
-        link: getDocLink('$toString', META_EXPR_STRING),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/type-expression/$tostring', // inferred from another category
     },
     {
         value: '$trim',
@@ -1103,7 +1103,7 @@ const typeExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_TYPE,
         description: 'The $type operator retrieves documents if the chosen field is of the specified type.',
         snippet: '{ $type: "${1:\\$field}" }',
-        link: getDocLink('$type', META_EXPR_TYPE),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/element-query/$type', // inferred from another category
     },
 ];
 

@@ -664,12 +664,9 @@ function generateSection(spec: FileSpec, snippets: Map<string, Map<string, strin
         if (!dumpLink) {
             // No documentation page exists — omit the link
             linkLine = '';
-        } else if (isInferred && computedLink) {
-            // Link was inferred from another category, but this meta tag has its own
-            // canonical doc directory — prefer the category-correct getDocLink() URL
-            linkLine = `        link: getDocLink('${escapeString(op.value)}', ${spec.metaImport}),\n`;
         } else if (isInferred) {
-            // Link was inferred from another category via cross-reference (no canonical dir for this meta)
+            // Link was inferred from another category via cross-reference (scraper confirmed
+            // no page exists at this operator's own category URL — use the real page found)
             linkLine = `        link: '${escapeString(dumpLink)}', // inferred from another category\n`;
         } else if (dumpLink === computedLink) {
             // The computed URL matches — use the compact getDocLink() call

@@ -64,7 +64,7 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         description:
             'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
         snippet: '{ $count: "${1:countField}" }',
-        link: getDocLink('$count', META_STAGE),
+        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$count', // inferred from another category
     },
     {
         value: '$densify',
