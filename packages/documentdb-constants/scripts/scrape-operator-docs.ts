@@ -315,6 +315,7 @@ function extractSyntax(markdown: string): string | undefined {
 function escapeTableCell(text: string): string {
     return text
         .replace(/\r\n|\r|\n/g, ' ')
+        .replace(/\\/g, '\\\\')
         .replace(/\|/g, '\\|')
         .replace(/\s+/g, ' ')
         .trim();
