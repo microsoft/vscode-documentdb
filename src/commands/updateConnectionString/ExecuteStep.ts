@@ -37,12 +37,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
             };
 
             await ConnectionStorageService.save(resourceType, connection, true);
+
+            showConfirmationAsInSettings(l10n.t('Connection updated successfully.'));
         } catch (pushError) {
             ext.outputChannel.error(l10n.t('Failed to update connection: {0}', String(pushError)));
             void window.showErrorMessage(l10n.t('Failed to update the connection.'));
         }
-
-        showConfirmationAsInSettings(l10n.t('Connection updated successfully.'));
     }
 
     public shouldExecute(context: UpdateCSWizardContext): boolean {
