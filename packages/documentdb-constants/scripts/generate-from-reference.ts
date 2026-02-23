@@ -613,12 +613,19 @@ import { registerOperators } from './getFilteredCompletions';
 
     content += sectionsStr;
 
-    // Registration call
-    const allVarNames = specs.map((s) => `...${s.variableName}`).join(',\n    ');
+    // Derive the exported load function name from the first spec's fileName
+    // e.g. "queryOperators" → "loadQueryOperators"
+    const fileName = specs[0]?.fileName ?? 'operators';
+    const loadFnName = 'load' + fileName.charAt(0).toUpperCase() + fileName.slice(1);
+
+    // Emit an explicit load function instead of a side-effect registration call
+    const allVarNames = specs.map((s) => `...${s.variableName}`).join(',\n        ');
     content += `// ---------------------------------------------------------------------------\n`;
     content += `// Registration\n`;
     content += `// ---------------------------------------------------------------------------\n\n`;
-    content += `registerOperators([\n    ${allVarNames},\n]);\n`;
+    content += `export function ${loadFnName}(): void {\n`;
+    content += `    registerOperators([\n        ${allVarNames},\n    ]);\n`;
+    content += `}\n`;
 
     return content;
 }
@@ -649,8 +656,12 @@ function generateSection(spec: FileSpec, snippets: Map<string, Map<string, strin
         if (!dumpLink) {
             // No documentation page exists — omit the link
             linkLine = '';
+        } else if (isInferred && computedLink) {
+            // Link was inferred from another category, but this meta tag has its own
+            // canonical doc directory — prefer the category-correct getDocLink() URL
+            linkLine = `        link: getDocLink('${escapeString(op.value)}', ${spec.metaImport}),\n`;
         } else if (isInferred) {
-            // Link was inferred from another category via cross-reference
+            // Link was inferred from another category via cross-reference (no canonical dir for this meta)
             linkLine = `        link: '${escapeString(dumpLink)}', // inferred from another category\n`;
         } else if (dumpLink === computedLink) {
             // The computed URL matches — use the compact getDocLink() call

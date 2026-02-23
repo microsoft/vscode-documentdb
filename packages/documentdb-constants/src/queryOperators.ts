@@ -381,7 +381,7 @@ const projectionOperators: readonly OperatorEntry[] = [
         meta: META_QUERY_PROJECTION,
         description:
             'The $ positional operator identifies an element in an array to update without explicitly specifying the position of the element in the array.',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$', // inferred from another category
+        link: getDocLink('$', META_QUERY_PROJECTION),
     },
     {
         value: '$elemMatch',
@@ -389,14 +389,14 @@ const projectionOperators: readonly OperatorEntry[] = [
         description:
             'The $elemmatch operator returns complete array, qualifying criteria with at least one matching array element.',
         snippet: '{ $elemMatch: { ${1:query} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-query/$elemmatch', // inferred from another category
+        link: getDocLink('$elemMatch', META_QUERY_PROJECTION),
     },
     {
         value: '$slice',
         meta: META_QUERY_PROJECTION,
         description: 'The $slice operator returns a subset of an array from any element onwards in the array.',
         snippet: '{ $slice: ${1:number} }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$slice', // inferred from another category
+        link: getDocLink('$slice', META_QUERY_PROJECTION),
     },
 ];
 
