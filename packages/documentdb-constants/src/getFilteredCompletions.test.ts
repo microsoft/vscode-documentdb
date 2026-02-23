@@ -17,6 +17,7 @@ import {
     WINDOW_COMPLETION_META,
     getAllCompletions,
     getFilteredCompletions,
+    loadOperators,
 } from './index';
 
 describe('getFilteredCompletions', () => {
@@ -218,5 +219,15 @@ describe('completion context presets', () => {
         const results = getFilteredCompletions({ meta: PROJECTION_COMPLETION_META });
         // field:identifier entries are injected at runtime, not statically registered
         expect(results.length).toBe(0);
+    });
+});
+
+describe('registry idempotency', () => {
+    test('calling loadOperators() twice does not duplicate entries', () => {
+        const countBefore = getAllCompletions().length;
+        // loadOperators is re-exported from index
+        loadOperators();
+        const countAfter = getAllCompletions().length;
+        expect(countAfter).toBe(countBefore);
     });
 });

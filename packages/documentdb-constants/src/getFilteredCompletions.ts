@@ -17,16 +17,26 @@ import { type CompletionFilter, type OperatorEntry } from './types';
  * individual operator module files (queryOperators, stages, etc.)
  * via {@link registerOperators}.
  */
+const allOperatorsSet = new Set<string>();
 const allOperators: OperatorEntry[] = [];
 
 /**
  * Registers operator entries into the global registry.
+ * Duplicate entries (same value + meta key) are silently skipped,
+ * making repeated calls idempotent.
+ *
  * Called by each operator module during module initialization.
  *
  * @param entries - array of OperatorEntry objects to register
  */
 export function registerOperators(entries: readonly OperatorEntry[]): void {
-    allOperators.push(...entries);
+    for (const entry of entries) {
+        const key = `${entry.value}|${entry.meta}`;
+        if (!allOperatorsSet.has(key)) {
+            allOperatorsSet.add(key);
+            allOperators.push(entry);
+        }
+    }
 }
 
 /**
@@ -35,6 +45,7 @@ export function registerOperators(entries: readonly OperatorEntry[]): void {
  */
 export function clearOperators(): void {
     allOperators.length = 0;
+    allOperatorsSet.clear();
 }
 
 /**
