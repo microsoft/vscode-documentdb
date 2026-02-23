@@ -2,6 +2,15 @@
 
 Static operator metadata for all DocumentDB-supported operators, aggregation stages, accumulators, update operators, BSON type constructors, and system variables.
 
+> **Monorepo package** — this package is part of the `vscode-documentdb` workspace.
+> Dev dependencies (Jest, ts-jest, Prettier, ts-node, etc.) are provided by the
+> root `package.json`. Always install from the repository root:
+>
+> ```bash
+> cd <repo-root>
+> npm install
+> ```
+
 ## Purpose
 
 This package is the **single source of truth** for operator metadata when the connected database is DocumentDB. It provides:

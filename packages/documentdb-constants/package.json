@@ -21,12 +21,5 @@
     "url": "https://github.com/microsoft/vscode-documentdb",
     "directory": "packages/documentdb-constants"
   },
-  "license": "MIT",
-  "devDependencies": {
-    "@types/jest": "^29.5.14",
-    "jest": "^29.7.0",
-    "prettier": "~3.6.2",
-    "ts-jest": "^29.3.4",
-    "ts-node": "^10.9.2"
-  }
+  "license": "MIT"
 }
