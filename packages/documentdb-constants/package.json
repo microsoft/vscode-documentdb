@@ -11,6 +11,7 @@
     "build": "tsc -p .",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "test": "jest --config jest.config.js",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit",
     "prettier-fix": "prettier -w \"(scripts|src)/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\"",
     "scrape": "ts-node scripts/scrape-operator-docs.ts && prettier --write resources/scraped/operator-reference.md",
     "generate": "ts-node scripts/generate-from-reference.ts",
