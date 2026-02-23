@@ -89,7 +89,9 @@ export function getFilteredCompletions(filter: CompletionFilter): readonly Opera
 /**
  * Returns all operator entries (unfiltered).
  * Useful for validation, testing, and diagnostics.
+ *
+ * Returns a shallow copy so callers cannot mutate the internal registry.
  */
 export function getAllCompletions(): readonly OperatorEntry[] {
-    return allOperators;
+    return [...allOperators];
 }
