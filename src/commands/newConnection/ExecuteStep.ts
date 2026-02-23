@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 
 import {
     type ConnectionItem,
@@ -51,12 +52,29 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
             const existingDuplicateConnection = existingConnections.find((existingConnection) => {
-                const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
-                const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-                // Use nativeAuthConfig for comparison
-                const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+                const secret = existingConnection.secrets?.connectionString;
+                if (!secret) {
+                    ext.outputChannel.trace(
+                        `[NewConnection] Skipping stored connection "${existingConnection.name}" (id: ${existingConnection.id}) — empty connection string`,
+                    );
+                    return false;
+                }
 
-                return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
+                try {
+                    const existingCS = new DocumentDBConnectionString(secret);
+                    const existingHostsJoined = [...existingCS.hosts].sort().join(',');
+                    // Use nativeAuthConfig for comparison
+                    const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+
+                    return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
+                } catch (error) {
+                    // An existing stored connection has an invalid/corrupt connection string.
+                    // Log it but don't block the user from creating a new connection.
+                    ext.outputChannel.warn(
+                        `[NewConnection] Stored connection "${existingConnection.name}" (id: ${existingConnection.id}) has an invalid connection string and was skipped during duplicate check: ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                    return false;
+                }
             });
 
             if (existingDuplicateConnection) {

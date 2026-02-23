@@ -7,6 +7,7 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import {
     type ConnectionItem,
     ConnectionStorageService,
@@ -68,14 +69,24 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         const existingDuplicateConnection = existingConnections.find((connection) => {
             const secret = connection.secrets?.connectionString;
             if (!secret) {
+                ext.outputChannel.trace(
+                    `[NewLocalConnection] Skipping stored connection "${connection.name}" (id: ${connection.id}) — empty connection string`,
+                );
                 return false; // Skip if no secret string is found
             }
 
-            const itemCS = new DocumentDBConnectionString(secret);
-            return (
-                itemCS.username === newConnectionStringParsed.username &&
-                [...itemCS.hosts].sort().join(',') === joinedHosts
-            );
+            try {
+                const itemCS = new DocumentDBConnectionString(secret);
+                return (
+                    itemCS.username === newConnectionStringParsed.username &&
+                    [...itemCS.hosts].sort().join(',') === joinedHosts
+                );
+            } catch (error) {
+                ext.outputChannel.warn(
+                    `[NewLocalConnection] Stored connection "${connection.name}" (id: ${connection.id}) has an invalid connection string and was skipped during duplicate check: ${error instanceof Error ? error.message : String(error)}`,
+                );
+                return false;
+            }
         });
 
         if (existingDuplicateConnection) {
