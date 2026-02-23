@@ -645,7 +645,11 @@ async function buildGlobalFileIndex(): Promise<Map<string, string>> {
     return index;
 }
 
-async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<void> {
+interface FetchOperatorDocsResult {
+    failureDetails: { operator: string; category: string; reason: string }[];
+}
+
+async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<FetchOperatorDocsResult> {
     // Build a global index of all doc files to use as fallback
     console.log('  Building global file index from GitHub API...');
     const globalIndex = await buildGlobalFileIndex();
@@ -789,6 +793,8 @@ async function fetchOperatorDocs(operators: OperatorInfo[]): Promise<void> {
             console.log('');
         }
     }
+
+    return { failureDetails };
 }
 
 // ---------------------------------------------------------------------------
@@ -918,8 +924,23 @@ async function main(): Promise<void> {
     console.log('');
 
     // Phase 2: Fetch per-operator docs
-    await fetchOperatorDocs(operators);
+    const { failureDetails } = await fetchOperatorDocs(operators);
     console.log('');
+
+    // Fail immediately on network errors (transient connectivity problems that
+    // exhaust all retries). 404s are expected for operators without dedicated
+    // doc pages and do not abort the run.
+    const networkFailures = failureDetails.filter((f) => f.reason.startsWith('NetworkError:'));
+    if (networkFailures.length > 0) {
+        console.error(
+            `ERROR: ${networkFailures.length} operator(s) failed due to network errors (not 404). Aborting.`,
+        );
+        for (const f of networkFailures) {
+            console.error(`  - ${f.operator} (${f.category}): ${f.reason}`);
+        }
+        process.exit(1);
+    }
+
 
     // Phase 3: Generate dump
     console.log('  Phase 3: Generating scraped/operator-reference.md...');
