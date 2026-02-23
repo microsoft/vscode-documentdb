@@ -68,5 +68,15 @@ describe('docLinks', () => {
         test('returns undefined for variable meta tag (no docs directory)', () => {
             expect(getDocLink('$$NOW', 'variable')).toBeUndefined();
         });
+
+        test('generates correct URL for boolean expression operator', () => {
+            const link = getDocLink('$and', 'expr:bool');
+            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/boolean-expression/$and');
+        });
+
+        test('generates correct URL for comparison expression operator', () => {
+            const link = getDocLink('$eq', 'expr:comparison');
+            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-expression/$eq');
+        });
     });
 });
