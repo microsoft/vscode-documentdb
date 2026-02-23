@@ -24,6 +24,7 @@
 ### Fixes
 
 - **Azure Resources View Expansion**: Fixes cluster expansion failures in the Azure Resources view by deriving resource group information from resource IDs. [#480](https://github.com/microsoft/vscode-documentdb/pull/480)
+- **Connection String Deduplication**: Fixes an issue where connection string parameters were duplicated, ensuring valid connection strings and compliance with specifications. [#478](https://github.com/microsoft/vscode-documentdb/pull/478)
 - **Dark Theme Rendering**: Fixes unreadable text in some dark themes by respecting theme colors. [#457](https://github.com/microsoft/vscode-documentdb/issues/457)
 - **Import from Discovery View**: Fixes document import for Azure Cosmos DB for MongoDB (RU) discovery when connection metadata is not yet cached. [#368](https://github.com/microsoft/vscode-documentdb/issues/368), [#479](https://github.com/microsoft/vscode-documentdb/pull/479)
 - **Invalid Query JSON**: Shows a clear error when query JSON fails to parse instead of silently using empty objects. [#458](https://github.com/microsoft/vscode-documentdb/issues/458), [#471](https://github.com/microsoft/vscode-documentdb/pull/471)
