@@ -932,15 +932,12 @@ async function main(): Promise<void> {
     // doc pages and do not abort the run.
     const networkFailures = failureDetails.filter((f) => f.reason.startsWith('NetworkError:'));
     if (networkFailures.length > 0) {
-        console.error(
-            `ERROR: ${networkFailures.length} operator(s) failed due to network errors (not 404). Aborting.`,
-        );
+        console.error(`ERROR: ${networkFailures.length} operator(s) failed due to network errors (not 404). Aborting.`);
         for (const f of networkFailures) {
             console.error(`  - ${f.operator} (${f.category}): ${f.reason}`);
         }
         process.exit(1);
     }
-
 
     // Phase 3: Generate dump
     console.log('  Phase 3: Generating scraped/operator-reference.md...');
