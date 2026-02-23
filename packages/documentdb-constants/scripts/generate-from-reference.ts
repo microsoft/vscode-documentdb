@@ -364,19 +364,27 @@ function applyOverrides(
             // Try to find operators across all categories (override category
             // may not match dump category exactly for cross-category operators)
             for (const [opName, override] of opOverrides) {
-                let found = false;
-                for (const [, catOps] of categorizedOps) {
+                const matches: Array<{ category: string; op: ParsedOperator }> = [];
+                for (const [cat, catOps] of categorizedOps) {
                     const op = catOps.find((o) => o.value === opName);
-                    if (op) {
-                        mergeOverride(op, override);
-                        applied++;
-                        found = true;
-                        break;
-                    }
+                    if (op) matches.push({ category: cat, op });
                 }
-                if (!found) {
+                if (matches.length === 0) {
                     console.warn(`⚠️  Override target not found: ${opName} in "${category}"`);
                     missed++;
+                } else {
+                    if (matches.length > 1) {
+                        const catList = matches.map((m) => `"${m.category}"`).join(', ');
+                        console.warn(
+                            `⚠️  Ambiguous override fallback: "${opName}" — found in ${matches.length} categories: [${catList}]. Override from "${category}" applied to first match. Specify the correct category to disambiguate.`,
+                        );
+                    } else {
+                        console.log(
+                            `ℹ️  Override fallback: "${opName}" not found in "${category}", applied to match in "${matches[0].category}".`,
+                        );
+                    }
+                    mergeOverride(matches[0].op, override);
+                    applied++;
                 }
             }
             continue;
