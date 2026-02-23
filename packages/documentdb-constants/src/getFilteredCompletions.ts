@@ -61,7 +61,9 @@ export function clearOperators(): void {
  * `applicableBsonTypes` (universal operators) are always included.
  *
  * @param filter - the filtering criteria
- * @returns matching operator entries (readonly array)
+ * @returns matching operator entries as a new array — `Array.prototype.filter`
+ * always allocates a fresh array, so callers cannot mutate the internal registry
+ * through this return value.
  */
 export function getFilteredCompletions(filter: CompletionFilter): readonly OperatorEntry[] {
     return allOperators.filter((entry) => {
