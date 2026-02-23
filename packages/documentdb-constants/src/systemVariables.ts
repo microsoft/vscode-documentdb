@@ -69,4 +69,6 @@ const systemVariables: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([...systemVariables]);
+export function loadSystemVariables(): void {
+    registerOperators([...systemVariables]);
+}

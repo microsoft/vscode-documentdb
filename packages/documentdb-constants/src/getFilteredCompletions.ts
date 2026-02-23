@@ -30,6 +30,14 @@ export function registerOperators(entries: readonly OperatorEntry[]): void {
 }
 
 /**
+ * Clears all registered operator entries.
+ * Intended for internal/testing use only.
+ */
+export function clearOperators(): void {
+    allOperators.length = 0;
+}
+
+/**
  * Returns operator entries matching the given filter.
  *
  * Meta tag matching uses **prefix matching**: a filter meta of 'query'

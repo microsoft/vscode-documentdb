@@ -1158,22 +1158,24 @@ const conditionalExpressionOperators: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([
-    ...arithmeticExpressionOperators,
-    ...arrayExpressionOperators,
-    ...bitwiseOperators,
-    ...booleanExpressionOperators,
-    ...comparisonExpressionOperators,
-    ...dataSizeOperators,
-    ...dateExpressionOperators,
-    ...literalExpressionOperator,
-    ...miscellaneousOperators,
-    ...objectExpressionOperators,
-    ...setExpressionOperators,
-    ...stringExpressionOperators,
-    ...timestampExpressionOperators,
-    ...trigonometryExpressionOperators,
-    ...typeExpressionOperators,
-    ...variableExpressionOperators,
-    ...conditionalExpressionOperators,
-]);
+export function loadExpressionOperators(): void {
+    registerOperators([
+        ...arithmeticExpressionOperators,
+        ...arrayExpressionOperators,
+        ...bitwiseOperators,
+        ...booleanExpressionOperators,
+        ...comparisonExpressionOperators,
+        ...dataSizeOperators,
+        ...dateExpressionOperators,
+        ...literalExpressionOperator,
+        ...miscellaneousOperators,
+        ...objectExpressionOperators,
+        ...setExpressionOperators,
+        ...stringExpressionOperators,
+        ...timestampExpressionOperators,
+        ...trigonometryExpressionOperators,
+        ...typeExpressionOperators,
+        ...variableExpressionOperators,
+        ...conditionalExpressionOperators,
+    ]);
+}

@@ -198,4 +198,6 @@ const bitwiseUpdateOperators: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([...fieldUpdateOperators, ...arrayUpdateOperators, ...bitwiseUpdateOperators]);
+export function loadUpdateOperators(): void {
+    registerOperators([...fieldUpdateOperators, ...arrayUpdateOperators, ...bitwiseUpdateOperators]);
+}

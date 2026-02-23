@@ -286,4 +286,6 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([...aggregationPipelineStages]);
+export function loadStages(): void {
+    registerOperators([...aggregationPipelineStages]);
+}

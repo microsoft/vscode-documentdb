@@ -434,14 +434,16 @@ const miscellaneousQueryOperators: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([
-    ...comparisonQueryOperators,
-    ...logicalQueryOperators,
-    ...elementQueryOperators,
-    ...evaluationQueryOperators,
-    ...geospatialOperators,
-    ...arrayQueryOperators,
-    ...bitwiseQueryOperators,
-    ...projectionOperators,
-    ...miscellaneousQueryOperators,
-]);
+export function loadQueryOperators(): void {
+    registerOperators([
+        ...comparisonQueryOperators,
+        ...logicalQueryOperators,
+        ...elementQueryOperators,
+        ...evaluationQueryOperators,
+        ...geospatialOperators,
+        ...arrayQueryOperators,
+        ...bitwiseQueryOperators,
+        ...projectionOperators,
+        ...miscellaneousQueryOperators,
+    ]);
+}

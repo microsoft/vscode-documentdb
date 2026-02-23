@@ -228,4 +228,6 @@ const windowOperators: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([...windowOperators]);
+export function loadWindowOperators(): void {
+    registerOperators([...windowOperators]);
+}

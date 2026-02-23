@@ -65,17 +65,41 @@ export {
 } from './metaTags';
 
 // -- Consumer API --
-export { getAllCompletions, getFilteredCompletions, registerOperators } from './getFilteredCompletions';
+export { getAllCompletions, getFilteredCompletions } from './getFilteredCompletions';
 
 // -- Documentation URL helpers --
 export { getDocBase, getDocLink } from './docLinks';
 
-// -- Operator data modules (self-register on import) --
-import './accumulators';
-import './bsonConstructors';
-import './expressionOperators';
-import './queryOperators';
-import './stages';
-import './systemVariables';
-import './updateOperators';
-import './windowOperators';
+// -- Operator data modules --
+import { loadAccumulators } from './accumulators';
+import { loadBsonConstructors } from './bsonConstructors';
+import { loadExpressionOperators } from './expressionOperators';
+import { loadQueryOperators } from './queryOperators';
+import { loadStages } from './stages';
+import { loadSystemVariables } from './systemVariables';
+import { loadUpdateOperators } from './updateOperators';
+import { loadWindowOperators } from './windowOperators';
+
+/**
+ * Loads all built-in operator data into the registry.
+ *
+ * Called automatically at module import time so that consumers using
+ * `import { getFilteredCompletions } from '@vscode-documentdb/documentdb-constants'`
+ * get all operators without any additional setup.
+ *
+ * Can also be called explicitly (e.g. in workers or tests) — the call is
+ * idempotent when combined with {@link clearOperators}.
+ */
+export function loadOperators(): void {
+    loadAccumulators();
+    loadBsonConstructors();
+    loadExpressionOperators();
+    loadQueryOperators();
+    loadStages();
+    loadSystemVariables();
+    loadUpdateOperators();
+    loadWindowOperators();
+}
+
+// Auto-load on module import so the public API works out of the box.
+loadOperators();

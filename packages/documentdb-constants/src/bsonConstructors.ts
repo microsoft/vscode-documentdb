@@ -78,4 +78,6 @@ const bsonConstructors: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators(bsonConstructors);
+export function loadBsonConstructors(): void {
+    registerOperators(bsonConstructors);
+}

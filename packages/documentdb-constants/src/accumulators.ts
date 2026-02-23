@@ -181,4 +181,6 @@ const groupAccumulators: readonly OperatorEntry[] = [
 // Registration
 // ---------------------------------------------------------------------------
 
-registerOperators([...groupAccumulators]);
+export function loadAccumulators(): void {
+    registerOperators([...groupAccumulators]);
+}
