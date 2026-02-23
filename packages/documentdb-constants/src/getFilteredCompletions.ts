@@ -42,7 +42,7 @@ export function registerOperators(entries: readonly OperatorEntry[]): void {
  * `applicableBsonTypes` (universal operators) are always included.
  *
  * @param filter - the filtering criteria
- * @returns matching operator entries (frozen array)
+ * @returns matching operator entries (readonly array)
  */
 export function getFilteredCompletions(filter: CompletionFilter): readonly OperatorEntry[] {
     return allOperators.filter((entry) => {
