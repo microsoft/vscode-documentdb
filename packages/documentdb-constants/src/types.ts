@@ -48,9 +48,34 @@ export interface OperatorEntry {
     readonly applicableBsonTypes?: readonly string[];
 
     /**
-     * Operator return type or value type hint.
-     * Used by CompletionItemProvider for contextual snippet generation.
-     * Example: "$gt" → "same" (same type as input), "$size" → "number"
+     * @experimental Not yet populated by the generator; reserved for a future
+     * contextual-snippet feature.
+     *
+     * When populated, this field carries a hint about the type of value an operator
+     * produces or expects, enabling the CompletionItemProvider to tailor snippets
+     * and insert sensible placeholder values based on context.
+     *
+     * Planned values and their meanings:
+     *   - `"number"`   — operator always produces a number
+     *                    (e.g. `$size` on an array field → insert a numeric comparand)
+     *   - `"boolean"`  — operator produces true/false
+     *                    (e.g. `$and`, `$or` in expression context)
+     *   - `"string"`   — operator produces a string
+     *                    (e.g. `$concat`, `$toLower`)
+     *   - `"array"`    — operator produces an array
+     *                    (e.g. `$push` accumulator, `$concatArrays`)
+     *   - `"date"`     — operator produces a date
+     *                    (e.g. `$dateAdd`, `$toDate`)
+     *   - `"same"`     — operator produces the same type as its input
+     *                    (e.g. `$min`, `$max`, comparison operators like `$gt`)
+     *   - `"object"`   — operator produces a document/object
+     *                    (e.g. `$mergeObjects`)
+     *   - `"any"`      — return type is undetermined or context-dependent
+     *
+     * This field is intentionally absent from all current entries. The generator
+     * (`scripts/generate-from-reference.ts`) does not yet emit it. It will be
+     * populated in a follow-up pass once the `CompletionItemProvider` is ready
+     * to consume it.
      */
     readonly returnType?: string;
 }
