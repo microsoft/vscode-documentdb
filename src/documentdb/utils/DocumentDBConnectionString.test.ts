@@ -375,6 +375,41 @@ describe('DocumentDBConnectionString', () => {
         });
     });
 
+    describe('validatePassword', () => {
+        it('should validate normal passwords', () => {
+            expect(DocumentDBConnectionString.validatePassword('password')).toBe(true);
+            expect(DocumentDBConnectionString.validatePassword('pass123')).toBe(true);
+        });
+
+        it('should validate passwords with common special characters', () => {
+            expect(DocumentDBConnectionString.validatePassword('p@ssw0rd!')).toBe(true);
+            expect(DocumentDBConnectionString.validatePassword('pass#word')).toBe(true);
+            expect(DocumentDBConnectionString.validatePassword('p@$#$w0rd!&*()')).toBe(true);
+        });
+
+        it('should validate passwords with URL-significant characters', () => {
+            expect(DocumentDBConnectionString.validatePassword('user:pass@host')).toBe(true);
+            expect(DocumentDBConnectionString.validatePassword('pass?query=1')).toBe(true);
+            expect(DocumentDBConnectionString.validatePassword('pass&key=val')).toBe(true);
+        });
+
+        it('should validate passwords with encoding-sensitive characters', () => {
+            expect(DocumentDBConnectionString.validatePassword('pass%20word')).toBe(true);
+            expect(DocumentDBConnectionString.validatePassword('pass=word')).toBe(true);
+            expect(DocumentDBConnectionString.validatePassword('pass+word')).toBe(true);
+        });
+
+        it('should validate empty password', () => {
+            expect(DocumentDBConnectionString.validatePassword('')).toBe(true);
+        });
+
+        it('should validate Azure Cosmos DB style keys', () => {
+            // Cosmos DB keys often contain ==, +, and /
+            expect(DocumentDBConnectionString.validatePassword('someComplexKey123==')).toBe(true);
+            expect(DocumentDBConnectionString.validatePassword('abc+def/ghi==')).toBe(true);
+        });
+    });
+
     describe('whitespace trimming in constructor', () => {
         const baseUri = 'mongodb://user:pass@localhost:27017/test?ssl=true';
 
