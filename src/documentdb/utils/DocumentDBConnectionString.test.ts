@@ -375,6 +375,64 @@ describe('DocumentDBConnectionString', () => {
         });
     });
 
+    describe('whitespace trimming in constructor', () => {
+        const baseUri = 'mongodb://user:pass@localhost:27017/test?ssl=true';
+
+        it('should trim leading whitespace from connection string', () => {
+            const connStr = new DocumentDBConnectionString('   ' + baseUri);
+            expect(connStr.hosts).toEqual(['localhost:27017']);
+            expect(connStr.username).toBe('user');
+        });
+
+        it('should trim trailing whitespace from connection string', () => {
+            const connStr = new DocumentDBConnectionString(baseUri + '   ');
+            expect(connStr.hosts).toEqual(['localhost:27017']);
+            expect(connStr.username).toBe('user');
+        });
+
+        it('should trim leading and trailing whitespace', () => {
+            const connStr = new DocumentDBConnectionString('  ' + baseUri + '  ');
+            expect(connStr.hosts).toEqual(['localhost:27017']);
+            expect(connStr.searchParams.get('ssl')).toBe('true');
+        });
+
+        it('should trim BOM (\\uFEFF) from connection string', () => {
+            const connStr = new DocumentDBConnectionString('\uFEFF' + baseUri);
+            expect(connStr.hosts).toEqual(['localhost:27017']);
+            expect(connStr.username).toBe('user');
+        });
+
+        it('should trim NBSP (\\u00A0) from connection string', () => {
+            // Note: String.prototype.trim() does NOT remove NBSP in all engines,
+            // but we verify the current behavior handles common whitespace
+            const connStr = new DocumentDBConnectionString('\u00A0' + baseUri);
+            expect(connStr.hosts).toEqual(['localhost:27017']);
+        });
+
+        it('should trim mixed whitespace characters', () => {
+            const connStr = new DocumentDBConnectionString('\t\n ' + baseUri + ' \r\n');
+            expect(connStr.hosts).toEqual(['localhost:27017']);
+            expect(connStr.password).toBe('pass');
+        });
+
+        it('should handle connection string without query params and leading whitespace', () => {
+            const connStr = new DocumentDBConnectionString('  mongodb://localhost:27017/db  ');
+            expect(connStr.hosts).toEqual(['localhost:27017']);
+            expect(connStr.pathname).toBe('/db');
+        });
+
+        it('should parse correctly after trimming and preserve round-trip', () => {
+            const connStr = new DocumentDBConnectionString('  ' + baseUri + '  ');
+            const serialized = connStr.toString();
+            const reparsed = new DocumentDBConnectionString(serialized);
+
+            expect(reparsed.username).toBe('user');
+            expect(reparsed.password).toBe('pass');
+            expect(reparsed.hosts).toEqual(['localhost:27017']);
+            expect(reparsed.searchParams.get('ssl')).toBe('true');
+        });
+    });
+
     describe('real-world Azure Cosmos DB connection strings', () => {
         it('should parse Azure Cosmos DB for MongoDB RU connection string', () => {
             const uri =
