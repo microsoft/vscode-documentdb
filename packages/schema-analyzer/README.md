@@ -2,6 +2,15 @@
 
 Incremental JSON Schema analyzer for DocumentDB API and MongoDB API documents. Processes documents one at a time (or in batches) and produces an extended JSON Schema with statistical metadata — field occurrence counts, BSON type distributions, min/max values, and array length stats.
 
+> **Monorepo package** — this package is part of the `vscode-documentdb` workspace.
+> Dev dependencies (Jest, ts-jest, Prettier, TypeScript, etc.) are provided by the
+> root `package.json`. Always install from the repository root:
+>
+> ```bash
+> cd <repo-root>
+> npm install
+> ```
+>
 > **Note:** This package is not yet published to npm. We plan to publish it once the API stabilizes. For now, it is consumed internally via npm workspaces within the [vscode-documentdb](https://github.com/microsoft/vscode-documentdb) repository.
 
 ## Overview
