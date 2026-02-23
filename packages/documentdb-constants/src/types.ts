@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type ALL_META_TAGS } from './metaTags';
+
 /**
  * Represents a single operator, stage, accumulator, or BSON constructor
  * for use in autocomplete, hover docs, and diagnostics.
@@ -109,4 +111,4 @@ export interface CompletionFilter {
  * - 'variable' — system variables ($$NOW, $$ROOT, etc.)
  * - 'field:identifier' — injected field names from schema (not static)
  */
-export type MetaTag = string;
+export type MetaTag = (typeof ALL_META_TAGS)[number] | (string & {});
