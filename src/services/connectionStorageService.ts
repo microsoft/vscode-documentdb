@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type EntraIdAuthConfig, type NativeAuthConfig } from '../documentdb/auth/AuthConfig';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
+import { redactCredentialsFromConnectionString } from '../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -756,7 +757,9 @@ export class ConnectionStorageService {
             } catch (error) {
                 // Do not let one corrupt item break the entire list.
                 // Log at warn level so it is visible in the output channel.
-                const errorMessage = error instanceof Error ? error.message : String(error);
+                const errorMessage = redactCredentialsFromConnectionString(
+                    error instanceof Error ? error.message : String(error),
+                );
                 ext.outputChannel.warn(
                     `[Storage] Skipping corrupt stored item "${item.name}" (id: ${item.id}, version: ${item.version ?? 'none'}): ${errorMessage}`,
                 );
@@ -796,7 +799,9 @@ export class ConnectionStorageService {
         try {
             return this.fromStorageItem(storageItem);
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = redactCredentialsFromConnectionString(
+                error instanceof Error ? error.message : String(error),
+            );
             ext.outputChannel.warn(
                 `[Storage] get(${connectionId}): failed to load item "${storageItem.name}": ${errorMessage}`,
             );

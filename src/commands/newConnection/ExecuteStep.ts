@@ -6,6 +6,7 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
@@ -70,8 +71,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 } catch (error) {
                     // An existing stored connection has an invalid/corrupt connection string.
                     // Log it but don't block the user from creating a new connection.
+                    const rawMessage = error instanceof Error ? error.message : String(error);
                     ext.outputChannel.warn(
-                        `[NewConnection] Stored connection "${existingConnection.name}" (id: ${existingConnection.id}) has an invalid connection string and was skipped during duplicate check: ${error instanceof Error ? error.message : String(error)}`,
+                        `[NewConnection] Stored connection "${existingConnection.name}" (id: ${existingConnection.id}) has an invalid connection string and was skipped during duplicate check: ${redactCredentialsFromConnectionString(rawMessage)}`,
                     );
                     return false;
                 }

@@ -5,6 +5,7 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
@@ -82,8 +83,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                     [...itemCS.hosts].sort().join(',') === joinedHosts
                 );
             } catch (error) {
+                const rawMessage = error instanceof Error ? error.message : String(error);
                 ext.outputChannel.warn(
-                    `[NewLocalConnection] Stored connection "${connection.name}" (id: ${connection.id}) has an invalid connection string and was skipped during duplicate check: ${error instanceof Error ? error.message : String(error)}`,
+                    `[NewLocalConnection] Stored connection "${connection.name}" (id: ${connection.id}) has an invalid connection string and was skipped during duplicate check: ${redactCredentialsFromConnectionString(rawMessage)}`,
                 );
                 return false;
             }
