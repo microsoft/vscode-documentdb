@@ -182,11 +182,7 @@ class MigrationServiceImpl {
                 return false;
             }
             const c = p as Record<string, unknown>;
-            return (
-                typeof c.id === 'string' &&
-                typeof c.name === 'string' &&
-                typeof c.description === 'string'
-            );
+            return typeof c.id === 'string' && typeof c.name === 'string' && typeof c.description === 'string';
         });
 
         if (hideInstalled) {
