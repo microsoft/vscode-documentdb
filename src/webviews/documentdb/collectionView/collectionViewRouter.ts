@@ -9,7 +9,6 @@ import * as fs from 'fs';
 import { type Document } from 'mongodb';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { type JSONSchema } from 'vscode-json-languageservice';
 import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
@@ -39,9 +38,7 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
-// eslint-disable-next-line import/no-internal-modules
-import basicFindQuerySchema from '../../../utils/json/data-api/autocomplete/basicMongoFindFilterSchema.json';
-import { generateMongoFindJsonSchema } from '../../../utils/json/data-api/autocomplete/generateMongoFindJsonSchema';
+import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../api/configuration/appRouter';
@@ -234,24 +231,16 @@ export const collectionsViewRouter = router({
 
             return { documentCount: size };
         }),
-    getAutocompletionSchema: publicProcedureWithTelemetry
+    getFieldCompletionData: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
 
-            const autoCompletionData: FieldEntry[] = session.getKnownFields();
+            const fieldEntries: FieldEntry[] = session.getKnownFields();
 
-            let querySchema: JSONSchema;
-
-            if (autoCompletionData.length > 0) {
-                querySchema = generateMongoFindJsonSchema(autoCompletionData);
-            } else {
-                querySchema = basicFindQuerySchema;
-            }
-
-            return querySchema;
+            return toFieldCompletionItems(fieldEntries);
         }),
     getCurrentPageAsTable: publicProcedureWithTelemetry
         // parameters

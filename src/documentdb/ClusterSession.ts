@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import {
     SchemaAnalyzer,
     getPropertyNamesAtLevel,
@@ -540,7 +541,7 @@ export class ClusterSession {
      * @remarks
      * This method uses the same BSON parsing logic as ClustersClient.runFindQuery():
      * - filter is parsed with toFilterQueryObj() which handles UUID(), Date(), MinKey(), MaxKey() constructors
-     * - projection and sort are parsed with EJSON.parse()
+     * - projection and sort are parsed with parseShellBSON() in Loose mode
      *
      * Use this method when you need the actual MongoDB Document objects for query execution.
      * Use getCurrentFindQueryParams() when you only need the string representations.
@@ -555,7 +556,9 @@ export class ClusterSession {
         let projectionObj: Document | undefined;
         if (stringParams.project && stringParams.project.trim() !== '{}') {
             try {
-                projectionObj = EJSON.parse(stringParams.project) as Document;
+                projectionObj = parseShellBSON(stringParams.project, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 throw new Error(
                     l10n.t('Invalid projection syntax: {0}', error instanceof Error ? error.message : String(error)),
@@ -567,7 +570,9 @@ export class ClusterSession {
         let sortObj: Document | undefined;
         if (stringParams.sort && stringParams.sort.trim() !== '{}') {
             try {
-                sortObj = EJSON.parse(stringParams.sort) as Document;
+                sortObj = parseShellBSON(stringParams.sort, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 throw new Error(
                     l10n.t('Invalid sort syntax: {0}', error instanceof Error ? error.message : String(error)),

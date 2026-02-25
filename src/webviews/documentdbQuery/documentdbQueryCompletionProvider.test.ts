@@ -1,0 +1,513 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import {
+    FILTER_COMPLETION_META,
+    getFilteredCompletions,
+    PROJECTION_COMPLETION_META,
+    type OperatorEntry,
+} from '@vscode-documentdb/documentdb-constants';
+// eslint-disable-next-line import/no-internal-modules
+import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
+import { clearAllCompletionContexts, setCompletionContext } from './completionStore';
+import {
+    createCompletionItems,
+    getCompletionKindForMeta,
+    getMetaTagsForEditorType,
+    mapFieldToCompletionItem,
+    mapOperatorToCompletionItem,
+} from './documentdbQueryCompletionProvider';
+import { EditorType } from './languageConfig';
+
+/**
+ * Minimal mock of `monaco.languages.CompletionItemKind` for testing.
+ * Uses distinct numeric values matching Monaco's enum.
+ */
+const mockCompletionItemKind: typeof monacoEditor.languages.CompletionItemKind = {
+    Method: 0,
+    Function: 1,
+    Constructor: 2,
+    Field: 3,
+    Variable: 4,
+    Class: 5,
+    Struct: 6,
+    Interface: 7,
+    Module: 8,
+    Property: 9,
+    Event: 10,
+    Operator: 11,
+    Unit: 12,
+    Value: 13,
+    Constant: 14,
+    Enum: 15,
+    EnumMember: 16,
+    Keyword: 17,
+    Text: 18,
+    Color: 19,
+    File: 20,
+    Reference: 21,
+    Customcolor: 22,
+    Folder: 23,
+    TypeParameter: 24,
+    User: 25,
+    Issue: 26,
+    Snippet: 27,
+};
+
+/** Minimal mock of `monaco.languages.CompletionItemInsertTextRule`. */
+const mockInsertTextRule = {
+    InsertAsSnippet: 4, // Same value as Monaco
+    KeepWhitespace: 1,
+    None: 0,
+} as typeof monacoEditor.languages.CompletionItemInsertTextRule;
+
+/**
+ * Creates a minimal Monaco API mock for testing completion provider functions.
+ */
+function createMockMonaco(): typeof monacoEditor {
+    return {
+        languages: {
+            CompletionItemKind: mockCompletionItemKind,
+            CompletionItemInsertTextRule: mockInsertTextRule,
+        },
+    } as unknown as typeof monacoEditor;
+}
+
+/** Standard test range for all completion items. */
+const testRange: monacoEditor.IRange = {
+    startLineNumber: 1,
+    endLineNumber: 1,
+    startColumn: 1,
+    endColumn: 1,
+};
+
+describe('documentdbQueryCompletionProvider', () => {
+    describe('getCompletionKindForMeta', () => {
+        const kinds = mockCompletionItemKind;
+
+        test('maps query operators to Operator kind', () => {
+            expect(getCompletionKindForMeta('query', kinds)).toBe(kinds.Operator);
+            expect(getCompletionKindForMeta('query:comparison', kinds)).toBe(kinds.Operator);
+            expect(getCompletionKindForMeta('query:logical', kinds)).toBe(kinds.Operator);
+        });
+
+        test('maps expression operators to Function kind', () => {
+            expect(getCompletionKindForMeta('expr:arith', kinds)).toBe(kinds.Function);
+            expect(getCompletionKindForMeta('expr:string', kinds)).toBe(kinds.Function);
+        });
+
+        test('maps BSON constructors to Constructor kind', () => {
+            expect(getCompletionKindForMeta('bson', kinds)).toBe(kinds.Constructor);
+        });
+
+        test('maps stages to Module kind', () => {
+            expect(getCompletionKindForMeta('stage', kinds)).toBe(kinds.Module);
+        });
+
+        test('maps accumulators to Method kind', () => {
+            expect(getCompletionKindForMeta('accumulator', kinds)).toBe(kinds.Method);
+        });
+
+        test('maps update operators to Property kind', () => {
+            expect(getCompletionKindForMeta('update', kinds)).toBe(kinds.Property);
+        });
+
+        test('maps variables to Variable kind', () => {
+            expect(getCompletionKindForMeta('variable', kinds)).toBe(kinds.Variable);
+        });
+
+        test('maps window operators to Event kind', () => {
+            expect(getCompletionKindForMeta('window', kinds)).toBe(kinds.Event);
+        });
+
+        test('maps field identifiers to Field kind', () => {
+            expect(getCompletionKindForMeta('field:identifier', kinds)).toBe(kinds.Field);
+        });
+
+        test('maps unknown meta to Text kind', () => {
+            expect(getCompletionKindForMeta('unknown', kinds)).toBe(kinds.Text);
+        });
+    });
+
+    describe('mapOperatorToCompletionItem', () => {
+        const mockMonaco = createMockMonaco();
+
+        test('maps a simple operator entry without snippet', () => {
+            const entry: OperatorEntry = {
+                value: '$eq',
+                meta: 'query:comparison',
+                description: 'Matches values equal to a specified value.',
+            };
+
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco);
+
+            expect(item.label).toBe('$eq');
+            expect(item.kind).toBe(mockCompletionItemKind.Operator);
+            expect(item.insertText).toBe('$eq');
+            expect(item.insertTextRules).toBeUndefined();
+            expect(item.detail).toBe('Matches values equal to a specified value.');
+            expect(item.documentation).toBeUndefined(); // no link
+            expect(item.range).toBe(testRange);
+        });
+
+        test('maps an operator entry with snippet', () => {
+            const entry: OperatorEntry = {
+                value: '$gt',
+                meta: 'query:comparison',
+                description: 'Greater than',
+                snippet: '{ $gt: ${1:value} }',
+            };
+
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco);
+
+            expect(item.label).toBe('$gt');
+            expect(item.insertText).toBe('{ $gt: ${1:value} }');
+            expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
+        });
+
+        test('maps a BSON constructor with link', () => {
+            const entry: OperatorEntry = {
+                value: 'ObjectId',
+                meta: 'bson',
+                description: 'Creates a new ObjectId value.',
+                snippet: 'ObjectId("${1:hex}")',
+                link: 'https://docs.example.com/objectid',
+            };
+
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco);
+
+            expect(item.label).toBe('ObjectId');
+            expect(item.kind).toBe(mockCompletionItemKind.Constructor);
+            expect(item.insertText).toBe('ObjectId("${1:hex}")');
+            expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
+            expect(item.documentation).toEqual({
+                value: '[DocumentDB Docs](https://docs.example.com/objectid)',
+            });
+        });
+
+        test('uses the provided range', () => {
+            const customRange: monacoEditor.IRange = {
+                startLineNumber: 3,
+                endLineNumber: 3,
+                startColumn: 5,
+                endColumn: 10,
+            };
+
+            const entry: OperatorEntry = {
+                value: '$in',
+                meta: 'query:comparison',
+                description: 'Matches any value in an array.',
+            };
+
+            const item = mapOperatorToCompletionItem(entry, customRange, mockMonaco);
+            expect(item.range).toBe(customRange);
+        });
+    });
+
+    describe('getMetaTagsForEditorType', () => {
+        test('returns FILTER_COMPLETION_META for Filter editor type', () => {
+            const tags = getMetaTagsForEditorType(EditorType.Filter);
+            expect(tags).toBe(FILTER_COMPLETION_META);
+        });
+
+        test('returns PROJECTION_COMPLETION_META for Project editor type', () => {
+            const tags = getMetaTagsForEditorType(EditorType.Project);
+            expect(tags).toBe(PROJECTION_COMPLETION_META);
+        });
+
+        test('returns PROJECTION_COMPLETION_META for Sort editor type', () => {
+            const tags = getMetaTagsForEditorType(EditorType.Sort);
+            expect(tags).toBe(PROJECTION_COMPLETION_META);
+        });
+
+        test('returns FILTER_COMPLETION_META for undefined (fallback)', () => {
+            const tags = getMetaTagsForEditorType(undefined);
+            expect(tags).toBe(FILTER_COMPLETION_META);
+        });
+    });
+
+    describe('createCompletionItems', () => {
+        const mockMonaco = createMockMonaco();
+
+        afterEach(() => {
+            clearAllCompletionContexts();
+        });
+
+        test('returns items for filter context using documentdb-constants', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            // Should return the filter completions from documentdb-constants
+            expect(items.length).toBeGreaterThan(0);
+
+            // All items should have required CompletionItem properties
+            for (const item of items) {
+                expect(item.label).toBeDefined();
+                expect(typeof item.label).toBe('string');
+                expect(item.kind).toBeDefined();
+                expect(item.insertText).toBeDefined();
+                expect(item.range).toBe(testRange);
+            }
+        });
+
+        test('filter completions include query operators like $eq, $gt, $match', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const labels = items.map((item) => item.label);
+            expect(labels).toContain('$eq');
+            expect(labels).toContain('$gt');
+            expect(labels).toContain('$in');
+        });
+
+        test('filter completions include BSON constructors like ObjectId', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const labels = items.map((item) => item.label);
+            expect(labels).toContain('ObjectId');
+            expect(labels).toContain('UUID');
+            expect(labels).toContain('ISODate');
+        });
+
+        test('filter completions do NOT include JS globals like console, Math, function', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const labels = items.map((item) => item.label);
+            expect(labels).not.toContain('console');
+            expect(labels).not.toContain('Math');
+            expect(labels).not.toContain('function');
+            expect(labels).not.toContain('window');
+            expect(labels).not.toContain('document');
+            expect(labels).not.toContain('Array');
+            expect(labels).not.toContain('Object');
+            expect(labels).not.toContain('String');
+        });
+
+        test('filter completions do NOT include aggregation stages', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const labels = items.map((item) => item.label);
+            // $match is a query operator AND a stage, but $group/$unwind are stage-only
+            expect(labels).not.toContain('$group');
+            expect(labels).not.toContain('$unwind');
+            expect(labels).not.toContain('$lookup');
+        });
+
+        test('filter completions match getFilteredCompletions count for FILTER_COMPLETION_META', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
+            expect(items).toHaveLength(expected.length);
+        });
+
+        test('default (undefined editor type) matches filter completions', () => {
+            const filterItems = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const defaultItems = createCompletionItems({
+                editorType: undefined,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            expect(defaultItems).toHaveLength(filterItems.length);
+        });
+    });
+
+    describe('mapFieldToCompletionItem', () => {
+        const mockMonaco = createMockMonaco();
+
+        test('maps a simple field to a CompletionItem', () => {
+            const field = {
+                fieldName: 'age',
+                displayType: 'Number',
+                bsonType: 'int',
+                isSparse: false,
+                insertText: 'age',
+                referenceText: '$age',
+            };
+
+            const item = mapFieldToCompletionItem(field, testRange, mockMonaco);
+
+            expect(item.label).toBe('age');
+            expect(item.kind).toBe(mockCompletionItemKind.Field);
+            expect(item.insertText).toBe('age');
+            expect(item.detail).toBe('Number');
+            expect(item.sortText).toBe('0_age');
+            expect(item.range).toBe(testRange);
+        });
+
+        test('includes (sparse) indicator for sparse fields', () => {
+            const field = {
+                fieldName: 'optionalField',
+                displayType: 'String',
+                bsonType: 'string',
+                isSparse: true,
+                insertText: 'optionalField',
+                referenceText: '$optionalField',
+            };
+
+            const item = mapFieldToCompletionItem(field, testRange, mockMonaco);
+
+            expect(item.detail).toBe('String (sparse)');
+        });
+
+        test('uses pre-escaped insertText for special field names', () => {
+            const field = {
+                fieldName: 'address.city',
+                displayType: 'String',
+                bsonType: 'string',
+                isSparse: false,
+                insertText: '"address.city"',
+                referenceText: '$address.city',
+            };
+
+            const item = mapFieldToCompletionItem(field, testRange, mockMonaco);
+
+            expect(item.label).toBe('address.city');
+            expect(item.insertText).toBe('"address.city"');
+        });
+    });
+
+    describe('field completions via store', () => {
+        const mockMonaco = createMockMonaco();
+
+        afterEach(() => {
+            clearAllCompletionContexts();
+        });
+
+        test('field completions appear when store has data', () => {
+            setCompletionContext('test-session', {
+                fields: [
+                    {
+                        fieldName: 'name',
+                        displayType: 'String',
+                        bsonType: 'string',
+                        isSparse: false,
+                        insertText: 'name',
+                        referenceText: '$name',
+                    },
+                    {
+                        fieldName: 'age',
+                        displayType: 'Number',
+                        bsonType: 'int',
+                        isSparse: false,
+                        insertText: 'age',
+                        referenceText: '$age',
+                    },
+                ],
+            });
+
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: 'test-session',
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const labels = items.map((i) => i.label);
+            expect(labels).toContain('name');
+            expect(labels).toContain('age');
+        });
+
+        test('field completions have sortText prefix so they sort first', () => {
+            setCompletionContext('test-session', {
+                fields: [
+                    {
+                        fieldName: 'name',
+                        displayType: 'String',
+                        bsonType: 'string',
+                        isSparse: false,
+                        insertText: 'name',
+                        referenceText: '$name',
+                    },
+                ],
+            });
+
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: 'test-session',
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const fieldItem = items.find((i) => i.label === 'name');
+            expect(fieldItem?.sortText).toBe('0_name');
+
+            // Operators should not have a sort prefix starting with 0_
+            const operatorItem = items.find((i) => i.label === '$eq');
+            expect(operatorItem?.sortText).toBeUndefined();
+        });
+
+        test('empty store returns only operator completions', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: 'nonexistent-session',
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
+            expect(items).toHaveLength(expected.length);
+        });
+
+        test('undefined sessionId returns only operator completions', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
+            expect(items).toHaveLength(expected.length);
+        });
+    });
+});
