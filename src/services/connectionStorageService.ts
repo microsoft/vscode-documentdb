@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type EntraIdAuthConfig, type NativeAuthConfig } from '../documentdb/auth/AuthConfig';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
+import { redactCredentialsFromConnectionString } from '../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -426,7 +427,8 @@ export class ConnectionStorageService {
      * Order matters:
      * 1. Fix folder connection strings for backward compatibility
      * 2. Deduplicate connection string parameters
-     * 3. Clean up orphaned items
+     * 3. Remove connections with invalid/empty connection strings
+     * 4. Clean up orphaned items
      */
     private static async resolvePostMigrationErrors(): Promise<void> {
         await callWithTelemetryAndErrorHandling('resolvePostMigrationErrors', async (context: IActionContext) => {
@@ -443,9 +445,90 @@ export class ConnectionStorageService {
             // This fixes corruption from previous bugs in migration or editing
             await this.cleanupDuplicateConnectionStringParameters(context, storageService);
 
-            // 3. Clean up orphaned items after folder and connection string fixes (fire-and-forget)
+            // 3. Remove connections with invalid/empty connection strings that cannot be parsed
+            // This prevents corrupt stored items from blocking operations like duplicate checking
+            await this.cleanupInvalidConnectionStrings(context, storageService);
+
+            // 4. Clean up orphaned items after folder and connection string fixes (fire-and-forget)
             void this.cleanupOrphanedItems();
         });
+    }
+
+    /**
+     * Removes connection items with empty or unparseable connection strings.
+     * These can result from interrupted writes (globalState saved but SecretStorage failed),
+     * incomplete migrations, or other storage corruption. Such items block operations like
+     * duplicate checking that need to parse every stored connection string.
+     *
+     * **Design note — intentional automatic deletion:**
+     * Permanently deleting these items on startup is acceptable because:
+     *   1. An empty/unparseable connection string means the entry is non-functional —
+     *      the user cannot connect, rename, or export it.
+     *   2. The most common cause is an interrupted write (globalState committed but
+     *      SecretStorage did not), which leaves an orphan that would otherwise block
+     *      the duplicate-check loop every session.
+     *   3. All removals are logged at warn level and reported via telemetry
+     *      (`invalidConnectionsRemoved`) so they remain auditable.
+     *
+     * @param context - The action context for telemetry
+     * @param storageService - The storage service to use (avoids circular getStorageService call)
+     */
+    private static async cleanupInvalidConnectionStrings(
+        context: IActionContext,
+        storageService: Storage,
+    ): Promise<void> {
+        let invalidRemoved = 0;
+
+        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
+            const items = await storageService.getItems<StoredItemProperties>(connectionType);
+
+            // Only check connection items with known versions (skip folders and unknown versions)
+            const connectionsToCheck = items.filter(
+                (item) =>
+                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                    item.properties?.type === ItemType.Connection &&
+                    item.secrets?.[SecretIndex.ConnectionString] !== FOLDER_PLACEHOLDER_CONNECTION_STRING,
+            );
+
+            for (const item of connectionsToCheck) {
+                const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
+
+                // Skip connections with a non-empty, parseable connection string
+                if (connectionString) {
+                    try {
+                        new DocumentDBConnectionString(connectionString);
+                        continue; // Valid — nothing to do
+                    } catch {
+                        // Falls through to removal below
+                    }
+                }
+
+                // Connection string is empty or unparseable — remove the item
+                try {
+                    await storageService.delete(connectionType, item.id);
+                    invalidRemoved++;
+
+                    ext.outputChannel.warn(
+                        `[Storage] Removed invalid connection "${item.name}" (id: ${item.id}, zone: ${connectionType}) — ` +
+                            `connection string was ${connectionString ? 'unparseable' : 'empty'}.`,
+                    );
+                    ext.outputChannel.trace(
+                        `[Storage]   └ version: ${item.version ?? 'none'}, secrets[0] length: ${connectionString.length}`,
+                    );
+                } catch (error) {
+                    ext.outputChannel.trace(
+                        `[Storage] Failed to remove invalid connection ${item.id}: ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                }
+            }
+        }
+
+        context.telemetry.measurements.invalidConnectionsRemoved = invalidRemoved;
+        if (invalidRemoved > 0) {
+            ext.outputChannel.appendLog(
+                `Cleaned up ${invalidRemoved} connection(s) with invalid or empty connection strings.`,
+            );
+        }
     }
 
     /**
@@ -662,19 +745,45 @@ export class ConnectionStorageService {
         const storageService = await this.getStorageService();
         const items = await storageService.getItems<StoredItemProperties>(connectionType);
 
+        ext.outputChannel.trace(
+            `[Storage] getAllItems(${connectionType}): loaded ${items.length} raw item(s) from storage`,
+        );
+
         // Filter out items with unknown versions (future-proofing)
         const knownItems = items.filter((item) => {
             if (!KNOWN_STORAGE_VERSIONS.has(item.version)) {
-                console.debug(
-                    `Skipping item "${item.id}" with unknown storage version "${item.version}". ` +
-                        `This may be from a newer extension version.`,
+                ext.outputChannel.trace(
+                    `[Storage] Skipping item "${item.id}" (version: "${item.version}") — unknown storage version`,
                 );
                 return false;
             }
             return true;
         });
 
-        return knownItems.map((item) => this.fromStorageItem(item));
+        const result: StoredItem[] = [];
+        for (const item of knownItems) {
+            try {
+                result.push(this.fromStorageItem(item));
+            } catch (error) {
+                // Do not let one corrupt item break the entire list.
+                // Log at warn level so it is visible in the output channel.
+                const errorMessage = redactCredentialsFromConnectionString(
+                    error instanceof Error ? error.message : String(error),
+                );
+                ext.outputChannel.warn(
+                    `[Storage] Skipping corrupt stored item "${item.name}" (id: ${item.id}, version: ${item.version ?? 'none'}): ${errorMessage}`,
+                );
+                ext.outputChannel.trace(
+                    `[Storage]   └ secrets present: ${!!item.secrets}, secrets[0] length: ${item.secrets?.[0]?.length ?? 'N/A'}, properties.type: ${item.properties?.type ?? 'undefined'}`,
+                );
+            }
+        }
+
+        ext.outputChannel.trace(
+            `[Storage] getAllItems(${connectionType}): returning ${result.length} valid item(s) (${knownItems.length - result.length} skipped due to errors)`,
+        );
+
+        return result;
     }
 
     /**
@@ -691,14 +800,23 @@ export class ConnectionStorageService {
 
         // Skip items with unknown versions (future-proofing)
         if (!KNOWN_STORAGE_VERSIONS.has(storageItem.version)) {
-            console.debug(
-                `Skipping item "${storageItem.id}" with unknown storage version "${storageItem.version}". ` +
-                    `This may be from a newer extension version.`,
+            ext.outputChannel.trace(
+                `[Storage] get(${connectionId}): skipping item with unknown storage version "${storageItem.version}"`,
             );
             return undefined;
         }
 
-        return this.fromStorageItem(storageItem);
+        try {
+            return this.fromStorageItem(storageItem);
+        } catch (error) {
+            const errorMessage = redactCredentialsFromConnectionString(
+                error instanceof Error ? error.message : String(error),
+            );
+            ext.outputChannel.warn(
+                `[Storage] get(${connectionId}): failed to load item "${storageItem.name}": ${errorMessage}`,
+            );
+            return undefined;
+        }
     }
 
     /**
@@ -864,6 +982,10 @@ export class ConnectionStorageService {
     }
 
     private static fromStorageItem(item: StorageItem<StoredItemProperties>): StoredItem {
+        ext.outputChannel.trace(
+            `[Storage] fromStorageItem: id=${item.id}, name="${item.name}", version=${item.version ?? 'none'}, type=${item.properties?.type ?? 'undefined'}`,
+        );
+
         switch (item.version) {
             case '3.0':
                 // v3.0 - reconstruct directly from storage
@@ -885,6 +1007,18 @@ export class ConnectionStorageService {
      */
     private static reconstructStoredItemFromSecrets(item: StorageItem<StoredItemProperties>): StoredItem {
         const secretsArray = item.secrets ?? [];
+
+        const rawConnectionString = secretsArray[SecretIndex.ConnectionString] ?? '';
+        if (
+            !rawConnectionString &&
+            item.properties?.type !== ItemType.Folder &&
+            rawConnectionString !== FOLDER_PLACEHOLDER_CONNECTION_STRING
+        ) {
+            ext.outputChannel.warn(
+                `[Storage] Item "${item.name}" (id: ${item.id}) has an empty connection string in secrets — ` +
+                    `this may indicate incomplete storage write or missing SecretStorage data.`,
+            );
+        }
 
         // Reconstruct native auth config from individual fields
         let nativeAuthConfig: NativeAuthConfig | undefined;
@@ -938,7 +1072,21 @@ export class ConnectionStorageService {
      */
     private static migrateToV2(item: StorageItem): StoredItem {
         // in V2, the connection string shouldn't contain the username/password combo
-        const parsedCS = new DocumentDBConnectionString(item?.secrets?.[0] ?? '');
+        const rawSecret = item?.secrets?.[0] ?? '';
+
+        ext.outputChannel.trace(
+            `[Storage] migrateToV2: id=${item.id}, name="${item.name}", secret length=${rawSecret.length}`,
+        );
+
+        // Guard: If the stored connection string is empty or clearly invalid, we cannot
+        // parse it. Throw a descriptive error so the caller (getAllItems) can skip it.
+        if (!rawSecret || rawSecret.trim().length === 0) {
+            throw new Error(
+                `Cannot migrate v1 item "${item.name}" (id: ${item.id}): stored connection string is empty`,
+            );
+        }
+
+        const parsedCS = new DocumentDBConnectionString(rawSecret);
         const username = parsedCS.username;
         const password = parsedCS.password;
         parsedCS.username = '';

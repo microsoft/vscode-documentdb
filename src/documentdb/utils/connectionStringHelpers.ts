@@ -6,6 +6,24 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { DocumentDBConnectionString } from './DocumentDBConnectionString';
 
+/**
+ * Redacts credentials from any MongoDB connection string URIs found in arbitrary text.
+ * Use this when logging error messages that may contain raw connection strings
+ * (e.g., MongoParseError messages include the original URI).
+ *
+ * Unlike {@link removePasswordFromConnectionString}, this function does NOT require
+ * a parseable connection string — it uses a regex to strip the `user:password@` segment
+ * from `mongodb://` and `mongodb+srv://` URIs embedded anywhere in the input text.
+ *
+ * @param text - The text to redact (e.g., an error message)
+ * @returns The text with credentials replaced by `<credentials>`
+ */
+export const redactCredentialsFromConnectionString = (text: string): string => {
+    // Matches the credentials portion (everything before the last '@' that follows the scheme)
+    // in mongodb:// or mongodb+srv:// URIs.
+    return text.replace(/(mongodb(?:\+srv)?:\/\/)[^\s@]*@/gi, '$1<credentials>@');
+};
+
 export const removePasswordFromConnectionString = (connectionString: string): string => {
     const connectionStringOb = new DocumentDBConnectionString(connectionString);
     connectionStringOb.password = '';
