@@ -109,6 +109,9 @@ export const QueryInsightsMain = (): JSX.Element => {
     // AbortController ref for cancelling in-flight Stage 3 AI requests
     const stage3AbortControllerRef = useRef<AbortController | null>(null);
 
+    // Timer ref for the delayed tips/error card shown during Stage 3 loading
+    const stage3TipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     // Feedback dialog state
     const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
     const [feedbackSentiment, setFeedbackSentiment] = useState<'positive' | 'negative'>('positive');
@@ -452,13 +455,19 @@ export const QueryInsightsMain = (): JSX.Element => {
         // Transition to Stage 3 loading (this will reset UI flags)
         transitionToStage(3, 'loading');
 
+        // Clear any pending tips/error card timer from a previous request
+        if (stage3TipsTimerRef.current) {
+            clearTimeout(stage3TipsTimerRef.current);
+            stage3TipsTimerRef.current = null;
+        }
+
         // Check if Stage 2 has query execution errors
         const hasExecutionError =
             queryInsightsState.stage2Data?.concerns &&
             queryInsightsState.stage2Data.concerns.some((concern) => concern.includes('Query Execution Failed'));
 
         // Show appropriate card after 1 second delay
-        const timer = setTimeout(() => {
+        stage3TipsTimerRef.current = setTimeout(() => {
             if (hasExecutionError) {
                 setShowErrorCard(true);
             } else {
@@ -550,11 +559,15 @@ export const QueryInsightsMain = (): JSX.Element => {
             ...prev,
             stage3Promise: promise,
         }));
-
-        return () => clearTimeout(timer);
     };
 
     const handleCancelAI = () => {
+        // Clear any pending tips/error card timer to prevent stale UI after cancel
+        if (stage3TipsTimerRef.current) {
+            clearTimeout(stage3TipsTimerRef.current);
+            stage3TipsTimerRef.current = null;
+        }
+
         // Abort the in-flight tRPC request so the server can stop work early
         if (stage3AbortControllerRef.current) {
             stage3AbortControllerRef.current.abort();
