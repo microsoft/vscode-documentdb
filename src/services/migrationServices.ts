@@ -170,16 +170,27 @@ class MigrationServiceImpl {
      */
     public listAnnouncedProviders(hideInstalled: boolean = true): AnnouncedMigrationProvider[] {
         const packageJson = ext.context.extension.packageJSON as unknown;
-        if (
-            !packageJson ||
-            typeof packageJson !== 'object' ||
-            !('x-announcedMigrationProviders' in packageJson) ||
-            !packageJson['x-announcedMigrationProviders']
-        ) {
+        if (!packageJson || typeof packageJson !== 'object' || !('x-announcedMigrationProviders' in packageJson)) {
             return [];
         }
 
-        const announcedProviders = packageJson['x-announcedMigrationProviders'] as AnnouncedMigrationProvider[];
+        const raw = (packageJson as Record<string, unknown>)['x-announcedMigrationProviders'];
+        if (!Array.isArray(raw)) {
+            return [];
+        }
+
+        const announcedProviders = raw.filter((p: unknown): p is AnnouncedMigrationProvider => {
+            if (p === null || typeof p !== 'object') {
+                return false;
+            }
+            const c = p as Record<string, unknown>;
+            return (
+                typeof c.id === 'string' &&
+                typeof c.name === 'string' &&
+                typeof c.description === 'string' &&
+                typeof c.url === 'string'
+            );
+        });
 
         if (hideInstalled) {
             // Filter out providers whose extension has already registered via the API.
