@@ -351,18 +351,10 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function updateAutoCompletionData(): void {
-        trpcClient.mongoClusters.collectionView.getAutocompletionSchema
-            .query()
-            .then(async (schema) => {
-                void (await currentContextRef.current.queryEditor?.setJsonSchema(schema));
-            })
-            .catch((error) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error while loading the autocompletion data'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
-            });
+        // TODO: Step 4 — Replace with field-completion-data push via tRPC subscription.
+        // The old JSON schema pipeline (getAutocompletionSchema + setJsonSchema) has been
+        // removed as part of the documentdb-query language POC. Static completions from
+        // documentdb-constants are used until dynamic field data is wired up.
     }
 
     function handleDeleteDocumentRequest(): void {

@@ -10,9 +10,8 @@ import { useContext, useEffect, useRef, useState, type JSX } from 'react';
 import { InputWithProgress } from '../../../../components/InputWithProgress';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
-// eslint-disable-next-line import/no-internal-modules
-import basicFindQuerySchema from '../../../../../utils/json/data-api/autocomplete/basicMongoFindFilterSchema.json';
 import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
+import { LANGUAGE_ID, registerDocumentDBQueryLanguage } from '../../../../documentdbQuery';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 
 import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from '@fluentui/react-icons';
@@ -46,7 +45,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     // AI prompt history (survives hide/show of AI input)
     const [aiPromptHistory, setAiPromptHistory] = useState<string[]>([]);
 
-    const schemaAbortControllerRef = useRef<AbortController | null>(null);
     const aiGenerationAbortControllerRef = useRef<AbortController | null>(null);
     const aiInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -63,6 +61,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         // Store the filter editor reference
         filterEditorRef.current = editor;
 
+        // Register the documentdb-query language (idempotent — safe to call on every mount)
+        void registerDocumentDBQueryLanguage(monaco);
+
         const getCurrentQueryFunction = () => ({
             filter: filterValue,
             project: projectValue,
@@ -76,78 +77,8 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             ...prev,
             queryEditor: {
                 getCurrentQuery: getCurrentQueryFunction,
-                /**
-                 * Dynamically sets the JSON schema for the Monaco editor's validation and autocompletion.
-                 *
-                 * NOTE: This function can encounter network errors if called immediately after the
-                 * editor mounts, as the underlying JSON web worker may not have finished loading.
-                 * To mitigate this, a delay is introduced before attempting to set the schema.
-                 *
-                 * A more robust long-term solution should be implemented to programmatically
-                 * verify that the JSON worker is initialized before this function proceeds.
-                 *
-                 * An AbortController is used to prevent race conditions when this function is
-                 * called in quick succession (e.g., rapid "refresh" clicks). It ensures that
-                 * any pending schema update is cancelled before a new one begins, guaranteeing
-                 * a clean, predictable state and allowing the Monaco worker to initialize correctly.
-                 */
-                setJsonSchema: async (schema) => {
-                    // Use the ref to cancel the previous operation
-                    if (schemaAbortControllerRef.current) {
-                        schemaAbortControllerRef.current.abort();
-                    }
-
-                    // Create and store the new AbortController in the ref
-                    const abortController = new AbortController();
-                    schemaAbortControllerRef.current = abortController;
-                    const signal = abortController.signal;
-
-                    try {
-                        // Wait for 2 seconds to give the worker time to initialize
-                        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                        // If the operation was cancelled during the delay, abort early
-                        if (signal.aborted) {
-                            return;
-                        }
-
-                        // Check if JSON language features are available and set the schema
-                        if (monaco.languages.json?.jsonDefaults) {
-                            monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-                                validate: false,
-                                schemas: [
-                                    {
-                                        uri: 'mongodb-filter-query-schema.json',
-                                        fileMatch: ['*'],
-                                        schema: schema,
-                                    },
-                                ],
-                            });
-                        }
-                    } catch (error) {
-                        // The error is likely an uncaught exception in the worker,
-                        // but we catch here just in case.
-                        console.warn('Error setting JSON schema:', error);
-                    }
-                },
             },
         }));
-
-        // initialize the monaco editor with the schema that's basic
-        // as we don't know the schema of the collection available
-        // this is a fallback for the case when the autocompletion feature fails.
-        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-            validate: true,
-            schemas: [
-                {
-                    uri: 'mongodb-filter-query-schema.json', // Unique identifier
-                    fileMatch: ['*'], // Apply to all JSON files or specify as needed
-
-                    schema: basicFindQuerySchema,
-                    // schema: generateMongoFindJsonSchema(fieldEntries)
-                },
-            ],
-        });
     };
 
     const monacoOptions: editor.IStandaloneEditorConstructionOptions = {
@@ -176,10 +107,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     // Cleanup any pending operations when component unmounts
     useEffect(() => {
         return () => {
-            if (schemaAbortControllerRef.current) {
-                schemaAbortControllerRef.current.abort();
-                schemaAbortControllerRef.current = null;
-            }
             if (aiGenerationAbortControllerRef.current) {
                 aiGenerationAbortControllerRef.current.abort();
                 aiGenerationAbortControllerRef.current = null;
@@ -397,7 +324,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                     <MonacoAutoHeight
                         height={'100%'}
                         width={'100%'}
-                        language="json"
+                        language={LANGUAGE_ID}
                         adaptiveHeight={{
                             enabled: true,
                             maxLines: 10,
@@ -416,7 +343,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         }}
                         options={{
                             ...monacoOptions,
-                            ariaLabel: l10n.t('Filter: Enter the DocumentDB query filter in JSON format'),
+                            ariaLabel: l10n.t('Filter: Enter the DocumentDB query filter'),
                         }}
                     />
                 </div>
@@ -508,7 +435,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
-                                language="json"
+                                language={LANGUAGE_ID}
                                 adaptiveHeight={{
                                     enabled: true,
                                     maxLines: 5,
@@ -539,7 +466,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
-                                language="json"
+                                language={LANGUAGE_ID}
                                 adaptiveHeight={{
                                     enabled: true,
                                     maxLines: 5,
