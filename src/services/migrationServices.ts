@@ -65,11 +65,11 @@ export interface ActionsOptions {
  */
 export interface AnnouncedMigrationProvider {
     /** The VS Code extension ID of the announced provider (e.g., "ms-azurecosmosdbtools.vscode-mongo-migration") */
-    id: string;
+    readonly id: string;
     /** Display name shown in the QuickPick */
-    name: string;
+    readonly name: string;
     /** Short description shown as detail text */
-    description: string;
+    readonly description: string;
 }
 
 /**
