@@ -10,6 +10,7 @@
  * 1. Registers the language ID with Monaco
  * 2. Imports the JavaScript Monarch tokenizer for syntax highlighting
  * 3. Registers a custom CompletionItemProvider scoped to `documentdb-query`
+ * 4. Registers a HoverProvider for operator/constructor documentation
  *
  * The JS tokenizer provides correct highlighting for:
  * - Unquoted identifiers: `{ name: 1 }`
@@ -26,6 +27,7 @@
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { createCompletionItems } from './documentdbQueryCompletionProvider';
+import { getHoverContent } from './documentdbQueryHoverProvider';
 import { LANGUAGE_ID, parseEditorUri } from './languageConfig';
 
 /** Tracks whether the language has already been registered (idempotent guard). */
@@ -71,7 +73,7 @@ export async function registerDocumentDBQueryLanguage(monaco: typeof monacoEdito
 
             // Get the word at the current position for range calculation
             const wordInfo = model.getWordUntilPosition(position);
-            const range: monacoEditor.IRange = {
+            let range: monacoEditor.IRange = {
                 startLineNumber: position.lineNumber,
                 endLineNumber: position.lineNumber,
                 startColumn: wordInfo.startColumn,
@@ -79,18 +81,55 @@ export async function registerDocumentDBQueryLanguage(monaco: typeof monacoEdito
             };
 
             // Check if cursor is preceded by '$' (for operator completions)
+            // Monaco's getWordUntilPosition() does not treat '$' as part of a word boundary.
+            // When the user types '$g', wordInfo.startColumn points to 'g', not '$'.
+            // Without this fix, selecting '$gt' would insert '$$gt' (double dollar).
             const lineContent = model.getLineContent(position.lineNumber);
             const charBefore = lineContent[wordInfo.startColumn - 2]; // -2 because columns are 1-based
+
+            if (charBefore === '$') {
+                range = { ...range, startColumn: range.startColumn - 1 };
+            }
 
             // Build completion items based on context
             const items = createCompletionItems({
                 editorType: parsed?.editorType,
+                sessionId: parsed?.sessionId,
                 range,
                 isDollarPrefix: charBefore === '$',
                 monaco,
             });
 
             return { suggestions: items };
+        },
+    });
+
+    // Step 5: Register the hover provider
+    monaco.languages.registerHoverProvider(LANGUAGE_ID, {
+        provideHover: (
+            model: monacoEditor.editor.ITextModel,
+            position: monacoEditor.Position,
+        ): monacoEditor.languages.Hover | null => {
+            const wordAtPosition = model.getWordAtPosition(position);
+            if (!wordAtPosition) {
+                return null;
+            }
+
+            const hover = getHoverContent(wordAtPosition.word);
+            if (!hover) {
+                return null;
+            }
+
+            // Set the range for the hover highlight
+            return {
+                ...hover,
+                range: {
+                    startLineNumber: position.lineNumber,
+                    endLineNumber: position.lineNumber,
+                    startColumn: wordAtPosition.startColumn,
+                    endColumn: wordAtPosition.endColumn,
+                },
+            };
         },
     });
 

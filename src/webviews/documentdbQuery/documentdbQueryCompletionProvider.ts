@@ -25,6 +25,8 @@ import {
 } from '@vscode-documentdb/documentdb-constants';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
+import { type FieldCompletionData } from '../../utils/json/data-api/autocomplete/toFieldCompletionItems';
+import { getCompletionContext } from './completionStore';
 import { EditorType } from './languageConfig';
 
 /**
@@ -77,11 +79,35 @@ export function mapOperatorToCompletionItem(
 }
 
 /**
+ * Maps a FieldCompletionData entry to a Monaco CompletionItem.
+ *
+ * Fields are given a sort prefix of `"0_"` so they appear before operators
+ * in the completion list.
+ */
+export function mapFieldToCompletionItem(
+    field: FieldCompletionData,
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem {
+    const sparseIndicator = field.isSparse ? ' (sparse)' : '';
+    return {
+        label: field.fieldName,
+        kind: monaco.languages.CompletionItemKind.Field,
+        insertText: field.insertText,
+        detail: `${field.displayType}${sparseIndicator}`,
+        sortText: `0_${field.fieldName}`,
+        range,
+    };
+}
+
+/**
  * Parameters for creating completion items.
  */
 export interface CreateCompletionItemsParams {
     /** The editor type parsed from the model URI (undefined if URI doesn't match). */
     editorType: EditorType | undefined;
+    /** The session ID for looking up dynamic field completions. */
+    sessionId: string | undefined;
     /** The range to insert completions at. */
     range: monacoEditor.IRange;
     /** Whether the cursor is immediately after a '$' character. */
@@ -116,10 +142,23 @@ export function getMetaTagsForEditorType(editorType: EditorType | undefined): re
  * each entry to a Monaco CompletionItem.
  */
 export function createCompletionItems(params: CreateCompletionItemsParams): monacoEditor.languages.CompletionItem[] {
-    const { editorType, range, monaco } = params;
+    const { editorType, sessionId, range, monaco } = params;
 
+    // Static operator completions from documentdb-constants
     const metaTags = getMetaTagsForEditorType(editorType);
     const entries = getFilteredCompletions({ meta: [...metaTags] });
+    const operatorItems = entries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco));
 
-    return entries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco));
+    // Dynamic field completions from the completion store
+    const fieldItems: monacoEditor.languages.CompletionItem[] = [];
+    if (sessionId) {
+        const context = getCompletionContext(sessionId);
+        if (context) {
+            for (const field of context.fields) {
+                fieldItems.push(mapFieldToCompletionItem(field, range, monaco));
+            }
+        }
+    }
+
+    return [...fieldItems, ...operatorItems];
 }

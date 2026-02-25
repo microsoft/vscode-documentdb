@@ -22,5 +22,7 @@
  * ```
  */
 
+export { clearCompletionContext, getCompletionContext, setCompletionContext } from './completionStore';
+export { validateExpression, type Diagnostic } from './documentdbQueryValidator';
 export { EditorType, LANGUAGE_ID, URI_SCHEME, buildEditorUri, parseEditorUri } from './languageConfig';
 export { registerDocumentDBQueryLanguage } from './registerLanguage';

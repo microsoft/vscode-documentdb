@@ -12,6 +12,7 @@ import { Announcer } from '../../api/webview-client/accessibility';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
+import { setCompletionContext } from '../../documentdbQuery';
 import './collectionView.scss';
 import {
     CollectionViewContext,
@@ -351,10 +352,15 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function updateAutoCompletionData(): void {
-        // TODO: Step 4 — Replace with field-completion-data push via tRPC subscription.
-        // The old JSON schema pipeline (getAutocompletionSchema + setJsonSchema) has been
-        // removed as part of the documentdb-query language POC. Static completions from
-        // documentdb-constants are used until dynamic field data is wired up.
+        trpcClient.mongoClusters.collectionView.getFieldCompletionData
+            .query()
+            .then((fields) => {
+                setCompletionContext(configuration.sessionId, { fields });
+            })
+            .catch((error) => {
+                console.debug('Failed to update field completion data:', error);
+                // Non-blocking — completion will work without fields
+            });
     }
 
     function handleDeleteDocumentRequest(): void {

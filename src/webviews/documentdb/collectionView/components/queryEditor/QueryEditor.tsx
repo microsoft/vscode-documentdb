@@ -11,7 +11,15 @@ import { InputWithProgress } from '../../../../components/InputWithProgress';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
-import { LANGUAGE_ID, registerDocumentDBQueryLanguage } from '../../../../documentdbQuery';
+import {
+    buildEditorUri,
+    clearCompletionContext,
+    EditorType,
+    LANGUAGE_ID,
+    registerDocumentDBQueryLanguage,
+    validateExpression,
+    type Diagnostic,
+} from '../../../../documentdbQuery';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 
 import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from '@fluentui/react-icons';
@@ -22,6 +30,31 @@ import { MonacoAutoHeight } from '../../../../components/MonacoAutoHeight';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import './queryEditor.scss';
+
+/**
+ * Convert a Diagnostic from the documentdb-query validator to a Monaco marker.
+ */
+function toMonacoMarker(
+    diagnostic: Diagnostic,
+    model: monacoEditor.editor.ITextModel,
+    monaco: typeof monacoEditor,
+): monacoEditor.editor.IMarkerData {
+    const startPos = model.getPositionAt(diagnostic.startOffset);
+    const endPos = model.getPositionAt(diagnostic.endOffset);
+    return {
+        severity:
+            diagnostic.severity === 'error'
+                ? monaco.MarkerSeverity.Error
+                : diagnostic.severity === 'warning'
+                  ? monaco.MarkerSeverity.Warning
+                  : monaco.MarkerSeverity.Info,
+        message: diagnostic.message,
+        startLineNumber: startPos.lineNumber,
+        startColumn: startPos.column,
+        endLineNumber: endPos.lineNumber,
+        endColumn: endPos.column,
+    };
+}
 
 interface QueryEditorProps {
     onExecuteRequest: () => void;
@@ -55,14 +88,66 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
     const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
-    const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
-        editor.setValue('{  }');
+    /**
+     * Creates a Monaco model with a URI scheme for the given editor type.
+     * This enables the completion provider to identify which editor the request is for.
+     */
+    const createEditorModel = (
+        editor: monacoEditor.editor.IStandaloneCodeEditor,
+        monaco: typeof monacoEditor,
+        editorType: EditorType,
+        initialValue: string,
+    ): monacoEditor.editor.ITextModel => {
+        const uri = monaco.Uri.parse(buildEditorUri(editorType, configuration.sessionId));
+        let model = monaco.editor.getModel(uri);
+        if (!model) {
+            model = monaco.editor.createModel(initialValue, LANGUAGE_ID, uri);
+        }
+        editor.setModel(model);
+        return model;
+    };
 
+    /**
+     * Sets up debounced validation on editor content changes.
+     * Returns a cleanup function to clear any pending timeout.
+     */
+    const setupValidation = (
+        editor: monacoEditor.editor.IStandaloneCodeEditor,
+        monaco: typeof monacoEditor,
+        model: monacoEditor.editor.ITextModel,
+    ): (() => void) => {
+        let validationTimeout: ReturnType<typeof setTimeout>;
+        const disposable = editor.onDidChangeModelContent(() => {
+            clearTimeout(validationTimeout);
+            validationTimeout = setTimeout(() => {
+                const diagnostics = validateExpression(editor.getValue());
+                const markers = diagnostics.map((d) => toMonacoMarker(d, model, monaco));
+                monaco.editor.setModelMarkers(model, 'documentdb-query', markers);
+            }, 300);
+        });
+        return () => {
+            clearTimeout(validationTimeout);
+            disposable.dispose();
+        };
+    };
+
+    // Track validation cleanup functions
+    const filterValidationCleanupRef = useRef<(() => void) | null>(null);
+    const projectValidationCleanupRef = useRef<(() => void) | null>(null);
+    const sortValidationCleanupRef = useRef<(() => void) | null>(null);
+
+    const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
         // Store the filter editor reference
         filterEditorRef.current = editor;
 
         // Register the documentdb-query language (idempotent — safe to call on every mount)
         void registerDocumentDBQueryLanguage(monaco);
+
+        // Create model with URI scheme for contextual completions
+        const model = createEditorModel(editor, monaco, EditorType.Filter, '{  }');
+
+        // Set up debounced validation
+        filterValidationCleanupRef.current = setupValidation(editor, monaco, model);
 
         const getCurrentQueryFunction = () => ({
             filter: filterValue,
@@ -111,8 +196,21 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 aiGenerationAbortControllerRef.current.abort();
                 aiGenerationAbortControllerRef.current = null;
             }
+
+            // Clean up validation timeouts
+            filterValidationCleanupRef.current?.();
+            projectValidationCleanupRef.current?.();
+            sortValidationCleanupRef.current?.();
+
+            // Dispose Monaco models
+            filterEditorRef.current?.getModel()?.dispose();
+            projectEditorRef.current?.getModel()?.dispose();
+            sortEditorRef.current?.getModel()?.dispose();
+
+            // Clear completion store for this session
+            clearCompletionContext(configuration.sessionId);
         };
-    }, []);
+    }, [configuration.sessionId]);
 
     // Update getCurrentQuery function whenever state changes
     useEffect(() => {
@@ -336,7 +434,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         }}
                         onMount={(editor, monaco) => {
                             handleEditorDidMount(editor, monaco);
-                            // Sync initial value
+                            // Sync editor content to state
                             editor.onDidChangeModelContent(() => {
                                 setFilterValue(editor.getValue());
                             });
@@ -442,9 +540,18 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     minLines: 1,
                                     lineHeight: 19,
                                 }}
-                                onMount={(editor) => {
+                                onMount={(editor, monaco) => {
+                                    // Register language (idempotent)
+                                    void registerDocumentDBQueryLanguage(monaco);
+
                                     projectEditorRef.current = editor;
-                                    editor.setValue(projectValue);
+
+                                    // Create model with URI scheme for project completions
+                                    const model = createEditorModel(editor, monaco, EditorType.Project, projectValue);
+
+                                    // Set up validation
+                                    projectValidationCleanupRef.current = setupValidation(editor, monaco, model);
+
                                     editor.onDidChangeModelContent(() => {
                                         setProjectValue(editor.getValue());
                                     });
@@ -473,9 +580,18 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     minLines: 1,
                                     lineHeight: 19,
                                 }}
-                                onMount={(editor) => {
+                                onMount={(editor, monaco) => {
+                                    // Register language (idempotent)
+                                    void registerDocumentDBQueryLanguage(monaco);
+
                                     sortEditorRef.current = editor;
-                                    editor.setValue(sortValue);
+
+                                    // Create model with URI scheme for sort completions
+                                    const model = createEditorModel(editor, monaco, EditorType.Sort, sortValue);
+
+                                    // Set up validation
+                                    sortValidationCleanupRef.current = setupValidation(editor, monaco, model);
+
                                     editor.onDidChangeModelContent(() => {
                                         setSortValue(editor.getValue());
                                     });
