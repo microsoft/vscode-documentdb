@@ -34,7 +34,6 @@ export async function accessDataMigrationServices(context: IActionContext, node:
             id: `${ANNOUNCED_PROVIDER_PREFIX}-${provider.id}`,
             label: `$(extensions) ${provider.name}`,
             detail: l10n.t('Open the VS Code Marketplace to learn more about "{0}"', provider.name),
-            url: provider.url,
             marketplaceId: provider.id,
             group: 'Visit Marketplace',
             alwaysShow: true,
