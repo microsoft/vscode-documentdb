@@ -502,7 +502,7 @@
       {
         "//": "Data Migration",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.chooseDataMigrationExtension",
+        "command": "vscode-documentdb.command.accessDataMigrationServices",
         "title": "Data Migration…"
       },
       {
@@ -796,8 +796,8 @@
         },
         {
           "//": "[Cluster] Data Migration",
-          "command": "vscode-documentdb.command.chooseDataMigrationExtension",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && migrationProvidersAvailable",
+          "command": "vscode-documentdb.command.accessDataMigrationServices",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "2@2"
         },
         {
@@ -974,7 +974,7 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.chooseDataMigrationExtension",
+          "command": "vscode-documentdb.command.accessDataMigrationServices",
           "when": "never"
         },
         {
@@ -1228,6 +1228,13 @@
       }
     ]
   },
+  "x-announcedMigrationProviders": [
+    {
+      "id": "ms-azurecosmosdbtools.vscode-mongo-migration",
+      "name": "Azure DocumentDB Migration",
+      "description": "Assess and migrate your databases to Azure DocumentDB."
+    }
+  ],
   "x-documentdbApi": {
     "registeredClients": [
       "vscode-cosmosdb",
