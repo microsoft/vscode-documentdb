@@ -15,18 +15,17 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const prompt: string = l10n.t('Enter the connection string of your MongoDB cluster.');
-        const newConnectionString = (
-            await context.ui.showInputBox({
-                prompt: prompt,
-                ignoreFocusOut: true,
-                placeHolder: l10n.t('Starts with mongodb:// or mongodb+srv://'),
-                validateInput: (connectionString?: string) => this.validateInput(connectionString),
-                asyncValidationTask: (connectionString: string) => this.validateConnectionString(connectionString),
-            })
-        ).trim();
+        const newConnectionString = await context.ui.showInputBox({
+            prompt: prompt,
+            ignoreFocusOut: true,
+            placeHolder: l10n.t('Starts with mongodb:// or mongodb+srv://'),
+            validateInput: (connectionString?: string) => this.validateInput(connectionString),
+            asyncValidationTask: (connectionString: string) => this.validateConnectionString(connectionString),
+        });
+        const trimmedConnectionString = newConnectionString.trim();
 
         // 1. Parse the connection string and extract credentials
-        const parsedConnectionString = new DocumentDBConnectionString(newConnectionString);
+        const parsedConnectionString = new DocumentDBConnectionString(trimmedConnectionString);
 
         // Extract credentials to structured nativeAuthConfig
         if (parsedConnectionString.username || parsedConnectionString.password) {
