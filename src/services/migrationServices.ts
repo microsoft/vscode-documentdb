@@ -70,8 +70,6 @@ export interface AnnouncedMigrationProvider {
     name: string;
     /** Short description shown as detail text */
     description: string;
-    /** URL to the VS Code Marketplace page */
-    url: string;
 }
 
 /**
@@ -187,8 +185,7 @@ class MigrationServiceImpl {
             return (
                 typeof c.id === 'string' &&
                 typeof c.name === 'string' &&
-                typeof c.description === 'string' &&
-                typeof c.url === 'string'
+                typeof c.description === 'string'
             );
         });
 

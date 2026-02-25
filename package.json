@@ -1232,8 +1232,7 @@
     {
       "id": "ms-azurecosmosdbtools.vscode-mongo-migration",
       "name": "Azure DocumentDB Migration",
-      "description": "Assess and migrate your databases to Azure DocumentDB.",
-      "url": "https://marketplace.visualstudio.com/items?itemName=ms-azurecosmosdbtools.vscode-mongo-migration"
+      "description": "Assess and migrate your databases to Azure DocumentDB."
     }
   ],
   "x-documentdbApi": {
