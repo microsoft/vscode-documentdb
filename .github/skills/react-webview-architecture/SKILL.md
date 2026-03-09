@@ -1,6 +1,6 @@
 ---
 name: react-webview-architecture
-description: Architecture patterns for React-based webviews in the vscode-documentdb extension. Use when creating new webview components, modifying existing views (CollectionView, DocumentView), working with state management (Context API), integrating Fluent UI components, handling Monaco Editor or SlickGrid, solving stale closure bugs with refs, or debugging webview rendering issues. Does NOT cover tRPC messaging (see webview-trpc-messaging skill) or accessibility/ARIA (see detecting-accessibility-issues skill).
+description: Architecture patterns for React-based webviews in the vscode-documentdb extension. Use when creating new webview components, modifying existing views (CollectionView, DocumentView), working with state management (Context API), integrating Fluent UI components, handling Monaco Editor or SlickGrid, solving stale closure bugs with refs, or debugging webview rendering issues. Does NOT cover tRPC messaging (see webview-trpc-messaging skill) or accessibility/ARIA (see accessibility-aria-expert skill).
 ---
 
 # React Webview Architecture
@@ -10,7 +10,7 @@ Patterns and conventions for React webviews in vscode-documentdb.
 **Related skills** (do not duplicate):
 
 - **webview-trpc-messaging** — tRPC routers, procedures, telemetry, AbortSignal, subscriptions, WebviewController
-- **detecting-accessibility-issues** — ARIA labels, Announcer, focus management, screen reader patterns
+- **accessibility-aria-expert** — ARIA labels, Announcer, focus management, screen reader patterns
 
 **Full reference**: See [references/REACT_ARCHITECTURE_GUIDELINES.md](./references/REACT_ARCHITECTURE_GUIDELINES.md)
 
