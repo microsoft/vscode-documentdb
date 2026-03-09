@@ -122,6 +122,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                 clearTimeout(stage3TipsTimerRef.current);
                 stage3TipsTimerRef.current = null;
             }
+            if (stage3AbortControllerRef.current) {
+                stage3AbortControllerRef.current.abort();
+                stage3AbortControllerRef.current = null;
+            }
         };
     }, []);
 
