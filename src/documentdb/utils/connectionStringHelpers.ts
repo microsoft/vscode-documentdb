@@ -19,8 +19,13 @@ import { DocumentDBConnectionString } from './DocumentDBConnectionString';
  * @returns The text with credentials replaced by `<credentials>`
  */
 export const redactCredentialsFromConnectionString = (text: string): string => {
-    // Matches the credentials portion (everything before the last '@' that follows the scheme)
+    // Matches the credentials portion (user:password before the '@' delimiter)
     // in mongodb:// or mongodb+srv:// URIs.
+    //
+    // Note: Per RFC 3986, the '@' character in usernames or passwords MUST be
+    // percent-encoded as '%40'. This regex relies on that assumption — it stops
+    // at the first literal '@' after the scheme, which is the credential delimiter
+    // in any spec-compliant URI. Unencoded '@' in passwords is malformed input.
     return text.replace(/(mongodb(?:\+srv)?:\/\/)[^\s@]*@/gi, '$1<credentials>@');
 };
 
