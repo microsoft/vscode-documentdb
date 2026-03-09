@@ -171,7 +171,7 @@ export class CopilotService {
         signal?.addEventListener('abort', onAbort);
 
         try {
-            // Github copilot LLM API currently doesn't support temperature or maxTokens in
+            // GitHub copilot LLM API currently doesn't support temperature or maxTokens in
             // LanguageModelChatRequestOptions, but we keep them here for potential future use
             const requestOptions: vscode.LanguageModelChatRequestOptions = {};
 
