@@ -15,6 +15,19 @@ import { ConnectionStringStep } from './ConnectionStringStep';
 import { ExecuteStep } from './ExecuteStep';
 import { type UpdateCSWizardContext } from './UpdateCSWizardContext';
 
+/**
+ * Updates the connection string (hosts, ports, etc.) for a cluster connection.
+ *
+ * Architecture:
+ * 1. Loads the current connection string with credentials masked
+ * 2. Runs wizard to collect new connection string:
+ *    - ConnectionStringStep: Enter new connection string
+ * 3. ExecuteStep: Saves updated connection string to storage
+ * 4. Post-wizard: Refreshes the view
+ *
+ * Note: This command does NOT prompt for reconnection or handle error node states.
+ * Use updateCredentials command for error recovery scenarios.
+ */
 export async function updateConnectionString(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));

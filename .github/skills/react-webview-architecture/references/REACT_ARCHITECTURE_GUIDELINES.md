@@ -35,11 +35,20 @@ viewName/
 ├── viewName.tsx           # Main component
 ├── viewName.scss          # View-specific styles
 ├── viewNameContext.ts     # Context and state types (if complex)
+├── viewNameController.ts  # Backend communication logic (WebviewController subclass)
+├── viewNameRouter.ts      # tRPC router with server-side procedures
+├── constants.ts           # View-specific constants
 ├── components/            # Sub-components
 │   ├── Component.tsx
 │   ├── component.scss     # Component-specific styles (if needed)
-│   └── toolbar/           # Nested component groups
-└── viewNameController.ts  # Backend communication logic
+│   ├── toolbar/           # Toolbar components
+│   └── queryEditor/       # Feature-specific component groups
+├── hooks/                 # Custom React hooks
+│   └── useCustomHook.ts
+├── types/                 # TypeScript type definitions
+│   └── featureTypes.ts
+└── utils/                 # Utility functions
+    └── helper.ts
 ```
 
 ### Component Hierarchy Example
@@ -56,14 +65,24 @@ DocumentView
 
 ```tsx
 CollectionView
+├── ProgressBar (conditional: isLoading)
+├── Announcer (accessibility: screen reader announcements)
 ├── ToolbarMainView
 ├── QueryEditor
-│   └── MonacoAutoHeight
-├── DataView (switched based on currentView)
-│   ├── DataViewPanelTable
-│   ├── DataViewPanelTree
-│   └── DataViewPanelJSON
-└── ToolbarTableNavigation
+│   └── MonacoAutoHeight (multiple: filter, project, sort)
+├── TabList (Results | Query Insights [PREVIEW])
+├── Results Tab:
+│   ├── resultsActionBar
+│   │   ├── ToolbarViewNavigation
+│   │   ├── ToolbarDocumentManipulation
+│   │   └── ViewSwitcher (Dropdown: Table/Tree/JSON)
+│   ├── resultsDisplayArea (switched based on currentView)
+│   │   ├── DataViewPanelTable
+│   │   ├── DataViewPanelTree
+│   │   └── DataViewPanelJSON
+│   └── ToolbarTableNavigation (conditional: Table View only)
+└── Query Insights Tab:
+    └── QueryInsightsMain (3-stage progressive loading)
 ```
 
 ---
@@ -100,6 +119,7 @@ export type CollectionViewContextType = {
     limit: number;
     pageNumber: number;
     pageSize: number;
+    executionIntent?: 'initial' | 'refresh' | 'pagination'; // Intent of the query execution
   };
   commands: {
     disableAddDocument: boolean;
@@ -122,6 +142,7 @@ export type CollectionViewContextType = {
     setJsonSchema(schema: object): Promise<void>;
   };
   isAiRowVisible: boolean;
+  queryInsights: QueryInsightsState; // 3-stage progressive loading state
 };
 
 // Create context with tuple pattern [state, setState]
@@ -756,6 +777,128 @@ trpcClient.common.reportEvent
 
 ---
 
+## Rendering Architecture
+
+### Entry Point
+
+The webview rendering pipeline starts in `index.tsx`:
+
+```tsx
+import { WebviewRegistry } from './api/configuration/WebviewRegistry';
+import { DynamicThemeProvider } from './theme/DynamicThemeProvider';
+import { WithWebviewContext } from './WebviewContext';
+
+export function render<V extends ViewKey>(key: V, vscodeApi: WebviewApi<WebviewState>, rootId = 'root'): void {
+  l10n.config({ contents: (globalThis.l10n_bundle as l10nJsonFormat) ?? {} });
+  const container = document.getElementById(rootId);
+  const Component: React.ComponentType = WebviewRegistry[key];
+  const root = createRoot(container);
+
+  root.render(
+    <DynamicThemeProvider useAdaptive={true}>
+      <WithWebviewContext vscodeApi={vscodeApi}>
+        <Component />
+      </WithWebviewContext>
+    </DynamicThemeProvider>,
+  );
+}
+```
+
+**Key architecture layers:**
+
+- **`DynamicThemeProvider`**: Adapts Fluent UI theming to VS Code's current color theme
+- **`WithWebviewContext`**: Provides `vscodeApi` (for postMessage) via React Context
+- **`WebviewRegistry`**: Maps webview names to React components
+- **`l10n` config**: Loads localization bundle injected by the extension host
+
+### Configuration Flow
+
+1. Extension host creates `WebviewController` with a configuration object
+2. Configuration is serialized as `encodeURIComponent(JSON.stringify(config))` in the HTML template
+3. Webview reads it via `useConfiguration<T>()` hook:
+
+```tsx
+export function useConfiguration<T>(): T {
+  const [configuration] = useState<T>(() => {
+    const configString = decodeURIComponent(window.config?.__initialData ?? '{}');
+    return JSON.parse(configString) as T;
+  });
+  return configuration;
+}
+```
+
+---
+
+## AbortController, tRPC, and Accessibility
+
+These topics are covered by dedicated skills. See:
+
+- **AbortSignal & tRPC messaging**: `.github/skills/webview-trpc-messaging/SKILL.md`
+- **Accessibility / ARIA patterns**: `.github/skills/accessibility-aria-expert/SKILL.md`
+
+---
+
+## Fluent UI Integration
+
+The webviews use `@fluentui/react-components` (Fluent UI v9) as the primary component library, themed to match VS Code via `DynamicThemeProvider`.
+
+### Common Components
+
+| Component                      | Usage                                     |
+| ------------------------------ | ----------------------------------------- |
+| `ProgressBar`                  | Loading indicators                        |
+| `Button`, `ToggleButton`       | Toolbar actions                           |
+| `Tab`, `TabList`               | View switching (Results / Query Insights) |
+| `Dropdown`, `Option`           | Selection controls (ViewSwitcher)         |
+| `Badge`                        | Status/preview indicators                 |
+| `Input`, `Label`               | Form fields                               |
+| `Tooltip`                      | Hover help text                           |
+| `MessageBar`, `MessageBarBody` | Info/warning messages                     |
+| `Skeleton`, `SkeletonItem`     | Loading placeholders                      |
+| `Text`                         | Typography                                |
+
+### Animations
+
+Use `@fluentui/react-motion-components-preview` for collapse/expand animations:
+
+```tsx
+import { Collapse } from '@fluentui/react-motion-components-preview';
+
+<Collapse visible={isExpanded}>
+  <div>{/* collapsible content */}</div>
+</Collapse>;
+```
+
+---
+
+## Custom Hooks
+
+### `useConfiguration<T>`
+
+Reads the initial configuration object passed to the webview at creation:
+
+```tsx
+const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
+```
+
+### `useSelectiveContextMenuPrevention`
+
+Prevents browser context menus everywhere except Monaco editors. Call once in the top-level view component.
+
+### `useHideScrollbarsDuringResize`
+
+Temporarily hides scrollbars during layout transitions (e.g., QueryEditor collapse animations) to prevent flickering:
+
+```tsx
+const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
+// Call before triggering a layout change
+hideScrollbarsTemporarily();
+```
+
+For tRPC-related hooks (`useTrpcClient`) and patterns, see the **webview-trpc-messaging** skill.
+
+---
+
 ## Known Issues & Anti-Patterns
 
 ### 🔴 Issues to Fix
@@ -865,19 +1008,20 @@ trpcClient.common.reportEvent
 - Use flexbox with `row-gap`/`column-gap` for spacing
 - Store third-party component references in `useRef`
 - Use ref pattern to solve stale closure issues
-- Clean up event listeners and subscriptions
+- Clean up event listeners, subscriptions, and AbortControllers
 - Use functional state updates when depending on previous state
 - Always localize user-facing strings with `l10n.t()`
 - Define styles in SCSS files, not inline
 - Use `es-toolkit` for utilities like `debounce`
 - Handle errors gracefully with user-friendly messages
 - Use Monaco's manual layout for performance
+- Use Fluent UI components themed via `DynamicThemeProvider`
 
 ### ❌ Don'ts
 
 - Don't use inline styles (move to SCSS)
 - Don't overuse negative margins (fix layout instead)
-- Don't forget to clean up in useEffect return
+- Don't forget to clean up in useEffect return (listeners, AbortControllers)
 - Don't use `any` type (use proper types or `unknown`)
 - Don't capture state in closures for third-party components (use refs)
 - Don't hardcode delays (use proper initialization checks)
@@ -889,6 +1033,8 @@ trpcClient.common.reportEvent
 ## References
 
 - TypeScript Guidelines: See `.github/copilot-instructions.md`
+- tRPC Messaging: See `.github/skills/webview-trpc-messaging/SKILL.md`
+- Accessibility: See `.github/skills/accessibility-aria-expert/SKILL.md`
 - VS Code Webview API: [VS Code Webview API](https://code.visualstudio.com/api/extension-guides/webview)
 - Monaco Editor API: [Monaco Editor API](https://microsoft.github.io/monaco-editor/api/index.html)
 - SlickGrid React: [SlickGrid React Docs](https://ghiscoding.gitbook.io/slickgrid-react/)
@@ -896,6 +1042,6 @@ trpcClient.common.reportEvent
 
 ---
 
-_Document Version: 1.1_
-_Last Updated: October 20, 2025_
-_Based on: DocumentView and CollectionView analysis with QueryEditor enhancements_
+_Document Version: 2.0_
+_Last Updated: February 12, 2026_
+_Based on: DocumentView, CollectionView, QueryEditor, QueryInsights analysis_

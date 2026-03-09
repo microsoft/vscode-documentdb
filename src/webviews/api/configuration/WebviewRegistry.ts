@@ -7,6 +7,12 @@ import { CollectionView } from '../../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../../documentdb/documentView/documentView';
 
 export const WebviewRegistry = {
-    mongoClustersCollectionView: CollectionView,
-    mongoClustersDocumentView: DocumentView,
+    collectionView: CollectionView,
+    documentView: DocumentView,
 } as const;
+
+/**
+ * Union type of all registered webview name keys.
+ * Used by WebviewController to ensure the webviewName matches a registered entry.
+ */
+export type WebviewName = keyof typeof WebviewRegistry;

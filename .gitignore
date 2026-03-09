@@ -274,3 +274,5 @@ stats.json
 
 .DS_Store
 
+docs/analysis/
+docs/plan/

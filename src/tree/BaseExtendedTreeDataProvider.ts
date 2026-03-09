@@ -209,6 +209,16 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
     }
 
     /**
+     * Checks whether a node is currently in an error state (has cached error children).
+     *
+     * @param nodeId The ID of the node to check.
+     * @returns `true` if the node has cached error children, `false` otherwise.
+     */
+    hasNodeErrorState(nodeId: string): boolean {
+        return this.failedChildrenCache.has(nodeId);
+    }
+
+    /**
      * Removes a node's error state from the failed children cache.
      * This allows the node to be refreshed and its children to be re-fetched on the next refresh call.
      * If not reset, the cached error children will always be returned for this node.

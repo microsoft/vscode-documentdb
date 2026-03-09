@@ -790,6 +790,7 @@ export const collectionsViewRouter = router({
                 databaseName,
                 collectionName,
                 cachedExecutionPlan ?? undefined,
+                myCtx.signal,
             );
             const aiServiceDuration = Date.now() - aiServiceStart;
             ext.outputChannel.trace(

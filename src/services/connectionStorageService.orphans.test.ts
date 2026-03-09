@@ -167,6 +167,11 @@ jest.mock('../extensionVariables', () => ({
             get appendLog() {
                 return mockAppendLog;
             },
+            trace: jest.fn(),
+            debug: jest.fn(),
+            info: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
         },
     },
 }));

@@ -23,9 +23,10 @@ import {
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
+import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
-import { ENABLE_AI_QUERY_GENERATION } from '../../constants';
+import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
@@ -72,6 +73,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
      * Use the `useTrpcClient` hook to get the tRPC client
      */
     const { trpcClient } = useTrpcClient();
+    const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
 
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
@@ -186,7 +188,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
 
             <ToolbarDividerTransparent />
 
-            {ENABLE_AI_QUERY_GENERATION && (
+            {configuration.enableAIQueryGeneration && (
                 <>
                     <ToolbarToggleButton
                         appearance="subtle"

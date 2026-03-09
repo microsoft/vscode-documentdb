@@ -71,6 +71,20 @@ export async function activateInternal(
         //registerReportIssueCommand('azureDatabases.reportIssue');
     });
 
+    // Report enabled experimental settings at launch
+    void callWithTelemetryAndErrorHandling('experimentalFeaturesStatus', async (telemetryContext: IActionContext) => {
+        telemetryContext.telemetry.properties.isActivationEvent = 'true';
+        telemetryContext.errorHandling.suppressDisplay = true;
+        telemetryContext.errorHandling.rethrow = false;
+
+        const enableAIQueryGeneration = vscode.workspace
+            .getConfiguration()
+            .get<boolean>(ext.settingsKeys.enableAIQueryGeneration, false)
+            .toString();
+
+        telemetryContext.telemetry.properties.enableAIQueryGeneration = enableAIQueryGeneration;
+    });
+
     // Create the DocumentDB Extension API v0.2.0
     const documentDBApiV2: DocumentDBExtensionApi = {
         apiVersion: '0.2.0',

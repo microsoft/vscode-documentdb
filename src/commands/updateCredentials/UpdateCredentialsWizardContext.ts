@@ -19,4 +19,9 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
     entraIdAuthConfig?: EntraIdAuthConfig;
 
     selectedAuthenticationMethod?: AuthMethodId;
+
+    /** True when the wizard was triggered from an error/retry node. */
+    isErrorState: boolean;
+    /** Set by the reconnect prompt; when true, error state is cleared to trigger a reconnect. */
+    reconnectAfterError: boolean;
 }

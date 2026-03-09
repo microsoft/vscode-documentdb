@@ -9,11 +9,11 @@ import * as React from 'react';
 // eslint-disable-next-line import/no-internal-modules
 import { createRoot } from 'react-dom/client';
 import { type WebviewApi } from 'vscode-webview';
-import { WebviewRegistry } from './api/configuration/WebviewRegistry';
+import { type WebviewName, WebviewRegistry } from './api/configuration/WebviewRegistry';
 import { DynamicThemeProvider } from './theme/DynamicThemeProvider';
 import { type WebviewState, WithWebviewContext } from './WebviewContext';
 
-export type ViewKey = keyof typeof WebviewRegistry;
+export type ViewKey = WebviewName;
 
 export function render<V extends ViewKey>(key: V, vscodeApi: WebviewApi<WebviewState>, rootId = 'root'): void {
     l10n.config({

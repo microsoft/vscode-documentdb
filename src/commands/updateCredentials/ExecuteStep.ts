@@ -12,6 +12,17 @@ import { ConnectionStorageService, ConnectionType } from '../../services/connect
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
+/**
+ * Saves updated credentials to storage.
+ *
+ * This step:
+ * 1. Removes embedded username/password from the connection string
+ * 2. Updates the auth method-specific configuration (native auth or Entra ID)
+ * 3. Saves the updated connection to storage
+ *
+ * Note: Cache clearing and error state management happen after the wizard completes
+ * in the main updateCredentials function, not in this execution step.
+ */
 export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardContext> {
     public priority: number = 100;
 

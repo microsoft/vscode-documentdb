@@ -73,6 +73,7 @@ export namespace ext {
         export const largeCollectionWarningThreshold = 'documentDB.copyPaste.largeCollectionWarningThreshold';
         export const localPort = 'documentDB.local.port';
         export const collectionViewDefaultPageSize = 'documentDB.collectionView.defaultPageSize';
+        export const enableAIQueryGeneration = 'documentDB.experimental.enableAIQueryGeneration';
 
         export namespace vsCode {
             export const proxyStrictSSL = 'http.proxyStrictSSL';

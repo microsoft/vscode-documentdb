@@ -1,5 +1,20 @@
 # Change Log
 
+## 0.7.1
+
+### Improvements
+
+- **Data Migration Discoverability**: The "Data Migration…" menu is now always visible on cluster nodes and introduces announced providers infrastructure to help users discover and install migration extensions from the Marketplace. [#515](https://github.com/microsoft/vscode-documentdb/pull/515)
+- **Reconnect Prompt After Credential Update**: Offers a reconnect prompt when updating credentials from an error recovery node, so users no longer need to manually retry the connection. [#504](https://github.com/microsoft/vscode-documentdb/pull/504)
+- **Experimental AI Query Generation Setting**: Adds `documentDB.experimental.enableAIQueryGeneration` setting to control the AI query generation feature, disabled by default. Reports experimental feature status via activation telemetry. [#503](https://github.com/microsoft/vscode-documentdb/pull/503)
+- **tRPC Upgrade and Abort Signal Support**: Upgrades `@trpc/client` and `@trpc/server` to v11.10.0 and adds `AbortSignal`-based cancellation for webview operations. [#320](https://github.com/microsoft/vscode-documentdb/issues/320), [#502](https://github.com/microsoft/vscode-documentdb/pull/502)
+- **Connection String Validation**: Adds defensive trimming (including BOM, NBSP) at all input entry points and simplifies credential validation to avoid unnecessary parse/serialize round-trips. [#511](https://github.com/microsoft/vscode-documentdb/pull/511)
+- **Feedback Collection Documentation**: Documents how the extension collects user feedback and its relation to VS Code's global telemetry setting in the README. [#509](https://github.com/microsoft/vscode-documentdb/pull/509)
+
+### Security
+
+- **Dependency Updates**: Updates `minimatch` (3.1.2 → 3.1.4), `qs`, and `body-parser` to address security vulnerabilities. [#505](https://github.com/microsoft/vscode-documentdb/pull/505), [#514](https://github.com/microsoft/vscode-documentdb/pull/514)
+
 ## 0.7.0
 
 ### New Features
@@ -24,6 +39,7 @@
 ### Fixes
 
 - **Azure Resources View Expansion**: Fixes cluster expansion failures in the Azure Resources view by deriving resource group information from resource IDs. [#480](https://github.com/microsoft/vscode-documentdb/pull/480)
+- **Connection String Deduplication**: Fixes an issue where connection string parameters were duplicated, ensuring valid connection strings and compliance with specifications. [#478](https://github.com/microsoft/vscode-documentdb/pull/478)
 - **Dark Theme Rendering**: Fixes unreadable text in some dark themes by respecting theme colors. [#457](https://github.com/microsoft/vscode-documentdb/issues/457)
 - **Import from Discovery View**: Fixes document import for Azure Cosmos DB for MongoDB (RU) discovery when connection metadata is not yet cached. [#368](https://github.com/microsoft/vscode-documentdb/issues/368), [#479](https://github.com/microsoft/vscode-documentdb/pull/479)
 - **Invalid Query JSON**: Shows a clear error when query JSON fails to parse instead of silently using empty objects. [#458](https://github.com/microsoft/vscode-documentdb/issues/458), [#471](https://github.com/microsoft/vscode-documentdb/pull/471)

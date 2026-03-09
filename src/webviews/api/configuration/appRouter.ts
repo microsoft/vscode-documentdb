@@ -31,17 +31,35 @@ import { publicProcedure, router } from '../extension-server/trpc';
 
 export type BaseRouterContext = {
     dbExperience: API;
+    /**
+     * Label used in telemetry event names to identify the source webview
+     * (e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
+     *
+     * This is **not** the same as the registry key passed to the `WebviewController` constructor.
+     */
     webviewName: string;
     telemetry?: ITelemetryContext;
-    signal?: AbortSignal; // This is a special property that is used to cancel subscriptions
-};
 
-/**
- * Context type for procedures using publicProcedureWithTelemetry
- * Telemetry is guaranteed to be present via the trpcToTelemetry middleware
- */
-export type BaseRouterContextWithTelemetry = BaseRouterContext & {
-    telemetry: ITelemetryContext;
+    /**
+     * AbortSignal used to cancel in-flight operations (queries, mutations, and subscriptions).
+     *
+     * Populated by `WebviewController` when handling incoming tRPC messages. Each operation
+     * receives its own `AbortController`; when the client sends an `'abort'` (for queries/mutations)
+     * or `'subscription.stop'` (for subscriptions) message, the controller calls `.abort()` on it.
+     *
+     * Router procedures can use this signal to gracefully cancel long-running work:
+     *
+     * ```ts
+     * .query(async ({ ctx }) => {
+     *     const myCtx = ctx as WithTelemetry<RouterContext>;
+     *     // Option 1: Pass to APIs that accept AbortSignal (e.g. MongoDB driver)
+     *     const cursor = collection.find(filter, { signal: myCtx.signal });
+     *     // Option 2: Check manually
+     *     if (myCtx.signal?.aborted) return;
+     * })
+     * ```
+     */
+    signal?: AbortSignal;
 };
 
 /**

@@ -34,7 +34,7 @@ import { MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text } from '@fluen
 import { ChatMailRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import { useCallback, useContext, useEffect, useState, type JSX } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState, type JSX } from 'react';
 import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
@@ -106,9 +106,28 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [showErrorCard, setShowErrorCard] = useState(false);
 
+    // AbortController ref for cancelling in-flight Stage 3 AI requests
+    const stage3AbortControllerRef = useRef<AbortController | null>(null);
+
+    // Timer ref for the delayed tips/error card shown during Stage 3 loading
+    const stage3TipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     // Feedback dialog state
     const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
     const [feedbackSentiment, setFeedbackSentiment] = useState<'positive' | 'negative'>('positive');
+
+    useEffect(() => {
+        return () => {
+            if (stage3TipsTimerRef.current !== null) {
+                clearTimeout(stage3TipsTimerRef.current);
+                stage3TipsTimerRef.current = null;
+            }
+            if (stage3AbortControllerRef.current) {
+                stage3AbortControllerRef.current.abort();
+                stage3AbortControllerRef.current = null;
+            }
+        };
+    }, []);
 
     /**
      * Display error message to user for the given stage
@@ -449,13 +468,19 @@ export const QueryInsightsMain = (): JSX.Element => {
         // Transition to Stage 3 loading (this will reset UI flags)
         transitionToStage(3, 'loading');
 
+        // Clear any pending tips/error card timer from a previous request
+        if (stage3TipsTimerRef.current) {
+            clearTimeout(stage3TipsTimerRef.current);
+            stage3TipsTimerRef.current = null;
+        }
+
         // Check if Stage 2 has query execution errors
         const hasExecutionError =
             queryInsightsState.stage2Data?.concerns &&
             queryInsightsState.stage2Data.concerns.some((concern) => concern.includes('Query Execution Failed'));
 
         // Show appropriate card after 1 second delay
-        const timer = setTimeout(() => {
+        stage3TipsTimerRef.current = setTimeout(() => {
             if (hasExecutionError) {
                 setShowErrorCard(true);
             } else {
@@ -472,9 +497,15 @@ export const QueryInsightsMain = (): JSX.Element => {
             stage3RequestKey: requestKey,
         }));
 
+        // Create an AbortController for this request so Cancel can abort server-side work
+        // Abort any previous in-flight request before creating a new controller
+        stage3AbortControllerRef.current?.abort();
+        const abortController = new AbortController();
+        stage3AbortControllerRef.current = abortController;
+
         // Call the tRPC endpoint (10+ second delay expected from AI service)
         const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
-            .query({ requestKey })
+            .query({ requestKey }, { signal: abortController.signal })
             .then((response) => {
                 // Only update state if this request is still the current one
                 let wasAccepted = false;
@@ -499,6 +530,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                 return response;
             })
             .catch((error: unknown) => {
+                // If the request was aborted (user clicked Cancel), silently discard
+                if (abortController.signal.aborted) {
+                    return undefined as never;
+                }
+
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 const errorCode = extractErrorCode(error);
 
@@ -526,17 +562,33 @@ export const QueryInsightsMain = (): JSX.Element => {
                 }
                 // Return undefined to satisfy TypeScript without creating unhandled rejection
                 return undefined as never;
+            })
+            .finally(() => {
+                // Clear the ref only if it still points to this request's controller
+                if (stage3AbortControllerRef.current === abortController) {
+                    stage3AbortControllerRef.current = null;
+                }
             });
 
         setQueryInsightsStateHelper((prev) => ({
             ...prev,
             stage3Promise: promise,
         }));
-
-        return () => clearTimeout(timer);
     };
 
     const handleCancelAI = () => {
+        // Clear any pending tips/error card timer to prevent stale UI after cancel
+        if (stage3TipsTimerRef.current) {
+            clearTimeout(stage3TipsTimerRef.current);
+            stage3TipsTimerRef.current = null;
+        }
+
+        // Abort the in-flight tRPC request so the server can stop work early
+        if (stage3AbortControllerRef.current) {
+            stage3AbortControllerRef.current.abort();
+            stage3AbortControllerRef.current = null;
+        }
+
         // Cancel the loading state and clear the request key
         // When the promise eventually returns, it will check the key and ignore the result
         setQueryInsightsStateHelper((prev) => ({
