@@ -395,6 +395,7 @@ export class WebviewController<Configuration> implements vscode.Disposable {
         this._isDisposed = true;
 
         this._onDisposed.fire();
+        this._onDisposed.dispose();
 
         // Abort all active queries/mutations so server-side procedures can stop early
         for (const controller of this._activeOperations.values()) {
