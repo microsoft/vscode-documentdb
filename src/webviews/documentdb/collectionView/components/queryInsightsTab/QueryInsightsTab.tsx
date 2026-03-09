@@ -498,6 +498,8 @@ export const QueryInsightsMain = (): JSX.Element => {
         }));
 
         // Create an AbortController for this request so Cancel can abort server-side work
+        // Abort any previous in-flight request before creating a new controller
+        stage3AbortControllerRef.current?.abort();
         const abortController = new AbortController();
         stage3AbortControllerRef.current = abortController;
 
