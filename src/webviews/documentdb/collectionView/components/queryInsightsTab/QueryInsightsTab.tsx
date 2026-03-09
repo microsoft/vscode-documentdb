@@ -116,6 +116,15 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
     const [feedbackSentiment, setFeedbackSentiment] = useState<'positive' | 'negative'>('positive');
 
+    useEffect(() => {
+        return () => {
+            if (stage3TipsTimerRef.current !== null) {
+                clearTimeout(stage3TipsTimerRef.current);
+                stage3TipsTimerRef.current = null;
+            }
+        };
+    }, []);
+
     /**
      * Display error message to user for the given stage
      * Only displays once per error state to avoid duplicate toasts
