@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type IconPath } from 'vscode';
@@ -98,6 +98,29 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     public abstract getCredentials(): Promise<EphemeralClusterCredentials | undefined>;
 
     /**
+     * Connects to the cluster using `ClustersClient.getClient()`, showing a cancellable
+     * notification so the user can abort a long-running connection attempt.
+     *
+     * @param clusterId - The stable cluster ID for cache and credential lookups.
+     * @returns A promise that resolves to the connected `ClustersClient`.
+     * @throws {UserCancelledError} if the user cancels the connection via the notification.
+     */
+    protected async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
+        const abortController = new AbortController();
+        return vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: l10n.t('Connecting to "{cluster}"\u2026', { cluster: this.cluster.name }),
+                cancellable: true,
+            },
+            async (_progress, token) => {
+                token.onCancellationRequested(() => abortController.abort());
+                return ClustersClient.getClient(clusterId, abortController.signal);
+            },
+        );
+    }
+
+    /**
      * Authenticates and connects to the cluster to list all available databases.
      * Here, the MongoDB client is created and cached for future use.
      *
@@ -123,7 +146,18 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     cluster: this.cluster.name,
                 }),
             );
-            clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+            try {
+                clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
+            } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    ext.outputChannel.appendLine(
+                        l10n.t('Connection to "{cluster}" was cancelled.', { cluster: this.cluster.name }),
+                    );
+                    clustersClient = null;
+                } else {
+                    throw error;
+                }
+            }
         } else {
             // Call to the abstract method to authenticate and connect to the cluster
             clustersClient = await this.authenticateAndConnect();

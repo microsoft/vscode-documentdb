@@ -156,7 +156,7 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
             }
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+                const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -170,6 +170,10 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
 
                 return clustersClient;
             } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    throw error;
+                }
+
                 // Add error telemetry
                 context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'failed';

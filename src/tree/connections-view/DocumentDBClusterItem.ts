@@ -222,8 +222,11 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
             // Attempt to create the client with the provided credentials
             try {
-                clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+                clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
             } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    throw error;
+                }
                 ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
 
                 void vscode.window.showErrorMessage(
