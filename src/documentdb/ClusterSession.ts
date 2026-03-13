@@ -3,11 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import {
+    SchemaAnalyzer,
+    getPropertyNamesAtLevel,
+    type FieldEntry,
+    type JSONSchema,
+} from '@vscode-documentdb/schema-analyzer';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
-import { type JSONSchema } from '../utils/json/JSONSchema';
-import { getPropertyNamesAtLevel, updateSchemaWithDocument } from '../utils/json/mongo/SchemaAnalyzer';
+import { ext } from '../extensionVariables';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
@@ -78,7 +83,7 @@ export class ClusterSession {
      * Updates progressively as users navigate through different pages.
      * Reset when the query or page size changes.
      */
-    private _accumulatedJsonSchema: JSONSchema = {};
+    private _schemaAnalyzer: SchemaAnalyzer = new SchemaAnalyzer();
 
     /**
      * Tracks the highest page number that has been accumulated into the schema.
@@ -162,7 +167,8 @@ export class ClusterSession {
         }
 
         // The user's query has changed, invalidate all caches
-        this._accumulatedJsonSchema = {};
+        this._schemaAnalyzer.reset();
+        ext.outputChannel.trace('[SchemaAnalyzer] Reset — query changed');
         this._highestPageAccumulated = 0;
         this._currentPageSize = null;
         this._currentRawDocuments = [];
@@ -185,7 +191,8 @@ export class ClusterSession {
     private resetAccumulationIfPageSizeChanged(newPageSize: number): void {
         if (this._currentPageSize !== null && this._currentPageSize !== newPageSize) {
             // Page size changed, reset accumulation tracking
-            this._accumulatedJsonSchema = {};
+            this._schemaAnalyzer.reset();
+            ext.outputChannel.trace('[SchemaAnalyzer] Reset — page size changed');
             this._highestPageAccumulated = 0;
         }
         this._currentPageSize = newPageSize;
@@ -298,8 +305,12 @@ export class ClusterSession {
         // Since navigation is sequential and starts at page 1, we only need to track
         // the highest page number accumulated
         if (pageNumber > this._highestPageAccumulated) {
-            this._currentRawDocuments.map((doc) => updateSchemaWithDocument(this._accumulatedJsonSchema, doc));
+            this._schemaAnalyzer.addDocuments(this._currentRawDocuments);
             this._highestPageAccumulated = pageNumber;
+
+            ext.outputChannel.trace(
+                `[SchemaAnalyzer] Analyzed ${String(this._schemaAnalyzer.getDocumentCount())} documents, ${String(this._schemaAnalyzer.getKnownFields().length)} known fields`,
+            );
         }
 
         return documents.length;
@@ -355,7 +366,7 @@ export class ClusterSession {
     public getCurrentPageAsTable(path: string[]): TableData {
         const responsePack: TableData = {
             path: path,
-            headers: getPropertyNamesAtLevel(this._accumulatedJsonSchema, path),
+            headers: getPropertyNamesAtLevel(this._schemaAnalyzer.getSchema(), path),
             data: getDataAtPath(this._currentRawDocuments, path),
         };
 
@@ -363,7 +374,15 @@ export class ClusterSession {
     }
 
     public getCurrentSchema(): JSONSchema {
-        return this._accumulatedJsonSchema;
+        return this._schemaAnalyzer.getSchema();
+    }
+
+    /**
+     * Returns the cached list of known fields from the accumulated schema.
+     * Uses SchemaAnalyzer's version-based caching — only recomputed when the schema changes.
+     */
+    public getKnownFields(): FieldEntry[] {
+        return this._schemaAnalyzer.getKnownFields();
     }
 
     // ============================================================================

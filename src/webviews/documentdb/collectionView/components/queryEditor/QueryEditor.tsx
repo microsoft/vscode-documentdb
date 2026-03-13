@@ -11,7 +11,7 @@ import { InputWithProgress } from '../../../../components/InputWithProgress';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 // eslint-disable-next-line import/no-internal-modules
-import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
+import basicFindQuerySchema from '../../../../../utils/json/data-api/autocomplete/basicMongoFindFilterSchema.json';
 import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 

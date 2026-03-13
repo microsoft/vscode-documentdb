@@ -721,7 +721,6 @@
   "No matching resources found.": "No matching resources found.",
   "No node selected.": "No node selected.",
   "No parent folder selected.": "No parent folder selected.",
-  "No properties found in the schema at path \"{0}\"": "No properties found in the schema at path \"{0}\"",
   "No public connectivity": "No public connectivity",
   "No result returned from the MongoDB shell.": "No result returned from the MongoDB shell.",
   "No results found": "No results found",

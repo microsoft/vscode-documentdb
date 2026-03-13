@@ -1,0 +1,27 @@
+{
+  "name": "@vscode-documentdb/schema-analyzer",
+  "version": "1.0.0",
+  "description": "Incremental JSON Schema analyzer for DocumentDB API / MongoDB API documents with statistical extensions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "test": "jest --config jest.config.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode-documentdb",
+    "directory": "packages/schema-analyzer"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "mongodb": ">=6.0.0"
+  },
+  "dependencies": {
+    "denque": "~2.1.0"
+  }
+}
