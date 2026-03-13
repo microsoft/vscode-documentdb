@@ -230,6 +230,7 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
                 clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
             } catch (error) {
                 if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
                 }
                 ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));

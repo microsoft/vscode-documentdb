@@ -34,6 +34,7 @@ import {
     type WithoutId,
 } from 'mongodb';
 import { Links } from '../constants';
+import { ext } from '../extensionVariables';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
@@ -244,12 +245,14 @@ export class ClustersClient {
         this._mongoClient = new MongoClient(connectionString, options);
 
         if (abortSignal?.aborted) {
+            ext.outputChannel.debug('Connection aborted before connecting (already aborted signal).');
             await this._mongoClient.close();
             throw new UserCancelledError('abortConnection');
         }
 
         // Wire up abort: closing the client causes the pending connect() to reject
         const onAbort = (): void => {
+            ext.outputChannel.debug('AbortSignal fired — closing MongoClient to interrupt connection handshake.');
             void this._mongoClient.close();
         };
         abortSignal?.addEventListener('abort', onAbort, { once: true });
@@ -260,6 +263,7 @@ export class ClustersClient {
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
             if (abortSignal?.aborted) {
+                ext.outputChannel.debug('Connection attempt was aborted by the user.');
                 throw new UserCancelledError('abortConnection');
             }
 

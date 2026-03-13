@@ -158,6 +158,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                 return clustersClient;
             } catch (error) {
                 if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
                 }
 

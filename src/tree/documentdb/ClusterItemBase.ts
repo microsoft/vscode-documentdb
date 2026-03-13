@@ -3,7 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { UserCancelledError, createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    callWithTelemetryAndErrorHandling,
+    createContextValue,
+    createGenericElement,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type IconPath } from 'vscode';
@@ -114,7 +119,12 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 cancellable: true,
             },
             async (_progress, token) => {
-                token.onCancellationRequested(() => abortController.abort());
+                token.onCancellationRequested(() => {
+                    ext.outputChannel.debug(
+                        `User cancelled connection attempt for "${this.cluster.name}" via progress notification.`,
+                    );
+                    abortController.abort();
+                });
                 return ClustersClient.getClient(clusterId, abortController.signal);
             },
         );
@@ -153,6 +163,12 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     ext.outputChannel.appendLine(
                         l10n.t('Connection to "{cluster}" was cancelled.', { cluster: this.cluster.name }),
                     );
+
+                    void callWithTelemetryAndErrorHandling('connect', (context) => {
+                        context.telemetry.properties.connectionResult = 'cancelled';
+                        throw error;
+                    });
+
                     clustersClient = null;
                 } else {
                     throw error;

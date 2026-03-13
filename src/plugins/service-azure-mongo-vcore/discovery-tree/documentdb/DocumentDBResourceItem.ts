@@ -171,6 +171,8 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
                 return clustersClient;
             } catch (error) {
                 if (error instanceof UserCancelledError) {
+                    context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                    context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
                 }
 
