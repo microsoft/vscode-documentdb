@@ -15,9 +15,10 @@
 
 - **Dependency Updates**: Updates `minimatch` (3.1.2 → 3.1.4), `qs`, and `body-parser` to address security vulnerabilities. [#505](https://github.com/microsoft/vscode-documentdb/pull/505), [#514](https://github.com/microsoft/vscode-documentdb/pull/514)
 
-## 0.7.1 _(skipped)_
+## 0.7.1 _skipped_
 
 Version 0.7.1 was reserved for an internal validation build and was not released on the Marketplace.
+
 ## 0.7.0
 
 ### New Features
