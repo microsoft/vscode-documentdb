@@ -1,3 +1,6 @@
+name: vscode-documentdb-$(Date:yyyy-MM-dd).$(Rev:r)
+appendCommitMessageToRunName: false
+
 # Trigger the build whenever `main` or `next` is updated
 trigger:
     - next
@@ -87,27 +90,44 @@ extends:
                             ob_sdl_codeql_compiled_enabled: true
                     steps:
                         - task: ComponentGovernanceComponentDetection@0
-                          displayName: 'Component Governance - Component Detection'
+                          displayName: '🛡️ Component Governance - Component Detection'
+
                         - task: notice@0
-                          displayName: "\U0001F449 Generate NOTICE file"
+                          displayName: '📄 Generate NOTICE file'
+                          continueOnError: true # the notice@0 task is unreliable and sometimes fails the build unexpectedly due to random outages
+                          retryCountOnTaskFailure: 6
                           inputs:
-                              outputfile: $(Build.SourcesDirectory)/NOTICE.html
+                              outputfile: $(Build.SourcesDirectory)/NOTICE.generated.html
                               outputformat: html
 
+                        - task: PowerShell@2
+                          displayName: '⚠️ Check NOTICE file generation'
+                          condition: always()
+                          inputs:
+                              pwsh: true
+                              targetType: 'inline'
+                              script: |
+                                  if (Test-Path "$(Build.SourcesDirectory)/NOTICE.generated.html") {
+                                      Move-Item -Force "$(Build.SourcesDirectory)/NOTICE.generated.html" "$(Build.SourcesDirectory)/NOTICE.html"
+                                      Write-Output "✅ NOTICE.html generated successfully"
+                                  } else {
+                                      Write-Host "##vso[task.logissue type=warning]NOTICE.html was not generated. The notice@0 task may have failed. Using committed version."
+                                  }
+
                         - task: NodeTool@0
-                          displayName: "\U0001F449 Using Node.js"
+                          displayName: '📦 Using Node.js'
                           inputs:
                               versionSource: fromFile
                               versionFilePath: .nvmrc
 
                         - task: npmAuthenticate@0
-                          displayName: "\U0001F449 Authenticate to npm registry"
+                          displayName: '🔐 Authenticate to npm registry'
                           condition: succeeded()
                           inputs:
                               workingFile: '$(Build.SourcesDirectory)/.azure-pipelines/.npmrc'
 
                         - task: Npm@1
-                          displayName: "\U0001F449 Install Dependencies"
+                          displayName: '⬇️ Install Dependencies'
                           condition: succeeded()
                           inputs:
                               command: custom
@@ -115,7 +135,7 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: Npm@1
-                          displayName: "\U0001F449 Build"
+                          displayName: '🔨 Build'
                           condition: succeeded()
                           inputs:
                               command: custom
@@ -123,7 +143,7 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: Npm@1
-                          displayName: "\U0001F449 Package"
+                          displayName: '📦 Package'
                           condition: succeeded()
                           inputs:
                               command: custom
@@ -131,14 +151,15 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - pwsh: npm i -g @vscode/vsce --userconfig $(Build.SourcesDirectory)/.azure-pipelines/.npmrc
-                          displayName: "\U0001F449 Install vsce"
+                          displayName: '⬇️ Install vsce'
                           condition: succeeded()
 
                         # Find the vsix and set the vsix file name variable
                         # Fails with an error if more than one .vsix file is found, or if no .vsix file is found
                         - task: PowerShell@2
-                          displayName: "\U0001F50D Find VSIX File"
+                          displayName: '🔍 Find VSIX File'
                           inputs:
+                              pwsh: true
                               targetType: 'inline'
                               script: |
                                   # Get all .vsix files in the current directory
@@ -147,10 +168,12 @@ extends:
 
                                   # Check if more than one .vsix file is found
                                   if ($vsixFiles.Count -gt 1) {
-                                    Write-Error "[Error] More than one .vsix file found: $($vsixFiles.Name -join ', ')"
+                                    Write-Host "##vso[task.logissue type=error]More than one .vsix file found: $($vsixFiles.Name -join ', ')"
+                                    Write-Host "##vso[task.complete result=Failed;]"
                                     exit 1
                                   } elseif ($vsixFiles.Count -eq 0) {
-                                    Write-Error "[Error] No .vsix files found in $(Build.SourcesDirectory)"
+                                    Write-Host "##vso[task.logissue type=error]No .vsix files found in $(Build.SourcesDirectory)"
+                                    Write-Host "##vso[task.complete result=Failed;]"
                                     exit 1
                                   } else {
                                     # Set the pipeline variable
@@ -163,18 +186,20 @@ extends:
                         ## Sign the extension using OneBranch signing task
                         ## see for VS Code specifics: https://aka.ms/vsm-ms-publisher-sign#cai-teams-sign-using-onebranch
                         - script: vsce generate-manifest -i $(vsixFileName) -o extension.manifest
-                          displayName: "\U0001F5DD Generate extension manifest for signing"
+                          displayName: '📝 Generate extension manifest for signing'
                           condition: and(succeeded(), ${{ eq(parameters.isOfficialBuild, true) }})
 
                         - task: PowerShell@2
-                          displayName: "\U0001F408 Prepare manifest for signing"
+                          displayName: '🐈 Prepare manifest for signing'
                           condition: and(succeeded(), ${{ eq(parameters.isOfficialBuild, true) }})
                           inputs:
+                              pwsh: true
                               targetType: 'inline'
                               script: |
                                   # Verify extension.manifest exists before proceeding
                                   if (-not (Test-Path "extension.manifest")) {
-                                      Write-Error "[Error] extension.manifest file not found. Cannot proceed with signing."
+                                      Write-Host "##vso[task.logissue type=error]extension.manifest file not found. Cannot proceed with signing."
+                                      Write-Host "##vso[task.complete result=Failed;]"
                                       exit 1
                                   }
 
@@ -182,7 +207,7 @@ extends:
                                   Get-ChildItem -Path "$(Build.SourcesDirectory)" -Filter "extension.*" | ForEach-Object { Write-Output $_.FullName }
 
                         - task: onebranch.pipeline.signing@1 # https://aka.ms/obpipelines/signing
-                          displayName: "\U0001F5DD Sign VSIX package"
+                          displayName: '✍️ Sign VSIX package'
                           # Only sign if isOfficialBuild is true
                           condition: and(succeeded(), ${{ eq(parameters.isOfficialBuild, true) }})
                           inputs:
@@ -193,9 +218,10 @@ extends:
                               #use_testsign: true # Set to true for test signing for development purposes, default is false
 
                         - task: PowerShell@2
-                          displayName: "\U0001F396 Verify VSIX signature"
+                          displayName: '🔒 Verify VSIX signature'
                           condition: and(succeeded(), ${{ eq(parameters.isOfficialBuild, true) }})
                           inputs:
+                              pwsh: true
                               targetType: 'inline'
                               failOnStderr: true
                               script: |
@@ -205,7 +231,8 @@ extends:
                                   # Check if the vsce command failed to execute
                                   if ($LastExitCode -ne 0)
                                   {
-                                      Write-Error "[Error] VSIX signature verification command failed with exit code $LastExitCode."
+                                      Write-Host "##vso[task.logissue type=error]VSIX signature verification command failed with exit code $LastExitCode"
+                                      Write-Host "##vso[task.complete result=Failed;]"
                                       exit 1
                                   }
 
@@ -216,17 +243,18 @@ extends:
                                       if ($exitCodeValue -eq "Success") {
                                           Write-Output "[Success] VSIX signature verification succeeded."
                                       } elseif ($exitCodeValue -eq "UnhandledException") {
-                                          Write-Error "[Error] VSIX signature verification failed with UnhandledException."
+                                          Write-Host "##vso[task.logissue type=error]VSIX signature verification failed with UnhandledException"
+                                          Write-Host "##vso[task.complete result=Failed;]"
                                           exit 1
                                       } else {
                                           Write-Warning "[Warning] VSIX signature verification completed with unexpected exit code: $exitCodeValue"
                                       }
                                   } else {
-                                      Write-Warning "[Warning] Could not parse exit code from vsce verify-signature output. Raw output: $output"
+                                      Write-Warning "[Warning] Could not parse exit code from vsce verify-signature output."
                                   }
 
                         - task: CopyFiles@2
-                          displayName: "\U0001F449 Copy packages and vsix to staging directory"
+                          displayName: '📂 Copy packages and vsix to staging directory'
                           inputs:
                               # Uploading the package.json so we can publish later without cloning the source
                               # Files related to signing:
@@ -245,7 +273,7 @@ extends:
                           condition: and(succeeded(), ne(variables['System.PullRequest.IsFork'], 'True'))
 
                         - task: Npm@1
-                          displayName: "\U0001F449 Test"
+                          displayName: '🧪 Test'
                           inputs:
                               command: custom
                               customCommand: test
