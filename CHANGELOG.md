@@ -17,6 +17,7 @@
 
 ## 0.7.1 _(skipped)_
 
+Version 0.7.1 was reserved for an internal validation build and was not released on the Marketplace.
 ## 0.7.0
 
 ### New Features
