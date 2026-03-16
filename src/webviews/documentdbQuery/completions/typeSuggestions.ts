@@ -78,13 +78,13 @@ const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
     date: [
         {
             label: 'ISODate("▪")',
-            insertText: 'ISODate("${1:yyyy-MM-ddTHH:mm:ssZ}")',
+            insertText: 'ISODate("${1:2025-01-01T00:00:00Z}")',
             isSnippet: true,
             description: 'date value',
         },
         {
             label: '{ $gt: ISODate("▪"), $lt: ISODate("▪") }',
-            insertText: '{ $gt: ISODate("${1:start}"), $lt: ISODate("${2:end}") }',
+            insertText: '{ $gt: ISODate("${1:2025-01-01T00:00:00Z}"), $lt: ISODate("${2:2025-12-31T23:59:59Z}") }',
             isSnippet: true,
             description: 'date range',
             documentation: 'Match documents where this date field falls within a range.',
