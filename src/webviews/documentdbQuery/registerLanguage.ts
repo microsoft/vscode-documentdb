@@ -26,6 +26,8 @@
 
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
+import { getCompletionContext } from './completionStore';
+import { detectCursorContext } from './cursorContext';
 import { createCompletionItems } from './documentdbQueryCompletionProvider';
 import { getHoverContent } from './documentdbQueryHoverProvider';
 import { LANGUAGE_ID, parseEditorUri } from './languageConfig';
@@ -96,13 +98,28 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
                 range = { ...range, startColumn: range.startColumn - 1 };
             }
 
+            // Detect cursor context for context-sensitive completions
+            const text = model.getValue();
+            const cursorOffset = model.getOffsetAt(position);
+            const sessionId = parsed?.sessionId;
+
+            // Build field lookup from completion store to enrich context with BSON types
+            const fieldLookup = (fieldName: string): string | undefined => {
+                if (!sessionId) return undefined;
+                const ctx = getCompletionContext(sessionId);
+                return ctx?.fields.find((f) => f.fieldName === fieldName)?.bsonType;
+            };
+
+            const cursorContext = detectCursorContext(text, cursorOffset, fieldLookup);
+
             // Build completion items based on context
             const items = createCompletionItems({
                 editorType: parsed?.editorType,
-                sessionId: parsed?.sessionId,
+                sessionId,
                 range,
                 isDollarPrefix: charBefore === '$',
                 monaco,
+                cursorContext,
             });
 
             return { suggestions: items };

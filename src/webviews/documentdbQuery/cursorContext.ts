@@ -45,11 +45,7 @@ export type FieldTypeLookup = (fieldName: string) => string | undefined;
  * @param fieldLookup - optional callback to resolve field names to BSON types
  * @returns the detected cursor context
  */
-export function detectCursorContext(
-    text: string,
-    cursorOffset: number,
-    fieldLookup?: FieldTypeLookup,
-): CursorContext {
+export function detectCursorContext(text: string, cursorOffset: number, fieldLookup?: FieldTypeLookup): CursorContext {
     if (!text || cursorOffset <= 0) {
         return { position: 'unknown' };
     }
@@ -137,11 +133,7 @@ function isSkippable(ch: string): boolean {
  * - `{ _id: | }` → value with fieldName '_id'
  * - `{ age: | }` → value with fieldName 'age'
  */
-function resolveValueContext(
-    text: string,
-    colonIndex: number,
-    fieldLookup?: FieldTypeLookup,
-): CursorContext {
+function resolveValueContext(text: string, colonIndex: number, fieldLookup?: FieldTypeLookup): CursorContext {
     const fieldName = extractKeyBeforeColon(text, colonIndex);
     if (!fieldName) {
         return { position: 'unknown' };
@@ -161,11 +153,7 @@ function resolveValueContext(
  * 1. Root or top-level: `{ | }` → key position
  * 2. After a colon: `{ age: { | } }` → operator position for field 'age'
  */
-function resolveOpenBraceContext(
-    text: string,
-    braceIndex: number,
-    fieldLookup?: FieldTypeLookup,
-): CursorContext {
+function resolveOpenBraceContext(text: string, braceIndex: number, fieldLookup?: FieldTypeLookup): CursorContext {
     // Look backward from the '{' to find what precedes it
     const beforeBrace = scanBackwardFrom(text, braceIndex);
 
@@ -209,11 +197,7 @@ function resolveOpenBraceContext(
  * 2. Inside an operator object: `{ age: { $gt: 5, | } }` → operator position
  * 3. Inside an array: `{ $and: [ {...}, | ] }` → array-element position
  */
-function resolveCommaContext(
-    text: string,
-    commaIndex: number,
-    fieldLookup?: FieldTypeLookup,
-): CursorContext {
+function resolveCommaContext(text: string, commaIndex: number, fieldLookup?: FieldTypeLookup): CursorContext {
     // Determine if comma is inside an array or an object by finding the
     // nearest unmatched '[' or '{'
     const enclosing = findEnclosingBracket(text, commaIndex);
@@ -240,10 +224,7 @@ function resolveCommaContext(
  *
  * Example: `{ $and: [ | ] }` → array-element with parentOperator '$and'
  */
-function resolveOpenBracketContext(
-    text: string,
-    bracketIndex: number,
-): CursorContext {
+function resolveOpenBracketContext(text: string, bracketIndex: number): CursorContext {
     // Look backward from '[' to find the parent key via ':'
     const beforeBracket = scanBackwardFrom(text, bracketIndex);
 
@@ -261,10 +242,7 @@ function resolveOpenBracketContext(
  * Resolves key context when '{' is found immediately after '['.
  * Pattern: `$and: [ { | } ]` → key at depth 1
  */
-function resolveKeyInsideArray(
-    text: string,
-    bracketIndex: number,
-): CursorContext {
+function resolveKeyInsideArray(text: string, bracketIndex: number): CursorContext {
     // Check if this array belongs to a logical operator
     const beforeBracket = scanBackwardFrom(text, bracketIndex);
     if (beforeBracket && beforeBracket.char === ':') {
@@ -283,10 +261,7 @@ function resolveKeyInsideArray(
  * Resolves context when '{' is preceded by ',' inside an array.
  * Pattern: `$and: [ {...}, { | } ]`
  */
-function resolveCommaInsideArrayForBrace(
-    text: string,
-    commaIndex: number,
-): CursorContext {
+function resolveCommaInsideArrayForBrace(text: string, commaIndex: number): CursorContext {
     const enclosing = findEnclosingBracket(text, commaIndex);
     if (enclosing && enclosing.char === '[') {
         return resolveKeyInsideArray(text, enclosing.index);
