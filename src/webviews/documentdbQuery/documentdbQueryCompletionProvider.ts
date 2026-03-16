@@ -146,6 +146,8 @@ export interface CreateCompletionItemsParams {
     /** The range to insert completions at. */
     range: monacoEditor.IRange;
     /** Whether the cursor is immediately after a '$' character. */
+    // TODO: WIP — isDollarPrefix is passed but not yet consumed by createCompletionItems().
+    // Will be used to filter/prioritize $-prefixed operators vs constructors.
     isDollarPrefix: boolean;
     /** The Monaco editor API. */
     monaco: typeof monacoEditor;
