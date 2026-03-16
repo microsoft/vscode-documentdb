@@ -1123,6 +1123,9 @@ describe('documentdbQueryCompletionProvider', () => {
             });
 
             test('applies type-aware sorting when fieldBsonType is available', () => {
+                // Uses 'int' (documentdb-constants naming) rather than 'int32' (BSONTypes)
+                // because applicableBsonTypes in operators uses the constants naming.
+                // TODO: normalize type names between schema-analyzer and documentdb-constants
                 const typedContext: CursorContext = {
                     position: 'operator',
                     fieldName: 'age',
@@ -1273,7 +1276,7 @@ describe('documentdbQueryCompletionProvider', () => {
         });
 
         test('returns true/false for boolean fields', () => {
-            const items = createTypeSuggestions('bool', testRange, mockMonaco);
+            const items = createTypeSuggestions('boolean', testRange, mockMonaco);
             expect(items).toHaveLength(2);
 
             const labels = items.map((i) => getLabelText(i.label));
@@ -1288,7 +1291,7 @@ describe('documentdbQueryCompletionProvider', () => {
         });
 
         test('returns range query for int fields', () => {
-            const items = createTypeSuggestions('int', testRange, mockMonaco);
+            const items = createTypeSuggestions('int32', testRange, mockMonaco);
             expect(items.length).toBeGreaterThanOrEqual(1);
 
             const labels = items.map((i) => getLabelText(i.label));
@@ -1340,14 +1343,14 @@ describe('documentdbQueryCompletionProvider', () => {
         });
 
         test('suggestions have sort prefix 00_ (highest priority)', () => {
-            const items = createTypeSuggestions('bool', testRange, mockMonaco);
+            const items = createTypeSuggestions('boolean', testRange, mockMonaco);
             for (const item of items) {
                 expect(item.sortText).toMatch(/^00_/);
             }
         });
 
         test('first suggestion is preselected', () => {
-            const items = createTypeSuggestions('int', testRange, mockMonaco);
+            const items = createTypeSuggestions('int32', testRange, mockMonaco);
             expect(items[0].preselect).toBe(true);
         });
     });
@@ -1356,7 +1359,7 @@ describe('documentdbQueryCompletionProvider', () => {
         const mockMonaco = createMockMonaco();
 
         test('boolean field at value position shows true/false first', () => {
-            const context: CursorContext = { position: 'value', fieldName: 'isActive', fieldBsonType: 'bool' };
+            const context: CursorContext = { position: 'value', fieldName: 'isActive', fieldBsonType: 'boolean' };
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
@@ -1382,7 +1385,7 @@ describe('documentdbQueryCompletionProvider', () => {
         });
 
         test('int field at value position shows range query first', () => {
-            const context: CursorContext = { position: 'value', fieldName: 'age', fieldBsonType: 'int' };
+            const context: CursorContext = { position: 'value', fieldName: 'age', fieldBsonType: 'int32' };
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,

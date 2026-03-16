@@ -45,14 +45,21 @@ interface TypeSuggestionDef {
  * The suggestions use Monaco snippet syntax for tab stops.
  */
 const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
-    bool: [
+    // BSONTypes.Boolean = 'boolean'
+    boolean: [
         { label: 'true', insertText: 'true', isSnippet: false, description: 'boolean literal' },
         { label: 'false', insertText: 'false', isSnippet: false, description: 'boolean literal' },
     ],
-    int: numberSuggestions(),
+    // BSONTypes.Int32 = 'int32'
+    int32: numberSuggestions(),
+    // BSONTypes.Double = 'double'
     double: numberSuggestions(),
+    // BSONTypes.Long = 'long'
     long: numberSuggestions(),
-    decimal: numberSuggestions(),
+    // BSONTypes.Decimal128 = 'decimal128'
+    decimal128: numberSuggestions(),
+    // BSONTypes.Number = 'number' (generic number without specific subtype)
+    number: numberSuggestions(),
     string: [
         {
             label: '{ $regex: /▪/ }',
