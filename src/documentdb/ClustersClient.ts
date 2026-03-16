@@ -10,6 +10,7 @@
  */
 
 import { appendExtensionUserAgent, callWithTelemetryAndErrorHandling, parseError } from '@microsoft/vscode-azext-utils';
+import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import {
@@ -513,13 +514,15 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = EJSON.parse(queryParams.project) as Document;
+                options.projection = parseShellBSON(queryParams.project, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_PROJECTION',
                     l10n.t(
-                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid projection syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -530,13 +533,15 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = EJSON.parse(queryParams.sort) as Document;
+                options.sort = parseShellBSON(queryParams.sort, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_SORT',
                     l10n.t(
-                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid sort syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -662,13 +667,15 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = EJSON.parse(queryParams.project) as Document;
+                options.projection = parseShellBSON(queryParams.project, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_PROJECTION',
                     l10n.t(
-                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid projection syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -679,13 +686,15 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = EJSON.parse(queryParams.sort) as Document;
+                options.sort = parseShellBSON(queryParams.sort, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_SORT',
                     l10n.t(
-                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid sort syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
