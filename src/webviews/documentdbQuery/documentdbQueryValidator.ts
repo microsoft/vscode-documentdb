@@ -108,16 +108,20 @@ export function levenshteinDistance(a: string, b: string): number {
 }
 
 /**
- * Finds the closest BSON constructor name to a given identifier.
+ * Finds the closest known identifier (BSON constructor or known global) to a given name.
  * Returns the match and distance if within threshold, otherwise undefined.
+ *
+ * Searches both BSON constructor entries (from documentdb-constants) and
+ * KNOWN_GLOBALS (Date, Math, RegExp, etc.) for near-misses.
  */
-function findNearMissBsonConstructor(name: string): { match: string; distance: number } | undefined {
+function findNearMissKnownIdentifier(name: string): { match: string; distance: number } | undefined {
     ensureBsonConstructors();
 
-    const allEntries = getAllCompletions();
     let bestMatch: string | undefined;
     let bestDistance = Infinity;
 
+    // Check against BSON constructors
+    const allEntries = getAllCompletions();
     for (const entry of allEntries) {
         if (entry.meta === 'bson') {
             const dist = levenshteinDistance(name.toLowerCase(), entry.value.toLowerCase());
@@ -125,6 +129,15 @@ function findNearMissBsonConstructor(name: string): { match: string; distance: n
                 bestDistance = dist;
                 bestMatch = entry.value;
             }
+        }
+    }
+
+    // Check against KNOWN_GLOBALS (Date, Math, RegExp, Number, etc.)
+    for (const known of KNOWN_GLOBALS) {
+        const dist = levenshteinDistance(name.toLowerCase(), known.toLowerCase());
+        if (dist <= 2 && dist < bestDistance) {
+            bestDistance = dist;
+            bestMatch = known;
         }
     }
 
@@ -146,8 +159,11 @@ export function validateExpression(code: string): Diagnostic[] {
 
     const trimmed = code.trim();
     if (trimmed.length === 0) {
+        console.debug('[documentdb-query validator] Empty input, skipping validation');
         return [];
     }
+
+    console.debug('[documentdb-query validator] Validating expression:', JSON.stringify(code));
 
     const diagnostics: Diagnostic[] = [];
 
@@ -161,6 +177,10 @@ export function validateExpression(code: string): Diagnostic[] {
             ecmaVersion: 'latest',
             sourceType: 'module',
         });
+        console.debug(
+            '[documentdb-query validator] Parsed successfully, AST type:',
+            (ast as acorn.Node & { type: string }).type,
+        );
     } catch (error) {
         if (error instanceof SyntaxError) {
             const syntaxError = error as SyntaxError & { pos?: number; loc?: { line: number; column: number } };
@@ -169,13 +189,22 @@ export function validateExpression(code: string): Diagnostic[] {
             const startOffset = Math.max(0, Math.min(pos, code.length));
             const endOffset = Math.min(startOffset + 1, code.length);
 
+            const message = syntaxError.message.replace(/\(\d+:\d+\)/, '').trim();
+            console.debug(
+                '[documentdb-query validator] Syntax error at offset %d–%d: %s',
+                startOffset,
+                endOffset,
+                message,
+            );
+
             diagnostics.push({
                 startOffset,
                 endOffset,
                 severity: 'error',
-                message: syntaxError.message.replace(/\(\d+:\d+\)/, '').trim(),
+                message,
             });
         }
+        console.debug('[documentdb-query validator] Returning %d diagnostic(s) after parse error', diagnostics.length);
         return diagnostics;
     }
 
@@ -191,23 +220,40 @@ export function validateExpression(code: string): Diagnostic[] {
                 }
 
                 // Don't flag field names — only flag function call identifiers
-                // that look like BSON constructor typos
+                // that look like BSON constructor typos.
+                // CallExpression and MemberExpression handlers below handle
+                // identifiers in call/member positions.
             },
-            CallExpression(node: acorn.Node & { callee: acorn.Node & { name?: string; type: string } }) {
+            CallExpression(
+                node: acorn.Node & {
+                    callee: acorn.Node & {
+                        name?: string;
+                        type: string;
+                        object?: acorn.Node & { name?: string; type: string };
+                    };
+                },
+            ) {
+                // Case 1: Direct call — e.g., ObjctId("abc")
                 if (node.callee.type === 'Identifier' && node.callee.name) {
                     const name = node.callee.name;
 
-                    // If it's a known global, skip
                     if (KNOWN_GLOBALS.has(name)) {
                         return;
                     }
 
-                    // Check if it's a near-miss of a BSON constructor
-                    const nearMiss = findNearMissBsonConstructor(name);
+                    const nearMiss = findNearMissKnownIdentifier(name);
                     if (nearMiss) {
-                        // Adjust offset for wrapping parenthesis
                         const startOffset = node.callee.start - 1;
                         const endOffset = node.callee.end - 1;
+
+                        console.debug(
+                            '[documentdb-query validator] Near-miss: "%s" at offset %d–%d → did you mean "%s"? (distance: %d)',
+                            name,
+                            startOffset,
+                            endOffset,
+                            nearMiss.match,
+                            nearMiss.distance,
+                        );
 
                         diagnostics.push({
                             startOffset,
@@ -215,13 +261,62 @@ export function validateExpression(code: string): Diagnostic[] {
                             severity: 'warning',
                             message: `Did you mean '${nearMiss.match}'?`,
                         });
+                    } else {
+                        console.debug(
+                            '[documentdb-query validator] Unknown call: "%s" (no near-miss match)',
+                            name,
+                        );
+                    }
+                }
+
+                // Case 2: Member call — e.g., Daate.now(), Maht.min()
+                // Check if the object is an unknown identifier that's a near-miss
+                if (
+                    node.callee.type === 'MemberExpression' &&
+                    node.callee.object &&
+                    node.callee.object.type === 'Identifier' &&
+                    node.callee.object.name
+                ) {
+                    const objName = node.callee.object.name;
+
+                    if (KNOWN_GLOBALS.has(objName)) {
+                        return;
+                    }
+
+                    const nearMiss = findNearMissKnownIdentifier(objName);
+                    if (nearMiss) {
+                        const startOffset = node.callee.object.start - 1;
+                        const endOffset = node.callee.object.end - 1;
+
+                        console.debug(
+                            '[documentdb-query validator] Near-miss (member object): "%s" at offset %d–%d → did you mean "%s"? (distance: %d)',
+                            objName,
+                            startOffset,
+                            endOffset,
+                            nearMiss.match,
+                            nearMiss.distance,
+                        );
+
+                        diagnostics.push({
+                            startOffset,
+                            endOffset,
+                            severity: 'warning',
+                            message: `Did you mean '${nearMiss.match}'?`,
+                        });
+                    } else {
+                        console.debug(
+                            '[documentdb-query validator] Unknown member call object: "%s" (no near-miss match)',
+                            objName,
+                        );
                     }
                 }
             },
         });
     } catch {
         // If walking fails, just return syntax diagnostics we already have
+        console.debug('[documentdb-query validator] AST walk failed, returning syntax diagnostics only');
     }
 
+    console.debug('[documentdb-query validator] Returning %d diagnostic(s):', diagnostics.length, diagnostics);
     return diagnostics;
 }

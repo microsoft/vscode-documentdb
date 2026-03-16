@@ -76,6 +76,13 @@ describe('documentdbQueryValidator', () => {
             expect(diagnostics).toHaveLength(0);
         });
 
+        test('unknown field name ___id is not flagged (field validation is out of scope)', () => {
+            // The validator does not validate field names against the schema.
+            // That requires integration with the completion store (known fields).
+            const diagnostics = validateExpression('{ ___id: 1 }');
+            expect(diagnostics).toHaveLength(0);
+        });
+
         test('empty string produces no diagnostics', () => {
             const diagnostics = validateExpression('');
             expect(diagnostics).toHaveLength(0);
@@ -88,6 +95,44 @@ describe('documentdbQueryValidator', () => {
 
         test('valid expression with Math.min produces no diagnostics', () => {
             const diagnostics = validateExpression('{ rating: Math.min(1.7, 2) }');
+            expect(diagnostics).toHaveLength(0);
+        });
+
+        test('valid expression with Date.now produces no diagnostics', () => {
+            const diagnostics = validateExpression('{ ts: Date.now() }');
+            expect(diagnostics).toHaveLength(0);
+        });
+
+        test('typo Daate.now() produces warning "Did you mean Date?"', () => {
+            const diagnostics = validateExpression('{ _id: Daate.now() }');
+
+            const warnings = diagnostics.filter((d) => d.severity === 'warning');
+            expect(warnings.length).toBeGreaterThan(0);
+            expect(warnings[0].message).toContain('Date');
+            expect(warnings[0].message).toContain('Did you mean');
+        });
+
+        test('typo Maht.min() produces warning "Did you mean Math?"', () => {
+            const diagnostics = validateExpression('{ val: Maht.min(1, 2) }');
+
+            const warnings = diagnostics.filter((d) => d.severity === 'warning');
+            expect(warnings.length).toBeGreaterThan(0);
+            expect(warnings[0].message).toContain('Math');
+        });
+
+        test('typo Nubmer.parseInt() produces warning "Did you mean Number?"', () => {
+            const diagnostics = validateExpression('{ x: Nubmer.parseInt("42") }');
+
+            const warnings = diagnostics.filter((d) => d.severity === 'warning');
+            expect(warnings.length).toBeGreaterThan(0);
+            expect(warnings[0].message).toContain('Number');
+        });
+
+        test('Date.nodw() does NOT produce a warning (method validation is out of scope)', () => {
+            // We validate the object (Date) but not individual method names.
+            // Date is a known global, so no warning. The .nodw() method name
+            // is not validated — that would require method-level knowledge.
+            const diagnostics = validateExpression('{ _id: Date.nodw() }');
             expect(diagnostics).toHaveLength(0);
         });
 
