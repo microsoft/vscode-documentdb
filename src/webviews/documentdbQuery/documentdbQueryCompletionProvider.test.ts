@@ -12,6 +12,7 @@ import {
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { clearAllCompletionContexts, setCompletionContext } from './completionStore';
+import { type CursorContext } from './cursorContext';
 import {
     createCompletionItems,
     getCompletionKindForMeta,
@@ -743,6 +744,386 @@ describe('documentdbQueryCompletionProvider', () => {
 
             const fieldItem = items.find((i) => i.label === 'age');
             expect(fieldItem?.sortText).toBe('0_age');
+        });
+    });
+
+    // ---------------------------------------------------------------
+    // Context-sensitive completions (Step 4.5)
+    // ---------------------------------------------------------------
+    describe('context-sensitive completions', () => {
+        const mockMonaco = createMockMonaco();
+
+        afterEach(() => {
+            clearAllCompletionContexts();
+        });
+
+        describe('key position', () => {
+            const keyContext: CursorContext = { position: 'key', depth: 1 };
+
+            test('shows field names when store has data', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'name',
+                            displayType: 'String',
+                            bsonType: 'string',
+                            isSparse: false,
+                            insertText: 'name',
+                            referenceText: '$name',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).toContain('name');
+            });
+
+            test('shows key-position operators ($and, $or, $nor)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).toContain('$and');
+                expect(labels).toContain('$or');
+                expect(labels).toContain('$nor');
+                expect(labels).toContain('$not');
+                expect(labels).toContain('$comment');
+                expect(labels).toContain('$expr');
+            });
+
+            test('does NOT show value-level operators ($gt, $lt, $regex, $eq)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).not.toContain('$gt');
+                expect(labels).not.toContain('$lt');
+                expect(labels).not.toContain('$regex');
+                expect(labels).not.toContain('$eq');
+                expect(labels).not.toContain('$in');
+                expect(labels).not.toContain('$exists');
+            });
+
+            test('does NOT show BSON constructors', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).not.toContain('ObjectId');
+                expect(labels).not.toContain('UUID');
+                expect(labels).not.toContain('ISODate');
+            });
+
+            test('fields sort before operators', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'age',
+                            displayType: 'Number',
+                            bsonType: 'int',
+                            isSparse: false,
+                            insertText: 'age',
+                            referenceText: '$age',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const fieldItem = items.find((i) => i.label === 'age');
+                const andItem = items.find((i) => i.label === '$and');
+                expect(fieldItem?.sortText).toBe('0_age');
+                expect(andItem?.sortText).toBe('1_$and');
+            });
+        });
+
+        describe('value position', () => {
+            const valueContext: CursorContext = { position: 'value', fieldName: 'age' };
+
+            test('shows BSON constructors', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).toContain('ObjectId');
+                expect(labels).toContain('UUID');
+                expect(labels).toContain('ISODate');
+            });
+
+            test('does NOT show query operators', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).not.toContain('$gt');
+                expect(labels).not.toContain('$eq');
+                expect(labels).not.toContain('$and');
+            });
+
+            test('does NOT show field names', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'name',
+                            displayType: 'String',
+                            bsonType: 'string',
+                            isSparse: false,
+                            insertText: 'name',
+                            referenceText: '$name',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).not.toContain('name');
+            });
+        });
+
+        describe('operator position', () => {
+            const operatorContext: CursorContext = { position: 'operator', fieldName: 'age' };
+
+            test('shows comparison operators ($gt, $lt, $eq, $in)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: operatorContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).toContain('$gt');
+                expect(labels).toContain('$lt');
+                expect(labels).toContain('$eq');
+                expect(labels).toContain('$in');
+                expect(labels).toContain('$exists');
+                expect(labels).toContain('$regex');
+            });
+
+            test('does NOT show key-position operators ($and, $or)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: operatorContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).not.toContain('$and');
+                expect(labels).not.toContain('$or');
+                expect(labels).not.toContain('$nor');
+            });
+
+            test('does NOT show BSON constructors', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: operatorContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).not.toContain('ObjectId');
+                expect(labels).not.toContain('UUID');
+            });
+
+            test('does NOT show field names', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'name',
+                            displayType: 'String',
+                            bsonType: 'string',
+                            isSparse: false,
+                            insertText: 'name',
+                            referenceText: '$name',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: operatorContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                expect(labels).not.toContain('name');
+            });
+
+            test('applies type-aware sorting when fieldBsonType is available', () => {
+                const typedContext: CursorContext = {
+                    position: 'operator',
+                    fieldName: 'age',
+                    fieldBsonType: 'int',
+                };
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: typedContext,
+                });
+
+                // $regex has applicableBsonTypes=['string'], doesn't match 'int' → demoted
+                const regexItem = items.find((i) => i.label === '$regex');
+                expect(regexItem?.sortText).toBe('2_$regex');
+
+                // $bitsAllSet has applicableBsonTypes containing 'int' → promoted
+                const bitsItem = items.find((i) => i.label === '$bitsAllSet');
+                expect(bitsItem?.sortText).toBe('0_$bitsAllSet');
+
+                // $eq is universal → middle
+                const eqItem = items.find((i) => i.label === '$eq');
+                expect(eqItem?.sortText).toBe('1_$eq');
+            });
+        });
+
+        describe('array-element position', () => {
+            const arrayContext: CursorContext = { position: 'array-element', parentOperator: '$and' };
+
+            test('behaves like key position (shows fields + key operators)', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'age',
+                            displayType: 'Number',
+                            bsonType: 'int',
+                            isSparse: false,
+                            insertText: 'age',
+                            referenceText: '$age',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: arrayContext,
+                });
+
+                const labels = items.map((i) => i.label);
+                // Should include fields
+                expect(labels).toContain('age');
+                // Should include key-position operators
+                expect(labels).toContain('$and');
+                expect(labels).toContain('$or');
+                // Should NOT include value-level operators
+                expect(labels).not.toContain('$gt');
+                expect(labels).not.toContain('$regex');
+                // Should NOT include BSON constructors
+                expect(labels).not.toContain('ObjectId');
+            });
+        });
+
+        describe('unknown position', () => {
+            const unknownContext: CursorContext = { position: 'unknown' };
+
+            test('falls back to showing all completions', () => {
+                const itemsWithContext = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: unknownContext,
+                });
+
+                const itemsWithoutContext = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                });
+
+                // Same number of items
+                expect(itemsWithContext).toHaveLength(itemsWithoutContext.length);
+            });
+        });
+
+        describe('no cursorContext (undefined)', () => {
+            test('falls back to showing all completions (backward compatible)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: undefined,
+                });
+
+                const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
+                expect(items).toHaveLength(expected.length);
+            });
         });
     });
 });

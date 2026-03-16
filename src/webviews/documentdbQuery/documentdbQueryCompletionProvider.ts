@@ -27,6 +27,7 @@ import {
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { type FieldCompletionData } from '../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { getCompletionContext } from './completionStore';
+import { type CursorContext } from './cursorContext';
 import { EditorType } from './languageConfig';
 
 /**
@@ -157,6 +158,13 @@ export interface CreateCompletionItemsParams {
      * type-matching first, universal second, non-matching last.
      */
     fieldBsonTypes?: readonly string[];
+    /**
+     * Optional cursor context from the heuristic cursor position detector.
+     * When provided, completions are filtered based on the semantic position
+     * of the cursor (key, value, operator, array-element).
+     * When undefined, falls back to showing all completions (backward compatible).
+     */
+    cursorContext?: CursorContext;
 }
 
 /**
@@ -178,21 +186,158 @@ export function getMetaTagsForEditorType(editorType: EditorType | undefined): re
 }
 
 /**
+ * Operator values that are valid at key position (root level of a query object).
+ * These are logical operators and top-level query operators that take a document-level position,
+ * as opposed to value-level operators like $gt, $regex, etc.
+ *
+ * Exported for testing.
+ */
+export const KEY_POSITION_OPERATORS = new Set([
+    '$and',
+    '$or',
+    '$nor',
+    '$not',
+    '$comment',
+    '$expr',
+    '$jsonSchema',
+    '$text',
+    '$where',
+]);
+
+/**
  * Creates Monaco completion items based on the editor context.
  *
  * This function is the main entry point called by the CompletionItemProvider.
  * It delegates to `documentdb-constants` for the operator data and maps
  * each entry to a Monaco CompletionItem.
+ *
+ * When a `cursorContext` is provided, completions are filtered based on the
+ * semantic position of the cursor:
+ * - **key**: field names + key-position operators ($and, $or, etc.)
+ * - **value**: BSON constructors only
+ * - **operator**: query operators (comparison, element, array, etc.) with type-aware sorting
+ * - **array-element**: same as key position
+ * - **unknown**: all completions (backward compatible fallback)
  */
 export function createCompletionItems(params: CreateCompletionItemsParams): monacoEditor.languages.CompletionItem[] {
-    const { editorType, sessionId, range, monaco, fieldBsonTypes } = params;
+    const { editorType, sessionId, range, monaco, fieldBsonTypes, cursorContext } = params;
 
-    // Static operator completions from documentdb-constants
+    // If no cursor context → fall back to showing everything (backward compatible)
+    if (!cursorContext || cursorContext.position === 'unknown') {
+        return createAllCompletions(editorType, sessionId, range, monaco, fieldBsonTypes);
+    }
+
+    switch (cursorContext.position) {
+        case 'key':
+        case 'array-element':
+            return createKeyPositionCompletions(editorType, sessionId, range, monaco);
+
+        case 'value':
+            return createValuePositionCompletions(editorType, range, monaco);
+
+        case 'operator': {
+            const bsonTypes = cursorContext.fieldBsonType ? [cursorContext.fieldBsonType] : fieldBsonTypes;
+            return createOperatorPositionCompletions(editorType, range, monaco, bsonTypes);
+        }
+
+        default:
+            return createAllCompletions(editorType, sessionId, range, monaco, fieldBsonTypes);
+    }
+}
+
+/**
+ * Returns all completions (operators + fields) — the pre-4.5 behavior.
+ * Used as fallback when cursor context is unknown or not provided.
+ */
+function createAllCompletions(
+    editorType: EditorType | undefined,
+    sessionId: string | undefined,
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+    fieldBsonTypes: readonly string[] | undefined,
+): monacoEditor.languages.CompletionItem[] {
     const metaTags = getMetaTagsForEditorType(editorType);
     const entries = getFilteredCompletions({ meta: [...metaTags] });
     const operatorItems = entries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes));
 
-    // Dynamic field completions from the completion store
+    const fieldItems = getFieldCompletionItems(sessionId, range, monaco);
+    return [...fieldItems, ...operatorItems];
+}
+
+/**
+ * Returns completions appropriate for key position:
+ * field names + key-position operators ($and, $or, $nor, $not, $comment, $expr, $jsonSchema, $text, $where).
+ *
+ * Fields get sort prefix `0_`, operators get `1_`.
+ */
+function createKeyPositionCompletions(
+    editorType: EditorType | undefined,
+    sessionId: string | undefined,
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
+    const metaTags = getMetaTagsForEditorType(editorType);
+    const allEntries = getFilteredCompletions({ meta: [...metaTags] });
+
+    // Filter to only key-position operators
+    const keyEntries = allEntries.filter((e) => KEY_POSITION_OPERATORS.has(e.value));
+    const operatorItems = keyEntries.map((entry) => {
+        const item = mapOperatorToCompletionItem(entry, range, monaco);
+        // Give operators a `1_` prefix so fields sort first
+        item.sortText = `1_${entry.value}`;
+        return item;
+    });
+
+    const fieldItems = getFieldCompletionItems(sessionId, range, monaco);
+    return [...fieldItems, ...operatorItems];
+}
+
+/**
+ * Returns completions appropriate for value position:
+ * BSON constructors only (ObjectId, UUID, ISODate, etc.).
+ */
+function createValuePositionCompletions(
+    editorType: EditorType | undefined,
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
+    // For value position, we only want BSON constructors
+    // In the filter context, these have meta='bson'
+    const metaTags = getMetaTagsForEditorType(editorType);
+    const allEntries = getFilteredCompletions({ meta: [...metaTags] });
+    const bsonEntries = allEntries.filter((e) => e.meta === 'bson');
+    return bsonEntries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco));
+}
+
+/**
+ * Returns completions appropriate for operator position (inside `{ field: { | } }`):
+ * Query operators (comparison, element, array, evaluation, bitwise) excluding key-position-only operators.
+ * Type-aware sorting is applied when field BSON types are available.
+ */
+function createOperatorPositionCompletions(
+    editorType: EditorType | undefined,
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+    fieldBsonTypes: readonly string[] | undefined,
+): monacoEditor.languages.CompletionItem[] {
+    const metaTags = getMetaTagsForEditorType(editorType);
+    const allEntries = getFilteredCompletions({ meta: [...metaTags] });
+
+    // Exclude key-position-only operators and BSON constructors
+    const operatorEntries = allEntries.filter(
+        (e) => e.meta !== 'bson' && e.meta !== 'variable' && !KEY_POSITION_OPERATORS.has(e.value),
+    );
+    return operatorEntries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes));
+}
+
+/**
+ * Retrieves field completion items from the completion store for the given session.
+ */
+function getFieldCompletionItems(
+    sessionId: string | undefined,
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
     const fieldItems: monacoEditor.languages.CompletionItem[] = [];
     if (sessionId) {
         const context = getCompletionContext(sessionId);
@@ -202,6 +347,5 @@ export function createCompletionItems(params: CreateCompletionItemsParams): mona
             }
         }
     }
-
-    return [...fieldItems, ...operatorItems];
+    return fieldItems;
 }
