@@ -30,20 +30,24 @@ import { createCompletionItems } from './documentdbQueryCompletionProvider';
 import { getHoverContent } from './documentdbQueryHoverProvider';
 import { LANGUAGE_ID, parseEditorUri } from './languageConfig';
 
-/** Tracks whether the language has already been registered (idempotent guard). */
-let isRegistered = false;
+/** Coalesces concurrent registrations into a single promise. */
+let registrationPromise: Promise<void> | undefined;
 
 /**
  * Registers the `documentdb-query` language with Monaco.
  *
- * Safe to call multiple times — subsequent calls are no-ops.
+ * Safe to call multiple times — concurrent calls coalesce into one registration.
  *
  * @param monaco - the Monaco editor API instance
  */
-export async function registerDocumentDBQueryLanguage(monaco: typeof monacoEditor): Promise<void> {
-    if (isRegistered) {
-        return;
+export function registerDocumentDBQueryLanguage(monaco: typeof monacoEditor): Promise<void> {
+    if (!registrationPromise) {
+        registrationPromise = doRegisterLanguage(monaco);
     }
+    return registrationPromise;
+}
+
+async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
 
     // Step 1: Register the language ID
     monaco.languages.register({ id: LANGUAGE_ID });
@@ -132,8 +136,6 @@ export async function registerDocumentDBQueryLanguage(monaco: typeof monacoEdito
             };
         },
     });
-
-    isRegistered = true;
 }
 
 /**
@@ -141,5 +143,5 @@ export async function registerDocumentDBQueryLanguage(monaco: typeof monacoEdito
  * @internal
  */
 export function _resetRegistration(): void {
-    isRegistered = false;
+    registrationPromise = undefined;
 }
