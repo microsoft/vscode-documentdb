@@ -15,6 +15,7 @@ import { clearAllCompletionContexts, setCompletionContext } from './completionSt
 import { type CursorContext } from './cursorContext';
 import {
     createCompletionItems,
+    createTypeSuggestions,
     escapeSnippetDollars,
     getCategoryLabel,
     getCompletionKindForMeta,
@@ -1252,6 +1253,169 @@ describe('documentdbQueryCompletionProvider', () => {
                 const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
                 expect(items).toHaveLength(expected.length);
             });
+        });
+    });
+
+    // ---------------------------------------------------------------
+    // Type-aware value suggestions
+    // ---------------------------------------------------------------
+    describe('createTypeSuggestions', () => {
+        const mockMonaco = createMockMonaco();
+
+        test('returns empty array for undefined bsonType', () => {
+            const items = createTypeSuggestions(undefined, testRange, mockMonaco);
+            expect(items).toHaveLength(0);
+        });
+
+        test('returns empty array for unknown bsonType', () => {
+            const items = createTypeSuggestions('unknownType', testRange, mockMonaco);
+            expect(items).toHaveLength(0);
+        });
+
+        test('returns true/false for boolean fields', () => {
+            const items = createTypeSuggestions('bool', testRange, mockMonaco);
+            expect(items).toHaveLength(2);
+
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('true');
+            expect(labels).toContain('false');
+
+            // Plain text, not snippets
+            const trueItem = items.find((i) => getLabelText(i.label) === 'true');
+            expect(trueItem?.insertText).toBe('true');
+            expect(trueItem?.insertTextRules).toBeUndefined();
+            expect(trueItem?.kind).toBe(mockCompletionItemKind.Value);
+        });
+
+        test('returns range query for int fields', () => {
+            const items = createTypeSuggestions('int', testRange, mockMonaco);
+            expect(items.length).toBeGreaterThanOrEqual(1);
+
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels[0]).toContain('$gt');
+            expect(labels[0]).toContain('$lt');
+
+            // Should be a snippet
+            expect(items[0].kind).toBe(mockCompletionItemKind.Snippet);
+        });
+
+        test('returns regex and empty string for string fields', () => {
+            const items = createTypeSuggestions('string', testRange, mockMonaco);
+            expect(items.length).toBeGreaterThanOrEqual(1);
+
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('{ $regex: /▪/ }');
+        });
+
+        test('returns ISODate for date fields', () => {
+            const items = createTypeSuggestions('date', testRange, mockMonaco);
+            expect(items.length).toBeGreaterThanOrEqual(1);
+
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('ISODate("▪")');
+        });
+
+        test('returns ObjectId for objectid fields', () => {
+            const items = createTypeSuggestions('objectid', testRange, mockMonaco);
+            expect(items).toHaveLength(1);
+
+            expect(getLabelText(items[0].label)).toBe('ObjectId("▪")');
+        });
+
+        test('returns null for null fields', () => {
+            const items = createTypeSuggestions('null', testRange, mockMonaco);
+            expect(items).toHaveLength(1);
+
+            expect(getLabelText(items[0].label)).toBe('null');
+            expect(items[0].insertText).toBe('null');
+        });
+
+        test('returns elemMatch and size for array fields', () => {
+            const items = createTypeSuggestions('array', testRange, mockMonaco);
+            expect(items.length).toBeGreaterThanOrEqual(2);
+
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('{ $elemMatch: { ▪ } }');
+            expect(labels).toContain('{ $size: ▪ }');
+        });
+
+        test('suggestions have sort prefix 00_ (highest priority)', () => {
+            const items = createTypeSuggestions('bool', testRange, mockMonaco);
+            for (const item of items) {
+                expect(item.sortText).toMatch(/^00_/);
+            }
+        });
+
+        test('first suggestion is preselected', () => {
+            const items = createTypeSuggestions('int', testRange, mockMonaco);
+            expect(items[0].preselect).toBe(true);
+        });
+    });
+
+    describe('type suggestions in value position integration', () => {
+        const mockMonaco = createMockMonaco();
+
+        test('boolean field at value position shows true/false first', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'isActive', fieldBsonType: 'bool' };
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const labels = items.map((i) => getLabelText(i.label));
+            // true/false should be present
+            expect(labels).toContain('true');
+            expect(labels).toContain('false');
+
+            // Operators should also be present
+            expect(labels).toContain('$eq');
+            expect(labels).toContain('$gt');
+
+            // true/false should sort before operators (00_ < 0_)
+            const trueItem = items.find((i) => getLabelText(i.label) === 'true');
+            const eqItem = items.find((i) => getLabelText(i.label) === '$eq');
+            expect(trueItem!.sortText! < eqItem!.sortText!).toBe(true);
+        });
+
+        test('int field at value position shows range query first', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'age', fieldBsonType: 'int' };
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            // Range query suggestion should be first (sort 00_00)
+            const first = items[0];
+            expect(getLabelText(first.label)).toContain('$gt');
+            expect(first.sortText).toBe('00_00');
+        });
+
+        test('unknown type at value position has no type suggestions', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'data' };
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            // No type suggestions, but operators and BSON should still be present
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('$eq');
+            expect(labels).toContain('ObjectId');
+
+            // No items with 00_ sort prefix
+            expect(items.filter((i) => i.sortText?.startsWith('00_'))).toHaveLength(0);
         });
     });
 });
