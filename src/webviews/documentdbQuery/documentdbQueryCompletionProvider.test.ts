@@ -15,11 +15,13 @@ import { clearAllCompletionContexts, setCompletionContext } from './completionSt
 import { type CursorContext } from './cursorContext';
 import {
     createCompletionItems,
+    getCategoryLabel,
     getCompletionKindForMeta,
     getMetaTagsForEditorType,
     getOperatorSortPrefix,
     mapFieldToCompletionItem,
     mapOperatorToCompletionItem,
+    stripOuterBraces,
 } from './documentdbQueryCompletionProvider';
 import { EditorType } from './languageConfig';
 
@@ -75,6 +77,14 @@ function createMockMonaco(): typeof monacoEditor {
             CompletionItemInsertTextRule: mockInsertTextRule,
         },
     } as unknown as typeof monacoEditor;
+}
+
+/**
+ * Extracts the label string from a CompletionItem's label,
+ * which may be a plain string or a CompletionItemLabel object.
+ */
+function getLabelText(label: string | monacoEditor.languages.CompletionItemLabel): string {
+    return typeof label === 'string' ? label : label.label;
 }
 
 /** Standard test range for all completion items. */
@@ -145,7 +155,7 @@ describe('documentdbQueryCompletionProvider', () => {
 
             const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco);
 
-            expect(item.label).toBe('$eq');
+            expect(getLabelText(item.label)).toBe('$eq');
             expect(item.kind).toBe(mockCompletionItemKind.Operator);
             expect(item.insertText).toBe('$eq');
             expect(item.insertTextRules).toBeUndefined();
@@ -164,7 +174,7 @@ describe('documentdbQueryCompletionProvider', () => {
 
             const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco);
 
-            expect(item.label).toBe('$gt');
+            expect(getLabelText(item.label)).toBe('$gt');
             expect(item.insertText).toBe('{ $gt: ${1:value} }');
             expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
         });
@@ -180,7 +190,7 @@ describe('documentdbQueryCompletionProvider', () => {
 
             const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco);
 
-            expect(item.label).toBe('ObjectId');
+            expect(getLabelText(item.label)).toBe('ObjectId');
             expect(item.kind).toBe(mockCompletionItemKind.Constructor);
             expect(item.insertText).toBe('ObjectId("${1:hex}")');
             expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
@@ -252,7 +262,7 @@ describe('documentdbQueryCompletionProvider', () => {
             // All items should have required CompletionItem properties
             for (const item of items) {
                 expect(item.label).toBeDefined();
-                expect(typeof item.label).toBe('string');
+                expect(getLabelText(item.label)).toBeDefined();
                 expect(item.kind).toBeDefined();
                 expect(item.insertText).toBeDefined();
                 expect(item.range).toBe(testRange);
@@ -268,7 +278,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            const labels = items.map((item) => item.label);
+            const labels = items.map((item) => getLabelText(item.label));
             expect(labels).toContain('$eq');
             expect(labels).toContain('$gt');
             expect(labels).toContain('$in');
@@ -283,7 +293,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            const labels = items.map((item) => item.label);
+            const labels = items.map((item) => getLabelText(item.label));
             expect(labels).toContain('ObjectId');
             expect(labels).toContain('UUID');
             expect(labels).toContain('ISODate');
@@ -298,7 +308,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            const labels = items.map((item) => item.label);
+            const labels = items.map((item) => getLabelText(item.label));
             expect(labels).not.toContain('console');
             expect(labels).not.toContain('Math');
             expect(labels).not.toContain('function');
@@ -318,7 +328,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            const labels = items.map((item) => item.label);
+            const labels = items.map((item) => getLabelText(item.label));
             // $match is a query operator AND a stage, but $group/$unwind are stage-only
             expect(labels).not.toContain('$group');
             expect(labels).not.toContain('$unwind');
@@ -451,7 +461,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            const labels = items.map((i) => i.label);
+            const labels = items.map((i) => getLabelText(i.label));
             expect(labels).toContain('name');
             expect(labels).toContain('age');
         });
@@ -478,11 +488,11 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            const fieldItem = items.find((i) => i.label === 'name');
+            const fieldItem = items.find((i) => getLabelText(i.label) === 'name');
             expect(fieldItem?.sortText).toBe('0_name');
 
             // Operators should not have a sort prefix starting with 0_
-            const operatorItem = items.find((i) => i.label === '$eq');
+            const operatorItem = items.find((i) => getLabelText(i.label) === '$eq');
             expect(operatorItem?.sortText).toBeUndefined();
         });
 
@@ -647,10 +657,10 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            const regexItem = items.find((i) => i.label === '$regex');
+            const regexItem = items.find((i) => getLabelText(i.label) === '$regex');
             expect(regexItem?.sortText).toBeUndefined();
 
-            const eqItem = items.find((i) => i.label === '$eq');
+            const eqItem = items.find((i) => getLabelText(i.label) === '$eq');
             expect(eqItem?.sortText).toBeUndefined();
         });
 
@@ -664,14 +674,14 @@ describe('documentdbQueryCompletionProvider', () => {
                 fieldBsonTypes: ['string'],
             });
 
-            const regexItem = items.find((i) => i.label === '$regex');
+            const regexItem = items.find((i) => getLabelText(i.label) === '$regex');
             expect(regexItem?.sortText).toBe('0_$regex');
 
-            const sizeItem = items.find((i) => i.label === '$size');
+            const sizeItem = items.find((i) => getLabelText(i.label) === '$size');
             expect(sizeItem?.sortText).toBe('2_$size');
 
             // Universal operators like $eq get "1_"
-            const eqItem = items.find((i) => i.label === '$eq');
+            const eqItem = items.find((i) => getLabelText(i.label) === '$eq');
             expect(eqItem?.sortText).toBe('1_$eq');
         });
 
@@ -685,15 +695,15 @@ describe('documentdbQueryCompletionProvider', () => {
                 fieldBsonTypes: ['int'],
             });
 
-            const labels = items.map((i) => i.label);
+            const labels = items.map((i) => getLabelText(i.label));
             // $regex is still in the list, just demoted
             expect(labels).toContain('$regex');
 
-            const regexItem = items.find((i) => i.label === '$regex');
+            const regexItem = items.find((i) => getLabelText(i.label) === '$regex');
             expect(regexItem?.sortText).toBe('2_$regex');
 
             // Bitwise operators should match int
-            const bitsAllSetItem = items.find((i) => i.label === '$bitsAllSet');
+            const bitsAllSetItem = items.find((i) => getLabelText(i.label) === '$bitsAllSet');
             expect(bitsAllSetItem?.sortText).toBe('0_$bitsAllSet');
         });
 
@@ -742,8 +752,44 @@ describe('documentdbQueryCompletionProvider', () => {
                 fieldBsonTypes: ['int'],
             });
 
-            const fieldItem = items.find((i) => i.label === 'age');
+            const fieldItem = items.find((i) => getLabelText(i.label) === 'age');
             expect(fieldItem?.sortText).toBe('0_age');
+        });
+    });
+
+    describe('stripOuterBraces', () => {
+        test('strips outer { } from operator snippets', () => {
+            expect(stripOuterBraces('{ $gt: ${1:value} }')).toBe('$gt: ${1:value}');
+        });
+
+        test('preserves inner brackets', () => {
+            expect(stripOuterBraces('{ $in: [${1:value}] }')).toBe('$in: [${1:value}]');
+        });
+
+        test('preserves inner braces', () => {
+            expect(stripOuterBraces('{ $elemMatch: { ${1:query} } }')).toBe('$elemMatch: { ${1:query} }');
+        });
+
+        test('returns unchanged if not wrapped', () => {
+            expect(stripOuterBraces('ObjectId("${1:hex}")')).toBe('ObjectId("${1:hex}")');
+        });
+
+        test('returns unchanged for non-matching patterns', () => {
+            expect(stripOuterBraces('$gt')).toBe('$gt');
+        });
+    });
+
+    describe('getCategoryLabel', () => {
+        test('extracts sub-category from qualified meta tag', () => {
+            expect(getCategoryLabel('query:comparison')).toBe('comparison');
+            expect(getCategoryLabel('query:logical')).toBe('logical');
+            expect(getCategoryLabel('query:element')).toBe('element');
+            expect(getCategoryLabel('query:array')).toBe('array');
+        });
+
+        test('returns whole tag when no colon', () => {
+            expect(getCategoryLabel('bson')).toBe('bson');
+            expect(getCategoryLabel('variable')).toBe('variable');
         });
     });
 
@@ -783,7 +829,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: keyContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).toContain('name');
             });
 
@@ -797,7 +843,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: keyContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).toContain('$and');
                 expect(labels).toContain('$or');
                 expect(labels).toContain('$nor');
@@ -816,7 +862,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: keyContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).not.toContain('$gt');
                 expect(labels).not.toContain('$lt');
                 expect(labels).not.toContain('$regex');
@@ -835,7 +881,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: keyContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).not.toContain('ObjectId');
                 expect(labels).not.toContain('UUID');
                 expect(labels).not.toContain('ISODate');
@@ -864,8 +910,8 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: keyContext,
                 });
 
-                const fieldItem = items.find((i) => i.label === 'age');
-                const andItem = items.find((i) => i.label === '$and');
+                const fieldItem = items.find((i) => getLabelText(i.label) === 'age');
+                const andItem = items.find((i) => getLabelText(i.label) === '$and');
                 expect(fieldItem?.sortText).toBe('0_age');
                 expect(andItem?.sortText).toBe('1_$and');
             });
@@ -884,13 +930,13 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: valueContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).toContain('ObjectId');
                 expect(labels).toContain('UUID');
                 expect(labels).toContain('ISODate');
             });
 
-            test('does NOT show query operators', () => {
+            test('shows query operators (with brace-wrapping snippets)', () => {
                 const items = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -900,10 +946,45 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: valueContext,
                 });
 
-                const labels = items.map((i) => i.label);
-                expect(labels).not.toContain('$gt');
-                expect(labels).not.toContain('$eq');
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).toContain('$gt');
+                expect(labels).toContain('$eq');
+                expect(labels).toContain('$in');
+
+                // Operators should have their full brace-wrapping snippets at value position
+                const gtItem = items.find((i) => getLabelText(i.label) === '$gt');
+                expect(gtItem?.insertText).toBe('{ $gt: ${1:value} }');
+            });
+
+            test('operators sort before BSON constructors', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const gtItem = items.find((i) => getLabelText(i.label) === '$gt');
+                const objectIdItem = items.find((i) => getLabelText(i.label) === 'ObjectId');
+                expect(gtItem?.sortText).toBe('0_$gt');
+                expect(objectIdItem?.sortText).toBe('1_ObjectId');
+            });
+
+            test('does NOT show key-position operators ($and, $or)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).not.toContain('$and');
+                expect(labels).not.toContain('$or');
             });
 
             test('does NOT show field names', () => {
@@ -929,7 +1010,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: valueContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).not.toContain('name');
             });
         });
@@ -947,7 +1028,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: operatorContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).toContain('$gt');
                 expect(labels).toContain('$lt');
                 expect(labels).toContain('$eq');
@@ -966,7 +1047,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: operatorContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).not.toContain('$and');
                 expect(labels).not.toContain('$or');
                 expect(labels).not.toContain('$nor');
@@ -982,7 +1063,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: operatorContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).not.toContain('ObjectId');
                 expect(labels).not.toContain('UUID');
             });
@@ -1010,7 +1091,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: operatorContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).not.toContain('name');
             });
 
@@ -1031,16 +1112,37 @@ describe('documentdbQueryCompletionProvider', () => {
                 });
 
                 // $regex has applicableBsonTypes=['string'], doesn't match 'int' → demoted
-                const regexItem = items.find((i) => i.label === '$regex');
+                const regexItem = items.find((i) => getLabelText(i.label) === '$regex');
                 expect(regexItem?.sortText).toBe('2_$regex');
 
                 // $bitsAllSet has applicableBsonTypes containing 'int' → promoted
-                const bitsItem = items.find((i) => i.label === '$bitsAllSet');
+                const bitsItem = items.find((i) => getLabelText(i.label) === '$bitsAllSet');
                 expect(bitsItem?.sortText).toBe('0_$bitsAllSet');
 
                 // $eq is universal → middle
-                const eqItem = items.find((i) => i.label === '$eq');
+                const eqItem = items.find((i) => getLabelText(i.label) === '$eq');
                 expect(eqItem?.sortText).toBe('1_$eq');
+            });
+
+            test('strips outer braces from operator snippets (Issue A fix)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: operatorContext,
+                });
+
+                // At operator position, snippets should NOT have outer { }
+                const gtItem = items.find((i) => getLabelText(i.label) === '$gt');
+                expect(gtItem?.insertText).toBe('$gt: ${1:value}');
+
+                const inItem = items.find((i) => getLabelText(i.label) === '$in');
+                expect(inItem?.insertText).toBe('$in: [${1:value}]');
+
+                const regexItem = items.find((i) => getLabelText(i.label) === '$regex');
+                expect(regexItem?.insertText).toBe('$regex: /${1:pattern}/');
             });
         });
 
@@ -1070,7 +1172,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: arrayContext,
                 });
 
-                const labels = items.map((i) => i.label);
+                const labels = items.map((i) => getLabelText(i.label));
                 // Should include fields
                 expect(labels).toContain('age');
                 // Should include key-position operators

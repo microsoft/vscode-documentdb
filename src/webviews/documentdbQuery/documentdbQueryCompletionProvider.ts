@@ -79,6 +79,42 @@ export function getOperatorSortPrefix(
 }
 
 /**
+ * Extracts a human-readable category label from a meta tag.
+ *
+ * Examples:
+ * - `'query:comparison'` → `'comparison'`
+ * - `'query:logical'` → `'logical'`
+ * - `'bson'` → `'bson'`
+ * - `'variable'` → `'variable'`
+ */
+export function getCategoryLabel(meta: string): string {
+    const colonIndex = meta.indexOf(':');
+    return colonIndex >= 0 ? meta.substring(colonIndex + 1) : meta;
+}
+
+/**
+ * Strips the outermost `{ ` and ` }` from an operator snippet.
+ *
+ * Operator snippets in documentdb-constants are designed for value position
+ * (e.g., `{ $gt: ${1:value} }`). At operator position, the user is already
+ * inside braces, so the outer wrapping must be removed to avoid double-nesting.
+ *
+ * Only strips if the snippet starts with `'{ '` and ends with `' }'`.
+ * Inner brackets/braces are preserved:
+ * - `{ $in: [${1:value}] }` → `$in: [${1:value}]`
+ * - `{ $gt: ${1:value} }` → `$gt: ${1:value}`
+ *
+ * @param snippet - the original snippet string
+ * @returns the snippet with outer braces stripped, or the original if not wrapped
+ */
+export function stripOuterBraces(snippet: string): string {
+    if (snippet.startsWith('{ ') && snippet.endsWith(' }')) {
+        return snippet.slice(2, -2);
+    }
+    return snippet;
+}
+
+/**
  * Maps an OperatorEntry from documentdb-constants to a Monaco CompletionItem.
  *
  * This is a pure function with no side effects — safe for unit testing
@@ -88,20 +124,32 @@ export function getOperatorSortPrefix(
  * @param range - the insertion range
  * @param monaco - the Monaco API
  * @param fieldBsonTypes - optional BSON types of the field for type-aware sorting
+ * @param stripBraces - when true, strip outer `{ }` from snippets (for operator position)
  */
 export function mapOperatorToCompletionItem(
     entry: OperatorEntry,
     range: monacoEditor.IRange,
     monaco: typeof monacoEditor,
     fieldBsonTypes?: readonly string[],
+    stripBraces?: boolean,
 ): monacoEditor.languages.CompletionItem {
     const hasSnippet = !!entry.snippet;
     const sortPrefix = getOperatorSortPrefix(entry, fieldBsonTypes);
+    let insertText = hasSnippet ? entry.snippet! : entry.value;
+    if (stripBraces && hasSnippet) {
+        insertText = stripOuterBraces(insertText);
+    }
+
+    const categoryLabel = getCategoryLabel(entry.meta);
 
     return {
-        label: entry.value,
+        label: {
+            label: entry.value,
+            detail: ` ${categoryLabel}`,
+            description: entry.description,
+        },
         kind: getCompletionKindForMeta(entry.meta, monaco.languages.CompletionItemKind),
-        insertText: hasSnippet ? entry.snippet! : entry.value,
+        insertText,
         insertTextRules: hasSnippet ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
         detail: entry.description,
         documentation: entry.link
@@ -214,8 +262,8 @@ export const KEY_POSITION_OPERATORS = new Set([
  * When a `cursorContext` is provided, completions are filtered based on the
  * semantic position of the cursor:
  * - **key**: field names + key-position operators ($and, $or, etc.)
- * - **value**: BSON constructors only
- * - **operator**: query operators (comparison, element, array, etc.) with type-aware sorting
+ * - **value**: query operators (with braces in snippet) + BSON constructors
+ * - **operator**: query operators (without braces in snippet) with type-aware sorting
  * - **array-element**: same as key position
  * - **unknown**: all completions (backward compatible fallback)
  */
@@ -294,19 +342,39 @@ function createKeyPositionCompletions(
 
 /**
  * Returns completions appropriate for value position:
- * BSON constructors only (ObjectId, UUID, ISODate, etc.).
+ * Query operators first (with full brace-wrapping snippets), then BSON constructors.
+ *
+ * Operators use their original snippets which include `{ }` — this is correct
+ * at value position because the user needs the nested object
+ * (e.g., `{ _id: <cursor> }` → selecting `$gt` inserts `{ $gt: value }`).
  */
 function createValuePositionCompletions(
     editorType: EditorType | undefined,
     range: monacoEditor.IRange,
     monaco: typeof monacoEditor,
 ): monacoEditor.languages.CompletionItem[] {
-    // For value position, we only want BSON constructors
-    // In the filter context, these have meta='bson'
     const metaTags = getMetaTagsForEditorType(editorType);
     const allEntries = getFilteredCompletions({ meta: [...metaTags] });
+
+    // Operators first (sort prefix 0_), excluding key-position-only operators
+    const operatorEntries = allEntries.filter(
+        (e) => e.meta !== 'bson' && e.meta !== 'variable' && !KEY_POSITION_OPERATORS.has(e.value),
+    );
+    const operatorItems = operatorEntries.map((entry) => {
+        const item = mapOperatorToCompletionItem(entry, range, monaco);
+        item.sortText = `0_${entry.value}`;
+        return item;
+    });
+
+    // BSON constructors second (sort prefix 1_)
     const bsonEntries = allEntries.filter((e) => e.meta === 'bson');
-    return bsonEntries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco));
+    const bsonItems = bsonEntries.map((entry) => {
+        const item = mapOperatorToCompletionItem(entry, range, monaco);
+        item.sortText = `1_${entry.value}`;
+        return item;
+    });
+
+    return [...operatorItems, ...bsonItems];
 }
 
 /**
@@ -327,7 +395,8 @@ function createOperatorPositionCompletions(
     const operatorEntries = allEntries.filter(
         (e) => e.meta !== 'bson' && e.meta !== 'variable' && !KEY_POSITION_OPERATORS.has(e.value),
     );
-    return operatorEntries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes));
+    // Strip outer braces from snippets — at operator position the user is already inside { }
+    return operatorEntries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes, true));
 }
 
 /**
