@@ -159,8 +159,9 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.kind).toBe(mockCompletionItemKind.Operator);
             expect(item.insertText).toBe('$eq');
             expect(item.insertTextRules).toBeUndefined();
-            expect(item.detail).toBe('Matches values equal to a specified value.');
-            expect(item.documentation).toBeUndefined(); // no link
+            expect(item.documentation).toEqual({
+                value: 'Matches values equal to a specified value.',
+            });
             expect(item.range).toBe(testRange);
         });
 
@@ -195,7 +196,7 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.insertText).toBe('ObjectId("${1:hex}")');
             expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
             expect(item.documentation).toEqual({
-                value: '[DocumentDB Docs](https://docs.example.com/objectid)',
+                value: 'Creates a new ObjectId value.\n\n[DocumentDB Docs](https://docs.example.com/objectid)',
             });
         });
 

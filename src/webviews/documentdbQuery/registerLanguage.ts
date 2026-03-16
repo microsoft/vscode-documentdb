@@ -119,6 +119,8 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
                 position: { line: position.lineNumber, col: position.column },
                 charBefore,
                 isDollarPrefix: charBefore === '$',
+                wordInfo: { word: wordInfo.word, startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn },
+                range,
                 cursorContext,
                 editorType: parsed?.editorType,
                 sessionId,
@@ -138,6 +140,13 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
                 count: items.length,
                 labels: items.map((i) => i.label),
                 contextPosition: cursorContext.position,
+                // Log first 3 items with their insertText for snippet debugging
+                sampleItems: items.slice(0, 3).map((i) => ({
+                    label: i.label,
+                    insertText: i.insertText,
+                    insertTextRules: i.insertTextRules,
+                    range: i.range,
+                })),
             });
 
             return { suggestions: items };

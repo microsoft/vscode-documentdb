@@ -142,21 +142,23 @@ export function mapOperatorToCompletionItem(
 
     const categoryLabel = getCategoryLabel(entry.meta);
 
+    // Build documentation: description text + optional docs link
+    let documentationValue = entry.description;
+    if (entry.link) {
+        documentationValue += `\n\n[DocumentDB Docs](${entry.link})`;
+    }
+
     return {
         label: {
             label: entry.value,
-            detail: ` ${categoryLabel}`,
-            description: entry.description,
+            description: categoryLabel,
         },
         kind: getCompletionKindForMeta(entry.meta, monaco.languages.CompletionItemKind),
         insertText,
         insertTextRules: hasSnippet ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
-        detail: entry.description,
-        documentation: entry.link
-            ? {
-                  value: `[DocumentDB Docs](${entry.link})`,
-              }
-            : undefined,
+        documentation: {
+            value: documentationValue,
+        },
         sortText: sortPrefix ? `${sortPrefix}${entry.value}` : undefined,
         range,
     };
