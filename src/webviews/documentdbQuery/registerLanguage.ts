@@ -89,7 +89,9 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
             // When the user types '$g', wordInfo.startColumn points to 'g', not '$'.
             // Without this fix, selecting '$gt' would insert '$$gt' (double dollar).
             const lineContent = model.getLineContent(position.lineNumber);
-            const charBefore = lineContent[wordInfo.startColumn - 2]; // -2 because columns are 1-based
+            // -2 because columns are 1-based: e.g. startColumn=1 → index -1 → undefined (safe).
+            // JS returns undefined for out-of-bounds array access, so (undefined === '$') → false.
+            const charBefore = lineContent[wordInfo.startColumn - 2];
 
             if (charBefore === '$') {
                 range = { ...range, startColumn: range.startColumn - 1 };
