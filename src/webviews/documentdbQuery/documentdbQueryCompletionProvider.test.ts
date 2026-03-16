@@ -16,6 +16,7 @@ import {
     createCompletionItems,
     getCompletionKindForMeta,
     getMetaTagsForEditorType,
+    getOperatorSortPrefix,
     mapFieldToCompletionItem,
     mapOperatorToCompletionItem,
 } from './documentdbQueryCompletionProvider';
@@ -508,6 +509,240 @@ describe('documentdbQueryCompletionProvider', () => {
 
             const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
             expect(items).toHaveLength(expected.length);
+        });
+    });
+
+    describe('getOperatorSortPrefix', () => {
+        test('returns undefined when no fieldBsonTypes provided', () => {
+            const entry: OperatorEntry = {
+                value: '$eq',
+                meta: 'query:comparison',
+                description: 'Equals',
+            };
+            expect(getOperatorSortPrefix(entry, undefined)).toBeUndefined();
+            expect(getOperatorSortPrefix(entry, [])).toBeUndefined();
+        });
+
+        test('returns "1_" for universal operator (no applicableBsonTypes)', () => {
+            const entry: OperatorEntry = {
+                value: '$eq',
+                meta: 'query:comparison',
+                description: 'Equals',
+            };
+            expect(getOperatorSortPrefix(entry, ['string'])).toBe('1_');
+        });
+
+        test('returns "0_" for type-relevant operator (applicableBsonTypes matches)', () => {
+            const entry: OperatorEntry = {
+                value: '$regex',
+                meta: 'query:evaluation',
+                description: 'Regex match',
+                applicableBsonTypes: ['string'],
+            };
+            expect(getOperatorSortPrefix(entry, ['string'])).toBe('0_');
+        });
+
+        test('returns "2_" for non-matching operator (applicableBsonTypes does not match)', () => {
+            const entry: OperatorEntry = {
+                value: '$regex',
+                meta: 'query:evaluation',
+                description: 'Regex match',
+                applicableBsonTypes: ['string'],
+            };
+            expect(getOperatorSortPrefix(entry, ['int'])).toBe('2_');
+        });
+
+        test('handles polymorphic fields (multiple bsonTypes)', () => {
+            const regexEntry: OperatorEntry = {
+                value: '$regex',
+                meta: 'query:evaluation',
+                description: 'Regex match',
+                applicableBsonTypes: ['string'],
+            };
+            // Field is sometimes string, sometimes int — $regex should match
+            expect(getOperatorSortPrefix(regexEntry, ['int', 'string'])).toBe('0_');
+        });
+
+        test('returns "2_" when operator types and field types have no intersection', () => {
+            const sizeEntry: OperatorEntry = {
+                value: '$size',
+                meta: 'query:array',
+                description: 'Array size',
+                applicableBsonTypes: ['array'],
+            };
+            expect(getOperatorSortPrefix(sizeEntry, ['string', 'int'])).toBe('2_');
+        });
+    });
+
+    describe('type-aware operator sorting in mapOperatorToCompletionItem', () => {
+        const mockMonaco = createMockMonaco();
+
+        test('sortText is undefined when no fieldBsonTypes provided', () => {
+            const entry: OperatorEntry = {
+                value: '$eq',
+                meta: 'query:comparison',
+                description: 'Equals',
+            };
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco);
+            expect(item.sortText).toBeUndefined();
+        });
+
+        test('sortText is undefined when empty fieldBsonTypes provided', () => {
+            const entry: OperatorEntry = {
+                value: '$eq',
+                meta: 'query:comparison',
+                description: 'Equals',
+            };
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco, []);
+            expect(item.sortText).toBeUndefined();
+        });
+
+        test('universal operator gets "1_" prefix when fieldBsonTypes provided', () => {
+            const entry: OperatorEntry = {
+                value: '$eq',
+                meta: 'query:comparison',
+                description: 'Equals',
+            };
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco, ['int']);
+            expect(item.sortText).toBe('1_$eq');
+        });
+
+        test('type-relevant operator gets "0_" prefix', () => {
+            const entry: OperatorEntry = {
+                value: '$regex',
+                meta: 'query:evaluation',
+                description: 'Regex match',
+                applicableBsonTypes: ['string'],
+            };
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco, ['string']);
+            expect(item.sortText).toBe('0_$regex');
+        });
+
+        test('non-matching operator gets "2_" prefix (demoted, not hidden)', () => {
+            const entry: OperatorEntry = {
+                value: '$regex',
+                meta: 'query:evaluation',
+                description: 'Regex match',
+                applicableBsonTypes: ['string'],
+            };
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco, ['int']);
+            expect(item.sortText).toBe('2_$regex');
+        });
+    });
+
+    describe('type-aware sorting via createCompletionItems', () => {
+        const mockMonaco = createMockMonaco();
+
+        afterEach(() => {
+            clearAllCompletionContexts();
+        });
+
+        test('without fieldBsonTypes, operators have no sortText (backward compatible)', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const regexItem = items.find((i) => i.label === '$regex');
+            expect(regexItem?.sortText).toBeUndefined();
+
+            const eqItem = items.find((i) => i.label === '$eq');
+            expect(eqItem?.sortText).toBeUndefined();
+        });
+
+        test('with fieldBsonTypes=["string"], $regex gets "0_" and $size gets "2_"', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                fieldBsonTypes: ['string'],
+            });
+
+            const regexItem = items.find((i) => i.label === '$regex');
+            expect(regexItem?.sortText).toBe('0_$regex');
+
+            const sizeItem = items.find((i) => i.label === '$size');
+            expect(sizeItem?.sortText).toBe('2_$size');
+
+            // Universal operators like $eq get "1_"
+            const eqItem = items.find((i) => i.label === '$eq');
+            expect(eqItem?.sortText).toBe('1_$eq');
+        });
+
+        test('with fieldBsonTypes=["int"], $regex gets "2_" (demoted, still present)', () => {
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                fieldBsonTypes: ['int'],
+            });
+
+            const labels = items.map((i) => i.label);
+            // $regex is still in the list, just demoted
+            expect(labels).toContain('$regex');
+
+            const regexItem = items.find((i) => i.label === '$regex');
+            expect(regexItem?.sortText).toBe('2_$regex');
+
+            // Bitwise operators should match int
+            const bitsAllSetItem = items.find((i) => i.label === '$bitsAllSet');
+            expect(bitsAllSetItem?.sortText).toBe('0_$bitsAllSet');
+        });
+
+        test('all operators still present regardless of fieldBsonTypes', () => {
+            const itemsWithoutType = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+            });
+
+            const itemsWithType = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                fieldBsonTypes: ['int'],
+            });
+
+            // Same number of items — nothing filtered out
+            expect(itemsWithType).toHaveLength(itemsWithoutType.length);
+        });
+
+        test('field items still get "0_" prefix even when fieldBsonTypes is set', () => {
+            setCompletionContext('test-session', {
+                fields: [
+                    {
+                        fieldName: 'age',
+                        displayType: 'Number',
+                        bsonType: 'int',
+                        isSparse: false,
+                        insertText: 'age',
+                        referenceText: '$age',
+                    },
+                ],
+            });
+
+            const items = createCompletionItems({
+                editorType: EditorType.Filter,
+                sessionId: 'test-session',
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                fieldBsonTypes: ['int'],
+            });
+
+            const fieldItem = items.find((i) => i.label === 'age');
+            expect(fieldItem?.sortText).toBe('0_age');
         });
     });
 });

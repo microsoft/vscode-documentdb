@@ -51,17 +51,51 @@ export function getCompletionKindForMeta(
 }
 
 /**
+ * Computes a sortText prefix for an operator based on its type relevance
+ * to the given field BSON types.
+ *
+ * - `"0_"` — Type-relevant: operator's `applicableBsonTypes` intersects with `fieldBsonTypes`
+ * - `"1_"` — Universal: operator has no `applicableBsonTypes` (works on any type)
+ * - `"2_"` — Non-matching: operator's `applicableBsonTypes` is set but doesn't match
+ *
+ * Returns `undefined` when no field type info is available (no sorting override).
+ */
+export function getOperatorSortPrefix(
+    entry: OperatorEntry,
+    fieldBsonTypes: readonly string[] | undefined,
+): string | undefined {
+    if (!fieldBsonTypes || fieldBsonTypes.length === 0) {
+        return undefined;
+    }
+
+    if (!entry.applicableBsonTypes || entry.applicableBsonTypes.length === 0) {
+        // Universal operator — no type restriction
+        return '1_';
+    }
+
+    const hasMatch = entry.applicableBsonTypes.some((t) => fieldBsonTypes.includes(t));
+    return hasMatch ? '0_' : '2_';
+}
+
+/**
  * Maps an OperatorEntry from documentdb-constants to a Monaco CompletionItem.
  *
  * This is a pure function with no side effects — safe for unit testing
  * without a Monaco runtime.
+ *
+ * @param entry - the operator entry to map
+ * @param range - the insertion range
+ * @param monaco - the Monaco API
+ * @param fieldBsonTypes - optional BSON types of the field for type-aware sorting
  */
 export function mapOperatorToCompletionItem(
     entry: OperatorEntry,
     range: monacoEditor.IRange,
     monaco: typeof monacoEditor,
+    fieldBsonTypes?: readonly string[],
 ): monacoEditor.languages.CompletionItem {
     const hasSnippet = !!entry.snippet;
+    const sortPrefix = getOperatorSortPrefix(entry, fieldBsonTypes);
 
     return {
         label: entry.value,
@@ -74,6 +108,7 @@ export function mapOperatorToCompletionItem(
                   value: `[DocumentDB Docs](${entry.link})`,
               }
             : undefined,
+        sortText: sortPrefix ? `${sortPrefix}${entry.value}` : undefined,
         range,
     };
 }
@@ -114,6 +149,12 @@ export interface CreateCompletionItemsParams {
     isDollarPrefix: boolean;
     /** The Monaco editor API. */
     monaco: typeof monacoEditor;
+    /**
+     * Optional BSON types of the field the cursor is operating on.
+     * When provided, operators are sorted by type relevance:
+     * type-matching first, universal second, non-matching last.
+     */
+    fieldBsonTypes?: readonly string[];
 }
 
 /**
@@ -142,12 +183,12 @@ export function getMetaTagsForEditorType(editorType: EditorType | undefined): re
  * each entry to a Monaco CompletionItem.
  */
 export function createCompletionItems(params: CreateCompletionItemsParams): monacoEditor.languages.CompletionItem[] {
-    const { editorType, sessionId, range, monaco } = params;
+    const { editorType, sessionId, range, monaco, fieldBsonTypes } = params;
 
     // Static operator completions from documentdb-constants
     const metaTags = getMetaTagsForEditorType(editorType);
     const entries = getFilteredCompletions({ meta: [...metaTags] });
-    const operatorItems = entries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco));
+    const operatorItems = entries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes));
 
     // Dynamic field completions from the completion store
     const fieldItems: monacoEditor.languages.CompletionItem[] = [];
