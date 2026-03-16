@@ -360,6 +360,16 @@ export const CollectionView = (): JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to update field completion data:', error);
                 // Non-blocking — completion will work without fields
+                trpcClient.common.reportEvent
+                    .mutate({
+                        eventName: 'fieldCompletionDataFetchFailed',
+                        properties: {
+                            error: error instanceof Error ? error.message : String(error),
+                        },
+                    })
+                    .catch(() => {
+                        // best-effort telemetry, swallow errors
+                    });
             });
     }
 
