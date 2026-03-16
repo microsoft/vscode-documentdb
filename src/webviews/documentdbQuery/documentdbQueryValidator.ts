@@ -196,18 +196,13 @@ export function validateExpression(code: string): Diagnostic[] {
     // Walk the AST to check identifiers
     try {
         walk.simple(ast, {
-            Identifier(node: acorn.Node & { name: string }) {
-                const name = node.name;
-
-                // Skip known globals and common identifiers
-                if (KNOWN_GLOBALS.has(name)) {
-                    return;
-                }
-
-                // Don't flag field names — only flag function call identifiers
-                // that look like BSON constructor typos.
-                // CallExpression and MemberExpression handlers below handle
-                // identifiers in call/member positions.
+            // Planned no-op: bare identifiers are intentionally not flagged.
+            // In DocumentDB queries, most identifiers are field names (e.g. `{ age: 1 }`)
+            // which are valid and shouldn't produce diagnostics. Only identifiers in
+            // call positions (BSON constructor typos) are checked — see CallExpression
+            // and MemberExpression handlers below.
+            Identifier(_node: acorn.Node & { name: string }) {
+                // no-op by design
             },
             CallExpression(
                 node: acorn.Node & {
