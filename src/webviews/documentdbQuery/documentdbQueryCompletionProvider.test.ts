@@ -15,6 +15,7 @@ import { clearAllCompletionContexts, setCompletionContext } from './completionSt
 import { type CursorContext } from './cursorContext';
 import {
     createCompletionItems,
+    escapeSnippetDollars,
     getCategoryLabel,
     getCompletionKindForMeta,
     getMetaTagsForEditorType,
@@ -176,7 +177,7 @@ describe('documentdbQueryCompletionProvider', () => {
             const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco);
 
             expect(getLabelText(item.label)).toBe('$gt');
-            expect(item.insertText).toBe('{ $gt: ${1:value} }');
+            expect(item.insertText).toBe('{ \\$gt: ${1:value} }');
             expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
         });
 
@@ -794,6 +795,30 @@ describe('documentdbQueryCompletionProvider', () => {
         });
     });
 
+    describe('escapeSnippetDollars', () => {
+        test('escapes $ before operator names in snippets', () => {
+            expect(escapeSnippetDollars('{ $gt: ${1:value} }')).toBe('{ \\$gt: ${1:value} }');
+        });
+
+        test('preserves tab stop syntax', () => {
+            expect(escapeSnippetDollars('${1:value}')).toBe('${1:value}');
+            expect(escapeSnippetDollars('$1')).toBe('$1');
+        });
+
+        test('escapes multiple operator names', () => {
+            expect(escapeSnippetDollars('{ $and: [{ $gt: ${1:value} }] }')).toBe('{ \\$and: [{ \\$gt: ${1:value} }] }');
+        });
+
+        test('does not escape BSON constructor snippets', () => {
+            expect(escapeSnippetDollars('ObjectId("${1:hex}")')).toBe('ObjectId("${1:hex}")');
+        });
+
+        test('escapes stripped operator snippets', () => {
+            expect(escapeSnippetDollars('$gt: ${1:value}')).toBe('\\$gt: ${1:value}');
+            expect(escapeSnippetDollars('$in: [${1:value}]')).toBe('\\$in: [${1:value}]');
+        });
+    });
+
     // ---------------------------------------------------------------
     // Context-sensitive completions (Step 4.5)
     // ---------------------------------------------------------------
@@ -954,7 +979,7 @@ describe('documentdbQueryCompletionProvider', () => {
 
                 // Operators should have their full brace-wrapping snippets at value position
                 const gtItem = items.find((i) => getLabelText(i.label) === '$gt');
-                expect(gtItem?.insertText).toBe('{ $gt: ${1:value} }');
+                expect(gtItem?.insertText).toBe('{ \\$gt: ${1:value} }');
             });
 
             test('operators sort before BSON constructors', () => {
@@ -1137,13 +1162,13 @@ describe('documentdbQueryCompletionProvider', () => {
 
                 // At operator position, snippets should NOT have outer { }
                 const gtItem = items.find((i) => getLabelText(i.label) === '$gt');
-                expect(gtItem?.insertText).toBe('$gt: ${1:value}');
+                expect(gtItem?.insertText).toBe('\\$gt: ${1:value}');
 
                 const inItem = items.find((i) => getLabelText(i.label) === '$in');
-                expect(inItem?.insertText).toBe('$in: [${1:value}]');
+                expect(inItem?.insertText).toBe('\\$in: [${1:value}]');
 
                 const regexItem = items.find((i) => getLabelText(i.label) === '$regex');
-                expect(regexItem?.insertText).toBe('$regex: /${1:pattern}/');
+                expect(regexItem?.insertText).toBe('\\$regex: /${1:pattern}/');
             });
         });
 

@@ -115,6 +115,26 @@ export function stripOuterBraces(snippet: string): string {
 }
 
 /**
+ * Escapes literal `$` signs in snippet text that would be misinterpreted
+ * as Monaco snippet variables.
+ *
+ * In Monaco snippet syntax, `$name` is a variable reference (resolves to empty
+ * for unknown variables). Operator names like `$gt` in snippets get consumed
+ * as variable references, producing empty output instead of the literal `$gt`.
+ *
+ * This function escapes `$` when followed by a letter (`$gt` → `\$gt`)
+ * while preserving tab stop syntax (`${1:value}` and `$1` are unchanged).
+ *
+ * @param snippet - the snippet text to escape
+ * @returns the snippet with literal `$` signs escaped
+ */
+export function escapeSnippetDollars(snippet: string): string {
+    // Match $ followed by a letter (variable reference like $gt, $in, $regex)
+    // Don't match $ followed by { (tab stop like ${1:value}) or digit ($1)
+    return snippet.replace(/\$(?=[a-zA-Z])/g, '\\$');
+}
+
+/**
  * Maps an OperatorEntry from documentdb-constants to a Monaco CompletionItem.
  *
  * This is a pure function with no side effects — safe for unit testing
@@ -138,6 +158,9 @@ export function mapOperatorToCompletionItem(
     let insertText = hasSnippet ? entry.snippet! : entry.value;
     if (stripBraces && hasSnippet) {
         insertText = stripOuterBraces(insertText);
+    }
+    if (hasSnippet) {
+        insertText = escapeSnippetDollars(insertText);
     }
 
     const categoryLabel = getCategoryLabel(entry.meta);
