@@ -48,7 +48,6 @@ export function registerDocumentDBQueryLanguage(monaco: typeof monacoEditor): Pr
 }
 
 async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
-
     // Step 1: Register the language ID
     monaco.languages.register({ id: LANGUAGE_ID });
 
