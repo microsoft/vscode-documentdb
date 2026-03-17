@@ -1027,6 +1027,27 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(objectIdItem?.sortText).toBe('3_ObjectId');
             });
 
+            test('includes JS globals (Date, Math) after BSON constructors', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).toContain('Date');
+                expect(labels).toContain('Math');
+                expect(labels).toContain('RegExp');
+                expect(labels).toContain('Infinity');
+
+                // JS globals sort after BSON constructors (4_ > 3_)
+                const dateItem = items.find((i) => getLabelText(i.label) === 'Date');
+                expect(dateItem?.sortText).toBe('4_Date');
+            });
+
             test('does NOT show key-position operators ($and, $or)', () => {
                 const items = createCompletionItems({
                     editorType: EditorType.Filter,

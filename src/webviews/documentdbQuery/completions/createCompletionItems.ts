@@ -22,6 +22,7 @@ import { getCompletionContext } from '../completionStore';
 import { type CursorContext } from '../cursorContext';
 import { EditorType } from '../languageConfig';
 import { KEY_POSITION_OPERATORS } from './completionKnowledge';
+import { createJsGlobalCompletionItems } from './jsGlobals';
 import { mapFieldToCompletionItem, mapOperatorToCompletionItem } from './mapCompletionItems';
 import { createTypeSuggestions } from './typeSuggestions';
 
@@ -142,8 +143,9 @@ function createKeyPositionCompletions(
 /**
  * Value position completions:
  * 1. Type-aware suggestions (sort `00_`) — e.g., `true`/`false` for booleans
- * 2. Query operators with brace-wrapping snippets (sort `0_`)
- * 3. BSON constructors (sort `1_`)
+ * 2. Query operators with brace-wrapping snippets (sort `0_`–`2_`)
+ * 3. BSON constructors (sort `3_`)
+ * 4. JS globals: Date, Math, RegExp, etc. (sort `4_`)
  */
 function createValuePositionCompletions(
     editorType: EditorType | undefined,
@@ -181,7 +183,10 @@ function createValuePositionCompletions(
         return item;
     });
 
-    return [...typeSuggestions, ...operatorItems, ...bsonItems];
+    // 4. JS globals: Date, Math, RegExp, Infinity, NaN, undefined (sort prefix 4_)
+    const jsGlobals = createJsGlobalCompletionItems(range, monaco);
+
+    return [...typeSuggestions, ...operatorItems, ...bsonItems, ...jsGlobals];
 }
 
 function createOperatorPositionCompletions(
