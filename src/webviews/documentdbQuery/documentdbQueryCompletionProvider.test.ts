@@ -1027,7 +1027,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(objectIdItem?.sortText).toBe('3_ObjectId');
             });
 
-            test('includes JS globals (Date, Math) after BSON constructors', () => {
+            test('includes JS globals and common methods after BSON constructors', () => {
                 const items = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -1038,9 +1038,15 @@ describe('documentdbQueryCompletionProvider', () => {
                 });
 
                 const labels = items.map((i) => getLabelText(i.label));
+                // Class constructors
                 expect(labels).toContain('Date');
-                expect(labels).toContain('Math');
                 expect(labels).toContain('RegExp');
+                // Static methods
+                expect(labels).toContain('Date.now()');
+                expect(labels).toContain('Math.floor()');
+                expect(labels).toContain('Math.min()');
+                expect(labels).toContain('Math.max()');
+                // Primitives
                 expect(labels).toContain('Infinity');
 
                 // JS globals sort after BSON constructors (4_ > 3_)

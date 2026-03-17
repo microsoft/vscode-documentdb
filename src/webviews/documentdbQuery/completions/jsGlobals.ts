@@ -56,6 +56,7 @@ interface JsGlobalDef {
  * are already provided by `documentdb-constants` and are NOT duplicated here.
  */
 const JS_GLOBALS: readonly JsGlobalDef[] = [
+    // -- Class constructors --
     {
         label: 'Date',
         snippet: 'new Date(${1})',
@@ -65,20 +66,13 @@ const JS_GLOBALS: readonly JsGlobalDef[] = [
             'Usages:\n' +
             '- `new Date()` — current time\n' +
             '- `new Date("2025-01-01")` — specific date\n' +
-            '- `Date.now()` — milliseconds since epoch\n' +
             '- `new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)` — 14 days ago',
     },
     {
-        label: 'Math',
+        label: 'Date.now()',
+        snippet: 'Date.now()',
         description: 'JS global',
-        documentation:
-            'JavaScript Math object.\n\n' +
-            'Common methods:\n' +
-            '- `Math.floor(n)` — round down\n' +
-            '- `Math.ceil(n)` — round up\n' +
-            '- `Math.min(a, b)` — minimum\n' +
-            '- `Math.max(a, b)` — maximum\n' +
-            '- `Math.round(n)` — nearest integer',
+        documentation: 'Returns milliseconds since Unix epoch (Jan 1, 1970).\n\nUseful for relative date queries:\n```\n{ $gt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }\n```',
     },
     {
         label: 'RegExp',
@@ -86,6 +80,40 @@ const JS_GLOBALS: readonly JsGlobalDef[] = [
         description: 'JS global',
         documentation: 'JavaScript RegExp constructor.\n\nExample: `RegExp("^test")`\n\nPrefer regex literals: `/^test/`',
     },
+
+    // -- Math methods --
+    {
+        label: 'Math.floor()',
+        snippet: 'Math.floor(${1:value})',
+        description: 'JS global',
+        documentation: 'Round down to the nearest integer.\n\nExample: `Math.floor(3.7)` → `3`',
+    },
+    {
+        label: 'Math.ceil()',
+        snippet: 'Math.ceil(${1:value})',
+        description: 'JS global',
+        documentation: 'Round up to the nearest integer.\n\nExample: `Math.ceil(3.2)` → `4`',
+    },
+    {
+        label: 'Math.round()',
+        snippet: 'Math.round(${1:value})',
+        description: 'JS global',
+        documentation: 'Round to the nearest integer.\n\nExample: `Math.round(3.5)` → `4`',
+    },
+    {
+        label: 'Math.min()',
+        snippet: 'Math.min(${1:a}, ${2:b})',
+        description: 'JS global',
+        documentation: 'Return the smaller of two values.\n\nExample: `Math.min(1.7, 2)` → `1.7`',
+    },
+    {
+        label: 'Math.max()',
+        snippet: 'Math.max(${1:a}, ${2:b})',
+        description: 'JS global',
+        documentation: 'Return the larger of two values.\n\nExample: `Math.max(1.7, 2)` → `2`',
+    },
+
+    // -- Primitive globals --
     {
         label: 'Infinity',
         description: 'JS global',
