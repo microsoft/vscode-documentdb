@@ -72,13 +72,15 @@ const JS_GLOBALS: readonly JsGlobalDef[] = [
         label: 'Date.now()',
         snippet: 'Date.now()',
         description: 'JS global',
-        documentation: 'Returns milliseconds since Unix epoch (Jan 1, 1970).\n\nUseful for relative date queries:\n```\n{ $gt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }\n```',
+        documentation:
+            'Returns milliseconds since Unix epoch (Jan 1, 1970).\n\nUseful for relative date queries:\n```\n{ $gt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }\n```',
     },
     {
         label: 'RegExp',
         snippet: 'RegExp("${1:pattern}")',
         description: 'JS global',
-        documentation: 'JavaScript RegExp constructor.\n\nExample: `RegExp("^test")`\n\nPrefer regex literals: `/^test/`',
+        documentation:
+            'JavaScript RegExp constructor.\n\nExample: `RegExp("^test")`\n\nPrefer regex literals: `/^test/`',
     },
 
     // -- Math methods --

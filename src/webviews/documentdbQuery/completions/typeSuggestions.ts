@@ -88,8 +88,7 @@ const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
             insertText: '{ $regex: /${1:\\.com$}/ }',
             isSnippet: true,
             description: `ends with .com - pattern match`,
-            documentation:
-                'Example pattern match for: ends with `.com`:\n```\n{ $regex: /\\.com$/ }\n```',
+            documentation: 'Example pattern match for: ends with `.com`:\n```\n{ $regex: /\\.com$/ }\n```',
         },
         {
             label: '""',

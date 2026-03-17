@@ -141,7 +141,7 @@ export function mapFieldToCompletionItem(
             description: `${field.displayType}${sparseIndicator}`,
         },
         kind: monaco.languages.CompletionItemKind.Field,
-        insertText: `${field.insertText}: \$1`,
+        insertText: `${field.insertText}: $1`,
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         sortText: `0_${field.fieldName}`,
         range,

@@ -144,7 +144,9 @@ describe('documentdbQueryValidator', () => {
         });
 
         test('new Daddddte() produces error for unknown constructor', () => {
-            const diagnostics = validateExpression('{ date: { $gt: new Daddddte(Date.now() - 14 * 24 * 60 * 60 * 1000) } }');
+            const diagnostics = validateExpression(
+                '{ date: { $gt: new Daddddte(Date.now() - 14 * 24 * 60 * 60 * 1000) } }',
+            );
             const errors = diagnostics.filter((d) => d.severity === 'error');
             expect(errors).toHaveLength(1);
             expect(errors[0].message).toContain("Unknown constructor 'Daddddte'");

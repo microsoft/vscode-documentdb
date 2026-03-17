@@ -16,8 +16,10 @@
 
 export { INFO_INDICATOR, LABEL_PLACEHOLDER } from './completionKnowledge';
 export {
+    KEY_POSITION_OPERATORS,
     createCompletionItems,
-    getMetaTagsForEditorType, KEY_POSITION_OPERATORS, type CreateCompletionItemsParams
+    getMetaTagsForEditorType,
+    type CreateCompletionItemsParams,
 } from './createCompletionItems';
 export { createJsGlobalCompletionItems } from './jsGlobals';
 export {
@@ -25,8 +27,7 @@ export {
     getCompletionKindForMeta,
     getOperatorSortPrefix,
     mapFieldToCompletionItem,
-    mapOperatorToCompletionItem
+    mapOperatorToCompletionItem,
 } from './mapCompletionItems';
 export { escapeSnippetDollars, stripOuterBraces } from './snippetUtils';
 export { createTypeSuggestions } from './typeSuggestions';
-
