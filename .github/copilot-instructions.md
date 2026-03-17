@@ -32,6 +32,12 @@ Before finishing work on a PR, agents **must** run the following steps in order:
 
 > ⚠️ **An agent must not finish or terminate until all three steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
 
+## Git Safety
+
+- **Never use `git add -f`** to force-add files. If `git add` refuses a file, it is likely in `.gitignore` for a reason (e.g., `docs/plan/`, `docs/analysis/`, build outputs). Do NOT override this with `-f`.
+- When `git add` warns that a path is ignored, **stop and inform the user** instead of force-adding.
+- Files in `docs/plan/` and `docs/analysis/` are **local planning documents** that must not be committed to the repository.
+
 ## Project Structure
 
 | Folder          | Purpose                                    |
