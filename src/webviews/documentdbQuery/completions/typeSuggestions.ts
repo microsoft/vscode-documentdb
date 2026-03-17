@@ -22,13 +22,8 @@
 
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
-import { INFO_INDICATOR, LABEL_PLACEHOLDER } from './completionKnowledge';
+import { LABEL_PLACEHOLDER } from './completionKnowledge';
 import { escapeSnippetDollars } from './snippetUtils';
-
-/** Shorthand for the placeholder glyph used in labels. */
-const P = LABEL_PLACEHOLDER;
-/** Shorthand for the info indicator. */
-const I = INFO_INDICATOR;
 
 /** A type suggestion definition. */
 interface TypeSuggestionDef {
@@ -53,8 +48,20 @@ interface TypeSuggestionDef {
 const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
     // BSONTypes.Boolean = 'boolean'
     boolean: [
-        { label: 'true', insertText: 'true', isSnippet: false, description: `${I} e.g. { isActive: true }` },
-        { label: 'false', insertText: 'false', isSnippet: false, description: `${I} e.g. { isVerified: false }` },
+        {
+            label: 'true',
+            insertText: 'true',
+            isSnippet: false,
+            description: 'boolean literal',
+            documentation: `Boolean literal \`true\`.\n\nExample: \`{ field: true }\``,
+        },
+        {
+            label: 'false',
+            insertText: 'false',
+            isSnippet: false,
+            description: 'boolean literal',
+            documentation: `Boolean literal \`false\`.\n\nExample: \`{ field: false }\``,
+        },
     ],
     // BSONTypes.Int32 = 'int32'
     int32: numberSuggestions(),
@@ -68,64 +75,75 @@ const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
     number: numberSuggestions(),
     string: [
         {
-            label: `{ $regex: /${P}/ }`,
+            label: `{ $regex: /${LABEL_PLACEHOLDER}/ }`,
             insertText: '{ $regex: /${1:pattern}/ }',
             isSnippet: true,
-            description: `${I} e.g. ends with '.com'`,
-            documentation: 'Match documents where this string field matches a regular expression pattern.',
+            description: 'pattern match',
+            documentation: `Match string fields with a regex.\n\nExample: \`{ $regex: /\\.com$/ }\` — ends with ".com"`,
         },
         {
             label: '""',
             insertText: '"${1:text}"',
             isSnippet: true,
-            description: `${I} e.g. "active", "pending"`,
+            description: 'string literal',
+            documentation: `Exact string match.\n\nExample: \`"active"\`, \`"pending"\``,
         },
     ],
     date: [
         {
-            label: `ISODate("${P}")`,
+            label: `ISODate("${LABEL_PLACEHOLDER}")`,
             insertText: `ISODate("\${1:${twoWeeksAgo()}}")`,
             isSnippet: true,
-            description: `${I} e.g. ISODate("${twoWeeksAgo()}")`,
+            description: 'date value',
+            documentation: `Match a specific date.\n\nExample: \`ISODate("${twoWeeksAgo()}")\``,
         },
         {
-            label: `{ $gt: ISODate("${P}"), $lt: ISODate("${P}") }`,
+            label: `{ $gt: ISODate("${LABEL_PLACEHOLDER}"), $lt: ISODate("${LABEL_PLACEHOLDER}") }`,
             insertText: `{ $gt: ISODate("\${1:${twoWeeksAgo()}}"), $lt: ISODate("\${2:${todayISO()}}") }`,
             isSnippet: true,
-            description: `${I} e.g. last 2 weeks`,
-            documentation: 'Match documents where this date field falls within a range.',
+            description: 'date range',
+            documentation: `Match dates within a range.\n\nExample: last 2 weeks — \`{ $gt: ISODate("${twoWeeksAgo()}"), $lt: ISODate("${todayISO()}") }\``,
         },
         {
-            label: 'new Date(Date.now() - …)',
-            insertText: 'new Date(Date.now() - ${1:14} * 24 * 60 * 60 * 1000)',
+            label: `{ $gt: new Date(Date.now() - ${LABEL_PLACEHOLDER}) }`,
+            insertText: '{ $gt: new Date(Date.now() - ${1:14} * 24 * 60 * 60 * 1000) }',
             isSnippet: true,
-            description: `${I} e.g. 14 days ago`,
-            documentation: 'Compute a date relative to now. Change the number to adjust the offset in days.',
+            description: 'last N days',
+            documentation: `Match dates in the last N days relative to now.\n\nExample: last 14 days — \`{ $gt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) }\``,
         },
     ],
     objectid: [
         {
-            label: `ObjectId("${P}")`,
+            label: `ObjectId("${LABEL_PLACEHOLDER}")`,
             insertText: 'ObjectId("${1:hex}")',
             isSnippet: true,
-            description: `${I} e.g. ObjectId("507f1f77...")`,
+            description: 'ObjectId value',
+            documentation: `Match by ObjectId.\n\nExample: \`ObjectId("507f1f77bcf86cd799439011")\``,
         },
     ],
-    null: [{ label: 'null', insertText: 'null', isSnippet: false, description: `${I} e.g. { field: null }` }],
+    null: [
+        {
+            label: 'null',
+            insertText: 'null',
+            isSnippet: false,
+            description: 'null literal',
+            documentation: `Match null or missing fields.\n\nExample: \`{ field: null }\``,
+        },
+    ],
     array: [
         {
-            label: `{ $elemMatch: { ${P} } }`,
+            label: `{ $elemMatch: { ${LABEL_PLACEHOLDER} } }`,
             insertText: '{ $elemMatch: { ${1:query} } }',
             isSnippet: true,
-            description: `${I} e.g. tags with "urgent"`,
-            documentation: 'Match documents where at least one array element matches the query.',
+            description: 'match element',
+            documentation: `Match arrays with at least one element satisfying the query.\n\nExample: \`{ $elemMatch: { status: "urgent" } }\``,
         },
         {
-            label: `{ $size: ${P} }`,
+            label: `{ $size: ${LABEL_PLACEHOLDER} }`,
             insertText: '{ $size: ${1:length} }',
             isSnippet: true,
-            description: `${I} e.g. exactly 3 items`,
-            documentation: 'Match documents where the array has the specified number of elements.',
+            description: 'array length',
+            documentation: `Match arrays with exactly N elements.\n\nExample: \`{ $size: 3 }\``,
         },
     ],
 };
@@ -134,17 +152,18 @@ const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
 function numberSuggestions(): readonly TypeSuggestionDef[] {
     return [
         {
-            label: `{ $gt: ${P}, $lt: ${P} }`,
+            label: `{ $gt: ${LABEL_PLACEHOLDER}, $lt: ${LABEL_PLACEHOLDER} }`,
             insertText: '{ $gt: ${1:min}, $lt: ${2:max} }',
             isSnippet: true,
-            description: `${I} e.g. between 18 and 65`,
-            documentation: 'Match documents where this numeric field falls within a range.',
+            description: 'range query',
+            documentation: `Match numbers within a range.\n\nExample: between 18 and 65 — \`{ $gt: 18, $lt: 65 }\``,
         },
         {
-            label: `{ $gte: ${P} }`,
+            label: `{ $gte: ${LABEL_PLACEHOLDER} }`,
             insertText: '{ $gte: ${1:value} }',
             isSnippet: true,
-            description: `${I} e.g. at least 100`,
+            description: 'minimum value',
+            documentation: `Match numbers greater than or equal to a value.\n\nExample: at least 100 — \`{ $gte: 100 }\``,
         },
     ];
 }
