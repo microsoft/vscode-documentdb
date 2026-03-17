@@ -215,10 +215,14 @@ describe('completion context presets', () => {
         expect(metaPrefixes).toContain('variable');
     });
 
-    test('PROJECTION_COMPLETION_META looks for field:identifier (empty since runtime-injected)', () => {
+    test('PROJECTION_COMPLETION_META returns projection operators + BSON constructors', () => {
         const results = getFilteredCompletions({ meta: PROJECTION_COMPLETION_META });
         // field:identifier entries are injected at runtime, not statically registered
-        expect(results.length).toBe(0);
+        // But projection operators ($, $elemMatch, $slice) and BSON constructors are static
+        expect(results.length).toBeGreaterThan(0);
+        const metas = [...new Set(results.map((r) => r.meta))];
+        expect(metas).toContain('query:projection');
+        expect(metas).toContain('bson');
     });
 });
 

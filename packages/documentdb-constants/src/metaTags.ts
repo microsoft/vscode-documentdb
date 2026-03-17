@@ -111,8 +111,8 @@ export const ALL_META_TAGS = [
 /** Query filter contexts: find filter bar, $match stage body */
 export const FILTER_COMPLETION_META: readonly string[] = ['query', 'bson', 'variable'];
 
-/** Projection/sort contexts */
-export const PROJECTION_COMPLETION_META: readonly string[] = ['field:identifier'];
+/** Projection/sort contexts: field names + projection operators */
+export const PROJECTION_COMPLETION_META: readonly string[] = ['field:identifier', 'query:projection', 'bson'];
 
 /** $group/$project/$addFields stage body: expressions + accumulators */
 export const GROUP_EXPRESSION_COMPLETION_META: readonly string[] = ['expr', 'accumulator', 'bson', 'variable'];
