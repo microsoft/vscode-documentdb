@@ -272,13 +272,14 @@ describe('documentdbQueryCompletionProvider', () => {
             }
         });
 
-        test('filter completions include query operators like $eq, $gt, $match', () => {
+        test('filter completions include query operators like $eq, $gt, $match at value position', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
                 range: testRange,
                 isDollarPrefix: false,
                 monaco: mockMonaco,
+                cursorContext: { position: 'value', fieldName: 'x' },
             });
 
             const labels = items.map((item) => getLabelText(item.label));
@@ -287,13 +288,14 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(labels).toContain('$in');
         });
 
-        test('filter completions include BSON constructors like ObjectId', () => {
+        test('filter completions include BSON constructors like ObjectId at value position', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
                 range: testRange,
                 isDollarPrefix: false,
                 monaco: mockMonaco,
+                cursorContext: { position: 'value', fieldName: 'x' },
             });
 
             const labels = items.map((item) => getLabelText(item.label));
@@ -338,17 +340,20 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(labels).not.toContain('$lookup');
         });
 
-        test('filter completions match getFilteredCompletions count for FILTER_COMPLETION_META', () => {
+        test('filter completions at value position match getFilteredCompletions count for FILTER_COMPLETION_META', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
                 range: testRange,
                 isDollarPrefix: false,
                 monaco: mockMonaco,
+                cursorContext: { position: 'value', fieldName: 'x' },
             });
 
             const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
-            expect(items).toHaveLength(expected.length);
+            // Value position includes operators + BSON constructors (minus key-position operators)
+            expect(items.length).toBeGreaterThan(0);
+            expect(items.length).toBeLessThanOrEqual(expected.length);
         });
 
         test('default (undefined editor type) matches filter completions', () => {
@@ -389,7 +394,8 @@ describe('documentdbQueryCompletionProvider', () => {
 
             expect(item.label).toBe('age');
             expect(item.kind).toBe(mockCompletionItemKind.Field);
-            expect(item.insertText).toBe('age');
+            expect(item.insertText).toBe('age: $1');
+            expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
             expect(item.detail).toBe('Number');
             expect(item.sortText).toBe('0_age');
             expect(item.range).toBe(testRange);
@@ -423,7 +429,7 @@ describe('documentdbQueryCompletionProvider', () => {
             const item = mapFieldToCompletionItem(field, testRange, mockMonaco);
 
             expect(item.label).toBe('address.city');
-            expect(item.insertText).toBe('"address.city"');
+            expect(item.insertText).toBe('"address.city": $1');
         });
     });
 
@@ -494,12 +500,12 @@ describe('documentdbQueryCompletionProvider', () => {
             const fieldItem = items.find((i) => getLabelText(i.label) === 'name');
             expect(fieldItem?.sortText).toBe('0_name');
 
-            // Operators should not have a sort prefix starting with 0_
-            const operatorItem = items.find((i) => getLabelText(i.label) === '$eq');
-            expect(operatorItem?.sortText).toBeUndefined();
+            // Key-position operators get "1_" prefix (below fields)
+            const andItem = items.find((i) => getLabelText(i.label) === '$and');
+            expect(andItem?.sortText).toBe('1_$and');
         });
 
-        test('empty store returns only operator completions', () => {
+        test('empty store returns only key-position operator completions', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: 'nonexistent-session',
@@ -508,11 +514,14 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
-            expect(items).toHaveLength(expected.length);
+            // Without cursorContext, falls back to key-position completions
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('$and');
+            expect(labels).toContain('$or');
+            expect(labels).not.toContain('$gt');
         });
 
-        test('undefined sessionId returns only operator completions', () => {
+        test('undefined sessionId returns only key-position operator completions', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
@@ -521,8 +530,11 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
-            expect(items).toHaveLength(expected.length);
+            // Without cursorContext, falls back to key-position completions
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('$and');
+            expect(labels).toContain('$or');
+            expect(labels).not.toContain('$gt');
         });
     });
 
@@ -537,13 +549,22 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(getOperatorSortPrefix(entry, [])).toBeUndefined();
         });
 
-        test('returns "1_" for universal operator (no applicableBsonTypes)', () => {
+        test('returns "1a_" for universal comparison operator (no applicableBsonTypes)', () => {
             const entry: OperatorEntry = {
                 value: '$eq',
                 meta: 'query:comparison',
                 description: 'Equals',
             };
-            expect(getOperatorSortPrefix(entry, ['string'])).toBe('1_');
+            expect(getOperatorSortPrefix(entry, ['string'])).toBe('1a_');
+        });
+
+        test('returns "1b_" for universal non-comparison operator', () => {
+            const entry: OperatorEntry = {
+                value: '$exists',
+                meta: 'query:element',
+                description: 'Exists',
+            };
+            expect(getOperatorSortPrefix(entry, ['string'])).toBe('1b_');
         });
 
         test('returns "0_" for type-relevant operator (applicableBsonTypes matches)', () => {
@@ -611,14 +632,14 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.sortText).toBeUndefined();
         });
 
-        test('universal operator gets "1_" prefix when fieldBsonTypes provided', () => {
+        test('universal comparison operator gets "1a_" prefix when fieldBsonTypes provided', () => {
             const entry: OperatorEntry = {
                 value: '$eq',
                 meta: 'query:comparison',
                 description: 'Equals',
             };
             const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco, ['int']);
-            expect(item.sortText).toBe('1_$eq');
+            expect(item.sortText).toBe('1a_$eq');
         });
 
         test('type-relevant operator gets "0_" prefix', () => {
@@ -651,23 +672,25 @@ describe('documentdbQueryCompletionProvider', () => {
             clearAllCompletionContexts();
         });
 
-        test('without fieldBsonTypes, operators have no sortText (backward compatible)', () => {
+        test('without fieldBsonTypes, operators have no sortText at value position', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
                 range: testRange,
                 isDollarPrefix: false,
                 monaco: mockMonaco,
+                cursorContext: { position: 'value', fieldName: 'x' },
             });
 
             const regexItem = items.find((i) => getLabelText(i.label) === '$regex');
-            expect(regexItem?.sortText).toBeUndefined();
+            // At value position, operators get sort prefix 0_ (not type-aware)
+            expect(regexItem?.sortText).toBe('0_$regex');
 
             const eqItem = items.find((i) => getLabelText(i.label) === '$eq');
-            expect(eqItem?.sortText).toBeUndefined();
+            expect(eqItem?.sortText).toBe('0_$eq');
         });
 
-        test('with fieldBsonTypes=["string"], $regex gets "0_" and $size gets "2_"', () => {
+        test('with fieldBsonTypes=["string"] at operator position, $regex gets "0_" and $size gets "2_"', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
@@ -675,6 +698,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 isDollarPrefix: false,
                 monaco: mockMonaco,
                 fieldBsonTypes: ['string'],
+                cursorContext: { position: 'operator', fieldName: 'x' },
             });
 
             const regexItem = items.find((i) => getLabelText(i.label) === '$regex');
@@ -683,12 +707,13 @@ describe('documentdbQueryCompletionProvider', () => {
             const sizeItem = items.find((i) => getLabelText(i.label) === '$size');
             expect(sizeItem?.sortText).toBe('2_$size');
 
-            // Universal operators like $eq get "1_"
+            // Comparison operators like $eq get "1a_" (promoted over other universals)
             const eqItem = items.find((i) => getLabelText(i.label) === '$eq');
-            expect(eqItem?.sortText).toBe('1_$eq');
+            expect(eqItem?.sortText).toBe('1a_$eq');
         });
 
-        test('with fieldBsonTypes=["int"], $regex gets "2_" (demoted, still present)', () => {
+        test('with fieldBsonTypes=["int"] at operator position, $regex gets "2_" (demoted, still present)', () => {
+            const context: CursorContext = { position: 'operator', fieldName: 'x' };
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
@@ -696,6 +721,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 isDollarPrefix: false,
                 monaco: mockMonaco,
                 fieldBsonTypes: ['int'],
+                cursorContext: context,
             });
 
             const labels = items.map((i) => getLabelText(i.label));
@@ -710,13 +736,14 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(bitsAllSetItem?.sortText).toBe('0_$bitsAllSet');
         });
 
-        test('all operators still present regardless of fieldBsonTypes', () => {
+        test('all operators still present regardless of fieldBsonTypes at operator position', () => {
             const itemsWithoutType = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
                 range: testRange,
                 isDollarPrefix: false,
                 monaco: mockMonaco,
+                cursorContext: { position: 'operator', fieldName: 'x' },
             });
 
             const itemsWithType = createCompletionItems({
@@ -726,6 +753,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 isDollarPrefix: false,
                 monaco: mockMonaco,
                 fieldBsonTypes: ['int'],
+                cursorContext: { position: 'operator', fieldName: 'x' },
             });
 
             // Same number of items — nothing filtered out
@@ -753,6 +781,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 isDollarPrefix: false,
                 monaco: mockMonaco,
                 fieldBsonTypes: ['int'],
+                cursorContext: { position: 'key', depth: 1 },
             });
 
             const fieldItem = items.find((i) => getLabelText(i.label) === 'age');
@@ -1149,9 +1178,9 @@ describe('documentdbQueryCompletionProvider', () => {
                 const bitsItem = items.find((i) => getLabelText(i.label) === '$bitsAllSet');
                 expect(bitsItem?.sortText).toBe('0_$bitsAllSet');
 
-                // $eq is universal → middle
+                // $eq is universal comparison → promoted tier
                 const eqItem = items.find((i) => getLabelText(i.label) === '$eq');
-                expect(eqItem?.sortText).toBe('1_$eq');
+                expect(eqItem?.sortText).toBe('1a_$eq');
             });
 
             test('strips outer braces from operator snippets (Issue A fix)', () => {
@@ -1219,7 +1248,7 @@ describe('documentdbQueryCompletionProvider', () => {
         describe('unknown position', () => {
             const unknownContext: CursorContext = { position: 'unknown' };
 
-            test('falls back to showing all completions', () => {
+            test('falls back to key-position completions', () => {
                 const itemsWithContext = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -1237,13 +1266,17 @@ describe('documentdbQueryCompletionProvider', () => {
                     monaco: mockMonaco,
                 });
 
-                // Same number of items
+                // Both should produce the same key-position completions
                 expect(itemsWithContext).toHaveLength(itemsWithoutContext.length);
+                const labels = itemsWithContext.map((i) => getLabelText(i.label));
+                expect(labels).toContain('$and');
+                expect(labels).toContain('$or');
+                expect(labels).not.toContain('$gt');
             });
         });
 
         describe('no cursorContext (undefined)', () => {
-            test('falls back to showing all completions (backward compatible)', () => {
+            test('falls back to key-position completions (fields + key operators)', () => {
                 const items = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -1253,8 +1286,12 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: undefined,
                 });
 
-                const expected = getFilteredCompletions({ meta: [...FILTER_COMPLETION_META] });
-                expect(items).toHaveLength(expected.length);
+                // Without cursorContext, shows key-position completions (fields + key operators)
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).toContain('$and');
+                expect(labels).toContain('$or');
+                expect(labels).not.toContain('$gt');
+                expect(labels).not.toContain('ObjectId');
             });
         });
     });
@@ -1307,7 +1344,7 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(items.length).toBeGreaterThanOrEqual(1);
 
             const labels = items.map((i) => getLabelText(i.label));
-            expect(labels).toContain('{ $regex: /▪/ }');
+            expect(labels).toContain('{ $regex: /…/ }');
         });
 
         test('returns ISODate for date fields', () => {
@@ -1315,14 +1352,14 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(items.length).toBeGreaterThanOrEqual(1);
 
             const labels = items.map((i) => getLabelText(i.label));
-            expect(labels).toContain('ISODate("▪")');
+            expect(labels).toContain('ISODate("…")');
         });
 
         test('returns ObjectId for objectid fields', () => {
             const items = createTypeSuggestions('objectid', testRange, mockMonaco);
             expect(items).toHaveLength(1);
 
-            expect(getLabelText(items[0].label)).toBe('ObjectId("▪")');
+            expect(getLabelText(items[0].label)).toBe('ObjectId("…")');
         });
 
         test('returns null for null fields', () => {
@@ -1338,8 +1375,8 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(items.length).toBeGreaterThanOrEqual(2);
 
             const labels = items.map((i) => getLabelText(i.label));
-            expect(labels).toContain('{ $elemMatch: { ▪ } }');
-            expect(labels).toContain('{ $size: ▪ }');
+            expect(labels).toContain('{ $elemMatch: { … } }');
+            expect(labels).toContain('{ $size: … }');
         });
 
         test('suggestions have sort prefix 00_ (highest priority)', () => {

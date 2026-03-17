@@ -22,7 +22,13 @@
 
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
+import { INFO_INDICATOR, LABEL_PLACEHOLDER } from './completionKnowledge';
 import { escapeSnippetDollars } from './snippetUtils';
+
+/** Shorthand for the placeholder glyph used in labels. */
+const P = LABEL_PLACEHOLDER;
+/** Shorthand for the info indicator. */
+const I = INFO_INDICATOR;
 
 /** A type suggestion definition. */
 interface TypeSuggestionDef {
@@ -47,8 +53,8 @@ interface TypeSuggestionDef {
 const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
     // BSONTypes.Boolean = 'boolean'
     boolean: [
-        { label: 'true', insertText: 'true', isSnippet: false, description: 'boolean literal' },
-        { label: 'false', insertText: 'false', isSnippet: false, description: 'boolean literal' },
+        { label: 'true', insertText: 'true', isSnippet: false, description: `${I} e.g. { isActive: true }` },
+        { label: 'false', insertText: 'false', isSnippet: false, description: `${I} e.g. { isVerified: false }` },
     ],
     // BSONTypes.Int32 = 'int32'
     int32: numberSuggestions(),
@@ -62,56 +68,63 @@ const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
     number: numberSuggestions(),
     string: [
         {
-            label: '{ $regex: /▪/ }',
+            label: `{ $regex: /${P}/ }`,
             insertText: '{ $regex: /${1:pattern}/ }',
             isSnippet: true,
-            description: 'pattern match',
+            description: `${I} e.g. ends with '.com'`,
             documentation: 'Match documents where this string field matches a regular expression pattern.',
         },
         {
             label: '""',
             insertText: '"${1:text}"',
             isSnippet: true,
-            description: 'string literal',
+            description: `${I} e.g. "active", "pending"`,
         },
     ],
     date: [
         {
-            label: 'ISODate("▪")',
-            insertText: 'ISODate("${1:2025-01-01T00:00:00Z}")',
+            label: `ISODate("${P}")`,
+            insertText: `ISODate("\${1:${twoWeeksAgo()}}")`,
             isSnippet: true,
-            description: 'date value',
+            description: `${I} e.g. ISODate("${twoWeeksAgo()}")`,
         },
         {
-            label: '{ $gt: ISODate("▪"), $lt: ISODate("▪") }',
-            insertText: '{ $gt: ISODate("${1:2025-01-01T00:00:00Z}"), $lt: ISODate("${2:2025-12-31T23:59:59Z}") }',
+            label: `{ $gt: ISODate("${P}"), $lt: ISODate("${P}") }`,
+            insertText: `{ $gt: ISODate("\${1:${twoWeeksAgo()}}"), $lt: ISODate("\${2:${todayISO()}}") }`,
             isSnippet: true,
-            description: 'date range',
+            description: `${I} e.g. last 2 weeks`,
             documentation: 'Match documents where this date field falls within a range.',
+        },
+        {
+            label: 'new Date(Date.now() - …)',
+            insertText: 'new Date(Date.now() - ${1:14} * 24 * 60 * 60 * 1000)',
+            isSnippet: true,
+            description: `${I} e.g. 14 days ago`,
+            documentation: 'Compute a date relative to now. Change the number to adjust the offset in days.',
         },
     ],
     objectid: [
         {
-            label: 'ObjectId("▪")',
+            label: `ObjectId("${P}")`,
             insertText: 'ObjectId("${1:hex}")',
             isSnippet: true,
-            description: 'objectid value',
+            description: `${I} e.g. ObjectId("507f1f77...")`,
         },
     ],
-    null: [{ label: 'null', insertText: 'null', isSnippet: false, description: 'null literal' }],
+    null: [{ label: 'null', insertText: 'null', isSnippet: false, description: `${I} e.g. { field: null }` }],
     array: [
         {
-            label: '{ $elemMatch: { ▪ } }',
+            label: `{ $elemMatch: { ${P} } }`,
             insertText: '{ $elemMatch: { ${1:query} } }',
             isSnippet: true,
-            description: 'match array element',
+            description: `${I} e.g. tags with "urgent"`,
             documentation: 'Match documents where at least one array element matches the query.',
         },
         {
-            label: '{ $size: ▪ }',
+            label: `{ $size: ${P} }`,
             insertText: '{ $size: ${1:length} }',
             isSnippet: true,
-            description: 'array length',
+            description: `${I} e.g. exactly 3 items`,
             documentation: 'Match documents where the array has the specified number of elements.',
         },
     ],
@@ -121,19 +134,39 @@ const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
 function numberSuggestions(): readonly TypeSuggestionDef[] {
     return [
         {
-            label: '{ $gt: ▪, $lt: ▪ }',
+            label: `{ $gt: ${P}, $lt: ${P} }`,
             insertText: '{ $gt: ${1:min}, $lt: ${2:max} }',
             isSnippet: true,
-            description: 'range query',
+            description: `${I} e.g. between 18 and 65`,
             documentation: 'Match documents where this numeric field falls within a range.',
         },
         {
-            label: '{ $gte: ▪ }',
+            label: `{ $gte: ${P} }`,
             insertText: '{ $gte: ${1:value} }',
             isSnippet: true,
-            description: 'minimum value',
+            description: `${I} e.g. at least 100`,
         },
     ];
+}
+
+/**
+ * Returns an ISO 8601 timestamp for two weeks ago (UTC, midnight).
+ * Used as a sensible default date placeholder — recent enough to be practical.
+ */
+function twoWeeksAgo(): string {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - 14);
+    d.setUTCHours(0, 0, 0, 0);
+    return d.toISOString().replace('.000Z', 'Z');
+}
+
+/**
+ * Returns an ISO 8601 timestamp for today (UTC, end of day).
+ */
+function todayISO(): string {
+    const d = new Date();
+    d.setUTCHours(23, 59, 59, 0);
+    return d.toISOString().replace('.000Z', 'Z');
 }
 
 /**

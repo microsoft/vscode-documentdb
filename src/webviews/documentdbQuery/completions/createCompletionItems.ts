@@ -21,6 +21,7 @@ import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { getCompletionContext } from '../completionStore';
 import { type CursorContext } from '../cursorContext';
 import { EditorType } from '../languageConfig';
+import { KEY_POSITION_OPERATORS } from './completionKnowledge';
 import { mapFieldToCompletionItem, mapOperatorToCompletionItem } from './mapCompletionItems';
 import { createTypeSuggestions } from './typeSuggestions';
 
@@ -51,22 +52,9 @@ export interface CreateCompletionItemsParams {
     cursorContext?: CursorContext;
 }
 
-/**
- * Operator values that are valid at key position (root level of a query object).
- *
- * Exported for testing.
- */
-export const KEY_POSITION_OPERATORS = new Set([
-    '$and',
-    '$or',
-    '$nor',
-    '$not',
-    '$comment',
-    '$expr',
-    '$jsonSchema',
-    '$text',
-    '$where',
-]);
+// KEY_POSITION_OPERATORS is imported from ./completionKnowledge
+// Re-export for backwards compatibility and testing
+export { KEY_POSITION_OPERATORS } from './completionKnowledge';
 
 /**
  * Returns the completion meta tags appropriate for the given editor type.
@@ -101,7 +89,10 @@ export function createCompletionItems(params: CreateCompletionItemsParams): mona
     const { editorType, sessionId, range, monaco, fieldBsonTypes, cursorContext } = params;
 
     if (!cursorContext || cursorContext.position === 'unknown') {
-        return createAllCompletions(editorType, sessionId, range, monaco, fieldBsonTypes);
+        // When context is unknown (e.g., empty input, no braces), show the same
+        // completions as key position: field names first, then key-position operators.
+        // This is the common scenario when users clear the input box and start fresh.
+        return createKeyPositionCompletions(editorType, sessionId, range, monaco);
     }
 
     switch (cursorContext.position) {
@@ -120,25 +111,11 @@ export function createCompletionItems(params: CreateCompletionItemsParams): mona
         }
 
         default:
-            return createAllCompletions(editorType, sessionId, range, monaco, fieldBsonTypes);
+            return createKeyPositionCompletions(editorType, sessionId, range, monaco);
     }
 }
 
 // ---------- Context-specific completion builders ----------
-
-function createAllCompletions(
-    editorType: EditorType | undefined,
-    sessionId: string | undefined,
-    range: monacoEditor.IRange,
-    monaco: typeof monacoEditor,
-    fieldBsonTypes: readonly string[] | undefined,
-): monacoEditor.languages.CompletionItem[] {
-    const metaTags = getMetaTagsForEditorType(editorType);
-    const entries = getFilteredCompletions({ meta: [...metaTags] });
-    const operatorItems = entries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes));
-    const fieldItems = getFieldCompletionItems(sessionId, range, monaco);
-    return [...fieldItems, ...operatorItems];
-}
 
 function createKeyPositionCompletions(
     editorType: EditorType | undefined,
@@ -151,7 +128,9 @@ function createKeyPositionCompletions(
 
     const keyEntries = allEntries.filter((e) => KEY_POSITION_OPERATORS.has(e.value));
     const operatorItems = keyEntries.map((entry) => {
-        const item = mapOperatorToCompletionItem(entry, range, monaco);
+        // Strip outer braces — the user is already inside `{ }` at key position,
+        // so inserting the full `{ $and: [...] }` would create double braces.
+        const item = mapOperatorToCompletionItem(entry, range, monaco, undefined, true);
         item.sortText = `1_${entry.value}`;
         return item;
     });
@@ -178,13 +157,19 @@ function createValuePositionCompletions(
     // 1. Type-aware suggestions (highest priority)
     const typeSuggestions = createTypeSuggestions(fieldBsonType, range, monaco);
 
-    // 2. Operators (sort prefix 0_), excluding key-position-only operators
+    // 2. Operators, excluding key-position-only operators.
+    //    When fieldBsonType is known, apply type-aware sorting so comparison
+    //    operators (e.g., $eq) appear above irrelevant ones (e.g., $bitsAllSet).
+    const fieldBsonTypes = fieldBsonType ? [fieldBsonType] : undefined;
     const operatorEntries = allEntries.filter(
         (e) => e.meta !== 'bson' && e.meta !== 'variable' && !KEY_POSITION_OPERATORS.has(e.value),
     );
     const operatorItems = operatorEntries.map((entry) => {
-        const item = mapOperatorToCompletionItem(entry, range, monaco);
-        item.sortText = `0_${entry.value}`;
+        const item = mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes);
+        // If type-aware sorting produced a prefix, keep it; otherwise default to 0_
+        if (!item.sortText) {
+            item.sortText = `0_${entry.value}`;
+        }
         return item;
     });
 

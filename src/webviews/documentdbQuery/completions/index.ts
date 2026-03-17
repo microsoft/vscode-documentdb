@@ -13,6 +13,7 @@
  * - `snippetUtils.ts` — snippet text manipulation (brace stripping, $ escaping)
  */
 
+export { INFO_INDICATOR, LABEL_PLACEHOLDER } from './completionKnowledge';
 export {
     KEY_POSITION_OPERATORS,
     createCompletionItems,

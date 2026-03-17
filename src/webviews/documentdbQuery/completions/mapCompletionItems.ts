@@ -36,8 +36,11 @@ export function getCompletionKindForMeta(
  * Computes a sortText prefix for an operator based on its type relevance
  * to the given field BSON types.
  *
+ * Sorting tiers (ascending = higher priority):
  * - `"0_"` — Type-relevant: operator's `applicableBsonTypes` intersects with `fieldBsonTypes`
- * - `"1_"` — Universal: operator has no `applicableBsonTypes` (works on any type)
+ * - `"1a_"` — Comparison operators (universal): `$eq`, `$ne`, `$gt`, `$in`, etc.
+ *   These are the most commonly used operators for any field type.
+ * - `"1b_"` — Other universal operators: element, evaluation, geospatial, etc.
  * - `"2_"` — Non-matching: operator's `applicableBsonTypes` is set but doesn't match
  *
  * Returns `undefined` when no field type info is available (no sorting override).
@@ -51,7 +54,8 @@ export function getOperatorSortPrefix(
     }
 
     if (!entry.applicableBsonTypes || entry.applicableBsonTypes.length === 0) {
-        return '1_';
+        // Promote comparison operators above other universal operators
+        return entry.meta === 'query:comparison' ? '1a_' : '1b_';
     }
 
     const hasMatch = entry.applicableBsonTypes.some((t) => fieldBsonTypes.includes(t));
@@ -122,6 +126,8 @@ export function mapOperatorToCompletionItem(
  * Maps a FieldCompletionData entry to a Monaco CompletionItem.
  *
  * Fields are given a sort prefix of `"0_"` so they appear before operators.
+ * The insert text includes a trailing `: $1` snippet so that selecting a
+ * field name immediately places the cursor at the value position.
  */
 export function mapFieldToCompletionItem(
     field: FieldCompletionData,
@@ -132,7 +138,8 @@ export function mapFieldToCompletionItem(
     return {
         label: field.fieldName,
         kind: monaco.languages.CompletionItemKind.Field,
-        insertText: field.insertText,
+        insertText: `${field.insertText}: \$1`,
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         detail: `${field.displayType}${sparseIndicator}`,
         sortText: `0_${field.fieldName}`,
         range,
