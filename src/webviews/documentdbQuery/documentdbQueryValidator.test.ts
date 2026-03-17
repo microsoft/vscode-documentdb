@@ -143,6 +143,30 @@ describe('documentdbQueryValidator', () => {
             expect(errors[0].message).toContain("Unknown function 'XyzAbc'");
         });
 
+        test('new Daddddte() produces error for unknown constructor', () => {
+            const diagnostics = validateExpression('{ date: { $gt: new Daddddte(Date.now() - 14 * 24 * 60 * 60 * 1000) } }');
+            const errors = diagnostics.filter((d) => d.severity === 'error');
+            expect(errors).toHaveLength(1);
+            expect(errors[0].message).toContain("Unknown constructor 'Daddddte'");
+        });
+
+        test('new Dae() produces warning for near-miss constructor', () => {
+            const diagnostics = validateExpression('{ date: new Dae("2025-01-01") }');
+            const warnings = diagnostics.filter((d) => d.severity === 'warning');
+            expect(warnings).toHaveLength(1);
+            expect(warnings[0].message).toContain('Date');
+        });
+
+        test('new Date() produces no diagnostics', () => {
+            const diagnostics = validateExpression('{ date: new Date() }');
+            expect(diagnostics).toHaveLength(0);
+        });
+
+        test('new RegExp() produces no diagnostics', () => {
+            const diagnostics = validateExpression('{ name: { $regex: new RegExp("^test") } }');
+            expect(diagnostics).toHaveLength(0);
+        });
+
         test('Date.nodw() does NOT produce a warning (method validation is out of scope)', () => {
             // We validate the object (Date) but not individual method names.
             // Date is a known global, so no warning. The .nodw() method name

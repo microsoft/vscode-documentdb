@@ -277,6 +277,40 @@ export function validateExpression(code: string): Diagnostic[] {
                     }
                 }
             },
+            // NewExpression has the same callee shape as CallExpression.
+            // e.g., `new Daddddte()` — the callee is an Identifier node.
+            NewExpression(
+                node: acorn.Node & {
+                    callee: acorn.Node & { name?: string; type: string };
+                },
+            ) {
+                if (node.callee.type === 'Identifier' && node.callee.name) {
+                    const name = node.callee.name;
+
+                    if (KNOWN_GLOBALS.has(name)) {
+                        return;
+                    }
+
+                    const nearMiss = findNearMissKnownIdentifier(name);
+                    const startOffset = node.callee.start - 1;
+                    const endOffset = node.callee.end - 1;
+                    if (nearMiss) {
+                        diagnostics.push({
+                            startOffset,
+                            endOffset,
+                            severity: 'warning',
+                            message: `Did you mean '${nearMiss.match}'?`,
+                        });
+                    } else {
+                        diagnostics.push({
+                            startOffset,
+                            endOffset,
+                            severity: 'error',
+                            message: `Unknown constructor '${name}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, RegExp).`,
+                        });
+                    }
+                }
+            },
         });
     } catch {
         // If walking fails, just return syntax diagnostics we already have
