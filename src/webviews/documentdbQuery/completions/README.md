@@ -36,8 +36,8 @@ Completion items use `sortText` prefixes so Monaco displays them in the intended
 | Prefix | Content | Example |
 |--------|---------|---------|
 | `00_00` – `00_99` | Type suggestions | `true` / `false` for boolean fields |
-| `0_$eq` | Query operators | `{ $eq: … }`, `{ $gt: … }` |
-| `1_ObjectId` | BSON constructors | `ObjectId(…)`, `ISODate(…)` |
+| `0_$eq` – `2_$op` | Query operators (type-aware) | `{ $eq: … }`, `{ $gt: … }` |
+| `3_ObjectId` | BSON constructors | `ObjectId(…)`, `ISODate(…)` |
 
 ### Key position
 

@@ -79,7 +79,17 @@ const TYPE_SUGGESTIONS: Record<string, readonly TypeSuggestionDef[]> = {
             insertText: '{ $regex: /${1:pattern}/ }',
             isSnippet: true,
             description: 'pattern match',
-            documentation: `Match string fields with a regex.\n\nExample: \`{ $regex: /\\.com$/ }\` — ends with ".com"`,
+            documentation:
+                'Match string fields with a regex pattern.\n\n' +
+                'Example — ends with `.com`:\n```\n{ $regex: /\\.com$/ }\n```',
+        },
+        {
+            label: '{ $regex: /\\.com$/ }',
+            insertText: '{ $regex: /${1:\\.com$}/ }',
+            isSnippet: true,
+            description: `ends with .com - pattern match`,
+            documentation:
+                'Example pattern match for: ends with `.com`:\n```\n{ $regex: /\\.com$/ }\n```',
         },
         {
             label: '""',

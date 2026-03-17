@@ -173,11 +173,11 @@ function createValuePositionCompletions(
         return item;
     });
 
-    // 3. BSON constructors (sort prefix 1_)
+    // 3. BSON constructors (sort prefix 3_ — after all operator tiers: 0_, 1a_, 1b_, 2_)
     const bsonEntries = allEntries.filter((e) => e.meta === 'bson');
     const bsonItems = bsonEntries.map((entry) => {
         const item = mapOperatorToCompletionItem(entry, range, monaco);
-        item.sortText = `1_${entry.value}`;
+        item.sortText = `3_${entry.value}`;
         return item;
     });
 

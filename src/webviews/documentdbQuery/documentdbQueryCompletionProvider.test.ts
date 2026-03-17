@@ -1025,7 +1025,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 const gtItem = items.find((i) => getLabelText(i.label) === '$gt');
                 const objectIdItem = items.find((i) => getLabelText(i.label) === 'ObjectId');
                 expect(gtItem?.sortText).toBe('0_$gt');
-                expect(objectIdItem?.sortText).toBe('1_ObjectId');
+                expect(objectIdItem?.sortText).toBe('3_ObjectId');
             });
 
             test('does NOT show key-position operators ($and, $or)', () => {
