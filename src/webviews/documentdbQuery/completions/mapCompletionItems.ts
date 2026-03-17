@@ -136,11 +136,13 @@ export function mapFieldToCompletionItem(
 ): monacoEditor.languages.CompletionItem {
     const sparseIndicator = field.isSparse ? ' (sparse)' : '';
     return {
-        label: field.fieldName,
+        label: {
+            label: field.fieldName,
+            description: `${field.displayType}${sparseIndicator}`,
+        },
         kind: monaco.languages.CompletionItemKind.Field,
         insertText: `${field.insertText}: \$1`,
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-        detail: `${field.displayType}${sparseIndicator}`,
         sortText: `0_${field.fieldName}`,
         range,
     };

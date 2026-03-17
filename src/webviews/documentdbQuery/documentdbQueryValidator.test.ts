@@ -63,11 +63,12 @@ describe('documentdbQueryValidator', () => {
             expect(warnings[0].message).toContain('ObjectId');
         });
 
-        test('unknown identifier foo used as function is not flagged if not near BSON constructor', () => {
-            // "foo" is not close to any BSON constructor name (Levenshtein > 2)
+        test('unknown identifier foo used as function produces error', () => {
+            // "foo" is not close to any known identifier (Levenshtein > 2)
             const diagnostics = validateExpression('{ id: foo("abc") }');
-            const warnings = diagnostics.filter((d) => d.severity === 'warning');
-            expect(warnings).toHaveLength(0);
+            const errors = diagnostics.filter((d) => d.severity === 'error');
+            expect(errors).toHaveLength(1);
+            expect(errors[0].message).toContain("Unknown function 'foo'");
         });
 
         test('unknown identifier as field name is not flagged', () => {
@@ -126,6 +127,20 @@ describe('documentdbQueryValidator', () => {
             const warnings = diagnostics.filter((d) => d.severity === 'warning');
             expect(warnings.length).toBeGreaterThan(0);
             expect(warnings[0].message).toContain('Number');
+        });
+
+        test('completely unknown member call UdddddduaD.now() produces error', () => {
+            const diagnostics = validateExpression('{ _id: UdddddduaD.now() }');
+            const errors = diagnostics.filter((d) => d.severity === 'error');
+            expect(errors).toHaveLength(1);
+            expect(errors[0].message).toContain("Unknown identifier 'UdddddduaD'");
+        });
+
+        test('completely unknown direct call XyzAbc() produces error', () => {
+            const diagnostics = validateExpression('{ _id: XyzAbc("123") }');
+            const errors = diagnostics.filter((d) => d.severity === 'error');
+            expect(errors).toHaveLength(1);
+            expect(errors[0].message).toContain("Unknown function 'XyzAbc'");
         });
 
         test('Date.nodw() does NOT produce a warning (method validation is out of scope)', () => {

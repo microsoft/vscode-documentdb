@@ -222,14 +222,22 @@ export function validateExpression(code: string): Diagnostic[] {
                     }
 
                     const nearMiss = findNearMissKnownIdentifier(name);
+                    const startOffset = node.callee.start - 1;
+                    const endOffset = node.callee.end - 1;
                     if (nearMiss) {
-                        const startOffset = node.callee.start - 1;
-                        const endOffset = node.callee.end - 1;
                         diagnostics.push({
                             startOffset,
                             endOffset,
                             severity: 'warning',
                             message: `Did you mean '${nearMiss.match}'?`,
+                        });
+                    } else {
+                        // No near-miss found — unknown function call will fail at runtime
+                        diagnostics.push({
+                            startOffset,
+                            endOffset,
+                            severity: 'error',
+                            message: `Unknown function '${name}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, Math).`,
                         });
                     }
                 }
@@ -249,14 +257,22 @@ export function validateExpression(code: string): Diagnostic[] {
                     }
 
                     const nearMiss = findNearMissKnownIdentifier(objName);
+                    const startOffset = node.callee.object.start - 1;
+                    const endOffset = node.callee.object.end - 1;
                     if (nearMiss) {
-                        const startOffset = node.callee.object.start - 1;
-                        const endOffset = node.callee.object.end - 1;
                         diagnostics.push({
                             startOffset,
                             endOffset,
                             severity: 'warning',
                             message: `Did you mean '${nearMiss.match}'?`,
+                        });
+                    } else {
+                        // No near-miss found — unknown object will fail at runtime
+                        diagnostics.push({
+                            startOffset,
+                            endOffset,
+                            severity: 'error',
+                            message: `Unknown identifier '${objName}'. Expected a known global (e.g., Date, Math).`,
                         });
                     }
                 }

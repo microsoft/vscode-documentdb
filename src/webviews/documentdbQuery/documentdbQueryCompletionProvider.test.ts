@@ -392,11 +392,10 @@ describe('documentdbQueryCompletionProvider', () => {
 
             const item = mapFieldToCompletionItem(field, testRange, mockMonaco);
 
-            expect(item.label).toBe('age');
+            expect(item.label).toEqual({ label: 'age', description: 'Number' });
             expect(item.kind).toBe(mockCompletionItemKind.Field);
             expect(item.insertText).toBe('age: $1');
             expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
-            expect(item.detail).toBe('Number');
             expect(item.sortText).toBe('0_age');
             expect(item.range).toBe(testRange);
         });
@@ -413,7 +412,7 @@ describe('documentdbQueryCompletionProvider', () => {
 
             const item = mapFieldToCompletionItem(field, testRange, mockMonaco);
 
-            expect(item.detail).toBe('String (sparse)');
+            expect((item.label as { description: string }).description).toBe('String (sparse)');
         });
 
         test('uses pre-escaped insertText for special field names', () => {
@@ -428,7 +427,7 @@ describe('documentdbQueryCompletionProvider', () => {
 
             const item = mapFieldToCompletionItem(field, testRange, mockMonaco);
 
-            expect(item.label).toBe('address.city');
+            expect((item.label as { label: string }).label).toBe('address.city');
             expect(item.insertText).toBe('"address.city": $1');
         });
     });
