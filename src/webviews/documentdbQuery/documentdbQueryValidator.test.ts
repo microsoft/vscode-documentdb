@@ -63,11 +63,12 @@ describe('documentdbQueryValidator', () => {
             expect(warnings[0].message).toContain('ObjectId');
         });
 
-        test('unknown identifier foo used as function is not flagged if not near BSON constructor', () => {
-            // "foo" is not close to any BSON constructor name (Levenshtein > 2)
+        test('unknown identifier foo used as function produces error', () => {
+            // "foo" is not close to any known identifier (Levenshtein > 2)
             const diagnostics = validateExpression('{ id: foo("abc") }');
-            const warnings = diagnostics.filter((d) => d.severity === 'warning');
-            expect(warnings).toHaveLength(0);
+            const errors = diagnostics.filter((d) => d.severity === 'error');
+            expect(errors).toHaveLength(1);
+            expect(errors[0].message).toContain("Unknown function 'foo'");
         });
 
         test('unknown identifier as field name is not flagged', () => {
@@ -126,6 +127,46 @@ describe('documentdbQueryValidator', () => {
             const warnings = diagnostics.filter((d) => d.severity === 'warning');
             expect(warnings.length).toBeGreaterThan(0);
             expect(warnings[0].message).toContain('Number');
+        });
+
+        test('completely unknown member call UdddddduaD.now() produces error', () => {
+            const diagnostics = validateExpression('{ _id: UdddddduaD.now() }');
+            const errors = diagnostics.filter((d) => d.severity === 'error');
+            expect(errors).toHaveLength(1);
+            expect(errors[0].message).toContain("Unknown identifier 'UdddddduaD'");
+        });
+
+        test('completely unknown direct call XyzAbc() produces error', () => {
+            const diagnostics = validateExpression('{ _id: XyzAbc("123") }');
+            const errors = diagnostics.filter((d) => d.severity === 'error');
+            expect(errors).toHaveLength(1);
+            expect(errors[0].message).toContain("Unknown function 'XyzAbc'");
+        });
+
+        test('new Daddddte() produces error for unknown constructor', () => {
+            const diagnostics = validateExpression(
+                '{ date: { $gt: new Daddddte(Date.now() - 14 * 24 * 60 * 60 * 1000) } }',
+            );
+            const errors = diagnostics.filter((d) => d.severity === 'error');
+            expect(errors).toHaveLength(1);
+            expect(errors[0].message).toContain("Unknown constructor 'Daddddte'");
+        });
+
+        test('new Dae() produces warning for near-miss constructor', () => {
+            const diagnostics = validateExpression('{ date: new Dae("2025-01-01") }');
+            const warnings = diagnostics.filter((d) => d.severity === 'warning');
+            expect(warnings).toHaveLength(1);
+            expect(warnings[0].message).toContain('Date');
+        });
+
+        test('new Date() produces no diagnostics', () => {
+            const diagnostics = validateExpression('{ date: new Date() }');
+            expect(diagnostics).toHaveLength(0);
+        });
+
+        test('new RegExp() produces no diagnostics', () => {
+            const diagnostics = validateExpression('{ name: { $regex: new RegExp("^test") } }');
+            expect(diagnostics).toHaveLength(0);
         });
 
         test('Date.nodw() does NOT produce a warning (method validation is out of scope)', () => {

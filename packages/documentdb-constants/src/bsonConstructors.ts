@@ -22,7 +22,7 @@ const bsonConstructors: readonly OperatorEntry[] = [
         value: 'ISODate',
         meta: META_BSON,
         description: 'Creates a date object from an ISO 8601 date string.',
-        snippet: 'ISODate("${1:yyyy-MM-ddTHH:mm:ssZ}")',
+        snippet: 'ISODate("${1:2025-01-01T00:00:00Z}")',
     },
     {
         value: 'NumberLong',

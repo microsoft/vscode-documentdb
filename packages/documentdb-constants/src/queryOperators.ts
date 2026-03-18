@@ -341,7 +341,7 @@ const bitwiseQueryOperators: readonly OperatorEntry[] = [
             'The $bitsAllClear operator is used to match documents where all the bit positions specified in a bitmask are clear.',
         snippet: '{ $bitsAllClear: ${1:bitmask} }',
         link: getDocLink('$bitsAllClear', META_QUERY_BITWISE),
-        applicableBsonTypes: ['int', 'long'],
+        applicableBsonTypes: ['int32', 'long'],
     },
     {
         value: '$bitsAllSet',
@@ -349,7 +349,7 @@ const bitwiseQueryOperators: readonly OperatorEntry[] = [
         description: 'The bitsAllSet command is used to match documents where all the specified bit positions are set.',
         snippet: '{ $bitsAllSet: ${1:bitmask} }',
         link: getDocLink('$bitsAllSet', META_QUERY_BITWISE),
-        applicableBsonTypes: ['int', 'long'],
+        applicableBsonTypes: ['int32', 'long'],
     },
     {
         value: '$bitsAnyClear',
@@ -358,7 +358,7 @@ const bitwiseQueryOperators: readonly OperatorEntry[] = [
             'The $bitsAnyClear operator matches documents where any of the specified bit positions in a bitmask are clear.',
         snippet: '{ $bitsAnyClear: ${1:bitmask} }',
         link: getDocLink('$bitsAnyClear', META_QUERY_BITWISE),
-        applicableBsonTypes: ['int', 'long'],
+        applicableBsonTypes: ['int32', 'long'],
     },
     {
         value: '$bitsAnySet',
@@ -367,7 +367,7 @@ const bitwiseQueryOperators: readonly OperatorEntry[] = [
             'The $bitsAnySet operator returns documents where any of the specified bit positions are set to 1.',
         snippet: '{ $bitsAnySet: ${1:bitmask} }',
         link: getDocLink('$bitsAnySet', META_QUERY_BITWISE),
-        applicableBsonTypes: ['int', 'long'],
+        applicableBsonTypes: ['int32', 'long'],
     },
 ];
 
