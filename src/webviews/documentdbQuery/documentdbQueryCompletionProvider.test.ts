@@ -498,13 +498,9 @@ describe('documentdbQueryCompletionProvider', () => {
 
             const fieldItem = items.find((i) => getLabelText(i.label) === 'name');
             expect(fieldItem?.sortText).toBe('0_name');
-
-            // Key-position operators get "1_" prefix (below fields)
-            const andItem = items.find((i) => getLabelText(i.label) === '$and');
-            expect(andItem?.sortText).toBe('1_$and');
         });
 
-        test('empty store returns only key-position operator completions', () => {
+        test('empty store returns all operator completions', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: 'nonexistent-session',
@@ -513,14 +509,14 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            // Without cursorContext, falls back to key-position completions
+            // Without cursorContext, falls back to all completions
             const labels = items.map((i) => getLabelText(i.label));
             expect(labels).toContain('$and');
             expect(labels).toContain('$or');
-            expect(labels).not.toContain('$gt');
+            expect(labels).toContain('$gt');
         });
 
-        test('undefined sessionId returns only key-position operator completions', () => {
+        test('undefined sessionId returns all operator completions', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
@@ -529,11 +525,11 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            // Without cursorContext, falls back to key-position completions
+            // Without cursorContext, falls back to all completions
             const labels = items.map((i) => getLabelText(i.label));
             expect(labels).toContain('$and');
             expect(labels).toContain('$or');
-            expect(labels).not.toContain('$gt');
+            expect(labels).toContain('$gt');
         });
     });
 
@@ -1271,7 +1267,7 @@ describe('documentdbQueryCompletionProvider', () => {
         describe('unknown position', () => {
             const unknownContext: CursorContext = { position: 'unknown' };
 
-            test('falls back to key-position completions', () => {
+            test('falls back to all completions', () => {
                 const itemsWithContext = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -1289,17 +1285,20 @@ describe('documentdbQueryCompletionProvider', () => {
                     monaco: mockMonaco,
                 });
 
-                // Both should produce the same key-position completions
+                // Both should produce the same all-completions list
                 expect(itemsWithContext).toHaveLength(itemsWithoutContext.length);
                 const labels = itemsWithContext.map((i) => getLabelText(i.label));
+                // All completions include key-position operators
                 expect(labels).toContain('$and');
                 expect(labels).toContain('$or');
-                expect(labels).not.toContain('$gt');
+                // Also include value-position operators and BSON constructors
+                expect(labels).toContain('$gt');
+                expect(labels).toContain('ObjectId');
             });
         });
 
         describe('no cursorContext (undefined)', () => {
-            test('falls back to key-position completions (fields + key operators)', () => {
+            test('falls back to all completions (fields + operators + BSON + JS globals)', () => {
                 const items = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -1309,12 +1308,12 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: undefined,
                 });
 
-                // Without cursorContext, shows key-position completions (fields + key operators)
+                // Without cursorContext, shows all completions
                 const labels = items.map((i) => getLabelText(i.label));
                 expect(labels).toContain('$and');
                 expect(labels).toContain('$or');
-                expect(labels).not.toContain('$gt');
-                expect(labels).not.toContain('ObjectId');
+                expect(labels).toContain('$gt');
+                expect(labels).toContain('ObjectId');
             });
         });
     });

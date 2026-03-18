@@ -48,7 +48,8 @@ export interface CreateCompletionItemsParams {
     /**
      * Optional cursor context from the heuristic cursor position detector.
      * When provided, completions are filtered based on the semantic position
-     * of the cursor. When undefined, falls back to showing all completions.
+     * of the cursor. When undefined, falls back to showing all completions
+     * (fields, operators, BSON constructors, and JS globals).
      */
     cursorContext?: CursorContext;
 }
@@ -84,16 +85,16 @@ export function getMetaTagsForEditorType(editorType: EditorType | undefined): re
  * - **value**: type suggestions + operators (with braces) + BSON constructors
  * - **operator**: operators (without braces) with type-aware sorting
  * - **array-element**: same as key position
- * - **unknown**: all completions (backward compatible fallback)
+ * - **unknown / undefined**: all completions — fields, all operators, BSON
+ *   constructors, and JS globals (backward-compatible fallback)
  */
 export function createCompletionItems(params: CreateCompletionItemsParams): monacoEditor.languages.CompletionItem[] {
     const { editorType, sessionId, range, monaco, fieldBsonTypes, cursorContext } = params;
 
     if (!cursorContext || cursorContext.position === 'unknown') {
-        // When context is unknown (e.g., empty input, no braces), show the same
-        // completions as key position: field names first, then key-position operators.
-        // This is the common scenario when users clear the input box and start fresh.
-        return createKeyPositionCompletions(editorType, sessionId, range, monaco);
+        // When context is unknown (e.g., empty input, no braces), show all
+        // completions so the user can discover what's available.
+        return createAllCompletions(editorType, sessionId, range, monaco);
     }
 
     switch (cursorContext.position) {
@@ -112,11 +113,43 @@ export function createCompletionItems(params: CreateCompletionItemsParams): mona
         }
 
         default:
-            return createKeyPositionCompletions(editorType, sessionId, range, monaco);
+            return createAllCompletions(editorType, sessionId, range, monaco);
     }
 }
 
 // ---------- Context-specific completion builders ----------
+
+/**
+ * All completions — used when cursor context is unknown or undefined.
+ * Shows fields, all operators, BSON constructors, and JS globals.
+ */
+function createAllCompletions(
+    editorType: EditorType | undefined,
+    sessionId: string | undefined,
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
+    const metaTags = getMetaTagsForEditorType(editorType);
+    const allEntries = getFilteredCompletions({ meta: [...metaTags] });
+
+    const fieldItems = getFieldCompletionItems(sessionId, range, monaco);
+
+    const operatorItems = allEntries
+        .filter((e) => e.meta !== 'bson' && e.meta !== 'variable')
+        .map((entry) => mapOperatorToCompletionItem(entry, range, monaco));
+
+    const bsonItems = allEntries
+        .filter((e) => e.meta === 'bson')
+        .map((entry) => {
+            const item = mapOperatorToCompletionItem(entry, range, monaco);
+            item.sortText = `3_${entry.value}`;
+            return item;
+        });
+
+    const jsGlobals = createJsGlobalCompletionItems(range, monaco);
+
+    return [...fieldItems, ...operatorItems, ...bsonItems, ...jsGlobals];
+}
 
 function createKeyPositionCompletions(
     editorType: EditorType | undefined,
