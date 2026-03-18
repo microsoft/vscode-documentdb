@@ -30,6 +30,7 @@ import { getCompletionContext } from './completionStore';
 import { detectCursorContext } from './cursorContext';
 import { createCompletionItems } from './documentdbQueryCompletionProvider';
 import { getHoverContent } from './documentdbQueryHoverProvider';
+import { isCursorInsideString } from './isCursorInsideString';
 import { LANGUAGE_ID, parseEditorUri } from './languageConfig';
 
 /** Coalesces concurrent registrations into a single promise. */
@@ -67,7 +68,7 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
 
     // Step 4: Register the completion provider
     monaco.languages.registerCompletionItemProvider(LANGUAGE_ID, {
-        triggerCharacters: ['$', '"', "'", '{', '.'],
+        triggerCharacters: ['$', '"', "'", '{', '.', ':', ',', '['],
         provideCompletionItems: (
             model: monacoEditor.editor.ITextModel,
             position: monacoEditor.Position,
@@ -101,6 +102,14 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
             // Detect cursor context for context-sensitive completions
             const text = model.getValue();
             const cursorOffset = model.getOffsetAt(position);
+
+            // Suppress completions when the cursor is inside a string literal.
+            // This prevents trigger characters like ':', ',', '[' from firing
+            // inside strings like { name: "has:colon" } or { msg: "has[bracket" }.
+            if (isCursorInsideString(text, cursorOffset)) {
+                return { suggestions: [] };
+            }
+
             const sessionId = parsed?.sessionId;
 
             // Build field lookup from completion store to enrich context with BSON types
