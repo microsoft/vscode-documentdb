@@ -152,7 +152,17 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
                 return null;
             }
 
-            const hover = getHoverContent(wordAtPosition.word);
+            // Build field lookup from completion store for field hover info
+            const uriString = model.uri.toString();
+            const parsedUri = parseEditorUri(uriString);
+            const hoverFieldLookup = parsedUri?.sessionId
+                ? (word: string) => {
+                      const ctx = getCompletionContext(parsedUri.sessionId);
+                      return ctx?.fields.find((f) => f.fieldName === word);
+                  }
+                : undefined;
+
+            const hover = getHoverContent(wordAtPosition.word, hoverFieldLookup);
             if (!hover) {
                 return null;
             }

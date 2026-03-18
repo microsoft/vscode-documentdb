@@ -3,7 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getHoverContent } from './documentdbQueryHoverProvider';
+import { type FieldCompletionData } from '../../utils/json/data-api/autocomplete/toFieldCompletionItems';
+import { getHoverContent, type FieldDataLookup } from './documentdbQueryHoverProvider';
+
+/** Creates a mock field lookup function from an array of fields. */
+function createFieldLookup(fields: FieldCompletionData[]): FieldDataLookup {
+    return (word: string) => fields.find((f) => f.fieldName === word);
+}
 
 describe('documentdbQueryHoverProvider', () => {
     describe('getHoverContent', () => {
@@ -68,6 +74,85 @@ describe('documentdbQueryHoverProvider', () => {
 
             const content = (hover!.contents[0] as { value: string }).value;
             expect(content).toContain('**UUID**');
+        });
+    });
+
+    describe('field hover', () => {
+        const fields: FieldCompletionData[] = [
+            {
+                fieldName: 'age',
+                displayType: 'Number',
+                bsonType: 'int32',
+                isSparse: false,
+                insertText: 'age',
+                referenceText: '$age',
+            },
+            {
+                fieldName: 'nickname',
+                displayType: 'String',
+                bsonType: 'string',
+                isSparse: true,
+                insertText: 'nickname',
+                referenceText: '$nickname',
+            },
+        ];
+
+        test('returns hover for a known field name', () => {
+            const hover = getHoverContent('age', createFieldLookup(fields));
+            expect(hover).not.toBeNull();
+
+            const content = (hover!.contents[0] as { value: string }).value;
+            expect(content).toContain('**age**');
+            expect(content).toContain('Number');
+        });
+
+        test('shows sparse indicator for sparse fields', () => {
+            const hover = getHoverContent('nickname', createFieldLookup(fields));
+            expect(hover).not.toBeNull();
+
+            const content = (hover!.contents[0] as { value: string }).value;
+            expect(content).toContain('**nickname**');
+            expect(content).toContain('String');
+            expect(content).toContain('sparse');
+        });
+
+        test('does NOT show sparse indicator for non-sparse fields', () => {
+            const hover = getHoverContent('age', createFieldLookup(fields));
+            expect(hover).not.toBeNull();
+
+            const content = (hover!.contents[0] as { value: string }).value;
+            expect(content).not.toContain('sparse');
+        });
+
+        test('returns null for unknown field when no operator match', () => {
+            const hover = getHoverContent('unknownField', createFieldLookup(fields));
+            expect(hover).toBeNull();
+        });
+
+        test('operators take priority over field names', () => {
+            // If a field happens to be named "gt", the operator $gt should match first
+            const fieldsWithOperatorName: FieldCompletionData[] = [
+                {
+                    fieldName: 'gt',
+                    displayType: 'String',
+                    bsonType: 'string',
+                    isSparse: false,
+                    insertText: 'gt',
+                    referenceText: '$gt',
+                },
+            ];
+
+            const hover = getHoverContent('gt', createFieldLookup(fieldsWithOperatorName));
+            expect(hover).not.toBeNull();
+
+            const content = (hover!.contents[0] as { value: string }).value;
+            // Should show operator hover, not field hover
+            expect(content).toContain('**$gt**');
+        });
+
+        test('returns null for field when no fieldLookup provided', () => {
+            const hover = getHoverContent('age');
+            expect(hover).toBeNull();
         });
     });
 });
