@@ -163,6 +163,7 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.insertTextRules).toBeUndefined();
             expect(item.documentation).toEqual({
                 value: 'Matches values equal to a specified value.',
+                isTrusted: true,
             });
             expect(item.range).toBe(testRange);
         });
@@ -199,6 +200,7 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
             expect(item.documentation).toEqual({
                 value: 'Creates a new ObjectId value.\n\n[DocumentDB Docs](https://docs.example.com/objectid)',
+                isTrusted: true,
             });
         });
 

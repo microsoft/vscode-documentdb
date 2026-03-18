@@ -116,6 +116,7 @@ export function mapOperatorToCompletionItem(
         insertTextRules: hasSnippet ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
         documentation: {
             value: documentationValue,
+            isTrusted: true,
         },
         sortText: sortPrefix ? `${sortPrefix}${entry.value}` : undefined,
         range,
