@@ -112,20 +112,6 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
 
             const cursorContext = detectCursorContext(text, cursorOffset, fieldLookup);
 
-            // Trace-level logging for debugging context-sensitive completions
-            console.debug('[documentdb-query] provideCompletionItems', {
-                text,
-                cursorOffset,
-                position: { line: position.lineNumber, col: position.column },
-                charBefore,
-                isDollarPrefix: charBefore === '$',
-                wordInfo: { word: wordInfo.word, startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn },
-                range,
-                cursorContext,
-                editorType: parsed?.editorType,
-                sessionId,
-            });
-
             // Build completion items based on context
             const items = createCompletionItems({
                 editorType: parsed?.editorType,
@@ -134,19 +120,6 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
                 isDollarPrefix: charBefore === '$',
                 monaco,
                 cursorContext,
-            });
-
-            console.debug('[documentdb-query] completionItems', {
-                count: items.length,
-                labels: items.map((i) => i.label),
-                contextPosition: cursorContext.position,
-                // Log first 3 items with their insertText for snippet debugging
-                sampleItems: items.slice(0, 3).map((i) => ({
-                    label: i.label,
-                    insertText: i.insertText,
-                    insertTextRules: i.insertTextRules,
-                    range: i.range,
-                })),
             });
 
             return { suggestions: items };
