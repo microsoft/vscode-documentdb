@@ -28,7 +28,6 @@ describe('documentdbQueryHoverProvider', () => {
 
             const content = (hover!.contents[0] as { value: string }).value;
             expect(content).toContain('**$eq**');
-            // It should have a description line
             expect(content.split('\n').length).toBeGreaterThan(1);
         });
 
@@ -51,7 +50,6 @@ describe('documentdbQueryHoverProvider', () => {
         });
 
         test('word without $ prefix matches operator when prefixed', () => {
-            // When cursor is on "gt" (after $ was already output), try $gt
             const hover = getHoverContent('gt');
             expect(hover).not.toBeNull();
 
@@ -64,8 +62,15 @@ describe('documentdbQueryHoverProvider', () => {
             expect(hover).not.toBeNull();
 
             const content = (hover!.contents[0] as { value: string }).value;
-            // $gt is a well-known operator that should have a doc link
             expect(content).toContain('[DocumentDB Docs]');
+        });
+
+        test('operator hover has isTrusted set for clickable links', () => {
+            const hover = getHoverContent('$gt');
+            expect(hover).not.toBeNull();
+
+            const hoverContent = hover!.contents[0] as { isTrusted?: boolean };
+            expect(hoverContent.isTrusted).toBe(true);
         });
 
         test('returns hover for UUID constructor', () => {
@@ -95,6 +100,16 @@ describe('documentdbQueryHoverProvider', () => {
                 insertText: 'nickname',
                 referenceText: '$nickname',
             },
+            {
+                fieldName: 'rating',
+                displayType: 'Double',
+                bsonType: 'double',
+                bsonTypes: ['double', 'int32'],
+                displayTypes: ['Double', 'Int32'],
+                isSparse: true,
+                insertText: 'rating',
+                referenceText: '$rating',
+            },
         ];
 
         test('returns hover for a known field name', () => {
@@ -103,7 +118,25 @@ describe('documentdbQueryHoverProvider', () => {
 
             const content = (hover!.contents[0] as { value: string }).value;
             expect(content).toContain('**age**');
+        });
+
+        test('shows "Inferred Types" section with type list', () => {
+            const hover = getHoverContent('age', createFieldLookup(fields));
+            expect(hover).not.toBeNull();
+
+            const content = (hover!.contents[0] as { value: string }).value;
+            expect(content).toContain('**Inferred Types**');
             expect(content).toContain('Number');
+        });
+
+        test('shows multiple types for polymorphic fields', () => {
+            const hover = getHoverContent('rating', createFieldLookup(fields));
+            expect(hover).not.toBeNull();
+
+            const content = (hover!.contents[0] as { value: string }).value;
+            expect(content).toContain('**Inferred Types**');
+            expect(content).toContain('Double');
+            expect(content).toContain('Int32');
         });
 
         test('shows sparse indicator for sparse fields', () => {
@@ -112,8 +145,8 @@ describe('documentdbQueryHoverProvider', () => {
 
             const content = (hover!.contents[0] as { value: string }).value;
             expect(content).toContain('**nickname**');
-            expect(content).toContain('String');
             expect(content).toContain('sparse');
+            expect(content).toContain('not present in all documents');
         });
 
         test('does NOT show sparse indicator for non-sparse fields', () => {
@@ -124,13 +157,20 @@ describe('documentdbQueryHoverProvider', () => {
             expect(content).not.toContain('sparse');
         });
 
+        test('field hover has isTrusted set', () => {
+            const hover = getHoverContent('age', createFieldLookup(fields));
+            expect(hover).not.toBeNull();
+
+            const hoverContent = hover!.contents[0] as { isTrusted?: boolean };
+            expect(hoverContent.isTrusted).toBe(true);
+        });
+
         test('returns null for unknown field when no operator match', () => {
             const hover = getHoverContent('unknownField', createFieldLookup(fields));
             expect(hover).toBeNull();
         });
 
         test('operators take priority over field names', () => {
-            // If a field happens to be named "gt", the operator $gt should match first
             const fieldsWithOperatorName: FieldCompletionData[] = [
                 {
                     fieldName: 'gt',
@@ -146,7 +186,6 @@ describe('documentdbQueryHoverProvider', () => {
             expect(hover).not.toBeNull();
 
             const content = (hover!.contents[0] as { value: string }).value;
-            // Should show operator hover, not field hover
             expect(content).toContain('**$gt**');
         });
 

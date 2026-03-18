@@ -70,20 +70,30 @@ export function getHoverContent(word: string, fieldLookup?: FieldDataLookup): mo
 }
 
 /**
- * Builds a hover tooltip for a field name, showing its type info.
+ * Builds a hover tooltip for a field name.
  *
- * Uses relative language for statistics (e.g., "sparse" rather than
- * absolute percentages) since the SchemaAnalyzer accumulates data
- * across queries and the numbers are approximate.
+ * Format:
+ * ```
+ * **fieldName** <small>sparse: not present in all documents</small>
+ *
+ * **Inferred Types**
+ * String, Int32
+ * ```
  */
 function buildFieldHover(field: FieldCompletionData): monacoEditor.languages.Hover {
-    const lines: string[] = [`**${field.fieldName}**`];
+    // First line: field name, optionally with sparse note
+    let header = `**${field.fieldName}**`;
+    if (field.isSparse) {
+        header += ' &nbsp; <sub>sparse: not present in all documents</sub>';
+    }
 
-    // Type info
-    const sparseNote = field.isSparse ? ' *(sparse — not present in all documents)*' : '';
-    lines.push('', `Type: \`${field.displayType}\`${sparseNote}`);
+    const lines: string[] = [header];
+
+    // Inferred types section
+    const typeList = field.displayTypes && field.displayTypes.length > 0 ? field.displayTypes : [field.displayType];
+    lines.push('', '**Inferred Types**', typeList.join(', '));
 
     return {
-        contents: [{ value: lines.join('\n') }],
+        contents: [{ value: lines.join('\n'), isTrusted: true, supportHtml: true }],
     };
 }
