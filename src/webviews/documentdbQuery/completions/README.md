@@ -23,9 +23,10 @@ registerLanguage.ts
 1. Monaco calls `provideCompletionItems()` (registered in `registerLanguage.ts`)
 2. `detectCursorContext()` scans backward from the cursor to determine the semantic position
 3. `createCompletionItems()` routes to the appropriate builder:
-   - **key / array-element / unknown** → field names + key-position operators
-   - **value** → type suggestions + operators (with braces) + BSON constructors
+   - **key / array-element** → field names + key-position operators
+   - **value** → type suggestions + operators (with braces) + BSON constructors + JS globals
    - **operator** → operators only (braces stripped, type-aware sorting)
+   - **unknown / undefined** → all completions (fields, all operators, BSON constructors, JS globals)
 
 ## Sorting
 
