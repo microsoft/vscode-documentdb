@@ -1790,9 +1790,7 @@ describe('documentdbQueryCompletionProvider', () => {
          * For JS globals it is "JS global".
          * For fields it is the type, e.g., "Number".
          */
-        function getDescription(
-            label: string | monacoEditor.languages.CompletionItemLabel,
-        ): string | undefined {
+        function getDescription(label: string | monacoEditor.languages.CompletionItemLabel): string | undefined {
             return typeof label === 'string' ? undefined : label.description;
         }
 
