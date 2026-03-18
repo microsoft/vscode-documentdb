@@ -1321,6 +1321,81 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(labels).toContain('ObjectId');
             });
         });
+
+        describe('needsWrapping (empty editor, no braces)', () => {
+            test('field insertText is wrapped with { } when needsWrapping is true', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'name',
+                            displayType: 'String',
+                            bsonType: 'string',
+                            isSparse: false,
+                            insertText: 'name',
+                            referenceText: '$name',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'unknown' },
+                    needsWrapping: true,
+                });
+
+                const fieldItem = items.find((i) => getLabelText(i.label) === 'name');
+                expect(fieldItem?.insertText).toBe('{ name: $1 }');
+            });
+
+            test('field insertText is NOT wrapped when needsWrapping is false', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'name',
+                            displayType: 'String',
+                            bsonType: 'string',
+                            isSparse: false,
+                            insertText: 'name',
+                            referenceText: '$name',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'unknown' },
+                    needsWrapping: false,
+                });
+
+                const fieldItem = items.find((i) => getLabelText(i.label) === 'name');
+                expect(fieldItem?.insertText).toBe('name: $1');
+            });
+
+            test('operators keep full brace-wrapping snippets when needsWrapping is true', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'unknown' },
+                    needsWrapping: true,
+                });
+
+                // Operator snippets include { } already — they should NOT be stripped
+                const andItem = items.find((i) => getLabelText(i.label) === '$and');
+                expect(andItem?.insertText).toContain('{');
+                expect(andItem?.insertText).toContain('}');
+            });
+        });
     });
 
     // ---------------------------------------------------------------

@@ -112,6 +112,11 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
 
             const cursorContext = detectCursorContext(text, cursorOffset, fieldLookup);
 
+            // Detect whether the editor content has braces. When the user clears
+            // the editor (deleting initial `{  }`), completions need to include
+            // wrapping braces so inserted snippets produce valid query syntax.
+            const needsWrapping = !text.includes('{');
+
             // Build completion items based on context
             const items = createCompletionItems({
                 editorType: parsed?.editorType,
@@ -120,6 +125,7 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
                 isDollarPrefix: charBefore === '$',
                 monaco,
                 cursorContext,
+                needsWrapping,
             });
 
             return { suggestions: items };
