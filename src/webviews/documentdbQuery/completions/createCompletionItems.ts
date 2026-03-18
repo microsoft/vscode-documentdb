@@ -91,16 +91,21 @@ export function getMetaTagsForEditorType(editorType: EditorType | undefined): re
  * - **value**: type suggestions + operators (with braces) + BSON constructors
  * - **operator**: operators (without braces) with type-aware sorting
  * - **array-element**: same as key position
- * - **unknown / undefined**: all completions — fields, all operators, BSON
- *   constructors, and JS globals (backward-compatible fallback)
+ * - **empty** (unknown + needsWrapping): key-position completions with `{ }` wrapping
+ * - **unknown** (ambiguous): all completions — full discovery fallback
  */
 export function createCompletionItems(params: CreateCompletionItemsParams): monacoEditor.languages.CompletionItem[] {
     const { editorType, sessionId, range, monaco, fieldBsonTypes, cursorContext, needsWrapping } = params;
 
     if (!cursorContext || cursorContext.position === 'unknown') {
-        // When context is unknown (e.g., empty input, no braces), show all
-        // completions so the user can discover what's available.
-        return createAllCompletions(editorType, sessionId, range, monaco, needsWrapping);
+        if (needsWrapping) {
+            // EMPTY editor — no braces present. Show key-position completions
+            // (fields + root operators) with { } wrapping so inserted items
+            // produce valid syntax.
+            return createEmptyEditorCompletions(editorType, sessionId, range, monaco);
+        }
+        // Genuinely UNKNOWN — show all completions as a discovery fallback.
+        return createAllCompletions(editorType, sessionId, range, monaco);
     }
 
     switch (cursorContext.position) {
@@ -126,30 +131,53 @@ export function createCompletionItems(params: CreateCompletionItemsParams): mona
 // ---------- Context-specific completion builders ----------
 
 /**
- * All completions — used when cursor context is unknown or undefined.
- * Shows fields, all operators, BSON constructors, and JS globals.
+ * Empty editor completions — shows key-position items with `{ }` wrapping.
  *
- * When `needsWrapping` is true, field insertText is wrapped with `{ ... }`
- * to produce valid syntax in an empty editor.
+ * Used when the editor has no braces (user cleared content). Behaves like
+ * key position but wraps all inserted completions with outer `{ }` so they
+ * produce valid query syntax.
+ */
+function createEmptyEditorCompletions(
+    editorType: EditorType | undefined,
+    sessionId: string | undefined,
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
+    const metaTags = getMetaTagsForEditorType(editorType);
+    const allEntries = getFilteredCompletions({ meta: [...metaTags] });
+
+    // Key-position operators — keep outer braces (don't strip)
+    const keyEntries = allEntries.filter((e) => KEY_POSITION_OPERATORS.has(e.value));
+    const operatorItems = keyEntries.map((entry) => {
+        const item = mapOperatorToCompletionItem(entry, range, monaco);
+        item.sortText = `1_${entry.value}`;
+        return item;
+    });
+
+    // Fields — wrap insertText with `{ ... }` for valid syntax
+    const fieldItems = getFieldCompletionItems(sessionId, range, monaco).map((item) => ({
+        ...item,
+        insertText: `{ ${item.insertText as string} }`,
+    }));
+
+    return [...fieldItems, ...operatorItems];
+}
+
+/**
+ * All completions — used when cursor context is genuinely ambiguous (UNKNOWN).
+ * Shows fields, all operators, BSON constructors, and JS globals.
+ * Full discovery fallback for positions the parser can't classify.
  */
 function createAllCompletions(
     editorType: EditorType | undefined,
     sessionId: string | undefined,
     range: monacoEditor.IRange,
     monaco: typeof monacoEditor,
-    needsWrapping?: boolean,
 ): monacoEditor.languages.CompletionItem[] {
     const metaTags = getMetaTagsForEditorType(editorType);
     const allEntries = getFilteredCompletions({ meta: [...metaTags] });
 
-    let fieldItems = getFieldCompletionItems(sessionId, range, monaco);
-    if (needsWrapping) {
-        // Wrap field insertText with { ... } for empty-editor context
-        fieldItems = fieldItems.map((item) => ({
-            ...item,
-            insertText: `{ ${item.insertText as string} }`,
-        }));
-    }
+    const fieldItems = getFieldCompletionItems(sessionId, range, monaco);
 
     const operatorItems = allEntries
         .filter((e) => e.meta !== 'bson' && e.meta !== 'variable')

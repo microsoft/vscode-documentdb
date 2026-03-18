@@ -1821,7 +1821,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(categories.has('logical')).toBe(true);
             });
 
-            test('does NOT include field-level categories (comparison, array, evaluation, element)', () => {
+            test('does NOT include purely field-level categories (comparison, array, element)', () => {
                 const items = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -1832,10 +1832,11 @@ describe('documentdbQueryCompletionProvider', () => {
                 });
 
                 const categories = getCategories(items);
+                // These categories have NO operators in KEY_POSITION_OPERATORS
                 expect(categories.has('comparison')).toBe(false);
                 expect(categories.has('array')).toBe(false);
-                expect(categories.has('evaluation')).toBe(false);
                 expect(categories.has('element')).toBe(false);
+                // Note: 'evaluation' IS present because $expr, $jsonSchema, $text are key-position
             });
 
             test('does NOT include "bson" or "JS global"', () => {
@@ -1946,10 +1947,10 @@ describe('documentdbQueryCompletionProvider', () => {
             });
         });
 
-        describe('unknown position (empty editor / no context)', () => {
+        describe('unknown position (genuinely ambiguous — shows everything)', () => {
             const unknownContext: CursorContext = { position: 'unknown' };
 
-            test('includes key-position "logical" category', () => {
+            test('includes all categories (full discovery fallback)', () => {
                 const items = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -1960,39 +1961,12 @@ describe('documentdbQueryCompletionProvider', () => {
                 });
 
                 const categories = getCategories(items);
+                // UNKNOWN shows everything as discovery
                 expect(categories.has('logical')).toBe(true);
-            });
-
-            test('does NOT include field-level categories (comparison, array, evaluation, element)', () => {
-                const items = createCompletionItems({
-                    editorType: EditorType.Filter,
-                    sessionId: undefined,
-                    range: testRange,
-                    isDollarPrefix: false,
-                    monaco: mockMonaco,
-                    cursorContext: unknownContext,
-                });
-
-                const categories = getCategories(items);
-                expect(categories.has('comparison')).toBe(false);
-                expect(categories.has('array')).toBe(false);
-                expect(categories.has('evaluation')).toBe(false);
-                expect(categories.has('element')).toBe(false);
-            });
-
-            test('does NOT include "bson" or "JS global"', () => {
-                const items = createCompletionItems({
-                    editorType: EditorType.Filter,
-                    sessionId: undefined,
-                    range: testRange,
-                    isDollarPrefix: false,
-                    monaco: mockMonaco,
-                    cursorContext: unknownContext,
-                });
-
-                const categories = getCategories(items);
-                expect(categories.has('bson')).toBe(false);
-                expect(categories.has('JS global')).toBe(false);
+                expect(categories.has('comparison')).toBe(true);
+                expect(categories.has('array')).toBe(true);
+                expect(categories.has('bson')).toBe(true);
+                expect(categories.has('JS global')).toBe(true);
             });
 
             test('includes field names if store has data', () => {

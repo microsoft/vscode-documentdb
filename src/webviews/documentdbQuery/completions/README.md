@@ -26,11 +26,21 @@ registerLanguage.ts
    - **key / array-element** → field names + key-position operators
    - **value** → type suggestions + operators (with braces) + BSON constructors + JS globals
    - **operator** → operators only (braces stripped, type-aware sorting)
-   - **unknown / undefined** → all completions (fields, all operators, BSON constructors, JS globals)
+   - **empty** (unknown + needsWrapping) → key-position completions with `{ }` wrapping
+   - **unknown** (ambiguous, no wrapping) → all completions (fields, all operators, BSON constructors, JS globals)
 
 ## Sorting
 
 Completion items use `sortText` prefixes so Monaco displays them in the intended order. Lower prefixes appear higher in the list.
+
+### Empty position (no braces)
+
+Same as key position. All insertions wrapped with `{ }`.
+
+| Prefix | Content | Example |
+|--------|---------|---------|
+| `0_fieldName` | Schema field names (wrapped) | `{ age: $1 }`, `{ name: $1 }` |
+| `1_$and` | Key-position operators (with braces) | `{ $and: [...] }` |
 
 ### Value position
 
@@ -93,6 +103,7 @@ Curated domain rules that go beyond the auto-generated operator registry in `doc
 
 Operator snippets in `documentdb-constants` include outer braces: `{ $gt: ${1:value} }`.
 
+- **Empty position**: operators keep full braces (user has no braces); fields wrapped with `{ ... }`
 - **Value position**: inserted as-is (user is replacing the entire value)
 - **Operator position**: outer `{ }` stripped via `stripOuterBraces()` (user is already inside braces)
 - **Key position**: outer `{ }` stripped (user is already inside the query object)
