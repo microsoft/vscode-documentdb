@@ -131,10 +131,56 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         };
     };
 
+    /**
+     * Sets up pattern-based auto-trigger of completions.
+     * When the user types a space after `: ` or `, `, completions are
+     * triggered automatically after a short delay. This bridges the gap
+     * where selecting a field completion (e.g., `rating`) inserts `rating: `
+     * but the completion popup doesn't reappear for the value.
+     *
+     * Returns a cleanup function.
+     */
+    const setupSmartTrigger = (editor: monacoEditor.editor.IStandaloneCodeEditor): (() => void) => {
+        let triggerTimeout: ReturnType<typeof setTimeout>;
+        const disposable = editor.onDidChangeModelContent((e) => {
+            clearTimeout(triggerTimeout);
+
+            // Only fire for single-character insertions (typing)
+            const change = e.changes[0];
+            if (!change || change.text !== ' ') return;
+
+            // Check the two characters ending at the cursor: "X " where X is : or ,
+            const model = editor.getModel();
+            if (!model) return;
+
+            const offset = model.getOffsetAt(
+                // The position after the inserted space
+                model.getPositionAt(change.rangeOffset + 1),
+            );
+
+            // We need at least 2 chars: the trigger char + space
+            if (offset < 2) return;
+
+            const textBefore = model.getValue().substring(offset - 2, offset);
+            if (textBefore === ': ' || textBefore === ', ') {
+                triggerTimeout = setTimeout(() => {
+                    editor.trigger('smart-trigger', 'editor.action.triggerSuggest', {});
+                }, 50);
+            }
+        });
+        return () => {
+            clearTimeout(triggerTimeout);
+            disposable.dispose();
+        };
+    };
+
     // Track validation cleanup functions
     const filterValidationCleanupRef = useRef<(() => void) | null>(null);
     const projectValidationCleanupRef = useRef<(() => void) | null>(null);
     const sortValidationCleanupRef = useRef<(() => void) | null>(null);
+    const filterSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
+    const projectSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
+    const sortSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
 
     const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
         // Store the filter editor reference
@@ -148,6 +194,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
         // Set up debounced validation
         filterValidationCleanupRef.current = setupValidation(editor, monaco, model);
+
+        // Set up smart-trigger for completions after ": " and ", "
+        filterSmartTriggerCleanupRef.current = setupSmartTrigger(editor);
 
         const getCurrentQueryFunction = () => ({
             filter: filterValue,
@@ -201,6 +250,11 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             filterValidationCleanupRef.current?.();
             projectValidationCleanupRef.current?.();
             sortValidationCleanupRef.current?.();
+
+            // Clean up smart-trigger listeners
+            filterSmartTriggerCleanupRef.current?.();
+            projectSmartTriggerCleanupRef.current?.();
+            sortSmartTriggerCleanupRef.current?.();
 
             // Dispose Monaco models
             filterEditorRef.current?.getModel()?.dispose();
@@ -552,6 +606,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     // Set up validation
                                     projectValidationCleanupRef.current = setupValidation(editor, monaco, model);
 
+                                    // Set up smart-trigger
+                                    projectSmartTriggerCleanupRef.current = setupSmartTrigger(editor);
+
                                     editor.onDidChangeModelContent(() => {
                                         setProjectValue(editor.getValue());
                                     });
@@ -591,6 +648,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
                                     // Set up validation
                                     sortValidationCleanupRef.current = setupValidation(editor, monaco, model);
+
+                                    // Set up smart-trigger
+                                    sortSmartTriggerCleanupRef.current = setupSmartTrigger(editor);
 
                                     editor.onDidChangeModelContent(() => {
                                         setSortValue(editor.getValue());

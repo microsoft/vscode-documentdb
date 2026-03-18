@@ -1777,4 +1777,252 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(ascItem?.preselect).toBe(true);
         });
     });
+
+    // ---------------------------------------------------------------
+    // Category-based completion coverage by cursor position
+    // ---------------------------------------------------------------
+    describe('completion categories by cursor position', () => {
+        const mockMonaco = createMockMonaco();
+
+        /**
+         * Helper: extracts the description (category label) from a CompletionItem.
+         * For operator items this is getCategoryLabel(meta), e.g., "comparison", "array".
+         * For JS globals it is "JS global".
+         * For fields it is the type, e.g., "Number".
+         */
+        function getDescription(
+            label: string | monacoEditor.languages.CompletionItemLabel,
+        ): string | undefined {
+            return typeof label === 'string' ? undefined : label.description;
+        }
+
+        /** Returns Set of distinct category descriptions from a completion list. */
+        function getCategories(items: monacoEditor.languages.CompletionItem[]): Set<string> {
+            const categories = new Set<string>();
+            for (const item of items) {
+                const desc = getDescription(item.label);
+                if (desc) categories.add(desc);
+            }
+            return categories;
+        }
+
+        describe('key position ({ <cursor> })', () => {
+            const keyContext: CursorContext = { position: 'key', depth: 1 };
+
+            test('includes "logical" category operators', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('logical')).toBe(true);
+            });
+
+            test('does NOT include field-level categories (comparison, array, evaluation, element)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('comparison')).toBe(false);
+                expect(categories.has('array')).toBe(false);
+                expect(categories.has('evaluation')).toBe(false);
+                expect(categories.has('element')).toBe(false);
+            });
+
+            test('does NOT include "bson" or "JS global"', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('bson')).toBe(false);
+                expect(categories.has('JS global')).toBe(false);
+            });
+        });
+
+        describe('value position ({ field: <cursor> })', () => {
+            const valueContext: CursorContext = { position: 'value', fieldName: 'x' };
+
+            test('includes field-level categories: comparison, array, evaluation, element', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('comparison')).toBe(true);
+                expect(categories.has('array')).toBe(true);
+                expect(categories.has('evaluation')).toBe(true);
+                expect(categories.has('element')).toBe(true);
+            });
+
+            test('includes "bson" and "JS global"', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('bson')).toBe(true);
+                expect(categories.has('JS global')).toBe(true);
+            });
+
+            test('does NOT include key-position-only operators', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).not.toContain('$and');
+                expect(labels).not.toContain('$or');
+                expect(labels).not.toContain('$nor');
+            });
+        });
+
+        describe('operator position ({ field: { <cursor> } })', () => {
+            const operatorContext: CursorContext = { position: 'operator', fieldName: 'x' };
+
+            test('includes field-level categories: comparison, array, evaluation, element', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: operatorContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('comparison')).toBe(true);
+                expect(categories.has('array')).toBe(true);
+                expect(categories.has('evaluation')).toBe(true);
+                expect(categories.has('element')).toBe(true);
+            });
+
+            test('does NOT include "bson", "JS global", or key-position operators', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: operatorContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('bson')).toBe(false);
+                expect(categories.has('JS global')).toBe(false);
+
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).not.toContain('$and');
+                expect(labels).not.toContain('$or');
+            });
+        });
+
+        describe('unknown position (empty editor / no context)', () => {
+            const unknownContext: CursorContext = { position: 'unknown' };
+
+            test('includes key-position "logical" category', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: unknownContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('logical')).toBe(true);
+            });
+
+            test('does NOT include field-level categories (comparison, array, evaluation, element)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: unknownContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('comparison')).toBe(false);
+                expect(categories.has('array')).toBe(false);
+                expect(categories.has('evaluation')).toBe(false);
+                expect(categories.has('element')).toBe(false);
+            });
+
+            test('does NOT include "bson" or "JS global"', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: unknownContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('bson')).toBe(false);
+                expect(categories.has('JS global')).toBe(false);
+            });
+
+            test('includes field names if store has data', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'name',
+                            displayType: 'String',
+                            bsonType: 'string',
+                            isSparse: false,
+                            insertText: 'name',
+                            referenceText: '$name',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: unknownContext,
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).toContain('name');
+            });
+        });
+    });
 });
