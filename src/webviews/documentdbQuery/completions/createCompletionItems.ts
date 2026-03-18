@@ -175,10 +175,13 @@ function createKeyPositionCompletions(
 
 /**
  * Value position completions:
- * 1. Type-aware suggestions (sort `00_`) — e.g., `true`/`false` for booleans
- * 2. Query operators with brace-wrapping snippets (sort `0_`–`2_`)
- * 3. BSON constructors (sort `3_`)
- * 4. JS globals: Date, Math, RegExp, etc. (sort `4_`)
+ * - **Project editor**: `1` (include) and `0` (exclude) — the most common projection values
+ * - **Sort editor**: `1` (ascending) and `-1` (descending)
+ * - **Filter editor** (default):
+ *   1. Type-aware suggestions (sort `00_`) — e.g., `true`/`false` for booleans
+ *   2. Query operators with brace-wrapping snippets (sort `0_`–`2_`)
+ *   3. BSON constructors (sort `3_`)
+ *   4. JS globals: Date, Math, RegExp, etc. (sort `4_`)
  */
 function createValuePositionCompletions(
     editorType: EditorType | undefined,
@@ -186,6 +189,16 @@ function createValuePositionCompletions(
     monaco: typeof monacoEditor,
     fieldBsonType: string | undefined,
 ): monacoEditor.languages.CompletionItem[] {
+    // Project editor: only show include/exclude values
+    if (editorType === EditorType.Project) {
+        return createProjectValueCompletions(range, monaco);
+    }
+
+    // Sort editor: only show ascending/descending values
+    if (editorType === EditorType.Sort) {
+        return createSortValueCompletions(range, monaco);
+    }
+
     const metaTags = getMetaTagsForEditorType(editorType);
     const allEntries = getFilteredCompletions({ meta: [...metaTags] });
 
@@ -220,6 +233,62 @@ function createValuePositionCompletions(
     const jsGlobals = createJsGlobalCompletionItems(range, monaco);
 
     return [...typeSuggestions, ...operatorItems, ...bsonItems, ...jsGlobals];
+}
+
+/**
+ * Value completions for the **project** editor: `1` (include) and `0` (exclude).
+ *
+ * Projection operators like `$slice` and `$elemMatch` are already available
+ * via operator-position completions; these simple numeric values cover the
+ * most common use case.
+ */
+function createProjectValueCompletions(
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
+    return [
+        {
+            label: { label: '1', description: 'include field' },
+            kind: monaco.languages.CompletionItemKind.Value,
+            insertText: '1',
+            sortText: '00_1',
+            preselect: true,
+            range,
+        },
+        {
+            label: { label: '0', description: 'exclude field' },
+            kind: monaco.languages.CompletionItemKind.Value,
+            insertText: '0',
+            sortText: '00_0',
+            range,
+        },
+    ];
+}
+
+/**
+ * Value completions for the **sort** editor: `1` (ascending) and `-1` (descending).
+ */
+function createSortValueCompletions(
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
+    return [
+        {
+            label: { label: '1', description: 'ascending' },
+            kind: monaco.languages.CompletionItemKind.Value,
+            insertText: '1',
+            sortText: '00_1',
+            preselect: true,
+            range,
+        },
+        {
+            label: { label: '-1', description: 'descending' },
+            kind: monaco.languages.CompletionItemKind.Value,
+            insertText: '-1',
+            sortText: '00_-1',
+            range,
+        },
+    ];
 }
 
 function createOperatorPositionCompletions(

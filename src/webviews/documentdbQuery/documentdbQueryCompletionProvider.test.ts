@@ -1485,4 +1485,143 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(items.filter((i) => i.sortText?.startsWith('00_'))).toHaveLength(0);
         });
     });
+
+    // ---------------------------------------------------------------
+    // Project and Sort value completions
+    // ---------------------------------------------------------------
+    describe('project editor value completions', () => {
+        const mockMonaco = createMockMonaco();
+
+        test('shows 1 (include) and 0 (exclude) at value position', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'name' };
+            const items = createCompletionItems({
+                editorType: EditorType.Project,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            expect(items).toHaveLength(2);
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('1');
+            expect(labels).toContain('0');
+        });
+
+        test('1 (include) has description "include field"', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'name' };
+            const items = createCompletionItems({
+                editorType: EditorType.Project,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const includeItem = items.find((i) => getLabelText(i.label) === '1');
+            expect((includeItem?.label as { description: string }).description).toBe('include field');
+        });
+
+        test('does NOT show operators, BSON constructors, or JS globals', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'name' };
+            const items = createCompletionItems({
+                editorType: EditorType.Project,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).not.toContain('$gt');
+            expect(labels).not.toContain('ObjectId');
+            expect(labels).not.toContain('Date');
+        });
+
+        test('1 is preselected', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'name' };
+            const items = createCompletionItems({
+                editorType: EditorType.Project,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const includeItem = items.find((i) => getLabelText(i.label) === '1');
+            expect(includeItem?.preselect).toBe(true);
+        });
+    });
+
+    describe('sort editor value completions', () => {
+        const mockMonaco = createMockMonaco();
+
+        test('shows 1 (ascending) and -1 (descending) at value position', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'age' };
+            const items = createCompletionItems({
+                editorType: EditorType.Sort,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            expect(items).toHaveLength(2);
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('1');
+            expect(labels).toContain('-1');
+        });
+
+        test('-1 has description "descending"', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'age' };
+            const items = createCompletionItems({
+                editorType: EditorType.Sort,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const descItem = items.find((i) => getLabelText(i.label) === '-1');
+            expect((descItem?.label as { description: string }).description).toBe('descending');
+        });
+
+        test('does NOT show operators, BSON constructors, or JS globals', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'age' };
+            const items = createCompletionItems({
+                editorType: EditorType.Sort,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).not.toContain('$gt');
+            expect(labels).not.toContain('ObjectId');
+            expect(labels).not.toContain('Date');
+        });
+
+        test('1 is preselected', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'age' };
+            const items = createCompletionItems({
+                editorType: EditorType.Sort,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const ascItem = items.find((i) => getLabelText(i.label) === '1');
+            expect(ascItem?.preselect).toBe(true);
+        });
+    });
 });
