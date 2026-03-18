@@ -238,6 +238,31 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         automaticLayout: false,
     };
 
+    // Intercept link clicks in Monaco hover tooltips.
+    // Monaco renders hover markdown links as <a> tags, but the webview CSP
+    // blocks direct navigation. Capture clicks and route through tRPC.
+    const editorContainerRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        const container = editorContainerRef.current;
+        if (!container) return;
+
+        const handleLinkClick = (e: MouseEvent): void => {
+            const target = e.target as HTMLElement;
+            const anchor = target.closest('a');
+            if (!anchor) return;
+
+            const href = anchor.getAttribute('href');
+            if (href && (href.startsWith('https://') || href.startsWith('http://'))) {
+                e.preventDefault();
+                e.stopPropagation();
+                void trpcClient.common.openUrl.mutate({ url: href });
+            }
+        };
+
+        container.addEventListener('click', handleLinkClick, true);
+        return () => container.removeEventListener('click', handleLinkClick, true);
+    }, [trpcClient]);
+
     // Cleanup any pending operations when component unmounts
     useEffect(() => {
         return () => {
@@ -421,7 +446,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     };
 
     return (
-        <div className="queryEditor">
+        <div className="queryEditor" ref={editorContainerRef}>
             {/* Optional AI prompt row */}
             <Collapse visible={configuration.enableAIQueryGeneration && currentContext.isAiRowVisible} unmountOnExit>
                 <div className={`aiRow${isAiActive ? ' ai-active' : ''}`}>
