@@ -5,8 +5,10 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import {
     type ConnectionItem,
     ConnectionStorageService,
@@ -48,7 +50,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 throw new Error(l10n.t('Internal error: mode must be defined.'));
         }
 
-        const newConnectionStringParsed = new DocumentDBConnectionString(context.connectionString);
+        const newConnectionStringParsed = new DocumentDBConnectionString(context.connectionString.trim());
         newConnectionStringParsed.username = context.userName ?? '';
         newConnectionStringParsed.password = context.password ?? '';
 
@@ -68,14 +70,25 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         const existingDuplicateConnection = existingConnections.find((connection) => {
             const secret = connection.secrets?.connectionString;
             if (!secret) {
+                ext.outputChannel.trace(
+                    `[NewLocalConnection] Skipping stored connection "${connection.name}" (id: ${connection.id}) — empty connection string`,
+                );
                 return false; // Skip if no secret string is found
             }
 
-            const itemCS = new DocumentDBConnectionString(secret);
-            return (
-                itemCS.username === newConnectionStringParsed.username &&
-                [...itemCS.hosts].sort().join(',') === joinedHosts
-            );
+            try {
+                const itemCS = new DocumentDBConnectionString(secret);
+                return (
+                    itemCS.username === newConnectionStringParsed.username &&
+                    [...itemCS.hosts].sort().join(',') === joinedHosts
+                );
+            } catch (error) {
+                const rawMessage = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.warn(
+                    `[NewLocalConnection] Stored connection "${connection.name}" (id: ${connection.id}) has an invalid connection string and was skipped during duplicate check: ${redactCredentialsFromConnectionString(rawMessage)}`,
+                );
+                return false;
+            }
         });
 
         if (existingDuplicateConnection) {

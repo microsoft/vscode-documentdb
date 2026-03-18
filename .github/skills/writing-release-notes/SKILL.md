@@ -78,6 +78,14 @@ Version X.Y.Z:
 4. Use exciting language for features, clear language for fixes
 5. Include images when applicable (reference existing patterns)
 
+### Step 4: Update Release Notes Index
+
+1. Open `docs/index.md`
+2. Find the **Release Notes** section
+3. For X.Y.0: Add a new line `- [X.Y](./release-notes/X.Y)` at the top of the list
+4. For X.Y.Z (patch): Append `, [X.Y.Z](./release-notes/X.Y#patch-release-vXYZ)` to the existing line for that major.minor version (where `vXYZ` uses no dots, e.g., `v071`)
+5. Follow the existing pattern of other entries in the list
+
 ## Writing Guidelines
 
 ### Changelog Tone
@@ -119,3 +127,4 @@ Before completing:
 - [ ] Categories are appropriate (Features, Fixes, Improvements)
 - [ ] Release notes use proper header format
 - [ ] Patch releases append to existing file with `---` separator
+- [ ] `docs/index.md` Release Notes section updated with link to new version

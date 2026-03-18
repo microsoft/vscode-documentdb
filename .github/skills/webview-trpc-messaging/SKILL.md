@@ -111,7 +111,7 @@ export class MyViewController extends WebviewController<MyViewConfig> {
 }
 ```
 
-> **Important:** The `webviewName` in the `WebviewController` constructor is the **registry key** (must match a key in `WebviewRegistry`, e.g. `mongoClustersCollectionView`). The `webviewName` in the tRPC context is a **telemetry label** used in telemetry event names (e.g. `collectionView`). These are intentionally different values — do not confuse them.
+> **Important:** The `webviewName` in the `WebviewController` constructor is the **registry key** (must match a key in `WebviewRegistry`, e.g. `collectionView`). The `webviewName` in the tRPC context is a **telemetry label** used in telemetry event names (e.g. `collectionView`). These may be the same string but serve different purposes — do not confuse them.
 
 ### 5. Register in WebviewRegistry
 
@@ -122,8 +122,8 @@ Add your React component to the registry. The key must match the `webviewName` p
 import { MyView } from '../../documentdb/myView/MyView';
 
 export const WebviewRegistry = {
-  mongoClustersCollectionView: CollectionView,
-  mongoClustersDocumentView: DocumentView,
+  collectionView: CollectionView,
+  documentView: DocumentView,
   myViewName: MyView, // <-- add your entry
 } as const;
 
