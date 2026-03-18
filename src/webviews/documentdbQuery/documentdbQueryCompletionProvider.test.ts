@@ -1396,6 +1396,84 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(andItem?.insertText).toContain('}');
             });
         });
+
+        // ---------------------------------------------------------------
+        // Category coverage: verify operator categories at each position
+        // ---------------------------------------------------------------
+        describe('operator category coverage by position', () => {
+            test('key position: only key-position operators, no field-level operators', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'key', depth: 1 },
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                // Key-position: logical combinators and meta operators
+                expect(labels).toContain('$and'); // query:logical
+                expect(labels).toContain('$or'); // query:logical
+                expect(labels).toContain('$nor'); // query:logical
+                expect(labels).toContain('$comment'); // query:comment
+                expect(labels).toContain('$expr'); // query:expr
+                // Field-level operators must NOT appear at key position
+                expect(labels).not.toContain('$all'); // query:array — field-level
+                expect(labels).not.toContain('$elemMatch'); // query:array — field-level
+                expect(labels).not.toContain('$size'); // query:array — field-level
+                expect(labels).not.toContain('$gt'); // query:comparison
+                expect(labels).not.toContain('$regex'); // query:evaluation
+                expect(labels).not.toContain('$exists'); // query:element
+                expect(labels).not.toContain('$not'); // query:logical — field-level
+            });
+
+            test('value position: includes operators from all field-level categories', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'value', fieldName: 'x' },
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                // Should include field-level operators from every category
+                expect(labels).toContain('$gt'); // query:comparison
+                expect(labels).toContain('$eq'); // query:comparison
+                expect(labels).toContain('$in'); // query:comparison
+                expect(labels).toContain('$regex'); // query:evaluation
+                expect(labels).toContain('$exists'); // query:element
+                expect(labels).toContain('$type'); // query:element
+                expect(labels).toContain('$all'); // query:array
+                expect(labels).toContain('$elemMatch'); // query:array
+                expect(labels).toContain('$size'); // query:array
+                expect(labels).toContain('$not'); // query:logical (field-level)
+                // Key-position operators should NOT be at value position
+                expect(labels).not.toContain('$and');
+                expect(labels).not.toContain('$or');
+            });
+
+            test('operator position: same field-level categories as value position', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'operator', fieldName: 'x' },
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).toContain('$gt'); // query:comparison
+                expect(labels).toContain('$regex'); // query:evaluation
+                expect(labels).toContain('$exists'); // query:element
+                expect(labels).toContain('$all'); // query:array
+                expect(labels).toContain('$not'); // query:logical (field-level)
+                expect(labels).not.toContain('$and'); // key-position only
+            });
+        });
     });
 
     // ---------------------------------------------------------------
