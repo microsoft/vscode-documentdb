@@ -109,7 +109,7 @@ describe('completionStore', () => {
                 {
                     fieldName: 'b',
                     displayType: 'Number',
-                    bsonType: 'int',
+                    bsonType: 'int32',
                     isSparse: true,
                     insertText: 'b',
                     referenceText: '$b',

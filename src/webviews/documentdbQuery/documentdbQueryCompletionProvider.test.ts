@@ -384,7 +384,7 @@ describe('documentdbQueryCompletionProvider', () => {
             const field = {
                 fieldName: 'age',
                 displayType: 'Number',
-                bsonType: 'int',
+                bsonType: 'int32',
                 isSparse: false,
                 insertText: 'age',
                 referenceText: '$age',
@@ -453,7 +453,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     {
                         fieldName: 'age',
                         displayType: 'Number',
-                        bsonType: 'int',
+                        bsonType: 'int32',
                         isSparse: false,
                         insertText: 'age',
                         referenceText: '$age',
@@ -583,7 +583,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 description: 'Regex match',
                 applicableBsonTypes: ['string'],
             };
-            expect(getOperatorSortPrefix(entry, ['int'])).toBe('2_');
+            expect(getOperatorSortPrefix(entry, ['int32'])).toBe('2_');
         });
 
         test('handles polymorphic fields (multiple bsonTypes)', () => {
@@ -593,8 +593,8 @@ describe('documentdbQueryCompletionProvider', () => {
                 description: 'Regex match',
                 applicableBsonTypes: ['string'],
             };
-            // Field is sometimes string, sometimes int — $regex should match
-            expect(getOperatorSortPrefix(regexEntry, ['int', 'string'])).toBe('0_');
+            // Field is sometimes string, sometimes int32 — $regex should match
+            expect(getOperatorSortPrefix(regexEntry, ['int32', 'string'])).toBe('0_');
         });
 
         test('returns "2_" when operator types and field types have no intersection', () => {
@@ -604,7 +604,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 description: 'Array size',
                 applicableBsonTypes: ['array'],
             };
-            expect(getOperatorSortPrefix(sizeEntry, ['string', 'int'])).toBe('2_');
+            expect(getOperatorSortPrefix(sizeEntry, ['string', 'int32'])).toBe('2_');
         });
     });
 
@@ -637,7 +637,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 meta: 'query:comparison',
                 description: 'Equals',
             };
-            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco, ['int']);
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco, ['int32']);
             expect(item.sortText).toBe('1a_$eq');
         });
 
@@ -659,7 +659,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 description: 'Regex match',
                 applicableBsonTypes: ['string'],
             };
-            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco, ['int']);
+            const item = mapOperatorToCompletionItem(entry, testRange, mockMonaco, ['int32']);
             expect(item.sortText).toBe('2_$regex');
         });
     });
@@ -711,7 +711,7 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(eqItem?.sortText).toBe('1a_$eq');
         });
 
-        test('with fieldBsonTypes=["int"] at operator position, $regex gets "2_" (demoted, still present)', () => {
+        test('with fieldBsonTypes=["int32"] at operator position, $regex gets "2_" (demoted, still present)', () => {
             const context: CursorContext = { position: 'operator', fieldName: 'x' };
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
@@ -719,7 +719,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 range: testRange,
                 isDollarPrefix: false,
                 monaco: mockMonaco,
-                fieldBsonTypes: ['int'],
+                fieldBsonTypes: ['int32'],
                 cursorContext: context,
             });
 
@@ -751,7 +751,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 range: testRange,
                 isDollarPrefix: false,
                 monaco: mockMonaco,
-                fieldBsonTypes: ['int'],
+                fieldBsonTypes: ['int32'],
                 cursorContext: { position: 'operator', fieldName: 'x' },
             });
 
@@ -765,7 +765,7 @@ describe('documentdbQueryCompletionProvider', () => {
                     {
                         fieldName: 'age',
                         displayType: 'Number',
-                        bsonType: 'int',
+                        bsonType: 'int32',
                         isSparse: false,
                         insertText: 'age',
                         referenceText: '$age',
@@ -779,7 +779,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 range: testRange,
                 isDollarPrefix: false,
                 monaco: mockMonaco,
-                fieldBsonTypes: ['int'],
+                fieldBsonTypes: ['int32'],
                 cursorContext: { position: 'key', depth: 1 },
             });
 
@@ -948,7 +948,7 @@ describe('documentdbQueryCompletionProvider', () => {
                         {
                             fieldName: 'age',
                             displayType: 'Number',
-                            bsonType: 'int',
+                            bsonType: 'int32',
                             isSparse: false,
                             insertText: 'age',
                             referenceText: '$age',
@@ -1178,13 +1178,10 @@ describe('documentdbQueryCompletionProvider', () => {
             });
 
             test('applies type-aware sorting when fieldBsonType is available', () => {
-                // Uses 'int' (documentdb-constants naming) rather than 'int32' (BSONTypes)
-                // because applicableBsonTypes in operators uses the constants naming.
-                // TODO: normalize type names between schema-analyzer and documentdb-constants
                 const typedContext: CursorContext = {
                     position: 'operator',
                     fieldName: 'age',
-                    fieldBsonType: 'int',
+                    fieldBsonType: 'int32',
                 };
 
                 const items = createCompletionItems({
@@ -1196,11 +1193,11 @@ describe('documentdbQueryCompletionProvider', () => {
                     cursorContext: typedContext,
                 });
 
-                // $regex has applicableBsonTypes=['string'], doesn't match 'int' → demoted
+                // $regex has applicableBsonTypes=['string'], doesn't match 'int32' → demoted
                 const regexItem = items.find((i) => getLabelText(i.label) === '$regex');
                 expect(regexItem?.sortText).toBe('2_$regex');
 
-                // $bitsAllSet has applicableBsonTypes containing 'int' → promoted
+                // $bitsAllSet has applicableBsonTypes containing 'int32' → promoted
                 const bitsItem = items.find((i) => getLabelText(i.label) === '$bitsAllSet');
                 expect(bitsItem?.sortText).toBe('0_$bitsAllSet');
 
@@ -1240,7 +1237,7 @@ describe('documentdbQueryCompletionProvider', () => {
                         {
                             fieldName: 'age',
                             displayType: 'Number',
-                            bsonType: 'int',
+                            bsonType: 'int32',
                             isSparse: false,
                             insertText: 'age',
                             referenceText: '$age',

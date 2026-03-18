@@ -65,9 +65,9 @@ describe('detectCursorContext', () => {
             });
 
             it('includes bsonType when fieldLookup provides it', () => {
-                const lookup: FieldTypeLookup = (name) => (name === 'age' ? 'int' : undefined);
+                const lookup: FieldTypeLookup = (name) => (name === 'age' ? 'int32' : undefined);
                 const result = detect('{ age: | }', lookup);
-                expect(result).toEqual({ position: 'value', fieldName: 'age', fieldBsonType: 'int' });
+                expect(result).toEqual({ position: 'value', fieldName: 'age', fieldBsonType: 'int32' });
             });
 
             it('omits bsonType when fieldLookup returns undefined', () => {
@@ -84,9 +84,9 @@ describe('detectCursorContext', () => {
             });
 
             it('detects operator position with bsonType', () => {
-                const lookup: FieldTypeLookup = (name) => (name === 'age' ? 'int' : undefined);
+                const lookup: FieldTypeLookup = (name) => (name === 'age' ? 'int32' : undefined);
                 const result = detect('{ age: { | } }', lookup);
-                expect(result).toEqual({ position: 'operator', fieldName: 'age', fieldBsonType: 'int' });
+                expect(result).toEqual({ position: 'operator', fieldName: 'age', fieldBsonType: 'int32' });
             });
 
             it('detects operator position after comma in nested object', () => {
@@ -229,9 +229,9 @@ describe('detectCursorContext', () => {
         });
 
         it('handles fieldLookup with incomplete input', () => {
-            const lookup: FieldTypeLookup = (name) => (name === 'age' ? 'int' : undefined);
+            const lookup: FieldTypeLookup = (name) => (name === 'age' ? 'int32' : undefined);
             const result = detect('{ age: { $|', lookup);
-            expect(result).toEqual({ position: 'operator', fieldName: 'age', fieldBsonType: 'int' });
+            expect(result).toEqual({ position: 'operator', fieldName: 'age', fieldBsonType: 'int32' });
         });
 
         it('{ $or: [ { name: "x" }, {| — second element in $or array', () => {

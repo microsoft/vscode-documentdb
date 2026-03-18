@@ -205,7 +205,7 @@ function todayISO(): string {
  *
  * Returns an empty array when the BSON type is unknown or has no specific suggestions.
  *
- * @param fieldBsonType - BSON type string from the schema (e.g., 'int', 'string', 'bool')
+ * @param fieldBsonType - BSON type string from the schema (e.g., 'int32', 'string', 'boolean')
  * @param range - the insertion range
  * @param monaco - the Monaco API
  */
