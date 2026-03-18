@@ -88,6 +88,14 @@ interface ScanResult {
     index: number;
 }
 
+// Known edge case: the backward scanner does not track whether characters
+// are inside quoted strings. A structural character that appears within a
+// string literal is still treated as structural. For example, in
+//   { msg: "{", | }
+// the `{` inside the string `"{"` would be found before the real opening
+// brace, causing a misclassification. This is acceptable for a completion
+// heuristic where rare edge cases degrade gracefully rather than break.
+
 /**
  * Scans backward from the cursor, skipping whitespace and identifier characters
  * (letters, digits, `_`, `$`, `.`, quotes), to find the nearest structural character.
