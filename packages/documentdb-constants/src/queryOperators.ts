@@ -230,6 +230,7 @@ const geospatialOperators: readonly OperatorEntry[] = [
         description: 'The $box operator defines a rectangular area for geospatial queries using coordinate pairs.',
         snippet: '[[${1:bottomLeftX}, ${2:bottomLeftY}], [${3:upperRightX}, ${4:upperRightY}]]',
         link: getDocLink('$box', META_QUERY_GEOSPATIAL),
+        standalone: false,
     },
     {
         value: '$center',
@@ -237,6 +238,7 @@ const geospatialOperators: readonly OperatorEntry[] = [
         description: 'The $center operator specifies a circle using legacy coordinate pairs for $geoWithin queries.',
         snippet: '[[${1:x}, ${2:y}], ${3:radius}]',
         link: getDocLink('$center', META_QUERY_GEOSPATIAL),
+        standalone: false,
     },
     {
         value: '$centerSphere',
@@ -244,6 +246,7 @@ const geospatialOperators: readonly OperatorEntry[] = [
         description: 'The $centerSphere operator specifies a circle using spherical geometry for $geoWithin queries.',
         snippet: '[[${1:x}, ${2:y}], ${3:radiusInRadians}]',
         link: getDocLink('$centerSphere', META_QUERY_GEOSPATIAL),
+        standalone: false,
     },
     {
         value: '$geometry',
@@ -251,6 +254,7 @@ const geospatialOperators: readonly OperatorEntry[] = [
         description: 'The $geometry operator specifies a GeoJSON geometry for geospatial queries.',
         snippet: '{ type: "${1:Point}", coordinates: [${2:coordinates}] }',
         link: getDocLink('$geometry', META_QUERY_GEOSPATIAL),
+        standalone: false,
     },
     {
         value: '$maxDistance',
@@ -259,6 +263,7 @@ const geospatialOperators: readonly OperatorEntry[] = [
             'The $maxDistance operator specifies the maximum distance that can exist between two points in a geospatial query.',
         snippet: '${1:distance}',
         link: getDocLink('$maxDistance', META_QUERY_GEOSPATIAL),
+        standalone: false,
     },
     {
         value: '$minDistance',
@@ -267,6 +272,7 @@ const geospatialOperators: readonly OperatorEntry[] = [
             'The $minDistance operator specifies the minimum distance that must exist between two points in a geospatial query.',
         snippet: '${1:distance}',
         link: getDocLink('$minDistance', META_QUERY_GEOSPATIAL),
+        standalone: false,
     },
     {
         value: '$polygon',
@@ -275,6 +281,7 @@ const geospatialOperators: readonly OperatorEntry[] = [
             'The $polygon operator defines a polygon for geospatial queries, allowing you to find locations within an irregular shape.',
         snippet: '[[${1:x1}, ${2:y1}], [${3:x2}, ${4:y2}], [${5:x3}, ${6:y3}]]',
         link: getDocLink('$polygon', META_QUERY_GEOSPATIAL),
+        standalone: false,
     },
     {
         value: '$near',
@@ -382,6 +389,7 @@ const projectionOperators: readonly OperatorEntry[] = [
         description:
             'The $ positional operator identifies an element in an array to update without explicitly specifying the position of the element in the array.',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$', // inferred from another category
+        standalone: false,
     },
     {
         value: '$elemMatch',
@@ -427,6 +435,7 @@ const miscellaneousQueryOperators: readonly OperatorEntry[] = [
             'The $natural operator forces the query to use the natural order of documents in a collection, providing control over document ordering and retrieval.',
         snippet: '{ $natural: ${1:1} }',
         link: getDocLink('$natural', META_QUERY_MISC),
+        standalone: false,
     },
 ];
 

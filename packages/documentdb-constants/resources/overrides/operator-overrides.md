@@ -17,6 +17,7 @@
 <!--   - **Description:** ...   (overrides description)                        -->
 <!--   - **Snippet:** ...       (overrides the generated snippet)             -->
 <!--   - **Doc Link:** ...      (overrides the doc link)                       -->
+<!--   - **Standalone:** false  (marks operator as not valid standalone)        -->
 <!--                                                                           -->
 <!-- Only fields you include are overridden; omitted fields keep their         -->
 <!-- scraped or generated values.                                              -->
@@ -276,3 +277,45 @@
 ### $minN
 
 - **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn
+
+## Geospatial Operators
+
+### $box
+
+- **Standalone:** false
+
+### $center
+
+- **Standalone:** false
+
+### $centerSphere
+
+- **Standalone:** false
+
+### $geometry
+
+- **Standalone:** false
+
+### $maxDistance
+
+- **Standalone:** false
+
+### $minDistance
+
+- **Standalone:** false
+
+### $polygon
+
+- **Standalone:** false
+
+## Projection Operators
+
+### $
+
+- **Standalone:** false
+
+## Miscellaneous Query Operators
+
+### $natural
+
+- **Standalone:** false

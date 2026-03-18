@@ -48,6 +48,21 @@ export interface OperatorEntry {
     readonly applicableBsonTypes?: readonly string[];
 
     /**
+     * Whether this operator is valid as a standalone completion at top-level
+     * positions (key, value, operator). Defaults to `true` when absent.
+     *
+     * Set to `false` for operators that are only valid inside another operator's
+     * value object — e.g., geospatial shape specifiers (`$box`, `$geometry`)
+     * which are only valid inside `$geoWithin`/`$near`, or sort-only modifiers
+     * like `$natural`.
+     *
+     * Completion providers should filter out `standalone === false` entries
+     * from standard completion lists. These entries remain in the registry
+     * for hover documentation and future context-aware nested completions.
+     */
+    readonly standalone?: boolean;
+
+    /**
      * @experimental Not yet populated by the generator; reserved for a future
      * contextual-snippet feature.
      *

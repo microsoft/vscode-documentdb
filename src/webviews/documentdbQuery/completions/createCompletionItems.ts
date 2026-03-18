@@ -180,7 +180,7 @@ function createAllCompletions(
     const fieldItems = getFieldCompletionItems(sessionId, range, monaco);
 
     const operatorItems = allEntries
-        .filter((e) => e.meta !== 'bson' && e.meta !== 'variable')
+        .filter((e) => e.meta !== 'bson' && e.meta !== 'variable' && e.standalone !== false)
         .map((entry) => mapOperatorToCompletionItem(entry, range, monaco));
 
     const bsonItems = allEntries
@@ -255,7 +255,11 @@ function createValuePositionCompletions(
     //    operators (e.g., $eq) appear above irrelevant ones (e.g., $bitsAllSet).
     const fieldBsonTypes = fieldBsonType ? [fieldBsonType] : undefined;
     const operatorEntries = allEntries.filter(
-        (e) => e.meta !== 'bson' && e.meta !== 'variable' && !KEY_POSITION_OPERATORS.has(e.value),
+        (e) =>
+            e.meta !== 'bson' &&
+            e.meta !== 'variable' &&
+            e.standalone !== false &&
+            !KEY_POSITION_OPERATORS.has(e.value),
     );
     const operatorItems = operatorEntries.map((entry) => {
         const item = mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes);
@@ -346,7 +350,11 @@ function createOperatorPositionCompletions(
     const allEntries = getFilteredCompletions({ meta: [...metaTags] });
 
     const operatorEntries = allEntries.filter(
-        (e) => e.meta !== 'bson' && e.meta !== 'variable' && !KEY_POSITION_OPERATORS.has(e.value),
+        (e) =>
+            e.meta !== 'bson' &&
+            e.meta !== 'variable' &&
+            e.standalone !== false &&
+            !KEY_POSITION_OPERATORS.has(e.value),
     );
     return operatorEntries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes, true));
 }
