@@ -900,9 +900,10 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(labels).toContain('$and');
                 expect(labels).toContain('$or');
                 expect(labels).toContain('$nor');
-                expect(labels).toContain('$not');
                 expect(labels).toContain('$comment');
                 expect(labels).toContain('$expr');
+                // $not is a field-level operator, NOT a key-position operator
+                expect(labels).not.toContain('$not');
             });
 
             test('does NOT show value-level operators ($gt, $lt, $regex, $eq)', () => {
@@ -1098,7 +1099,7 @@ describe('documentdbQueryCompletionProvider', () => {
         describe('operator position', () => {
             const operatorContext: CursorContext = { position: 'operator', fieldName: 'age' };
 
-            test('shows comparison operators ($gt, $lt, $eq, $in)', () => {
+            test('shows comparison operators ($gt, $lt, $eq, $in) and $not', () => {
                 const items = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -1115,6 +1116,8 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(labels).toContain('$in');
                 expect(labels).toContain('$exists');
                 expect(labels).toContain('$regex');
+                // $not is a field-level operator, valid at operator position
+                expect(labels).toContain('$not');
             });
 
             test('does NOT show key-position operators ($and, $or)', () => {
