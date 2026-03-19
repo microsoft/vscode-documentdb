@@ -200,6 +200,16 @@ This is a **DocumentDB** extension that uses the **MongoDB-compatible wire proto
 
 This applies to: code comments, JSDoc/TSDoc, naming (prefer `documentdb` prefix), user-facing strings, docs, and test descriptions.
 
+## TDD Contract Tests
+
+Test suites prefixed with `TDD:` (e.g., `describe('TDD: Completion Behavior', ...)`) are **behavior contracts** written before the implementation. If a `TDD:` test fails after a code change:
+
+1. **Do NOT automatically fix the test.**
+2. **Stop and ask the user** whether the behavior change is intentional.
+3. The user decides: update the contract (test) or fix the implementation.
+
+This applies to any test whose name starts with `TDD:`, regardless of folder location.
+
 ## Additional Patterns
 
 For detailed patterns, see:
