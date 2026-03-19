@@ -75,11 +75,20 @@ export const MonacoEditor = ({ onEscapeEditor, onMount, ...props }: MonacoEditor
             disposablesRef.current.forEach((d) => d.dispose());
             disposablesRef.current = [];
 
-            // Register Escape key handler to exit the editor
+            // Register Escape key handler to exit the editor.
+            // The context expression ensures ESC is only handled when:
+            // - The suggest (autocomplete) widget is NOT visible
+            // - The editor is NOT in snippet tab-stop mode
+            // This allows Monaco's built-in handlers to dismiss the suggest
+            // widget or exit snippet mode first, before our handler fires.
             if (onEscapeEditor) {
-                editor.addCommand(monacoInstance.KeyCode.Escape, () => {
-                    onEscapeEditor();
-                });
+                editor.addCommand(
+                    monacoInstance.KeyCode.Escape,
+                    () => {
+                        onEscapeEditor();
+                    },
+                    '!suggestWidgetVisible && !inSnippetMode',
+                );
             }
 
             // Announce escape hint once when editor gains focus
