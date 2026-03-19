@@ -201,10 +201,21 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             cancelSnippetSession(editor);
         });
 
+        // Cancel snippet session on Enter or Ctrl+Enter / Cmd+Enter.
+        // Enter commits the current line and should exit snippet mode.
+        // Ctrl+Enter triggers query execution and should also exit snippet mode
+        // so the tab-stop highlight doesn't persist after running a query.
+        const keyDownDisposable = editor.onKeyDown((e) => {
+            if (e.browserEvent.key === 'Enter') {
+                cancelSnippetSession(editor);
+            }
+        });
+
         return () => {
             clearTimeout(triggerTimeout);
             contentDisposable.dispose();
             blurDisposable.dispose();
+            keyDownDisposable.dispose();
         };
     };
 
