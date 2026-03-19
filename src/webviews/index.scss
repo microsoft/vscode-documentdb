@@ -87,3 +87,13 @@ $media-breakpoint-query-control-area: 1024px;
     @include input-focus-animation;
     @include input-hover;
 }
+
+/**
+ * Monaco suggest-details panel: ensure links show a pointer cursor.
+ * The hover widget applies this automatically, but the completion
+ * documentation panel does not — VS Code's webview CSS reset overrides it.
+ */
+.monaco-editor .suggest-details a,
+.monaco-editor .suggest-details-container a {
+    cursor: pointer;
+}

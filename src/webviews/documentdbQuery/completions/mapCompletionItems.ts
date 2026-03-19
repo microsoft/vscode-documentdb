@@ -103,7 +103,7 @@ export function mapOperatorToCompletionItem(
 
     let documentationValue = entry.description;
     if (entry.link) {
-        documentationValue += `\n\n[DocumentDB Docs](${entry.link})`;
+        documentationValue += `\n\n[ⓘ Documentation](${entry.link})`;
     }
 
     return {

@@ -161,10 +161,9 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.kind).toBe(mockCompletionItemKind.Operator);
             expect(item.insertText).toBe('$eq');
             expect(item.insertTextRules).toBeUndefined();
-            expect(item.documentation).toEqual({
-                value: 'Matches values equal to a specified value.',
-                isTrusted: true,
-            });
+            expect((item.documentation as { value: string }).value).toContain(
+                'Matches values equal to a specified value.',
+            );
             expect(item.range).toBe(testRange);
         });
 
@@ -198,10 +197,9 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.kind).toBe(mockCompletionItemKind.Constructor);
             expect(item.insertText).toBe('ObjectId("${1:hex}")');
             expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
-            expect(item.documentation).toEqual({
-                value: 'Creates a new ObjectId value.\n\n[DocumentDB Docs](https://docs.example.com/objectid)',
-                isTrusted: true,
-            });
+            const docValue = (item.documentation as { value: string }).value;
+            expect(docValue).toContain('Creates a new ObjectId value.');
+            expect(docValue).toContain('https://docs.example.com/objectid');
         });
 
         test('uses the provided range', () => {

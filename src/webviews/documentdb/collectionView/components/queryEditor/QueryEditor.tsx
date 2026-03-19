@@ -219,8 +219,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         // Store the filter editor reference
         filterEditorRef.current = editor;
 
-        // Register the documentdb-query language (idempotent — safe to call on every mount)
-        void registerDocumentDBQueryLanguage(monaco);
+        // Register the documentdb-query language (idempotent — safe to call on every mount).
+        // Pass the tRPC openUrl handler so hover links can be opened via the extension host,
+        // bypassing the webview sandbox's popup restrictions.
+        void registerDocumentDBQueryLanguage(monaco, (url) => void trpcClient.common.openUrl.mutate({ url }));
 
         // Create model with URI scheme for contextual completions
         const model = createEditorModel(editor, monaco, EditorType.Filter, '{  }');
@@ -654,7 +656,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 }}
                                 onMount={(editor, monaco) => {
                                     // Register language (idempotent)
-                                    void registerDocumentDBQueryLanguage(monaco);
+                                    void registerDocumentDBQueryLanguage(
+                                        monaco,
+                                        (url) => void trpcClient.common.openUrl.mutate({ url }),
+                                    );
 
                                     projectEditorRef.current = editor;
 
@@ -697,7 +702,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                 }}
                                 onMount={(editor, monaco) => {
                                     // Register language (idempotent)
-                                    void registerDocumentDBQueryLanguage(monaco);
+                                    void registerDocumentDBQueryLanguage(
+                                        monaco,
+                                        (url) => void trpcClient.common.openUrl.mutate({ url }),
+                                    );
 
                                     sortEditorRef.current = editor;
 

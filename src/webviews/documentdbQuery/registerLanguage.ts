@@ -37,14 +37,24 @@ import { LANGUAGE_ID, parseEditorUri } from './languageConfig';
 /** Coalesces concurrent registrations into a single promise. */
 let registrationPromise: Promise<void> | undefined;
 
+/** Callback used to open external URLs via the extension host. */
+let openUrlHandler: ((url: string) => void) | undefined;
+
 /**
  * Registers the `documentdb-query` language with Monaco.
  *
  * Safe to call multiple times — concurrent calls coalesce into one registration.
+ * The `openUrl` callback is updated on every call so the tRPC client reference
+ * stays current even after hot-reloads.
  *
  * @param monaco - the Monaco editor API instance
+ * @param openUrl - callback to open a URL via the extension host (avoids webview sandbox restrictions)
  */
-export function registerDocumentDBQueryLanguage(monaco: typeof monacoEditor): Promise<void> {
+export function registerDocumentDBQueryLanguage(
+    monaco: typeof monacoEditor,
+    openUrl?: (url: string) => void,
+): Promise<void> {
+    openUrlHandler = openUrl ?? openUrlHandler;
     if (!registrationPromise) {
         registrationPromise = doRegisterLanguage(monaco);
     }
@@ -66,6 +76,22 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
     // Step 3: Apply the JS tokenizer and language configuration to our custom language
     monaco.languages.setMonarchTokensProvider(LANGUAGE_ID, jsLanguage.language);
     monaco.languages.setLanguageConfiguration(LANGUAGE_ID, jsLanguage.conf);
+
+    // Register a link opener so that documentation links in hover tooltips
+    // are opened via the extension host (which calls vscode.env.openExternal).
+    // VS Code webview sandboxing blocks window.open/popups, so we route through
+    // the tRPC openUrl mutation when available, or fall back to window.open.
+    monaco.editor.registerLinkOpener({
+        open(resource) {
+            const url = resource.toString(true);
+            if (openUrlHandler) {
+                openUrlHandler(url);
+            } else {
+                window.open(url, '_blank');
+            }
+            return true;
+        },
+    });
 
     // Step 4: Register the completion provider
     monaco.languages.registerCompletionItemProvider(LANGUAGE_ID, {
