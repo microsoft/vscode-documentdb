@@ -157,12 +157,12 @@ describe('documentdbQueryHoverProvider', () => {
             expect(content).not.toContain('sparse');
         });
 
-        test('field hover has isTrusted set', () => {
+        test('field hover does NOT set isTrusted (user data is not trusted)', () => {
             const hover = getHoverContent('age', createFieldLookup(fields));
             expect(hover).not.toBeNull();
 
             const hoverContent = hover!.contents[0] as { isTrusted?: boolean };
-            expect(hoverContent.isTrusted).toBe(true);
+            expect(hoverContent.isTrusted).toBeUndefined();
         });
 
         test('returns null for unknown field when no operator match', () => {

@@ -15,6 +15,7 @@ import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { type FieldCompletionData } from '../../utils/json/data-api/autocomplete/toFieldCompletionItems';
+import { escapeMarkdown } from '../utils/escapeMarkdown';
 
 /**
  * A callback that resolves a word to field data from the completion store.
@@ -80,7 +81,8 @@ export function getHoverContent(word: string, fieldLookup?: FieldDataLookup): mo
  * Builds a hover tooltip for a field name.
  */
 function buildFieldHover(field: FieldCompletionData): monacoEditor.languages.Hover {
-    let header = `**${field.fieldName}**`;
+    const safeName = escapeMarkdown(field.fieldName);
+    let header = `**${safeName}**`;
 
     if (field.isSparse) {
         header += ' &nbsp;&nbsp; <small>sparse: not present in all documents</small>';
@@ -93,10 +95,10 @@ function buildFieldHover(field: FieldCompletionData): monacoEditor.languages.Hov
     if (typeList && typeList.length > 0) {
         lines.push('---');
         lines.push('<br>');
-        lines.push(`Inferred Type: ${typeList.map((type) => `\`${type}\``).join(', ')}`);
+        lines.push(`Inferred Type: ${typeList.map((type) => `\`${escapeMarkdown(type)}\``).join(', ')}`);
     }
 
     return {
-        contents: [{ value: lines.join('\n\n'), isTrusted: true, supportHtml: true }],
+        contents: [{ value: lines.join('\n\n'), supportHtml: true }],
     };
 }
