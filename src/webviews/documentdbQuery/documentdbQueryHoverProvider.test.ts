@@ -62,7 +62,7 @@ describe('documentdbQueryHoverProvider', () => {
             expect(hover).not.toBeNull();
 
             const content = (hover!.contents[0] as { value: string }).value;
-            expect(content).toContain('[DocumentDB Docs]');
+            expect(content).toContain('Documentation]');
         });
 
         test('operator hover has isTrusted set for clickable links', () => {
@@ -120,12 +120,12 @@ describe('documentdbQueryHoverProvider', () => {
             expect(content).toContain('**age**');
         });
 
-        test('shows "Inferred Types" section with type list', () => {
+        test('shows "Inferred Type" section with type list', () => {
             const hover = getHoverContent('age', createFieldLookup(fields));
             expect(hover).not.toBeNull();
 
             const content = (hover!.contents[0] as { value: string }).value;
-            expect(content).toContain('**Inferred Types**');
+            expect(content).toContain('Inferred Type');
             expect(content).toContain('Number');
         });
 
@@ -134,7 +134,7 @@ describe('documentdbQueryHoverProvider', () => {
             expect(hover).not.toBeNull();
 
             const content = (hover!.contents[0] as { value: string }).value;
-            expect(content).toContain('**Inferred Types**');
+            expect(content).toContain('Inferred Type');
             expect(content).toContain('Double');
             expect(content).toContain('Int32');
         });

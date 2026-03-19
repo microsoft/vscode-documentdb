@@ -46,14 +46,24 @@ export function getHoverContent(word: string, fieldLookup?: FieldDataLookup): mo
         const match = allEntries.find((e) => e.value === candidate);
         if (match) {
             const lines: string[] = [`**${match.value}**`];
+
+            if (match.description || match.link) {
+                lines.push('---');
+                lines.push('<br>');
+            }
+
             if (match.description) {
-                lines.push('', match.description);
+                lines.push(match.description);
             }
             if (match.link) {
-                lines.push('', `[DocumentDB Docs](${match.link})`);
+                if (match.description) {
+                    lines.push('<br>');
+                }
+                lines.push(`[ⓘ Documentation](${match.link})`);
             }
+
             return {
-                contents: [{ value: lines.join('\n'), isTrusted: true }],
+                contents: [{ value: lines.join('\n\n'), isTrusted: true, supportHtml: true }],
             };
         }
     }
@@ -71,29 +81,25 @@ export function getHoverContent(word: string, fieldLookup?: FieldDataLookup): mo
 
 /**
  * Builds a hover tooltip for a field name.
- *
- * Format:
- * ```
- * **fieldName** <small>sparse: not present in all documents</small>
- *
- * **Inferred Types**
- * String, Int32
- * ```
  */
 function buildFieldHover(field: FieldCompletionData): monacoEditor.languages.Hover {
-    // First line: field name, optionally with sparse note
     let header = `**${field.fieldName}**`;
+
     if (field.isSparse) {
-        header += ' &nbsp; <sub>sparse: not present in all documents</sub>';
+        header += ' &nbsp;&nbsp; <small>sparse: not present in all documents</small>';
     }
 
     const lines: string[] = [header];
 
     // Inferred types section
     const typeList = field.displayTypes && field.displayTypes.length > 0 ? field.displayTypes : [field.displayType];
-    lines.push('', '**Inferred Types**', typeList.join(', '));
+    if (typeList && typeList.length > 0) {
+        lines.push('---');
+        lines.push('<br>');
+        lines.push(`Inferred Type: ${typeList.map((type) => `\`${type}\``).join(', ')}`);
+    }
 
     return {
-        contents: [{ value: lines.join('\n'), isTrusted: true, supportHtml: true }],
+        contents: [{ value: lines.join('\n\n'), isTrusted: true, supportHtml: true }],
     };
 }
