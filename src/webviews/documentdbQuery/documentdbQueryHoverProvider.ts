@@ -56,9 +56,6 @@ export function getHoverContent(word: string, fieldLookup?: FieldDataLookup): mo
                 lines.push(match.description);
             }
             if (match.link) {
-                if (match.description) {
-                    lines.push('<br>');
-                }
                 lines.push(`[ⓘ Documentation](${match.link})`);
             }
 
