@@ -167,9 +167,17 @@ export class ClusterSession {
             }
         }
 
-        // The user's query has changed, invalidate all caches
-        this._schemaAnalyzer.reset();
-        ext.outputChannel.trace('[SchemaAnalyzer] Reset — query changed');
+        // The user's query has changed, invalidate all caches.
+        //
+        // NOTE: We intentionally do NOT reset the SchemaAnalyzer here.
+        // When a new query returns 0 results, preserving field knowledge from
+        // previous queries is more valuable for autocompletion than having an
+        // empty field list. The SchemaAnalyzer accumulates field data
+        // monotonically — new fields are added, existing field type statistics
+        // are enriched with each query. This means type statistics represent
+        // aggregated observations across queries, not a single query snapshot.
+        // Consumers should treat type frequency data as approximate/relative
+        // (e.g., "mostly String") rather than absolute percentages.
         this._highestPageAccumulated = 0;
         this._currentPageSize = null;
         this._currentRawDocuments = [];

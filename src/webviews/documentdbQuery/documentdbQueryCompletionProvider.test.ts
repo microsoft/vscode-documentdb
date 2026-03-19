@@ -163,6 +163,7 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.insertTextRules).toBeUndefined();
             expect(item.documentation).toEqual({
                 value: 'Matches values equal to a specified value.',
+                isTrusted: true,
             });
             expect(item.range).toBe(testRange);
         });
@@ -199,6 +200,7 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
             expect(item.documentation).toEqual({
                 value: 'Creates a new ObjectId value.\n\n[DocumentDB Docs](https://docs.example.com/objectid)',
+                isTrusted: true,
             });
         });
 
@@ -898,9 +900,10 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(labels).toContain('$and');
                 expect(labels).toContain('$or');
                 expect(labels).toContain('$nor');
-                expect(labels).toContain('$not');
                 expect(labels).toContain('$comment');
                 expect(labels).toContain('$expr');
+                // $not is a field-level operator, NOT a key-position operator
+                expect(labels).not.toContain('$not');
             });
 
             test('does NOT show value-level operators ($gt, $lt, $regex, $eq)', () => {
@@ -1096,7 +1099,7 @@ describe('documentdbQueryCompletionProvider', () => {
         describe('operator position', () => {
             const operatorContext: CursorContext = { position: 'operator', fieldName: 'age' };
 
-            test('shows comparison operators ($gt, $lt, $eq, $in)', () => {
+            test('shows comparison operators ($gt, $lt, $eq, $in) and $not', () => {
                 const items = createCompletionItems({
                     editorType: EditorType.Filter,
                     sessionId: undefined,
@@ -1113,6 +1116,8 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(labels).toContain('$in');
                 expect(labels).toContain('$exists');
                 expect(labels).toContain('$regex');
+                // $not is a field-level operator, valid at operator position
+                expect(labels).toContain('$not');
             });
 
             test('does NOT show key-position operators ($and, $or)', () => {
@@ -1316,6 +1321,159 @@ describe('documentdbQueryCompletionProvider', () => {
                 expect(labels).toContain('ObjectId');
             });
         });
+
+        describe('needsWrapping (empty editor, no braces)', () => {
+            test('field insertText is wrapped with { } when needsWrapping is true', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'name',
+                            displayType: 'String',
+                            bsonType: 'string',
+                            isSparse: false,
+                            insertText: 'name',
+                            referenceText: '$name',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'unknown' },
+                    needsWrapping: true,
+                });
+
+                const fieldItem = items.find((i) => getLabelText(i.label) === 'name');
+                expect(fieldItem?.insertText).toBe('{ name: $1 }');
+            });
+
+            test('field insertText is NOT wrapped when needsWrapping is false', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'name',
+                            displayType: 'String',
+                            bsonType: 'string',
+                            isSparse: false,
+                            insertText: 'name',
+                            referenceText: '$name',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'unknown' },
+                    needsWrapping: false,
+                });
+
+                const fieldItem = items.find((i) => getLabelText(i.label) === 'name');
+                expect(fieldItem?.insertText).toBe('name: $1');
+            });
+
+            test('operators keep full brace-wrapping snippets when needsWrapping is true', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'unknown' },
+                    needsWrapping: true,
+                });
+
+                // Operator snippets include { } already — they should NOT be stripped
+                const andItem = items.find((i) => getLabelText(i.label) === '$and');
+                expect(andItem?.insertText).toContain('{');
+                expect(andItem?.insertText).toContain('}');
+            });
+        });
+
+        // ---------------------------------------------------------------
+        // Category coverage: verify operator categories at each position
+        // ---------------------------------------------------------------
+        describe('operator category coverage by position', () => {
+            test('key position: only key-position operators, no field-level operators', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'key', depth: 1 },
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                // Key-position: logical combinators and meta operators
+                expect(labels).toContain('$and'); // query:logical
+                expect(labels).toContain('$or'); // query:logical
+                expect(labels).toContain('$nor'); // query:logical
+                expect(labels).toContain('$comment'); // query:comment
+                expect(labels).toContain('$expr'); // query:expr
+                // Field-level operators must NOT appear at key position
+                expect(labels).not.toContain('$all'); // query:array — field-level
+                expect(labels).not.toContain('$elemMatch'); // query:array — field-level
+                expect(labels).not.toContain('$size'); // query:array — field-level
+                expect(labels).not.toContain('$gt'); // query:comparison
+                expect(labels).not.toContain('$regex'); // query:evaluation
+                expect(labels).not.toContain('$exists'); // query:element
+                expect(labels).not.toContain('$not'); // query:logical — field-level
+            });
+
+            test('value position: includes operators from all field-level categories', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'value', fieldName: 'x' },
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                // Should include field-level operators from every category
+                expect(labels).toContain('$gt'); // query:comparison
+                expect(labels).toContain('$eq'); // query:comparison
+                expect(labels).toContain('$in'); // query:comparison
+                expect(labels).toContain('$regex'); // query:evaluation
+                expect(labels).toContain('$exists'); // query:element
+                expect(labels).toContain('$type'); // query:element
+                expect(labels).toContain('$all'); // query:array
+                expect(labels).toContain('$elemMatch'); // query:array
+                expect(labels).toContain('$size'); // query:array
+                expect(labels).toContain('$not'); // query:logical (field-level)
+                // Key-position operators should NOT be at value position
+                expect(labels).not.toContain('$and');
+                expect(labels).not.toContain('$or');
+            });
+
+            test('operator position: same field-level categories as value position', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: { position: 'operator', fieldName: 'x' },
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).toContain('$gt'); // query:comparison
+                expect(labels).toContain('$regex'); // query:evaluation
+                expect(labels).toContain('$exists'); // query:element
+                expect(labels).toContain('$all'); // query:array
+                expect(labels).toContain('$not'); // query:logical (field-level)
+                expect(labels).not.toContain('$and'); // key-position only
+            });
+        });
     });
 
     // ---------------------------------------------------------------
@@ -1478,6 +1636,365 @@ describe('documentdbQueryCompletionProvider', () => {
 
             // No items with 00_ sort prefix
             expect(items.filter((i) => i.sortText?.startsWith('00_'))).toHaveLength(0);
+        });
+    });
+
+    // ---------------------------------------------------------------
+    // Project and Sort value completions
+    // ---------------------------------------------------------------
+    describe('project editor value completions', () => {
+        const mockMonaco = createMockMonaco();
+
+        test('shows 1 (include) and 0 (exclude) at value position', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'name' };
+            const items = createCompletionItems({
+                editorType: EditorType.Project,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            expect(items).toHaveLength(2);
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('1');
+            expect(labels).toContain('0');
+        });
+
+        test('1 (include) has description "include field"', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'name' };
+            const items = createCompletionItems({
+                editorType: EditorType.Project,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const includeItem = items.find((i) => getLabelText(i.label) === '1');
+            expect((includeItem?.label as { description: string }).description).toBe('include field');
+        });
+
+        test('does NOT show operators, BSON constructors, or JS globals', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'name' };
+            const items = createCompletionItems({
+                editorType: EditorType.Project,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).not.toContain('$gt');
+            expect(labels).not.toContain('ObjectId');
+            expect(labels).not.toContain('Date');
+        });
+
+        test('1 is preselected', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'name' };
+            const items = createCompletionItems({
+                editorType: EditorType.Project,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const includeItem = items.find((i) => getLabelText(i.label) === '1');
+            expect(includeItem?.preselect).toBe(true);
+        });
+    });
+
+    describe('sort editor value completions', () => {
+        const mockMonaco = createMockMonaco();
+
+        test('shows 1 (ascending) and -1 (descending) at value position', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'age' };
+            const items = createCompletionItems({
+                editorType: EditorType.Sort,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            expect(items).toHaveLength(2);
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).toContain('1');
+            expect(labels).toContain('-1');
+        });
+
+        test('-1 has description "descending"', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'age' };
+            const items = createCompletionItems({
+                editorType: EditorType.Sort,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const descItem = items.find((i) => getLabelText(i.label) === '-1');
+            expect((descItem?.label as { description: string }).description).toBe('descending');
+        });
+
+        test('does NOT show operators, BSON constructors, or JS globals', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'age' };
+            const items = createCompletionItems({
+                editorType: EditorType.Sort,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const labels = items.map((i) => getLabelText(i.label));
+            expect(labels).not.toContain('$gt');
+            expect(labels).not.toContain('ObjectId');
+            expect(labels).not.toContain('Date');
+        });
+
+        test('1 is preselected', () => {
+            const context: CursorContext = { position: 'value', fieldName: 'age' };
+            const items = createCompletionItems({
+                editorType: EditorType.Sort,
+                sessionId: undefined,
+                range: testRange,
+                isDollarPrefix: false,
+                monaco: mockMonaco,
+                cursorContext: context,
+            });
+
+            const ascItem = items.find((i) => getLabelText(i.label) === '1');
+            expect(ascItem?.preselect).toBe(true);
+        });
+    });
+
+    // ---------------------------------------------------------------
+    // Category-based completion coverage by cursor position
+    // ---------------------------------------------------------------
+    describe('completion categories by cursor position', () => {
+        const mockMonaco = createMockMonaco();
+
+        /**
+         * Helper: extracts the description (category label) from a CompletionItem.
+         * For operator items this is getCategoryLabel(meta), e.g., "comparison", "array".
+         * For JS globals it is "JS global".
+         * For fields it is the type, e.g., "Number".
+         */
+        function getDescription(label: string | monacoEditor.languages.CompletionItemLabel): string | undefined {
+            return typeof label === 'string' ? undefined : label.description;
+        }
+
+        /** Returns Set of distinct category descriptions from a completion list. */
+        function getCategories(items: monacoEditor.languages.CompletionItem[]): Set<string> {
+            const categories = new Set<string>();
+            for (const item of items) {
+                const desc = getDescription(item.label);
+                if (desc) categories.add(desc);
+            }
+            return categories;
+        }
+
+        describe('key position ({ <cursor> })', () => {
+            const keyContext: CursorContext = { position: 'key', depth: 1 };
+
+            test('includes "logical" category operators', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('logical')).toBe(true);
+            });
+
+            test('does NOT include purely field-level categories (comparison, array, element)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const categories = getCategories(items);
+                // These categories have NO operators in KEY_POSITION_OPERATORS
+                expect(categories.has('comparison')).toBe(false);
+                expect(categories.has('array')).toBe(false);
+                expect(categories.has('element')).toBe(false);
+                // Note: 'evaluation' IS present because $expr, $jsonSchema, $text are key-position
+            });
+
+            test('does NOT include "bson" or "JS global"', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: keyContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('bson')).toBe(false);
+                expect(categories.has('JS global')).toBe(false);
+            });
+        });
+
+        describe('value position ({ field: <cursor> })', () => {
+            const valueContext: CursorContext = { position: 'value', fieldName: 'x' };
+
+            test('includes field-level categories: comparison, array, evaluation, element', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('comparison')).toBe(true);
+                expect(categories.has('array')).toBe(true);
+                expect(categories.has('evaluation')).toBe(true);
+                expect(categories.has('element')).toBe(true);
+            });
+
+            test('includes "bson" and "JS global"', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('bson')).toBe(true);
+                expect(categories.has('JS global')).toBe(true);
+            });
+
+            test('does NOT include key-position-only operators', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: valueContext,
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).not.toContain('$and');
+                expect(labels).not.toContain('$or');
+                expect(labels).not.toContain('$nor');
+            });
+        });
+
+        describe('operator position ({ field: { <cursor> } })', () => {
+            const operatorContext: CursorContext = { position: 'operator', fieldName: 'x' };
+
+            test('includes field-level categories: comparison, array, evaluation, element', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: operatorContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('comparison')).toBe(true);
+                expect(categories.has('array')).toBe(true);
+                expect(categories.has('evaluation')).toBe(true);
+                expect(categories.has('element')).toBe(true);
+            });
+
+            test('does NOT include "bson", "JS global", or key-position operators', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: operatorContext,
+                });
+
+                const categories = getCategories(items);
+                expect(categories.has('bson')).toBe(false);
+                expect(categories.has('JS global')).toBe(false);
+
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).not.toContain('$and');
+                expect(labels).not.toContain('$or');
+            });
+        });
+
+        describe('unknown position (genuinely ambiguous — shows everything)', () => {
+            const unknownContext: CursorContext = { position: 'unknown' };
+
+            test('includes all categories (full discovery fallback)', () => {
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: undefined,
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: unknownContext,
+                });
+
+                const categories = getCategories(items);
+                // UNKNOWN shows everything as discovery
+                expect(categories.has('logical')).toBe(true);
+                expect(categories.has('comparison')).toBe(true);
+                expect(categories.has('array')).toBe(true);
+                expect(categories.has('bson')).toBe(true);
+                expect(categories.has('JS global')).toBe(true);
+            });
+
+            test('includes field names if store has data', () => {
+                setCompletionContext('test-session', {
+                    fields: [
+                        {
+                            fieldName: 'name',
+                            displayType: 'String',
+                            bsonType: 'string',
+                            isSparse: false,
+                            insertText: 'name',
+                            referenceText: '$name',
+                        },
+                    ],
+                });
+
+                const items = createCompletionItems({
+                    editorType: EditorType.Filter,
+                    sessionId: 'test-session',
+                    range: testRange,
+                    isDollarPrefix: false,
+                    monaco: mockMonaco,
+                    cursorContext: unknownContext,
+                });
+
+                const labels = items.map((i) => getLabelText(i.label));
+                expect(labels).toContain('name');
+            });
         });
     });
 });

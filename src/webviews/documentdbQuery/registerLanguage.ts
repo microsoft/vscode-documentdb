@@ -30,6 +30,8 @@ import { getCompletionContext } from './completionStore';
 import { detectCursorContext } from './cursorContext';
 import { createCompletionItems } from './documentdbQueryCompletionProvider';
 import { getHoverContent } from './documentdbQueryHoverProvider';
+import { extractQuotedKey } from './extractQuotedKey';
+import { isCursorInsideString } from './isCursorInsideString';
 import { LANGUAGE_ID, parseEditorUri } from './languageConfig';
 
 /** Coalesces concurrent registrations into a single promise. */
@@ -67,7 +69,7 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
 
     // Step 4: Register the completion provider
     monaco.languages.registerCompletionItemProvider(LANGUAGE_ID, {
-        triggerCharacters: ['$', '"', "'", '{', '.'],
+        triggerCharacters: ['$', '"', "'", '{', '.', ':', ',', '['],
         provideCompletionItems: (
             model: monacoEditor.editor.ITextModel,
             position: monacoEditor.Position,
@@ -101,6 +103,14 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
             // Detect cursor context for context-sensitive completions
             const text = model.getValue();
             const cursorOffset = model.getOffsetAt(position);
+
+            // Suppress completions when the cursor is inside a string literal.
+            // This prevents trigger characters like ':', ',', '[' from firing
+            // inside strings like { name: "has:colon" } or { msg: "has[bracket" }.
+            if (isCursorInsideString(text, cursorOffset)) {
+                return { suggestions: [] };
+            }
+
             const sessionId = parsed?.sessionId;
 
             // Build field lookup from completion store to enrich context with BSON types
@@ -112,6 +122,11 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
 
             const cursorContext = detectCursorContext(text, cursorOffset, fieldLookup);
 
+            // Detect whether the editor content has braces. When the user clears
+            // the editor (deleting initial `{  }`), completions need to include
+            // wrapping braces so inserted snippets produce valid query syntax.
+            const needsWrapping = !text.includes('{');
+
             // Build completion items based on context
             const items = createCompletionItems({
                 editorType: parsed?.editorType,
@@ -120,6 +135,7 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
                 isDollarPrefix: charBefore === '$',
                 monaco,
                 cursorContext,
+                needsWrapping,
             });
 
             return { suggestions: items };
@@ -132,12 +148,46 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
             model: monacoEditor.editor.ITextModel,
             position: monacoEditor.Position,
         ): monacoEditor.languages.Hover | null => {
+            // Build field lookup from completion store for field hover info
+            const uriString = model.uri.toString();
+            const parsedUri = parseEditorUri(uriString);
+            const hoverFieldLookup = parsedUri?.sessionId
+                ? (word: string) => {
+                      const ctx = getCompletionContext(parsedUri.sessionId);
+                      return ctx?.fields.find((f) => f.fieldName === word);
+                  }
+                : undefined;
+
+            // Try to extract a quoted string key (e.g., "address.street")
+            // Monaco's getWordAtPosition treats quotes and dots as word boundaries,
+            // so for { "address.street": 1 } hovering on "address" would only match
+            // "address", not the full field name "address.street".
+            const lineContent = model.getLineContent(position.lineNumber);
+            const col0 = position.column - 1; // 0-based
+
+            const quotedResult = extractQuotedKey(lineContent, col0);
+            if (quotedResult) {
+                const hover = getHoverContent(quotedResult.key, hoverFieldLookup);
+                if (hover) {
+                    return {
+                        ...hover,
+                        range: {
+                            startLineNumber: position.lineNumber,
+                            endLineNumber: position.lineNumber,
+                            startColumn: quotedResult.start + 1, // 1-based
+                            endColumn: quotedResult.end + 1, // 1-based
+                        },
+                    };
+                }
+            }
+
+            // Fall back to standard word-based hover
             const wordAtPosition = model.getWordAtPosition(position);
             if (!wordAtPosition) {
                 return null;
             }
 
-            const hover = getHoverContent(wordAtPosition.word);
+            const hover = getHoverContent(wordAtPosition.word, hoverFieldLookup);
             if (!hover) {
                 return null;
             }

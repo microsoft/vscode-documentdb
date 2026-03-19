@@ -49,6 +49,7 @@ interface ParsedOperator {
     docLink: string;
     category: string;
     snippetOverride?: string;
+    standalone?: boolean;
 }
 
 interface FileSpec {
@@ -271,6 +272,7 @@ interface OverrideEntry {
     syntax?: string;
     docLink?: string;
     snippet?: string;
+    standalone?: boolean;
 }
 
 function parseOverrides(content: string): Map<string, Map<string, OverrideEntry>> {
@@ -332,6 +334,10 @@ function parseOverrides(content: string): Map<string, Map<string, OverrideEntry>
                 snippet = snippet.slice(1, -1);
             }
             currentOp.entry.snippet = snippet;
+        }
+        if (currentOp && line.startsWith('- **Standalone:**')) {
+            const val = line.replace('- **Standalone:**', '').trim().toLowerCase();
+            currentOp.entry.standalone = val !== 'false' ? undefined : false;
         }
     }
 
@@ -417,6 +423,9 @@ function mergeOverride(op: ParsedOperator, override: OverrideEntry): void {
     }
     if (override.snippet !== undefined && override.snippet !== '') {
         op.snippetOverride = override.snippet;
+    }
+    if (override.standalone !== undefined) {
+        op.standalone = override.standalone;
     }
 }
 
@@ -525,8 +534,8 @@ function getApplicableBsonTypes(op: ParsedOperator, meta: string): string[] | un
     // Array-specific operators (query context)
     if (meta === 'META_QUERY_ARRAY') return ['array'];
 
-    // Bitwise query operators
-    if (meta === 'META_QUERY_BITWISE') return ['int', 'long'];
+    // Bitwise query operators — use 'int32' to match SchemaAnalyzer BSON types
+    if (meta === 'META_QUERY_BITWISE') return ['int32', 'long'];
 
     return undefined;
 }
@@ -688,6 +697,9 @@ function generateSection(spec: FileSpec, snippets: Map<string, Map<string, strin
         }
         if (bsonTypes) {
             section += `        applicableBsonTypes: [${bsonTypes.map((t) => `'${t}'`).join(', ')}],\n`;
+        }
+        if (op.standalone === false) {
+            section += `        standalone: false,\n`;
         }
         section += `    },\n`;
     }

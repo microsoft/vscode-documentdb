@@ -49,6 +49,10 @@
  * { age: { $and: … } }
  * ```
  *
+ * **`$not` is intentionally excluded** — despite being a logical operator,
+ * `$not` is a field-level operator that wraps a single field's expression:
+ * `{ price: { $not: { $gt: 1.99 } } }`. It does NOT work at query root.
+ *
  * The completion provider uses this set to:
  * - **Include** these operators at key position and array-element position
  * - **Exclude** them from operator position (inside `{ field: { … } }`)
@@ -60,7 +64,6 @@ export const KEY_POSITION_OPERATORS = new Set([
     '$and',
     '$or',
     '$nor',
-    '$not',
     '$comment',
     '$expr',
     '$jsonSchema',

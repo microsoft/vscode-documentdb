@@ -23,6 +23,10 @@ export interface FieldCompletionData {
     displayType: string;
     /** Raw BSON type from FieldEntry */
     bsonType: string;
+    /** All observed BSON types for polymorphic fields (e.g., ["string", "int32"]) */
+    bsonTypes?: string[];
+    /** Human-readable display strings for all observed types (e.g., ["String", "Int32"]) */
+    displayTypes?: string[];
     /** Whether the field was not present in every inspected document (statistical observation, not a constraint) */
     isSparse: boolean;
     /** Text to insert when the user selects this completion — quoted/escaped if the field name contains special chars */
@@ -72,6 +76,8 @@ export function toFieldCompletionItems(fields: FieldEntry[]): FieldCompletionDat
             fieldName: entry.path,
             displayType,
             bsonType: entry.bsonType,
+            bsonTypes: entry.bsonTypes,
+            displayTypes: entry.bsonTypes?.map((t) => BSONTypes.toDisplayString(t as BSONTypes)),
             isSparse: entry.isSparse ?? false,
             insertText,
             referenceText: `$${entry.path}`,

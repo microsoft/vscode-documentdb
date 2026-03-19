@@ -131,11 +131,90 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         };
     };
 
+    /**
+     * Cancels any active snippet session on the given editor.
+     *
+     * After a snippet completion (e.g., `fieldName: $1`), Monaco keeps the
+     * snippet session alive and highlights the tab-stop placeholder. If the
+     * user continues typing, the highlight grows — the "ghost selection"
+     * bug. Calling this function ends the snippet session cleanly.
+     */
+    const cancelSnippetSession = (editor: monacoEditor.editor.IStandaloneCodeEditor): void => {
+        const controller = editor.getContribution('snippetController2') as { cancel: () => void } | null | undefined;
+        controller?.cancel();
+    };
+
+    /** Characters that signal the end of a field-value pair and should exit snippet mode. */
+    const SNIPPET_EXIT_CHARS = new Set([',', '}', ']']);
+
+    /**
+     * Sets up pattern-based auto-trigger of completions.
+     * When a content change results in a trigger character followed by a
+     * space (`: `, `, `, `{ `, `[ `) at the end of the inserted text,
+     * completions are triggered automatically after a short delay. This
+     * handles both manual typing and completion acceptance.
+     *
+     * Also cancels any active snippet session when a delimiter character
+     * (`,`, `}`, `]`) is typed, preventing the "ghost selection" bug
+     * where the tab-stop highlight expands as the user continues typing.
+     *
+     * Returns a cleanup function.
+     */
+    const setupSmartTrigger = (editor: monacoEditor.editor.IStandaloneCodeEditor): (() => void) => {
+        let triggerTimeout: ReturnType<typeof setTimeout>;
+        const contentDisposable = editor.onDidChangeModelContent((e) => {
+            clearTimeout(triggerTimeout);
+
+            const change = e.changes[0];
+            if (!change || change.text.length === 0) return;
+
+            // Cancel snippet session when the user *types* a delimiter character.
+            // Only applies to single-character edits (user keystrokes), not to
+            // multi-character completion insertions which may legitimately
+            // contain commas or braces as part of the snippet text.
+            if (change.text.length === 1 && SNIPPET_EXIT_CHARS.has(change.text)) {
+                cancelSnippetSession(editor);
+            }
+
+            const model = editor.getModel();
+            if (!model) return;
+
+            // Calculate the offset at the end of the inserted text in the new model
+            const endOffset = change.rangeOffset + change.text.length;
+
+            // We need at least 2 chars to check for ": " or ", "
+            if (endOffset < 2) return;
+
+            const fullText = model.getValue();
+            const lastTwo = fullText.substring(endOffset - 2, endOffset);
+            if (lastTwo === ': ' || lastTwo === ', ' || lastTwo === '{ ' || lastTwo === '[ ') {
+                triggerTimeout = setTimeout(() => {
+                    editor.trigger('smart-trigger', 'editor.action.triggerSuggest', {});
+                }, 50);
+            }
+        });
+
+        // Cancel snippet session when the editor loses focus (Option D).
+        // If the user clicks away while a tab-stop is highlighted, the
+        // highlight should not persist when they return.
+        const blurDisposable = editor.onDidBlurEditorText(() => {
+            cancelSnippetSession(editor);
+        });
+
+        return () => {
+            clearTimeout(triggerTimeout);
+            contentDisposable.dispose();
+            blurDisposable.dispose();
+        };
+    };
+
     // Track validation cleanup functions
     const filterValidationCleanupRef = useRef<(() => void) | null>(null);
     const projectValidationCleanupRef = useRef<(() => void) | null>(null);
     const sortValidationCleanupRef = useRef<(() => void) | null>(null);
-
+    const filterSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
+    const projectSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
+    const sortSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
     const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
         // Store the filter editor reference
         filterEditorRef.current = editor;
@@ -148,6 +227,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
         // Set up debounced validation
         filterValidationCleanupRef.current = setupValidation(editor, monaco, model);
+
+        // Set up smart-trigger for completions after ": " and ", "
+        filterSmartTriggerCleanupRef.current = setupSmartTrigger(editor);
 
         const getCurrentQueryFunction = () => ({
             filter: filterValue,
@@ -189,6 +271,31 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         automaticLayout: false,
     };
 
+    // Intercept link clicks in Monaco hover tooltips.
+    // Monaco renders hover markdown links as <a> tags, but the webview CSP
+    // blocks direct navigation. Capture clicks and route through tRPC.
+    const editorContainerRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        const container = editorContainerRef.current;
+        if (!container) return;
+
+        const handleLinkClick = (e: MouseEvent): void => {
+            const target = e.target as HTMLElement;
+            const anchor = target.closest('a');
+            if (!anchor) return;
+
+            const href = anchor.getAttribute('href');
+            if (href && (href.startsWith('https://') || href.startsWith('http://'))) {
+                e.preventDefault();
+                e.stopPropagation();
+                void trpcClient.common.openUrl.mutate({ url: href });
+            }
+        };
+
+        container.addEventListener('click', handleLinkClick, true);
+        return () => container.removeEventListener('click', handleLinkClick, true);
+    }, [trpcClient]);
+
     // Cleanup any pending operations when component unmounts
     useEffect(() => {
         return () => {
@@ -201,6 +308,11 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             filterValidationCleanupRef.current?.();
             projectValidationCleanupRef.current?.();
             sortValidationCleanupRef.current?.();
+
+            // Clean up smart-trigger listeners
+            filterSmartTriggerCleanupRef.current?.();
+            projectSmartTriggerCleanupRef.current?.();
+            sortSmartTriggerCleanupRef.current?.();
 
             // Dispose Monaco models
             filterEditorRef.current?.getModel()?.dispose();
@@ -367,7 +479,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     };
 
     return (
-        <div className="queryEditor">
+        <div className="queryEditor" ref={editorContainerRef}>
             {/* Optional AI prompt row */}
             <Collapse visible={configuration.enableAIQueryGeneration && currentContext.isAiRowVisible} unmountOnExit>
                 <div className={`aiRow${isAiActive ? ' ai-active' : ''}`}>
@@ -552,6 +664,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                                     // Set up validation
                                     projectValidationCleanupRef.current = setupValidation(editor, monaco, model);
 
+                                    // Set up smart-trigger
+                                    projectSmartTriggerCleanupRef.current = setupSmartTrigger(editor);
+
                                     editor.onDidChangeModelContent(() => {
                                         setProjectValue(editor.getValue());
                                     });
@@ -591,6 +706,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
                                     // Set up validation
                                     sortValidationCleanupRef.current = setupValidation(editor, monaco, model);
+
+                                    // Set up smart-trigger
+                                    sortSmartTriggerCleanupRef.current = setupSmartTrigger(editor);
 
                                     editor.onDidChangeModelContent(() => {
                                         setSortValue(editor.getValue());

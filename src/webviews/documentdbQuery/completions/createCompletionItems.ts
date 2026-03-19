@@ -46,6 +46,12 @@ export interface CreateCompletionItemsParams {
      */
     fieldBsonTypes?: readonly string[];
     /**
+     * When true, completion snippets should include outer `{ }` wrapping.
+     * Set when the editor content has no braces (user cleared the editor),
+     * so that inserted completions produce valid query syntax.
+     */
+    needsWrapping?: boolean;
+    /**
      * Optional cursor context from the heuristic cursor position detector.
      * When provided, completions are filtered based on the semantic position
      * of the cursor. When undefined, falls back to showing all completions
@@ -85,15 +91,20 @@ export function getMetaTagsForEditorType(editorType: EditorType | undefined): re
  * - **value**: type suggestions + operators (with braces) + BSON constructors
  * - **operator**: operators (without braces) with type-aware sorting
  * - **array-element**: same as key position
- * - **unknown / undefined**: all completions — fields, all operators, BSON
- *   constructors, and JS globals (backward-compatible fallback)
+ * - **empty** (unknown + needsWrapping): key-position completions with `{ }` wrapping
+ * - **unknown** (ambiguous): all completions — full discovery fallback
  */
 export function createCompletionItems(params: CreateCompletionItemsParams): monacoEditor.languages.CompletionItem[] {
-    const { editorType, sessionId, range, monaco, fieldBsonTypes, cursorContext } = params;
+    const { editorType, sessionId, range, monaco, fieldBsonTypes, cursorContext, needsWrapping } = params;
 
     if (!cursorContext || cursorContext.position === 'unknown') {
-        // When context is unknown (e.g., empty input, no braces), show all
-        // completions so the user can discover what's available.
+        if (needsWrapping) {
+            // EMPTY editor — no braces present. Show key-position completions
+            // (fields + root operators) with { } wrapping so inserted items
+            // produce valid syntax.
+            return createEmptyEditorCompletions(editorType, sessionId, range, monaco);
+        }
+        // Genuinely UNKNOWN — show all completions as a discovery fallback.
         return createAllCompletions(editorType, sessionId, range, monaco);
     }
 
@@ -120,8 +131,42 @@ export function createCompletionItems(params: CreateCompletionItemsParams): mona
 // ---------- Context-specific completion builders ----------
 
 /**
- * All completions — used when cursor context is unknown or undefined.
+ * Empty editor completions — shows key-position items with `{ }` wrapping.
+ *
+ * Used when the editor has no braces (user cleared content). Behaves like
+ * key position but wraps all inserted completions with outer `{ }` so they
+ * produce valid query syntax.
+ */
+function createEmptyEditorCompletions(
+    editorType: EditorType | undefined,
+    sessionId: string | undefined,
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
+    const metaTags = getMetaTagsForEditorType(editorType);
+    const allEntries = getFilteredCompletions({ meta: [...metaTags] });
+
+    // Key-position operators — keep outer braces (don't strip)
+    const keyEntries = allEntries.filter((e) => KEY_POSITION_OPERATORS.has(e.value));
+    const operatorItems = keyEntries.map((entry) => {
+        const item = mapOperatorToCompletionItem(entry, range, monaco);
+        item.sortText = `1_${entry.value}`;
+        return item;
+    });
+
+    // Fields — wrap insertText with `{ ... }` for valid syntax
+    const fieldItems = getFieldCompletionItems(sessionId, range, monaco).map((item) => ({
+        ...item,
+        insertText: `{ ${item.insertText as string} }`,
+    }));
+
+    return [...fieldItems, ...operatorItems];
+}
+
+/**
+ * All completions — used when cursor context is genuinely ambiguous (UNKNOWN).
  * Shows fields, all operators, BSON constructors, and JS globals.
+ * Full discovery fallback for positions the parser can't classify.
  */
 function createAllCompletions(
     editorType: EditorType | undefined,
@@ -135,7 +180,7 @@ function createAllCompletions(
     const fieldItems = getFieldCompletionItems(sessionId, range, monaco);
 
     const operatorItems = allEntries
-        .filter((e) => e.meta !== 'bson' && e.meta !== 'variable')
+        .filter((e) => e.meta !== 'bson' && e.meta !== 'variable' && e.standalone !== false)
         .map((entry) => mapOperatorToCompletionItem(entry, range, monaco));
 
     const bsonItems = allEntries
@@ -175,10 +220,13 @@ function createKeyPositionCompletions(
 
 /**
  * Value position completions:
- * 1. Type-aware suggestions (sort `00_`) — e.g., `true`/`false` for booleans
- * 2. Query operators with brace-wrapping snippets (sort `0_`–`2_`)
- * 3. BSON constructors (sort `3_`)
- * 4. JS globals: Date, Math, RegExp, etc. (sort `4_`)
+ * - **Project editor**: `1` (include) and `0` (exclude) — the most common projection values
+ * - **Sort editor**: `1` (ascending) and `-1` (descending)
+ * - **Filter editor** (default):
+ *   1. Type-aware suggestions (sort `00_`) — e.g., `true`/`false` for booleans
+ *   2. Query operators with brace-wrapping snippets (sort `0_`–`2_`)
+ *   3. BSON constructors (sort `3_`)
+ *   4. JS globals: Date, Math, RegExp, etc. (sort `4_`)
  */
 function createValuePositionCompletions(
     editorType: EditorType | undefined,
@@ -186,6 +234,16 @@ function createValuePositionCompletions(
     monaco: typeof monacoEditor,
     fieldBsonType: string | undefined,
 ): monacoEditor.languages.CompletionItem[] {
+    // Project editor: only show include/exclude values
+    if (editorType === EditorType.Project) {
+        return createProjectValueCompletions(range, monaco);
+    }
+
+    // Sort editor: only show ascending/descending values
+    if (editorType === EditorType.Sort) {
+        return createSortValueCompletions(range, monaco);
+    }
+
     const metaTags = getMetaTagsForEditorType(editorType);
     const allEntries = getFilteredCompletions({ meta: [...metaTags] });
 
@@ -197,7 +255,11 @@ function createValuePositionCompletions(
     //    operators (e.g., $eq) appear above irrelevant ones (e.g., $bitsAllSet).
     const fieldBsonTypes = fieldBsonType ? [fieldBsonType] : undefined;
     const operatorEntries = allEntries.filter(
-        (e) => e.meta !== 'bson' && e.meta !== 'variable' && !KEY_POSITION_OPERATORS.has(e.value),
+        (e) =>
+            e.meta !== 'bson' &&
+            e.meta !== 'variable' &&
+            e.standalone !== false &&
+            !KEY_POSITION_OPERATORS.has(e.value),
     );
     const operatorItems = operatorEntries.map((entry) => {
         const item = mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes);
@@ -222,6 +284,62 @@ function createValuePositionCompletions(
     return [...typeSuggestions, ...operatorItems, ...bsonItems, ...jsGlobals];
 }
 
+/**
+ * Value completions for the **project** editor: `1` (include) and `0` (exclude).
+ *
+ * Projection operators like `$slice` and `$elemMatch` are already available
+ * via operator-position completions; these simple numeric values cover the
+ * most common use case.
+ */
+function createProjectValueCompletions(
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
+    return [
+        {
+            label: { label: '1', description: 'include field' },
+            kind: monaco.languages.CompletionItemKind.Value,
+            insertText: '1',
+            sortText: '00_1',
+            preselect: true,
+            range,
+        },
+        {
+            label: { label: '0', description: 'exclude field' },
+            kind: monaco.languages.CompletionItemKind.Value,
+            insertText: '0',
+            sortText: '00_0',
+            range,
+        },
+    ];
+}
+
+/**
+ * Value completions for the **sort** editor: `1` (ascending) and `-1` (descending).
+ */
+function createSortValueCompletions(
+    range: monacoEditor.IRange,
+    monaco: typeof monacoEditor,
+): monacoEditor.languages.CompletionItem[] {
+    return [
+        {
+            label: { label: '1', description: 'ascending' },
+            kind: monaco.languages.CompletionItemKind.Value,
+            insertText: '1',
+            sortText: '00_1',
+            preselect: true,
+            range,
+        },
+        {
+            label: { label: '-1', description: 'descending' },
+            kind: monaco.languages.CompletionItemKind.Value,
+            insertText: '-1',
+            sortText: '00_-1',
+            range,
+        },
+    ];
+}
+
 function createOperatorPositionCompletions(
     editorType: EditorType | undefined,
     range: monacoEditor.IRange,
@@ -232,7 +350,11 @@ function createOperatorPositionCompletions(
     const allEntries = getFilteredCompletions({ meta: [...metaTags] });
 
     const operatorEntries = allEntries.filter(
-        (e) => e.meta !== 'bson' && e.meta !== 'variable' && !KEY_POSITION_OPERATORS.has(e.value),
+        (e) =>
+            e.meta !== 'bson' &&
+            e.meta !== 'variable' &&
+            e.standalone !== false &&
+            !KEY_POSITION_OPERATORS.has(e.value),
     );
     return operatorEntries.map((entry) => mapOperatorToCompletionItem(entry, range, monaco, fieldBsonTypes, true));
 }
