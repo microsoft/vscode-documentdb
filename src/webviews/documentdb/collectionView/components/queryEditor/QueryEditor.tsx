@@ -133,10 +133,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
     /**
      * Sets up pattern-based auto-trigger of completions.
-     * When the user types a space after `: ` or `, `, completions are
-     * triggered automatically after a short delay. This bridges the gap
-     * where selecting a field completion (e.g., `rating`) inserts `rating: `
-     * but the completion popup doesn't reappear for the value.
+     * When a content change results in a trigger character followed by a
+     * space (`: `, `, `, `{ `, `[ `) at the end of the inserted text,
+     * completions are triggered automatically after a short delay. This
+     * handles both manual typing and completion acceptance.
      *
      * Returns a cleanup function.
      */
@@ -145,24 +145,21 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         const disposable = editor.onDidChangeModelContent((e) => {
             clearTimeout(triggerTimeout);
 
-            // Only fire for single-character insertions (typing)
             const change = e.changes[0];
-            if (!change || change.text !== ' ') return;
+            if (!change || change.text.length === 0) return;
 
-            // Check the two characters ending at the cursor: "X " where X is : or ,
             const model = editor.getModel();
             if (!model) return;
 
-            const offset = model.getOffsetAt(
-                // The position after the inserted space
-                model.getPositionAt(change.rangeOffset + 1),
-            );
+            // Calculate the offset at the end of the inserted text in the new model
+            const endOffset = change.rangeOffset + change.text.length;
 
-            // We need at least 2 chars: the trigger char + space
-            if (offset < 2) return;
+            // We need at least 2 chars to check for ": " or ", "
+            if (endOffset < 2) return;
 
-            const textBefore = model.getValue().substring(offset - 2, offset);
-            if (textBefore === ': ' || textBefore === ', ') {
+            const fullText = model.getValue();
+            const lastTwo = fullText.substring(endOffset - 2, endOffset);
+            if (lastTwo === ': ' || lastTwo === ', ' || lastTwo === '{ ' || lastTwo === '[ ') {
                 triggerTimeout = setTimeout(() => {
                     editor.trigger('smart-trigger', 'editor.action.triggerSuggest', {});
                 }, 50);
@@ -181,7 +178,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     const filterSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
     const projectSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
     const sortSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
-
     const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
         // Store the filter editor reference
         filterEditorRef.current = editor;
