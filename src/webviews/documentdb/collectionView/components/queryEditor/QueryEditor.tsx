@@ -132,21 +132,49 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     };
 
     /**
+     * Cancels any active snippet session on the given editor.
+     *
+     * After a snippet completion (e.g., `fieldName: $1`), Monaco keeps the
+     * snippet session alive and highlights the tab-stop placeholder. If the
+     * user continues typing, the highlight grows — the "ghost selection"
+     * bug. Calling this function ends the snippet session cleanly.
+     */
+    const cancelSnippetSession = (editor: monacoEditor.editor.IStandaloneCodeEditor): void => {
+        const controller = editor.getContribution('snippetController2') as { cancel: () => void } | null | undefined;
+        controller?.cancel();
+    };
+
+    /** Characters that signal the end of a field-value pair and should exit snippet mode. */
+    const SNIPPET_EXIT_CHARS = new Set([',', '}', ']']);
+
+    /**
      * Sets up pattern-based auto-trigger of completions.
      * When a content change results in a trigger character followed by a
      * space (`: `, `, `, `{ `, `[ `) at the end of the inserted text,
      * completions are triggered automatically after a short delay. This
      * handles both manual typing and completion acceptance.
      *
+     * Also cancels any active snippet session when a delimiter character
+     * (`,`, `}`, `]`) is typed, preventing the "ghost selection" bug
+     * where the tab-stop highlight expands as the user continues typing.
+     *
      * Returns a cleanup function.
      */
     const setupSmartTrigger = (editor: monacoEditor.editor.IStandaloneCodeEditor): (() => void) => {
         let triggerTimeout: ReturnType<typeof setTimeout>;
-        const disposable = editor.onDidChangeModelContent((e) => {
+        const contentDisposable = editor.onDidChangeModelContent((e) => {
             clearTimeout(triggerTimeout);
 
             const change = e.changes[0];
             if (!change || change.text.length === 0) return;
+
+            // Cancel snippet session when the user *types* a delimiter character.
+            // Only applies to single-character edits (user keystrokes), not to
+            // multi-character completion insertions which may legitimately
+            // contain commas or braces as part of the snippet text.
+            if (change.text.length === 1 && SNIPPET_EXIT_CHARS.has(change.text)) {
+                cancelSnippetSession(editor);
+            }
 
             const model = editor.getModel();
             if (!model) return;
@@ -165,9 +193,18 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 }, 50);
             }
         });
+
+        // Cancel snippet session when the editor loses focus (Option D).
+        // If the user clicks away while a tab-stop is highlighted, the
+        // highlight should not persist when they return.
+        const blurDisposable = editor.onDidBlurEditorText(() => {
+            cancelSnippetSession(editor);
+        });
+
         return () => {
             clearTimeout(triggerTimeout);
-            disposable.dispose();
+            contentDisposable.dispose();
+            blurDisposable.dispose();
         };
     };
 
