@@ -952,7 +952,7 @@
               "string",
               "null"
             ],
-            "description": "Full path to folder and executable to start the Mongo shell, needed by some DocumentDB Scrapbook commands. The default is to search in the system path for 'mongosh'.",
+            "description": "Full path to folder and executable to start the Mongo shell. The default is to search in the system path for 'mongosh'.",
             "default": null
           },
           "documentDB.mongoShell.args": {
