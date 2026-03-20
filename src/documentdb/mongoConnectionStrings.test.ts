@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { wellKnownEmulatorPassword } from '../../constants';
+import { wellKnownEmulatorPassword } from '../constants';
 import { isCosmosEmulatorConnectionString } from './connectToClient';
 import {
     addDatabaseToAccountConnectionString,

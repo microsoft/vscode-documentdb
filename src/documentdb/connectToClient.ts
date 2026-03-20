@@ -5,8 +5,8 @@
 
 import * as l10n from '@vscode/l10n';
 import { MongoClient, type MongoClientOptions } from 'mongodb';
-import { Links, wellKnownEmulatorPassword } from '../../constants';
-import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
+import { Links, wellKnownEmulatorPassword } from '../constants';
+import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 
 export async function connectToClient(
     connectionString: string,

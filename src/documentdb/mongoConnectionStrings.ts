@@ -5,8 +5,8 @@
 
 import { appendExtensionUserAgent, parseError, type IParsedError } from '@microsoft/vscode-azext-utils';
 import { type MongoClient } from 'mongodb';
-import { ParsedConnectionString } from '../../ParsedConnectionString';
-import { nonNullValue } from '../../utils/nonNull';
+import { ParsedConnectionString } from '../ParsedConnectionString';
+import { nonNullValue } from '../utils/nonNull';
 import { connectToClient } from './connectToClient';
 
 // Connection strings follow the following format (https://docs.mongodb.com/manual/reference/connection-string/):

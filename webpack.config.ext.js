@@ -21,9 +21,6 @@ module.exports = (env, { mode }) => {
         mode: mode || 'none',
         node: { __filename: false, __dirname: false },
         entry: {
-            // 'extension.bundle.ts': './src/extension.ts', // Is still necessary?
-            './vscode-documentdb-scrapbook-language-languageServer.bundle':
-                './src/documentdb/scrapbook/languageServer.ts',
             main: './main.ts',
         },
         output: {
@@ -68,12 +65,6 @@ module.exports = (env, { mode }) => {
             // conditionNames: ['import', 'require', 'node'], // Uncomment when we will use VSCode what supports modules
             mainFields: ['module', 'main'],
             extensions: ['.js', '.ts'],
-            alias: {
-                'vscode-languageserver-types': path.resolve(
-                    __dirname,
-                    'node_modules/vscode-languageserver-types/lib/esm/main.js',
-                ),
-            },
         },
         module: {
             rules: [
@@ -116,10 +107,6 @@ module.exports = (env, { mode }) => {
             // - The dist folder should be ready to be published to the marketplace and be only one working folder
             new CopyWebpackPlugin({
                 patterns: [
-                    {
-                        from: 'grammar',
-                        to: 'grammar',
-                    },
                     {
                         from: 'l10n',
                         to: 'l10n',
