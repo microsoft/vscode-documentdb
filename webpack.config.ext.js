@@ -21,9 +21,6 @@ module.exports = (env, { mode }) => {
         mode: mode || 'none',
         node: { __filename: false, __dirname: false },
         entry: {
-            // 'extension.bundle.ts': './src/extension.ts', // Is still necessary?
-            './vscode-documentdb-scrapbook-language-languageServer.bundle':
-                './src/documentdb/scrapbook/languageServer.ts',
             main: './main.ts',
         },
         output: {
