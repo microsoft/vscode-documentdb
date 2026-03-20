@@ -246,29 +246,8 @@
         "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
       }
     ],
-    "languages": [
-      {
-        "id": "vscode-documentdb-scrapbook-language",
-        "aliases": [
-          "DocumentDB Scrapbook"
-        ],
-        "extensions": [
-          ".vscode-documentdb-scrapbook"
-        ],
-        "configuration": "./grammar/configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "vscode-documentdb-scrapbook-language",
-        "scopeName": "source.mongo.js",
-        "path": "./grammar/JavaScript.tmLanguage.json"
-      },
-      {
-        "scopeName": "source.mongo.js.regexp",
-        "path": "./grammar/Regular Expressions (JavaScript).tmLanguage"
-      }
-    ],
+    "languages": [],
+    "grammars": [],
     "commands": [
       {
         "//": "[ConnectionsView] New Connection",
@@ -437,31 +416,6 @@
         "title": "Create Database…"
       },
       {
-        "//": "Scrapbook: Connect Database",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scrapbook.connect",
-        "title": "Connect to this database"
-      },
-      {
-        "//": "Scrapbook: Execute All Commands",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
-        "title": "Execute All Commands"
-      },
-      {
-        "//": "Scrapbook: Execute Command",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scrapbook.executeCommand",
-        "title": "Execute Command"
-      },
-      {
-        "//": "Scrapbook: New Scrapbook",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scrapbook.new",
-        "title": "New DocumentDB Scrapbook",
-        "icon": "$(new-file)"
-      },
-      {
         "//": "Delete Collection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.dropCollection",
@@ -546,41 +500,8 @@
         "title": "Paste Collection…"
       }
     ],
-    "submenus": [
-      {
-        "id": "documentDB.submenus.mongo.database.scrapbook",
-        "label": "DocumentDB Scrapbook"
-      },
-      {
-        "id": "documentDB.submenus.mongo.collection.scrapbook",
-        "label": "DocumentDB Scrapbook"
-      }
-    ],
+    "submenus": [],
     "menus": {
-      "documentDB.submenus.mongo.database.scrapbook": [
-        {
-          "//": "[Database] Scrapbook: New Scrapbook",
-          "command": "vscode-documentdb.command.scrapbook.new",
-          "group": "1@1"
-        },
-        {
-          "//": "[Database] Scrapbook: Connect",
-          "command": "vscode-documentdb.command.scrapbook.connect",
-          "group": "1@2"
-        }
-      ],
-      "documentDB.submenus.mongo.collection.scrapbook": [
-        {
-          "//": "[Collection] Mongo DB|Cluster Scrapbook New",
-          "command": "vscode-documentdb.command.scrapbook.new",
-          "group": "1@1"
-        },
-        {
-          "//": "[Collection] Scrapbook / Connect",
-          "command": "vscode-documentdb.command.scrapbook.connect",
-          "group": "1@2"
-        }
-      ],
       "view/title": [
         {
           "command": "vscode-documentdb.command.connectionsView.refresh",
@@ -608,16 +529,7 @@
           "group": "navigation@5"
         }
       ],
-      "editor/context": [
-        {
-          "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
-          "when": "resourceLangId==mongo"
-        },
-        {
-          "command": "vscode-documentdb.command.scrapbook.executeCommand",
-          "when": "resourceLangId==mongo"
-        }
-      ],
+      "editor/context": [],
       "editor/title": [],
       "view/item/context": [
         {
@@ -775,12 +687,6 @@
           "group": "3@1"
         },
         {
-          "//": "[Database] Mongo DB|Cluster Scrapbook Submenu",
-          "submenu": "documentDB.submenus.mongo.database.scrapbook",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "3@2"
-        },
-        {
           "//": "[Collection] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
@@ -839,12 +745,6 @@
           "command": "vscode-documentdb.command.launchShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "5@1"
-        },
-        {
-          "//": "[Collection] Mongo DB|Cluster Scrapbook Submenu",
-          "submenu": "documentDB.submenus.mongo.collection.scrapbook",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "5@2"
         },
         {
           "//": "[Collection/Documents] Mongo DB|Cluster Open collection",
@@ -994,39 +894,10 @@
         {
           "command": "vscode-documentdb.command.containerView.open",
           "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.scrapbook.new",
-          "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.scrapbook.connect",
-          "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
-          "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.scrapbook.executeCommand",
-          "when": "never"
         }
       ]
     },
-    "keybindings": [
-      {
-        "command": "vscode-documentdb.command.scrapbook.executeCommand",
-        "key": "ctrl+shift+'",
-        "mac": "cmd+shift+'",
-        "when": "editorLangId == 'vscode-documentdb-scrapbook-language' && editorTextFocus"
-      },
-      {
-        "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
-        "key": "ctrl+shift+;",
-        "mac": "cmd+shift+;",
-        "when": "editorLangId == 'vscode-documentdb-scrapbook-language' && editorTextFocus"
-      }
-    ],
+    "keybindings": [],
     "configuration": [
       {
         "title": "DocumentDB for VS Code",
