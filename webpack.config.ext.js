@@ -131,6 +131,10 @@ module.exports = (env, { mode }) => {
                         to: 'scratchpad-language-configuration.json',
                     },
                     {
+                        from: 'syntaxes',
+                        to: 'syntaxes',
+                    },
+                    {
                         from: 'package.nls.*.json',
                         to: '[name][ext]',
                         noErrorOnMissing: true,

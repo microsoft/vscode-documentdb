@@ -255,7 +255,8 @@
     "grammars": [
       {
         "language": "documentdb-scratchpad",
-        "scopeName": "source.js"
+        "scopeName": "source.documentdb-scratchpad",
+        "path": "./syntaxes/documentdb-scratchpad.tmGrammar.json"
       }
     ],
     "commands": [
