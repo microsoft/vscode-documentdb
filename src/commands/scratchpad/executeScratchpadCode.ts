@@ -44,7 +44,7 @@ export async function executeScratchpadCode(code: string): Promise<void> {
                 await openReadOnlyContent(
                     { label: l10n.t('Scratchpad Results'), fullId: `scratchpad-results-${Date.now()}` },
                     formattedOutput,
-                    '.js',
+                    '.jsonc',
                     { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
                 );
             } catch (error: unknown) {
@@ -54,7 +54,7 @@ export async function executeScratchpadCode(code: string): Promise<void> {
                 await openReadOnlyContent(
                     { label: l10n.t('Scratchpad Error'), fullId: `scratchpad-error-${Date.now()}` },
                     formattedOutput,
-                    '.js',
+                    '.jsonc',
                     { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
                 );
 
