@@ -7,13 +7,16 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ScratchpadCommandIds } from './constants';
 import { ScratchpadService } from './ScratchpadService';
-import { detectBlocks } from './statementDetector';
+import { detectBlocks, findBlockAtLine } from './statementDetector';
 
 /**
  * Provides CodeLens actions for DocumentDB Scratchpad files:
  * 1. Connection status lens (line 0) — shows connected cluster/database or "Connect"
  * 2. Run All lens (line 0) — runs the entire file
- * 3. Per-block Run lens — one "▶ Run" per blank-line-separated code block
+ * 3. Per-block Run lens — shown only for the block containing the cursor
+ *
+ * The per-block lens follows the cursor: when the cursor moves to a different
+ * block, we fire `onDidChangeCodeLenses` so VS Code re-requests lenses.
  */
 export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vscode.Disposable {
     private readonly _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
@@ -21,14 +24,60 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
 
     private readonly _disposables: vscode.Disposable[] = [];
 
+    /** Track which block the cursor is in to avoid unnecessary refreshes. */
+    private _lastActiveBlockStart: number | undefined;
+
+    /** OS-aware modifier key for shortcut labels. */
+    private readonly _mod = process.platform === 'darwin' ? '⌘' : 'Ctrl';
+
     constructor() {
-        // Refresh lenses when connection/execution state changes
         const service = ScratchpadService.getInstance();
+
+        // Refresh lenses when connection/execution state changes
         this._disposables.push(
             service.onDidChangeState(() => {
                 this._onDidChangeCodeLenses.fire();
             }),
         );
+
+        // Refresh lenses when cursor moves to a different block
+        this._disposables.push(
+            vscode.window.onDidChangeTextEditorSelection((e) => {
+                if (e.textEditor.document.languageId !== 'documentdb-scratchpad') {
+                    return;
+                }
+                const cursorLine = e.selections[0].active.line;
+                const blocks = detectBlocks(e.textEditor.document);
+                const newStart = this.resolveActiveBlock(blocks, cursorLine)?.startLine;
+
+                if (newStart !== this._lastActiveBlockStart) {
+                    this._lastActiveBlockStart = newStart;
+                    this._onDidChangeCodeLenses.fire();
+                }
+            }),
+        );
+    }
+
+    /**
+     * Find the block at the cursor line. If the cursor is on a blank line
+     * between blocks, fall back to the nearest preceding block to avoid
+     * CodeLens flickering.
+     */
+    private resolveActiveBlock(
+        blocks: ReturnType<typeof detectBlocks>,
+        cursorLine: number,
+    ): ReturnType<typeof findBlockAtLine> {
+        const direct = findBlockAtLine(blocks, cursorLine);
+        if (direct) {
+            return direct;
+        }
+        // Fall back: find the last block that ends before the cursor
+        for (let i = blocks.length - 1; i >= 0; i--) {
+            if (blocks[i].endLine < cursorLine) {
+                return blocks[i];
+            }
+        }
+        return undefined;
     }
 
     provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
@@ -59,28 +108,37 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
         // 2. Run All lens
         const runAllTitle = service.isExecuting
             ? `$(loading~spin) ${l10n.t('Running…')}`
-            : `$(run-all) ${l10n.t('Run All')}`;
+            : `$(run-all) ${l10n.t('Run All')} (${this._mod}+Shift+Enter)`;
         lenses.push(
             new vscode.CodeLens(topRange, {
                 title: runAllTitle,
                 command: ScratchpadCommandIds.runAll,
-                tooltip: l10n.t('Run the entire file (Ctrl+Shift+Enter)'),
+                tooltip: l10n.t('Run the entire file'),
             }),
         );
 
-        // 3. Per-block Run lenses
-        const blocks = detectBlocks(document);
-        for (const block of blocks) {
-            const blockRange = new vscode.Range(block.startLine, 0, block.startLine, 0);
-            const runTitle = service.isExecuting ? `$(loading~spin) ${l10n.t('Running…')}` : `$(play) ${l10n.t('Run')}`;
-            lenses.push(
-                new vscode.CodeLens(blockRange, {
-                    title: runTitle,
-                    command: ScratchpadCommandIds.runSelected,
-                    arguments: [block.startLine, block.endLine],
-                    tooltip: l10n.t('Run this block (Ctrl+Enter)'),
-                }),
-            );
+        // 3. Per-block Run lens — only for the block containing the cursor
+        //    Falls back to the nearest preceding block when cursor is between blocks
+        const editor = vscode.window.activeTextEditor;
+        if (editor && editor.document === document) {
+            const cursorLine = editor.selection.active.line;
+            const blocks = detectBlocks(document);
+            const activeBlock = this.resolveActiveBlock(blocks, cursorLine);
+
+            if (activeBlock) {
+                const blockRange = new vscode.Range(activeBlock.startLine, 0, activeBlock.startLine, 0);
+                const runTitle = service.isExecuting
+                    ? `$(loading~spin) ${l10n.t('Running…')}`
+                    : `$(play) ${l10n.t('Run')} (${this._mod}+Enter)`;
+                lenses.push(
+                    new vscode.CodeLens(blockRange, {
+                        title: runTitle,
+                        command: ScratchpadCommandIds.runSelected,
+                        arguments: [activeBlock.startLine, activeBlock.endLine],
+                        tooltip: l10n.t('Run this block'),
+                    }),
+                );
+            }
         }
 
         return lenses;

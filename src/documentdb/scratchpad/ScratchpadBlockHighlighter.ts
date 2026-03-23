@@ -3,25 +3,39 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { SCRATCHPAD_LANGUAGE_ID } from './constants';
 import { detectBlocks, findBlockAtLine } from './statementDetector';
 
 /**
- * Highlights the code block containing the cursor in scratchpad files.
- * Uses a subtle background tint so the user knows which block
- * "▶ Run" (Ctrl+Enter) will execute.
+ * Shows a vertical bar in the gutter for all code blocks in scratchpad files.
+ * The active block (containing the cursor) is brighter; inactive blocks are dimmed.
+ * Decoration types are recreated when the color theme changes to use the
+ * appropriate dark/light SVG variants.
  */
 export class ScratchpadBlockHighlighter implements vscode.Disposable {
-    private readonly _decoration = vscode.window.createTextEditorDecorationType({
-        backgroundColor: new vscode.ThemeColor('editor.linkedEditingBackground'),
-        isWholeLine: true,
-    });
+    private _activeDecoration!: vscode.TextEditorDecorationType;
+    private _inactiveDecoration!: vscode.TextEditorDecorationType;
+    private readonly _extensionPath: string;
 
     private readonly _disposables: vscode.Disposable[] = [];
 
-    constructor() {
-        this._disposables.push(this._decoration);
+    constructor(extensionPath: string) {
+        this._extensionPath = extensionPath;
+        this.createDecorations();
+
+        this._disposables.push(
+            vscode.window.onDidChangeActiveColorTheme(() => {
+                this._activeDecoration.dispose();
+                this._inactiveDecoration.dispose();
+                this.createDecorations();
+                // Re-apply to current editor
+                if (vscode.window.activeTextEditor) {
+                    this.update(vscode.window.activeTextEditor);
+                }
+            }),
+        );
 
         this._disposables.push(
             vscode.window.onDidChangeTextEditorSelection((e) => {
@@ -37,10 +51,35 @@ export class ScratchpadBlockHighlighter implements vscode.Disposable {
             }),
         );
 
-        // Initialize with current editor
+        this._disposables.push(
+            vscode.workspace.onDidChangeTextDocument((e) => {
+                const editor = vscode.window.activeTextEditor;
+                if (editor && editor.document === e.document) {
+                    this.update(editor);
+                }
+            }),
+        );
+
         if (vscode.window.activeTextEditor) {
             this.update(vscode.window.activeTextEditor);
         }
+    }
+
+    private createDecorations(): void {
+        const isLight =
+            vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light ||
+            vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.HighContrastLight;
+        const suffix = isLight ? '-light' : '';
+        const iconsDir = path.join(this._extensionPath, 'resources', 'icons');
+
+        this._activeDecoration = vscode.window.createTextEditorDecorationType({
+            gutterIconPath: vscode.Uri.file(path.join(iconsDir, `scratchpad-block-active${suffix}.svg`)),
+            gutterIconSize: 'contain',
+        });
+        this._inactiveDecoration = vscode.window.createTextEditorDecorationType({
+            gutterIconPath: vscode.Uri.file(path.join(iconsDir, `scratchpad-block-inactive${suffix}.svg`)),
+            gutterIconSize: 'contain',
+        });
     }
 
     private update(editor: vscode.TextEditor): void {
@@ -50,22 +89,26 @@ export class ScratchpadBlockHighlighter implements vscode.Disposable {
 
         const cursorLine = editor.selection.active.line;
         const blocks = detectBlocks(editor.document);
-        const currentBlock = findBlockAtLine(blocks, cursorLine);
+        const activeBlock = findBlockAtLine(blocks, cursorLine);
 
-        if (currentBlock) {
-            const range = new vscode.Range(
-                currentBlock.startLine,
-                0,
-                currentBlock.endLine,
-                editor.document.lineAt(currentBlock.endLine).text.length,
-            );
-            editor.setDecorations(this._decoration, [range]);
-        } else {
-            editor.setDecorations(this._decoration, []);
+        const activeRanges: vscode.Range[] = [];
+        const inactiveRanges: vscode.Range[] = [];
+
+        for (const block of blocks) {
+            const isActive = activeBlock !== undefined && block.startLine === activeBlock.startLine;
+            const target = isActive ? activeRanges : inactiveRanges;
+            for (let line = block.startLine; line <= block.endLine; line++) {
+                target.push(new vscode.Range(line, 0, line, 0));
+            }
         }
+
+        editor.setDecorations(this._activeDecoration, activeRanges);
+        editor.setDecorations(this._inactiveDecoration, inactiveRanges);
     }
 
     dispose(): void {
+        this._activeDecoration.dispose();
+        this._inactiveDecoration.dispose();
         for (const d of this._disposables) {
             d?.dispose();
         }

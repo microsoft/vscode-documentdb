@@ -790,16 +790,10 @@
           "group": "5@1"
         },
         {
-          "//": "[Database] Scratchpad submenu",
+          "//": "[Database/Collection] Scratchpad submenu",
           "submenu": "documentDB.submenus.scratchpad",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "4@1"
-        },
-        {
-          "//": "[Collection] Scratchpad submenu",
-          "submenu": "documentDB.submenus.scratchpad",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "6@1"
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "5@2"
         },
         {
           "//": "[Collection/Documents] Mongo DB|Cluster Open collection",

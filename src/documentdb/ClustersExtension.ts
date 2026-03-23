@@ -211,7 +211,7 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 // Register block highlighter for scratchpad files
-                const blockHighlighter = new ScratchpadBlockHighlighter();
+                const blockHighlighter = new ScratchpadBlockHighlighter(ext.context.extensionPath);
                 ext.context.subscriptions.push(blockHighlighter);
 
                 //// Scratchpad Commands:

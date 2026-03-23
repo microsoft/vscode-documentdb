@@ -73,23 +73,12 @@ describe('ScratchpadCodeLensProvider', () => {
         expect(runAllLens.range.start.line).toBe(0);
     });
 
-    it('provides per-block Run lens for each detected block', () => {
+    it('provides only top-level lenses when no active editor (per-block lens follows cursor)', () => {
         const doc = mockDocument('db.users.find({});\n\ndb.orders.find({});');
         const lenses = provider.provideCodeLenses(doc);
 
-        // 2 top lenses (connection + Run All) + 2 block lenses = 4
-        expect(lenses.length).toBe(4);
-
-        // Block lenses (indices 2 and 3)
-        const blockLens1 = lenses[2];
-        expect(blockLens1.command?.command).toBe(ScratchpadCommandIds.runSelected);
-        expect(blockLens1.range.start.line).toBe(0);
-        expect(blockLens1.command?.arguments).toEqual([0, 0]);
-
-        const blockLens2 = lenses[3];
-        expect(blockLens2.command?.command).toBe(ScratchpadCommandIds.runSelected);
-        expect(blockLens2.range.start.line).toBe(2);
-        expect(blockLens2.command?.arguments).toEqual([2, 2]);
+        // Only 2 top lenses (connection + Run All) — per-block lens requires active editor
+        expect(lenses.length).toBe(2);
     });
 
     it('shows running state when executing', () => {

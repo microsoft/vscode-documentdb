@@ -44,8 +44,9 @@ export async function newScratchpad(_context: IActionContext, node?: DatabaseIte
         '',
     ].join('\n');
 
-    // Create untitled file with the scratchpad extension
-    const uri = vscode.Uri.from({ scheme: 'untitled', path: `scratchpad${SCRATCHPAD_FILE_EXTENSION}` });
+    // Create untitled file with a unique name to avoid reusing existing documents
+    const timestamp = Date.now();
+    const uri = vscode.Uri.from({ scheme: 'untitled', path: `scratchpad-${timestamp}${SCRATCHPAD_FILE_EXTENSION}` });
     const edit = new vscode.WorkspaceEdit();
     edit.insert(uri, new vscode.Position(0, 0), template);
     await vscode.workspace.applyEdit(edit);
