@@ -79,6 +79,7 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
+import { ScratchpadService } from './scratchpad/ScratchpadService';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -190,6 +191,10 @@ export class ClustersExtension implements vscode.Disposable {
 
                 // Initialize TaskService and TaskProgressReportingService
                 TaskProgressReportingService.attach(TaskService);
+
+                // Initialize ScratchpadService (connection state + StatusBarItem)
+                const scratchpadService = ScratchpadService.getInstance();
+                ext.context.subscriptions.push(scratchpadService);
 
                 //// General Commands:
 

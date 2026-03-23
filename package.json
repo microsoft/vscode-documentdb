@@ -239,8 +239,25 @@
         "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
       }
     ],
-    "languages": [],
-    "grammars": [],
+    "languages": [
+      {
+        "id": "documentdb-scratchpad",
+        "extensions": [
+          ".documentdb",
+          ".documentdb.js"
+        ],
+        "aliases": [
+          "DocumentDB Scratchpad"
+        ],
+        "configuration": "./scratchpad-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "documentdb-scratchpad",
+        "scopeName": "source.js"
+      }
+    ],
     "commands": [
       {
         "//": "[ConnectionsView] New Connection",
