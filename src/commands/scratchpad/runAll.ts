@@ -8,10 +8,10 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
 import { SCRATCHPAD_LANGUAGE_ID } from '../../documentdb/scratchpad/constants';
+import { executeScratchpadCode } from './executeScratchpadCode';
 
 /**
  * Runs the entire content of the active scratchpad file.
- * Execution engine is wired in WI-3 (Phase 4).
  */
 export async function runAll(_context: IActionContext): Promise<void> {
     const editor = vscode.window.activeTextEditor;
@@ -32,6 +32,5 @@ export async function runAll(_context: IActionContext): Promise<void> {
         return;
     }
 
-    // Execution will be wired in WI-3 (Phase 4 — ScratchpadEvaluator)
-    void vscode.window.showInformationMessage(l10n.t('Scratchpad execution is not yet available.'));
+    await executeScratchpadCode(code);
 }

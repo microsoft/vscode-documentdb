@@ -258,6 +258,15 @@ export class ClustersClient {
     }
 
     /**
+     * Returns the underlying MongoClient instance.
+     * Used by the scratchpad evaluator to create a `@mongosh` ServiceProvider
+     * that reuses the existing, authenticated connection.
+     */
+    public getMongoClient(): MongoClient {
+        return this._mongoClient;
+    }
+
+    /**
      * Retrieves an instance of `ClustersClient` based on the provided `clusterId`.
      *
      * @param clusterId - A required string used to find the cached connection string to connect.

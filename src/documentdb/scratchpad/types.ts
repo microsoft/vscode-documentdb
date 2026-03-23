@@ -15,3 +15,15 @@ export interface ScratchpadConnection {
     /** Target database name for query execution. */
     readonly databaseName: string;
 }
+
+/**
+ * Result of executing scratchpad code via the `@mongosh` eval pipeline.
+ */
+export interface ExecutionResult {
+    /** The mongosh result type string (e.g. 'Cursor', 'Document', 'string'). */
+    readonly type: string | null;
+    /** The printable result value — already iterated for cursors. */
+    readonly printable: unknown;
+    /** Execution duration in milliseconds. */
+    readonly durationMs: number;
+}

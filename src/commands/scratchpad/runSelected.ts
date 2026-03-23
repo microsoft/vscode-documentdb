@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
 import { SCRATCHPAD_LANGUAGE_ID } from '../../documentdb/scratchpad/constants';
 import { detectCurrentBlock } from '../../documentdb/scratchpad/statementDetector';
+import { executeScratchpadCode } from './executeScratchpadCode';
 
 /**
  * Runs the selected text, the block specified by CodeLens arguments,
@@ -49,6 +50,5 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
         return;
     }
 
-    // Execution will be wired in WI-3 (Phase 4 — ScratchpadEvaluator)
-    void vscode.window.showInformationMessage(l10n.t('Scratchpad execution is not yet available.'));
+    await executeScratchpadCode(codeToRun);
 }
