@@ -30,27 +30,38 @@ export async function executeScratchpadCode(code: string): Promise<void> {
 
     service.setExecuting(true);
 
-    try {
-        const result = await evaluator.evaluate(connection, code);
-        const formattedOutput = formatResult(result, code);
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: l10n.t('Running scratchpad query…'),
+            cancellable: false,
+        },
+        async () => {
+            try {
+                const result = await evaluator!.evaluate(connection, code);
+                const formattedOutput = formatResult(result, code);
 
-        await openReadOnlyContent(
-            { label: l10n.t('Scratchpad Results'), fullId: `scratchpad-results-${Date.now()}` },
-            formattedOutput,
-            '.js',
-        );
-    } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const formattedOutput = formatError(error, code, 0);
+                await openReadOnlyContent(
+                    { label: l10n.t('Scratchpad Results'), fullId: `scratchpad-results-${Date.now()}` },
+                    formattedOutput,
+                    '.js',
+                    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+                );
+            } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                const formattedOutput = formatError(error, code, 0);
 
-        await openReadOnlyContent(
-            { label: l10n.t('Scratchpad Error'), fullId: `scratchpad-error-${Date.now()}` },
-            formattedOutput,
-            '.js',
-        );
+                await openReadOnlyContent(
+                    { label: l10n.t('Scratchpad Error'), fullId: `scratchpad-error-${Date.now()}` },
+                    formattedOutput,
+                    '.js',
+                    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+                );
 
-        void vscode.window.showErrorMessage(l10n.t('Scratchpad execution failed: {0}', errorMessage));
-    } finally {
-        service.setExecuting(false);
-    }
+                void vscode.window.showErrorMessage(l10n.t('Scratchpad execution failed: {0}', errorMessage));
+            } finally {
+                service.setExecuting(false);
+            }
+        },
+    );
 }

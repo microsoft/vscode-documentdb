@@ -72,9 +72,9 @@ export class ScratchpadEvaluator {
         const result = await Promise.race([evalPromise, timeoutPromise]);
         const durationMs = Date.now() - startTime;
 
-        // toShellResult() converts raw mongosh result to { type, printable }
-        const { toShellResult } = await import('@mongosh/shell-api');
-        const shellResult = await toShellResult(result);
+        // customEval already runs toShellResult() internally via resultHandler,
+        // so `result` is already a ShellResult { type, printable, rawValue }.
+        const shellResult = result as { type: string | null; printable: unknown };
 
         return {
             type: shellResult.type,

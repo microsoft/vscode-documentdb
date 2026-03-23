@@ -77,6 +77,15 @@ function formatPrintable(printable: unknown): string {
     if (typeof printable === 'number' || typeof printable === 'boolean') {
         return String(printable);
     }
-    // Documents, arrays, cursors — use EJSON for structured output
-    return EJSON.stringify(printable, undefined, 2, { relaxed: true });
+    // Documents, arrays, cursors — use EJSON for structured output.
+    // Fall back to JSON.stringify with circular reference handling if EJSON fails.
+    try {
+        return EJSON.stringify(printable, undefined, 2, { relaxed: true });
+    } catch {
+        try {
+            return JSON.stringify(printable, undefined, 2);
+        } catch {
+            return String(printable);
+        }
+    }
 }
