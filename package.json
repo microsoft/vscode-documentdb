@@ -509,9 +509,41 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.pasteCollection",
         "title": "Paste Collection…"
+      },
+      {
+        "//": "[Scratchpad] New DocumentDB Scratchpad",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scratchpad.new",
+        "title": "New Scratchpad",
+        "icon": "$(new-file)"
+      },
+      {
+        "//": "[Scratchpad] Connect Scratchpad to Database",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scratchpad.connect",
+        "title": "Connect Scratchpad to this database"
+      },
+      {
+        "//": "[Scratchpad] Run All",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scratchpad.runAll",
+        "title": "Scratchpad: Run All",
+        "icon": "$(run-all)"
+      },
+      {
+        "//": "[Scratchpad] Run Selected / Current Block",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scratchpad.runSelected",
+        "title": "Scratchpad: Run Selected",
+        "icon": "$(play)"
       }
     ],
-    "submenus": [],
+    "submenus": [
+      {
+        "id": "documentDB.submenus.scratchpad",
+        "label": "DocumentDB Scratchpad"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -758,6 +790,18 @@
           "group": "5@1"
         },
         {
+          "//": "[Database] Scratchpad submenu",
+          "submenu": "documentDB.submenus.scratchpad",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "4@1"
+        },
+        {
+          "//": "[Collection] Scratchpad submenu",
+          "submenu": "documentDB.submenus.scratchpad",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "6@1"
+        },
+        {
           "//": "[Collection/Documents] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documents\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
@@ -786,6 +830,16 @@
           "command": "vscode-documentdb.command.pasteCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "3@4"
+        }
+      ],
+      "documentDB.submenus.scratchpad": [
+        {
+          "command": "vscode-documentdb.command.scratchpad.new",
+          "group": "1@1"
+        },
+        {
+          "command": "vscode-documentdb.command.scratchpad.connect",
+          "group": "1@2"
         }
       ],
       "explorer/context": [],
@@ -905,10 +959,35 @@
         {
           "command": "vscode-documentdb.command.containerView.open",
           "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.scratchpad.connect",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.scratchpad.runAll",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.scratchpad.runSelected",
+          "when": "never"
         }
       ]
     },
-    "keybindings": [],
+    "keybindings": [
+      {
+        "command": "vscode-documentdb.command.scratchpad.runAll",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorLangId == 'documentdb-scratchpad' && editorTextFocus"
+      },
+      {
+        "command": "vscode-documentdb.command.scratchpad.runSelected",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorLangId == 'documentdb-scratchpad' && editorTextFocus"
+      }
+    ],
     "configuration": [
       {
         "title": "DocumentDB for VS Code",
