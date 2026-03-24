@@ -5,6 +5,7 @@
 
 import { EventEmitter } from 'events';
 import * as vm from 'vm';
+import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { ClustersClient } from '../ClustersClient';
@@ -54,7 +55,7 @@ export class ScratchpadEvaluator {
         // Pre-select the target database
         await evaluator.customEval(
             customEvalFn,
-            `use('${escapeSingleQuotes(connection.databaseName)}')`,
+            `use(${JSON.stringify(connection.databaseName)})`,
             context,
             'scratchpad',
         );
@@ -73,7 +74,7 @@ export class ScratchpadEvaluator {
 
         const evalPromise = evaluator.customEval(customEvalFn, code, context, 'scratchpad');
         const timeoutPromise = new Promise<never>((_resolve, reject) => {
-            setTimeout(() => reject(new Error('Execution timed out')), timeoutMs);
+            setTimeout(() => reject(new Error(l10n.t('Execution timed out'))), timeoutMs);
         });
 
         const result = await Promise.race([evalPromise, timeoutPromise]);
@@ -177,8 +178,4 @@ export class ScratchpadEvaluator {
 async function customEvalFn(code: string, context: object): Promise<unknown> {
     const vmContext = vm.isContext(context) ? context : vm.createContext(context);
     return vm.runInContext(code, vmContext) as unknown;
-}
-
-function escapeSingleQuotes(value: string): string {
-    return value.replace(/'/g, "\\'");
 }
