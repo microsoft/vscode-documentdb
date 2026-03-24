@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
 import { SCRATCHPAD_LANGUAGE_ID } from '../../documentdb/scratchpad/constants';
-import { detectCurrentBlock } from '../../documentdb/scratchpad/statementDetector';
+import { detectBlocks, detectCurrentBlock } from '../../documentdb/scratchpad/statementDetector';
 import { executeScratchpadCode } from './executeScratchpadCode';
 
 /**
@@ -42,8 +42,26 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
         // Behavior 1: Run selection
         codeToRun = editor.document.getText(editor.selection);
     } else {
-        // Behavior 2: Run current block at cursor
+        // Behavior 2: Run current block at cursor, fall back to preceding block
         codeToRun = detectCurrentBlock(editor.document, editor.selection.active);
+        if (!codeToRun.trim()) {
+            // Cursor is on a blank line — fall back to the nearest preceding block
+            // (same behavior as CodeLens resolveActiveBlock)
+            const blocks = detectBlocks(editor.document);
+            const cursorLine = editor.selection.active.line;
+            for (let i = blocks.length - 1; i >= 0; i--) {
+                if (blocks[i].endLine < cursorLine) {
+                    const range = new vscode.Range(
+                        blocks[i].startLine,
+                        0,
+                        blocks[i].endLine,
+                        editor.document.lineAt(blocks[i].endLine).text.length,
+                    );
+                    codeToRun = editor.document.getText(range);
+                    break;
+                }
+            }
+        }
     }
 
     if (!codeToRun.trim()) {
