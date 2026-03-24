@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    callWithTelemetryAndErrorHandling,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
@@ -103,7 +107,7 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
                 );
 
                 // Connect using the cached credentials
-                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+                const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -117,6 +121,12 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
 
                 return clustersClient;
             } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                    context.telemetry.properties.connectionResult = 'cancelled';
+                    throw error;
+                }
+
                 // Add error telemetry
                 context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'failed';

@@ -147,7 +147,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
             }
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+                const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -157,6 +157,11 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
 
                 return clustersClient;
             } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
+                    throw error;
+                }
+
                 ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
 
                 void vscode.window.showErrorMessage(
