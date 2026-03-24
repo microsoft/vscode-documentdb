@@ -64,6 +64,13 @@ export class ScratchpadEvaluator {
 
         const startTime = Date.now();
 
+        // Intercept scratchpad-specific commands before they reach @mongosh
+        const trimmed = code.trim();
+        const helpResult = this.tryHandleHelp(trimmed);
+        if (helpResult) {
+            return { ...helpResult, durationMs: Date.now() - startTime };
+        }
+
         const evalPromise = evaluator.customEval(customEvalFn, code, context, 'scratchpad');
         const timeoutPromise = new Promise<never>((_resolve, reject) => {
             setTimeout(() => reject(new Error('Execution timed out')), timeoutMs);
@@ -81,6 +88,54 @@ export class ScratchpadEvaluator {
             printable: shellResult.printable,
             durationMs,
         };
+    }
+
+    /**
+     * Handle `help` command with scratchpad-specific output.
+     * Returns undefined if the input is not a help command.
+     */
+    private tryHandleHelp(input: string): Omit<ExecutionResult, 'durationMs'> | undefined {
+        if (input !== 'help' && input !== 'help()') {
+            return undefined;
+        }
+
+        const helpText = [
+            'DocumentDB Scratchpad — Quick Reference',
+            '════════════════════════════════════════',
+            '',
+            'Query Commands:',
+            '  db.getCollection("name").find({})     Find documents',
+            '  db.getCollection("name").findOne({})  Find one document',
+            '  db.getCollection("name").countDocuments({})  Count documents',
+            '  db.getCollection("name").aggregate([...])    Aggregation pipeline',
+            '',
+            'Write Commands:',
+            '  db.getCollection("name").insertOne({...})    Insert a document',
+            '  db.getCollection("name").insertMany([...])   Insert multiple documents',
+            '  db.getCollection("name").updateOne({}, {$set:{}})   Update one',
+            '  db.getCollection("name").deleteOne({})       Delete one',
+            '',
+            'Database Commands:',
+            '  show dbs                              List databases',
+            '  show collections                      List collections',
+            '  db.getCollectionNames()               List collection names',
+            '',
+            'BSON Constructors:',
+            '  ObjectId("...")                        Create ObjectId',
+            '  ISODate("...")                         Create Date',
+            '  NumberDecimal("...")                   Create Decimal128',
+            '',
+            'Keyboard Shortcuts:',
+            `  ${process.platform === 'darwin' ? '⌘' : 'Ctrl'}+Enter              Run current block`,
+            `  ${process.platform === 'darwin' ? '⌘' : 'Ctrl'}+Shift+Enter       Run entire file`,
+            '',
+            'Tips:',
+            '  • Separate code blocks with blank lines',
+            '  • Variables persist within a block but not between separate runs',
+            '  • Use .toArray() to get all results (default: first 20 documents)',
+        ].join('\n');
+
+        return { type: 'Help', printable: helpText };
     }
 }
 
