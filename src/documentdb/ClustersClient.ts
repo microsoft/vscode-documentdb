@@ -38,6 +38,7 @@ import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
+import { SchemaStore } from './SchemaStore';
 import {
     llmEnhancedFeatureApis,
     type CollectionStats,
@@ -320,8 +321,6 @@ export class ClustersClient {
             ClustersClient._clients.delete(credentialId);
 
             // Clear cached schema data for this cluster
-            // Lazy import to avoid circular dependency (SchemaStore imports from schema-analyzer)
-            const { SchemaStore } = await import('./SchemaStore');
             SchemaStore.getInstance().clearCluster(credentialId);
         }
     }
