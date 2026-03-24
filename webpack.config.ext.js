@@ -209,9 +209,9 @@ module.exports = (env, { mode }) => {
         // webpack can't statically analyze. None execute at runtime.
         // See docs/plan/06-scrapbook-rebuild.md §"Webpack Externals" for details.
         ignoreWarnings: [
-            { module: /node_modules\/@babel\/core/ },
-            { module: /node_modules\/browserslist/ },
-            { module: /node_modules\/@mongodb-js\/oidc-plugin\/node_modules\/express/ },
+            { module: /node_modules[\\/]@babel[\\/]core/ },
+            { module: /node_modules[\\/]browserslist/ },
+            { module: /node_modules[\\/]@mongodb-js[\\/]oidc-plugin[\\/]node_modules[\\/]express/ },
         ],
         infrastructureLogging: {
             level: 'log', // enables logging required for problem matchers
