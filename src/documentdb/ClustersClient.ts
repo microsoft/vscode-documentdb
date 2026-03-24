@@ -48,6 +48,7 @@ import {
     type IndexSpecification,
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
+import { SchemaStore } from './SchemaStore';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -318,6 +319,9 @@ export class ClustersClient {
             const client = ClustersClient._clients.get(credentialId) as ClustersClient;
             await client._mongoClient.close(true);
             ClustersClient._clients.delete(credentialId);
+
+            // Clear cached schema data for this cluster
+            SchemaStore.getInstance().clearCluster(credentialId);
         }
     }
 

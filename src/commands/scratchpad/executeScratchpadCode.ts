@@ -5,10 +5,13 @@
 
 import { openReadOnlyContent } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
+import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ScratchpadEvaluator } from '../../documentdb/scratchpad/ScratchpadEvaluator';
 import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
 import { formatError, formatResult } from '../../documentdb/scratchpad/resultFormatter';
+import { type ExecutionResult, type ScratchpadConnection } from '../../documentdb/scratchpad/types';
 
 /** Shared evaluator instance — lazily created, reused across runs. */
 let evaluator: ScratchpadEvaluator | undefined;
@@ -47,6 +50,9 @@ export async function executeScratchpadCode(code: string): Promise<void> {
                 const result = await evaluator!.evaluate(connection, code);
                 const formattedOutput = formatResult(result, code, connection);
 
+                // Feed document results to SchemaStore for cross-tab schema sharing
+                feedResultToSchemaStore(result, connection);
+
                 const resultLabel = l10n.t('{0}/{1} — Results', connection.clusterDisplayName, connection.databaseName);
 
                 await openReadOnlyContent(
@@ -75,4 +81,39 @@ export async function executeScratchpadCode(code: string): Promise<void> {
             }
         },
     );
+}
+
+/**
+ * Very conservative schema feeding: only feed 'Cursor' and 'Document' result types.
+ * Extracts documents from the printable result and adds them to SchemaStore.
+ */
+function feedResultToSchemaStore(result: ExecutionResult, connection: ScratchpadConnection): void {
+    // Only feed known document-producing result types
+    if (result.type !== 'Cursor' && result.type !== 'Document') {
+        return;
+    }
+
+    const ns = result.source?.namespace;
+    if (!ns?.collection) {
+        return;
+    }
+
+    const printable = result.printable;
+    if (printable === null || printable === undefined) {
+        return;
+    }
+
+    // Normalize to array
+    const items: unknown[] = Array.isArray(printable) ? printable : [printable];
+
+    // Filter to actual document objects with _id (not primitives, not nested arrays,
+    // not projection results with _id: 0 which have artificial shapes)
+    const docs = items.filter(
+        (d): d is WithId<Document> =>
+            d !== null && d !== undefined && typeof d === 'object' && !Array.isArray(d) && '_id' in d,
+    );
+
+    if (docs.length > 0) {
+        SchemaStore.getInstance().addDocuments(connection.clusterId, ns.db, ns.collection, docs);
+    }
 }

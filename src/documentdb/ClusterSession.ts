@@ -4,12 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
-import {
-    SchemaAnalyzer,
-    getPropertyNamesAtLevel,
-    type FieldEntry,
-    type JSONSchema,
-} from '@vscode-documentdb/schema-analyzer';
+import { type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
@@ -17,6 +12,7 @@ import { ext } from '../extensionVariables';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
+import { SchemaStore } from './SchemaStore';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export type TableDataEntry = {
@@ -71,7 +67,10 @@ export class ClusterSession {
      * Private constructor to enforce the use of `initNewSession` for creating new sessions.
      * This ensures that sessions are properly initialized and managed.
      */
-    private constructor(private _client: ClustersClient) {
+    private constructor(
+        private _client: ClustersClient,
+        private readonly _clusterId: string,
+    ) {
         return;
     }
 
@@ -80,19 +79,16 @@ export class ClusterSession {
     }
 
     /**
-     * Accumulated JSON schema across all pages seen for the current query.
-     * Updates progressively as users navigate through different pages.
-     * Reset when the query or page size changes.
+     * Database name for the current collection view.
+     * Set on the first runFindQueryWithCache call.
      */
-    private _schemaAnalyzer: SchemaAnalyzer = new SchemaAnalyzer();
+    private _databaseName: string | undefined;
 
     /**
-     * Tracks the highest page number that has been accumulated into the schema.
-     * Users navigate sequentially starting from page 1, so any page ≤ this value
-     * has already been accumulated and should be skipped.
-     * Reset when the query or page size changes.
+     * Collection name for the current collection view.
+     * Set on the first runFindQueryWithCache call.
      */
-    private _highestPageAccumulated: number = 0;
+    private _collectionName: string | undefined;
 
     /**
      * Stores the user's original query parameters (filter, project, sort, skip, limit).
@@ -169,16 +165,12 @@ export class ClusterSession {
 
         // The user's query has changed, invalidate all caches.
         //
-        // NOTE: We intentionally do NOT reset the SchemaAnalyzer here.
+        // NOTE: We intentionally do NOT reset schema here.
+        // Schema data is accumulated monotonically in the shared SchemaStore.
         // When a new query returns 0 results, preserving field knowledge from
         // previous queries is more valuable for autocompletion than having an
-        // empty field list. The SchemaAnalyzer accumulates field data
-        // monotonically — new fields are added, existing field type statistics
-        // are enriched with each query. This means type statistics represent
-        // aggregated observations across queries, not a single query snapshot.
-        // Consumers should treat type frequency data as approximate/relative
-        // (e.g., "mostly String") rather than absolute percentages.
-        this._highestPageAccumulated = 0;
+        // empty field list. Consumers should treat type frequency data as
+        // approximate/relative (e.g., "mostly String").
         this._currentPageSize = null;
         this._currentRawDocuments = [];
         this._lastExecutionTimeMs = undefined;
@@ -199,10 +191,9 @@ export class ClusterSession {
      */
     private resetAccumulationIfPageSizeChanged(newPageSize: number): void {
         if (this._currentPageSize !== null && this._currentPageSize !== newPageSize) {
-            // Page size changed, reset accumulation tracking
-            this._schemaAnalyzer.reset();
-            ext.outputChannel.trace('[SchemaAnalyzer] Reset — page size changed');
-            this._highestPageAccumulated = 0;
+            // Page size changed — schema data in SchemaStore is still valid
+            // (accumulated monotonically), just note the size change
+            ext.outputChannel.trace('[SchemaStore] Page size changed');
         }
         this._currentPageSize = newPageSize;
     }
@@ -310,15 +301,17 @@ export class ClusterSession {
         // Update current page documents (always replace, not accumulate)
         this._currentRawDocuments = documents;
 
-        // Accumulate schema only if this page hasn't been seen before
-        // Since navigation is sequential and starts at page 1, we only need to track
-        // the highest page number accumulated
-        if (pageNumber > this._highestPageAccumulated) {
-            this._schemaAnalyzer.addDocuments(this._currentRawDocuments);
-            this._highestPageAccumulated = pageNumber;
+        // Store database/collection context for schema operations
+        this._databaseName = databaseName;
+        this._collectionName = collectionName;
+
+        // Feed documents to the shared SchemaStore
+        if (documents.length > 0) {
+            const store = SchemaStore.getInstance();
+            store.addDocuments(this._clusterId, databaseName, collectionName, documents);
 
             ext.outputChannel.trace(
-                `[SchemaAnalyzer] Analyzed ${String(this._schemaAnalyzer.getDocumentCount())} documents, ${String(this._schemaAnalyzer.getKnownFields().length)} known fields`,
+                `[SchemaStore] Fed ${String(documents.length)} documents, ${String(store.getDocumentCount(this._clusterId, databaseName, collectionName))} total, ${String(store.getKnownFields(this._clusterId, databaseName, collectionName).length)} known fields`,
             );
         }
 
@@ -373,25 +366,28 @@ export class ClusterSession {
     }
 
     public getCurrentPageAsTable(path: string[]): TableData {
+        const store = SchemaStore.getInstance();
         const responsePack: TableData = {
             path: path,
-            headers: getPropertyNamesAtLevel(this._schemaAnalyzer.getSchema(), path),
+            headers:
+                this._databaseName && this._collectionName
+                    ? store.getPropertyNamesAtLevel(this._clusterId, this._databaseName, this._collectionName, path)
+                    : [],
             data: getDataAtPath(this._currentRawDocuments, path),
         };
 
         return responsePack;
     }
 
-    public getCurrentSchema(): JSONSchema {
-        return this._schemaAnalyzer.getSchema();
-    }
-
     /**
-     * Returns the cached list of known fields from the accumulated schema.
-     * Uses SchemaAnalyzer's version-based caching — only recomputed when the schema changes.
+     * Returns the cached list of known fields from the shared SchemaStore.
+     * Delegates to SchemaStore which provides cross-tab schema sharing.
      */
     public getKnownFields(): FieldEntry[] {
-        return this._schemaAnalyzer.getKnownFields();
+        if (!this._databaseName || !this._collectionName) {
+            return [];
+        }
+        return SchemaStore.getInstance().getKnownFields(this._clusterId, this._databaseName, this._collectionName);
     }
 
     // ============================================================================
@@ -690,7 +686,7 @@ export class ClusterSession {
 
         const sessionId = Math.random().toString(16).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        const session = new ClusterSession(client);
+        const session = new ClusterSession(client, credentialId);
 
         ClusterSession._sessions.set(sessionId, session);
 

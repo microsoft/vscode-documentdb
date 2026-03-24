@@ -81,13 +81,25 @@ export class ScratchpadEvaluator {
         const durationMs = Date.now() - startTime;
 
         // customEval already runs toShellResult() internally via resultHandler,
-        // so `result` is already a ShellResult { type, printable, rawValue }.
-        const shellResult = result as { type: string | null; printable: unknown };
+        // so `result` is already a ShellResult { type, printable, rawValue, source? }.
+        const shellResult = result as {
+            type: string | null;
+            printable: unknown;
+            source?: { namespace?: { db: string; collection: string } };
+        };
 
         return {
             type: shellResult.type,
             printable: shellResult.printable,
             durationMs,
+            source: shellResult.source?.namespace
+                ? {
+                      namespace: {
+                          db: shellResult.source.namespace.db,
+                          collection: shellResult.source.namespace.collection,
+                      },
+                  }
+                : undefined,
         };
     }
 
