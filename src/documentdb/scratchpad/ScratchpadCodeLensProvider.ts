@@ -5,7 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ScratchpadCommandIds } from './constants';
+import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './constants';
 import { ScratchpadService } from './ScratchpadService';
 import { detectBlocks, findBlockAtLine } from './statementDetector';
 
@@ -43,7 +43,7 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
         // Refresh lenses when cursor moves to a different block
         this._disposables.push(
             vscode.window.onDidChangeTextEditorSelection((e) => {
-                if (e.textEditor.document.languageId !== 'documentdb-scratchpad') {
+                if (e.textEditor.document.languageId !== SCRATCHPAD_LANGUAGE_ID) {
                     return;
                 }
                 const cursorLine = e.selections[0].active.line;

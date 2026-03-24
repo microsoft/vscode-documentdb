@@ -105,6 +105,8 @@
   "{0} task(s) are using connections in this folder. Check the Output panel for details.": "{0} task(s) are using connections in this folder. Check the Output panel for details.",
   "{0} tenants available ({1} signed in)": "{0} tenants available ({1} signed in)",
   "{0} was stopped": "{0} was stopped",
+  "{0}/{1} — Error": "{0}/{1} — Error",
+  "{0}/{1} — Results": "{0}/{1} — Results",
   "{0}/{1} documents": "{0}/{1} documents",
   "{countMany} documents have been deleted.": "{countMany} documents have been deleted.",
   "{countOne} document has been deleted.": "{countOne} document has been deleted.",
