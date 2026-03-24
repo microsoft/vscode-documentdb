@@ -53,12 +53,17 @@ export const DocumentView = (): JSX.Element => {
      */
     const { trpcClient } = useTrpcClient();
 
-    const [editorContent] = configuration.mode === 'add' ? useState('{  }') : useState('{ "loading…": true }');
+    const initialContent = configuration.mode === 'add' ? '{  }' : '{ "loading…": true }';
+    const [editorContent] = useState(initialContent);
     const [isLoading, setIsLoading] = useState(configuration.mode !== 'add');
     const [isDirty, setIsDirty] = useState(true);
 
     // Ref for the Save button to manage focus
     const saveButtonRef = useRef<HTMLButtonElement>(null);
+
+    const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    const getCurrentContent = () => editorRef.current?.getValue() || '';
+    const setContent = (newValue: string) => editorRef.current?.setValue(newValue);
 
     useSelectiveContextMenuPrevention();
 
@@ -67,6 +72,7 @@ export const DocumentView = (): JSX.Element => {
         if (configuration.mode !== 'add') {
             const documentId: string = configuration.documentId;
 
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- Setting loading state before async document fetch
             setIsLoading(true);
 
             void trpcClient.mongoClusters.documentView.getDocumentById
@@ -87,9 +93,11 @@ export const DocumentView = (): JSX.Element => {
         }
     }, []);
 
-    const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
-    const getCurrentContent = () => editorRef.current?.getValue() || '';
-    const setContent = (newValue: string) => editorRef.current?.setValue(newValue);
+    const handleResize = () => {
+        if (editorRef.current) {
+            editorRef.current.layout();
+        }
+    };
 
     const handleMonacoEditorMount = (
         editor: monacoEditor.editor.IStandaloneCodeEditor,
@@ -106,28 +114,6 @@ export const DocumentView = (): JSX.Element => {
         // provides better keyboard navigation until Tab navigation from editor is improved.
         // Addresses WCAG 2.4.3 Focus Order requirement.
         saveButtonRef.current?.focus();
-
-        // initialize the monaco editor with the schema that's basic
-        // as we don't know the schema of the collection available
-        // this is a fallback for the case when the autocompletion feature fails.
-        // monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-        //     validate: true,
-        //     schemas: [
-        //         {
-        //             uri: 'mongodb-filter-query-schema.json', // Unique identifier
-        //             fileMatch: ['*'], // Apply to all JSON files or specify as needed
-        //             // eslint-disable-next-line
-        //             schema: basicFindQuerySchema,
-        //             // schema: generateMongoFindJsonSchema(fieldEntries)
-        //         },
-        //     ],
-        // });
-    };
-
-    const handleResize = () => {
-        if (editorRef.current) {
-            editorRef.current.layout();
-        }
     };
 
     useEffect(() => {

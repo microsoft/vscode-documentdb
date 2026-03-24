@@ -36,7 +36,7 @@ export const useThemeMutationObserver = (callback: (themeKind: string) => void) 
 };
 
 // get class value from body element
-export const useVSCodeTheme = () => {
+export const getVSCodeThemeKind = () => {
     return document.body.getAttribute('data-vscode-theme-kind') ?? 'vscode-light';
 };
 
@@ -106,17 +106,21 @@ export const generateThemeContext = (useAdaptive: boolean = false, themeKind: st
 };
 
 export const WithTheme = ({ children, useAdaptive }: { children: ReactNode; useAdaptive: boolean }) => {
-    const [state, setState] = useState(generateThemeContext(useAdaptive, useVSCodeTheme()));
+    const [state, setState] = useState(generateThemeContext(useAdaptive, getVSCodeThemeKind()));
 
     function setThemeKind(themeKind: string) {
-        setState({
-            ...state,
+        setState((prev) => ({
+            ...prev,
             ...generateThemeContext(useAdaptive, themeKind),
-        });
+        }));
     }
 
     useEffect(() => {
-        setThemeKind(useVSCodeTheme());
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Synchronizing React state with external DOM theme; no way to derive this without effect+setState
+        setState((prev) => ({
+            ...prev,
+            ...generateThemeContext(useAdaptive, getVSCodeThemeKind()),
+        }));
     }, [useAdaptive]);
 
     useThemeMutationObserver((themeKind) => {

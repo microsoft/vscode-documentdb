@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as React from 'react';
+import type * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 export interface AnnouncerProps {
@@ -45,14 +45,16 @@ export function Announcer({ when, message, politeness = 'polite' }: AnnouncerPro
     useEffect(() => {
         if (when && !wasActiveRef.current) {
             // Transition to active - announce with delay for NVDA compatibility
-            setAnnouncement('');
+            // Clear and re-set inside timer to avoid synchronous setState in effect
             const timer = setTimeout(() => setAnnouncement(message), 100);
             wasActiveRef.current = true;
             return () => clearTimeout(timer);
         } else if (!when) {
             // Reset for next activation
             wasActiveRef.current = false;
-            setAnnouncement('');
+            // Schedule clear to avoid synchronous setState in effect body
+            const timer = setTimeout(() => setAnnouncement(''), 0);
+            return () => clearTimeout(timer);
         }
         return undefined;
     }, [when, message]);
