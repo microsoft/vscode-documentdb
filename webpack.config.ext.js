@@ -45,21 +45,37 @@ module.exports = (env, { mode }) => {
             ],
         },
         externalsType: 'node-commonjs',
-        externals: {
-            vs: 'vs',
-            vscode: 'commonjs vscode',
-            /* Mongodb optional dependencies */
-            kerberos: 'commonjs kerberos',
-            '@mongodb-js/zstd': 'commonjs @mongodb-js/zstd',
-            '@aws-sdk/credential-providers': 'commonjs @aws-sdk/credential-providers',
-            'gcp-metadata': 'commonjs gcp-metadata',
-            snappy: 'commonjs snappy',
-            socks: 'commonjs socks',
-            aws4: 'commonjs aws4',
-            'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
-            /* PG optional dependencies */
-            'pg-native': 'commonjs pg-native',
-        },
+        externals: [
+            {
+                vs: 'vs',
+                vscode: 'commonjs vscode',
+                /* Mongodb optional dependencies */
+                kerberos: 'commonjs kerberos',
+                '@mongodb-js/zstd': 'commonjs @mongodb-js/zstd',
+                '@aws-sdk/credential-providers': 'commonjs @aws-sdk/credential-providers',
+                'gcp-metadata': 'commonjs gcp-metadata',
+                snappy: 'commonjs snappy',
+                socks: 'commonjs socks',
+                aws4: 'commonjs aws4',
+                'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
+                /* @mongosh transitive optional dependencies */
+                electron: 'commonjs electron',
+                'os-dns-native': 'commonjs os-dns-native',
+                'cpu-features': 'commonjs cpu-features',
+                ssh2: 'commonjs ssh2',
+                'win-export-certificate-and-key': 'commonjs win-export-certificate-and-key',
+                'macos-export-certificate-and-key': 'commonjs macos-export-certificate-and-key',
+                /* PG optional dependencies */
+                'pg-native': 'commonjs pg-native',
+            },
+            // Handle @babel/preset-typescript and its subpath imports (e.g. /package.json)
+            ({ request }, callback) => {
+                if (request && request.startsWith('@babel/preset-typescript')) {
+                    return callback(null, `commonjs ${request}`);
+                }
+                callback();
+            },
+        ],
         resolve: {
             roots: [__dirname],
             // conditionNames: ['import', 'require', 'node'], // Uncomment when we will use VSCode what supports modules
@@ -127,6 +143,14 @@ module.exports = (env, { mode }) => {
                         to: 'package.nls.json',
                     },
                     {
+                        from: 'scratchpad-language-configuration.json',
+                        to: 'scratchpad-language-configuration.json',
+                    },
+                    {
+                        from: 'syntaxes',
+                        to: 'syntaxes',
+                    },
+                    {
                         from: 'package.nls.*.json',
                         to: '[name][ext]',
                         noErrorOnMissing: true,
@@ -179,6 +203,16 @@ module.exports = (env, { mode }) => {
             }),
         ].filter(Boolean),
         devtool: isDev ? 'source-map' : false,
+        // Filter known warnings from @mongosh transitive dependencies.
+        // These are all "Critical dependency" warnings from @babel/core,
+        // browserslist, and express that use dynamic require() patterns
+        // webpack can't statically analyze. None execute at runtime.
+        // See docs/plan/06-scrapbook-rebuild.md §"Webpack Externals" for details.
+        ignoreWarnings: [
+            { module: /node_modules[\\/]@babel[\\/]core/ },
+            { module: /node_modules[\\/]browserslist/ },
+            { module: /node_modules[\\/]@mongodb-js[\\/]oidc-plugin[\\/]node_modules[\\/]express/ },
+        ],
         infrastructureLogging: {
             level: 'log', // enables logging required for problem matchers
         },

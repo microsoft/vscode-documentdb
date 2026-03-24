@@ -55,6 +55,10 @@ import { removeConnection } from '../commands/removeConnection/removeConnection'
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
+import { connectDatabase } from '../commands/scratchpad/connectDatabase';
+import { newScratchpad } from '../commands/scratchpad/newScratchpad';
+import { runAll } from '../commands/scratchpad/runAll';
+import { runSelected } from '../commands/scratchpad/runSelected';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -79,6 +83,10 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
+import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
+import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
+import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
+import { ScratchpadService } from './scratchpad/ScratchpadService';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -190,6 +198,37 @@ export class ClustersExtension implements vscode.Disposable {
 
                 // Initialize TaskService and TaskProgressReportingService
                 TaskProgressReportingService.attach(TaskService);
+
+                // Initialize ScratchpadService (connection state + StatusBarItem)
+                const scratchpadService = ScratchpadService.getInstance();
+                ext.context.subscriptions.push(scratchpadService);
+
+                // Register CodeLens provider for scratchpad files
+                const codeLensProvider = new ScratchpadCodeLensProvider();
+                ext.context.subscriptions.push(codeLensProvider);
+                ext.context.subscriptions.push(
+                    vscode.languages.registerCodeLensProvider({ language: SCRATCHPAD_LANGUAGE_ID }, codeLensProvider),
+                );
+
+                // Register block highlighter for scratchpad files
+                const blockHighlighter = new ScratchpadBlockHighlighter(ext.context.extensionPath);
+                ext.context.subscriptions.push(blockHighlighter);
+
+                //// Scratchpad Commands:
+
+                registerCommandWithTreeNodeUnwrapping(
+                    ScratchpadCommandIds.new,
+                    withTreeNodeCommandCorrelation(newScratchpad),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    ScratchpadCommandIds.connect,
+                    withTreeNodeCommandCorrelation(connectDatabase),
+                );
+
+                registerCommand(ScratchpadCommandIds.runAll, withCommandCorrelation(runAll));
+
+                registerCommand(ScratchpadCommandIds.runSelected, withCommandCorrelation(runSelected));
 
                 //// General Commands:
 

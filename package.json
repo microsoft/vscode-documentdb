@@ -166,6 +166,11 @@
     "@monaco-editor/react": "~4.7.0",
     "@mongodb-js/explain-plan-helper": "1.4.24",
     "@mongodb-js/shell-bson-parser": "^1.5.6",
+    "@mongosh/errors": "^2.4.6",
+    "@mongosh/service-provider-core": "^5.0.3",
+    "@mongosh/service-provider-node-driver": "^5.0.6",
+    "@mongosh/shell-api": "^5.1.4",
+    "@mongosh/shell-evaluator": "^5.1.4",
     "@trpc/client": "~11.10.0",
     "@trpc/server": "~11.10.0",
     "@vscode-documentdb/documentdb-constants": "*",
@@ -173,11 +178,11 @@
     "@vscode/l10n": "~0.0.18",
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
-    "bson": "~7.0.0",
+    "bson": "^7.2.0",
     "denque": "~2.1.0",
     "es-toolkit": "~1.42.0",
     "monaco-editor": "~0.52.2",
-    "mongodb": "~7.0.0",
+    "mongodb": "^7.1.0",
     "mongodb-connection-string-url": "~3.0.2",
     "react-hotkeys-hook": "~5.2.1",
     "react-markdown": "^10.1.0",
@@ -239,8 +244,26 @@
         "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
       }
     ],
-    "languages": [],
-    "grammars": [],
+    "languages": [
+      {
+        "id": "documentdb-scratchpad",
+        "extensions": [
+          ".documentdb",
+          ".documentdb.js"
+        ],
+        "aliases": [
+          "DocumentDB Scratchpad"
+        ],
+        "configuration": "./scratchpad-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "documentdb-scratchpad",
+        "scopeName": "source.documentdb-scratchpad",
+        "path": "./syntaxes/documentdb-scratchpad.tmGrammar.json"
+      }
+    ],
     "commands": [
       {
         "//": "[ConnectionsView] New Connection",
@@ -491,9 +514,41 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.pasteCollection",
         "title": "Paste Collection…"
+      },
+      {
+        "//": "[Scratchpad] New DocumentDB Scratchpad",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scratchpad.new",
+        "title": "New Scratchpad",
+        "icon": "$(new-file)"
+      },
+      {
+        "//": "[Scratchpad] Connect Scratchpad to Database",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scratchpad.connect",
+        "title": "Connect Scratchpad to this database"
+      },
+      {
+        "//": "[Scratchpad] Run All",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scratchpad.runAll",
+        "title": "Scratchpad: Run All",
+        "icon": "$(run-all)"
+      },
+      {
+        "//": "[Scratchpad] Run Selected / Current Block",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scratchpad.runSelected",
+        "title": "Scratchpad: Run Selected",
+        "icon": "$(play)"
       }
     ],
-    "submenus": [],
+    "submenus": [
+      {
+        "id": "documentDB.submenus.scratchpad",
+        "label": "DocumentDB Scratchpad"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -740,6 +795,12 @@
           "group": "5@1"
         },
         {
+          "//": "[Database/Collection] Scratchpad submenu",
+          "submenu": "documentDB.submenus.scratchpad",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "5@2"
+        },
+        {
           "//": "[Collection/Documents] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documents\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
@@ -768,6 +829,16 @@
           "command": "vscode-documentdb.command.pasteCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "3@4"
+        }
+      ],
+      "documentDB.submenus.scratchpad": [
+        {
+          "command": "vscode-documentdb.command.scratchpad.new",
+          "group": "1@1"
+        },
+        {
+          "command": "vscode-documentdb.command.scratchpad.connect",
+          "group": "1@2"
         }
       ],
       "explorer/context": [],
@@ -887,10 +958,35 @@
         {
           "command": "vscode-documentdb.command.containerView.open",
           "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.scratchpad.connect",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.scratchpad.runAll",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.scratchpad.runSelected",
+          "when": "never"
         }
       ]
     },
-    "keybindings": [],
+    "keybindings": [
+      {
+        "command": "vscode-documentdb.command.scratchpad.runAll",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorLangId == 'documentdb-scratchpad' && editorTextFocus"
+      },
+      {
+        "command": "vscode-documentdb.command.scratchpad.runSelected",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorLangId == 'documentdb-scratchpad' && editorTextFocus"
+      }
+    ],
     "configuration": [
       {
         "title": "DocumentDB for VS Code",
