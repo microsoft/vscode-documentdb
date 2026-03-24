@@ -24,6 +24,11 @@ export async function executeScratchpadCode(code: string): Promise<void> {
         return;
     }
 
+    // Prevent concurrent runs — no queuing
+    if (service.isExecuting) {
+        return;
+    }
+
     if (!evaluator) {
         evaluator = new ScratchpadEvaluator();
     }
@@ -37,11 +42,12 @@ export async function executeScratchpadCode(code: string): Promise<void> {
             cancellable: false,
         },
         async () => {
+            const startTime = Date.now();
             try {
                 const result = await evaluator!.evaluate(connection, code);
                 const formattedOutput = formatResult(result, code, connection);
 
-                const resultLabel = `${connection.clusterDisplayName}/${connection.databaseName} — Results`;
+                const resultLabel = l10n.t('{0}/{1} — Results', connection.clusterDisplayName, connection.databaseName);
 
                 await openReadOnlyContent(
                     { label: resultLabel, fullId: `scratchpad-results-${Date.now()}` },
@@ -50,10 +56,11 @@ export async function executeScratchpadCode(code: string): Promise<void> {
                     { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
                 );
             } catch (error: unknown) {
+                const durationMs = Date.now() - startTime;
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                const formattedOutput = formatError(error, code, 0, connection);
+                const formattedOutput = formatError(error, code, durationMs, connection);
 
-                const errorLabel = `${connection.clusterDisplayName}/${connection.databaseName} — Error`;
+                const errorLabel = l10n.t('{0}/{1} — Error', connection.clusterDisplayName, connection.databaseName);
 
                 await openReadOnlyContent(
                     { label: errorLabel, fullId: `scratchpad-error-${Date.now()}` },
