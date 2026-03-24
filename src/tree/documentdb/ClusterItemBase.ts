@@ -115,7 +115,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         return vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: l10n.t('Connecting to "{cluster}"\u2026', { cluster: this.cluster.name }),
+                title: l10n.t('Connecting to "{cluster}"…', { cluster: this.cluster.name }),
                 cancellable: true,
             },
             async (_progress, token) => {
@@ -179,9 +179,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             clustersClient = await this.authenticateAndConnect();
         }
 
-        // If authentication failed, return the error element
+        // If authentication failed or cancelled, return the error element
         if (!clustersClient) {
-            ext.outputChannel.appendLine(`Failed to connect to "${this.cluster.name}".`);
+            ext.outputChannel.appendLine(l10n.t('Could not connect to "{cluster}".', { cluster: this.cluster.name }));
             return [
                 createGenericElementWithContext({
                     contextValue: 'error',

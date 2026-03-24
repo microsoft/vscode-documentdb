@@ -253,7 +253,9 @@ export class ClustersClient {
         // Wire up abort: closing the client causes the pending connect() to reject
         const onAbort = (): void => {
             ext.outputChannel.debug('AbortSignal fired — closing MongoClient to interrupt connection handshake.');
-            void this._mongoClient.close();
+            void this._mongoClient.close().catch(() => {
+                // Ignore close errors during abort cleanup
+            });
         };
         abortSignal?.addEventListener('abort', onAbort, { once: true });
 
