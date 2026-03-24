@@ -39,23 +39,23 @@ export async function executeScratchpadCode(code: string): Promise<void> {
         async () => {
             try {
                 const result = await evaluator!.evaluate(connection, code);
-                const formattedOutput = formatResult(result, code);
+                const formattedOutput = formatResult(result, code, connection);
 
                 await openReadOnlyContent(
                     { label: l10n.t('Scratchpad Results'), fullId: `scratchpad-results-${Date.now()}` },
                     formattedOutput,
                     '.jsonc',
-                    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+                    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
                 );
             } catch (error: unknown) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                const formattedOutput = formatError(error, code, 0);
+                const formattedOutput = formatError(error, code, 0, connection);
 
                 await openReadOnlyContent(
                     { label: l10n.t('Scratchpad Error'), fullId: `scratchpad-error-${Date.now()}` },
                     formattedOutput,
                     '.jsonc',
-                    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+                    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
                 );
 
                 void vscode.window.showErrorMessage(l10n.t('Scratchpad execution failed: {0}', errorMessage));

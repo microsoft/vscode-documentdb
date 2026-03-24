@@ -108,12 +108,12 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
         // 2. Run All lens
         const runAllTitle = service.isExecuting
             ? `$(loading~spin) ${l10n.t('Running…')}`
-            : `$(run-all) ${l10n.t('Run All')} (${this._mod}+Shift+Enter)`;
+            : `$(run-all) ${l10n.t('Run All')}`;
         lenses.push(
             new vscode.CodeLens(topRange, {
                 title: runAllTitle,
                 command: ScratchpadCommandIds.runAll,
-                tooltip: l10n.t('Run the entire file'),
+                tooltip: l10n.t('Run the entire file ({0}+Shift+Enter)', this._mod),
             }),
         );
 
@@ -129,13 +129,13 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
                 const blockRange = new vscode.Range(activeBlock.startLine, 0, activeBlock.startLine, 0);
                 const runTitle = service.isExecuting
                     ? `$(loading~spin) ${l10n.t('Running…')}`
-                    : `$(play) ${l10n.t('Run')} (${this._mod}+Enter)`;
+                    : `$(play) ${l10n.t('Run')}`;
                 lenses.push(
                     new vscode.CodeLens(blockRange, {
                         title: runTitle,
                         command: ScratchpadCommandIds.runSelected,
                         arguments: [activeBlock.startLine, activeBlock.endLine],
-                        tooltip: l10n.t('Run this block'),
+                        tooltip: l10n.t('Run this block ({0}+Enter)', this._mod),
                     }),
                 );
             }

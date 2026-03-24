@@ -6,6 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { type ExecutionResult } from './types';
+import { type ScratchpadConnection } from './types';
 
 /**
  * Formats a scratchpad execution result for display in a read-only output panel.
@@ -15,8 +16,13 @@ import { type ExecutionResult } from './types';
  * - Result metadata (type, timing, document count)
  * - Formatted result value (EJSON for documents, raw for scalars)
  */
-export function formatResult(result: ExecutionResult, code: string): string {
+export function formatResult(result: ExecutionResult, code: string, connection: ScratchpadConnection): string {
     const lines: string[] = [];
+
+    // Connection and timestamp
+    lines.push(`// ${connection.clusterDisplayName} / ${connection.databaseName}`);
+    lines.push(`// ${new Date().toLocaleString()}`);
+    lines.push('//');
 
     // Code echo — truncate to first 120 chars if long
     const codePreview = code.length > 120 ? code.slice(0, 120) + '…' : code;
@@ -36,6 +42,7 @@ export function formatResult(result: ExecutionResult, code: string): string {
 
     lines.push(`// ${l10n.t('Executed in {0}ms', result.durationMs)}`);
     lines.push('// ─────────────────────────');
+    lines.push('');
 
     // Result value
     lines.push(formatPrintable(result.printable));
@@ -46,8 +53,13 @@ export function formatResult(result: ExecutionResult, code: string): string {
 /**
  * Formats an error from scratchpad execution for display.
  */
-export function formatError(error: unknown, code: string, durationMs: number): string {
+export function formatError(error: unknown, code: string, durationMs: number, connection: ScratchpadConnection): string {
     const lines: string[] = [];
+
+    // Connection and timestamp
+    lines.push(`// ${connection.clusterDisplayName} / ${connection.databaseName}`);
+    lines.push(`// ${new Date().toLocaleString()}`);
+    lines.push('//');
 
     const codePreview = code.length > 120 ? code.slice(0, 120) + '…' : code;
     for (const codeLine of codePreview.split('\n')) {
@@ -57,6 +69,7 @@ export function formatError(error: unknown, code: string, durationMs: number): s
     lines.push(`// ❌ ${l10n.t('Error executing query')}`);
     lines.push(`// ${l10n.t('Executed in {0}ms', durationMs)}`);
     lines.push('// ─────────────────────────');
+    lines.push('');
 
     const errorMessage = error instanceof Error ? error.message : String(error);
     lines.push(errorMessage);
