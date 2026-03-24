@@ -184,7 +184,7 @@
     "vscode-uri": "~3.1.0",
     "zod": "~4.3.6"
   },
-  "//overrides": "glob 12 for latest, dompurify for security, and FluentUI needs to accept React 19",
+  "//overrides": "Pin transitive dependencies: glob 12 for latest, test-exclude 7 for compatibility",
   "overrides": {
     "glob": "~12.0.0",
     "test-exclude": "~7.0.1"
