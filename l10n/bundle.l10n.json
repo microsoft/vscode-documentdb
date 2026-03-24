@@ -81,6 +81,8 @@
   "[Query Insights Stage 3] Using cached execution plan from Stage 2 (requestKey: {key})": "[Query Insights Stage 3] Using cached execution plan from Stage 2 (requestKey: {key})",
   "[Reader] Counting documents in {0}.{1}": "[Reader] Counting documents in {0}.{1}",
   "[Reader] Document count result: {0} documents": "[Reader] Document count result: {0} documents",
+  "[SchemaStore] Clearing schema cache: {0} collections, {1} documents, {2} fields": "[SchemaStore] Clearing schema cache: {0} collections, {1} documents, {2} fields",
+  "[SchemaStore] Schema cache cleared: {0} collections, {1} documents, {2} fields": "[SchemaStore] Schema cache cleared: {0} collections, {1} documents, {2} fields",
   "[StreamingWriter] Abort signal received during streaming": "[StreamingWriter] Abort signal received during streaming",
   "[StreamingWriter] Buffer flush complete ({0} total processed so far)": "[StreamingWriter] Buffer flush complete ({0} total processed so far)",
   "[StreamingWriter] Fatal error ({0}): {1}": "[StreamingWriter] Fatal error ({0}): {1}",

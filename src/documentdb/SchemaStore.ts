@@ -3,13 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import {
     SchemaAnalyzer,
     getPropertyNamesAtLevel,
     type FieldEntry,
     type JSONSchema,
 } from '@vscode-documentdb/schema-analyzer';
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 
 import { type Document, type WithId } from 'mongodb';
@@ -140,7 +140,9 @@ export class SchemaStore implements vscode.Disposable {
                 `${String(stats.totalFields)} fields discovered`,
         );
         for (const c of stats.collections) {
-            ext.outputChannel?.trace(`[SchemaStore]   ${c.key}: ${String(c.documentCount)} docs, ${String(c.fieldCount)} fields`);
+            ext.outputChannel?.trace(
+                `[SchemaStore]   ${c.key}: ${String(c.documentCount)} docs, ${String(c.fieldCount)} fields`,
+            );
         }
     }
 

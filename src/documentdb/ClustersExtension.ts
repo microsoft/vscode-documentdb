@@ -55,11 +55,11 @@ import { removeConnection } from '../commands/removeConnection/removeConnection'
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
+import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { connectDatabase } from '../commands/scratchpad/connectDatabase';
 import { newScratchpad } from '../commands/scratchpad/newScratchpad';
 import { runAll } from '../commands/scratchpad/runAll';
 import { runSelected } from '../commands/scratchpad/runSelected';
-import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -231,10 +231,7 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommand(ScratchpadCommandIds.runSelected, withCommandCorrelation(runSelected));
 
-                registerCommand(
-                    'vscode-documentdb.command.clearSchemaCache',
-                    withCommandCorrelation(clearSchemaCache),
-                );
+                registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
 
                 //// General Commands:
 

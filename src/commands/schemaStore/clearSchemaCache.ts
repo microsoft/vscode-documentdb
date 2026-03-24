@@ -5,8 +5,8 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ext } from '../../extensionVariables';
 import { SchemaStore } from '../../documentdb/SchemaStore';
+import { ext } from '../../extensionVariables';
 
 /**
  * Command handler: Clear the shared schema cache.
