@@ -9,7 +9,12 @@
  * singletone on a client with a getter from a connection pool..
  */
 
-import { appendExtensionUserAgent, callWithTelemetryAndErrorHandling, parseError } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    appendExtensionUserAgent,
+    callWithTelemetryAndErrorHandling,
+    parseError,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import {
@@ -29,6 +34,7 @@ import {
     type WithoutId,
 } from 'mongodb';
 import { Links } from '../constants';
+import { ext } from '../extensionVariables';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
@@ -180,7 +186,7 @@ export class ClustersClient {
     //     }
     // }
 
-    private async initClient(): Promise<void> {
+    private async initClient(abortSignal?: AbortSignal): Promise<void> {
         const credentials = CredentialCache.getCredentials(this.clusterId);
         if (!credentials) {
             throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
@@ -212,7 +218,7 @@ export class ClustersClient {
         }
 
         // Connect with the configured options
-        await this.connect(connectionString, options, credentials.emulatorConfiguration);
+        await this.connect(connectionString, options, credentials.emulatorConfiguration, abortSignal);
 
         // Start metadata collection and store the promise
         this._clusterMetadataPromise = getClusterMetadata(this._mongoClient, hosts);
@@ -232,12 +238,37 @@ export class ClustersClient {
         connectionString: string,
         options: MongoClientOptions,
         emulatorConfiguration?: EmulatorConfiguration,
+        abortSignal?: AbortSignal,
     ): Promise<void> {
+        // Create the client instance first so we hold a reference during connection.
+        // This allows callers to abort via abortSignal by closing the underlying client.
+        this._mongoClient = new MongoClient(connectionString, options);
+
+        if (abortSignal?.aborted) {
+            ext.outputChannel.debug('Connection aborted before connecting (already aborted signal).');
+            await this._mongoClient.close();
+            throw new UserCancelledError('abortConnection');
+        }
+
+        // Wire up abort: closing the client causes the pending connect() to reject
+        const onAbort = (): void => {
+            ext.outputChannel.debug('AbortSignal fired — closing MongoClient to interrupt connection handshake.');
+            void this._mongoClient.close().catch(() => {
+                // Ignore close errors during abort cleanup
+            });
+        };
+        abortSignal?.addEventListener('abort', onAbort, { once: true });
+
         try {
-            this._mongoClient = await MongoClient.connect(connectionString, options);
+            await this._mongoClient.connect();
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
+            if (abortSignal?.aborted) {
+                ext.outputChannel.debug('Connection attempt was aborted by the user.');
+                throw new UserCancelledError('abortConnection');
+            }
+
             const message = parseError(error).message;
             if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -253,6 +284,8 @@ export class ClustersClient {
                 );
             }
             throw error;
+        } finally {
+            abortSignal?.removeEventListener('abort', onAbort);
         }
     }
 
@@ -261,21 +294,30 @@ export class ClustersClient {
      *
      * @param clusterId - A required string used to find the cached connection string to connect.
      * It is also used as a key to reuse existing clients.
+     * @param abortSignal - Optional signal to abort the connection attempt. When aborted,
+     * the in-progress connection is closed and a `UserCancelledError` is thrown.
      * @returns A promise that resolves to an instance of `ClustersClient`.
      */
-    public static async getClient(clusterId: string): Promise<ClustersClient> {
-        let client: ClustersClient;
-
+    public static async getClient(clusterId: string, abortSignal?: AbortSignal): Promise<ClustersClient> {
         if (ClustersClient._clients.has(clusterId)) {
-            client = ClustersClient._clients.get(clusterId) as ClustersClient;
+            const client = ClustersClient._clients.get(clusterId) as ClustersClient;
 
             // if the client is already connected, it's a NOOP.
             await client._mongoClient.connect();
-        } else {
-            client = new ClustersClient(clusterId);
+            return client;
+        }
+
+        const client = new ClustersClient(clusterId);
+        try {
             // Cluster metadata is set in initClient
-            await client.initClient();
+            await client.initClient(abortSignal);
             ClustersClient._clients.set(clusterId, client);
+        } catch (error) {
+            // On failure (including abort), clean up the partially-created client
+            void client._mongoClient?.close().catch(() => {
+                // Ignore close errors during cleanup
+            });
+            throw error;
         }
 
         return client;
