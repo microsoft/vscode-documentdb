@@ -41,8 +41,10 @@ export async function executeScratchpadCode(code: string): Promise<void> {
                 const result = await evaluator!.evaluate(connection, code);
                 const formattedOutput = formatResult(result, code, connection);
 
+                const resultLabel = `${connection.clusterDisplayName}/${connection.databaseName} — Results`;
+
                 await openReadOnlyContent(
-                    { label: l10n.t('Scratchpad Results'), fullId: `scratchpad-results-${Date.now()}` },
+                    { label: resultLabel, fullId: `scratchpad-results-${Date.now()}` },
                     formattedOutput,
                     '.jsonc',
                     { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
@@ -51,8 +53,10 @@ export async function executeScratchpadCode(code: string): Promise<void> {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 const formattedOutput = formatError(error, code, 0, connection);
 
+                const errorLabel = `${connection.clusterDisplayName}/${connection.databaseName} — Error`;
+
                 await openReadOnlyContent(
-                    { label: l10n.t('Scratchpad Error'), fullId: `scratchpad-error-${Date.now()}` },
+                    { label: errorLabel, fullId: `scratchpad-error-${Date.now()}` },
                     formattedOutput,
                     '.jsonc',
                     { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },

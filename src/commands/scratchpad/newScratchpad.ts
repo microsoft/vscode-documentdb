@@ -44,8 +44,17 @@ export async function newScratchpad(_context: IActionContext, node?: DatabaseIte
         '',
     ].join('\n');
 
-    // Create untitled file with a unique name to avoid reusing existing documents
-    const timestamp = Date.now();
+    // Create untitled file with a unique human-readable name
+    const now = new Date();
+    const timestamp = now.toLocaleString(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+    }).replace(/[/\\:]/g, '-').replace(/,\s*/g, '_');
     const uri = vscode.Uri.from({ scheme: 'untitled', path: `scratchpad-${timestamp}${SCRATCHPAD_FILE_EXTENSION}` });
     const edit = new vscode.WorkspaceEdit();
     edit.insert(uri, new vscode.Position(0, 0), template);
