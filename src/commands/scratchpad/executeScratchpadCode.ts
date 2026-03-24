@@ -106,9 +106,11 @@ function feedResultToSchemaStore(result: ExecutionResult, connection: Scratchpad
     // Normalize to array
     const items: unknown[] = Array.isArray(printable) ? printable : [printable];
 
-    // Filter to actual document objects (not primitives, not nested arrays)
+    // Filter to actual document objects with _id (not primitives, not nested arrays,
+    // not projection results with _id: 0 which have artificial shapes)
     const docs = items.filter(
-        (d): d is WithId<Document> => d !== null && d !== undefined && typeof d === 'object' && !Array.isArray(d),
+        (d): d is WithId<Document> =>
+            d !== null && d !== undefined && typeof d === 'object' && !Array.isArray(d) && '_id' in d,
     );
 
     if (docs.length > 0) {
