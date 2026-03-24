@@ -5,8 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
-import { type ExecutionResult } from './types';
-import { type ScratchpadConnection } from './types';
+import { type ExecutionResult, type ScratchpadConnection } from './types';
 
 /**
  * Formats a scratchpad execution result for display in a read-only output panel.
@@ -53,7 +52,12 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
 /**
  * Formats an error from scratchpad execution for display.
  */
-export function formatError(error: unknown, code: string, durationMs: number, connection: ScratchpadConnection): string {
+export function formatError(
+    error: unknown,
+    code: string,
+    durationMs: number,
+    connection: ScratchpadConnection,
+): string {
     const lines: string[] = [];
 
     // Connection and timestamp
