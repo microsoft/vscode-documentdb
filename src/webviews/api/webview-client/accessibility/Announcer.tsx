@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as React from 'react';
+import type * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 export interface AnnouncerProps {
@@ -44,15 +44,21 @@ export function Announcer({ when, message, politeness = 'polite' }: AnnouncerPro
 
     useEffect(() => {
         if (when && !wasActiveRef.current) {
-            // Transition to active - announce with delay for NVDA compatibility
-            setAnnouncement('');
-            const timer = setTimeout(() => setAnnouncement(message), 100);
+            // Transition to active: clear first so repeated identical messages
+            // are seen as a state change by React and re-announced by assistive tech.
+            // Both setState calls are in timer callbacks to satisfy react-hooks/set-state-in-effect.
+            const clearTimer = setTimeout(() => setAnnouncement(''), 0);
+            const announceTimer = setTimeout(() => setAnnouncement(message), 100);
             wasActiveRef.current = true;
-            return () => clearTimeout(timer);
+            return () => {
+                clearTimeout(clearTimer);
+                clearTimeout(announceTimer);
+            };
         } else if (!when) {
             // Reset for next activation
             wasActiveRef.current = false;
-            setAnnouncement('');
+            const timer = setTimeout(() => setAnnouncement(''), 0);
+            return () => clearTimeout(timer);
         }
         return undefined;
     }, [when, message]);

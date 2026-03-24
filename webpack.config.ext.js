@@ -33,6 +33,14 @@ module.exports = (env, { mode }) => {
             libraryTarget: 'commonjs2',
             devtoolModuleFilenameTemplate: '[resource-path]',
         },
+        cache: {
+            type: 'filesystem',
+            name: `extension-build${isDev ? '-dev' : ''}`,
+            cacheDirectory: path.resolve(__dirname, 'node_modules/.cache/webpack/extension'),
+            buildDependencies: {
+                config: [__filename],
+            },
+        },
         optimization: {
             minimize: !isDev,
             minimizer: [

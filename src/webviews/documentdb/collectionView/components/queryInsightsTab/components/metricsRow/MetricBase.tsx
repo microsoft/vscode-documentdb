@@ -5,7 +5,7 @@
 
 import { Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
 import { DataUsageRegular } from '@fluentui/react-icons';
-import * as React from 'react';
+import type * as React from 'react';
 import { useRef } from 'react';
 import './MetricsRow.scss';
 

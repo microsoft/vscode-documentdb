@@ -33,54 +33,58 @@ export const AnimatedCardList = ({ items, exitDuration = 300 }: AnimatedCardList
 
     useEffect(() => {
         const newKeys = new Set(items.map((item) => item.key));
-        const currentKeys = new Set(displayItems.map((item) => item.key));
 
-        // Find which items to add and which to remove
-        const toAdd = items.filter((item) => !currentKeys.has(item.key));
-        const toRemove = displayItems.filter((item) => !newKeys.has(item.key) && !item.isExiting);
+        // Use functional update to get current state without dependency
+        setDisplayItems((currentDisplayItems) => {
+            const currentKeys = new Set(currentDisplayItems.map((item) => item.key));
 
-        if (toAdd.length === 0 && toRemove.length === 0) {
-            return;
-        }
+            // Find which items to add and which to remove
+            const toAdd = items.filter((item) => !currentKeys.has(item.key));
+            const toRemove = currentDisplayItems.filter((item) => !newKeys.has(item.key) && !item.isExiting);
 
-        // Build new display list maintaining source order
-        const updated: ItemState[] = [];
-        const displayMap = new Map(displayItems.map((item) => [item.key, item]));
-
-        // First, add all items from source in their original order
-        for (const sourceItem of items) {
-            const existing = displayMap.get(sourceItem.key);
-            if (existing) {
-                // Item already exists, keep it with updated component
-                updated.push({ ...existing, component: sourceItem.component });
-                displayMap.delete(sourceItem.key); // Mark as processed
-            } else {
-                // New item
-                updated.push({ key: sourceItem.key, component: sourceItem.component, isExiting: false });
+            if (toAdd.length === 0 && toRemove.length === 0) {
+                return currentDisplayItems;
             }
-        }
 
-        // Then, handle items that were removed (not in source but still in display)
-        for (const [key, item] of displayMap) {
-            if (!item.isExiting) {
-                // Mark as exiting
-                const exitingItem = { ...item, isExiting: true };
-                updated.push(exitingItem);
+            // Build new display list maintaining source order
+            const updated: ItemState[] = [];
+            const displayMap = new Map(currentDisplayItems.map((item) => [item.key, item]));
 
-                // Schedule removal after animation
-                const timer = setTimeout(() => {
-                    setDisplayItems((current) => current.filter((i) => i.key !== key));
-                    exitTimersRef.current.delete(key);
-                }, exitDuration);
-
-                exitTimersRef.current.set(key, timer);
-            } else {
-                // Already exiting, keep it
-                updated.push(item);
+            // First, add all items from source in their original order
+            for (const sourceItem of items) {
+                const existing = displayMap.get(sourceItem.key);
+                if (existing) {
+                    // Item already exists, keep it with updated component
+                    updated.push({ ...existing, component: sourceItem.component });
+                    displayMap.delete(sourceItem.key); // Mark as processed
+                } else {
+                    // New item
+                    updated.push({ key: sourceItem.key, component: sourceItem.component, isExiting: false });
+                }
             }
-        }
 
-        setDisplayItems(updated);
+            // Then, handle items that were removed (not in source but still in display)
+            for (const [key, item] of displayMap) {
+                if (!item.isExiting) {
+                    // Mark as exiting
+                    const exitingItem = { ...item, isExiting: true };
+                    updated.push(exitingItem);
+
+                    // Schedule removal after animation
+                    const timer = setTimeout(() => {
+                        setDisplayItems((current) => current.filter((i) => i.key !== key));
+                        exitTimersRef.current.delete(key);
+                    }, exitDuration);
+
+                    exitTimersRef.current.set(key, timer);
+                } else {
+                    // Already exiting, keep it
+                    updated.push(item);
+                }
+            }
+
+            return updated;
+        });
     }, [items, exitDuration]);
 
     // Cleanup timers on unmount

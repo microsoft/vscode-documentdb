@@ -7,7 +7,7 @@ import { Badge, Text, tokens, Tooltip } from '@fluentui/react-components';
 import { InfoRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import * as React from 'react';
+import type * as React from 'react';
 import '../../../../../../../components/focusableBadge/focusableBadge.scss';
 import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
