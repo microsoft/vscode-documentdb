@@ -87,78 +87,10 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { adaptiveHeight, onExecuteRequest, onMount, trapTabKey, onEscapeEditor, ...editorProps } = props;
 
-    const handleMonacoEditorMount = (
-        editor: monacoEditor.editor.IStandaloneCodeEditor,
-        monaco: typeof monacoEditor,
-    ) => {
-        // Store the editor instance in ref
-        editorRef.current = editor;
-
-        handleResize();
-
-        if (propsRef.current.adaptiveHeight?.enabled) {
-            setupAdaptiveHeight(editor);
-        }
-
-        configureTabKeyMode(editor, propsRef.current.trapTabKey ?? false);
-
-        // Register a command for Ctrl + Enter / Cmd + Enter
-        if (propsRef.current.onExecuteRequest) {
-            editor.addCommand(monacoEditor.KeyMod.CtrlCmd | monacoEditor.KeyCode.Enter, () => {
-                // Use the ref to get the latest onExecuteRequest handler
-                propsRef.current.onExecuteRequest?.(editor.getValue());
-            });
-        }
-
-        // If the parent has provided the onMount handler, call it now
-        if (propsRef.current.onMount) {
-            propsRef.current.onMount(editor, monaco); // Pass the editor instance to the parent
-        }
-    };
-
-    useEffect(() => {
-        // Add the debounced resize event listener
-        const debouncedResizeHandler = debounce(handleResize, 100);
-        window.addEventListener('resize', debouncedResizeHandler);
-
-        // Initial layout adjustment
-        handleResize();
-
-        // Clean up on component unmount
-        return () => {
-            if (tabKeyDisposerRef.current) {
-                tabKeyDisposerRef.current.dispose();
-                tabKeyDisposerRef.current = null;
-            }
-            if (editorRef.current) {
-                editorRef.current.dispose();
-            }
-            window.removeEventListener('resize', debouncedResizeHandler);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (editorRef.current) {
-            configureTabKeyMode(editorRef.current, trapTabKey ?? false);
-        }
-    }, [trapTabKey]);
-
     const handleResize = () => {
         if (editorRef.current) {
             editorRef.current.layout();
         }
-    };
-
-    //Helper function to set up adaptive height behavior
-    const setupAdaptiveHeight = (editor: monacoEditor.editor.IStandaloneCodeEditor) => {
-        // Update the height initially and on content changes
-        // const updateHeight = debounce(() => updateEditorHeight(editor), 300); // doesn't really look good, but let's revisit it later
-        const updateHeight = () => updateEditorHeight(editor);
-
-        updateHeight();
-
-        // Attach event listener for content changes
-        editor.onDidChangeModelContent(updateHeight);
     };
 
     // Update the editor height based on the number of lines in the document
@@ -190,6 +122,57 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
 
             // Save the last line count to avoid unnecessary updates
             setLastLineCount(lineCount);
+        }
+    };
+
+    //Helper function to set up adaptive height behavior
+    const setupAdaptiveHeight = (editor: monacoEditor.editor.IStandaloneCodeEditor) => {
+        // Update the height initially and on content changes
+        // const updateHeight = debounce(() => updateEditorHeight(editor), 300); // doesn't really look good, but let's revisit it later
+        const updateHeight = () => updateEditorHeight(editor);
+
+        updateHeight();
+
+        // Attach event listener for content changes
+        editor.onDidChangeModelContent(updateHeight);
+    };
+
+    /**
+     * Moves keyboard focus to the next or previous focusable element relative to the editor.
+     *
+     * @param {monacoEditor.editor.IStandaloneCodeEditor} editor - The Monaco editor instance.
+     * @param {'next' | 'previous'} direction - The direction to move focus:
+     *        'next' moves to the next focusable element, 'previous' moves to the previous one.
+     *        Typically determined by whether Shift is held during Tab key press.
+     *
+     * If no focusable element is found in the given direction, the currently active element
+     * or the editor DOM node will be blurred as a fallback.
+     */
+    const moveFocus = (editor: monacoEditor.editor.IStandaloneCodeEditor, direction: 'next' | 'previous') => {
+        const focusFinders = focusFindersRef.current;
+        const editorDomNode = editor.getDomNode();
+
+        if (!focusFinders || !editorDomNode) {
+            return;
+        }
+
+        const activeElement = document.activeElement as HTMLElement | null;
+        const startElement = activeElement ?? (editorDomNode as HTMLElement);
+
+        const targetElement =
+            direction === 'next'
+                ? focusFinders.findNextFocusable(startElement)
+                : focusFinders.findPrevFocusable(startElement);
+
+        if (targetElement) {
+            targetElement.focus();
+            return;
+        }
+
+        if (activeElement) {
+            activeElement.blur();
+        } else if (editorDomNode instanceof HTMLElement) {
+            editorDomNode.blur();
         }
     };
 
@@ -248,45 +231,6 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
         };
     };
 
-    /**
-     * Moves keyboard focus to the next or previous focusable element relative to the editor.
-     *
-     * @param {monacoEditor.editor.IStandaloneCodeEditor} editor - The Monaco editor instance.
-     * @param {'next' | 'previous'} direction - The direction to move focus:
-     *        'next' moves to the next focusable element, 'previous' moves to the previous one.
-     *        Typically determined by whether Shift is held during Tab key press.
-     *
-     * If no focusable element is found in the given direction, the currently active element
-     * or the editor DOM node will be blurred as a fallback.
-     */
-    const moveFocus = (editor: monacoEditor.editor.IStandaloneCodeEditor, direction: 'next' | 'previous') => {
-        const focusFinders = focusFindersRef.current;
-        const editorDomNode = editor.getDomNode();
-
-        if (!focusFinders || !editorDomNode) {
-            return;
-        }
-
-        const activeElement = document.activeElement as HTMLElement | null;
-        const startElement = activeElement ?? (editorDomNode as HTMLElement);
-
-        const targetElement =
-            direction === 'next'
-                ? focusFinders.findNextFocusable(startElement)
-                : focusFinders.findPrevFocusable(startElement);
-
-        if (targetElement) {
-            targetElement.focus();
-            return;
-        }
-
-        if (activeElement) {
-            activeElement.blur();
-        } else if (editorDomNode instanceof HTMLElement) {
-            editorDomNode.blur();
-        }
-    };
-
     // Default escape handler: move focus to next element (like Tab)
     const handleEscapeEditor = () => {
         if (propsRef.current.onEscapeEditor) {
@@ -295,6 +239,62 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
             moveFocus(editorRef.current, 'next');
         }
     };
+
+    const handleMonacoEditorMount = (
+        editor: monacoEditor.editor.IStandaloneCodeEditor,
+        monaco: typeof monacoEditor,
+    ) => {
+        // Store the editor instance in ref
+        editorRef.current = editor;
+
+        handleResize();
+
+        if (propsRef.current.adaptiveHeight?.enabled) {
+            setupAdaptiveHeight(editor);
+        }
+
+        configureTabKeyMode(editor, propsRef.current.trapTabKey ?? false);
+
+        // Register a command for Ctrl + Enter / Cmd + Enter
+        if (propsRef.current.onExecuteRequest) {
+            editor.addCommand(monacoEditor.KeyMod.CtrlCmd | monacoEditor.KeyCode.Enter, () => {
+                // Use the ref to get the latest onExecuteRequest handler
+                propsRef.current.onExecuteRequest?.(editor.getValue());
+            });
+        }
+
+        // If the parent has provided the onMount handler, call it now
+        if (propsRef.current.onMount) {
+            propsRef.current.onMount(editor, monaco); // Pass the editor instance to the parent
+        }
+    };
+
+    useEffect(() => {
+        // Add the debounced resize event listener
+        const debouncedResizeHandler = debounce(handleResize, 100);
+        window.addEventListener('resize', debouncedResizeHandler);
+
+        // Initial layout adjustment
+        handleResize();
+
+        // Clean up on component unmount
+        return () => {
+            if (tabKeyDisposerRef.current) {
+                tabKeyDisposerRef.current.dispose();
+                tabKeyDisposerRef.current = null;
+            }
+            if (editorRef.current) {
+                editorRef.current.dispose();
+            }
+            window.removeEventListener('resize', debouncedResizeHandler);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (editorRef.current) {
+            configureTabKeyMode(editorRef.current, trapTabKey ?? false);
+        }
+    }, [trapTabKey]);
 
     return (
         <div className="monacoAutoHeightContainer" style={{ height: editorHeight }}>

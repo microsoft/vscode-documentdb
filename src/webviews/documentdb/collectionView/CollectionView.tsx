@@ -112,6 +112,7 @@ export const CollectionView = (): JSX.Element => {
         // Only reset on actual query changes, not pagination
         if (intent === 'initial' || intent === 'refresh') {
             console.trace('[CollectionView] Query changed (intent: {0}), resetting Query Insights', intent);
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting derived state on query intent change
             setCurrentContext((prev) => ({
                 ...prev,
                 queryInsights: DefaultCollectionViewContext.queryInsights,
@@ -188,93 +189,6 @@ export const CollectionView = (): JSX.Element => {
      * It helps us manage the query runs as the configuration changes from
      * within various controls (query panel, paging, etc.).
      */
-    useEffect(() => {
-        setCurrentContext((prev) => ({ ...prev, isLoading: true }));
-
-        // 1. Run the query, this operation only acknowledges the request.
-        //    Next we need to load the ones we need.
-        trpcClient.mongoClusters.collectionView.runFindQuery
-            .query({
-                filter: currentContext.activeQuery.filter,
-                project: currentContext.activeQuery.project,
-                sort: currentContext.activeQuery.sort,
-                skip: currentContext.activeQuery.skip,
-                limit: currentContext.activeQuery.limit,
-                pageNumber: currentContext.activeQuery.pageNumber,
-                pageSize: currentContext.activeQuery.pageSize,
-                executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
-            })
-            .then((response) => {
-                // Store document count for screen reader announcements (skip pagination)
-                if (currentContext.activeQuery.executionIntent !== 'pagination') {
-                    setCurrentQueryResults((prev) => ({ ...prev, documentCount: response.documentCount }));
-                }
-
-                // 2. This is the time to update the auto-completion data
-                //    Since now we do know more about the data returned from the query
-                updateAutoCompletionData();
-
-                // 3. Load the data for the current view
-                getDataForView(currentContext.currentView);
-
-                // 4. Non-blocking Stage 1 prefetch to populate cache
-                //    This runs in background and doesn't block results display
-                prefetchQueryInsights();
-
-                setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
-            })
-            .catch((error) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error while running the query'),
-                    modal: true,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
-            })
-            .finally(() => {
-                setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
-            });
-    }, [currentContext.activeQuery]);
-
-    useEffect(() => {
-        if (currentContext.currentView === Views.TABLE && currentContext.currentViewState?.currentPath) {
-            getDataForView(currentContext.currentView);
-        }
-    }, [currentContext.currentViewState?.currentPath]);
-
-    const handleViewChanged = (_optionValue: string) => {
-        let selection: Views;
-
-        switch (_optionValue) {
-            case 'Table View':
-                selection = Views.TABLE;
-                break;
-            case 'Tree View':
-                selection = Views.TREE;
-                break;
-            case 'JSON View':
-                selection = Views.JSON;
-                break;
-            default:
-                selection = Views.TABLE;
-                break;
-        }
-
-        trpcClient.common.reportEvent
-            .mutate({
-                eventName: 'viewChanged',
-                properties: {
-                    view: selection,
-                },
-            })
-            .catch((error) => {
-                console.debug('Failed to report an event:', error);
-            });
-
-        setCurrentContext((prev) => ({ ...prev, currentView: selection }));
-        getDataForView(selection);
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
-    };
 
     function getDataForView(selectedView: Views): void {
         switch (selectedView) {
@@ -372,6 +286,95 @@ export const CollectionView = (): JSX.Element => {
                     });
             });
     }
+
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Setting loading state before async query execution
+        setCurrentContext((prev) => ({ ...prev, isLoading: true }));
+
+        // 1. Run the query, this operation only acknowledges the request.
+        //    Next we need to load the ones we need.
+        trpcClient.mongoClusters.collectionView.runFindQuery
+            .query({
+                filter: currentContext.activeQuery.filter,
+                project: currentContext.activeQuery.project,
+                sort: currentContext.activeQuery.sort,
+                skip: currentContext.activeQuery.skip,
+                limit: currentContext.activeQuery.limit,
+                pageNumber: currentContext.activeQuery.pageNumber,
+                pageSize: currentContext.activeQuery.pageSize,
+                executionIntent: currentContext.activeQuery.executionIntent ?? 'pagination',
+            })
+            .then((response) => {
+                // Store document count for screen reader announcements (skip pagination)
+                if (currentContext.activeQuery.executionIntent !== 'pagination') {
+                    setCurrentQueryResults((prev) => ({ ...prev, documentCount: response.documentCount }));
+                }
+
+                // 2. This is the time to update the auto-completion data
+                //    Since now we do know more about the data returned from the query
+                updateAutoCompletionData();
+
+                // 3. Load the data for the current view
+                getDataForView(currentContext.currentView);
+
+                // 4. Non-blocking Stage 1 prefetch to populate cache
+                //    This runs in background and doesn't block results display
+                prefetchQueryInsights();
+
+                setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
+            })
+            .catch((error) => {
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Error while running the query'),
+                    modal: true,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+            })
+            .finally(() => {
+                setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
+            });
+    }, [currentContext.activeQuery]);
+
+    useEffect(() => {
+        if (currentContext.currentView === Views.TABLE && currentContext.currentViewState?.currentPath) {
+            getDataForView(currentContext.currentView);
+        }
+    }, [currentContext.currentViewState?.currentPath]);
+
+    const handleViewChanged = (_optionValue: string) => {
+        let selection: Views;
+
+        switch (_optionValue) {
+            case 'Table View':
+                selection = Views.TABLE;
+                break;
+            case 'Tree View':
+                selection = Views.TREE;
+                break;
+            case 'JSON View':
+                selection = Views.JSON;
+                break;
+            default:
+                selection = Views.TABLE;
+                break;
+        }
+
+        trpcClient.common.reportEvent
+            .mutate({
+                eventName: 'viewChanged',
+                properties: {
+                    view: selection,
+                },
+            })
+            .catch((error) => {
+                console.debug('Failed to report an event:', error);
+            });
+
+        setCurrentContext((prev) => ({ ...prev, currentView: selection }));
+        getDataForView(selection);
+
+        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
+    };
 
     function handleDeleteDocumentRequest(): void {
         trpcClient.mongoClusters.collectionView.deleteDocumentsById
@@ -641,7 +644,7 @@ export const CollectionView = (): JSX.Element => {
                                     ),
                                     'Tree View': <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />,
                                     'JSON View': <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />,
-                                    default: <div>error '{currentContext.currentView}'</div>,
+                                    default: <div>error &apos;{currentContext.currentView}&apos;</div>,
                                 }[currentContext.currentView] // switch-statement
                             }
                         </div>

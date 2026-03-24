@@ -6,7 +6,7 @@
 import { Button, Card, Text } from '@fluentui/react-components';
 import { DocumentArrowLeftRegular, EyeRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import * as React from 'react';
+import type * as React from 'react';
 import './QuickActions.scss';
 
 interface QuickActionsProps {

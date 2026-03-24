@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Card, Text } from '@fluentui/react-components';
-import * as React from 'react';
+import type * as React from 'react';
 import './SummaryCard.scss';
 
 /**

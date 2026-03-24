@@ -205,6 +205,7 @@ export function DataViewPanelTable({ liveHeaders, liveData, handleStepIn }: Prop
     if (currentContext.isFirstTimeLoad) {
         return <LoadingAnimationTable />;
     } else {
+        /* eslint-disable react-hooks/refs -- SlickgridReact requires ref for imperative grid API access */
         return (
             <SlickgridReact
                 gridId="myGrid"

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { tokens } from '@fluentui/react-components';
-import * as React from 'react';
+import type * as React from 'react';
 import { formatRatio } from './formatUtils';
 import { MetricBase, type MetricBaseProps } from './MetricBase';
 

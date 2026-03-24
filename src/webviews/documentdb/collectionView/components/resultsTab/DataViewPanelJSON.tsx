@@ -30,6 +30,12 @@ export const DataViewPanelJSON = ({ value }: Props): React.JSX.Element => {
     const editorRef = React.useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
     const { findNextFocusable } = useFocusFinders();
 
+    const handleResize = () => {
+        if (editorRef.current) {
+            editorRef.current.layout();
+        }
+    };
+
     React.useEffect(() => {
         // Add ResizeObserver to watch parent container size changes
         // This detects all resize events: window resize, QueryEditor Collapse animation, etc.
@@ -56,12 +62,6 @@ export const DataViewPanelJSON = ({ value }: Props): React.JSX.Element => {
             }
         };
     }, []);
-
-    const handleResize = () => {
-        if (editorRef.current) {
-            editorRef.current.layout();
-        }
-    };
 
     // Handle Escape key: move focus to next focusable element
     const handleEscapeEditor = React.useCallback(() => {

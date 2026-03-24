@@ -29,6 +29,14 @@ module.exports = (env, { mode }) => {
             filename: '[name].js',
             libraryTarget: 'module',
         },
+        cache: {
+            type: 'filesystem',
+            name: `views-build${isDev ? '-dev' : ''}`,
+            cacheDirectory: path.resolve(__dirname, 'node_modules/.cache/webpack/views'),
+            buildDependencies: {
+                config: [__filename],
+            },
+        },
         experiments: {
             outputModule: true,
         },
