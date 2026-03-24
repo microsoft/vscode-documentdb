@@ -545,6 +545,12 @@
         "command": "vscode-documentdb.command.scratchpad.runSelected",
         "title": "Scratchpad: Run Selected",
         "icon": "$(play)"
+      },
+      {
+        "//": "[Diagnostics] Clear Schema Cache",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.clearSchemaCache",
+        "title": "Clear Schema Cache"
       }
     ],
     "submenus": [
