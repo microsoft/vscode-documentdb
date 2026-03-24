@@ -5,13 +5,13 @@
 
 import { openReadOnlyContent } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import type { Document, WithId } from 'mongodb';
+import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ScratchpadEvaluator } from '../../documentdb/scratchpad/ScratchpadEvaluator';
 import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
 import { formatError, formatResult } from '../../documentdb/scratchpad/resultFormatter';
-import type { ExecutionResult, ScratchpadConnection } from '../../documentdb/scratchpad/types';
+import { type ExecutionResult, type ScratchpadConnection } from '../../documentdb/scratchpad/types';
 
 /** Shared evaluator instance — lazily created, reused across runs. */
 let evaluator: ScratchpadEvaluator | undefined;
@@ -99,7 +99,7 @@ function feedResultToSchemaStore(result: ExecutionResult, connection: Scratchpad
     }
 
     const printable = result.printable;
-    if (printable == null) {
+    if (printable === null || printable === undefined) {
         return;
     }
 
@@ -108,7 +108,7 @@ function feedResultToSchemaStore(result: ExecutionResult, connection: Scratchpad
 
     // Filter to actual document objects (not primitives, not nested arrays)
     const docs = items.filter(
-        (d): d is WithId<Document> => d != null && typeof d === 'object' && !Array.isArray(d),
+        (d): d is WithId<Document> => d !== null && d !== undefined && typeof d === 'object' && !Array.isArray(d),
     );
 
     if (docs.length > 0) {

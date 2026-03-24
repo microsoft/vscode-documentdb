@@ -93,7 +93,12 @@ export class ScratchpadEvaluator {
             printable: shellResult.printable,
             durationMs,
             source: shellResult.source?.namespace
-                ? { namespace: { db: shellResult.source.namespace.db, collection: shellResult.source.namespace.collection } }
+                ? {
+                      namespace: {
+                          db: shellResult.source.namespace.db,
+                          collection: shellResult.source.namespace.collection,
+                      },
+                  }
                 : undefined,
         };
     }

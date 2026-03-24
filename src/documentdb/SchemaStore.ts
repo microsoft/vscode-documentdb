@@ -11,7 +11,7 @@ import {
 } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
 
-import type { Document, WithId } from 'mongodb';
+import { type Document, type WithId } from 'mongodb';
 
 export interface SchemaChangeEvent {
     readonly clusterId: string;
@@ -87,12 +87,7 @@ export class SchemaStore implements vscode.Disposable {
     // ── Write operations ──
 
     /** Feed documents to the schema store (from any source). */
-    public addDocuments(
-        clusterId: string,
-        db: string,
-        coll: string,
-        documents: ReadonlyArray<WithId<Document>>,
-    ): void {
+    public addDocuments(clusterId: string, db: string, coll: string, documents: ReadonlyArray<WithId<Document>>): void {
         if (documents.length === 0) return;
 
         const key = SchemaStore.key(clusterId, db, coll);
