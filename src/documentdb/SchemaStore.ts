@@ -9,14 +9,31 @@ import {
     type FieldEntry,
     type JSONSchema,
 } from '@vscode-documentdb/schema-analyzer';
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 
 import { type Document, type WithId } from 'mongodb';
+import { ext } from '../extensionVariables';
 
 export interface SchemaChangeEvent {
     readonly clusterId: string;
     readonly databaseName: string;
     readonly collectionName: string;
+}
+
+export interface SchemaStoreStats {
+    /** Number of collections with cached schema. */
+    readonly collectionCount: number;
+    /** Total documents analyzed across all collections. */
+    readonly totalDocuments: number;
+    /** Total known fields across all collections. */
+    readonly totalFields: number;
+    /** Per-collection breakdown. */
+    readonly collections: ReadonlyArray<{
+        readonly key: string;
+        readonly documentCount: number;
+        readonly fieldCount: number;
+    }>;
 }
 
 /**
@@ -35,6 +52,12 @@ export class SchemaStore implements vscode.Disposable {
     private readonly _analyzers = new Map<string, SchemaAnalyzer>();
     private readonly _onDidChangeSchema = new vscode.EventEmitter<SchemaChangeEvent>();
     private readonly _pendingNotifications = new Map<string, ReturnType<typeof setTimeout>>();
+
+    /** High-water marks for telemetry — tracks peak usage across the session. */
+    private _maxCollectionCount = 0;
+    private _maxTotalDocuments = 0;
+    private _maxTotalFields = 0;
+    private _statsChanged = false;
 
     /** Fires when schema data changes for any collection (debounced, 1 second). */
     public readonly onDidChangeSchema: vscode.Event<SchemaChangeEvent> = this._onDidChangeSchema.event;
@@ -84,6 +107,80 @@ export class SchemaStore implements vscode.Disposable {
         return getPropertyNamesAtLevel(schema, path);
     }
 
+    // ── Stats & telemetry ──
+
+    /** Get a snapshot of current schema store statistics. */
+    public getStats(): SchemaStoreStats {
+        let totalDocuments = 0;
+        let totalFields = 0;
+        const collections: Array<{ key: string; documentCount: number; fieldCount: number }> = [];
+
+        for (const [key, analyzer] of this._analyzers) {
+            const docCount = analyzer.getDocumentCount();
+            const fieldCount = analyzer.getKnownFields().length;
+            totalDocuments += docCount;
+            totalFields += fieldCount;
+            collections.push({ key, documentCount: docCount, fieldCount });
+        }
+
+        return {
+            collectionCount: this._analyzers.size,
+            totalDocuments,
+            totalFields,
+            collections,
+        };
+    }
+
+    /** Log current stats to the output channel. */
+    public logStats(): void {
+        const stats = this.getStats();
+        ext.outputChannel?.appendLog(
+            `[SchemaStore] ${String(stats.collectionCount)} collections cached, ` +
+                `${String(stats.totalDocuments)} documents analyzed, ` +
+                `${String(stats.totalFields)} fields discovered`,
+        );
+        for (const c of stats.collections) {
+            ext.outputChannel?.trace(`[SchemaStore]   ${c.key}: ${String(c.documentCount)} docs, ${String(c.fieldCount)} fields`);
+        }
+    }
+
+    /** Report peak usage to telemetry (called on dispose or periodically). */
+    private _reportTelemetry(): void {
+        if (!this._statsChanged) {
+            return;
+        }
+        this._statsChanged = false;
+
+        void callWithTelemetryAndErrorHandling('schemaStore.stats', (ctx) => {
+            ctx.errorHandling.suppressDisplay = true;
+            ctx.errorHandling.rethrow = false;
+            ctx.telemetry.measurements.maxCollectionCount = this._maxCollectionCount;
+            ctx.telemetry.measurements.maxTotalDocuments = this._maxTotalDocuments;
+            ctx.telemetry.measurements.maxTotalFields = this._maxTotalFields;
+
+            // Current snapshot
+            const stats = this.getStats();
+            ctx.telemetry.measurements.currentCollectionCount = stats.collectionCount;
+            ctx.telemetry.measurements.currentTotalDocuments = stats.totalDocuments;
+            ctx.telemetry.measurements.currentTotalFields = stats.totalFields;
+        });
+    }
+
+    /** Update high-water marks after schema changes. */
+    private _updateMaxStats(): void {
+        const stats = this.getStats();
+        if (
+            stats.collectionCount > this._maxCollectionCount ||
+            stats.totalDocuments > this._maxTotalDocuments ||
+            stats.totalFields > this._maxTotalFields
+        ) {
+            this._maxCollectionCount = Math.max(this._maxCollectionCount, stats.collectionCount);
+            this._maxTotalDocuments = Math.max(this._maxTotalDocuments, stats.totalDocuments);
+            this._maxTotalFields = Math.max(this._maxTotalFields, stats.totalFields);
+            this._statsChanged = true;
+        }
+    }
+
     // ── Write operations ──
 
     /** Feed documents to the schema store (from any source). */
@@ -98,6 +195,7 @@ export class SchemaStore implements vscode.Disposable {
         }
 
         analyzer.addDocuments(documents);
+        this._updateMaxStats();
         this._fireSchemaChanged(key, { clusterId, databaseName: db, collectionName: coll });
     }
 
@@ -157,6 +255,10 @@ export class SchemaStore implements vscode.Disposable {
     }
 
     public dispose(): void {
+        // Report peak stats to telemetry before teardown
+        this._reportTelemetry();
+        this.logStats();
+
         for (const timer of this._pendingNotifications.values()) {
             clearTimeout(timer);
         }
