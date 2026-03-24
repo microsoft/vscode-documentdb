@@ -26,4 +26,11 @@ export interface ExecutionResult {
     readonly printable: unknown;
     /** Execution duration in milliseconds. */
     readonly durationMs: number;
+    /** Source namespace from the `@mongosh` ShellResult, if available. */
+    readonly source?: {
+        readonly namespace?: {
+            readonly db: string;
+            readonly collection: string;
+        };
+    };
 }
