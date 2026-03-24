@@ -143,6 +143,18 @@ describe('SchemaStore', () => {
         expect(store.hasSchema('other-cluster', db, 'users')).toBe(true);
     });
 
+    it('clearDatabase removes schemas for a specific database', () => {
+        store.addDocuments(clusterId, 'db1', 'users', makeDocs([{ name: 'Alice' }]));
+        store.addDocuments(clusterId, 'db1', 'orders', makeDocs([{ total: 99 }]));
+        store.addDocuments(clusterId, 'db2', 'products', makeDocs([{ sku: 'X' }]));
+
+        store.clearDatabase(clusterId, 'db1');
+
+        expect(store.hasSchema(clusterId, 'db1', 'users')).toBe(false);
+        expect(store.hasSchema(clusterId, 'db1', 'orders')).toBe(false);
+        expect(store.hasSchema(clusterId, 'db2', 'products')).toBe(true);
+    });
+
     it('reset clears everything', () => {
         store.addDocuments('c1', db, 'a', makeDocs([{ x: 1 }]));
         store.addDocuments('c2', db, 'b', makeDocs([{ y: 2 }]));

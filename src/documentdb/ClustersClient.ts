@@ -318,6 +318,11 @@ export class ClustersClient {
             const client = ClustersClient._clients.get(credentialId) as ClustersClient;
             await client._mongoClient.close(true);
             ClustersClient._clients.delete(credentialId);
+
+            // Clear cached schema data for this cluster
+            // Lazy import to avoid circular dependency (SchemaStore imports from schema-analyzer)
+            const { SchemaStore } = await import('./SchemaStore');
+            SchemaStore.getInstance().clearCluster(credentialId);
         }
     }
 

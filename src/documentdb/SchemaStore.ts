@@ -137,6 +137,21 @@ export class SchemaStore implements vscode.Disposable {
         }
     }
 
+    /** Clear all schemas for a database within a cluster (e.g., on database drop). */
+    public clearDatabase(clusterId: string, db: string): void {
+        const prefix = `${clusterId}::${db}::`;
+        for (const key of this._analyzers.keys()) {
+            if (key.startsWith(prefix)) {
+                this._analyzers.delete(key);
+                const pending = this._pendingNotifications.get(key);
+                if (pending !== undefined) {
+                    clearTimeout(pending);
+                    this._pendingNotifications.delete(key);
+                }
+            }
+        }
+    }
+
     /** Clear all schemas (e.g., for testing). */
     public reset(): void {
         this._analyzers.clear();
