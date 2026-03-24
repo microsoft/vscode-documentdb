@@ -38,7 +38,6 @@ import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
-import { SchemaStore } from './SchemaStore';
 import {
     llmEnhancedFeatureApis,
     type CollectionStats,
@@ -49,6 +48,7 @@ import {
     type IndexSpecification,
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
+import { SchemaStore } from './SchemaStore';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
