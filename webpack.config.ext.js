@@ -203,6 +203,16 @@ module.exports = (env, { mode }) => {
             }),
         ].filter(Boolean),
         devtool: isDev ? 'source-map' : false,
+        // Filter known warnings from @mongosh transitive dependencies.
+        // These are all "Critical dependency" warnings from @babel/core,
+        // browserslist, and express that use dynamic require() patterns
+        // webpack can't statically analyze. None execute at runtime.
+        // See docs/plan/06-scrapbook-rebuild.md §"Webpack Externals" for details.
+        ignoreWarnings: [
+            { module: /node_modules\/@babel\/core/ },
+            { module: /node_modules\/browserslist/ },
+            { module: /node_modules\/@mongodb-js\/oidc-plugin\/node_modules\/express/ },
+        ],
         infrastructureLogging: {
             level: 'log', // enables logging required for problem matchers
         },
