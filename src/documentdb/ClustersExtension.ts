@@ -56,6 +56,7 @@ import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/rem
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
+import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
 import { connectDatabase } from '../commands/scratchpad/connectDatabase';
 import { disposeEvaluator, shutdownEvaluator } from '../commands/scratchpad/executeScratchpadCode';
 import { newScratchpad } from '../commands/scratchpad/newScratchpad';
@@ -220,23 +221,40 @@ export class ClustersExtension implements vscode.Disposable {
 
                 // Shut down the scratchpad worker when the last .documentdb editor closes
                 ext.context.subscriptions.push(
-                    vscode.workspace.onDidCloseTextDocument((doc) => {
-                        if (doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
-                            // Check if any other scratchpad editors remain open
-                            const hasOpenScratchpad = vscode.window.tabGroups.all.some((group) =>
-                                group.tabs.some((tab) => {
-                                    const input = tab.input;
-                                    return (
-                                        input instanceof vscode.TabInputText &&
-                                        (input.uri.path.endsWith('.documentdb') ||
-                                            input.uri.path.endsWith('.documentdb.js'))
-                                    );
-                                }),
+                    vscode.window.tabGroups.onDidChangeTabs((event) => {
+                        // Only react when tabs are closed
+                        if (event.closed.length === 0) {
+                            return;
+                        }
+
+                        // Check if any closed tab was a scratchpad
+                        const closedScratchpad = event.closed.some((tab) => {
+                            const input = tab.input;
+                            return (
+                                input instanceof vscode.TabInputText &&
+                                (input.uri.path.endsWith('.documentdb') || input.uri.path.endsWith('.documentdb.js'))
                             );
-                            if (!hasOpenScratchpad) {
-                                ext.outputChannel.debug('[Scratchpad] All editors closed — shutting down worker');
-                                shutdownEvaluator();
-                            }
+                        });
+
+                        if (!closedScratchpad) {
+                            return;
+                        }
+
+                        // Check if any scratchpad tabs remain open
+                        const hasOpenScratchpad = vscode.window.tabGroups.all.some((group) =>
+                            group.tabs.some((tab) => {
+                                const input = tab.input;
+                                return (
+                                    input instanceof vscode.TabInputText &&
+                                    (input.uri.path.endsWith('.documentdb') ||
+                                        input.uri.path.endsWith('.documentdb.js'))
+                                );
+                            }),
+                        );
+
+                        if (!hasOpenScratchpad) {
+                            ext.outputChannel.debug('[Scratchpad] All editors closed — shutting down worker');
+                            shutdownEvaluator();
                         }
                     }),
                 );
@@ -269,6 +287,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(ScratchpadCommandIds.runSelected, withCommandCorrelation(runSelected));
 
                 registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
+
+                registerCommand(
+                    'vscode-documentdb.command.showSchemaStoreStats',
+                    withCommandCorrelation(showSchemaStoreStats),
+                );
 
                 //// General Commands:
 
