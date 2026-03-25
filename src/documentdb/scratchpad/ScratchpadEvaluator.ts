@@ -72,7 +72,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         const needsSpawn =
             !this._worker || this._workerState === 'idle' || this._workerClusterId !== connection.clusterId;
         if (needsSpawn) {
-            onProgress?.(l10n.t('Initializing scratchpad runtime…'));
+            onProgress?.(l10n.t('Initializing…'));
         }
         await this.ensureWorker(connection, onProgress);
 
@@ -155,19 +155,19 @@ export class ScratchpadEvaluator implements vscode.Disposable {
 
         // Listen for worker exit (crash or termination)
         this._worker.on('exit', (exitCode: number) => {
-            ext.outputChannel.appendLine(`[Scratchpad Worker] Worker exited with code ${String(exitCode)}`);
+            ext.outputChannel.debug(`[Scratchpad Worker] Worker exited with code ${String(exitCode)}`);
             this.handleWorkerExit();
         });
 
         this._worker.on('error', (error: Error) => {
-            ext.outputChannel.appendLine(`[Scratchpad Worker] ERROR: ${error.message}`);
+            ext.outputChannel.error(`[Scratchpad Worker] ${error.message}`);
         });
 
         // Build init message from cached credentials
         const initMsg = this.buildInitMessage(connection);
 
         // Send init and wait for acknowledgment
-        onProgress?.(l10n.t('Authenticating with {0}…', connection.clusterDisplayName));
+        onProgress?.(l10n.t('Authenticating…'));
         await this.sendRequest<void>(initMsg, 30000);
         this._workerState = 'ready';
     }
@@ -374,13 +374,16 @@ export class ScratchpadEvaluator implements vscode.Disposable {
                 const prefix = '[Scratchpad Worker]';
                 switch (msg.level) {
                     case 'error':
-                        ext.outputChannel.appendLine(`${prefix} ERROR: ${msg.message}`);
+                        ext.outputChannel.error(`${prefix} ${msg.message}`);
                         break;
                     case 'warn':
-                        ext.outputChannel.appendLine(`${prefix} WARN: ${msg.message}`);
+                        ext.outputChannel.warn(`${prefix} ${msg.message}`);
+                        break;
+                    case 'debug':
+                        ext.outputChannel.debug(`${prefix} ${msg.message}`);
                         break;
                     default:
-                        ext.outputChannel.appendLine(`${prefix} ${msg.message}`);
+                        ext.outputChannel.trace(`${prefix} ${msg.message}`);
                         break;
                 }
                 break;

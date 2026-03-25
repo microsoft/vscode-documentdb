@@ -119,6 +119,6 @@ export type WorkerToMainMessage =
       }
     | {
           readonly type: 'log';
-          readonly level: 'info' | 'warn' | 'error' | 'debug';
+          readonly level: 'trace' | 'debug' | 'info' | 'warn' | 'error';
           readonly message: string;
       };

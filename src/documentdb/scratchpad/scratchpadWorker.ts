@@ -37,7 +37,7 @@ const pendingTokenRequests = new Map<string, { resolve: (token: string) => void;
 
 // ─── Logging helper ──────────────────────────────────────────────────────────
 
-function log(level: 'info' | 'warn' | 'error' | 'debug', message: string): void {
+function log(level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string): void {
     const msg: WorkerToMainMessage = { type: 'log', level, message };
     parentPort!.postMessage(msg);
 }
@@ -90,7 +90,7 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 // ─── Init handler ────────────────────────────────────────────────────────────
 
 async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
-    log('info', `Initializing worker (auth: ${msg.authMechanism}, db: ${msg.databaseName})`);
+    log('debug', `Initializing worker (auth: ${msg.authMechanism}, db: ${msg.databaseName})`);
 
     // Lazy-import MongoDB driver
     const { MongoClient } = await import('mongodb');
@@ -129,7 +129,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
     await mongoClient.connect();
     currentDatabaseName = msg.databaseName;
 
-    log('info', 'Worker initialized — MongoClient connected');
+    log('debug', 'Worker initialized — MongoClient connected');
 
     const response: WorkerToMainMessage = {
         type: 'initResult',
@@ -146,7 +146,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
         throw new Error('Worker not initialized — call init first');
     }
 
-    log('debug', `Evaluating code (${msg.code.length} chars, db: ${msg.databaseName})`);
+    log('trace', `Evaluating code (${msg.code.length} chars, db: ${msg.databaseName})`);
 
     // Lazy-import @mongosh packages
     const { EventEmitter } = await import('events');
@@ -211,7 +211,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
         }
     }
 
-    log('debug', `Evaluation complete (${durationMs}ms, type: ${shellResult.type ?? 'null'})`);
+    log('trace', `Evaluation complete (${durationMs}ms, type: ${shellResult.type ?? 'null'})`);
 
     const response: WorkerToMainMessage = {
         type: 'evalResult',
@@ -236,7 +236,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
 // ─── Shutdown handler ────────────────────────────────────────────────────────
 
 async function handleShutdown(msg: Extract<MainToWorkerMessage, { type: 'shutdown' }>): Promise<void> {
-    log('info', 'Shutting down worker — closing MongoClient');
+    log('debug', 'Shutting down worker — closing MongoClient');
 
     try {
         if (mongoClient) {

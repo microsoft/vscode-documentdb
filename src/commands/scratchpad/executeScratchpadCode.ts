@@ -59,12 +59,16 @@ export async function executeScratchpadCode(code: string): Promise<void> {
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: l10n.t('Running scratchpad…'),
+            title: l10n.t('DocumentDB Scratchpad'),
             cancellable: true,
         },
         async (progress, token) => {
+            // Track whether user cancelled — to suppress the error notification
+            let cancelled = false;
+
             // Cancel kills the worker — user can re-run to respawn
             token.onCancellationRequested(() => {
+                cancelled = true;
                 evaluator?.killWorker();
             });
 
@@ -87,6 +91,11 @@ export async function executeScratchpadCode(code: string): Promise<void> {
                     { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
                 );
             } catch (error: unknown) {
+                // Don't show error UI when the user explicitly cancelled
+                if (cancelled) {
+                    return;
+                }
+
                 const durationMs = Date.now() - startTime;
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 const formattedOutput = formatError(error, code, durationMs, connection);

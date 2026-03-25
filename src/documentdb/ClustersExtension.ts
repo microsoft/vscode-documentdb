@@ -212,6 +212,7 @@ export class ClustersExtension implements vscode.Disposable {
                 ext.context.subscriptions.push(
                     scratchpadService.onDidChangeState(() => {
                         if (!scratchpadService.isConnected()) {
+                            ext.outputChannel.debug('[Scratchpad] Connection cleared — shutting down worker');
                             shutdownEvaluator();
                         }
                     }),
@@ -233,6 +234,7 @@ export class ClustersExtension implements vscode.Disposable {
                                 }),
                             );
                             if (!hasOpenScratchpad) {
+                                ext.outputChannel.debug('[Scratchpad] All editors closed — shutting down worker');
                                 shutdownEvaluator();
                             }
                         }
