@@ -30,13 +30,14 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
     }
 
     // Result metadata
+    // Result metadata — state what we know from @mongosh, don't guess
     if (result.type) {
-        // CursorIterationResult from @mongosh wraps documents in { cursorHasMore, documents }.
-        // Unwrap to get the actual document array for display and counting.
-        const printable = unwrapCursorResult(result.printable);
-        if (Array.isArray(printable)) {
-            lines.push(`// ${l10n.t('{0} documents returned', printable.length)}`);
+        const unwrapped = unwrapCursorResult(result.printable);
+        if (result.type === 'Cursor' && Array.isArray(unwrapped)) {
+            // Cursor with a known batch: "Result: Cursor (20 documents)"
+            lines.push(`// ${l10n.t('Result: Cursor ({0} documents)', unwrapped.length)}`);
         } else {
+            // Any other typed result: "Result: Document", "Result: string", etc.
             lines.push(`// ${l10n.t('Result: {0}', result.type)}`);
         }
     }
