@@ -26,6 +26,15 @@ export function disposeEvaluator(): void {
 }
 
 /**
+ * Gracefully shut down the evaluator's worker thread (closes MongoClient).
+ * Called when the scratchpad connection is cleared or when all scratchpad editors close.
+ * The worker will be re-spawned lazily on the next Run.
+ */
+export function shutdownEvaluator(): void {
+    void evaluator?.shutdown();
+}
+
+/**
  * Executes scratchpad code and displays the result in a read-only side panel.
  * Used by both `runAll` and `runSelected` commands.
  */
@@ -98,8 +107,16 @@ export async function executeScratchpadCode(code: string): Promise<void> {
 }
 
 /**
+ * Maximum number of documents to feed to SchemaStore per execution.
+ * If the result set is larger, a random sample of this size is used.
+ */
+const SCHEMA_DOC_CAP = 100;
+
+/**
  * Very conservative schema feeding: only feed 'Cursor' and 'Document' result types.
  * Extracts documents from the printable result and adds them to SchemaStore.
+ *
+ * Caps at {@link SCHEMA_DOC_CAP} documents (randomly sampled if more).
  */
 function feedResultToSchemaStore(result: ExecutionResult, connection: ScratchpadConnection): void {
     // Only feed known document-producing result types
@@ -122,12 +139,32 @@ function feedResultToSchemaStore(result: ExecutionResult, connection: Scratchpad
 
     // Filter to actual document objects with _id (not primitives, not nested arrays,
     // not projection results with _id: 0 which have artificial shapes)
-    const docs = items.filter(
+    let docs = items.filter(
         (d): d is WithId<Document> =>
             d !== null && d !== undefined && typeof d === 'object' && !Array.isArray(d) && '_id' in d,
     );
 
-    if (docs.length > 0) {
-        SchemaStore.getInstance().addDocuments(connection.clusterId, ns.db, ns.collection, docs);
+    if (docs.length === 0) {
+        return;
     }
+
+    // Cap at SCHEMA_DOC_CAP documents — randomly sample if more
+    if (docs.length > SCHEMA_DOC_CAP) {
+        docs = randomSample(docs, SCHEMA_DOC_CAP);
+    }
+
+    SchemaStore.getInstance().addDocuments(connection.clusterId, ns.db, ns.collection, docs);
+}
+
+/**
+ * Fisher–Yates shuffle-based random sample of `count` items from `array`.
+ * Returns a new array of length `count` with randomly selected items.
+ */
+function randomSample<T>(array: T[], count: number): T[] {
+    const copy = [...array];
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy.slice(0, count);
 }

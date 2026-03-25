@@ -57,7 +57,7 @@ import { retryAuthentication } from '../commands/retryAuthentication/retryAuthen
 import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { connectDatabase } from '../commands/scratchpad/connectDatabase';
-import { disposeEvaluator } from '../commands/scratchpad/executeScratchpadCode';
+import { disposeEvaluator, shutdownEvaluator } from '../commands/scratchpad/executeScratchpadCode';
 import { newScratchpad } from '../commands/scratchpad/newScratchpad';
 import { runAll } from '../commands/scratchpad/runAll';
 import { runSelected } from '../commands/scratchpad/runSelected';
@@ -207,6 +207,37 @@ export class ClustersExtension implements vscode.Disposable {
 
                 // Register evaluator disposal for clean worker shutdown on deactivation
                 ext.context.subscriptions.push({ dispose: disposeEvaluator });
+
+                // Shut down the scratchpad worker when connection is cleared
+                ext.context.subscriptions.push(
+                    scratchpadService.onDidChangeState(() => {
+                        if (!scratchpadService.isConnected()) {
+                            shutdownEvaluator();
+                        }
+                    }),
+                );
+
+                // Shut down the scratchpad worker when the last .documentdb editor closes
+                ext.context.subscriptions.push(
+                    vscode.workspace.onDidCloseTextDocument((doc) => {
+                        if (doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
+                            // Check if any other scratchpad editors remain open
+                            const hasOpenScratchpad = vscode.window.tabGroups.all.some((group) =>
+                                group.tabs.some((tab) => {
+                                    const input = tab.input;
+                                    return (
+                                        input instanceof vscode.TabInputText &&
+                                        (input.uri.path.endsWith('.documentdb') ||
+                                            input.uri.path.endsWith('.documentdb.js'))
+                                    );
+                                }),
+                            );
+                            if (!hasOpenScratchpad) {
+                                shutdownEvaluator();
+                            }
+                        }
+                    }),
+                );
 
                 // Register CodeLens provider for scratchpad files
                 const codeLensProvider = new ScratchpadCodeLensProvider();
