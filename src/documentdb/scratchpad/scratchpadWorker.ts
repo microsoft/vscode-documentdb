@@ -15,16 +15,13 @@
  */
 
 import { randomUUID } from 'crypto';
+import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
-import type { MainToWorkerMessage, WorkerToMainMessage } from './workerTypes';
+import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
 if (!parentPort) {
     throw new Error('scratchpadWorker.ts must be run as a worker_thread');
 }
-
-// ─── Types for lazily-imported @mongosh packages ─────────────────────────────
-
-type MongoClientType = import('mongodb').MongoClient;
 
 // ─── Worker state ────────────────────────────────────────────────────────────
 
@@ -92,16 +89,14 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 
 // ─── Init handler ────────────────────────────────────────────────────────────
 
-async function handleInit(
-    msg: Extract<MainToWorkerMessage, { type: 'init' }>,
-): Promise<void> {
+async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
     log('info', `Initializing worker (auth: ${msg.authMechanism}, db: ${msg.databaseName})`);
 
     // Lazy-import MongoDB driver
     const { MongoClient } = await import('mongodb');
 
     // Build MongoClient options from the serializable subset
-    const options: import('mongodb').MongoClientOptions = {
+    const options: MongoClientOptions = {
         ...msg.clientOptions,
     };
 
@@ -146,9 +141,7 @@ async function handleInit(
 
 // ─── Eval handler ────────────────────────────────────────────────────────────
 
-async function handleEval(
-    msg: Extract<MainToWorkerMessage, { type: 'eval' }>,
-): Promise<void> {
+async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): Promise<void> {
     if (!mongoClient) {
         throw new Error('Worker not initialized — call init first');
     }
@@ -186,21 +179,11 @@ async function handleEval(
 
     // Switch database if different from current
     if (msg.databaseName !== currentDatabaseName) {
-        await evaluator.customEval(
-            customEvalFn,
-            `use(${JSON.stringify(msg.databaseName)})`,
-            context,
-            'scratchpad',
-        );
+        await evaluator.customEval(customEvalFn, `use(${JSON.stringify(msg.databaseName)})`, context, 'scratchpad');
         currentDatabaseName = msg.databaseName;
     } else {
         // Pre-select the target database (fresh context each time)
-        await evaluator.customEval(
-            customEvalFn,
-            `use(${JSON.stringify(msg.databaseName)})`,
-            context,
-            'scratchpad',
-        );
+        await evaluator.customEval(customEvalFn, `use(${JSON.stringify(msg.databaseName)})`, context, 'scratchpad');
     }
 
     // Evaluate user code
@@ -252,9 +235,7 @@ async function handleEval(
 
 // ─── Shutdown handler ────────────────────────────────────────────────────────
 
-async function handleShutdown(
-    msg: Extract<MainToWorkerMessage, { type: 'shutdown' }>,
-): Promise<void> {
+async function handleShutdown(msg: Extract<MainToWorkerMessage, { type: 'shutdown' }>): Promise<void> {
     log('info', 'Shutting down worker — closing MongoClient');
 
     try {

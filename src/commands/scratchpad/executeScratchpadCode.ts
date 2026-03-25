@@ -41,10 +41,15 @@ export async function executeScratchpadCode(code: string): Promise<void> {
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: l10n.t('Running scratchpad query…'),
-            cancellable: false,
+            title: l10n.t('Running scratchpad…'),
+            cancellable: true,
         },
-        async () => {
+        async (_progress, token) => {
+            // Cancel kills the worker — user can re-run to respawn
+            token.onCancellationRequested(() => {
+                evaluator?.killWorker();
+            });
+
             const startTime = Date.now();
             try {
                 const result = await evaluator!.evaluate(connection, code);
