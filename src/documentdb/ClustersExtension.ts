@@ -57,6 +57,7 @@ import { retryAuthentication } from '../commands/retryAuthentication/retryAuthen
 import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { connectDatabase } from '../commands/scratchpad/connectDatabase';
+import { disposeEvaluator } from '../commands/scratchpad/executeScratchpadCode';
 import { newScratchpad } from '../commands/scratchpad/newScratchpad';
 import { runAll } from '../commands/scratchpad/runAll';
 import { runSelected } from '../commands/scratchpad/runSelected';
@@ -203,6 +204,9 @@ export class ClustersExtension implements vscode.Disposable {
                 // Initialize ScratchpadService (connection state + StatusBarItem)
                 const scratchpadService = ScratchpadService.getInstance();
                 ext.context.subscriptions.push(scratchpadService);
+
+                // Register evaluator disposal for clean worker shutdown on deactivation
+                ext.context.subscriptions.push({ dispose: disposeEvaluator });
 
                 // Register CodeLens provider for scratchpad files
                 const codeLensProvider = new ScratchpadCodeLensProvider();

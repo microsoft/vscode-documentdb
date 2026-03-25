@@ -17,6 +17,15 @@ import { type ExecutionResult, type ScratchpadConnection } from '../../documentd
 let evaluator: ScratchpadEvaluator | undefined;
 
 /**
+ * Dispose the shared evaluator instance (kills the worker thread).
+ * Called during extension deactivation.
+ */
+export function disposeEvaluator(): void {
+    evaluator?.dispose();
+    evaluator = undefined;
+}
+
+/**
  * Executes scratchpad code and displays the result in a read-only side panel.
  * Used by both `runAll` and `runSelected` commands.
  */
