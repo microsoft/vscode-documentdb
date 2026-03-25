@@ -197,17 +197,25 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
         source?: { namespace?: { db: string; collection: string } };
     };
 
-    // Serialize the printable value via EJSON for safe transfer
+    // Serialize the printable value via EJSON for safe transfer.
+    // CursorIterationResult is an Array subclass with extra properties (cursorHasMore,
+    // documents). EJSON.serialize treats it as a plain object and includes those
+    // properties, producing { cursorHasMore: true, documents: [...] } instead of [...].
+    // Convert to a plain Array first to preserve correct array serialization.
+    const printableValue = Array.isArray(shellResult.printable)
+        ? Array.from(shellResult.printable as unknown[])
+        : shellResult.printable;
+
     let printableStr: string;
     try {
         const { EJSON } = await import('bson');
-        printableStr = EJSON.stringify(shellResult.printable, { relaxed: true }, 2);
+        printableStr = EJSON.stringify(printableValue, { relaxed: true }, 2);
     } catch {
         // Fallback: try JSON, then plain string
         try {
-            printableStr = JSON.stringify(shellResult.printable, null, 2);
+            printableStr = JSON.stringify(printableValue, null, 2);
         } catch {
-            printableStr = String(shellResult.printable);
+            printableStr = String(printableValue);
         }
     }
 
