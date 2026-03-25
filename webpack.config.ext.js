@@ -22,6 +22,7 @@ module.exports = (env, { mode }) => {
         node: { __filename: false, __dirname: false },
         entry: {
             main: './main.ts',
+            scratchpadWorker: './src/documentdb/scratchpad/scratchpadWorker.ts',
         },
         output: {
             path: path.resolve(__dirname, 'dist'),
