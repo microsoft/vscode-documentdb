@@ -62,7 +62,7 @@ export async function executeScratchpadCode(code: string): Promise<void> {
             title: l10n.t('Running scratchpad…'),
             cancellable: true,
         },
-        async (_progress, token) => {
+        async (progress, token) => {
             // Cancel kills the worker — user can re-run to respawn
             token.onCancellationRequested(() => {
                 evaluator?.killWorker();
@@ -70,7 +70,9 @@ export async function executeScratchpadCode(code: string): Promise<void> {
 
             const startTime = Date.now();
             try {
-                const result = await evaluator!.evaluate(connection, code);
+                const result = await evaluator!.evaluate(connection, code, (message) => {
+                    progress.report({ message });
+                });
                 const formattedOutput = formatResult(result, code, connection);
 
                 // Feed document results to SchemaStore for cross-tab schema sharing

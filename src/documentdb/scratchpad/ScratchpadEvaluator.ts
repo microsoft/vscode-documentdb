@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -52,9 +53,14 @@ export class ScratchpadEvaluator implements vscode.Disposable {
      *
      * @param connection - Active scratchpad connection (clusterId + databaseName).
      * @param code - JavaScript code string to evaluate.
+     * @param onProgress - Optional callback for phased progress reporting.
      * @returns Formatted execution result with type, printable value, and timing.
      */
-    async evaluate(connection: ScratchpadConnection, code: string): Promise<ExecutionResult> {
+    async evaluate(
+        connection: ScratchpadConnection,
+        code: string,
+        onProgress?: (message: string) => void,
+    ): Promise<ExecutionResult> {
         // Intercept scratchpad-specific commands before they reach the worker
         const trimmed = code.trim();
         const helpResult = this.tryHandleHelp(trimmed);
@@ -63,9 +69,15 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         }
 
         // Ensure worker is alive and connected to the right cluster
-        await this.ensureWorker(connection);
+        const needsSpawn =
+            !this._worker || this._workerState === 'idle' || this._workerClusterId !== connection.clusterId;
+        if (needsSpawn) {
+            onProgress?.(l10n.t('Initializing scratchpad runtime…'));
+        }
+        await this.ensureWorker(connection, onProgress);
 
         // Send eval message and await result
+        onProgress?.(l10n.t('Running query…'));
         const timeoutSec = vscode.workspace.getConfiguration().get<number>(ext.settingsKeys.shellTimeout) ?? 30;
         const timeoutMs = timeoutSec * 1000;
 
@@ -110,7 +122,10 @@ export class ScratchpadEvaluator implements vscode.Disposable {
      * Spawns a new worker if needed (lazy), or kills and respawns if the
      * cluster has changed.
      */
-    private async ensureWorker(connection: ScratchpadConnection): Promise<void> {
+    private async ensureWorker(
+        connection: ScratchpadConnection,
+        onProgress?: (message: string) => void,
+    ): Promise<void> {
         // If worker is alive but connected to a different cluster, shut it down
         if (this._worker && this._workerClusterId !== connection.clusterId) {
             this.terminateWorker();
@@ -118,14 +133,14 @@ export class ScratchpadEvaluator implements vscode.Disposable {
 
         // If no worker exists, spawn one
         if (!this._worker || this._workerState === 'idle') {
-            await this.spawnWorker(connection);
+            await this.spawnWorker(connection, onProgress);
         }
     }
 
     /**
      * Spawn a new worker thread and send the init message.
      */
-    private async spawnWorker(connection: ScratchpadConnection): Promise<void> {
+    private async spawnWorker(connection: ScratchpadConnection, onProgress?: (message: string) => void): Promise<void> {
         this._workerState = 'spawning';
 
         // Resolve worker script path (same directory as the main bundle in dist/)
@@ -152,6 +167,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         const initMsg = this.buildInitMessage(connection);
 
         // Send init and wait for acknowledgment
+        onProgress?.(l10n.t('Authenticating with {0}…', connection.clusterDisplayName));
         await this.sendRequest<void>(initMsg, 30000);
         this._workerState = 'ready';
     }
