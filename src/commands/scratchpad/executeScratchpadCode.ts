@@ -145,8 +145,21 @@ function feedResultToSchemaStore(result: ExecutionResult, connection: Scratchpad
         return;
     }
 
-    // Normalize to array
-    const items: unknown[] = Array.isArray(printable) ? printable : [printable];
+    // CursorIterationResult from @mongosh wraps documents in { cursorHasMore, documents }.
+    // Unwrap to get the actual document array.
+    let items: unknown[];
+    if (
+        typeof printable === 'object' &&
+        !Array.isArray(printable) &&
+        'documents' in printable &&
+        Array.isArray((printable as { documents: unknown }).documents)
+    ) {
+        items = (printable as { documents: unknown[] }).documents;
+    } else if (Array.isArray(printable)) {
+        items = printable;
+    } else {
+        items = [printable];
+    }
 
     // Filter to actual document objects with _id (not primitives, not nested arrays,
     // not projection results with _id: 0 which have artificial shapes)

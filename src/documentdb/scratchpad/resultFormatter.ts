@@ -31,7 +31,9 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
 
     // Result metadata
     if (result.type) {
-        const printable = result.printable;
+        // CursorIterationResult from @mongosh wraps documents in { cursorHasMore, documents }.
+        // Unwrap to get the actual document array for display and counting.
+        const printable = unwrapCursorResult(result.printable);
         if (Array.isArray(printable)) {
             lines.push(`// ${l10n.t('{0} documents returned', printable.length)}`);
         } else {
@@ -43,8 +45,8 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
     lines.push('// ─────────────────────────');
     lines.push('');
 
-    // Result value
-    lines.push(formatPrintable(result.printable));
+    // Result value — unwrap cursor wrapper for clean output
+    lines.push(formatPrintable(unwrapCursorResult(result.printable)));
 
     return lines.join('\n');
 }
@@ -79,6 +81,27 @@ export function formatError(
     lines.push(errorMessage);
 
     return lines.join('\n');
+}
+
+/**
+ * Unwrap CursorIterationResult from @mongosh.
+ *
+ * @mongosh's `asPrintable()` on CursorIterationResult produces `{ cursorHasMore, documents }`
+ * instead of a plain array. This function extracts the `documents` array for clean display
+ * and schema feeding.
+ */
+function unwrapCursorResult(printable: unknown): unknown {
+    if (
+        printable !== null &&
+        printable !== undefined &&
+        typeof printable === 'object' &&
+        !Array.isArray(printable) &&
+        'documents' in printable &&
+        Array.isArray((printable as { documents: unknown }).documents)
+    ) {
+        return (printable as { documents: unknown[] }).documents;
+    }
+    return printable;
 }
 
 function formatPrintable(printable: unknown): string {
