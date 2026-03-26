@@ -217,6 +217,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
             databaseName: connection.databaseName,
             authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID',
             tenantId: credentials.entraIdConfig?.tenantId,
+            // TODO(F11): Read from documentDB.mongoShell.batchSize setting and wire in worker
             displayBatchSize: 50,
         };
     }

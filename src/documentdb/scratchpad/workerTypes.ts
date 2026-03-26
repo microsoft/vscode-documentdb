@@ -61,7 +61,8 @@ export type MainToWorkerMessage =
           readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID';
           /** Tenant ID for Entra ID clusters */
           readonly tenantId?: string;
-          /** Display batch size from documentDB.mongoShell.batchSize setting */
+          // TODO(F11): Wire displayBatchSize end-to-end — currently sent but not read by the worker.
+          // See future-work.md §F11 for the plan to honor documentDB.mongoShell.batchSize.
           readonly displayBatchSize: number;
       }
     | {
