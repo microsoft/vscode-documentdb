@@ -223,11 +223,11 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     let printableStr: string;
     try {
         const { EJSON } = await import('bson');
-        printableStr = EJSON.stringify(printableValue, { relaxed: true }, 2);
+        printableStr = EJSON.stringify(printableValue, { relaxed: false });
     } catch {
         // Fallback: try JSON, then plain string
         try {
-            printableStr = JSON.stringify(printableValue, null, 2);
+            printableStr = JSON.stringify(printableValue);
         } catch {
             printableStr = String(printableValue);
         }

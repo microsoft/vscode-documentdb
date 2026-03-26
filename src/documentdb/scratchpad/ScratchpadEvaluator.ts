@@ -241,16 +241,14 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         try {
             const result = await this.sendRequest<{ result: SerializableExecutionResult }>(evalMsg, timeoutMs);
 
-            // Deserialize the result — printable is an EJSON string from the worker.
-            // Use EJSON.parse to reconstruct BSON types (ObjectId, Date, Decimal128, etc.)
-            // so that SchemaAnalyzer correctly identifies field types.
-            // Int32 and Long are still collapsed to Double (JavaScript number) — this is
-            // a fundamental EJSON limitation, not a bug.
+            // Deserialize the result — printable is a canonical EJSON string from the worker.
+            // Canonical EJSON preserves all BSON types (ObjectId, Date, Decimal128, Int32,
+            // Long, Double, etc.) so that SchemaAnalyzer correctly identifies field types.
             const serResult = result.result;
             let printable: unknown;
             try {
                 const { EJSON } = await import('bson');
-                printable = EJSON.parse(serResult.printable);
+                printable = EJSON.parse(serResult.printable, { relaxed: false });
             } catch {
                 // Fallback to JSON.parse if EJSON fails, then raw string
                 try {
