@@ -23,8 +23,11 @@ export function showSchemaStoreStats(_context: IActionContext): void {
 
     if (stats.collections.length > 0) {
         for (const c of stats.collections) {
+            // Key format is "clusterId::db::collection" — show only db/collection
+            const parts = c.key.split('::');
+            const displayKey = parts.length >= 3 ? `${parts[1]}/${parts[2]}` : c.key;
             ext.outputChannel.appendLog(
-                `[SchemaStore]   ${c.key}: ${String(c.documentCount)} docs, ${String(c.fieldCount)} fields`,
+                `[SchemaStore]   ${displayKey}: ${String(c.documentCount)} docs, ${String(c.fieldCount)} fields`,
             );
         }
     } else {

@@ -39,8 +39,8 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
         // Typed result: "Result: Document", "Result: string", etc.
         lines.push(`// ${l10n.t('Result: {0}', result.type)}`);
     } else if (Array.isArray(unwrapped)) {
-        // Untyped array (e.g. .toArray()) — show count
-        lines.push(`// ${l10n.t('{0} results', unwrapped.length)}`);
+        // Untyped array (e.g. .toArray()) — show type and count
+        lines.push(`// ${l10n.t('Result: Array ({0} elements)', unwrapped.length)}`);
     }
 
     lines.push(`// ${l10n.t('Executed in {0}ms', result.durationMs)}`);

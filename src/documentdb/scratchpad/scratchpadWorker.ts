@@ -146,7 +146,11 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
         throw new Error('Worker not initialized — call init first');
     }
 
-    log('trace', `Evaluating code (${msg.code.length} chars, db: ${msg.databaseName})`);
+    const lineCount = msg.code.split('\n').length;
+    log(
+        'trace',
+        `Evaluating code (${String(lineCount)} lines, ${String(msg.code.length)} chars, db: ${msg.databaseName})`,
+    );
 
     // Lazy-import @mongosh packages
     const { EventEmitter } = await import('events');
@@ -197,14 +201,24 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
         source?: { namespace?: { db: string; collection: string } };
     };
 
-    // Serialize the printable value via EJSON for safe transfer.
-    // CursorIterationResult is an Array subclass with extra properties (cursorHasMore,
-    // documents). EJSON.serialize treats it as a plain object and includes those
-    // properties, producing { cursorHasMore: true, documents: [...] } instead of [...].
-    // Convert to a plain Array first to preserve correct array serialization.
-    const printableValue = Array.isArray(shellResult.printable)
-        ? Array.from(shellResult.printable as unknown[])
-        : shellResult.printable;
+    // Normalize the printable value for IPC transfer.
+    // @mongosh's ShellEvaluator wraps cursor results as { cursorHasMore, documents }
+    // when running in a worker context. Extract the documents array so that the
+    // main thread receives a clean array (matching the in-process behavior where
+    // printable was a CursorIterationResult array).
+    let printableValue: unknown = shellResult.printable;
+    if (
+        shellResult.type === 'Cursor' &&
+        typeof shellResult.printable === 'object' &&
+        shellResult.printable !== null &&
+        'documents' in shellResult.printable &&
+        Array.isArray((shellResult.printable as { documents?: unknown }).documents)
+    ) {
+        printableValue = (shellResult.printable as { documents: unknown[] }).documents;
+    } else if (Array.isArray(shellResult.printable)) {
+        // Array subclass (CursorIterationResult) — normalize to plain Array
+        printableValue = Array.from(shellResult.printable as unknown[]);
+    }
 
     let printableStr: string;
     try {
