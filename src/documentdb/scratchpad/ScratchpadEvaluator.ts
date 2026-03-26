@@ -185,7 +185,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
     private buildInitMessage(connection: ScratchpadConnection): MainToWorkerMessage & { type: 'init' } {
         const credentials = CredentialCache.getCredentials(connection.clusterId);
         if (!credentials) {
-            throw new Error(`No credentials found for cluster ${connection.clusterId}`);
+            throw new Error(l10n.t('No credentials found for cluster {0}', connection.clusterId));
         }
 
         const authMechanism = credentials.authMechanism ?? 'NativeAuth';
@@ -280,7 +280,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
      */
     private sendRequest<T>(msg: MainToWorkerMessage, timeoutMs: number): Promise<T> {
         if (!this._worker) {
-            return Promise.reject(new Error('Worker is not running'));
+            return Promise.reject(new Error(l10n.t('Worker is not running')));
         }
 
         const requestId = randomUUID();
@@ -299,7 +299,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
                     this._pendingRequests.delete(requestId);
                     this.killWorker();
                     pending.reject(
-                        new Error(`Execution timed out after ${String(Math.round(timeoutMs / 1000))} seconds`),
+                        new Error(l10n.t('Execution timed out after {0} seconds', String(Math.round(timeoutMs / 1000)))),
                     );
                 }
             }, timeoutMs);
