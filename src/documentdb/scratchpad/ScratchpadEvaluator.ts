@@ -24,10 +24,10 @@ type WorkerState = 'idle' | 'spawning' | 'ready' | 'executing';
 /**
  * Evaluates scratchpad code in a persistent worker thread.
  *
- * The worker owns its own `MongoClient` (authenticated via credentials from
+ * The worker owns its own database client (authenticated via credentials from
  * `CredentialCache`) and stays alive between runs. This provides:
  * - Infinite loop safety (main thread can kill the worker)
- * - MongoClient isolation from the Collection View
+ * - Client isolation from the Collection View
  * - Zero re-auth overhead after the first run
  *
  * The public API is unchanged from the in-process evaluator:
@@ -86,7 +86,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
     }
 
     /**
-     * Gracefully shut down the worker: close MongoClient, then terminate thread.
+     * Gracefully shut down the worker: close the database client, then terminate thread.
      * Returns after the worker has confirmed shutdown or after a timeout.
      */
     async shutdown(): Promise<void> {

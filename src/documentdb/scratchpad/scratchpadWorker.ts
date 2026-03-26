@@ -7,7 +7,7 @@
  * Worker thread entry point for scratchpad code evaluation.
  *
  * This file runs in a Node.js worker_thread, isolated from the extension host.
- * It owns its own MongoClient instance (authenticated via credentials passed from
+ * It owns its own database client instance (authenticated via credentials passed from
  * the main thread at init time) and evaluates user code through the @mongosh pipeline.
  *
  * Communication with the main thread is via postMessage (structured clone).
@@ -95,7 +95,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
     // Lazy-import MongoDB driver
     const { MongoClient } = await import('mongodb');
 
-    // Build MongoClient options from the serializable subset
+    // Build client options from the serializable subset
     const options: MongoClientOptions = {
         ...msg.clientOptions,
     };
@@ -124,12 +124,12 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         };
     }
 
-    // Create and connect MongoClient
+    // Create and connect the database client
     mongoClient = new MongoClient(msg.connectionString, options);
     await mongoClient.connect();
     currentDatabaseName = msg.databaseName;
 
-    log('debug', 'Worker initialized — MongoClient connected');
+    log('debug', 'Worker initialized — client connected');
 
     const response: WorkerToMainMessage = {
         type: 'initResult',
@@ -258,7 +258,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
 // ─── Shutdown handler ────────────────────────────────────────────────────────
 
 async function handleShutdown(msg: Extract<MainToWorkerMessage, { type: 'shutdown' }>): Promise<void> {
-    log('debug', 'Shutting down worker — closing MongoClient');
+    log('debug', 'Shutting down worker — closing client');
 
     try {
         if (mongoClient) {
@@ -267,7 +267,7 @@ async function handleShutdown(msg: Extract<MainToWorkerMessage, { type: 'shutdow
         }
     } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        log('warn', `Error closing MongoClient during shutdown: ${errorMessage}`);
+        log('warn', `Error closing client during shutdown: ${errorMessage}`);
     }
 
     const response: WorkerToMainMessage = {
