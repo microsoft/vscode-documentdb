@@ -39,6 +39,7 @@ export async function newScratchpad(_context: IActionContext, node?: DatabaseIte
         headerComment,
         '// Use Ctrl+Enter (Cmd+Enter) to run the current block',
         '// Use Ctrl+Shift+Enter (Cmd+Shift+Enter) to run the entire file',
+        '// Note: when running multiple statements, only the last result is displayed',
         '',
         `db.getCollection('${collectionName}').find({ })`,
         '',

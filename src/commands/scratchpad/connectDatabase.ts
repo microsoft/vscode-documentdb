@@ -27,11 +27,12 @@ export async function connectDatabase(_context: IActionContext, node?: DatabaseI
             l10n.t('DocumentDB Scratchpad connected to {0}/{1}', node.cluster.name, node.databaseInfo.name),
         );
     } else {
-        // No tree context — show instructions (per plan §2.3)
-        void vscode.window.showInformationMessage(
-            l10n.t(
-                'To connect, right-click a database or collection in the DocumentDB panel and select "Connect Scratchpad to this database".',
+        // No tree context — show instructions as modal dialog
+        void vscode.window.showInformationMessage(l10n.t('No database connected'), {
+            modal: true,
+            detail: l10n.t(
+                'Right-click a database or collection in the DocumentDB panel and select "Connect Scratchpad to this database".',
             ),
-        );
+        });
     }
 }

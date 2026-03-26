@@ -524,6 +524,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
             'Tips:',
             '  • Separate code blocks with blank lines',
             '  • Variables persist within a block but not between separate runs',
+            '  • When running multiple statements, only the last result is shown',
             '  • Use .toArray() to get all results (default: first 20 documents)',
         ].join('\n');
 
