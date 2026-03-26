@@ -163,13 +163,20 @@ export class ScratchpadEvaluator implements vscode.Disposable {
             ext.outputChannel.error(`[Scratchpad Worker] ${error.message}`);
         });
 
-        // Build init message from cached credentials
-        const initMsg = this.buildInitMessage(connection);
+        // Build init message from cached credentials and send to worker.
+        // If init fails (bad credentials, unreachable host, etc.), tear down
+        // the worker so the next evaluate() call can respawn cleanly.
+        try {
+            const initMsg = this.buildInitMessage(connection);
 
-        // Send init and wait for acknowledgment
-        onProgress?.(l10n.t('Authenticating…'));
-        await this.sendRequest<void>(initMsg, 30000);
-        this._workerState = 'ready';
+            // Send init and wait for acknowledgment
+            onProgress?.(l10n.t('Authenticating…'));
+            await this.sendRequest<void>(initMsg, 30000);
+            this._workerState = 'ready';
+        } catch (error) {
+            this.terminateWorker();
+            throw error;
+        }
     }
 
     /**
