@@ -299,7 +299,9 @@ export class ScratchpadEvaluator implements vscode.Disposable {
                     this._pendingRequests.delete(requestId);
                     this.killWorker();
                     pending.reject(
-                        new Error(l10n.t('Execution timed out after {0} seconds', String(Math.round(timeoutMs / 1000)))),
+                        new Error(
+                            l10n.t('Execution timed out after {0} seconds', String(Math.round(timeoutMs / 1000))),
+                        ),
                     );
                 }
             }, timeoutMs);
