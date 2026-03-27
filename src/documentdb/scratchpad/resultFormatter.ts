@@ -30,21 +30,25 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
     }
 
     // Result metadata
-    if (result.type) {
-        const printable = result.printable;
-        if (Array.isArray(printable)) {
-            lines.push(`// ${l10n.t('{0} documents returned', printable.length)}`);
-        } else {
-            lines.push(`// ${l10n.t('Result: {0}', result.type)}`);
-        }
+    // Result metadata — state what we know from @mongosh, don't guess
+    const unwrapped = unwrapCursorResult(result.printable);
+    if (result.type === 'Cursor' && Array.isArray(unwrapped)) {
+        // Cursor with a known batch: "Result: Cursor (20 documents)"
+        lines.push(`// ${l10n.t('Result: Cursor ({0} documents)', unwrapped.length)}`);
+    } else if (result.type) {
+        // Typed result: "Result: Document", "Result: string", etc.
+        lines.push(`// ${l10n.t('Result: {0}', result.type)}`);
+    } else if (Array.isArray(unwrapped)) {
+        // Untyped array (e.g. .toArray()) — show type and count
+        lines.push(`// ${l10n.t('Result: Array ({0} elements)', unwrapped.length)}`);
     }
 
     lines.push(`// ${l10n.t('Executed in {0}ms', result.durationMs)}`);
     lines.push('// ─────────────────────────');
     lines.push('');
 
-    // Result value
-    lines.push(formatPrintable(result.printable));
+    // Result value — unwrap cursor wrapper for clean output
+    lines.push(formatPrintable(unwrapCursorResult(result.printable)));
 
     return lines.join('\n');
 }
@@ -79,6 +83,30 @@ export function formatError(
     lines.push(errorMessage);
 
     return lines.join('\n');
+}
+
+/**
+ * Unwrap CursorIterationResult from @mongosh.
+ *
+ * @mongosh's `asPrintable()` on CursorIterationResult produces
+ * `{ cursorHasMore: boolean, documents: unknown[] }` instead of a plain array.
+ * Only unwraps when the full wrapper shape is present to avoid
+ * false positives on user documents that happen to have a `documents` field.
+ */
+function unwrapCursorResult(printable: unknown): unknown {
+    if (
+        printable !== null &&
+        printable !== undefined &&
+        typeof printable === 'object' &&
+        !Array.isArray(printable) &&
+        'cursorHasMore' in printable &&
+        typeof (printable as Record<string, unknown>).cursorHasMore === 'boolean' &&
+        'documents' in printable &&
+        Array.isArray((printable as { documents: unknown }).documents)
+    ) {
+        return (printable as { documents: unknown[] }).documents;
+    }
+    return printable;
 }
 
 function formatPrintable(printable: unknown): string {

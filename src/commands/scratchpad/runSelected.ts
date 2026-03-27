@@ -68,5 +68,5 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
         return;
     }
 
-    await executeScratchpadCode(codeToRun);
+    await executeScratchpadCode(codeToRun, 'runSelected');
 }

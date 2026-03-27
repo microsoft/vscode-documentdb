@@ -551,6 +551,12 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.clearSchemaCache",
         "title": "Clear Schema Cache"
+      },
+      {
+        "//": "[Diagnostics] Show Schema Store Stats",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.showSchemaStoreStats",
+        "title": "Show Schema Store Stats"
       }
     ],
     "submenus": [
