@@ -207,6 +207,15 @@
   },
   "extensionDependencies": [],
   "contributes": {
+    "configurationDefaults": {
+      "[documentdb-scratchpad]": {
+        "editor.quickSuggestions": {
+          "strings": true,
+          "other": true,
+          "comments": false
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -252,7 +261,6 @@
       {
         "id": "documentdb-scratchpad",
         "extensions": [
-          ".documentdb",
           ".documentdb.js"
         ],
         "aliases": [
@@ -266,6 +274,15 @@
         "language": "documentdb-scratchpad",
         "scopeName": "source.documentdb-scratchpad",
         "path": "./syntaxes/documentdb-scratchpad.tmGrammar.json"
+      }
+    ],
+    "typescriptServerPlugins": [
+      {
+        "name": "../dist/scratchpadTsPlugin",
+        "languages": [
+          "documentdb-scratchpad"
+        ],
+        "enableForWorkspaceTypeScriptVersions": true
       }
     ],
     "commands": [

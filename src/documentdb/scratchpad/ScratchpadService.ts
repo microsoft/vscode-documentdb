@@ -13,7 +13,7 @@ import { type ScratchpadConnection } from './types';
  *
  * Design decisions (from 06-scrapbook-rebuild.md):
  * - D1 (Option B): All scratchpad files share a single global connection
- * - StatusBarItem shows connection status when a `.documentdb` file is active
+ * - StatusBarItem shows connection status when a `.documentdb.js` file is active
  * - Service emits state changes so UI components (CodeLens, StatusBar) can refresh
  */
 export class ScratchpadService implements vscode.Disposable {
