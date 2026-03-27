@@ -39,6 +39,19 @@ export class ScratchpadEvaluator implements vscode.Disposable {
     /** Which cluster the live worker is connected to (to detect cluster switches) */
     private _workerClusterId: string | undefined;
 
+    /**
+     * Telemetry session ID — generated on worker spawn, stable across evals within the
+     * same worker lifecycle. Resets when the worker is terminated/respawned.
+     * Used to correlate multiple scratchpad runs within a single "session".
+     */
+    private _sessionId: string | undefined;
+
+    /** Number of eval calls completed during this worker session (for usage tracking). */
+    private _sessionEvalCount: number = 0;
+
+    /** Auth mechanism used for the current worker session (for telemetry). */
+    private _sessionAuthMethod: string | undefined;
+
     /** Pending request correlation map: requestId → { resolve, reject } */
     private _pendingRequests = new Map<
         string,
@@ -47,6 +60,23 @@ export class ScratchpadEvaluator implements vscode.Disposable {
             reject: (error: Error) => void;
         }
     >();
+
+    /** Telemetry accessors — read by the command layer for telemetry properties. */
+    get sessionId(): string | undefined {
+        return this._sessionId;
+    }
+    get sessionEvalCount(): number {
+        return this._sessionEvalCount;
+    }
+    get sessionAuthMethod(): string | undefined {
+        return this._sessionAuthMethod;
+    }
+
+    /** Duration of the last worker init (spawn + auth), in ms. 0 if worker was already alive. */
+    private _lastInitDurationMs: number = 0;
+    get lastInitDurationMs(): number {
+        return this._lastInitDurationMs;
+    }
 
     /**
      * Evaluate user code against the connected database.
@@ -74,7 +104,10 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         if (needsSpawn) {
             onProgress?.(l10n.t('Initializing…'));
         }
+
+        const initStartTime = Date.now();
         await this.ensureWorker(connection, onProgress);
+        this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 
         // Send eval message and await result
         onProgress?.(l10n.t('Running query…'));
@@ -169,6 +202,11 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         try {
             const initMsg = this.buildInitMessage(connection);
 
+            // Start a new telemetry session for this worker lifecycle
+            this._sessionId = randomUUID();
+            this._sessionEvalCount = 0;
+            this._sessionAuthMethod = initMsg.authMechanism;
+
             // Send init and wait for acknowledgment
             onProgress?.(l10n.t('Authenticating…'));
             await this.sendRequest<void>(initMsg, 30000);
@@ -231,6 +269,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         timeoutMs: number,
     ): Promise<ExecutionResult> {
         this._workerState = 'executing';
+        this._sessionEvalCount++;
 
         const evalMsg: MainToWorkerMessage = {
             type: 'eval',
@@ -441,6 +480,9 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         }
         this._workerState = 'idle';
         this._workerClusterId = undefined;
+        this._sessionId = undefined;
+        this._sessionEvalCount = 0;
+        this._sessionAuthMethod = undefined;
 
         // Reject all pending requests
         for (const [, entry] of this._pendingRequests) {
@@ -453,6 +495,9 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         this._worker = undefined;
         this._workerState = 'idle';
         this._workerClusterId = undefined;
+        this._sessionId = undefined;
+        this._sessionEvalCount = 0;
+        this._sessionAuthMethod = undefined;
 
         // Reject any still-pending requests
         for (const [, entry] of this._pendingRequests) {

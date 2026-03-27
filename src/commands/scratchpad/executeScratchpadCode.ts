@@ -3,15 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { openReadOnlyContent } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    callWithTelemetryAndErrorHandling,
+    openReadOnlyContent,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ScratchpadEvaluator } from '../../documentdb/scratchpad/ScratchpadEvaluator';
 import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
 import { formatError, formatResult } from '../../documentdb/scratchpad/resultFormatter';
 import { type ExecutionResult, type ScratchpadConnection } from '../../documentdb/scratchpad/types';
+import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
+import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 
 /** Shared evaluator instance — lazily created, reused across runs. */
 let evaluator: ScratchpadEvaluator | undefined;
@@ -56,65 +63,132 @@ export async function executeScratchpadCode(code: string): Promise<void> {
 
     service.setExecuting(true);
 
-    await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: l10n.t('DocumentDB Scratchpad'),
-            cancellable: true,
-        },
-        async (progress, token) => {
-            // Track whether user cancelled — to suppress the error notification
-            let cancelled = false;
+    // callWithTelemetryAndErrorHandling automatically tracks:
+    //   - duration (measured from callback start to end)
+    //   - result: 'Succeeded' | 'Failed' | 'Canceled'
+    //   - error / errorMessage (from thrown errors)
+    // We add custom properties for scratchpad-specific analytics.
+    await callWithTelemetryAndErrorHandling('scratchpad.execute', async (context) => {
+        context.errorHandling.suppressDisplay = true; // we show our own error UI
+        context.errorHandling.rethrow = false;
 
-            // Cancel kills the worker — user can re-run to respawn
-            token.onCancellationRequested(() => {
-                cancelled = true;
-                evaluator?.killWorker();
-            });
+        // ── Pre-execution telemetry (known before eval) ──────────────
+        context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
+        context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
+        context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
+        context.telemetry.measurements.codeLineCount = code.split('\n').length;
 
-            const startTime = Date.now();
-            try {
-                const result = await evaluator!.evaluate(connection, code, (message) => {
-                    progress.report({ message });
+        // Domain info — privacy-safe hashed host data for platform analytics
+        const domainProps: Record<string, string | undefined> = {};
+        collectDomainTelemetry(connection, domainProps);
+        Object.assign(context.telemetry.properties, domainProps);
+
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: l10n.t('DocumentDB Scratchpad'),
+                cancellable: true,
+            },
+            async (progress, token) => {
+                let cancelled = false;
+
+                token.onCancellationRequested(() => {
+                    cancelled = true;
+                    evaluator?.killWorker();
                 });
-                const formattedOutput = formatResult(result, code, connection);
 
-                // Feed document results to SchemaStore for cross-tab schema sharing
-                feedResultToSchemaStore(result, connection);
+                try {
+                    const result = await evaluator!.evaluate(connection, code, (message) => {
+                        progress.report({ message });
+                    });
 
-                const resultLabel = l10n.t('{0}/{1} — Results', connection.clusterDisplayName, connection.databaseName);
+                    // ── Post-execution telemetry (known after success) ────
+                    context.telemetry.properties.resultType = result.type ?? 'null';
+                    context.telemetry.measurements.initDurationMs = evaluator!.lastInitDurationMs;
+                    // sessionId/sessionEvalCount may have changed after evaluate (if worker was spawned)
+                    context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
+                    context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
+                    context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
 
-                await openReadOnlyContent(
-                    { label: resultLabel, fullId: `scratchpad-results-${Date.now()}` },
-                    formattedOutput,
-                    '.jsonc',
-                    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-                );
-            } catch (error: unknown) {
-                // Don't show error UI when the user explicitly cancelled
-                if (cancelled) {
-                    return;
+                    const formattedOutput = formatResult(result, code, connection);
+                    feedResultToSchemaStore(result, connection);
+
+                    const resultLabel = l10n.t(
+                        '{0}/{1} — Results',
+                        connection.clusterDisplayName,
+                        connection.databaseName,
+                    );
+
+                    await openReadOnlyContent(
+                        { label: resultLabel, fullId: `scratchpad-results-${Date.now()}` },
+                        formattedOutput,
+                        '.jsonc',
+                        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+                    );
+
+                    // result: 'Succeeded' is set automatically by the framework
+                } catch (error: unknown) {
+                    // Update session telemetry even on failure (worker may have spawned before failing)
+                    context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
+                    context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
+                    context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
+                    context.telemetry.measurements.initDurationMs = evaluator!.lastInitDurationMs;
+
+                    if (cancelled) {
+                        // Throw UserCancelledError so framework marks result as 'Canceled'
+                        throw new UserCancelledError('scratchpad.execute');
+                    }
+
+                    // Show our own error UI before re-throwing
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    const formattedOutput = formatError(error, code, 0, connection);
+
+                    const errorLabel = l10n.t(
+                        '{0}/{1} — Error',
+                        connection.clusterDisplayName,
+                        connection.databaseName,
+                    );
+
+                    await openReadOnlyContent(
+                        { label: errorLabel, fullId: `scratchpad-error-${Date.now()}` },
+                        formattedOutput,
+                        '.jsonc',
+                        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+                    );
+
+                    void vscode.window.showErrorMessage(l10n.t('Scratchpad execution failed: {0}', errorMessage));
+
+                    // Re-throw so framework automatically captures result: 'Failed',
+                    // error, and errorMessage in telemetry
+                    throw error;
+                } finally {
+                    service.setExecuting(false);
                 }
+            },
+        );
+    });
+}
 
-                const durationMs = Date.now() - startTime;
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                const formattedOutput = formatError(error, code, durationMs, connection);
+// ─── Domain telemetry ────────────────────────────────────────────────────────
 
-                const errorLabel = l10n.t('{0}/{1} — Error', connection.clusterDisplayName, connection.databaseName);
-
-                await openReadOnlyContent(
-                    { label: errorLabel, fullId: `scratchpad-error-${Date.now()}` },
-                    formattedOutput,
-                    '.jsonc',
-                    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-                );
-
-                void vscode.window.showErrorMessage(l10n.t('Scratchpad execution failed: {0}', errorMessage));
-            } finally {
-                service.setExecuting(false);
-            }
-        },
-    );
+/**
+ * Collects domain info from the scratchpad connection's cached credentials.
+ * Reuses the same hashing logic as the connection metadata telemetry.
+ */
+function collectDomainTelemetry(
+    connection: ScratchpadConnection,
+    properties: Record<string, string | undefined>,
+): void {
+    try {
+        const credentials = CredentialCache.getCredentials(connection.clusterId);
+        if (!credentials?.connectionString) {
+            return;
+        }
+        const hosts = getHostsFromConnectionString(credentials.connectionString);
+        addDomainInfoToProperties(hosts, properties);
+    } catch {
+        // Domain info is best-effort — don't fail telemetry if parsing fails
+    }
 }
 
 /**
