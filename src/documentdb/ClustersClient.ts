@@ -15,6 +15,7 @@ import {
     callWithTelemetryAndErrorHandling,
     parseError,
 } from '@microsoft/vscode-azext-utils';
+import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import {
@@ -53,6 +54,7 @@ import {
     type IndexSpecification,
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
+import { SchemaStore } from './SchemaStore';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -290,6 +292,15 @@ export class ClustersClient {
     }
 
     /**
+     * Returns the underlying MongoClient instance.
+     * Used by the scratchpad evaluator to create a `@mongosh` ServiceProvider
+     * that reuses the existing, authenticated connection.
+     */
+    public getMongoClient(): MongoClient {
+        return this._mongoClient;
+    }
+
+    /**
      * Retrieves an instance of `ClustersClient` based on the provided `clusterId`.
      *
      * @param clusterId - A required string used to find the cached connection string to connect.
@@ -350,6 +361,9 @@ export class ClustersClient {
             const client = ClustersClient._clients.get(credentialId) as ClustersClient;
             await client._mongoClient.close(true);
             ClustersClient._clients.delete(credentialId);
+
+            // Clear cached schema data for this cluster
+            SchemaStore.getInstance().clearCluster(credentialId);
         }
     }
 
@@ -555,13 +569,15 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = EJSON.parse(queryParams.project) as Document;
+                options.projection = parseShellBSON(queryParams.project, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_PROJECTION',
                     l10n.t(
-                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid projection syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -572,13 +588,15 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = EJSON.parse(queryParams.sort) as Document;
+                options.sort = parseShellBSON(queryParams.sort, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_SORT',
                     l10n.t(
-                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid sort syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -704,13 +722,15 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = EJSON.parse(queryParams.project) as Document;
+                options.projection = parseShellBSON(queryParams.project, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_PROJECTION',
                     l10n.t(
-                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid projection syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -721,13 +741,15 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = EJSON.parse(queryParams.sort) as Document;
+                options.sort = parseShellBSON(queryParams.sort, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_SORT',
                     l10n.t(
-                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid sort syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,

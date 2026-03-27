@@ -7,7 +7,6 @@ import { type IAzExtLogOutputChannel, type TreeElementStateManager } from '@micr
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import type * as vscode from 'vscode';
 import { type DatabasesFileSystem } from './DatabasesFileSystem';
-import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClient';
 import { type VCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { type RUBranchDataProvider } from './tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { type ClustersWorkspaceBranchDataProvider } from './tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
@@ -28,7 +27,6 @@ export namespace ext {
     export let secretStorage: vscode.SecretStorage;
     export const prefix: string = 'documentDB';
     export let fileSystem: DatabasesFileSystem;
-    export let mongoLanguageClient: MongoDBLanguageClient;
 
     // TODO: TN improve this: This is a temporary solution to get going.
     export let copiedCollectionNode: CollectionItem | undefined;
