@@ -263,13 +263,13 @@ function feedResultToSchemaStore(result: ExecutionResult, connection: Scratchpad
 }
 
 /**
- * Fisher–Yates shuffle-based random sample of `count` items from `array`.
- * Returns a new array of length `count` with randomly selected items.
+ * Partial Fisher–Yates random sample of `count` items from `array`.
+ * Only performs `count` swaps instead of shuffling the entire array.
  */
 function randomSample<T>(array: T[], count: number): T[] {
     const copy = [...array];
-    for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+    for (let i = 0; i < count; i++) {
+        const j = i + Math.floor(Math.random() * (copy.length - i));
         [copy[i], copy[j]] = [copy[j], copy[i]];
     }
     return copy.slice(0, count);
