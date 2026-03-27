@@ -32,5 +32,5 @@ export async function runAll(_context: IActionContext): Promise<void> {
         return;
     }
 
-    await executeScratchpadCode(code);
+    await executeScratchpadCode(code, 'runAll');
 }

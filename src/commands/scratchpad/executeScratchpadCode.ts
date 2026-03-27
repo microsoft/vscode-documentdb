@@ -45,7 +45,9 @@ export function shutdownEvaluator(): void {
  * Executes scratchpad code and displays the result in a read-only side panel.
  * Used by both `runAll` and `runSelected` commands.
  */
-export async function executeScratchpadCode(code: string): Promise<void> {
+export type ScratchpadRunMode = 'runAll' | 'runSelected';
+
+export async function executeScratchpadCode(code: string, runMode: ScratchpadRunMode): Promise<void> {
     const service = ScratchpadService.getInstance();
     const connection = service.getConnection();
     if (!connection) {
@@ -76,6 +78,7 @@ export async function executeScratchpadCode(code: string): Promise<void> {
         context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
         context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
         context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
+        context.telemetry.properties.runMode = runMode;
         context.telemetry.measurements.codeLineCount = code.split('\n').length;
 
         // Domain info — privacy-safe hashed host data for platform analytics
