@@ -88,9 +88,10 @@ export function formatError(
 /**
  * Unwrap CursorIterationResult from @mongosh.
  *
- * @mongosh's `asPrintable()` on CursorIterationResult produces `{ cursorHasMore, documents }`
- * instead of a plain array. This function extracts the `documents` array for clean display
- * and schema feeding.
+ * @mongosh's `asPrintable()` on CursorIterationResult produces
+ * `{ cursorHasMore: boolean, documents: unknown[] }` instead of a plain array.
+ * Only unwraps when the full wrapper shape is present to avoid
+ * false positives on user documents that happen to have a `documents` field.
  */
 function unwrapCursorResult(printable: unknown): unknown {
     if (
@@ -98,6 +99,8 @@ function unwrapCursorResult(printable: unknown): unknown {
         printable !== undefined &&
         typeof printable === 'object' &&
         !Array.isArray(printable) &&
+        'cursorHasMore' in printable &&
+        typeof (printable as Record<string, unknown>).cursorHasMore === 'boolean' &&
         'documents' in printable &&
         Array.isArray((printable as { documents: unknown }).documents)
     ) {

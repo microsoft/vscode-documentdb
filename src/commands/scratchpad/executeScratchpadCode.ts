@@ -223,11 +223,14 @@ function feedResultToSchemaStore(result: ExecutionResult, connection: Scratchpad
     }
 
     // CursorIterationResult from @mongosh wraps documents in { cursorHasMore, documents }.
-    // Unwrap to get the actual document array.
+    // Only unwrap when the full wrapper shape is present to avoid false positives
+    // on user documents that happen to have a `documents` field.
     let items: unknown[];
     if (
         typeof printable === 'object' &&
         !Array.isArray(printable) &&
+        'cursorHasMore' in printable &&
+        typeof (printable as Record<string, unknown>).cursorHasMore === 'boolean' &&
         'documents' in printable &&
         Array.isArray((printable as { documents: unknown }).documents)
     ) {
