@@ -23,6 +23,7 @@ module.exports = (env, { mode }) => {
         entry: {
             main: './main.ts',
             scratchpadWorker: './src/documentdb/scratchpad/scratchpadWorker.ts',
+            scratchpadTsPlugin: './src/documentdb/scratchpad/tsPlugin/index.ts',
         },
         output: {
             path: path.resolve(__dirname, 'dist'),
@@ -195,6 +196,10 @@ module.exports = (env, { mode }) => {
                         from: '.vscodeignore',
                         to: '.vscodeignore',
                         toType: 'file',
+                    },
+                    {
+                        from: './src/documentdb/scratchpad/typeDefs',
+                        to: 'typeDefs',
                     },
                     {
                         from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
