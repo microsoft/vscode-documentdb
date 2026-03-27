@@ -100,6 +100,7 @@ export async function executeScratchpadCode(code: string, runMode: ScratchpadRun
                     evaluator?.killWorker();
                 });
 
+                const startTime = Date.now();
                 try {
                     const result = await evaluator!.evaluate(connection, code, (message) => {
                         progress.report({ message });
@@ -144,7 +145,8 @@ export async function executeScratchpadCode(code: string, runMode: ScratchpadRun
 
                     // Show our own error UI before re-throwing
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    const formattedOutput = formatError(error, code, 0, connection);
+                    const durationMs = Date.now() - startTime;
+                    const formattedOutput = formatError(error, code, durationMs, connection);
 
                     const errorLabel = l10n.t(
                         '{0}/{1} — Error',
