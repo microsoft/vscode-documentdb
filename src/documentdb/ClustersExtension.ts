@@ -86,7 +86,11 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
-import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
+import {
+    SCRATCHPAD_FILE_EXTENSION,
+    SCRATCHPAD_LANGUAGE_ID,
+    ScratchpadCommandIds,
+} from './scratchpad/constants';
 import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
 import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
 import { ScratchpadService } from './scratchpad/ScratchpadService';
@@ -219,7 +223,7 @@ export class ClustersExtension implements vscode.Disposable {
                     }),
                 );
 
-                // Shut down the scratchpad worker when the last .documentdb editor closes
+                // Shut down the scratchpad worker when the last .documentdb.js editor closes
                 ext.context.subscriptions.push(
                     vscode.window.tabGroups.onDidChangeTabs((event) => {
                         // Only react when tabs are closed
@@ -232,7 +236,7 @@ export class ClustersExtension implements vscode.Disposable {
                             const input = tab.input;
                             return (
                                 input instanceof vscode.TabInputText &&
-                                (input.uri.path.endsWith('.documentdb') || input.uri.path.endsWith('.documentdb.js'))
+                                input.uri.path.endsWith(SCRATCHPAD_FILE_EXTENSION)
                             );
                         });
 
@@ -246,8 +250,7 @@ export class ClustersExtension implements vscode.Disposable {
                                 const input = tab.input;
                                 return (
                                     input instanceof vscode.TabInputText &&
-                                    (input.uri.path.endsWith('.documentdb') ||
-                                        input.uri.path.endsWith('.documentdb.js'))
+                                    input.uri.path.endsWith(SCRATCHPAD_FILE_EXTENSION)
                                 );
                             }),
                         );
@@ -269,6 +272,23 @@ export class ClustersExtension implements vscode.Disposable {
                 // Register block highlighter for scratchpad files
                 const blockHighlighter = new ScratchpadBlockHighlighter(ext.context.extensionPath);
                 ext.context.subscriptions.push(blockHighlighter);
+
+                // Force-activate the TypeScript extension when a scratchpad file is opened.
+                // Our language ID (documentdb-scratchpad) is not in VS Code's built-in list
+                // of TS-handled languages (javascript, typescript, etc.), so the TS extension
+                // won't start automatically. We activate it eagerly so IntelliSense is
+                // available immediately — not only after some other TS-triggering event.
+                let tsActivated = false;
+                ext.context.subscriptions.push(
+                    vscode.workspace.onDidOpenTextDocument((doc) => {
+                        if (!tsActivated && doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
+                            tsActivated = true;
+                            void vscode.extensions
+                                .getExtension('vscode.typescript-language-features')
+                                ?.activate();
+                        }
+                    }),
+                );
 
                 //// Scratchpad Commands:
 

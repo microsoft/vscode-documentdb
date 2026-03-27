@@ -261,7 +261,6 @@
       {
         "id": "documentdb-scratchpad",
         "extensions": [
-          ".documentdb",
           ".documentdb.js"
         ],
         "aliases": [
@@ -279,7 +278,7 @@
     ],
     "typescriptServerPlugins": [
       {
-        "name": "./dist/scratchpadTsPlugin",
+        "name": "../dist/scratchpadTsPlugin",
         "languages": [
           "documentdb-scratchpad"
         ],

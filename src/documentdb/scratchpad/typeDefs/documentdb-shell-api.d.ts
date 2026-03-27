@@ -7,7 +7,7 @@
 // DocumentDB Shell API Type Definitions
 //
 // This file declares the shell API surface available in DocumentDB scratchpad
-// (.documentdb) files. It is loaded by the TypeScript language service to
+// (.documentdb.js) files. It is loaded by the TypeScript language service to
 // provide autocompletion, hover docs, and signature help.
 //
 // IMPORTANT:
