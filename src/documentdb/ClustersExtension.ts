@@ -86,11 +86,7 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
-import {
-    SCRATCHPAD_FILE_EXTENSION,
-    SCRATCHPAD_LANGUAGE_ID,
-    ScratchpadCommandIds,
-} from './scratchpad/constants';
+import { SCRATCHPAD_FILE_EXTENSION, SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
 import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
 import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
 import { ScratchpadService } from './scratchpad/ScratchpadService';
@@ -283,9 +279,7 @@ export class ClustersExtension implements vscode.Disposable {
                     vscode.workspace.onDidOpenTextDocument((doc) => {
                         if (!tsActivated && doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
                             tsActivated = true;
-                            void vscode.extensions
-                                .getExtension('vscode.typescript-language-features')
-                                ?.activate();
+                            void vscode.extensions.getExtension('vscode.typescript-language-features')?.activate();
                         }
                     }),
                 );
