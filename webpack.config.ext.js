@@ -202,6 +202,13 @@ module.exports = (env, { mode }) => {
                         to: 'typeDefs',
                     },
                     {
+                        // Create a node_modules package stub so the TS server can resolve
+                        // our plugin by package name (as documented by VS Code).
+                        // The plugin's package.json points to the actual bundle via "main".
+                        from: './src/documentdb/scratchpad/tsPlugin/package.json',
+                        to: 'node_modules/documentdb-scratchpad-ts-plugin/package.json',
+                    },
+                    {
                         from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
                         to: 'resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
                     },

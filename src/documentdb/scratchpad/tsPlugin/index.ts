@@ -18,12 +18,15 @@
  *
  * The plugin runs in the TypeScript server process (NOT the extension host),
  * so it cannot import `vscode` or any extension code.
+ *
+ * The plugin is resolved as an npm package from `<extensionPath>/node_modules/`
+ * (as documented by VS Code's typescriptServerPlugins contribution point).
+ * A package.json stub at `dist/node_modules/documentdb-scratchpad-ts-plugin/`
+ * points to the actual webpack bundle via its `"main"` field.
  */
 
 import * as path from 'path';
 import type ts from 'typescript';
-
-const PLUGIN_NAME = 'documentdb-scratchpad-types';
 
 /**
  * Path to the `.d.ts` file relative to this plugin's output location.
@@ -32,7 +35,9 @@ const PLUGIN_NAME = 'documentdb-scratchpad-types';
 const dtsPath = path.join(__dirname, 'typeDefs', 'documentdb-shell-api.d.ts');
 
 function create(info: ts.server.PluginCreateInfo): ts.LanguageService {
-    info.project.projectService.logger.info(`[${PLUGIN_NAME}] Plugin loaded. .d.ts path: ${dtsPath}`);
+    info.project.projectService.logger.info(
+        `[documentdb-ts-plugin] Loaded. dtsPath=${dtsPath}, project=${info.project.getProjectName()}`,
+    );
 
     // Return the original language service unmodified.
     // Our contribution is purely via getExternalFiles() below.
@@ -48,8 +53,7 @@ function getExternalFiles(_project: ts.server.Project): string[] {
 
 // Export as a TS server PluginModuleFactory.
 // The TS server calls this factory with { typescript: ts } and expects
-// a PluginModule back. This is NOT a direct module export — it must be
-// a function that returns the module.
+// a PluginModule back.
 const pluginModuleFactory: ts.server.PluginModuleFactory = (_mod) => ({
     create,
     getExternalFiles,

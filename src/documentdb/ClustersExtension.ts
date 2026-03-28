@@ -282,10 +282,13 @@ export class ClustersExtension implements vscode.Disposable {
                 // available immediately — not only after some other TS-triggering event.
                 let tsActivated = false;
                 ext.context.subscriptions.push(
-                    vscode.workspace.onDidOpenTextDocument((doc) => {
+                    vscode.workspace.onDidOpenTextDocument(async (doc) => {
                         if (!tsActivated && doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
                             tsActivated = true;
-                            void vscode.extensions.getExtension('vscode.typescript-language-features')?.activate();
+                            const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
+                            if (tsExt && !tsExt.isActive) {
+                                await tsExt.activate();
+                            }
                         }
                     }),
                 );
