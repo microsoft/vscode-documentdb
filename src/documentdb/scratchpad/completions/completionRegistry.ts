@@ -32,9 +32,21 @@ export interface ShellCompletionEntry {
 
 export const SHELL_GLOBALS: readonly ShellCompletionEntry[] = [
     { label: 'db', description: 'Current database object', sortPrefix: '0_', kind: 'variable' },
-    { label: 'use', description: 'Switch database', snippet: 'use("${1:database}")', sortPrefix: '1_', kind: 'function' },
+    {
+        label: 'use',
+        description: 'Switch database',
+        snippet: 'use("${1:database}")',
+        sortPrefix: '1_',
+        kind: 'function',
+    },
     { label: 'help', description: 'Display help information', snippet: 'help()', sortPrefix: '1_', kind: 'function' },
-    { label: 'print', description: 'Print values to output', snippet: 'print(${1})', sortPrefix: '1_', kind: 'function' },
+    {
+        label: 'print',
+        description: 'Print values to output',
+        snippet: 'print(${1})',
+        sortPrefix: '1_',
+        kind: 'function',
+    },
     {
         label: 'printjson',
         description: 'Print formatted JSON',
@@ -42,7 +54,13 @@ export const SHELL_GLOBALS: readonly ShellCompletionEntry[] = [
         sortPrefix: '1_',
         kind: 'function',
     },
-    { label: 'sleep', description: 'Pause execution (ms)', snippet: 'sleep(${1:1000})', sortPrefix: '1_', kind: 'function' },
+    {
+        label: 'sleep',
+        description: 'Pause execution (ms)',
+        snippet: 'sleep(${1:1000})',
+        sortPrefix: '1_',
+        kind: 'function',
+    },
     { label: 'version', description: 'Shell version', snippet: 'version()', sortPrefix: '1_', kind: 'function' },
 
     // BSON constructors
@@ -212,7 +230,13 @@ export const DATABASE_METHODS: readonly ShellCompletionEntry[] = [
 export const COLLECTION_METHODS: readonly ShellCompletionEntry[] = [
     // High-frequency — sortPrefix '0_'
     { label: 'find', description: 'Query documents', snippet: 'find({ ${1} })', sortPrefix: '0_', kind: 'method' },
-    { label: 'findOne', description: 'Query one document', snippet: 'findOne({ ${1} })', sortPrefix: '0_', kind: 'method' },
+    {
+        label: 'findOne',
+        description: 'Query one document',
+        snippet: 'findOne({ ${1} })',
+        sortPrefix: '0_',
+        kind: 'method',
+    },
     {
         label: 'insertOne',
         description: 'Insert one document',
@@ -369,7 +393,13 @@ export const COLLECTION_METHODS: readonly ShellCompletionEntry[] = [
 export const FIND_CURSOR_METHODS: readonly ShellCompletionEntry[] = [
     { label: 'limit', description: 'Limit results', snippet: 'limit(${1:10})', sortPrefix: '0_', kind: 'method' },
     { label: 'skip', description: 'Skip results', snippet: 'skip(${1:0})', sortPrefix: '0_', kind: 'method' },
-    { label: 'sort', description: 'Sort results', snippet: 'sort({ ${1}: ${2|1,-1|} })', sortPrefix: '0_', kind: 'method' },
+    {
+        label: 'sort',
+        description: 'Sort results',
+        snippet: 'sort({ ${1}: ${2|1,-1|} })',
+        sortPrefix: '0_',
+        kind: 'method',
+    },
     { label: 'toArray', description: 'Get all as array', snippet: 'toArray()', sortPrefix: '0_', kind: 'method' },
     {
         label: 'forEach',
@@ -389,7 +419,13 @@ export const FIND_CURSOR_METHODS: readonly ShellCompletionEntry[] = [
     { label: 'explain', description: 'Query plan', snippet: 'explain()', sortPrefix: '1_', kind: 'method' },
     { label: 'hasNext', description: 'Check for more', snippet: 'hasNext()', sortPrefix: '1_', kind: 'method' },
     { label: 'next', description: 'Get next document', snippet: 'next()', sortPrefix: '1_', kind: 'method' },
-    { label: 'batchSize', description: 'Set batch size', snippet: 'batchSize(${1:50})', sortPrefix: '1_', kind: 'method' },
+    {
+        label: 'batchSize',
+        description: 'Set batch size',
+        snippet: 'batchSize(${1:50})',
+        sortPrefix: '1_',
+        kind: 'method',
+    },
     { label: 'close', description: 'Close cursor', snippet: 'close()', sortPrefix: '1_', kind: 'method' },
     {
         label: 'collation',
@@ -430,7 +466,13 @@ export const AGGREGATION_CURSOR_METHODS: readonly ShellCompletionEntry[] = [
     },
     { label: 'hasNext', description: 'Check for more', snippet: 'hasNext()', sortPrefix: '1_', kind: 'method' },
     { label: 'next', description: 'Get next document', snippet: 'next()', sortPrefix: '1_', kind: 'method' },
-    { label: 'batchSize', description: 'Set batch size', snippet: 'batchSize(${1:50})', sortPrefix: '1_', kind: 'method' },
+    {
+        label: 'batchSize',
+        description: 'Set batch size',
+        snippet: 'batchSize(${1:50})',
+        sortPrefix: '1_',
+        kind: 'method',
+    },
     { label: 'close', description: 'Close cursor', snippet: 'close()', sortPrefix: '1_', kind: 'method' },
     { label: 'explain', description: 'Execution plan', snippet: 'explain()', sortPrefix: '1_', kind: 'method' },
     {

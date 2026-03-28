@@ -32,14 +32,7 @@ module.exports = (env, { mode }) => {
             libraryTarget: 'commonjs2',
             devtoolModuleFilenameTemplate: '[resource-path]',
         },
-        cache: {
-            type: 'filesystem',
-            name: `extension-build${isDev ? '-dev' : ''}`,
-            cacheDirectory: path.resolve(__dirname, 'node_modules/.cache/webpack/extension'),
-            buildDependencies: {
-                config: [__filename],
-            },
-        },
+        cache: false,
         optimization: {
             minimize: !isDev,
             minimizer: [
@@ -200,6 +193,13 @@ module.exports = (env, { mode }) => {
                     {
                         from: './src/documentdb/scratchpad/typeDefs',
                         to: 'typeDefs',
+                    },
+                    {
+                        // Create a node_modules package stub so the TS server can resolve
+                        // our plugin by package name (as documented by VS Code).
+                        // The plugin's package.json points to the actual bundle via "main".
+                        from: './src/documentdb/scratchpad/tsPlugin/package.json',
+                        to: 'node_modules/documentdb-scratchpad-ts-plugin/package.json',
                     },
                     {
                         from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',

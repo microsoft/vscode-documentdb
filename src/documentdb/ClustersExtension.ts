@@ -86,10 +86,10 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
+import { ScratchpadCompletionItemProvider } from './scratchpad/completions/ScratchpadCompletionItemProvider';
 import { SCRATCHPAD_FILE_EXTENSION, SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
 import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
 import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
-import { ScratchpadCompletionItemProvider } from './scratchpad/completions/ScratchpadCompletionItemProvider';
 import { ScratchpadService } from './scratchpad/ScratchpadService';
 import { Views } from './Views';
 
@@ -275,17 +275,30 @@ export class ClustersExtension implements vscode.Disposable {
                 // constructors that the TypeScript service (Layer 1) doesn't know about.
                 ext.context.subscriptions.push(ScratchpadCompletionItemProvider.register());
 
-                // Force-activate the TypeScript extension when a scratchpad file is opened.
-                // Our language ID (documentdb-scratchpad) is not in VS Code's built-in list
-                // of TS-handled languages (javascript, typescript, etc.), so the TS extension
-                // won't start automatically. We activate it eagerly so IntelliSense is
-                // available immediately — not only after some other TS-triggering event.
-                let tsActivated = false;
+                // Ensure the TypeScript extension recognizes our plugin and restarts
+                // its TS server to load it. The TS extension may have started before our
+                // extension was discovered, so its TS server might not include our plugin.
+                // We restart it once when the first scratchpad file is opened.
+                let tsRestarted = false;
                 ext.context.subscriptions.push(
-                    vscode.workspace.onDidOpenTextDocument((doc) => {
-                        if (!tsActivated && doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
-                            tsActivated = true;
-                            void vscode.extensions.getExtension('vscode.typescript-language-features')?.activate();
+                    vscode.workspace.onDidOpenTextDocument(async (doc) => {
+                        if (!tsRestarted && doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
+                            tsRestarted = true;
+                            const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
+                            if (tsExt) {
+                                if (!tsExt.isActive) {
+                                    await tsExt.activate();
+                                }
+                                // Wait a moment for the TS server to fully initialize before
+                                // restarting it. Without this delay, the restart command can
+                                // arrive while the server is still starting, causing a crash.
+                                await new Promise((resolve) => setTimeout(resolve, 2000));
+                                // Restart the TS server so it picks up our plugin from
+                                // contributes.typescriptServerPlugins. Without this, the server
+                                // may have started before our extension was loaded and won't
+                                // have our plugin in --globalPlugins.
+                                await vscode.commands.executeCommand('typescript.restartTsServer');
+                            }
                         }
                     }),
                 );

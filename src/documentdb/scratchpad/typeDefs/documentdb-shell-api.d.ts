@@ -333,10 +333,12 @@ interface BulkWriteResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Represents the current database. Access collections via `db.<name>` or
- * `db.getCollection("<name>")`.
+ * Named methods on the database object. Separated from the index signature
+ * to avoid TS2411 errors (named properties must match the index type within
+ * a single interface). The intersection type `DocumentDBDatabase` below
+ * combines these methods with the dynamic collection access pattern.
  */
-interface DocumentDBDatabase {
+interface DocumentDBDatabaseMethods {
     /**
      * Returns a collection object for the specified name.
      * @param name The collection name.
@@ -433,14 +435,23 @@ interface DocumentDBDatabase {
      * @example db.listCommands()
      */
     listCommands(): object;
+}
 
+/**
+ * Represents the current database. Access collections via `db.<name>` or
+ * `db.getCollection("<name>")`.
+ *
+ * Named methods are resolved first; unknown property names fall back to the
+ * index signature, returning a `DocumentDBCollection`.
+ */
+type DocumentDBDatabase = DocumentDBDatabaseMethods & {
     /**
      * Access a collection by name. Equivalent to `db.getCollection(name)`.
      * @example db.users.find({})
      * @example db["my-collection"].find({})
      */
-    [collectionName: string]: DocumentDBCollection | ((...args: unknown[]) => unknown);
-}
+    [collectionName: string]: DocumentDBCollection;
+};
 
 // ---------------------------------------------------------------------------
 // Collection Interface

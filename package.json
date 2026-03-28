@@ -278,7 +278,7 @@
     ],
     "typescriptServerPlugins": [
       {
-        "name": "../dist/scratchpadTsPlugin",
+        "name": "documentdb-scratchpad-ts-plugin",
         "languages": [
           "documentdb-scratchpad"
         ],
