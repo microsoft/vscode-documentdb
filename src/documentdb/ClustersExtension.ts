@@ -89,6 +89,7 @@ import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils
 import { SCRATCHPAD_FILE_EXTENSION, SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
 import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
 import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
+import { ScratchpadCompletionItemProvider } from './scratchpad/completions/ScratchpadCompletionItemProvider';
 import { ScratchpadService } from './scratchpad/ScratchpadService';
 import { Views } from './Views';
 
@@ -268,6 +269,11 @@ export class ClustersExtension implements vscode.Disposable {
                 // Register block highlighter for scratchpad files
                 const blockHighlighter = new ScratchpadBlockHighlighter(ext.context.extensionPath);
                 ext.context.subscriptions.push(blockHighlighter);
+
+                // Register completion provider for scratchpad files (Layer 2).
+                // Provides query operators, field names, collection names, and BSON
+                // constructors that the TypeScript service (Layer 1) doesn't know about.
+                ext.context.subscriptions.push(ScratchpadCompletionItemProvider.register());
 
                 // Force-activate the TypeScript extension when a scratchpad file is opened.
                 // Our language ID (documentdb-scratchpad) is not in VS Code's built-in list
