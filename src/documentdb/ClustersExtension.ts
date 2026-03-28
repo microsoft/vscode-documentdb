@@ -86,10 +86,10 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
+import { ScratchpadCompletionItemProvider } from './scratchpad/completions/ScratchpadCompletionItemProvider';
 import { SCRATCHPAD_FILE_EXTENSION, SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
 import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
 import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
-import { ScratchpadCompletionItemProvider } from './scratchpad/completions/ScratchpadCompletionItemProvider';
 import { ScratchpadService } from './scratchpad/ScratchpadService';
 import { Views } from './Views';
 

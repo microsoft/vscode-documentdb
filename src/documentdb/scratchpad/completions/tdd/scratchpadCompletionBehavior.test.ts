@@ -20,11 +20,11 @@
  */
 
 import {
-    SHELL_GLOBALS,
-    DATABASE_METHODS,
-    COLLECTION_METHODS,
-    FIND_CURSOR_METHODS,
     AGGREGATION_CURSOR_METHODS,
+    COLLECTION_METHODS,
+    DATABASE_METHODS,
+    FIND_CURSOR_METHODS,
+    SHELL_GLOBALS,
 } from '../completionRegistry';
 
 // =====================================================================

@@ -24,7 +24,13 @@ export type ScratchpadContext =
     | { kind: 'collection-method'; collectionName: string; prefix: string }
     | { kind: 'find-cursor-chain'; prefix: string }
     | { kind: 'aggregate-cursor-chain'; prefix: string }
-    | { kind: 'method-argument'; methodName: string; collectionName: string; argumentText: string; cursorOffset: number }
+    | {
+          kind: 'method-argument';
+          methodName: string;
+          collectionName: string;
+          argumentText: string;
+          cursorOffset: number;
+      }
     | { kind: 'string-literal'; enclosingCall: string }
     | { kind: 'unknown' };
 

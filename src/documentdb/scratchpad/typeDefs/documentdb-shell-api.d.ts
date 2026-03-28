@@ -439,7 +439,7 @@ interface DocumentDBDatabase {
      * @example db.users.find({})
      * @example db["my-collection"].find({})
      */
-    [collectionName: string]: DocumentDBCollection | ((...args: unknown[]) => unknown);
+    [collectionName: string]: DocumentDBCollection;
 }
 
 // ---------------------------------------------------------------------------

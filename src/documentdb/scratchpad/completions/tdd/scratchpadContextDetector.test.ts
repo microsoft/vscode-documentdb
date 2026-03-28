@@ -17,7 +17,7 @@
  * whether to update the spec or fix the implementation.
  */
 
-import { detectScratchpadContext, detectMethodArgContext } from '../scratchpadContextDetector';
+import { detectMethodArgContext, detectScratchpadContext } from '../scratchpadContextDetector';
 
 // =====================================================================
 // Tests: detectScratchpadContext

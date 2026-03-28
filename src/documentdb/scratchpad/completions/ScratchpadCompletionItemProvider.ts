@@ -3,11 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
 import { getFilteredCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
+import * as vscode from 'vscode';
+import { KEY_POSITION_OPERATORS } from '../../../webviews/documentdbQuery/completions/completionKnowledge';
+import { escapeSnippetDollars, stripOuterBraces } from '../../../webviews/documentdbQuery/completions/snippetUtils';
+import { detectCursorContext, type CursorContext } from '../../../webviews/documentdbQuery/cursorContext';
+import { SchemaStore } from '../../SchemaStore';
 import { SCRATCHPAD_LANGUAGE_ID } from '../constants';
 import { ScratchpadService } from '../ScratchpadService';
-import { SchemaStore } from '../../SchemaStore';
 import {
     AGGREGATION_CURSOR_METHODS,
     COLLECTION_METHODS,
@@ -17,9 +20,6 @@ import {
     type ShellCompletionEntry,
 } from './completionRegistry';
 import { detectMethodArgContext, detectScratchpadContext } from './scratchpadContextDetector';
-import { detectCursorContext, type CursorContext } from '../../../webviews/documentdbQuery/cursorContext';
-import { KEY_POSITION_OPERATORS } from '../../../webviews/documentdbQuery/completions/completionKnowledge';
-import { stripOuterBraces, escapeSnippetDollars } from '../../../webviews/documentdbQuery/completions/snippetUtils';
 
 // Ensure operators are loaded
 loadOperators();
@@ -54,11 +54,36 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         const text = document.getText();
         const offset = document.offsetAt(position);
 
+        // Compute the range that should be replaced when inserting a completion.
+        // For `$`-prefixed operators: when the user types `$g`, VS Code's word
+        // detection starts at `g` (not `$`). Without extending the range back by 1,
+        // selecting `$gt` would insert `$$gt` (double dollar). This mirrors the
+        // same fix in the collection view's registerLanguage.ts.
+        const line = document.lineAt(position.line);
+        const wordRange = document.getWordRangeAtPosition(position) ?? new vscode.Range(position, position);
+        const charBeforeWord = wordRange.start.character > 0 ? line.text[wordRange.start.character - 1] : '';
+        const isDollarPrefix = charBeforeWord === '$';
+        const replaceRange = isDollarPrefix
+            ? new vscode.Range(wordRange.start.translate(0, -1), wordRange.end)
+            : wordRange;
+
+        // Check if we're inside a string literal in a method call like
+        // db.getCollection("...") or use("..."). Must be checked BEFORE
+        // detectMethodArgContext because that treats the entire parenthesized
+        // content as a query-object argument.
+        const stringCompletions = this.checkStringLiteralContext(text, offset);
+        if (stringCompletions !== undefined) {
+            return stringCompletions;
+        }
+
         // First, check if we're inside a method argument — this is the most
         // common case and needs inner query-object context detection (Stage 2)
         const argContext = detectMethodArgContext(text, offset);
         if (argContext) {
-            return this.provideMethodArgumentCompletions(argContext, text, offset, context);
+            // For db.getCollection("name").find({...}), extract collection name from getCollection argument
+            const effectiveCollectionName = this.resolveCollectionName(argContext, text);
+            const resolved = { ...argContext, collectionName: effectiveCollectionName };
+            return this.provideMethodArgumentCompletions(resolved, text, offset, context, replaceRange, isDollarPrefix);
         }
 
         // Stage 1: JS-level context detection
@@ -181,6 +206,8 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         fullText: string,
         offset: number,
         context: vscode.CompletionContext,
+        replaceRange: vscode.Range,
+        isDollarPrefix: boolean,
     ): vscode.CompletionItem[] {
         const items: vscode.CompletionItem[] = [];
         const argumentText = fullText.substring(argCtx.argStart, offset);
@@ -202,7 +229,10 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         const cursorCtx = detectCursorContext(argumentText, cursorOffsetInArg, fieldLookup);
 
         // Determine if the trigger char was '$'
-        const isDollarPrefix = context.triggerCharacter === '$' || (cursorOffsetInArg > 0 && argumentText[cursorOffsetInArg - 1] === '$');
+        const dollarTriggered =
+            isDollarPrefix ||
+            context.triggerCharacter === '$' ||
+            (cursorOffsetInArg > 0 && argumentText[cursorOffsetInArg - 1] === '$');
 
         // Get field BSON types for the current field context
         const fieldBsonTypes = this.getFieldBsonTypes(cursorCtx);
@@ -211,21 +241,21 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         switch (cursorCtx.position) {
             case 'key':
             case 'array-element':
-                this.addKeyPositionItems(items, argCtx, connection, isDollarPrefix);
+                this.addKeyPositionItems(items, argCtx, connection, dollarTriggered, replaceRange);
                 break;
 
             case 'value':
-                this.addValuePositionItems(items, cursorCtx, isDollarPrefix);
+                this.addValuePositionItems(items, cursorCtx, dollarTriggered, replaceRange);
                 break;
 
             case 'operator':
-                this.addOperatorPositionItems(items, fieldBsonTypes, isDollarPrefix);
+                this.addOperatorPositionItems(items, fieldBsonTypes, dollarTriggered, replaceRange);
                 break;
 
             default:
                 // Unknown — provide everything
-                this.addKeyPositionItems(items, argCtx, connection, isDollarPrefix);
-                this.addValuePositionItems(items, cursorCtx, isDollarPrefix);
+                this.addKeyPositionItems(items, argCtx, connection, dollarTriggered, replaceRange);
+                this.addValuePositionItems(items, cursorCtx, dollarTriggered, replaceRange);
                 break;
         }
 
@@ -241,6 +271,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         argCtx: { methodName: string; collectionName: string },
         connection: { clusterId: string; databaseName: string } | null | undefined,
         _isDollarPrefix: boolean,
+        replaceRange: vscode.Range,
     ): void {
         // Field names from SchemaStore
         if (connection) {
@@ -250,9 +281,14 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 argCtx.collectionName,
             );
             for (const field of fields) {
-                const item = new vscode.CompletionItem(field.path, vscode.CompletionItemKind.Field);
+                // Quote field names that contain dots or special characters
+                const needsQuoting = /[.\\s-]/.test(field.path);
+                const displayName = field.path;
+                const insertName = needsQuoting ? `"${field.path}"` : field.path;
+
+                const item = new vscode.CompletionItem(displayName, vscode.CompletionItemKind.Field);
                 item.detail = `${field.bsonType}${field.isSparse ? ' (sparse)' : ''}`;
-                item.insertText = new vscode.SnippetString(`${field.path}: $1`);
+                item.insertText = new vscode.SnippetString(`${insertName}: $1`);
                 item.sortText = `0_${field.path}`;
                 items.push(item);
             }
@@ -268,6 +304,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                     item.insertText = new vscode.SnippetString(escapeSnippetDollars(op.snippet));
                 }
                 item.sortText = `1_${op.value}`;
+                item.range = replaceRange;
                 if (op.link) {
                     item.documentation = new vscode.MarkdownString(`${op.description}\n\n[Documentation](${op.link})`);
                 }
@@ -280,6 +317,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         items: vscode.CompletionItem[],
         cursorCtx: CursorContext,
         _isDollarPrefix: boolean,
+        replaceRange: vscode.Range,
     ): void {
         const fieldBsonTypes = this.getFieldBsonTypes(cursorCtx);
 
@@ -294,6 +332,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 item.insertText = new vscode.SnippetString(escapeSnippetDollars(op.snippet));
             }
             item.sortText = `${getVscodeOperatorSortPrefix(op, fieldBsonTypes)}${op.value}`;
+            item.range = replaceRange;
             if (op.link) {
                 item.documentation = new vscode.MarkdownString(`${op.description}\n\n[Documentation](${op.link})`);
             }
@@ -317,6 +356,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         items: vscode.CompletionItem[],
         fieldBsonTypes: readonly string[] | undefined,
         _isDollarPrefix: boolean,
+        replaceRange: vscode.Range,
     ): void {
         // Operators only (braces stripped, type-aware sorting)
         const allOperators = getFilteredCompletions({ meta: ['query'] });
@@ -331,6 +371,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 item.insertText = new vscode.SnippetString(escapeSnippetDollars(stripped));
             }
             item.sortText = `${getVscodeOperatorSortPrefix(op, fieldBsonTypes)}${op.value}`;
+            item.range = replaceRange;
             if (op.link) {
                 item.documentation = new vscode.MarkdownString(`${op.description}\n\n[Documentation](${op.link})`);
             }
@@ -355,6 +396,59 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Check if the cursor is inside a string literal argument to getCollection() or use().
+     * Returns collection names if so, undefined to continue with normal flow.
+     */
+    private checkStringLiteralContext(text: string, offset: number): vscode.CompletionItem[] | undefined {
+        // Quick check: is the cursor inside a string?
+        let inString = false;
+        let quoteChar = '';
+        for (let i = 0; i < offset; i++) {
+            const ch = text[i];
+            if (i > 0 && text[i - 1] === '\\') continue;
+            if ((ch === '"' || ch === "'") && (!inString || ch === quoteChar)) {
+                inString = !inString;
+                quoteChar = inString ? ch : '';
+            }
+        }
+
+        if (!inString) return undefined;
+
+        // Find the enclosing method call
+        const argCtx = detectMethodArgContext(text, offset);
+        if (!argCtx) return undefined;
+
+        if (argCtx.methodName === 'getCollection' || argCtx.methodName === 'use') {
+            return this.provideStringCompletions(argCtx.methodName) ?? [];
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Resolve the actual collection name, handling db.getCollection("name").find({}) pattern.
+     * When the user writes `db.getCollection("restaurants").find({...})`, the argContext
+     * has collectionName="getCollection" (the method before .find). We need to extract
+     * "restaurants" from the getCollection argument.
+     */
+    private resolveCollectionName(
+        argCtx: { methodName: string; collectionName: string; argStart: number },
+        text: string,
+    ): string {
+        if (argCtx.collectionName === 'getCollection') {
+            // Look backward from the method for the getCollection("name") pattern
+            // The argContext.argStart points to the opening of find({ — we need to find getCollection("name")
+            const beforeArg = text.substring(0, argCtx.argStart);
+            // Look for .getCollection("name"). or .getCollection('name').
+            const match = beforeArg.match(/\.getCollection\(\s*['"]([^'"]+)['"]\s*\)\s*\.\s*$/);
+            if (match) {
+                return match[1];
+            }
+        }
+        return argCtx.collectionName;
+    }
 
     private getFieldBsonTypes(cursorCtx: CursorContext): readonly string[] | undefined {
         if (cursorCtx.position === 'value' || cursorCtx.position === 'operator') {
