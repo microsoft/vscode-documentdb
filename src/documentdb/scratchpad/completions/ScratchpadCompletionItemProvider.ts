@@ -40,7 +40,9 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
     private readonly disposables: vscode.Disposable[] = [];
 
     dispose(): void {
-        this.disposables.forEach((d) => d.dispose());
+        this.disposables.forEach((d) => {
+            d.dispose();
+        });
     }
 
     provideCompletionItems(
