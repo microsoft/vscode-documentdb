@@ -23,6 +23,7 @@ module.exports = (env, { mode }) => {
         entry: {
             main: './main.ts',
             scratchpadWorker: './src/documentdb/scratchpad/scratchpadWorker.ts',
+            scratchpadTsPlugin: './src/documentdb/scratchpad/tsPlugin/index.ts',
         },
         output: {
             path: path.resolve(__dirname, 'dist'),
@@ -195,6 +196,17 @@ module.exports = (env, { mode }) => {
                         from: '.vscodeignore',
                         to: '.vscodeignore',
                         toType: 'file',
+                    },
+                    {
+                        from: './src/documentdb/scratchpad/typeDefs',
+                        to: 'typeDefs',
+                    },
+                    {
+                        // Create a node_modules package stub so the TS server can resolve
+                        // our plugin by package name (as documented by VS Code).
+                        // The plugin's package.json points to the actual bundle via "main".
+                        from: './src/documentdb/scratchpad/tsPlugin/package.json',
+                        to: 'node_modules/documentdb-scratchpad-ts-plugin/package.json',
                     },
                     {
                         from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
