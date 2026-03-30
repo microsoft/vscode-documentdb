@@ -191,7 +191,7 @@ module.exports = (env, { mode }) => {
                         toType: 'file',
                     },
                     {
-                        from: './src/documentdb/scratchpad/typeDefs',
+                        from: './packages/documentdb-shell-api-types/typeDefs',
                         to: 'typeDefs',
                     },
                     {

@@ -10,9 +10,15 @@
 // (.documentdb.js) files. It is loaded by the TypeScript language service to
 // provide autocompletion, hover docs, and signature help.
 //
+// The included methods were manually selected based on the Azure DocumentDB
+// compatibility matrix. Azure DocumentDB uses the MongoDB wire protocol;
+// client-side wrapper functions that rely on supported server commands are
+// compatible. See README.md in this directory for the full methodology and
+// reference links.
+//
 // IMPORTANT:
-//   - All JSDoc content is original writing — not copied from MongoDB docs.
-//   - Only DocumentDB-supported methods are included.
+//   - All JSDoc content is original writing.
+//   - Only methods mapping to supported DocumentDB server commands are included.
 //   - This file is the single source of truth for the scratchpad shell API.
 //   - When full MongoDB API support is added, a separate .d.ts can be swapped in.
 // =============================================================================
