@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getFilteredCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
+import { BSONTypes } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
 import { KEY_POSITION_OPERATORS } from '../../../webviews/documentdbQuery/completions/completionKnowledge';
 import { escapeSnippetDollars, stripOuterBraces } from '../../../webviews/documentdbQuery/completions/snippetUtils';
@@ -139,7 +140,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
 
         return collectionNames.map((name) => {
             const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
-            item.detail = 'collection';
+            item.detail = 'discovered collection';
             item.sortText = `0_${name}`;
             return item;
         });
@@ -162,7 +163,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
             );
             return collectionNames.map((name) => {
                 const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
-                item.detail = 'collection';
+                item.detail = 'discovered collection';
                 item.sortText = `0_${name}`;
                 return item;
             });
@@ -255,9 +256,9 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
             );
 
             if (fields.length === 0 && argCtx.collectionName) {
-                // No schema data — offer "Scan Schema…" action
+                // No schema data — offer to discover fields
                 const scanItem = new vscode.CompletionItem(
-                    '$(search) Scan collection schema\u2026',
+                    'Discover fields in collection\u2026',
                     vscode.CompletionItemKind.Event,
                 );
                 scanItem.detail = 'Sample ~100 documents to discover field names';
@@ -265,7 +266,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 scanItem.insertText = '';
                 scanItem.command = {
                     command: ScratchpadCommandIds.scanCollectionSchema,
-                    title: 'Scan Schema',
+                    title: 'Discover Fields',
                     arguments: [connection.clusterId, connection.databaseName, argCtx.collectionName],
                 };
                 items.push(scanItem);
@@ -278,7 +279,8 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 const insertName = needsQuoting ? `"${field.path}"` : field.path;
 
                 const item = new vscode.CompletionItem(displayName, vscode.CompletionItemKind.Field);
-                item.detail = `${field.bsonType}${field.isSparse ? ' (sparse)' : ''}`;
+                const displayType = BSONTypes.toDisplayString(field.bsonType as BSONTypes);
+                item.detail = `${displayType}${field.isSparse ? ' (sparse)' : ''}`;
                 item.insertText = new vscode.SnippetString(`${insertName}: $1`);
                 item.sortText = `0_${field.path}`;
                 items.push(item);
@@ -396,19 +398,22 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         // Quick check: is the cursor inside a string?
         let inString = false;
         let quoteChar = '';
+        let stringStart = -1;
         for (let i = 0; i < offset; i++) {
             const ch = text[i];
             if (i > 0 && text[i - 1] === '\\') continue;
             if ((ch === '"' || ch === "'") && (!inString || ch === quoteChar)) {
                 inString = !inString;
                 quoteChar = inString ? ch : '';
+                if (inString) stringStart = i;
             }
         }
 
         if (!inString) return undefined;
 
-        // Find the enclosing method call
-        const argCtx = detectMethodArgContext(text, offset);
+        // Find the enclosing method call by scanning from BEFORE the string started
+        // (not from inside the string, which would confuse skipStringBackward)
+        const argCtx = stringStart > 0 ? detectMethodArgContext(text, stringStart) : null;
         if (!argCtx) return undefined;
 
         if (argCtx.methodName === 'getCollection' || argCtx.methodName === 'use') {
@@ -420,20 +425,21 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
 
     /**
      * Resolve the actual collection name, handling db.getCollection("name").find({}) pattern.
-     * When the user writes `db.getCollection("restaurants").find({...})`, the argContext
-     * has collectionName="getCollection" (the method before .find). We need to extract
-     * "restaurants" from the getCollection argument.
+     *
+     * For `db.getCollection("restaurants").find({...})`, detectMethodArgContext reads backward
+     * from `.find(` and hits `)` (the closing paren of getCollection), so `collectionName`
+     * may be empty or 'getCollection'. We look backward in the text for the getCollection pattern.
      */
     private resolveCollectionName(
         argCtx: { methodName: string; collectionName: string; argStart: number },
         text: string,
     ): string {
-        if (argCtx.collectionName === 'getCollection') {
-            // Look backward from the method for the getCollection("name") pattern
-            // The argContext.argStart points to the opening of find({ — we need to find getCollection("name")
+        // When detectMethodArgContext hits a `)` before the method, collectionName is empty.
+        // Also handle the case where collectionName is 'getCollection' directly.
+        if (argCtx.collectionName === 'getCollection' || argCtx.collectionName === '') {
             const beforeArg = text.substring(0, argCtx.argStart);
-            // Look for .getCollection("name"). or .getCollection('name').
-            const match = beforeArg.match(/\.getCollection\(\s*['"]([^'"]+)['"]\s*\)\s*\.\s*$/);
+            // Match: .getCollection("name").methodName( OR .getCollection('name').methodName(
+            const match = beforeArg.match(/\.getCollection\(\s*['"]([^'"]+)['"]\s*\)\s*\.\s*\w+\s*$/);
             if (match) {
                 return match[1];
             }

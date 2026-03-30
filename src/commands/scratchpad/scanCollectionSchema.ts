@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
@@ -22,6 +23,7 @@ const SCHEMA_SAMPLE_SIZE = 100;
  * @param collectionName Collection to sample
  */
 export async function scanCollectionSchema(
+    _context: IActionContext,
     clusterId: string,
     databaseName: string,
     collectionName: string,
@@ -34,8 +36,11 @@ export async function scanCollectionSchema(
         const docs = await collection.aggregate([{ $sample: { size: SCHEMA_SAMPLE_SIZE } }]).toArray();
 
         if (docs.length === 0) {
-            void vscode.window.showInformationMessage(
-                l10n.t('Collection "{0}" is empty — no fields to discover.', collectionName),
+            void vscode.window.showWarningMessage(
+                l10n.t(
+                    'The collection "{0}" appears to be empty. Add some documents first, then try discovering fields again.',
+                    collectionName,
+                ),
             );
             return;
         }

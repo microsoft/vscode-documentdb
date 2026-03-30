@@ -322,13 +322,10 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommand(ScratchpadCommandIds.runSelected, withCommandCorrelation(runSelected));
 
-                // Register scan schema command (triggered by "Scan Schema…" completion item)
-                ext.context.subscriptions.push(
-                    vscode.commands.registerCommand(
-                        ScratchpadCommandIds.scanCollectionSchema,
-                        (clusterId: string, databaseName: string, collectionName: string) =>
-                            scanCollectionSchema(clusterId, databaseName, collectionName),
-                    ),
+                // Register scan schema command (triggered by "Discover Fields" completion item)
+                registerCommand(
+                    ScratchpadCommandIds.scanCollectionSchema,
+                    withCommandCorrelation(scanCollectionSchema),
                 );
 
                 registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));

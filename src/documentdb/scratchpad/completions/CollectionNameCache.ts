@@ -38,10 +38,16 @@ export class CollectionNameCache implements vscode.Disposable {
     private _pendingFetches = new Map<string, Promise<readonly string[]>>();
 
     private constructor() {
-        // Invalidate on connection change
+        // Invalidate on connection change and eagerly prefetch for new connection
         this._disposables.push(
             ScratchpadService.getInstance().onDidChangeState(() => {
                 this.invalidateAll();
+
+                // Eagerly prefetch collection names for the new connection
+                const connection = ScratchpadService.getInstance().getConnection();
+                if (connection) {
+                    this.getCollectionNames(connection.clusterId, connection.databaseName);
+                }
             }),
         );
 
