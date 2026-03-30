@@ -60,6 +60,7 @@ import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreSta
 import { connectDatabase } from '../commands/scratchpad/connectDatabase';
 import { disposeEvaluator, shutdownEvaluator } from '../commands/scratchpad/executeScratchpadCode';
 import { newScratchpad } from '../commands/scratchpad/newScratchpad';
+import { scanCollectionSchema } from '../commands/scratchpad/scanCollectionSchema';
 import { runAll } from '../commands/scratchpad/runAll';
 import { runSelected } from '../commands/scratchpad/runSelected';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
@@ -320,6 +321,15 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(ScratchpadCommandIds.runAll, withCommandCorrelation(runAll));
 
                 registerCommand(ScratchpadCommandIds.runSelected, withCommandCorrelation(runSelected));
+
+                // Register scan schema command (triggered by "Scan Schema…" completion item)
+                ext.context.subscriptions.push(
+                    vscode.commands.registerCommand(
+                        ScratchpadCommandIds.scanCollectionSchema,
+                        (clusterId: string, databaseName: string, collectionName: string) =>
+                            scanCollectionSchema(clusterId, databaseName, collectionName),
+                    ),
+                );
 
                 registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
 

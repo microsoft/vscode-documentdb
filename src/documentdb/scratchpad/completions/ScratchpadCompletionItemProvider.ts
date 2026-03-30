@@ -9,7 +9,7 @@ import { KEY_POSITION_OPERATORS } from '../../../webviews/documentdbQuery/comple
 import { escapeSnippetDollars, stripOuterBraces } from '../../../webviews/documentdbQuery/completions/snippetUtils';
 import { detectCursorContext, type CursorContext } from '../../../webviews/documentdbQuery/cursorContext';
 import { SchemaStore } from '../../SchemaStore';
-import { SCRATCHPAD_LANGUAGE_ID } from '../constants';
+import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from '../constants';
 import { ScratchpadService } from '../ScratchpadService';
 import { CollectionNameCache } from './CollectionNameCache';
 import { detectMethodArgContext, detectScratchpadContext } from './scratchpadContextDetector';
@@ -253,6 +253,24 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 connection.databaseName,
                 argCtx.collectionName,
             );
+
+            if (fields.length === 0 && argCtx.collectionName) {
+                // No schema data — offer "Scan Schema…" action
+                const scanItem = new vscode.CompletionItem(
+                    '$(search) Scan collection schema\u2026',
+                    vscode.CompletionItemKind.Event,
+                );
+                scanItem.detail = 'Sample ~100 documents to discover field names';
+                scanItem.sortText = '00_scan';
+                scanItem.insertText = '';
+                scanItem.command = {
+                    command: ScratchpadCommandIds.scanCollectionSchema,
+                    title: 'Scan Schema',
+                    arguments: [connection.clusterId, connection.databaseName, argCtx.collectionName],
+                };
+                items.push(scanItem);
+            }
+
             for (const field of fields) {
                 // Quote field names that contain dots or special characters
                 const needsQuoting = /[.\\s-]/.test(field.path);

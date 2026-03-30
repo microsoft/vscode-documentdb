@@ -564,6 +564,12 @@
         "icon": "$(play)"
       },
       {
+        "//": "[Scratchpad] Scan Collection Schema for field completions",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.scratchpad.scanCollectionSchema",
+        "title": "Scratchpad: Scan Collection Schema"
+      },
+      {
         "//": "[Diagnostics] Clear Schema Cache",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.clearSchemaCache",

@@ -27,4 +27,6 @@ export const ScratchpadCommandIds = {
     runAll: 'vscode-documentdb.command.scratchpad.runAll',
     /** Run the selection or the statement at the cursor */
     runSelected: 'vscode-documentdb.command.scratchpad.runSelected',
+    /** Sample documents from a collection to discover field names */
+    scanCollectionSchema: 'vscode-documentdb.command.scratchpad.scanCollectionSchema',
 } as const;
