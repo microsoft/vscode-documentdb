@@ -23,9 +23,9 @@
 // (MongoClient, @microsoft/vscode-azext-utils) are not needed for cache tests.
 jest.mock('../../../ClustersClient');
 
-import { CollectionNameCache } from '../CollectionNameCache';
-import { SchemaStore } from '../../../SchemaStore';
 import { ClustersClient } from '../../../ClustersClient';
+import { SchemaStore } from '../../../SchemaStore';
+import { CollectionNameCache } from '../CollectionNameCache';
 
 // =====================================================================
 // Helpers
@@ -68,26 +68,18 @@ describe('TDD: CollectionNameCache', () => {
 
         test('returns SchemaStore collection names while server fetch is pending', () => {
             // Populate SchemaStore with a collection
-            SchemaStore.getInstance().addDocuments(
-                TEST_CONNECTION.clusterId,
-                TEST_CONNECTION.databaseName,
-                'users',
-                [{ _id: 'doc1' as unknown as import('mongodb').ObjectId, name: 'Alice' }],
-            );
+            SchemaStore.getInstance().addDocuments(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName, 'users', [
+                { _id: 'doc1' as never, name: 'Alice' },
+            ]);
 
-            const names = cache.getCollectionNames(
-                TEST_CONNECTION.clusterId,
-                TEST_CONNECTION.databaseName,
-            );
+            const names = cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);
             expect(names).toContain('users');
         });
 
         test('returns server-fetched collection names after fetch completes', async () => {
-            const mockListCollections = jest.fn().mockResolvedValue([
-                { name: 'orders' },
-                { name: 'products' },
-                { name: 'users' },
-            ]);
+            const mockListCollections = jest
+                .fn()
+                .mockResolvedValue([{ name: 'orders' }, { name: 'products' }, { name: 'users' }]);
             (ClustersClient.getClient as jest.Mock).mockResolvedValue({
                 listCollections: mockListCollections,
             });
@@ -99,10 +91,7 @@ describe('TDD: CollectionNameCache', () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             // Second call returns cached server data
-            const names = cache.getCollectionNames(
-                TEST_CONNECTION.clusterId,
-                TEST_CONNECTION.databaseName,
-            );
+            const names = cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);
             expect(names).toContain('orders');
             expect(names).toContain('products');
             expect(names).toContain('users');
@@ -114,13 +103,10 @@ describe('TDD: CollectionNameCache', () => {
                 TEST_CONNECTION.clusterId,
                 TEST_CONNECTION.databaseName,
                 'newCollection',
-                [{ _id: 'doc1' as unknown as import('mongodb').ObjectId, x: 1 }],
+                [{ _id: 'doc1' as never, x: 1 }],
             );
 
-            const mockListCollections = jest.fn().mockResolvedValue([
-                { name: 'orders' },
-                { name: 'users' },
-            ]);
+            const mockListCollections = jest.fn().mockResolvedValue([{ name: 'orders' }, { name: 'users' }]);
             (ClustersClient.getClient as jest.Mock).mockResolvedValue({
                 listCollections: mockListCollections,
             });
@@ -129,21 +115,16 @@ describe('TDD: CollectionNameCache', () => {
             cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            const names = cache.getCollectionNames(
-                TEST_CONNECTION.clusterId,
-                TEST_CONNECTION.databaseName,
-            );
+            const names = cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);
             expect(names).toContain('orders');
             expect(names).toContain('users');
             expect(names).toContain('newCollection');
         });
 
         test('names are sorted alphabetically', async () => {
-            const mockListCollections = jest.fn().mockResolvedValue([
-                { name: 'zebra' },
-                { name: 'alpha' },
-                { name: 'middle' },
-            ]);
+            const mockListCollections = jest
+                .fn()
+                .mockResolvedValue([{ name: 'zebra' }, { name: 'alpha' }, { name: 'middle' }]);
             (ClustersClient.getClient as jest.Mock).mockResolvedValue({
                 listCollections: mockListCollections,
             });
@@ -151,10 +132,7 @@ describe('TDD: CollectionNameCache', () => {
             cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            const names = cache.getCollectionNames(
-                TEST_CONNECTION.clusterId,
-                TEST_CONNECTION.databaseName,
-            );
+            const names = cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);
             expect(names).toEqual(['alpha', 'middle', 'zebra']);
         });
 
@@ -186,10 +164,7 @@ describe('TDD: CollectionNameCache', () => {
             cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            const names = cache.getCollectionNames(
-                TEST_CONNECTION.clusterId,
-                TEST_CONNECTION.databaseName,
-            );
+            const names = cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);
             // Falls back to SchemaStore (empty)
             expect(names).toEqual([]);
         });

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { ClustersClient } from '../../ClustersClient';
 import { SchemaStore } from '../../SchemaStore';
 import { ScratchpadService } from '../ScratchpadService';
@@ -141,11 +141,7 @@ export class CollectionNameCache implements vscode.Disposable {
      * SchemaStore may have collections not returned by listCollections
      * (e.g., freshly created in the scratchpad session).
      */
-    private mergeWithSchemaStore(
-        serverNames: readonly string[],
-        clusterId: string,
-        databaseName: string,
-    ): string[] {
+    private mergeWithSchemaStore(serverNames: readonly string[], clusterId: string, databaseName: string): string[] {
         const schemaNames = this.getSchemaStoreCollectionNames(clusterId, databaseName);
         if (schemaNames.length === 0) {
             return [...serverNames];

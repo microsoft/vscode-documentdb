@@ -60,9 +60,9 @@ import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreSta
 import { connectDatabase } from '../commands/scratchpad/connectDatabase';
 import { disposeEvaluator, shutdownEvaluator } from '../commands/scratchpad/executeScratchpadCode';
 import { newScratchpad } from '../commands/scratchpad/newScratchpad';
-import { scanCollectionSchema } from '../commands/scratchpad/scanCollectionSchema';
 import { runAll } from '../commands/scratchpad/runAll';
 import { runSelected } from '../commands/scratchpad/runSelected';
+import { scanCollectionSchema } from '../commands/scratchpad/scanCollectionSchema';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';

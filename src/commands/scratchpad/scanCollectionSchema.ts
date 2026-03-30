@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { type Document, type WithId } from 'mongodb';
+import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 
@@ -31,9 +31,7 @@ export async function scanCollectionSchema(
         const collection = client.getMongoClient().db(databaseName).collection(collectionName);
 
         // Use $sample for random sampling when possible
-        const docs = await collection
-            .aggregate([{ $sample: { size: SCHEMA_SAMPLE_SIZE } }])
-            .toArray();
+        const docs = await collection.aggregate([{ $sample: { size: SCHEMA_SAMPLE_SIZE } }]).toArray();
 
         if (docs.length === 0) {
             void vscode.window.showInformationMessage(
@@ -43,9 +41,7 @@ export async function scanCollectionSchema(
         }
 
         // Filter to documents with _id (required by SchemaStore.addDocuments)
-        const validDocs = docs.filter(
-            (d): d is WithId<Document> => d !== null && typeof d === 'object' && '_id' in d,
-        );
+        const validDocs = docs.filter((d): d is WithId<Document> => d !== null && typeof d === 'object' && '_id' in d);
 
         if (validDocs.length === 0) {
             return;
@@ -53,18 +49,10 @@ export async function scanCollectionSchema(
 
         SchemaStore.getInstance().addDocuments(clusterId, databaseName, collectionName, validDocs);
 
-        const fieldCount = SchemaStore.getInstance().getKnownFields(
-            clusterId,
-            databaseName,
-            collectionName,
-        ).length;
+        const fieldCount = SchemaStore.getInstance().getKnownFields(clusterId, databaseName, collectionName).length;
 
         void vscode.window.showInformationMessage(
-            l10n.t(
-                'Schema scan complete — {0} fields discovered in "{1}".',
-                String(fieldCount),
-                collectionName,
-            ),
+            l10n.t('Schema scan complete — {0} fields discovered in "{1}".', String(fieldCount), collectionName),
         );
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

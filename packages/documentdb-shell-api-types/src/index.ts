@@ -21,7 +21,7 @@
 export type { ShellMethodEntry } from './types';
 
 // Method registry
-export { getMethodsByTarget, getRequiredServerCommands, SHELL_API_METHODS } from './methodRegistry';
+export { SHELL_API_METHODS, getMethodsByTarget, getRequiredServerCommands } from './methodRegistry';
 
 // .d.ts content — loaded lazily on first access
 import * as fs from 'fs';

@@ -1,13 +1,13 @@
 {
-    "extends": "./tsconfig.json",
-    "compilerOptions": {
-        "composite": false,
-        "declaration": false,
-        "declarationMap": false,
-        "noEmit": true,
-        "rootDir": ".",
-        "types": ["node"]
-    },
-    "include": ["scripts/**/*", "src/**/*"],
-    "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/*.spec.ts"]
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*", "src/**/*"],
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/*.spec.ts"]
 }
