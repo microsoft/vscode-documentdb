@@ -15,10 +15,13 @@ autocompletion system. These tests define the expected behavior contract.
 
 ## Test Files
 
-| File                                   | What it tests                                  |
-| -------------------------------------- | ---------------------------------------------- |
-| `scratchpadContextDetector.test.ts`    | JS-level cursor context detection (Stage 1)    |
-| `scratchpadCompletionBehavior.test.ts` | Which completions appear for each context kind |
+| File                                | What it tests                               |
+| ----------------------------------- | ------------------------------------------- |
+| `scratchpadContextDetector.test.ts` | JS-level cursor context detection (Stage 1) |
+
+Note: Completion registry tests (`scratchpadCompletionBehavior.test.ts`) were
+removed — the static registry was replaced by the `@vscode-documentdb/documentdb-shell-api-types`
+package and the TS Server Plugin (Layer 1). The package has its own tests.
 
 ## Specification
 

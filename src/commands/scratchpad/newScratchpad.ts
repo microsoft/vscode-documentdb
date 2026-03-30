@@ -64,8 +64,7 @@ export async function newScratchpad(_context: IActionContext, node?: DatabaseIte
         .replace(/[/\\:]/g, '-')
         .replace(/,\s*/g, '_');
     const fileName = `scratchpad-${timestamp}${SCRATCHPAD_FILE_EXTENSION}`;
-    const folderPath =
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
+    const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
     const filePath = path.join(folderPath, fileName);
     const uri = vscode.Uri.file(filePath).with({ scheme: 'untitled' });
     const edit = new vscode.WorkspaceEdit();
