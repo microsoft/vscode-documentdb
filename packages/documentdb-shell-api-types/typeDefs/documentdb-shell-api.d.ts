@@ -441,6 +441,34 @@ interface DocumentDBDatabaseMethods {
      * @example db.listCommands()
      */
     listCommands(): object;
+
+    /**
+     * Creates a new database user with the specified name and roles.
+     * @param user The user document containing the username, password, and roles.
+     * @example db.createUser({ user: "readUser", pwd: "secret", roles: ["read"] })
+     */
+    createUser(user: object): object;
+
+    /**
+     * Removes a user from the current database.
+     * @param username The name of the user to remove.
+     * @example db.dropUser("readUser")
+     */
+    dropUser(username: string): object;
+
+    /**
+     * Terminates a running operation by its operation ID.
+     * @param opId The operation ID to terminate.
+     * @example db.killOp(12345)
+     */
+    killOp(opId: number): object;
+
+    /**
+     * Returns information about one or more users in the current database.
+     * @param filter Optional filter to select specific users.
+     * @example db.getUsers()
+     */
+    getUsers(filter?: object): object;
 }
 
 /**

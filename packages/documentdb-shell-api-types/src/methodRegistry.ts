@@ -39,6 +39,10 @@ const databaseMethods: readonly ShellMethodEntry[] = [
     { name: 'version', target: 'database', serverCommands: ['buildInfo'], shellOnly: false, description: 'Returns the server version string' },
     { name: 'createView', target: 'database', serverCommands: ['create'], shellOnly: false, description: 'Creates a read-only view backed by an aggregation pipeline' },
     { name: 'listCommands', target: 'database', serverCommands: ['listCommands'], shellOnly: false, description: 'Lists available database commands' },
+    { name: 'createUser', target: 'database', serverCommands: ['createUser'], shellOnly: false, description: 'Creates a new database user' },
+    { name: 'dropUser', target: 'database', serverCommands: ['dropUser'], shellOnly: false, description: 'Removes a user from the current database' },
+    { name: 'killOp', target: 'database', serverCommands: ['killOp'], shellOnly: false, description: 'Terminates a running operation by its operation ID' },
+    { name: 'getUsers', target: 'database', serverCommands: ['usersInfo'], shellOnly: false, description: 'Returns information about users in the current database' },
 ];
 
 // ---------------------------------------------------------------------------
