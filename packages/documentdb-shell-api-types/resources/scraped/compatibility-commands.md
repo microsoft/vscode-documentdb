@@ -5,13 +5,13 @@
 
 ## Summary
 
-| Metric | Count |
-| --- | --- |
-| Server commands scraped from docs | 125 |
-| Server commands supported (✅) | 52 |
-| Server commands required by shell API | 23 |
-| Shell API methods (total) | 73 |
-| Shell API methods (shell-only) | 10 |
+| Metric                                | Count |
+| ------------------------------------- | ----- |
+| Server commands scraped from docs     | 125   |
+| Server commands supported (✅)        | 52    |
+| Server commands required by shell API | 23    |
+| Shell API methods (total)             | 73    |
+| Shell API methods (shell-only)        | 10    |
 
 ## Verification Result
 
@@ -61,222 +61,156 @@ for new shell methods.
 - **validate** (Diagnostic Commands)
 - **whatsmyuri** (Diagnostic Commands)
 
-## Supported Server Commands
+## Server Command Coverage
 
-52 commands marked as supported (✅) in the official documentation.
+Every command from the official compatibility page, showing whether it is
+supported by DocumentDB and whether our shell API type definitions include
+methods that use it.
 
-| Command | Category |
-| --- | --- |
-| abortTransaction | Session Commands |
-| aggregate | Aggregation Commands |
-| authenticate | Authentication Commands |
-| buildInfo | Diagnostic Commands |
-| collMod | Administrative Commands |
-| collStats | Diagnostic Commands |
-| commitTransaction | Session Commands |
-| connectionStatus | Diagnostic Commands |
-| count | Aggregation Commands |
-| create | Administrative Commands |
-| createIndexes | Administrative Commands |
-| createUser | User Management Commands |
-| currentOp | Administrative Commands |
-| dbStats | Diagnostic Commands |
-| delete | Query and Write Operation Commands |
-| distinct | Aggregation Commands |
-| drop | Administrative Commands |
-| dropDatabase | Administrative Commands |
-| dropIndexes | Administrative Commands |
-| dropUser | User Management Commands |
-| enableSharding | Sharding Commands |
-| endSessions | Session Commands |
-| explain | Diagnostic Commands |
-| find | Query and Write Operation Commands |
-| findAndModify | Query and Write Operation Commands |
-| getCmdLineOpts | Diagnostic Commands |
-| getDefaultRWConcern | Administrative Commands |
-| getLog | Diagnostic Commands |
-| getMore | Query and Write Operation Commands |
-| getParameter | Administrative Commands |
-| hello | Diagnostic Commands |
-| hostInfo | Diagnostic Commands |
-| insert | Query and Write Operation Commands |
-| isdbgrid | Sharding Commands |
-| killCursors | Administrative Commands |
-| killOp | Administrative Commands |
-| killSessions | Session Commands |
-| listCollections | Administrative Commands |
-| listCommands | Diagnostic Commands |
-| listDatabases | Administrative Commands |
-| listIndexes | Administrative Commands |
-| ping | Diagnostic Commands |
-| reIndex | Administrative Commands |
-| renameCollection | Administrative Commands |
-| reshardCollection | Sharding Commands |
-| setParameter | Administrative Commands |
-| shardCollection | Sharding Commands |
-| startSession | Session Commands |
-| update | Query and Write Operation Commands |
-| usersInfo | User Management Commands |
-| validate | Diagnostic Commands |
-| whatsmyuri | Diagnostic Commands |
+| Command                             | Category                           | Supported | In API Types | Shell Methods                                                                                                                                                                                                                                                                              |
+| ----------------------------------- | ---------------------------------- | --------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| abortMoveCollection                 | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| abortReshardCollection              | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| abortTransaction                    | Session Commands                   | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| abortUnshardCollection              | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| addShardToZone                      | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| aggregate                           | Aggregation Commands               | ✅ Yes    | ✅ Yes       | database.aggregate, collection.aggregate, collection.countDocuments, aggregationCursor.batchSize, aggregationCursor.maxTimeMS                                                                                                                                                              |
+| analyzeShardKey                     | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| authenticate                        | Authentication Commands            | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| balancerCollectionStatus            | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| balancerStart                       | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| balancerStatus                      | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| balancerStop                        | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| buildInfo                           | Diagnostic Commands                | ✅ Yes    | ✅ Yes       | database.version, global.version                                                                                                                                                                                                                                                           |
+| bulkWrite                           | Query and Write Operation Commands | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| checkMetadataConsistency            | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| cleanupReshardCollection            | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| clearJumboFlag                      | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| cloneCollectionAsCapped             | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| collMod                             | Administrative Commands            | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| collStats                           | Diagnostic Commands                | ✅ Yes    | ✅ Yes       | collection.stats, collection.isCapped                                                                                                                                                                                                                                                      |
+| commitReshardCollection             | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| commitTransaction                   | Session Commands                   | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| compact                             | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| compactStructuredEncryptionData     | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| configureCollectionBalancing        | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| configureQueryAnalyzer              | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| connectionStatus                    | Diagnostic Commands                | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| connPoolStats                       | Diagnostic Commands                | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| convertToCapped                     | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| count                               | Aggregation Commands               | ✅ Yes    | ✅ Yes       | collection.estimatedDocumentCount, findCursor.count                                                                                                                                                                                                                                        |
+| create                              | Administrative Commands            | ✅ Yes    | ✅ Yes       | database.createCollection, database.createView                                                                                                                                                                                                                                             |
+| createIndexes                       | Administrative Commands            | ✅ Yes    | ✅ Yes       | collection.createIndex                                                                                                                                                                                                                                                                     |
+| createUser                          | User Management Commands           | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| currentOp                           | Administrative Commands            | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| dataSize                            | Diagnostic Commands                | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| dbHash                              | Diagnostic Commands                | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| dbStats                             | Diagnostic Commands                | ✅ Yes    | ✅ Yes       | database.stats                                                                                                                                                                                                                                                                             |
+| delete                              | Query and Write Operation Commands | ✅ Yes    | ✅ Yes       | collection.deleteOne, collection.deleteMany, collection.bulkWrite                                                                                                                                                                                                                          |
+| distinct                            | Aggregation Commands               | ✅ Yes    | ✅ Yes       | collection.distinct                                                                                                                                                                                                                                                                        |
+| drop                                | Administrative Commands            | ✅ Yes    | ✅ Yes       | collection.drop                                                                                                                                                                                                                                                                            |
+| dropAllUsersFromDatabase            | User Management Commands           | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| dropConnections                     | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| dropDatabase                        | Administrative Commands            | ✅ Yes    | ✅ Yes       | database.dropDatabase                                                                                                                                                                                                                                                                      |
+| dropIndexes                         | Administrative Commands            | ✅ Yes    | ✅ Yes       | collection.dropIndex                                                                                                                                                                                                                                                                       |
+| dropUser                            | User Management Commands           | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| enableSharding                      | Sharding Commands                  | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| endSessions                         | Session Commands                   | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| explain                             | Diagnostic Commands                | ✅ Yes    | ✅ Yes       | collection.explain, findCursor.explain, aggregationCursor.explain                                                                                                                                                                                                                          |
+| filemd5                             | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| find                                | Query and Write Operation Commands | ✅ Yes    | ✅ Yes       | collection.find, collection.findOne, findCursor.limit, findCursor.skip, findCursor.sort, findCursor.batchSize, findCursor.collation, findCursor.hint, findCursor.comment, findCursor.maxTimeMS, findCursor.readConcern, findCursor.readPref, findCursor.returnKey, findCursor.showRecordId |
+| findAndModify                       | Query and Write Operation Commands | ✅ Yes    | ✅ Yes       | collection.findOneAndUpdate, collection.findOneAndDelete, collection.findOneAndReplace                                                                                                                                                                                                     |
+| flushRouterConfig                   | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| fsync                               | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| fsyncUnlock                         | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| geoSearch                           | Geospatial Commands                | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| getClusterParameter                 | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| getCmdLineOpts                      | Diagnostic Commands                | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| getDefaultRWConcern                 | Administrative Commands            | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| getLastError                        | Query and Write Operation Commands | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| getLog                              | Diagnostic Commands                | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| getMore                             | Query and Write Operation Commands | ✅ Yes    | ✅ Yes       | findCursor.toArray, findCursor.forEach, findCursor.map, findCursor.hasNext, findCursor.next, aggregationCursor.toArray, aggregationCursor.forEach, aggregationCursor.hasNext, aggregationCursor.next                                                                                       |
+| getParameter                        | Administrative Commands            | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| getShardMap                         | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| grantRolesToUser                    | User Management Commands           | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| hello                               | Diagnostic Commands                | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| hostInfo                            | Diagnostic Commands                | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| insert                              | Query and Write Operation Commands | ✅ Yes    | ✅ Yes       | collection.insertOne, collection.insertMany, collection.bulkWrite                                                                                                                                                                                                                          |
+| isdbgrid                            | Sharding Commands                  | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| killAllSessions                     | Session Commands                   | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| killAllSessionsByPattern            | Session Commands                   | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| killCursors                         | Administrative Commands            | ✅ Yes    | ✅ Yes       | findCursor.close, aggregationCursor.close                                                                                                                                                                                                                                                  |
+| killOp                              | Administrative Commands            | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| killSessions                        | Session Commands                   | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| listCollections                     | Administrative Commands            | ✅ Yes    | ✅ Yes       | database.getCollectionNames, database.getCollectionInfos                                                                                                                                                                                                                                   |
+| listCommands                        | Diagnostic Commands                | ✅ Yes    | ✅ Yes       | database.listCommands                                                                                                                                                                                                                                                                      |
+| listDatabases                       | Administrative Commands            | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| listIndexes                         | Administrative Commands            | ✅ Yes    | ✅ Yes       | collection.getIndexes                                                                                                                                                                                                                                                                      |
+| listShards                          | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| lockInfo                            | Diagnostic Commands                | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| logApplicationMessage               | System Events Auditing Commands    | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| logout                              | Authentication Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| logRotate                           | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| mapReduce                           | Aggregation Commands               | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| medianKey                           | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| mergeChunks                         | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| moveChunk                           | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| movePrimary                         | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| moveRange                           | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| ping                                | Diagnostic Commands                | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| profile                             | Diagnostic Commands                | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| refineCollectionShardKey            | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| refreshSessions                     | Session Commands                   | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| reIndex                             | Administrative Commands            | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| removeShard                         | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| removeShardFromZone                 | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| renameCollection                    | Administrative Commands            | ✅ Yes    | ✅ Yes       | collection.renameCollection                                                                                                                                                                                                                                                                |
+| resetError                          | Query and Write Operation Commands | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| reshardCollection                   | Sharding Commands                  | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| revokeRolesFromUser                 | User Management Commands           | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| rotateCertificates                  | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| serverStatus                        | Diagnostic Commands                | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| setDefaultRWConcern                 | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| setFeatureCompatibilityVersion      | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| setIndexCommitQuorum                | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| setParameter                        | Administrative Commands            | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| setShardVersion                     | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| setUserWriteBlockMode               | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| shardCollection                     | Sharding Commands                  | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| shardConnPoolStats                  | Diagnostic Commands                | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| shardingState                       | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| shutdown                            | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| split                               | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| startSession                        | Session Commands                   | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| top                                 | Diagnostic Commands                | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| transitionFromDedicatedConfigServer | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| transitionToDedicatedConfigServer   | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| unsetSharding                       | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| unshardCollection                   | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| update                              | Query and Write Operation Commands | ✅ Yes    | ✅ Yes       | collection.updateOne, collection.updateMany, collection.bulkWrite, collection.replaceOne                                                                                                                                                                                                   |
+| updateUser                          | User Management Commands           | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| updateZoneKeyRange                  | Sharding Commands                  | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| usersInfo                           | User Management Commands           | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| validate                            | Diagnostic Commands                | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
+| validateDBMetadata                  | Administrative Commands            | ❌ No     |              |                                                                                                                                                                                                                                                                                            |
+| whatsmyuri                          | Diagnostic Commands                | ✅ Yes    |              |                                                                                                                                                                                                                                                                                            |
 
-## Unsupported / Not Available Server Commands
+## Shell-Only Methods (no server command)
 
-73 commands that are not supported, not applicable, or deprecated.
+These methods run entirely on the client side and do not invoke a server command.
 
-| Command | Category | Status |
-| --- | --- | --- |
-| abortMoveCollection | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| abortReshardCollection | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| abortUnshardCollection | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| addShardToZone | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| analyzeShardKey | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| balancerCollectionStatus | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| balancerStart | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| balancerStatus | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| balancerStop | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| bulkWrite | Query and Write Operation Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| checkMetadataConsistency | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| cleanupReshardCollection | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| clearJumboFlag | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| cloneCollectionAsCapped | Administrative Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| commitReshardCollection | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| compact | Administrative Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| compactStructuredEncryptionData | Administrative Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| configureCollectionBalancing | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| configureQueryAnalyzer | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| connPoolStats | Diagnostic Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| convertToCapped | Administrative Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| dataSize | Diagnostic Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| dbHash | Diagnostic Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| dropAllUsersFromDatabase | User Management Commands | *N/A*⁷ | *N/A*⁷ | *N/A*⁷ | *N/A*⁷ |
-| dropConnections | Administrative Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| filemd5 | Administrative Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| flushRouterConfig | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| fsync | Administrative Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| fsyncUnlock | Administrative Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| geoSearch | Geospatial Commands | *N/A*³ | *N/A*³ | *N/A*³ | *N/A*³ |
-| getClusterParameter | Administrative Commands | *N/A*¹ | ❌ No | ❌ No | ❌ No |
-| getLastError | Query and Write Operation Commands | *N/A*⁴ | *N/A*⁴ | *N/A*⁴ | *N/A*⁴ |
-| getShardMap | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| grantRolesToUser | User Management Commands | *N/A*⁷ | *N/A*⁷ | *N/A*⁷ | *N/A*⁷ |
-| killAllSessions | Session Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| killAllSessionsByPattern | Session Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| listShards | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| lockInfo | Diagnostic Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| logApplicationMessage | System Events Auditing Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| logout | Authentication Commands | *N/A*³ | *N/A*³ | *N/A*³ | *N/A*³ |
-| logRotate | Administrative Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| mapReduce | Aggregation Commands | *N/A*³ | *N/A*³ | *N/A*³ | *N/A*³ |
-| medianKey | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| mergeChunks | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| moveChunk | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| movePrimary | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| moveRange | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| profile | Diagnostic Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| refineCollectionShardKey | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| refreshSessions | Session Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| removeShard | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| removeShardFromZone | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| resetError | Query and Write Operation Commands | *N/A*³ | *N/A*³ | *N/A*³ | *N/A*³ |
-| revokeRolesFromUser | User Management Commands | *N/A*⁷ | *N/A*⁷ | *N/A*⁷ | *N/A*⁷ |
-| rotateCertificates | Administrative Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| serverStatus | Diagnostic Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| setDefaultRWConcern | Administrative Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| setFeatureCompatibilityVersion | Administrative Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| setIndexCommitQuorum | Administrative Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| setShardVersion | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| setUserWriteBlockMode | Administrative Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| shardConnPoolStats | Diagnostic Commands | *N/A*³ | *N/A*³ | *N/A*³ | *N/A*³ |
-| shardingState | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| shutdown | Administrative Commands | *N/A*² | *N/A*² | *N/A*² | *N/A*² |
-| split | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| top | Diagnostic Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-| transitionFromDedicatedConfigServer | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| transitionToDedicatedConfigServer | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| unsetSharding | Sharding Commands | *N/A*³ | *N/A*³ | *N/A*³ | *N/A*³ |
-| unshardCollection | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| updateUser | User Management Commands | *N/A*⁷ | *N/A*⁷ | *N/A*⁷ | *N/A*⁷ |
-| updateZoneKeyRange | Sharding Commands | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ | *N/A*⁸ |
-| validateDBMetadata | Administrative Commands | ❌ No | ❌ No | ❌ No | ❌ No |
-
-## Method-to-Command Mapping
-
-| Target | Method | Server Command(s) | Shell-Only |
-| --- | --- | --- | --- |
-| database | getCollection | — | ✅ |
-| database | getCollectionNames | listCollections |  |
-| database | getCollectionInfos | listCollections |  |
-| database | createCollection | create |  |
-| database | dropDatabase | dropDatabase |  |
-| database | runCommand | — | ✅ |
-| database | adminCommand | — | ✅ |
-| database | aggregate | aggregate |  |
-| database | getSiblingDB | — | ✅ |
-| database | getName | — | ✅ |
-| database | stats | dbStats |  |
-| database | version | buildInfo |  |
-| database | createView | create |  |
-| database | listCommands | listCommands |  |
-| collection | find | find |  |
-| collection | findOne | find |  |
-| collection | insertOne | insert |  |
-| collection | insertMany | insert |  |
-| collection | updateOne | update |  |
-| collection | updateMany | update |  |
-| collection | deleteOne | delete |  |
-| collection | deleteMany | delete |  |
-| collection | aggregate | aggregate |  |
-| collection | countDocuments | aggregate |  |
-| collection | estimatedDocumentCount | count |  |
-| collection | distinct | distinct |  |
-| collection | createIndex | createIndexes |  |
-| collection | getIndexes | listIndexes |  |
-| collection | dropIndex | dropIndexes |  |
-| collection | drop | drop |  |
-| collection | bulkWrite | insert, update, delete |  |
-| collection | replaceOne | update |  |
-| collection | findOneAndUpdate | findAndModify |  |
-| collection | findOneAndDelete | findAndModify |  |
-| collection | findOneAndReplace | findAndModify |  |
-| collection | explain | explain |  |
-| collection | renameCollection | renameCollection |  |
-| collection | stats | collStats |  |
-| collection | isCapped | collStats |  |
-| findCursor | limit | find |  |
-| findCursor | skip | find |  |
-| findCursor | sort | find |  |
-| findCursor | toArray | getMore |  |
-| findCursor | forEach | getMore |  |
-| findCursor | map | getMore |  |
-| findCursor | count | count |  |
-| findCursor | explain | explain |  |
-| findCursor | hasNext | getMore |  |
-| findCursor | next | getMore |  |
-| findCursor | batchSize | find |  |
-| findCursor | close | killCursors |  |
-| findCursor | collation | find |  |
-| findCursor | hint | find |  |
-| findCursor | comment | find |  |
-| findCursor | maxTimeMS | find |  |
-| findCursor | readConcern | find |  |
-| findCursor | readPref | find |  |
-| findCursor | returnKey | find |  |
-| findCursor | showRecordId | find |  |
-| aggregationCursor | toArray | getMore |  |
-| aggregationCursor | forEach | getMore |  |
-| aggregationCursor | hasNext | getMore |  |
-| aggregationCursor | next | getMore |  |
-| aggregationCursor | batchSize | aggregate |  |
-| aggregationCursor | close | killCursors |  |
-| aggregationCursor | explain | explain |  |
-| aggregationCursor | maxTimeMS | aggregate |  |
-| global | use | — | ✅ |
-| global | help | — | ✅ |
-| global | print | — | ✅ |
-| global | printjson | — | ✅ |
-| global | sleep | — | ✅ |
-| global | version | buildInfo |  |
+| Target   | Method        | Description                                                  |
+| -------- | ------------- | ------------------------------------------------------------ |
+| database | getCollection | Returns a collection object by name (client-side only)       |
+| database | runCommand    | Executes an arbitrary database command (pass-through)        |
+| database | adminCommand  | Executes a command against the admin database (pass-through) |
+| database | getSiblingDB  | Switches database context (client-side only)                 |
+| database | getName       | Returns the current database name (client-side only)         |
+| global   | use           | Switches the current database context                        |
+| global   | help          | Displays help information                                    |
+| global   | print         | Prints values to output                                      |
+| global   | printjson     | Prints values as formatted JSON                              |
+| global   | sleep         | Pauses execution for a duration                              |
 
 ---
 
