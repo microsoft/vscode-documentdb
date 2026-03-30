@@ -11,6 +11,7 @@ import { detectCursorContext, type CursorContext } from '../../../webviews/docum
 import { SchemaStore } from '../../SchemaStore';
 import { SCRATCHPAD_LANGUAGE_ID } from '../constants';
 import { ScratchpadService } from '../ScratchpadService';
+import { CollectionNameCache } from './CollectionNameCache';
 import { detectMethodArgContext, detectScratchpadContext } from './scratchpadContextDetector';
 
 // Ensure operators are loaded
@@ -128,7 +129,10 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
             return undefined; // No connection — let TS handle db. methods only
         }
 
-        const collectionNames = this.getCollectionNames(connection.clusterId, connection.databaseName);
+        const collectionNames = CollectionNameCache.getInstance().getCollectionNames(
+            connection.clusterId,
+            connection.databaseName,
+        );
         if (collectionNames.length === 0) {
             return undefined;
         }
@@ -152,7 +156,10 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
             const connection = ScratchpadService.getInstance().getConnection();
             if (!connection) return undefined;
 
-            const collectionNames = this.getCollectionNames(connection.clusterId, connection.databaseName);
+            const collectionNames = CollectionNameCache.getInstance().getCollectionNames(
+                connection.clusterId,
+                connection.databaseName,
+            );
             return collectionNames.map((name) => {
                 const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
                 item.detail = 'collection';
@@ -422,20 +429,6 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
             return bsonType ? [bsonType] : undefined;
         }
         return undefined;
-    }
-
-    private getCollectionNames(clusterId: string, databaseName: string): string[] {
-        const store = SchemaStore.getInstance();
-        const stats = store.getStats();
-        const prefix = `${clusterId}::${databaseName}::`;
-        const names: string[] = [];
-        for (const coll of stats.collections) {
-            if (coll.key.startsWith(prefix)) {
-                const collName = coll.key.substring(prefix.length);
-                if (collName) names.push(collName);
-            }
-        }
-        return names;
     }
 
     /**

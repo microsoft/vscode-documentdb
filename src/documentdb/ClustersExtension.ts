@@ -86,6 +86,7 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
+import { CollectionNameCache } from './scratchpad/completions/CollectionNameCache';
 import { ScratchpadCompletionItemProvider } from './scratchpad/completions/ScratchpadCompletionItemProvider';
 import { SCRATCHPAD_FILE_EXTENSION, SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
 import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
@@ -273,6 +274,7 @@ export class ClustersExtension implements vscode.Disposable {
                 // Register completion provider for scratchpad files (Layer 2).
                 // Provides query operators, field names, collection names, and BSON
                 // constructors that the TypeScript service (Layer 1) doesn't know about.
+                ext.context.subscriptions.push(CollectionNameCache.getInstance());
                 ext.context.subscriptions.push(ScratchpadCompletionItemProvider.register());
 
                 // Ensure the TypeScript extension recognizes our plugin and restarts
