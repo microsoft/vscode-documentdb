@@ -106,8 +106,9 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
         const origGetSnapshot: (fileName: string) => ts.IScriptSnapshot | undefined =
             info.languageServiceHost.getScriptSnapshot.bind(info.languageServiceHost);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const origGetVersion: (fileName: string) => string =
-            info.languageServiceHost.getScriptVersion.bind(info.languageServiceHost);
+        const origGetVersion: (fileName: string) => string = info.languageServiceHost.getScriptVersion.bind(
+            info.languageServiceHost,
+        );
 
         info.languageServiceHost.getScriptSnapshot = (fileName: string): ts.IScriptSnapshot | undefined => {
             const snapshot = origGetSnapshot(fileName);
@@ -133,8 +134,8 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             const val = (ls as unknown as Record<string, unknown>)[k];
             if (typeof val === 'function') {
                 const fn = val as (...a: unknown[]) => unknown;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-return
                 (proxy as unknown as Record<string, unknown>)[k] = (...args: unknown[]): unknown =>
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
                     fn.apply(ls, args);
             }
         }
@@ -245,11 +246,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             position: number,
             filesToSearch: string[],
         ): ts.DocumentHighlights[] | undefined => {
-            const result = ls.getDocumentHighlights(
-                fileName,
-                adjustPosition(fileName, position),
-                filesToSearch,
-            );
+            const result = ls.getDocumentHighlights(fileName, adjustPosition(fileName, position), filesToSearch);
             if (!result) {
                 return result;
             }
@@ -271,10 +268,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             });
         };
 
-        proxy.getReferencesAtPosition = (
-            fileName: string,
-            position: number,
-        ): ts.ReferenceEntry[] | undefined => {
+        proxy.getReferencesAtPosition = (fileName: string, position: number): ts.ReferenceEntry[] | undefined => {
             const result = ls.getReferencesAtPosition(fileName, adjustPosition(fileName, position));
             if (!result) {
                 return result;
@@ -292,10 +286,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             });
         };
 
-        proxy.findReferences = (
-            fileName: string,
-            position: number,
-        ): ts.ReferencedSymbol[] | undefined => {
+        proxy.findReferences = (fileName: string, position: number): ts.ReferencedSymbol[] | undefined => {
             const result = ls.findReferences(fileName, adjustPosition(fileName, position));
             if (!result) {
                 return result;
@@ -316,11 +307,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             }));
         };
 
-        proxy.getRenameInfo = (
-            fileName: string,
-            position: number,
-            preferences?: ts.UserPreferences,
-        ): ts.RenameInfo => {
+        proxy.getRenameInfo = (fileName: string, position: number, preferences?: ts.UserPreferences): ts.RenameInfo => {
             const result = ls.getRenameInfo(fileName, adjustPosition(fileName, position), preferences);
             if (!isScratchpadFile(fileName) || !result.canRename) {
                 return result;
@@ -362,10 +349,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             return { spans: adjusted, endOfLineState: result.endOfLineState };
         };
 
-        proxy.getEncodedSyntacticClassifications = (
-            fileName: string,
-            span: ts.TextSpan,
-        ): ts.Classifications => {
+        proxy.getEncodedSyntacticClassifications = (fileName: string, span: ts.TextSpan): ts.Classifications => {
             const result = ls.getEncodedSyntacticClassifications(fileName, span);
             if (!isScratchpadFile(fileName)) {
                 return result;
@@ -405,9 +389,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             function adjustTree(node: ts.NavigationTree): ts.NavigationTree {
                 return {
                     ...node,
-                    spans: node.spans
-                        .map(adjustSpan)
-                        .filter((s): s is ts.TextSpan => s !== undefined),
+                    spans: node.spans.map(adjustSpan).filter((s): s is ts.TextSpan => s !== undefined),
                     nameSpan: node.nameSpan ? adjustSpan(node.nameSpan) : undefined,
                     childItems: node.childItems?.map(adjustTree),
                 };
