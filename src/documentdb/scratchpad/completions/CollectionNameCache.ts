@@ -79,15 +79,23 @@ export class CollectionNameCache implements vscode.Disposable {
     getCollectionNames(clusterId: string, databaseName: string): string[] {
         const key = this.makeCacheKey(clusterId, databaseName);
 
-        // Return cached result if available
+        // Return our local cache if available
         const cached = this._cache.get(key);
         if (cached) {
             return this.mergeWithSchemaStore(cached.names, clusterId, databaseName);
         }
 
+        // Try ClustersClient's in-memory cache for an instant synchronous response
+        // while we fire off the real async fetch in the background
+        const instantNames = this.tryGetCachedNames(clusterId, databaseName);
+
         // Trigger async fetch if not already in progress
         if (!this._pendingFetches.has(key)) {
             this._pendingFetches.set(key, this.fetchCollectionNames(clusterId, databaseName, key));
+        }
+
+        if (instantNames.length > 0) {
+            return this.mergeWithSchemaStore(instantNames, clusterId, databaseName);
         }
 
         // While fetch is in progress, return SchemaStore-only names
@@ -121,6 +129,19 @@ export class CollectionNameCache implements vscode.Disposable {
     }
 
     // ───────────────────────────────────────────────────────────────────
+
+    /**
+     * Attempt to get collection names from ClustersClient's in-memory cache.
+     * Returns an empty array if the client doesn't exist or has no cached data.
+     * This is fully synchronous — no network requests.
+     */
+    private tryGetCachedNames(clusterId: string, databaseName: string): string[] {
+        const client = ClustersClient.getExistingClient(clusterId);
+        if (!client) return [];
+        const cached = client.getCachedCollections(databaseName);
+        if (!cached) return [];
+        return cached.map((c) => c.name).sort();
+    }
 
     private async fetchCollectionNames(
         clusterId: string,

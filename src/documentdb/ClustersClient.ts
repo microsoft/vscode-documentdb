@@ -150,6 +150,11 @@ export class ClustersClient {
     private _queryInsightsApis: QueryInsightsApis | null = null;
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
+    /** In-memory cache for listDatabases results. */
+    private _databasesCache: DatabaseItemModel[] | null = null;
+    /** In-memory cache for listCollections results, keyed by database name. */
+    private _collectionsCache = new Map<string, CollectionItemModel[]>();
+
     /**
      * Private constructor - use getClient() instead.
      * Connections/Clients are being cached and reused.
@@ -356,6 +361,16 @@ export class ClustersClient {
         return ClustersClient._clients.has(credentialId);
     }
 
+    /**
+     * Returns an existing client synchronously if it is already in the connection pool.
+     * Returns `undefined` if the client is not yet connected. This is useful for
+     * accessing cached data (e.g., cached collection/database listings) without
+     * triggering a connection or blocking on async operations.
+     */
+    public static getExistingClient(clusterId: string): ClustersClient | undefined {
+        return ClustersClient._clients.get(clusterId);
+    }
+
     public static async deleteClient(credentialId: string): Promise<void> {
         if (ClustersClient._clients.has(credentialId)) {
             const client = ClustersClient._clients.get(credentialId) as ClustersClient;
@@ -469,7 +484,11 @@ export class ClustersClient {
         }
     }
 
-    async listDatabases(): Promise<DatabaseItemModel[]> {
+    async listDatabases(useCached?: boolean): Promise<DatabaseItemModel[]> {
+        if (useCached && this._databasesCache) {
+            return this._databasesCache;
+        }
+
         const rawDatabases: ListDatabasesResult = await this._mongoClient.db().admin().listDatabases();
         const databases: DatabaseItemModel[] = rawDatabases.databases.filter(
             // Filter out the 'admin' database if it's empty
@@ -499,14 +518,41 @@ export class ClustersClient {
                              }
          */
 
+        this._databasesCache = databases;
+
         return databases;
     }
 
-    async listCollections(databaseName: string): Promise<CollectionItemModel[]> {
+    async listCollections(databaseName: string, useCached?: boolean): Promise<CollectionItemModel[]> {
+        if (useCached) {
+            const cached = this._collectionsCache.get(databaseName);
+            if (cached) {
+                return cached;
+            }
+        }
+
         const rawCollections = await this._mongoClient.db(databaseName).listCollections().toArray();
         const collections: CollectionItemModel[] = rawCollections;
 
+        this._collectionsCache.set(databaseName, collections);
+
         return collections;
+    }
+
+    /**
+     * Returns cached collection names for the given database, if available.
+     * Does NOT trigger a network request. Returns `undefined` if no cache exists.
+     */
+    getCachedCollections(databaseName: string): CollectionItemModel[] | undefined {
+        return this._collectionsCache.get(databaseName);
+    }
+
+    /**
+     * Returns cached database list, if available.
+     * Does NOT trigger a network request. Returns `undefined` if no cache exists.
+     */
+    getCachedDatabases(): DatabaseItemModel[] | undefined {
+        return this._databasesCache ?? undefined;
     }
 
     async listIndexes(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {

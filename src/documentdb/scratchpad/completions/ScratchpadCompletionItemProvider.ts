@@ -438,8 +438,10 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         // Also handle the case where collectionName is 'getCollection' directly.
         if (argCtx.collectionName === 'getCollection' || argCtx.collectionName === '') {
             const beforeArg = text.substring(0, argCtx.argStart);
-            // Match: .getCollection("name").methodName( OR .getCollection('name').methodName(
-            const match = beforeArg.match(/\.getCollection\(\s*['"]([^'"]+)['"]\s*\)\s*\.\s*\w+\s*$/);
+            // Match: .getCollection("name").methodName(
+            // beforeArg ends with the opening `(` of the current method call,
+            // so match it explicitly with trailing `\(\s*`
+            const match = beforeArg.match(/\.getCollection\(\s*['"]([^'"]+)['"]\s*\)\s*\.\s*\w+\s*\(\s*$/);
             if (match) {
                 return match[1];
             }
