@@ -11,14 +11,6 @@ import { detectCursorContext, type CursorContext } from '../../../webviews/docum
 import { SchemaStore } from '../../SchemaStore';
 import { SCRATCHPAD_LANGUAGE_ID } from '../constants';
 import { ScratchpadService } from '../ScratchpadService';
-import {
-    AGGREGATION_CURSOR_METHODS,
-    COLLECTION_METHODS,
-    DATABASE_METHODS,
-    FIND_CURSOR_METHODS,
-    SHELL_GLOBALS,
-    type ShellCompletionEntry,
-} from './completionRegistry';
 import { detectMethodArgContext, detectScratchpadContext } from './scratchpadContextDetector';
 
 // Ensure operators are loaded
@@ -27,14 +19,18 @@ loadOperators();
 /**
  * Provides context-aware completions for DocumentDB scratchpad files.
  *
- * This is Layer 2 of the two-layer autocompletion system. It handles:
- * - Shell globals and BSON constructors (S1)
- * - Dynamic collection names from SchemaStore (S2)
+ * This is Layer 2 of the two-layer autocompletion system. It handles
+ * things the TypeScript language service (Layer 1) cannot provide:
+ * - Dynamic collection names from SchemaStore (after `db.` and in strings)
  * - Query operators and field names inside method arguments (Q1-Q8)
- * - Collection name completions inside strings (S6)
  *
- * Layer 1 (TypeScript Server Plugin + .d.ts) handles method chains,
- * cursor methods, hover docs, and signature help.
+ * Layer 1 (TS Server Plugin with Inline Snapshot Injection) handles:
+ * - Shell globals (`db`, `use`, `print`, BSON constructors)
+ * - Database methods (`getCollection`, `runCommand`, etc.)
+ * - Collection methods (`find`, `insertOne`, etc.)
+ * - Cursor methods (`limit`, `sort`, `toArray`, etc.)
+ * - Hover documentation and signature help
+ * - Variable type tracking across assignments
  */
 export class ScratchpadCompletionItemProvider implements vscode.CompletionItemProvider, vscode.Disposable {
     private readonly disposables: vscode.Disposable[] = [];
@@ -91,19 +87,18 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
 
         switch (scratchpadCtx.kind) {
             case 'top-level':
-                return this.provideTopLevelCompletions();
+            case 'collection-method':
+            case 'find-cursor-chain':
+            case 'aggregate-cursor-chain':
+                // These are fully handled by Layer 1 (TS Server Plugin).
+                // Returning undefined lets the TS service provide completions
+                // without duplicates from our custom provider.
+                return undefined;
 
             case 'db-dot':
+                // Layer 1 handles database methods (getCollection, runCommand, etc.).
+                // We only add dynamic collection names from SchemaStore.
                 return this.provideDbDotCompletions();
-
-            case 'collection-method':
-                return this.provideCollectionMethodCompletions();
-
-            case 'find-cursor-chain':
-                return this.provideFindCursorCompletions();
-
-            case 'aggregate-cursor-chain':
-                return this.provideAggCursorCompletions();
 
             case 'string-literal':
                 return this.provideStringCompletions(scratchpadCtx.enclosingCall);
@@ -119,64 +114,35 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
     }
 
     // -----------------------------------------------------------------------
-    // S1: Top-level globals
+    // S1: Top-level globals — handled by Layer 1 (TS Server Plugin)
     // -----------------------------------------------------------------------
 
-    private provideTopLevelCompletions(): vscode.CompletionItem[] {
-        return SHELL_GLOBALS.map((entry) => this.toCompletionItem(entry));
-    }
-
     // -----------------------------------------------------------------------
-    // S2: db.* completions (database methods + collection names)
+    // S2: db.* completions — only dynamic collection names
+    // Database methods are handled by Layer 1 (TS Server Plugin).
     // -----------------------------------------------------------------------
 
-    private provideDbDotCompletions(): vscode.CompletionItem[] {
-        const items: vscode.CompletionItem[] = [];
-
-        // Database methods
-        for (const entry of DATABASE_METHODS) {
-            items.push(this.toCompletionItem(entry));
-        }
-
-        // Dynamic collection names from SchemaStore
+    private provideDbDotCompletions(): vscode.CompletionItem[] | undefined {
         const connection = ScratchpadService.getInstance().getConnection();
-        if (connection) {
-            const collectionNames = this.getCollectionNames(connection.clusterId, connection.databaseName);
-            for (const name of collectionNames) {
-                const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
-                item.detail = 'collection';
-                item.sortText = `0_${name}`;
-                items.push(item);
-            }
+        if (!connection) {
+            return undefined; // No connection — let TS handle db. methods only
         }
 
-        return items;
+        const collectionNames = this.getCollectionNames(connection.clusterId, connection.databaseName);
+        if (collectionNames.length === 0) {
+            return undefined;
+        }
+
+        return collectionNames.map((name) => {
+            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
+            item.detail = 'collection';
+            item.sortText = `0_${name}`;
+            return item;
+        });
     }
 
     // -----------------------------------------------------------------------
-    // S3: Collection method completions
-    // -----------------------------------------------------------------------
-
-    private provideCollectionMethodCompletions(): vscode.CompletionItem[] {
-        return COLLECTION_METHODS.map((entry) => this.toCompletionItem(entry));
-    }
-
-    // -----------------------------------------------------------------------
-    // S4: Find cursor chain completions
-    // -----------------------------------------------------------------------
-
-    private provideFindCursorCompletions(): vscode.CompletionItem[] {
-        return FIND_CURSOR_METHODS.map((entry) => this.toCompletionItem(entry));
-    }
-
-    // -----------------------------------------------------------------------
-    // S5: Aggregation cursor chain completions
-    // -----------------------------------------------------------------------
-
-    private provideAggCursorCompletions(): vscode.CompletionItem[] {
-        return AGGREGATION_CURSOR_METHODS.map((entry) => this.toCompletionItem(entry));
-    }
-
+    // S3-S5: Collection/cursor methods — handled by Layer 1 (TS Server Plugin)
     // -----------------------------------------------------------------------
     // S6: String literal completions (collection names)
     // -----------------------------------------------------------------------
@@ -472,19 +438,6 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         return names;
     }
 
-    private toCompletionItem(entry: ShellCompletionEntry): vscode.CompletionItem {
-        const kind = mapKind(entry.kind);
-        const item = new vscode.CompletionItem(entry.label, kind);
-        item.detail = entry.description;
-        item.sortText = `${entry.sortPrefix}${entry.label}`;
-
-        if (entry.snippet) {
-            item.insertText = new vscode.SnippetString(entry.snippet);
-        }
-
-        return item;
-    }
-
     /**
      * Register this provider with VS Code.
      * Returns a disposable that unregisters the provider.
@@ -511,21 +464,6 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
-
-function mapKind(kind: ShellCompletionEntry['kind']): vscode.CompletionItemKind {
-    switch (kind) {
-        case 'function':
-            return vscode.CompletionItemKind.Function;
-        case 'variable':
-            return vscode.CompletionItemKind.Variable;
-        case 'method':
-            return vscode.CompletionItemKind.Method;
-        case 'module':
-            return vscode.CompletionItemKind.Module;
-        case 'constructor':
-            return vscode.CompletionItemKind.Constructor;
-    }
-}
 
 /**
  * Port of getOperatorSortPrefix from the webview completion provider.
