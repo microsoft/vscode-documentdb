@@ -220,7 +220,7 @@ extends:
                     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false))
                     dependsOn: ReleaseValidation
                     pool:
-                        type: windows
+                        type: release
                     variables:
                         tgzFileName: $[ dependencies.ReleaseValidation.outputs['findTgzStep.tgzFileName'] ]
                         ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
