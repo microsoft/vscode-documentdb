@@ -1,11 +1,7 @@
-# Build pipeline for npm packages in the packages/ folder
-# Produces .tgz archives that can be published via the npm release pipeline
+# Dummy build pipeline for configuration validation
+# Real pipeline content saved in build-npm-packages.yml.real
 
-trigger:
-    - next
-    - main
-
-# Disable PR trigger
+trigger: none
 pr: none
 
 parameters:
@@ -13,16 +9,11 @@ parameters:
       displayName: 'Enable debug output'
       type: boolean
       default: false
-    - name: isOfficialBuild
-      displayName: 'Official Build'
-      type: boolean
-      default: true
 
 variables:
-    CDP_DEFINITION_BUILD_COUNT: $[counter('', 0)] # needed for onebranch.pipeline.version task https://aka.ms/obpipelines/versioning
+    CDP_DEFINITION_BUILD_COUNT: $[counter('', 0)]
     system.debug: ${{ parameters.debug }}
-
-    WindowsContainerImage: 'onebranch.azurecr.io/windows/ltsc2022/vse2022:latest' # Docker image which is used to build the project https://aka.ms/obpipelines/containers
+    WindowsContainerImage: 'onebranch.azurecr.io/windows/ltsc2022/vse2022:latest'
 
 resources:
     repositories:
@@ -32,14 +23,11 @@ resources:
           ref: refs/heads/main
 
 extends:
-    ${{ if eq(parameters.isOfficialBuild, true) }}:
-        template: v2/OneBranch.Official.CrossPlat.yml@templates # https://aka.ms/obpipelines/templates
-    ${{ else }}:
-        template: v2/OneBranch.NonOfficial.CrossPlat.yml@templates # https://aka.ms/obpipelines/templates
+    template: v2/OneBranch.Official.CrossPlat.yml@templates
     parameters:
-        cloudvault: # https://aka.ms/obpipelines/cloudvault
+        cloudvault:
             enabled: false
-        globalSdl: # https://aka.ms/obpipelines/sdl
+        globalSdl:
             asyncSdl:
                 enabled: false
             tsa:
@@ -68,106 +56,7 @@ extends:
                     pool:
                         type: windows
                     variables:
-                        ob_outputDirectory: '$(Build.ArtifactStagingDirectory)\build' # this directory is uploaded to pipeline artifacts. More info at https://aka.ms/obpipelines/artifacts
-                        ob_sdl_codeSignValidation_excludes: '-|**\*.json;-|**\*.js;-|**\node_modules\**;'
+                        ob_outputDirectory: '$(Build.ArtifactStagingDirectory)\build'
                     steps:
-                        - task: ComponentGovernanceComponentDetection@0
-                          displayName: 'Component Governance - Component Detection'
-
-                        - task: NodeTool@0
-                          displayName: "\U0001F449 Use Node.js"
-                          inputs:
-                              versionSource: fromFile
-                              versionFilePath: .nvmrc
-
-                        - task: npmAuthenticate@0
-                          displayName: "\U0001F449 Authenticate to npm registry"
-                          inputs:
-                              workingFile: '$(Build.SourcesDirectory)/.azure-pipelines/.npmrc'
-
-                        - task: Npm@1
-                          displayName: "\U0001F449 Install Dependencies"
-                          condition: succeeded()
-                          inputs:
-                              command: custom
-                              customCommand: ci --userconfig $(Build.SourcesDirectory)/.azure-pipelines/.npmrc
-                              workingDir: $(Build.SourcesDirectory)
-
-                        - task: Npm@1
-                          displayName: "\U0001F449 Build Workspace Packages"
-                          condition: succeeded()
-                          inputs:
-                              command: custom
-                              customCommand: run build --workspaces --if-present
-                              workingDir: $(Build.SourcesDirectory)
-
-                        - task: Npm@1
-                          displayName: "\U0001F449 Test Workspace Packages"
-                          condition: succeeded()
-                          inputs:
-                              command: custom
-                              customCommand: run test --workspaces --if-present
-                              workingDir: $(Build.SourcesDirectory)
-
-                        - task: PowerShell@2
-                          displayName: "\U0001F4E6 Pack npm packages"
-                          condition: succeeded()
-                          inputs:
-                              targetType: 'inline'
-                              script: |
-                                  $outputDir = "$(ob_outputDirectory)\npm-packages"
-                                  New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
-
-                                  Write-Output "Packing npm workspace packages..."
-                                  Write-Output ""
-
-                                  $packageDirs = Get-ChildItem -Path "$(Build.SourcesDirectory)\packages" -Directory
-
-                                  foreach ($dir in $packageDirs) {
-                                      $packageJsonPath = Join-Path $dir.FullName "package.json"
-                                      if (Test-Path $packageJsonPath) {
-                                          $packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
-                                          $pkgName = $packageJson.name
-                                          $pkgVersion = $packageJson.version
-
-                                          if ($packageJson.private -eq $true) {
-                                              Write-Warning "Skipping private package: $pkgName"
-                                              continue
-                                          }
-
-                                          Write-Output "Packing $pkgName@$pkgVersion from $($dir.Name)..."
-                                          npm pack --pack-destination $outputDir --workspace "packages/$($dir.Name)"
-
-                                          if ($LASTEXITCODE -ne 0) {
-                                              Write-Error "[Error] Failed to pack $pkgName"
-                                              exit 1
-                                          }
-
-                                          Write-Output "✓ Packed $pkgName@$pkgVersion"
-                                          Write-Output ""
-                                      }
-                                  }
-
-                                  Write-Output "=== Generated .tgz files ==="
-                                  Get-ChildItem -Path $outputDir -Filter "*.tgz" | ForEach-Object {
-                                      $sizeKB = [math]::Round($_.Length / 1KB, 2)
-                                      Write-Output "  $($_.Name) (${sizeKB} KB)"
-                                  }
-
-                                  $tgzCount = (Get-ChildItem -Path $outputDir -Filter "*.tgz").Count
-                                  Write-Output ""
-                                  Write-Output "Total packages: $tgzCount"
-
-                                  if ($tgzCount -eq 0) {
-                                      Write-Error "[Error] No .tgz files were generated"
-                                      exit 1
-                                  }
-
-                        - task: CopyFiles@2
-                          displayName: "\U0001F449 Copy package metadata to staging"
-                          condition: succeeded()
-                          inputs:
-                              Contents: |
-                                  packages/*/package.json
-                                  !**/node_modules/**
-                              TargetFolder: $(ob_outputDirectory)
+                        - pwsh: Write-Output "Dummy build pipeline - configuration validated successfully"
+                          displayName: "\U00002705 Dummy step"

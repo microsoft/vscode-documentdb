@@ -1,0 +1,283 @@
+# Release pipeline for npm packages
+# Publishes a selected package to npmjs.org via ESRP Release
+#
+# Prerequisites:
+#   1. Install the "ESRP Release" ADO extension in your project
+#   2. Configure an ESRP service connection with certificate-based auth
+#   3. Set the pipeline variables listed in the TODO comments below
+#      (or use a variable group linked to this pipeline)
+
+parameters:
+    # Which package to publish (directory name under packages/)
+    - name: packageName
+      displayName: 'Package to release'
+      type: string
+      values:
+          - documentdb-constants
+          - schema-analyzer
+
+    # The expected version — must match the version in the package's package.json
+    - name: publishVersion
+      displayName: 'Expected package version'
+      type: string
+
+    # When true, runs validation only without publishing
+    - name: dryRun
+      displayName: 'Dry Run (validate without publishing)'
+      type: boolean
+      default: true
+
+    - name: 'debug'
+      displayName: 'Enable debug output'
+      type: boolean
+      default: false
+
+resources:
+    repositories:
+        - repository: templates
+          type: git
+          name: OneBranch.Pipelines/GovernedTemplates
+          ref: refs/heads/main
+    pipelines:
+        - pipeline: npmBuild
+          project: 'CosmosDB'
+          source: '\VSCode Extensions\vscode-documentdb Build NPM Packages' # TODO: Update to match the actual build pipeline name in ADO
+
+variables:
+    system.debug: ${{ parameters.debug }}
+    TeamName: 'Desktop Tools'
+    WindowsContainerImage: 'onebranch.azurecr.io/windows/ltsc2022/vse2022:latest'
+
+extends:
+    template: v2/OneBranch.Official.CrossPlat.yml@templates
+
+    parameters:
+        cloudvault:
+            enabled: false
+        globalSdl:
+            asyncSdl:
+                enabled: false
+            tsa:
+                enabled: false
+            credscan:
+                suppressionsFile: $(Build.SourcesDirectory)/.azure-pipelines/compliance/CredScanSuppressions.json
+            policheck:
+                break: true
+            suppression:
+                suppressionFile: $(Build.SourcesDirectory)/.config/guardian/.gdnsuppress
+            codeql:
+                compiled:
+                    enabled: false
+                tsaEnabled: false
+            componentgovernance:
+                ignoreDirectories: $(Build.SourcesDirectory)/.vscode-test
+        featureFlags:
+            linuxEsrpSigning: true
+            WindowsHostVersion:
+                Version: 2022
+
+        release:
+            category: NonAzure
+
+        stages:
+            - stage: Release
+              displayName: Release npm package
+              variables:
+                  - name: ob_release_environment
+                    value: Production # Options: Test, PPE, Production
+              jobs:
+                  - job: ReleaseValidation
+                    displayName: "\U00002713 Validate Artifacts"
+                    templateContext:
+                        inputs:
+                            - input: pipelineArtifact
+                              pipeline: npmBuild
+                              targetPath: $(System.DefaultWorkingDirectory)
+                              artifactName: drop_BuildStage_Main
+                    pool:
+                        type: release
+                    variables:
+                        ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
+                    steps:
+                        # Set a descriptive build number
+                        - task: PowerShell@2
+                          displayName: "\U0001F449 Set build number"
+                          inputs:
+                              targetType: 'inline'
+                              script: |
+                                  $packageName = "${{ parameters.packageName }}"
+                                  $publishVersion = "${{ parameters.publishVersion }}"
+                                  $isDryRun = "${{ parameters.dryRun }}"
+                                  $buildId = "$(Build.BuildId)"
+
+                                  $dryRunSuffix = ""
+                                  if ($isDryRun -eq 'True') {
+                                      $dryRunSuffix = "-dry"
+                                  }
+
+                                  $newBuildNumber = "npm-${packageName}-${publishVersion}${dryRunSuffix}-${buildId}"
+                                  Write-Output "Setting build number to: $newBuildNumber"
+                                  Write-Output "##vso[build.updatebuildnumber]$newBuildNumber"
+
+                        # Verify the version in package.json matches the intended publish version
+                        - task: PowerShell@2
+                          displayName: "\U0001F449 Verify package version"
+                          inputs:
+                              targetType: 'inline'
+                              script: |
+                                  $packageName = "${{ parameters.packageName }}"
+                                  $publishVersion = "${{ parameters.publishVersion }}"
+
+                                  $packageJsonPath = "$(System.DefaultWorkingDirectory)/packages/$packageName/package.json"
+                                  if (-not (Test-Path $packageJsonPath)) {
+                                      Write-Error "[Error] package.json not found at $packageJsonPath"
+                                      Write-Output "Available files:"
+                                      Get-ChildItem -Path "$(System.DefaultWorkingDirectory)" -Recurse -Filter "package.json" | ForEach-Object { Write-Output $_.FullName }
+                                      exit 1
+                                  }
+
+                                  $packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
+                                  $actualVersion = $packageJson.version
+                                  $fullPackageName = $packageJson.name
+
+                                  Write-Output "Package: $fullPackageName"
+                                  Write-Output "Version in package.json: $actualVersion"
+                                  Write-Output "Expected publish version: $publishVersion"
+
+                                  # Validate semantic version format
+                                  $semverPattern = '^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$'
+                                  if ($actualVersion -notmatch $semverPattern) {
+                                      Write-Error "[Error] Version in package.json ($actualVersion) is not a valid semantic version"
+                                      exit 1
+                                  }
+                                  if ($publishVersion -notmatch $semverPattern) {
+                                      Write-Error "[Error] Publish version ($publishVersion) is not a valid semantic version"
+                                      exit 1
+                                  }
+
+                                  if ($actualVersion -eq $publishVersion) {
+                                      Write-Output "[Success] Version matches. Proceeding with release of $fullPackageName@$publishVersion"
+                                  } else {
+                                      Write-Error "[Error] Publish version '$publishVersion' does not match version in package.json '$actualVersion'. Cancelling release."
+                                      exit 1
+                                  }
+
+                                  # ESRP Release cannot publish private packages
+                                  if ($packageJson.private -eq $true) {
+                                      Write-Error "[Error] Package $fullPackageName is marked as private in package.json. Cannot publish to npm."
+                                      exit 1
+                                  }
+
+                        # Find the .tgz file for the selected package
+                        - task: PowerShell@2
+                          displayName: "\U0001F50D Find .tgz file"
+                          name: findTgzStep
+                          inputs:
+                              targetType: 'inline'
+                              script: |
+                                  $packageName = "${{ parameters.packageName }}"
+                                  $npmPackagesDir = "$(System.DefaultWorkingDirectory)/npm-packages"
+
+                                  Write-Output "Searching for .tgz files in: $npmPackagesDir"
+
+                                  if (-not (Test-Path $npmPackagesDir)) {
+                                      Write-Error "[Error] npm-packages directory not found at $npmPackagesDir"
+                                      Write-Output "Available directories:"
+                                      Get-ChildItem -Path "$(System.DefaultWorkingDirectory)" -Directory | ForEach-Object { Write-Output $_.FullName }
+                                      exit 1
+                                  }
+
+                                  # List all available .tgz files
+                                  Write-Output "Available .tgz files:"
+                                  Get-ChildItem -Path $npmPackagesDir -Filter "*.tgz" | ForEach-Object {
+                                      $sizeKB = [math]::Round($_.Length / 1KB, 2)
+                                      Write-Output "  $($_.Name) (${sizeKB} KB)"
+                                  }
+
+                                  # Find the .tgz file matching the selected package
+                                  # npm pack generates filenames like: vscode-documentdb-{packageName}-{version}.tgz
+                                  $tgzFiles = Get-ChildItem -Path $npmPackagesDir -Filter "*$packageName*.tgz"
+
+                                  if ($tgzFiles.Count -eq 0) {
+                                      Write-Error "[Error] No .tgz file found matching package '$packageName'"
+                                      exit 1
+                                  } elseif ($tgzFiles.Count -gt 1) {
+                                      Write-Error "[Error] Multiple .tgz files found matching package '$packageName': $($tgzFiles.Name -join ', ')"
+                                      exit 1
+                                  }
+
+                                  $tgzFile = $tgzFiles[0]
+                                  $tgzSize = [math]::Round($tgzFile.Length / 1KB, 2)
+                                  Write-Output ""
+                                  Write-Output "[Success] Found .tgz file: $($tgzFile.Name) (${tgzSize} KB)"
+                                  Write-Output "##vso[task.setvariable variable=tgzFileName;isOutput=true]$($tgzFile.Name)"
+
+                  - job: PublishPackage
+                    displayName: "\U00002713 Publish to npm"
+                    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false))
+                    dependsOn: ReleaseValidation
+                    pool:
+                        type: windows
+                    variables:
+                        tgzFileName: $[ dependencies.ReleaseValidation.outputs['findTgzStep.tgzFileName'] ]
+                        ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
+                    templateContext:
+                        inputs:
+                            - input: pipelineArtifact
+                              pipeline: npmBuild
+                              targetPath: $(System.DefaultWorkingDirectory)
+                              artifactName: drop_BuildStage_Main
+                    steps:
+                        # Copy only the selected .tgz to an isolated folder for ESRP
+                        - task: PowerShell@2
+                          displayName: "\U0001F449 Prepare package for publishing"
+                          inputs:
+                              targetType: 'inline'
+                              script: |
+                                  $tgzFileName = "$(tgzFileName)"
+                                  $npmPackagesDir = "$(System.DefaultWorkingDirectory)\npm-packages"
+                                  $publishDir = "$(Build.ArtifactStagingDirectory)\npm-publish"
+
+                                  New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+
+                                  $sourcePath = Join-Path $npmPackagesDir $tgzFileName
+                                  if (-not (Test-Path $sourcePath)) {
+                                      Write-Error "[Error] .tgz file not found: $sourcePath"
+                                      exit 1
+                                  }
+
+                                  Copy-Item -Path $sourcePath -Destination $publishDir
+                                  Write-Output "Prepared for publishing:"
+                                  Get-ChildItem -Path $publishDir | ForEach-Object {
+                                      Write-Output "  $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)"
+                                  }
+
+                        # Publish to npmjs.org via ESRP Release
+                        # Docs: https://microsoft.sharepoint.com/teams/prss/release/
+                        #
+                        # TODO: Configure these pipeline variables (or use a variable group):
+                        #   - EsrpServiceConnection : ESRP ADO service connection name
+                        #   - EsrpKeyVaultName      : Azure Key Vault with ESRP certs
+                        #   - EsrpAuthCertName       : Auth certificate name in Key Vault
+                        #   - EsrpSignCertName       : Sign certificate name in Key Vault
+                        #   - EsrpClientId           : AAD app registration client ID
+                        #   - EsrpOwners             : Owner email(s) for the release (e.g., alias@microsoft.com)
+                        #   - EsrpApprovers          : Approver email(s) for the release (e.g., alias@microsoft.com)
+                        - task: EsrpRelease@7
+                          displayName: "\U0001F680 Publish to npmjs.org via ESRP"
+                          inputs:
+                              connectedservicename: '$(EsrpServiceConnection)'
+                              keyvaultname: '$(EsrpKeyVaultName)'
+                              authcertname: '$(EsrpAuthCertName)'
+                              signcertname: '$(EsrpSignCertName)'
+                              clientid: '$(EsrpClientId)'
+                              intent: 'PackageDistribution'
+                              contenttype: 'npm'
+                              contentsource: 'Folder'
+                              folderlocation: '$(Build.ArtifactStagingDirectory)/npm-publish'
+                              waitforreleasecompletion: true
+                              owners: '$(EsrpOwners)'
+                              approvers: '$(EsrpApprovers)'
+                              serviceendpointurl: 'https://api.esrp.microsoft.com'
+                              mainpublisher: 'ESRPRELPACMAN'
+                              domaintenantid: '72f988bf-86f1-41af-91ab-2d7cd011db47'
