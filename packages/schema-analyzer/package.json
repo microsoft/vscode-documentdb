@@ -1,5 +1,5 @@
 {
-  "name": "@vscode-documentdb/schema-analyzer",
+  "name": "@microsoft/vscode-documentdb-schema-analyzer",
   "version": "0.0.1-beta",
   "description": "Incremental JSON Schema analyzer for DocumentDB API / MongoDB API documents with statistical extensions",
   "main": "dist/index.js",

@@ -8,7 +8,7 @@ import {
     getPropertyNamesAtLevel,
     type FieldEntry,
     type JSONSchema,
-} from '@vscode-documentdb/schema-analyzer';
+} from '@microsoft/vscode-documentdb-schema-analyzer';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type JSONSchema } from '@vscode-documentdb/schema-analyzer';
+import { type JSONSchema } from '@microsoft/vscode-documentdb-schema-analyzer';
 import { generateDescriptions } from './generateDescriptions';
 
 describe('generateDescriptions', () => {
