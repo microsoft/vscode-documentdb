@@ -44,7 +44,7 @@ resources:
     pipelines:
         - pipeline: npmBuild
           project: 'CosmosDB'
-          source: '\VSCode Extensions\vscode-documentdb Build NPM Packages' # TODO: Update to match the actual build pipeline name in ADO
+          source: '\VSCode Extensions\vscode-documentdb Build npm packages'
 
 variables:
     system.debug: ${{ parameters.debug }}
