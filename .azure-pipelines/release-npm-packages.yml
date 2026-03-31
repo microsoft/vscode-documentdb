@@ -258,7 +258,8 @@ extends:
                         # Publish to npmjs.org via ESRP Release
                         # Docs: https://microsoft.sharepoint.com/teams/prss/release/
                         #
-                        # TODO: Configure these pipeline variables (or use a variable group):
+                        # TODO: Uncomment the EsrpRelease@7 task below once the ESRP service connection
+                        # and pipeline variables are configured. Required variables:
                         #   - EsrpServiceConnection : ESRP ADO service connection name
                         #   - EsrpKeyVaultName      : Azure Key Vault with ESRP certs
                         #   - EsrpAuthCertName       : Auth certificate name in Key Vault
@@ -266,21 +267,28 @@ extends:
                         #   - EsrpClientId           : AAD app registration client ID
                         #   - EsrpOwners             : Owner email(s) for the release (e.g., alias@microsoft.com)
                         #   - EsrpApprovers          : Approver email(s) for the release (e.g., alias@microsoft.com)
-                        - task: EsrpRelease@7
-                          displayName: "\U0001F680 Publish to npmjs.org via ESRP"
+                        - task: PowerShell@2
+                          displayName: "\U0001F680 Publish to npmjs.org via ESRP (placeholder)"
                           inputs:
-                              connectedservicename: '$(EsrpServiceConnection)'
-                              keyvaultname: '$(EsrpKeyVaultName)'
-                              authcertname: '$(EsrpAuthCertName)'
-                              signcertname: '$(EsrpSignCertName)'
-                              clientid: '$(EsrpClientId)'
-                              intent: 'PackageDistribution'
-                              contenttype: 'npm'
-                              contentsource: 'Folder'
-                              folderlocation: '$(Build.ArtifactStagingDirectory)/npm-publish'
-                              waitforreleasecompletion: true
-                              owners: '$(EsrpOwners)'
-                              approvers: '$(EsrpApprovers)'
-                              serviceendpointurl: 'https://api.esrp.microsoft.com'
-                              mainpublisher: 'ESRPRELPACMAN'
-                              domaintenantid: '72f988bf-86f1-41af-91ab-2d7cd011db47'
+                              targetType: 'inline'
+                              script: |
+                                  Write-Error "[Error] EsrpRelease@7 task is not yet configured. Set up the ESRP service connection and uncomment the task in release-npm-packages.yml."
+                                  exit 1
+                        # - task: EsrpRelease@7
+                        #   displayName: "\U0001F680 Publish to npmjs.org via ESRP"
+                        #   inputs:
+                        #       connectedservicename: '$(EsrpServiceConnection)'
+                        #       keyvaultname: '$(EsrpKeyVaultName)'
+                        #       authcertname: '$(EsrpAuthCertName)'
+                        #       signcertname: '$(EsrpSignCertName)'
+                        #       clientid: '$(EsrpClientId)'
+                        #       intent: 'PackageDistribution'
+                        #       contenttype: 'npm'
+                        #       contentsource: 'Folder'
+                        #       folderlocation: '$(Build.ArtifactStagingDirectory)/npm-publish'
+                        #       waitforreleasecompletion: true
+                        #       owners: '$(EsrpOwners)'
+                        #       approvers: '$(EsrpApprovers)'
+                        #       serviceendpointurl: 'https://api.esrp.microsoft.com'
+                        #       mainpublisher: 'ESRPRELPACMAN'
+                        #       domaintenantid: '72f988bf-86f1-41af-91ab-2d7cd011db47'
