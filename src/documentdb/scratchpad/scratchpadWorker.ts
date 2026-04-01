@@ -92,7 +92,7 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
     log('debug', `Initializing worker (auth: ${msg.authMechanism}, db: ${msg.databaseName})`);
 
-    // Lazy-import MongoDB driver
+    // Lazy-import the MongoDB API driver
     const { MongoClient } = await import('mongodb');
 
     // Build client options from the serializable subset

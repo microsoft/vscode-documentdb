@@ -57,7 +57,7 @@ export async function scanCollectionSchema(
         const fieldCount = SchemaStore.getInstance().getKnownFields(clusterId, databaseName, collectionName).length;
 
         void vscode.window.showInformationMessage(
-            l10n.t('Schema scan complete — {0} fields discovered in "{1}".', String(fieldCount), collectionName),
+            l10n.t('Schema scan complete: {0} fields discovered in "{1}".', String(fieldCount), collectionName),
         );
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
