@@ -16,8 +16,8 @@ extracted modules maintain their behavior contracts.
 
 ## Test Files
 
-| File                          | What it tests                                                          |
-| ----------------------------- | ---------------------------------------------------------------------- |
+| File                            | What it tests                                                             |
+| ------------------------------- | ------------------------------------------------------------------------- |
 | `sharedCompletionLogic.test.ts` | Sort prefixes, type suggestion data, JS global definitions, snippet utils |
 
 ## Specification
