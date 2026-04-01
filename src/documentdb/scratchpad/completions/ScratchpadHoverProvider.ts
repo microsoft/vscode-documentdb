@@ -220,8 +220,18 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
         const text = document.getText();
         const offset = document.offsetAt(position);
 
-        // Check if we're inside a method argument to determine the collection name
-        const argCtx = detectMethodArgContext(text, offset);
+        // Try to detect the method argument context.
+        // If the cursor is inside a quoted string (e.g., "additionalInfo.isFamilyFriendly"),
+        // detectMethodArgContext may fail because skipStringBackward can't find a matching
+        // opening quote when scanning from inside the string. In that case, find the string
+        // start and scan from before it (same approach as checkStringLiteralContext).
+        let argCtx = detectMethodArgContext(text, offset);
+        if (!argCtx) {
+            const stringStart = this.findEnclosingStringStart(text, offset);
+            if (stringStart > 0) {
+                argCtx = detectMethodArgContext(text, stringStart);
+            }
+        }
         if (!argCtx) return undefined;
 
         // Resolve getCollection("name") pattern — must happen before the empty
@@ -237,6 +247,26 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
             );
             return fields.find((f) => f.path === word);
         };
+    }
+
+    /**
+     * Find the start position of the enclosing string literal, if any.
+     * Returns the index of the opening quote, or -1 if not inside a string.
+     */
+    private findEnclosingStringStart(text: string, offset: number): number {
+        let inString = false;
+        let quoteChar = '';
+        let stringStart = -1;
+        for (let i = 0; i < offset; i++) {
+            const ch = text[i];
+            if (i > 0 && text[i - 1] === '\\') continue;
+            if ((ch === '"' || ch === "'") && (!inString || ch === quoteChar)) {
+                inString = !inString;
+                quoteChar = inString ? ch : '';
+                if (inString) stringStart = i;
+            }
+        }
+        return inString ? stringStart : -1;
     }
 
     /**

@@ -8,6 +8,7 @@ import { BSONTypes } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
 import { KEY_POSITION_OPERATORS } from '../../../webviews/documentdbQuery/completions/completionKnowledge';
 import { escapeSnippetDollars, stripOuterBraces } from '../../../webviews/documentdbQuery/completions/snippetUtils';
+import { getTypeSuggestionDefs } from '../../../webviews/documentdbQuery/completions/typeSuggestions';
 import { detectCursorContext, type CursorContext } from '../../../webviews/documentdbQuery/cursorContext';
 import { SchemaStore } from '../../SchemaStore';
 import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from '../constants';
@@ -314,6 +315,29 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         replaceRange: vscode.Range,
     ): void {
         const fieldBsonTypes = this.getFieldBsonTypes(cursorCtx);
+
+        // Type-aware value suggestions (true/false for booleans, range for numbers, etc.)
+        const fieldBsonType = cursorCtx.position === 'value' ? cursorCtx.fieldBsonType : undefined;
+        const typeSuggestions = getTypeSuggestionDefs(fieldBsonType);
+        for (let i = 0; i < typeSuggestions.length; i++) {
+            const def = typeSuggestions[i];
+            const item = new vscode.CompletionItem(
+                def.label,
+                def.isSnippet ? vscode.CompletionItemKind.Snippet : vscode.CompletionItemKind.Value,
+            );
+            item.detail = def.description;
+            if (def.isSnippet) {
+                item.insertText = new vscode.SnippetString(escapeSnippetDollars(def.insertText));
+            } else {
+                item.insertText = def.insertText;
+            }
+            item.sortText = `!00_${String(i).padStart(2, '0')}`;
+            if (i === 0) item.preselect = true;
+            if (def.documentation) {
+                item.documentation = new vscode.MarkdownString(def.documentation);
+            }
+            items.push(item);
+        }
 
         // Query operators with braces (value position)
         const allOperators = getFilteredCompletions({ meta: ['query'] });

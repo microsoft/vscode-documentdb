@@ -26,7 +26,7 @@ import { LABEL_PLACEHOLDER } from './completionKnowledge';
 import { escapeSnippetDollars } from './snippetUtils';
 
 /** A type suggestion definition. */
-interface TypeSuggestionDef {
+export interface TypeSuggestionDef {
     /** Display label */
     label: string;
     /** Text or snippet to insert */
@@ -245,4 +245,18 @@ export function createTypeSuggestions(
             range,
         };
     });
+}
+
+/**
+ * Returns platform-neutral type suggestion definitions for a BSON type.
+ *
+ * Used by the scratchpad provider (VS Code API) to create type-aware
+ * value completions without depending on the Monaco API.
+ *
+ * @param fieldBsonType - BSON type string from the schema
+ * @returns Suggestion definitions, or empty array if no suggestions for this type
+ */
+export function getTypeSuggestionDefs(fieldBsonType: string | undefined): readonly TypeSuggestionDef[] {
+    if (!fieldBsonType) return [];
+    return TYPE_SUGGESTIONS[fieldBsonType] ?? [];
 }
