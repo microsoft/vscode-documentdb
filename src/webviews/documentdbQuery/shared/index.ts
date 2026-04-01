@@ -38,3 +38,6 @@ export { getTypeSuggestionDefs, type TypeSuggestionDef } from './typeSuggestionD
 
 // JS global definitions
 export { JS_GLOBALS, type JsGlobalDef } from './jsGlobalDefs';
+
+// Platform-neutral completion data types
+export { CompletionKind, type CompletionData } from './types';
