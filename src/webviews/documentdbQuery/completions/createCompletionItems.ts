@@ -19,9 +19,9 @@ import {
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { getCompletionContext } from '../completionStore';
-import { type CursorContext } from '../shared/cursorContext';
 import { EditorType } from '../languageConfig';
 import { KEY_POSITION_OPERATORS } from '../shared/completionKnowledge';
+import { type CursorContext } from '../shared/cursorContext';
 import { createJsGlobalCompletionItems } from './jsGlobals';
 import { mapFieldToCompletionItem, mapOperatorToCompletionItem } from './mapCompletionItems';
 import { createTypeSuggestions } from './typeSuggestions';
