@@ -165,10 +165,7 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
      * Builds a field lookup function from SchemaStore if the cursor is inside
      * a method argument for a known collection.
      */
-    private buildFieldLookup(
-        document: vscode.TextDocument,
-        position: vscode.Position,
-    ): FieldEntryLookup | undefined {
+    private buildFieldLookup(document: vscode.TextDocument, position: vscode.Position): FieldEntryLookup | undefined {
         const connection = ScratchpadService.getInstance().getConnection();
         if (!connection) return undefined;
 
