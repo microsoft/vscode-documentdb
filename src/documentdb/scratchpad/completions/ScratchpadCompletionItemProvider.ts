@@ -141,7 +141,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         return collectionNames.map((name) => {
             const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
             item.detail = 'discovered collection';
-            item.sortText = `0_${name}`;
+            item.sortText = `!0_${name}`;
             return item;
         });
     }
@@ -164,7 +164,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
             return collectionNames.map((name) => {
                 const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
                 item.detail = 'discovered collection';
-                item.sortText = `0_${name}`;
+                item.sortText = `!0_${name}`;
                 return item;
             });
         }
@@ -262,7 +262,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                     vscode.CompletionItemKind.Event,
                 );
                 scanItem.detail = 'Sample ~100 documents to discover field names';
-                scanItem.sortText = '00_scan';
+                scanItem.sortText = '!00_scan';
                 scanItem.insertText = '';
                 scanItem.command = {
                     command: ScratchpadCommandIds.scanCollectionSchema,
@@ -282,7 +282,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 const displayType = BSONTypes.toDisplayString(field.bsonType as BSONTypes);
                 item.detail = `${displayType}${field.isSparse ? ' (sparse)' : ''}`;
                 item.insertText = new vscode.SnippetString(`${insertName}: $1`);
-                item.sortText = `00_${field.path}`;
+                item.sortText = `!00_${field.path}`;
                 items.push(item);
             }
         }
@@ -297,7 +297,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 if (op.snippet) {
                     item.insertText = new vscode.SnippetString(escapeSnippetDollars(op.snippet));
                 }
-                item.sortText = `1_${op.value}`;
+                item.sortText = `!1_${op.value}`;
                 item.range = replaceRange;
                 if (op.link) {
                     item.documentation = new vscode.MarkdownString(`${op.description}\n\n[Documentation](${op.link})`);
@@ -342,7 +342,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
             if (bson.snippet) {
                 item.insertText = new vscode.SnippetString(escapeSnippetDollars(bson.snippet));
             }
-            item.sortText = `3_${bson.value}`;
+            item.sortText = `!3_${bson.value}`;
             items.push(item);
         }
     }
@@ -496,12 +496,14 @@ function getVscodeOperatorSortPrefix(
     entry: { meta: string; applicableBsonTypes?: readonly string[] },
     fieldBsonTypes: readonly string[] | undefined,
 ): string {
+    // All prefixes start with '!' to sort above TS service completions
+    // ('!' = ASCII 33, before '0' = ASCII 48, 'A' = 65)
     if (!fieldBsonTypes || fieldBsonTypes.length === 0) {
-        return '';
+        return '!';
     }
     if (!entry.applicableBsonTypes || entry.applicableBsonTypes.length === 0) {
-        return entry.meta === 'query:comparison' ? '1a_' : '1b_';
+        return entry.meta === 'query:comparison' ? '!1a_' : '!1b_';
     }
     const hasMatch = entry.applicableBsonTypes.some((t) => fieldBsonTypes.includes(t));
-    return hasMatch ? '0_' : '5_';
+    return hasMatch ? '!0_' : '!5_';
 }

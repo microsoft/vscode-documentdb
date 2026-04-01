@@ -222,9 +222,10 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
 
         // Check if we're inside a method argument to determine the collection name
         const argCtx = detectMethodArgContext(text, offset);
-        if (!argCtx || !argCtx.collectionName) return undefined;
+        if (!argCtx) return undefined;
 
-        // Resolve getCollection("name") pattern
+        // Resolve getCollection("name") pattern — must happen before the empty
+        // collectionName check because getCollection chains produce empty collectionName
         const collectionName = this.resolveCollectionNameForHover(argCtx, text);
         if (!collectionName) return undefined;
 
