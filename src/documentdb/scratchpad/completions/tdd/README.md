@@ -15,10 +15,11 @@ autocompletion system. These tests define the expected behavior contract.
 
 ## Test Files
 
-| File                                | What it tests                                  |
-| ----------------------------------- | ---------------------------------------------- |
-| `scratchpadContextDetector.test.ts` | JS-level cursor context detection (Stage 1)    |
-| `dynamicSchemaIntegration.test.ts`  | CollectionNameCache, schema-driven completions |
+| File                                | What it tests                                        |
+| ----------------------------------- | ---------------------------------------------------- |
+| `scratchpadContextDetector.test.ts` | JS-level cursor context detection (Stage 1)          |
+| `dynamicSchemaIntegration.test.ts`  | CollectionNameCache, schema-driven completions       |
+| `hoverAndEdgeCases.test.ts`         | HoverProvider content, edge case context detection   |
 
 Note: Completion registry tests (`scratchpadCompletionBehavior.test.ts`) were
 removed — the static registry was replaced by the `@vscode-documentdb/documentdb-shell-api-types`

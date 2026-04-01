@@ -89,6 +89,7 @@ import {
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
 import { CollectionNameCache } from './scratchpad/completions/CollectionNameCache';
 import { ScratchpadCompletionItemProvider } from './scratchpad/completions/ScratchpadCompletionItemProvider';
+import { ScratchpadHoverProvider } from './scratchpad/completions/ScratchpadHoverProvider';
 import { SCRATCHPAD_FILE_EXTENSION, SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
 import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
 import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
@@ -277,6 +278,11 @@ export class ClustersExtension implements vscode.Disposable {
                 // constructors that the TypeScript service (Layer 1) doesn't know about.
                 ext.context.subscriptions.push(CollectionNameCache.getInstance());
                 ext.context.subscriptions.push(ScratchpadCompletionItemProvider.register());
+
+                // Register hover provider for scratchpad files.
+                // Provides inline docs for query operators, BSON constructors,
+                // and field names. Method hovers are handled by Layer 1 (TS Plugin).
+                ext.context.subscriptions.push(ScratchpadHoverProvider.register());
 
                 // Ensure the TypeScript extension recognizes our plugin and restarts
                 // its TS server to load it. The TS extension may have started before our

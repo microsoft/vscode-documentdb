@@ -282,7 +282,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 const displayType = BSONTypes.toDisplayString(field.bsonType as BSONTypes);
                 item.detail = `${displayType}${field.isSparse ? ' (sparse)' : ''}`;
                 item.insertText = new vscode.SnippetString(`${insertName}: $1`);
-                item.sortText = `0_${field.path}`;
+                item.sortText = `00_${field.path}`;
                 items.push(item);
             }
         }
@@ -290,6 +290,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         // Key-position operators ($and, $or, $nor, etc.)
         const allOperators = getFilteredCompletions({ meta: ['query'] });
         for (const op of allOperators) {
+            if (op.standalone === false) continue;
             if (KEY_POSITION_OPERATORS.has(op.value)) {
                 const item = new vscode.CompletionItem(op.value, vscode.CompletionItemKind.Operator);
                 item.detail = op.description;
@@ -317,6 +318,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         // Query operators with braces (value position)
         const allOperators = getFilteredCompletions({ meta: ['query'] });
         for (const op of allOperators) {
+            if (op.standalone === false) continue; // Skip nested-only operators
             if (KEY_POSITION_OPERATORS.has(op.value)) continue; // Skip key-level operators
 
             const item = new vscode.CompletionItem(op.value, vscode.CompletionItemKind.Operator);
@@ -354,6 +356,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         // Operators only (braces stripped, type-aware sorting)
         const allOperators = getFilteredCompletions({ meta: ['query'] });
         for (const op of allOperators) {
+            if (op.standalone === false) continue;
             if (KEY_POSITION_OPERATORS.has(op.value)) continue;
 
             const item = new vscode.CompletionItem(op.value, vscode.CompletionItemKind.Operator);
@@ -376,6 +379,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         const items: vscode.CompletionItem[] = [];
         const allOperators = getFilteredCompletions({ meta: ['query'] });
         for (const op of allOperators) {
+            if (op.standalone === false) continue;
             const item = new vscode.CompletionItem(op.value, vscode.CompletionItemKind.Operator);
             item.detail = op.description;
             if (op.snippet) {
@@ -499,5 +503,5 @@ function getVscodeOperatorSortPrefix(
         return entry.meta === 'query:comparison' ? '1a_' : '1b_';
     }
     const hasMatch = entry.applicableBsonTypes.some((t) => fieldBsonTypes.includes(t));
-    return hasMatch ? '0_' : '2_';
+    return hasMatch ? '0_' : '5_';
 }
