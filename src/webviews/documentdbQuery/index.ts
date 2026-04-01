@@ -23,7 +23,7 @@
  */
 
 export { clearCompletionContext, getCompletionContext, setCompletionContext } from './completionStore';
-export { detectCursorContext, type CursorContext, type FieldTypeLookup } from './cursorContext';
+export { detectCursorContext, type CursorContext, type FieldTypeLookup } from './shared/cursorContext';
 export { validateExpression, type Diagnostic } from './documentdbQueryValidator';
 export { EditorType, LANGUAGE_ID, URI_SCHEME, buildEditorUri, parseEditorUri } from './languageConfig';
 export { registerDocumentDBQueryLanguage } from './registerLanguage';

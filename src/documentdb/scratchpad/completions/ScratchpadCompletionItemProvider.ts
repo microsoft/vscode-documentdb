@@ -6,10 +6,15 @@
 import { getFilteredCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
 import { BSONTypes } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
-import { KEY_POSITION_OPERATORS } from '../../../webviews/documentdbQuery/completions/completionKnowledge';
-import { escapeSnippetDollars, stripOuterBraces } from '../../../webviews/documentdbQuery/completions/snippetUtils';
-import { getTypeSuggestionDefs } from '../../../webviews/documentdbQuery/completions/typeSuggestions';
-import { detectCursorContext, type CursorContext } from '../../../webviews/documentdbQuery/cursorContext';
+import {
+    KEY_POSITION_OPERATORS,
+    detectCursorContext,
+    escapeSnippetDollars,
+    getOperatorSortPrefix,
+    getTypeSuggestionDefs,
+    stripOuterBraces,
+    type CursorContext,
+} from '../../../webviews/documentdbQuery/shared';
 import { SchemaStore } from '../../SchemaStore';
 import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from '../constants';
 import { ScratchpadService } from '../ScratchpadService';
@@ -513,21 +518,23 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
 // ---------------------------------------------------------------------------
 
 /**
- * Port of getOperatorSortPrefix from the webview completion provider.
- * Produces sort prefixes for type-aware operator ordering.
+ * Wraps the shared getOperatorSortPrefix with VS Code-specific adjustments:
+ * - '!' prefix on all sort values (sorts above TS service completions)
+ * - '!5_' for non-matching operators (below BSON '!3_' and globals '!4_')
+ *
+ * The shared function returns '0_', '1a_', '1b_', '2_' or undefined.
+ * We remap '2_' → '5_' to push non-matching operators below BSON/globals,
+ * and prepend '!' to all values.
  */
 function getVscodeOperatorSortPrefix(
     entry: { meta: string; applicableBsonTypes?: readonly string[] },
     fieldBsonTypes: readonly string[] | undefined,
 ): string {
-    // All prefixes start with '!' to sort above TS service completions
-    // ('!' = ASCII 33, before '0' = ASCII 48, 'A' = 65)
-    if (!fieldBsonTypes || fieldBsonTypes.length === 0) {
+    const shared = getOperatorSortPrefix(entry, fieldBsonTypes);
+    if (shared === undefined) {
         return '!';
     }
-    if (!entry.applicableBsonTypes || entry.applicableBsonTypes.length === 0) {
-        return entry.meta === 'query:comparison' ? '!1a_' : '!1b_';
-    }
-    const hasMatch = entry.applicableBsonTypes.some((t) => fieldBsonTypes.includes(t));
-    return hasMatch ? '!0_' : '!5_';
+    // Remap '2_' (non-matching) to '5_' so it sorts below BSON (3_) and globals (4_)
+    const remapped = shared === '2_' ? '5_' : shared;
+    return `!${remapped}`;
 }

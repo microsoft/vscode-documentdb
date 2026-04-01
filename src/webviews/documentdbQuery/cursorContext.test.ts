@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { detectCursorContext, type CursorContext, type FieldTypeLookup } from './cursorContext';
+import { detectCursorContext, type CursorContext, type FieldTypeLookup } from './shared/cursorContext';
 
 /**
  * Helper: place cursor at the `|` marker in the input string.

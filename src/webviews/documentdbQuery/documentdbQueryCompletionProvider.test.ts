@@ -12,7 +12,7 @@ import {
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { clearAllCompletionContexts, setCompletionContext } from './completionStore';
-import { type CursorContext } from './cursorContext';
+import { type CursorContext } from './shared/cursorContext';
 import {
     createCompletionItems,
     createTypeSuggestions,

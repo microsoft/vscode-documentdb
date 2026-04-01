@@ -5,13 +5,17 @@
 
 /**
  * Functions for mapping operator and field data to Monaco CompletionItems.
+ *
+ * Platform-neutral sort logic (`getOperatorSortPrefix`, `getCategoryLabel`)
+ * has been extracted to `../shared/sortPrefixes.ts`.
  */
 
 import { type OperatorEntry } from '@vscode-documentdb/documentdb-constants';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { type FieldCompletionData } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
-import { escapeSnippetDollars, stripOuterBraces } from './snippetUtils';
+import { escapeSnippetDollars, stripOuterBraces } from '../shared/snippetUtils';
+import { getCategoryLabel, getOperatorSortPrefix } from '../shared/sortPrefixes';
 
 /**
  * Maps a meta tag category to a Monaco CompletionItemKind.
@@ -30,45 +34,6 @@ export function getCompletionKindForMeta(
     if (meta === 'window') return kinds.Event;
     if (meta === 'field:identifier') return kinds.Field;
     return kinds.Text;
-}
-
-/**
- * Computes a sortText prefix for an operator based on its type relevance
- * to the given field BSON types.
- *
- * Sorting tiers (ascending = higher priority):
- * - `"0_"` — Type-relevant: operator's `applicableBsonTypes` intersects with `fieldBsonTypes`
- * - `"1a_"` — Comparison operators (universal): `$eq`, `$ne`, `$gt`, `$in`, etc.
- *   These are the most commonly used operators for any field type.
- * - `"1b_"` — Other universal operators: element, evaluation, geospatial, etc.
- * - `"2_"` — Non-matching: operator's `applicableBsonTypes` is set but doesn't match
- *
- * Returns `undefined` when no field type info is available (no sorting override).
- */
-export function getOperatorSortPrefix(
-    entry: OperatorEntry,
-    fieldBsonTypes: readonly string[] | undefined,
-): string | undefined {
-    if (!fieldBsonTypes || fieldBsonTypes.length === 0) {
-        return undefined;
-    }
-
-    if (!entry.applicableBsonTypes || entry.applicableBsonTypes.length === 0) {
-        // Promote comparison operators above other universal operators
-        return entry.meta === 'query:comparison' ? '1a_' : '1b_';
-    }
-
-    const hasMatch = entry.applicableBsonTypes.some((t) => fieldBsonTypes.includes(t));
-    return hasMatch ? '0_' : '2_';
-}
-
-/**
- * Extracts a human-readable category label from a meta tag.
- * `'query:comparison'` → `'comparison'`, `'bson'` → `'bson'`
- */
-export function getCategoryLabel(meta: string): string {
-    const colonIndex = meta.indexOf(':');
-    return colonIndex >= 0 ? meta.substring(colonIndex + 1) : meta;
 }
 
 /**
