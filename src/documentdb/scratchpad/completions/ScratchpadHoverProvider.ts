@@ -18,6 +18,7 @@
 import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
 import { BSONTypes, type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
+import { extractQuotedKey } from '../../../webviews/documentdbQuery/extractQuotedKey';
 import { SchemaStore } from '../../SchemaStore';
 import { SCRATCHPAD_LANGUAGE_ID } from '../constants';
 import { ScratchpadService } from '../ScratchpadService';
@@ -138,27 +139,74 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
         position: vscode.Position,
         _token: vscode.CancellationToken,
     ): vscode.Hover | null {
+        const lineText = document.lineAt(position.line).text;
+        const col0 = position.character; // 0-based
+
+        // Build field lookup from SchemaStore if we have an active connection
+        // and the cursor is inside a method argument (where field names are relevant)
+        const fieldLookup = this.buildFieldLookup(document, position);
+
+        // 1. Try quoted key extraction first (handles "address.street" dotted paths)
+        // VS Code's getWordRangeAtPosition breaks on dots and quotes, so for
+        // quoted field names we need to extract the full string content.
+        const quotedResult = extractQuotedKey(lineText, col0);
+        if (quotedResult) {
+            const hoverData = getScratchpadHoverContent(quotedResult.key, fieldLookup);
+            if (hoverData) {
+                const hoverRange = new vscode.Range(position.line, quotedResult.start, position.line, quotedResult.end);
+                return this.toVscodeHover(hoverData, hoverRange);
+            }
+        }
+
+        // 2. Try $ + next word for operator hover when cursor is on '$'
+        // VS Code's getWordRangeAtPosition treats '$' as a word boundary,
+        // so hovering on '$' in '$exists' gives word='$' instead of '$exists'.
+        if (col0 < lineText.length && lineText[col0] === '$') {
+            const afterDollar = lineText.substring(col0 + 1);
+            const identMatch = afterDollar.match(/^[a-zA-Z_]\w*/);
+            if (identMatch) {
+                const operatorName = `$${identMatch[0]}`;
+                const hoverData = getScratchpadHoverContent(operatorName, fieldLookup);
+                if (hoverData) {
+                    const hoverRange = new vscode.Range(
+                        position.line,
+                        col0,
+                        position.line,
+                        col0 + 1 + identMatch[0].length,
+                    );
+                    return this.toVscodeHover(hoverData, hoverRange);
+                }
+            }
+        }
+
+        // 3. Standard word-based hover
         const wordRange = document.getWordRangeAtPosition(position);
         if (!wordRange) return null;
 
         const word = document.getText(wordRange);
         if (!word) return null;
 
-        // Build field lookup from SchemaStore if we have an active connection
-        // and the cursor is inside a method argument (where field names are relevant)
-        const fieldLookup = this.buildFieldLookup(document, position);
+        // Check if there's a '$' immediately before the word range
+        // (e.g., cursor on 'exists' in '$exists')
+        const charBefore = wordRange.start.character > 0 ? lineText[wordRange.start.character - 1] : '';
+        const effectiveWord = charBefore === '$' ? `$${word}` : word;
+        const effectiveRange =
+            charBefore === '$' ? new vscode.Range(wordRange.start.translate(0, -1), wordRange.end) : wordRange;
 
-        const hoverData = getScratchpadHoverContent(word, fieldLookup);
+        const hoverData = getScratchpadHoverContent(effectiveWord, fieldLookup);
         if (!hoverData) return null;
 
+        return this.toVscodeHover(hoverData, effectiveRange);
+    }
+
+    private toVscodeHover(hoverData: ScratchpadHoverData, range: vscode.Range): vscode.Hover {
         const markdownContents = hoverData.contents.map((c) => {
             const md = new vscode.MarkdownString(c.value);
             md.isTrusted = c.isTrusted ?? false;
             md.supportHtml = c.supportHtml ?? false;
             return md;
         });
-
-        return new vscode.Hover(markdownContents, wordRange);
+        return new vscode.Hover(markdownContents, range);
     }
 
     /**
