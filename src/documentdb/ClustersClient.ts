@@ -347,6 +347,10 @@ export class ClustersClient {
 
             try {
                 // if the client is already connected, it's a NOOP.
+                // Note: connectionCorrelationId retains the value from the initial
+                // connection (set in initClient). This is by design — the correlation
+                // ID links the original connect/staticmetadata/getmetadata events.
+                // Cached reconnects don't emit new metadata events, so no new ID is needed.
                 await client._mongoClient.connect();
             } catch (error) {
                 if (abortSignal?.aborted) {
