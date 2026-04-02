@@ -113,20 +113,31 @@ export class QueryInsightsAIService {
                 // Parse the AI response to extract structured recommendations
                 const parsedResponse = this.parseAIResponse(optimizationResult.recommendations);
 
-                // count all actionable recommendations like create, drop, modify..
-                const actionableRecommendationCount = parsedResponse.improvements.filter(
-                    (improvement) => improvement.action !== 'none',
-                ).length;
+                // Count all actionable recommendations by action type in a single pass
+                let actionableRecommendationCount = 0;
+                let createRecommendationCount = 0;
+                let dropRecommendationCount = 0;
+                let modifyRecommendationCount = 0;
+                for (const improvement of parsedResponse.improvements) {
+                    switch (improvement.action) {
+                        case 'create':
+                            createRecommendationCount++;
+                            actionableRecommendationCount++;
+                            break;
+                        case 'drop':
+                            dropRecommendationCount++;
+                            actionableRecommendationCount++;
+                            break;
+                        case 'modify':
+                            modifyRecommendationCount++;
+                            actionableRecommendationCount++;
+                            break;
+                    }
+                }
                 context.telemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
-                context.telemetry.measurements.createRecommendationCount = parsedResponse.improvements.filter(
-                    (improvement) => improvement.action === 'create',
-                ).length;
-                context.telemetry.measurements.dropRecommendationCount = parsedResponse.improvements.filter(
-                    (improvement) => improvement.action === 'drop',
-                ).length;
-                context.telemetry.measurements.modifyRecommendationCount = parsedResponse.improvements.filter(
-                    (improvement) => improvement.action === 'modify',
-                ).length;
+                context.telemetry.measurements.createRecommendationCount = createRecommendationCount;
+                context.telemetry.measurements.dropRecommendationCount = dropRecommendationCount;
+                context.telemetry.measurements.modifyRecommendationCount = modifyRecommendationCount;
 
                 return parsedResponse;
             },

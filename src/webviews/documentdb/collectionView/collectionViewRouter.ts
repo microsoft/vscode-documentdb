@@ -801,18 +801,30 @@ export const collectionsViewRouter = router({
             );
 
             ctx.telemetry.measurements.recommendationCount = aiRecommendations.improvements.length;
-            ctx.telemetry.measurements.actionableRecommendationCount = aiRecommendations.improvements.filter(
-                (rec) => rec.action !== 'none',
-            ).length;
-            ctx.telemetry.measurements.createRecommendationCount = aiRecommendations.improvements.filter(
-                (rec) => rec.action === 'create',
-            ).length;
-            ctx.telemetry.measurements.dropRecommendationCount = aiRecommendations.improvements.filter(
-                (rec) => rec.action === 'drop',
-            ).length;
-            ctx.telemetry.measurements.modifyRecommendationCount = aiRecommendations.improvements.filter(
-                (rec) => rec.action === 'modify',
-            ).length;
+            let actionableRecommendationCount = 0;
+            let createRecommendationCount = 0;
+            let dropRecommendationCount = 0;
+            let modifyRecommendationCount = 0;
+            for (const rec of aiRecommendations.improvements) {
+                switch (rec.action) {
+                    case 'create':
+                        createRecommendationCount++;
+                        actionableRecommendationCount++;
+                        break;
+                    case 'drop':
+                        dropRecommendationCount++;
+                        actionableRecommendationCount++;
+                        break;
+                    case 'modify':
+                        modifyRecommendationCount++;
+                        actionableRecommendationCount++;
+                        break;
+                }
+            }
+            ctx.telemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
+            ctx.telemetry.measurements.createRecommendationCount = createRecommendationCount;
+            ctx.telemetry.measurements.dropRecommendationCount = dropRecommendationCount;
+            ctx.telemetry.measurements.modifyRecommendationCount = modifyRecommendationCount;
 
             // Transform AI response to UI format with button payloads
             const transformed = transformAIResponseForUI(aiRecommendations, {
