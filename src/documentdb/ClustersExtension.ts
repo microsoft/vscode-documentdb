@@ -289,28 +289,51 @@ export class ClustersExtension implements vscode.Disposable {
                 // extension was discovered, so its TS server might not include our plugin.
                 // We restart it once when the first scratchpad file is opened.
                 let tsRestarted = false;
-                ext.context.subscriptions.push(
-                    vscode.workspace.onDidOpenTextDocument(async (doc) => {
-                        if (!tsRestarted && doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
-                            tsRestarted = true;
-                            const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
-                            if (tsExt) {
-                                if (!tsExt.isActive) {
-                                    await tsExt.activate();
-                                }
-                                // Wait a moment for the TS server to fully initialize before
-                                // restarting it. Without this delay, the restart command can
-                                // arrive while the server is still starting, causing a crash.
-                                await new Promise((resolve) => setTimeout(resolve, 2000));
-                                // Restart the TS server so it picks up our plugin from
-                                // contributes.typescriptServerPlugins. Without this, the server
-                                // may have started before our extension was loaded and won't
-                                // have our plugin in --globalPlugins.
-                                await vscode.commands.executeCommand('typescript.restartTsServer');
+
+                const ensureTsRestart = async (): Promise<void> => {
+                    if (tsRestarted) {
+                        return;
+                    }
+                    tsRestarted = true;
+                    try {
+                        const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
+                        if (tsExt) {
+                            if (!tsExt.isActive) {
+                                await tsExt.activate();
                             }
+                            // Wait a moment for the TS server to fully initialize before
+                            // restarting it. Without this delay, the restart command can
+                            // arrive while the server is still starting, causing a crash.
+                            await new Promise((resolve) => setTimeout(resolve, 2000));
+                            // Restart the TS server so it picks up our plugin from
+                            // contributes.typescriptServerPlugins. Without this, the server
+                            // may have started before our extension was loaded and won't
+                            // have our plugin in --globalPlugins.
+                            await vscode.commands.executeCommand('typescript.restartTsServer');
+                        }
+                    } catch (error) {
+                        const message = error instanceof Error ? error.message : String(error);
+                        ext.outputChannel.debug(`[Scratchpad] TS server restart failed: ${message}`);
+                    }
+                };
+
+                ext.context.subscriptions.push(
+                    vscode.workspace.onDidOpenTextDocument((doc) => {
+                        if (doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
+                            void ensureTsRestart();
                         }
                     }),
                 );
+
+                // If a scratchpad file was already open before the extension activated
+                // (e.g., restored by hot-exit), the onDidOpenTextDocument event will not
+                // fire. Check existing documents to cover that path.
+                const hasScratchpadOpen = vscode.workspace.textDocuments.some(
+                    (doc) => doc.languageId === SCRATCHPAD_LANGUAGE_ID,
+                );
+                if (hasScratchpadOpen) {
+                    void ensureTsRestart();
+                }
 
                 //// Scratchpad Commands:
 
