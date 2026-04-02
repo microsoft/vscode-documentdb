@@ -5,16 +5,16 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { SCRATCHPAD_LANGUAGE_ID } from './constants';
+import { PLAYGROUND_LANGUAGE_ID } from './constants';
 import { detectBlocks, findBlockAtLine } from './statementDetector';
 
 /**
- * Shows a vertical bar in the gutter for all code blocks in scratchpad files.
+ * Shows a vertical bar in the gutter for all code blocks in query playground files.
  * The active block (containing the cursor) is brighter; inactive blocks are dimmed.
  * Decoration types are recreated when the color theme changes to use the
  * appropriate dark/light SVG variants.
  */
-export class ScratchpadBlockHighlighter implements vscode.Disposable {
+export class PlaygroundBlockHighlighter implements vscode.Disposable {
     private _activeDecoration!: vscode.TextEditorDecorationType;
     private _inactiveDecoration!: vscode.TextEditorDecorationType;
     private readonly _extensionPath: string;
@@ -73,17 +73,17 @@ export class ScratchpadBlockHighlighter implements vscode.Disposable {
         const iconsDir = path.join(this._extensionPath, 'resources', 'icons');
 
         this._activeDecoration = vscode.window.createTextEditorDecorationType({
-            gutterIconPath: vscode.Uri.file(path.join(iconsDir, `scratchpad-block-active${suffix}.svg`)),
+            gutterIconPath: vscode.Uri.file(path.join(iconsDir, `playground-block-active${suffix}.svg`)),
             gutterIconSize: 'contain',
         });
         this._inactiveDecoration = vscode.window.createTextEditorDecorationType({
-            gutterIconPath: vscode.Uri.file(path.join(iconsDir, `scratchpad-block-inactive${suffix}.svg`)),
+            gutterIconPath: vscode.Uri.file(path.join(iconsDir, `playground-block-inactive${suffix}.svg`)),
             gutterIconSize: 'contain',
         });
     }
 
     private update(editor: vscode.TextEditor): void {
-        if (editor.document.languageId !== SCRATCHPAD_LANGUAGE_ID) {
+        if (editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
             return;
         }
 

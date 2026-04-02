@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { CredentialCache } from '../CredentialCache';
-import { type ExecutionResult, type ScratchpadConnection } from './types';
+import { type ExecutionResult, type PlaygroundConnection } from './types';
 import {
     type MainToWorkerMessage,
     type SerializableExecutionResult,
@@ -22,7 +22,7 @@ import {
 type WorkerState = 'idle' | 'spawning' | 'ready' | 'executing';
 
 /**
- * Evaluates scratchpad code in a persistent worker thread.
+ * Evaluates query playground code in a persistent worker thread.
  *
  * The worker owns its own database client (authenticated via credentials from
  * `CredentialCache`) and stays alive between runs. This provides:
@@ -33,7 +33,7 @@ type WorkerState = 'idle' | 'spawning' | 'ready' | 'executing';
  * The public API is unchanged from the in-process evaluator:
  * `evaluate(connection, code) → Promise<ExecutionResult>`
  */
-export class ScratchpadEvaluator implements vscode.Disposable {
+export class PlaygroundEvaluator implements vscode.Disposable {
     private _worker: Worker | undefined;
     private _workerState: WorkerState = 'idle';
     /** Which cluster the live worker is connected to (to detect cluster switches) */
@@ -42,7 +42,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
     /**
      * Telemetry session ID — generated on worker spawn, stable across evals within the
      * same worker lifecycle. Resets when the worker is terminated/respawned.
-     * Used to correlate multiple scratchpad runs within a single "session".
+     * Used to correlate multiple query playground runs within a single "session".
      */
     private _sessionId: string | undefined;
 
@@ -81,17 +81,17 @@ export class ScratchpadEvaluator implements vscode.Disposable {
     /**
      * Evaluate user code against the connected database.
      *
-     * @param connection - Active scratchpad connection (clusterId + databaseName).
+     * @param connection - Active query playground connection (clusterId + databaseName).
      * @param code - JavaScript code string to evaluate.
      * @param onProgress - Optional callback for phased progress reporting.
      * @returns Formatted execution result with type, printable value, and timing.
      */
     async evaluate(
-        connection: ScratchpadConnection,
+        connection: PlaygroundConnection,
         code: string,
         onProgress?: (message: string) => void,
     ): Promise<ExecutionResult> {
-        // Intercept scratchpad-specific commands before they reach the worker
+        // Intercept playground-specific commands before they reach the worker
         const trimmed = code.trim();
         const helpResult = this.tryHandleHelp(trimmed);
         if (helpResult) {
@@ -156,7 +156,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
      * cluster has changed.
      */
     private async ensureWorker(
-        connection: ScratchpadConnection,
+        connection: PlaygroundConnection,
         onProgress?: (message: string) => void,
     ): Promise<void> {
         // If worker is alive but connected to a different cluster, shut it down
@@ -173,11 +173,11 @@ export class ScratchpadEvaluator implements vscode.Disposable {
     /**
      * Spawn a new worker thread and send the init message.
      */
-    private async spawnWorker(connection: ScratchpadConnection, onProgress?: (message: string) => void): Promise<void> {
+    private async spawnWorker(connection: PlaygroundConnection, onProgress?: (message: string) => void): Promise<void> {
         this._workerState = 'spawning';
 
         // Resolve worker script path (same directory as the main bundle in dist/)
-        const workerPath = path.join(__dirname, 'scratchpadWorker.js');
+        const workerPath = path.join(__dirname, 'playgroundWorker.js');
         this._worker = new Worker(workerPath);
         this._workerClusterId = connection.clusterId;
 
@@ -188,12 +188,12 @@ export class ScratchpadEvaluator implements vscode.Disposable {
 
         // Listen for worker exit (crash or termination)
         this._worker.on('exit', (exitCode: number) => {
-            ext.outputChannel.debug(`[Scratchpad Worker] Worker exited with code ${String(exitCode)}`);
+            ext.outputChannel.debug(`[Playground Worker] Worker exited with code ${String(exitCode)}`);
             this.handleWorkerExit();
         });
 
         this._worker.on('error', (error: Error) => {
-            ext.outputChannel.error(`[Scratchpad Worker] ${error.message}`);
+            ext.outputChannel.error(`[Playground Worker] ${error.message}`);
         });
 
         // Build init message from cached credentials and send to worker.
@@ -220,7 +220,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
     /**
      * Build the init message from CredentialCache data.
      */
-    private buildInitMessage(connection: ScratchpadConnection): MainToWorkerMessage & { type: 'init' } {
+    private buildInitMessage(connection: PlaygroundConnection): MainToWorkerMessage & { type: 'init' } {
         const credentials = CredentialCache.getCredentials(connection.clusterId);
         if (!credentials) {
             throw new Error(l10n.t('No credentials found for cluster {0}', connection.clusterId));
@@ -264,7 +264,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
      * Send an eval message to the worker and await the result.
      */
     private async sendEval(
-        connection: ScratchpadConnection,
+        connection: PlaygroundConnection,
         code: string,
         timeoutMs: number,
     ): Promise<ExecutionResult> {
@@ -418,7 +418,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
             }
 
             case 'log': {
-                const prefix = '[Scratchpad Worker]';
+                const prefix = '[Playground Worker]';
                 switch (msg.level) {
                     case 'error':
                         ext.outputChannel.error(`${prefix} ${msg.message}`);
@@ -509,7 +509,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
     // ─── Help command interception ───────────────────────────────────────────
 
     /**
-     * Handle `help` command with scratchpad-specific output.
+     * Handle `help` command with playground-specific output.
      * Returns undefined if the input is not a help command.
      */
     private tryHandleHelp(input: string): Omit<ExecutionResult, 'durationMs'> | undefined {
@@ -518,7 +518,7 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         }
 
         const helpText = [
-            'DocumentDB Scratchpad - Quick Reference',
+            'Query Playground - Quick Reference',
             '═══════════════════════════════════════',
             '',
             'Collection Access:',

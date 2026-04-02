@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Hover provider for DocumentDB scratchpad files.
+ * Hover provider for DocumentDB query playground files.
  *
  * Provides inline documentation when hovering over:
  * - Query operators ($gt, $regex, $match, etc.) — from documentdb-constants
@@ -19,10 +19,10 @@ import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
 import { BSONTypes, type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
 import { SchemaStore } from '../../SchemaStore';
-import { SCRATCHPAD_LANGUAGE_ID } from '../../scratchpad/constants';
-import { ScratchpadService } from '../../scratchpad/ScratchpadService';
+import { PLAYGROUND_LANGUAGE_ID } from '../../playground/constants';
+import { PlaygroundService } from '../../playground/PlaygroundService';
 import { extractQuotedKey } from '../shared';
-import { detectMethodArgContext } from './scratchpadContextDetector';
+import { detectMethodArgContext } from './playgroundContextDetector';
 
 /**
  * A callback that resolves a word to field data from the SchemaStore.
@@ -32,12 +32,12 @@ type FieldEntryLookup = (word: string) => FieldEntry | undefined;
 /**
  * Hover content data (platform-neutral, used by both tests and the VS Code provider).
  */
-export interface ScratchpadHoverData {
+export interface PlaygroundHoverData {
     contents: Array<{ value: string; isTrusted?: boolean; supportHtml?: boolean }>;
 }
 
 /**
- * Returns hover content for a word in a scratchpad file.
+ * Returns hover content for a word in a query playground file.
  *
  * Tries operators/BSON first (with `$` prefix fallback), then field names.
  * This is a pure function for testability — the VS Code provider wraps it.
@@ -46,7 +46,7 @@ export interface ScratchpadHoverData {
  * @param fieldLookup - Optional callback to resolve field names to FieldEntry
  * @returns Hover data or null if no match
  */
-export function getScratchpadHoverContent(word: string, fieldLookup?: FieldEntryLookup): ScratchpadHoverData | null {
+export function getPlaygroundHoverContent(word: string, fieldLookup?: FieldEntryLookup): PlaygroundHoverData | null {
     if (!word) return null;
 
     // Try with '$' prefix first (for operators where cursor lands after $)
@@ -92,7 +92,7 @@ export function getScratchpadHoverContent(word: string, fieldLookup?: FieldEntry
 /**
  * Builds hover content for a field name.
  */
-function buildFieldHover(field: FieldEntry): ScratchpadHoverData {
+function buildFieldHover(field: FieldEntry): PlaygroundHoverData {
     let header = `**${escapeMarkdown(field.path)}**`;
 
     if (field.isSparse) {
@@ -127,13 +127,13 @@ function escapeMarkdown(text: string): string {
 }
 
 /**
- * VS Code HoverProvider for DocumentDB scratchpad files.
+ * VS Code HoverProvider for DocumentDB query playground files.
  *
  * Registered alongside the CompletionItemProvider in ClustersExtension.ts.
  * Only handles DocumentDB-specific items — method/cursor hover docs are
  * provided by Layer 1 (TS Server Plugin via .d.ts JSDoc).
  */
-export class ScratchpadHoverProvider implements vscode.HoverProvider {
+export class PlaygroundHoverProvider implements vscode.HoverProvider {
     provideHover(
         document: vscode.TextDocument,
         position: vscode.Position,
@@ -151,7 +151,7 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
         // quoted field names we need to extract the full string content.
         const quotedResult = extractQuotedKey(lineText, col0);
         if (quotedResult) {
-            const hoverData = getScratchpadHoverContent(quotedResult.key, fieldLookup);
+            const hoverData = getPlaygroundHoverContent(quotedResult.key, fieldLookup);
             if (hoverData) {
                 const hoverRange = new vscode.Range(position.line, quotedResult.start, position.line, quotedResult.end);
                 return this.toVscodeHover(hoverData, hoverRange);
@@ -166,7 +166,7 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
             const identMatch = afterDollar.match(/^[a-zA-Z_]\w*/);
             if (identMatch) {
                 const operatorName = `$${identMatch[0]}`;
-                const hoverData = getScratchpadHoverContent(operatorName, fieldLookup);
+                const hoverData = getPlaygroundHoverContent(operatorName, fieldLookup);
                 if (hoverData) {
                     const hoverRange = new vscode.Range(
                         position.line,
@@ -193,13 +193,13 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
         const effectiveRange =
             charBefore === '$' ? new vscode.Range(wordRange.start.translate(0, -1), wordRange.end) : wordRange;
 
-        const hoverData = getScratchpadHoverContent(effectiveWord, fieldLookup);
+        const hoverData = getPlaygroundHoverContent(effectiveWord, fieldLookup);
         if (!hoverData) return null;
 
         return this.toVscodeHover(hoverData, effectiveRange);
     }
 
-    private toVscodeHover(hoverData: ScratchpadHoverData, range: vscode.Range): vscode.Hover {
+    private toVscodeHover(hoverData: PlaygroundHoverData, range: vscode.Range): vscode.Hover {
         const markdownContents = hoverData.contents.map((c) => {
             const md = new vscode.MarkdownString(c.value);
             md.isTrusted = c.isTrusted ?? false;
@@ -214,7 +214,7 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
      * a method argument for a known collection.
      */
     private buildFieldLookup(document: vscode.TextDocument, position: vscode.Position): FieldEntryLookup | undefined {
-        const connection = ScratchpadService.getInstance().getConnection();
+        const connection = PlaygroundService.getInstance().getConnection();
         if (!connection) return undefined;
 
         const text = document.getText();
@@ -290,7 +290,7 @@ export class ScratchpadHoverProvider implements vscode.HoverProvider {
      * Register the hover provider with VS Code.
      */
     static register(): vscode.Disposable {
-        const provider = new ScratchpadHoverProvider();
-        return vscode.languages.registerHoverProvider({ language: SCRATCHPAD_LANGUAGE_ID }, provider);
+        const provider = new PlaygroundHoverProvider();
+        return vscode.languages.registerHoverProvider({ language: PLAYGROUND_LANGUAGE_ID }, provider);
     }
 }

@@ -6,20 +6,20 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
-import { SCRATCHPAD_LANGUAGE_ID } from '../../documentdb/scratchpad/constants';
-import { executeScratchpadCode } from './executeScratchpadCode';
+import { PlaygroundService } from '../../documentd./playground/PlaygroundService';
+import { PLAYGROUND_LANGUAGE_ID } from '../../documentd./playground/constants';
+import { executePlaygroundCode } from './executePlaygroundCode';
 
 /**
- * Runs the entire content of the active scratchpad file.
+ * Runs the entire content of the active query playground file.
  */
 export async function runAll(_context: IActionContext): Promise<void> {
     const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.languageId !== SCRATCHPAD_LANGUAGE_ID) {
+    if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
         return;
     }
 
-    const service = ScratchpadService.getInstance();
+    const service = PlaygroundService.getInstance();
     if (!service.isConnected()) {
         void vscode.window.showWarningMessage(
             l10n.t('Connect to a database before running. Right-click a database in the DocumentDB panel.'),
@@ -32,5 +32,5 @@ export async function runAll(_context: IActionContext): Promise<void> {
         return;
     }
 
-    await executeScratchpadCode(code, 'runAll');
+    await executePlaygroundCode(code, 'runAll');
 }

@@ -7,8 +7,8 @@ import { getFilteredCompletions, loadOperators } from '@vscode-documentdb/docume
 import { BSONTypes } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
 import { SchemaStore } from '../../SchemaStore';
-import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from '../../scratchpad/constants';
-import { ScratchpadService } from '../../scratchpad/ScratchpadService';
+import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from '../../playground/constants';
+import { PlaygroundService } from '../../playground/PlaygroundService';
 import {
     KEY_POSITION_OPERATORS,
     detectCursorContext,
@@ -19,13 +19,13 @@ import {
     type CursorContext,
 } from '../shared';
 import { CollectionNameCache } from './CollectionNameCache';
-import { detectMethodArgContext, detectScratchpadContext } from './scratchpadContextDetector';
+import { detectMethodArgContext, detectPlaygroundContext } from './playgroundContextDetector';
 
 // Ensure operators are loaded
 loadOperators();
 
 /**
- * Provides context-aware completions for DocumentDB scratchpad files.
+ * Provides context-aware completions for DocumentDB query playground files.
  *
  * This is Layer 2 of the two-layer autocompletion system. It handles
  * things the TypeScript language service (Layer 1) cannot provide:
@@ -40,7 +40,7 @@ loadOperators();
  * - Hover documentation and signature help
  * - Variable type tracking across assignments
  */
-export class ScratchpadCompletionItemProvider implements vscode.CompletionItemProvider, vscode.Disposable {
+export class PlaygroundCompletionItemProvider implements vscode.CompletionItemProvider, vscode.Disposable {
     private readonly disposables: vscode.Disposable[] = [];
 
     dispose(): void {
@@ -91,9 +91,9 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         }
 
         // Stage 1: JS-level context detection
-        const scratchpadCtx = detectScratchpadContext(text, offset);
+        const playgroundCtx = detectPlaygroundContext(text, offset);
 
-        switch (scratchpadCtx.kind) {
+        switch (playgroundCtx.kind) {
             case 'top-level':
             case 'collection-method':
             case 'find-cursor-chain':
@@ -109,7 +109,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 return this.provideDbDotCompletions();
 
             case 'string-literal':
-                return this.provideStringCompletions(scratchpadCtx.enclosingCall);
+                return this.provideStringCompletions(playgroundCtx.enclosingCall);
 
             case 'method-argument':
                 // This case is handled above via detectMethodArgContext,
@@ -131,7 +131,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
     // -----------------------------------------------------------------------
 
     private provideDbDotCompletions(): vscode.CompletionItem[] | undefined {
-        const connection = ScratchpadService.getInstance().getConnection();
+        const connection = PlaygroundService.getInstance().getConnection();
         if (!connection) {
             return undefined; // No connection — let TS handle db. methods only
         }
@@ -162,7 +162,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         // NOTE: use() should suggest database names, not collection names.
         // Database-name completion is tracked in docs/plan/future-nice-to-have.md.
         if (enclosingCall === 'getCollection') {
-            const connection = ScratchpadService.getInstance().getConnection();
+            const connection = PlaygroundService.getInstance().getConnection();
             if (!connection) return undefined;
 
             const collectionNames = CollectionNameCache.getInstance().getCollectionNames(
@@ -201,7 +201,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         const cursorOffsetInArg = offset - argCtx.argStart;
 
         // Use the field type lookup from SchemaStore
-        const connection = ScratchpadService.getInstance().getConnection();
+        const connection = PlaygroundService.getInstance().getConnection();
         const fieldLookup = (fieldName: string): string | undefined => {
             if (!connection) return undefined;
             const fields = SchemaStore.getInstance().getKnownFields(
@@ -278,7 +278,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
                 scanItem.sortText = '!00_scan';
                 scanItem.insertText = '';
                 scanItem.command = {
-                    command: ScratchpadCommandIds.scanCollectionSchema,
+                    command: PlaygroundCommandIds.scanCollectionSchema,
                     title: 'Discover Fields',
                     arguments: [connection.clusterId, connection.databaseName, argCtx.collectionName],
                 };
@@ -502,9 +502,9 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
      * Returns a disposable that unregisters the provider.
      */
     static register(): vscode.Disposable {
-        const provider = new ScratchpadCompletionItemProvider();
+        const provider = new PlaygroundCompletionItemProvider();
         const disposable = vscode.languages.registerCompletionItemProvider(
-            { language: SCRATCHPAD_LANGUAGE_ID },
+            { language: PLAYGROUND_LANGUAGE_ID },
             provider,
             '.',
             '"',

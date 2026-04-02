@@ -7,7 +7,7 @@
  * TDD Behavior Tests — HoverProvider + Edge Cases (WI-4)
  *
  * These tests define the expected behavior CONTRACT for:
- * - Scratchpad HoverProvider: operator hover, BSON hover, field hover
+ * - Query playground HoverProvider: operator hover, BSON hover, field hover
  * - Edge case handling: no-connection, empty file, comment position, unknown collection
  *
  * ⚠️ LLM/Agent Instruction:
@@ -18,7 +18,7 @@
  */
 
 import { getAllCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
-import { getScratchpadHoverContent } from '../ScratchpadHoverProvider';
+import { getPlaygroundHoverContent } from '../PlaygroundHoverProvider';
 
 // Ensure operators are loaded before tests
 beforeAll(() => {
@@ -26,10 +26,10 @@ beforeAll(() => {
 });
 
 // =====================================================================
-// Tests: ScratchpadHoverProvider — hover content generation
+// Tests: PlaygroundHoverProvider — hover content generation
 // =====================================================================
 
-describe('TDD: ScratchpadHoverProvider', () => {
+describe('TDD: PlaygroundHoverProvider', () => {
     beforeAll(() => {
         console.warn(
             '\n⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix the test.\n' +
@@ -43,7 +43,7 @@ describe('TDD: ScratchpadHoverProvider', () => {
     // -----------------------------------------------------------------
     describe('Operator hover', () => {
         test('$gt produces hover with description', () => {
-            const hover = getScratchpadHoverContent('$gt');
+            const hover = getPlaygroundHoverContent('$gt');
             expect(hover).not.toBeNull();
             expect(hover!.contents).toBeDefined();
             expect(hover!.contents.length).toBeGreaterThan(0);
@@ -53,14 +53,14 @@ describe('TDD: ScratchpadHoverProvider', () => {
         });
 
         test('gt (without $) also resolves to $gt', () => {
-            const hover = getScratchpadHoverContent('gt');
+            const hover = getPlaygroundHoverContent('gt');
             expect(hover).not.toBeNull();
             const md = hover!.contents[0] as { value: string };
             expect(md.value).toContain('**$gt**');
         });
 
         test('$match produces hover with description', () => {
-            const hover = getScratchpadHoverContent('$match');
+            const hover = getPlaygroundHoverContent('$match');
             expect(hover).not.toBeNull();
             const md = hover!.contents[0] as { value: string };
             expect(md.value).toContain('**$match**');
@@ -71,7 +71,7 @@ describe('TDD: ScratchpadHoverProvider', () => {
             const allEntries = getAllCompletions();
             const withLink = allEntries.find((e) => e.link);
             if (withLink) {
-                const hover = getScratchpadHoverContent(withLink.value);
+                const hover = getPlaygroundHoverContent(withLink.value);
                 expect(hover).not.toBeNull();
                 const md = hover!.contents[0] as { value: string };
                 expect(md.value).toContain('Documentation');
@@ -84,14 +84,14 @@ describe('TDD: ScratchpadHoverProvider', () => {
     // -----------------------------------------------------------------
     describe('BSON constructor hover', () => {
         test('ObjectId produces hover', () => {
-            const hover = getScratchpadHoverContent('ObjectId');
+            const hover = getPlaygroundHoverContent('ObjectId');
             expect(hover).not.toBeNull();
             const md = hover!.contents[0] as { value: string };
             expect(md.value).toContain('**ObjectId**');
         });
 
         test('ISODate produces hover', () => {
-            const hover = getScratchpadHoverContent('ISODate');
+            const hover = getPlaygroundHoverContent('ISODate');
             expect(hover).not.toBeNull();
             const md = hover!.contents[0] as { value: string };
             expect(md.value).toContain('**ISODate**');
@@ -109,7 +109,7 @@ describe('TDD: ScratchpadHoverProvider', () => {
                 }
                 return undefined;
             };
-            const hover = getScratchpadHoverContent('age', fieldLookup);
+            const hover = getPlaygroundHoverContent('age', fieldLookup);
             expect(hover).not.toBeNull();
             const md = hover!.contents[0] as { value: string };
             expect(md.value).toContain('**age**');
@@ -123,7 +123,7 @@ describe('TDD: ScratchpadHoverProvider', () => {
                 }
                 return undefined;
             };
-            const hover = getScratchpadHoverContent('nickname', fieldLookup);
+            const hover = getPlaygroundHoverContent('nickname', fieldLookup);
             expect(hover).not.toBeNull();
             const md = hover!.contents[0] as { value: string };
             expect(md.value).toContain('sparse');
@@ -137,7 +137,7 @@ describe('TDD: ScratchpadHoverProvider', () => {
                 }
                 return undefined;
             };
-            const hover = getScratchpadHoverContent('eq', fieldLookup);
+            const hover = getPlaygroundHoverContent('eq', fieldLookup);
             expect(hover).not.toBeNull();
             const md = hover!.contents[0] as { value: string };
             // Should show $eq operator, not the field
@@ -150,12 +150,12 @@ describe('TDD: ScratchpadHoverProvider', () => {
     // -----------------------------------------------------------------
     describe('No match', () => {
         test('unknown word returns null', () => {
-            const hover = getScratchpadHoverContent('nonExistentWord12345');
+            const hover = getPlaygroundHoverContent('nonExistentWord12345');
             expect(hover).toBeNull();
         });
 
         test('empty string returns null', () => {
-            const hover = getScratchpadHoverContent('');
+            const hover = getPlaygroundHoverContent('');
             expect(hover).toBeNull();
         });
     });
@@ -179,16 +179,16 @@ describe('TDD: Completion Edge Cases', () => {
 
     // Using the context detector directly
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { detectScratchpadContext, detectMethodArgContext } = require('../scratchpadContextDetector');
+    const { detectPlaygroundContext, detectMethodArgContext } = require('../playgroundContextDetector');
 
     describe('E1: After comment', () => {
         test('cursor after comment line → top-level', () => {
-            const ctx = detectScratchpadContext('// comment\n', 11);
+            const ctx = detectPlaygroundContext('// comment\n', 11);
             expect(ctx.kind).toBe('top-level');
         });
 
         test('cursor after block comment → top-level', () => {
-            const ctx = detectScratchpadContext('/* comment */\n', 14);
+            const ctx = detectPlaygroundContext('/* comment */\n', 14);
             expect(ctx.kind).toBe('top-level');
         });
     });
@@ -196,7 +196,7 @@ describe('TDD: Completion Edge Cases', () => {
     describe('E3: No active connection (context detection still works)', () => {
         test('db. context detected even without connection', () => {
             // Context detection is connection-agnostic — it just detects position
-            const ctx = detectScratchpadContext('db.', 3);
+            const ctx = detectPlaygroundContext('db.', 3);
             expect(ctx.kind).toBe('db-dot');
         });
     });
@@ -214,7 +214,7 @@ describe('TDD: Completion Edge Cases', () => {
         test('cursor chain across multiple lines', () => {
             const text = 'db.users\n  .find({})\n  .';
             const offset = text.length;
-            const ctx = detectScratchpadContext(text, offset);
+            const ctx = detectPlaygroundContext(text, offset);
             expect(ctx.kind).toBe('find-cursor-chain');
         });
     });

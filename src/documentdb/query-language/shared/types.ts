@@ -11,7 +11,7 @@
  * mappers convert these types to their respective CompletionItem types.
  *
  * Currently serves as the documented interface contract. The webview and
- * scratchpad providers use the shared primitives (getOperatorSortPrefix,
+ * query playground providers use the shared primitives (getOperatorSortPrefix,
  * getTypeSuggestionDefs, etc.) directly rather than routing through a
  * `CompletionData[]` intermediary — this avoids an unnecessary abstraction
  * layer while both providers are already functional.

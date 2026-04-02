@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * TDD Behavior Tests — Scratchpad Cursor Context Detection (Stage 1)
+ * TDD Behavior Tests — Query Playground Cursor Context Detection (Stage 1)
  *
  * These tests define the expected behavior CONTRACT for the JS-level
  * cursor context detection. They were written alongside the implementation
@@ -17,13 +17,13 @@
  * whether to update the spec or fix the implementation.
  */
 
-import { detectMethodArgContext, detectScratchpadContext } from '../scratchpadContextDetector';
+import { detectMethodArgContext, detectPlaygroundContext } from '../playgroundContextDetector';
 
 // =====================================================================
-// Tests: detectScratchpadContext
+// Tests: detectPlaygroundContext
 // =====================================================================
 
-describe('TDD: Scratchpad Context Detection', () => {
+describe('TDD: Query Playground Context Detection', () => {
     beforeAll(() => {
         console.warn(
             '\n⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix the test.\n' +
@@ -37,17 +37,17 @@ describe('TDD: Scratchpad Context Detection', () => {
     // -----------------------------------------------------------------
     describe('S1: Top-level context', () => {
         test('empty file → top-level', () => {
-            const ctx = detectScratchpadContext('', 0);
+            const ctx = detectPlaygroundContext('', 0);
             expect(ctx.kind).toBe('top-level');
         });
 
         test('cursor at start of new line → top-level', () => {
-            const ctx = detectScratchpadContext('// comment\n', 11);
+            const ctx = detectPlaygroundContext('// comment\n', 11);
             expect(ctx.kind).toBe('top-level');
         });
 
         test('standalone identifier without dot → top-level', () => {
-            const ctx = detectScratchpadContext('const x = ', 10);
+            const ctx = detectPlaygroundContext('const x = ', 10);
             expect(ctx.kind).toBe('top-level');
         });
     });
@@ -57,12 +57,12 @@ describe('TDD: Scratchpad Context Detection', () => {
     // -----------------------------------------------------------------
     describe('S2: db. context', () => {
         test('db. → db-dot', () => {
-            const ctx = detectScratchpadContext('db.', 3);
+            const ctx = detectPlaygroundContext('db.', 3);
             expect(ctx.kind).toBe('db-dot');
         });
 
         test('db.get → db-dot with prefix "get"', () => {
-            const ctx = detectScratchpadContext('db.get', 6);
+            const ctx = detectPlaygroundContext('db.get', 6);
             expect(ctx.kind).toBe('db-dot');
             if (ctx.kind === 'db-dot') {
                 expect(ctx.prefix).toBe('get');
@@ -70,7 +70,7 @@ describe('TDD: Scratchpad Context Detection', () => {
         });
 
         test('db. with leading whitespace → db-dot', () => {
-            const ctx = detectScratchpadContext('  db.', 5);
+            const ctx = detectPlaygroundContext('  db.', 5);
             expect(ctx.kind).toBe('db-dot');
         });
     });
@@ -80,7 +80,7 @@ describe('TDD: Scratchpad Context Detection', () => {
     // -----------------------------------------------------------------
     describe('S3: Collection method context', () => {
         test('db.users. → collection-method', () => {
-            const ctx = detectScratchpadContext('db.users.', 9);
+            const ctx = detectPlaygroundContext('db.users.', 9);
             expect(ctx.kind).toBe('collection-method');
             if (ctx.kind === 'collection-method') {
                 expect(ctx.collectionName).toBe('users');
@@ -88,7 +88,7 @@ describe('TDD: Scratchpad Context Detection', () => {
         });
 
         test('db.orders.find → collection-method with prefix "find"', () => {
-            const ctx = detectScratchpadContext('db.orders.find', 14);
+            const ctx = detectPlaygroundContext('db.orders.find', 14);
             expect(ctx.kind).toBe('collection-method');
             if (ctx.kind === 'collection-method') {
                 expect(ctx.collectionName).toBe('orders');
@@ -103,13 +103,13 @@ describe('TDD: Scratchpad Context Detection', () => {
     describe('S4: Find cursor chain', () => {
         test('db.users.find({}).  → find-cursor-chain', () => {
             const text = 'db.users.find({}).';
-            const ctx = detectScratchpadContext(text, text.length);
+            const ctx = detectPlaygroundContext(text, text.length);
             expect(ctx.kind).toBe('find-cursor-chain');
         });
 
         test('db.users.find({}).limit(10). → find-cursor-chain (chained)', () => {
             const text = 'db.users.find({}).limit(10).';
-            const ctx = detectScratchpadContext(text, text.length);
+            const ctx = detectPlaygroundContext(text, text.length);
             expect(ctx.kind).toBe('find-cursor-chain');
         });
     });
@@ -120,7 +120,7 @@ describe('TDD: Scratchpad Context Detection', () => {
     describe('S5: Aggregation cursor chain', () => {
         test('db.users.aggregate([]).  → aggregate-cursor-chain', () => {
             const text = 'db.users.aggregate([]).';
-            const ctx = detectScratchpadContext(text, text.length);
+            const ctx = detectPlaygroundContext(text, text.length);
             expect(ctx.kind).toBe('aggregate-cursor-chain');
         });
     });
@@ -131,13 +131,13 @@ describe('TDD: Scratchpad Context Detection', () => {
     describe('S6: String literal context', () => {
         test('inside double-quoted string → string-literal', () => {
             const text = 'db.getCollection("us';
-            const ctx = detectScratchpadContext(text, text.length);
+            const ctx = detectPlaygroundContext(text, text.length);
             expect(ctx.kind).toBe('string-literal');
         });
 
         test('inside single-quoted string → string-literal', () => {
             const text = "db.getCollection('us";
-            const ctx = detectScratchpadContext(text, text.length);
+            const ctx = detectPlaygroundContext(text, text.length);
             expect(ctx.kind).toBe('string-literal');
         });
     });

@@ -5,21 +5,21 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './constants';
-import { type ScratchpadConnection } from './types';
+import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
+import { type PlaygroundConnection } from './types';
 
 /**
- * Singleton service managing the active scratchpad connection and execution state.
+ * Singleton service managing the active query playground connection and execution state.
  *
  * Design decisions (from 06-scrapbook-rebuild.md):
- * - D1 (Option B): All scratchpad files share a single global connection
+ * - D1 (Option B): All query playground files share a single global connection
  * - StatusBarItem shows connection status when a `.documentdb.js` file is active
  * - Service emits state changes so UI components (CodeLens, StatusBar) can refresh
  */
-export class ScratchpadService implements vscode.Disposable {
-    private static _instance: ScratchpadService | undefined;
+export class PlaygroundService implements vscode.Disposable {
+    private static _instance: PlaygroundService | undefined;
 
-    private _connection: ScratchpadConnection | undefined;
+    private _connection: PlaygroundConnection | undefined;
     private _isExecuting = false;
 
     private readonly _onDidChangeState = new vscode.EventEmitter<void>();
@@ -29,9 +29,9 @@ export class ScratchpadService implements vscode.Disposable {
     private readonly _disposables: vscode.Disposable[] = [];
 
     private constructor() {
-        // StatusBarItem — left-aligned, shown only when a scratchpad file is the active editor
+        // StatusBarItem — left-aligned, shown only when a query playground file is the active editor
         this._statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-        this._statusBarItem.command = ScratchpadCommandIds.connect;
+        this._statusBarItem.command = PlaygroundCommandIds.connect;
         this._disposables.push(this._statusBarItem);
 
         // Update StatusBar visibility when the active editor changes
@@ -52,16 +52,16 @@ export class ScratchpadService implements vscode.Disposable {
         this.updateStatusBar(vscode.window.activeTextEditor);
     }
 
-    static getInstance(): ScratchpadService {
-        if (!ScratchpadService._instance) {
-            ScratchpadService._instance = new ScratchpadService();
+    static getInstance(): PlaygroundService {
+        if (!PlaygroundService._instance) {
+            PlaygroundService._instance = new PlaygroundService();
         }
-        return ScratchpadService._instance;
+        return PlaygroundService._instance;
     }
 
     // ── Connection management ──────────────────────────────────────────
 
-    setConnection(connection: ScratchpadConnection): void {
+    setConnection(connection: PlaygroundConnection): void {
         this._connection = connection;
         this._onDidChangeState.fire();
     }
@@ -75,7 +75,7 @@ export class ScratchpadService implements vscode.Disposable {
         return this._connection !== undefined;
     }
 
-    getConnection(): ScratchpadConnection | undefined {
+    getConnection(): PlaygroundConnection | undefined {
         return this._connection;
     }
 
@@ -104,7 +104,7 @@ export class ScratchpadService implements vscode.Disposable {
     // ── StatusBar ──────────────────────────────────────────────────────
 
     private updateStatusBar(editor: vscode.TextEditor | undefined): void {
-        if (!editor || editor.document.languageId !== SCRATCHPAD_LANGUAGE_ID) {
+        if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
             this._statusBarItem.hide();
             return;
         }
@@ -112,11 +112,11 @@ export class ScratchpadService implements vscode.Disposable {
         if (this._connection) {
             const displayName = this.getDisplayName()!;
             this._statusBarItem.text = `$(plug) ${displayName}`;
-            this._statusBarItem.tooltip = l10n.t('DocumentDB Scratchpad connected to {0}', displayName);
+            this._statusBarItem.tooltip = l10n.t('Query Playground connected to {0}', displayName);
         } else {
             this._statusBarItem.text = `$(warning) ${l10n.t('No database connected')}`;
             this._statusBarItem.tooltip = l10n.t(
-                'Click to learn how to connect a database for the DocumentDB Scratchpad',
+                'Click to learn how to connect a database for the Query Playground',
             );
         }
 
@@ -130,6 +130,6 @@ export class ScratchpadService implements vscode.Disposable {
             d?.dispose();
         }
         this._onDidChangeState.dispose();
-        ScratchpadService._instance = undefined;
+        PlaygroundService._instance = undefined;
     }
 }

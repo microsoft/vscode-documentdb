@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Worker thread entry point for scratchpad code evaluation.
+ * Worker thread entry point for query playground code evaluation.
  *
  * This file runs in a Node.js worker_thread, isolated from the extension host.
  * It owns its own database client instance (authenticated via credentials passed from
@@ -20,7 +20,7 @@ import { parentPort } from 'worker_threads';
 import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
 if (!parentPort) {
-    throw new Error('scratchpadWorker.ts must be run as a worker_thread');
+    throw new Error('playgroundWorker.ts must be run as a worker_thread');
 }
 
 // ─── Worker state ────────────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     const bus = new EventEmitter();
     const serviceProvider = new NodeDriverServiceProvider(mongoClient, bus, {
         productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
-        productName: 'DocumentDB for VS Code Scratchpad',
+        productName: 'DocumentDB for VS Code Query Playground',
     });
     const instanceState = new ShellInstanceState(serviceProvider, bus);
     const evaluator = new ShellEvaluator(instanceState);
@@ -183,15 +183,15 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
 
     // Switch database if different from current
     if (msg.databaseName !== currentDatabaseName) {
-        await evaluator.customEval(customEvalFn, `use(${JSON.stringify(msg.databaseName)})`, context, 'scratchpad');
+        await evaluator.customEval(customEvalFn, `use(${JSON.stringify(msg.databaseName)})`, context, 'playground');
         currentDatabaseName = msg.databaseName;
     } else {
         // Pre-select the target database (fresh context each time)
-        await evaluator.customEval(customEvalFn, `use(${JSON.stringify(msg.databaseName)})`, context, 'scratchpad');
+        await evaluator.customEval(customEvalFn, `use(${JSON.stringify(msg.databaseName)})`, context, 'playground');
     }
 
     // Evaluate user code
-    const result = await evaluator.customEval(customEvalFn, msg.code, context, 'scratchpad');
+    const result = await evaluator.customEval(customEvalFn, msg.code, context, 'playground');
     const durationMs = Date.now() - startTime;
 
     // result is a ShellResult { type, printable, rawValue, source? }

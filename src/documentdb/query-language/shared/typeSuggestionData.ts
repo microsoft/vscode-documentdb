@@ -189,7 +189,7 @@ function todayISO(): string {
 /**
  * Returns platform-neutral type suggestion definitions for a BSON type.
  *
- * Used by both the Monaco (webview) and VS Code (scratchpad) completion
+ * Used by both the Monaco (webview) and VS Code (query playground) completion
  * providers to create type-aware value completions.
  *
  * @param fieldBsonType - BSON type string from the schema

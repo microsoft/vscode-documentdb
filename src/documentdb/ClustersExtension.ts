@@ -59,12 +59,12 @@ import { retryAuthentication } from '../commands/retryAuthentication/retryAuthen
 import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
-import { connectDatabase } from '../commands/scratchpad/connectDatabase';
-import { disposeEvaluator, shutdownEvaluator } from '../commands/scratchpad/executeScratchpadCode';
-import { newScratchpad } from '../commands/scratchpad/newScratchpad';
-import { runAll } from '../commands/scratchpad/runAll';
-import { runSelected } from '../commands/scratchpad/runSelected';
-import { scanCollectionSchema } from '../commands/scratchpad/scanCollectionSchema';
+import { connectDatabase } from '../commands/playground/connectDatabase';
+import { disposeEvaluator, shutdownEvaluator } from '../commands/playground/executePlaygroundCode';
+import { newPlayground } from '../commands/playground/newPlayground';
+import { runAll } from '../commands/playground/runAll';
+import { runSelected } from '../commands/playground/runSelected';
+import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -89,13 +89,13 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
-import { CollectionNameCache } from './query-language/scratchpad-completions/CollectionNameCache';
-import { ScratchpadCompletionItemProvider } from './query-language/scratchpad-completions/ScratchpadCompletionItemProvider';
-import { ScratchpadHoverProvider } from './query-language/scratchpad-completions/ScratchpadHoverProvider';
-import { SCRATCHPAD_FILE_EXTENSION, SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
-import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
-import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
-import { ScratchpadService } from './scratchpad/ScratchpadService';
+import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
+import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
+import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
+import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
+import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
+import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
+import { PlaygroundService } from './playground/PlaygroundService';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -208,24 +208,24 @@ export class ClustersExtension implements vscode.Disposable {
                 // Initialize TaskService and TaskProgressReportingService
                 TaskProgressReportingService.attach(TaskService);
 
-                // Initialize ScratchpadService (connection state + StatusBarItem)
-                const scratchpadService = ScratchpadService.getInstance();
-                ext.context.subscriptions.push(scratchpadService);
+                // Initialize PlaygroundService (connection state + StatusBarItem)
+                const playgroundService = PlaygroundService.getInstance();
+                ext.context.subscriptions.push(playgroundService);
 
                 // Register evaluator disposal for clean worker shutdown on deactivation
                 ext.context.subscriptions.push({ dispose: disposeEvaluator });
 
-                // Shut down the scratchpad worker when connection is cleared
+                // Shut down the query playground worker when connection is cleared
                 ext.context.subscriptions.push(
-                    scratchpadService.onDidChangeState(() => {
-                        if (!scratchpadService.isConnected()) {
-                            ext.outputChannel.debug('[Scratchpad] Connection cleared — shutting down worker');
+                    playgroundService.onDidChangeState(() => {
+                        if (!playgroundService.isConnected()) {
+                            ext.outputChannel.debug('[Playground] Connection cleared — shutting down worker');
                             shutdownEvaluator();
                         }
                     }),
                 );
 
-                // Shut down the scratchpad worker when the last .documentdb.js editor closes
+                // Shut down the query playground worker when the last .documentdb.js editor closes
                 ext.context.subscriptions.push(
                     vscode.window.tabGroups.onDidChangeTabs((event) => {
                         // Only react when tabs are closed
@@ -233,63 +233,63 @@ export class ClustersExtension implements vscode.Disposable {
                             return;
                         }
 
-                        // Check if any closed tab was a scratchpad
-                        const closedScratchpad = event.closed.some((tab) => {
+                        // Check if any closed tab was a query playground
+                        const closedPlayground = event.closed.some((tab) => {
                             const input = tab.input;
                             return (
                                 input instanceof vscode.TabInputText &&
-                                input.uri.path.endsWith(SCRATCHPAD_FILE_EXTENSION)
+                                input.uri.path.endsWith(PLAYGROUND_FILE_EXTENSION)
                             );
                         });
 
-                        if (!closedScratchpad) {
+                        if (!closedPlayground) {
                             return;
                         }
 
-                        // Check if any scratchpad tabs remain open
-                        const hasOpenScratchpad = vscode.window.tabGroups.all.some((group) =>
+                        // Check if any query playground tabs remain open
+                        const hasOpenPlayground = vscode.window.tabGroups.all.some((group) =>
                             group.tabs.some((tab) => {
                                 const input = tab.input;
                                 return (
                                     input instanceof vscode.TabInputText &&
-                                    input.uri.path.endsWith(SCRATCHPAD_FILE_EXTENSION)
+                                    input.uri.path.endsWith(PLAYGROUND_FILE_EXTENSION)
                                 );
                             }),
                         );
 
-                        if (!hasOpenScratchpad) {
-                            ext.outputChannel.debug('[Scratchpad] All editors closed — shutting down worker');
+                        if (!hasOpenPlayground) {
+                            ext.outputChannel.debug('[Playground] All editors closed — shutting down worker');
                             shutdownEvaluator();
                         }
                     }),
                 );
 
-                // Register CodeLens provider for scratchpad files
-                const codeLensProvider = new ScratchpadCodeLensProvider();
+                // Register CodeLens provider for query playground files
+                const codeLensProvider = new PlaygroundCodeLensProvider();
                 ext.context.subscriptions.push(codeLensProvider);
                 ext.context.subscriptions.push(
-                    vscode.languages.registerCodeLensProvider({ language: SCRATCHPAD_LANGUAGE_ID }, codeLensProvider),
+                    vscode.languages.registerCodeLensProvider({ language: PLAYGROUND_LANGUAGE_ID }, codeLensProvider),
                 );
 
-                // Register block highlighter for scratchpad files
-                const blockHighlighter = new ScratchpadBlockHighlighter(ext.context.extensionPath);
+                // Register block highlighter for query playground files
+                const blockHighlighter = new PlaygroundBlockHighlighter(ext.context.extensionPath);
                 ext.context.subscriptions.push(blockHighlighter);
 
-                // Register completion provider for scratchpad files (Layer 2).
+                // Register completion provider for query playground files (Layer 2).
                 // Provides query operators, field names, collection names, and BSON
                 // constructors that the TypeScript service (Layer 1) doesn't know about.
                 ext.context.subscriptions.push(CollectionNameCache.getInstance());
-                ext.context.subscriptions.push(ScratchpadCompletionItemProvider.register());
+                ext.context.subscriptions.push(PlaygroundCompletionItemProvider.register());
 
-                // Register hover provider for scratchpad files.
+                // Register hover provider for query playground files.
                 // Provides inline docs for query operators, BSON constructors,
                 // and field names. Method hovers are handled by Layer 1 (TS Plugin).
-                ext.context.subscriptions.push(ScratchpadHoverProvider.register());
+                ext.context.subscriptions.push(PlaygroundHoverProvider.register());
 
                 // Ensure the TypeScript extension recognizes our plugin and restarts
                 // its TS server to load it. The TS extension may have started before our
                 // extension was discovered, so its TS server might not include our plugin.
-                // We restart it once when the first scratchpad file is opened.
+                // We restart it once when the first query playground file is opened.
                 let tsRestarted = false;
 
                 const ensureTsRestart = async (): Promise<void> => {
@@ -309,13 +309,13 @@ export class ClustersExtension implements vscode.Disposable {
                         const stubDir = path.join(
                             ext.context.extensionPath,
                             'node_modules',
-                            'documentdb-scratchpad-ts-plugin',
+                            'documentdb-playground-ts-plugin',
                         );
                         const stubEntry = path.join(stubDir, 'index.js');
                         if (!fs.existsSync(stubEntry)) {
                             fs.mkdirSync(stubDir, { recursive: true });
                             // Point to the bundled plugin at the extension root
-                            fs.writeFileSync(stubEntry, 'module.exports = require("../../scratchpadTsPlugin.js");\n');
+                            fs.writeFileSync(stubEntry, 'module.exports = require("../../playgroundTsPlugin.js");\n');
                         }
 
                         const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
@@ -335,47 +335,47 @@ export class ClustersExtension implements vscode.Disposable {
                         }
                     } catch (error) {
                         const message = error instanceof Error ? error.message : String(error);
-                        ext.outputChannel.debug(`[Scratchpad] TS server restart failed: ${message}`);
+                        ext.outputChannel.debug(`[Playground] TS server restart failed: ${message}`);
                     }
                 };
 
                 ext.context.subscriptions.push(
                     vscode.workspace.onDidOpenTextDocument((doc) => {
-                        if (doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
+                        if (doc.languageId === PLAYGROUND_LANGUAGE_ID) {
                             void ensureTsRestart();
                         }
                     }),
                 );
 
-                // If a scratchpad file was already open before the extension activated
+                // If a query playground file was already open before the extension activated
                 // (e.g., restored by hot-exit), the onDidOpenTextDocument event will not
                 // fire. Check existing documents to cover that path.
-                const hasScratchpadOpen = vscode.workspace.textDocuments.some(
-                    (doc) => doc.languageId === SCRATCHPAD_LANGUAGE_ID,
+                const hasPlaygroundOpen = vscode.workspace.textDocuments.some(
+                    (doc) => doc.languageId === PLAYGROUND_LANGUAGE_ID,
                 );
-                if (hasScratchpadOpen) {
+                if (hasPlaygroundOpen) {
                     void ensureTsRestart();
                 }
 
-                //// Scratchpad Commands:
+                //// Playground Commands:
 
                 registerCommandWithTreeNodeUnwrapping(
-                    ScratchpadCommandIds.new,
-                    withTreeNodeCommandCorrelation(newScratchpad),
+                    PlaygroundCommandIds.new,
+                    withTreeNodeCommandCorrelation(newPlayground),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    ScratchpadCommandIds.connect,
+                    PlaygroundCommandIds.connect,
                     withTreeNodeCommandCorrelation(connectDatabase),
                 );
 
-                registerCommand(ScratchpadCommandIds.runAll, withCommandCorrelation(runAll));
+                registerCommand(PlaygroundCommandIds.runAll, withCommandCorrelation(runAll));
 
-                registerCommand(ScratchpadCommandIds.runSelected, withCommandCorrelation(runSelected));
+                registerCommand(PlaygroundCommandIds.runSelected, withCommandCorrelation(runSelected));
 
                 // Register scan schema command (triggered by "Discover Fields" completion item)
                 registerCommand(
-                    ScratchpadCommandIds.scanCollectionSchema,
+                    PlaygroundCommandIds.scanCollectionSchema,
                     withCommandCorrelation(scanCollectionSchema),
                 );
 

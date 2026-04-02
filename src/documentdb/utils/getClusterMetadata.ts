@@ -113,7 +113,7 @@ function processDomainInfo(hosts: string[], result: ClusterMetadata): void {
 
 /**
  * Extracts domain information from hosts and adds it to a properties object.
- * Reusable for both cluster metadata telemetry and scratchpad telemetry.
+ * Reusable for both cluster metadata telemetry and playground telemetry.
  *
  * For Azure domains, records the API type (RU, vCore).
  * For non-Azure domains, produces SHA-256 hashed domain fragments for privacy-safe diagnostics.

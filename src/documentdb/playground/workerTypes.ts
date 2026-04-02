@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * IPC message types for the scratchpad worker thread.
+ * IPC message types for the query playground worker thread.
  *
- * This file is shared between the main thread (ScratchpadEvaluator) and
- * the worker thread (scratchpadWorker). It must have zero runtime dependencies —
+ * This file is shared between the main thread (PlaygroundEvaluator) and
+ * the worker thread (playgroundWorker). It must have zero runtime dependencies —
  * only TypeScript types and string literal unions.
  *
  * Communication uses Node.js `worker_threads` `postMessage()` with the

@@ -40,8 +40,8 @@ export interface SchemaStoreStats {
  * Shared, cluster-scoped schema cache.
  *
  * Accumulates schema data per `{clusterId, databaseName, collectionName}` triple,
- * enabling cross-tab and scratchpad schema sharing. All schema consumers
- * (Collection View tabs, scratchpad, future shell) read from and contribute
+ * enabling cross-tab and query playground schema sharing. All schema consumers
+ * (Collection View tabs, query playground, future shell) read from and contribute
  * to the same store.
  *
  * Schema change notifications are debounced per key (1 second) to avoid

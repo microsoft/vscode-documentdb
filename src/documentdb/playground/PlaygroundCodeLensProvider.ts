@@ -5,12 +5,12 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './constants';
-import { ScratchpadService } from './ScratchpadService';
+import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
+import { PlaygroundService } from './PlaygroundService';
 import { detectBlocks, findBlockAtLine } from './statementDetector';
 
 /**
- * Provides CodeLens actions for DocumentDB Scratchpad files:
+ * Provides CodeLens actions for Query Playground files:
  * 1. Connection status lens (line 0) — shows connected cluster/database or "Connect"
  * 2. Run All lens (line 0) — runs the entire file
  * 3. Per-block Run lens — shown only for the block containing the cursor
@@ -18,7 +18,7 @@ import { detectBlocks, findBlockAtLine } from './statementDetector';
  * The per-block lens follows the cursor: when the cursor moves to a different
  * block, we fire `onDidChangeCodeLenses` so VS Code re-requests lenses.
  */
-export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vscode.Disposable {
+export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vscode.Disposable {
     private readonly _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
     readonly onDidChangeCodeLenses: vscode.Event<void> = this._onDidChangeCodeLenses.event;
 
@@ -31,7 +31,7 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
     private readonly _mod = process.platform === 'darwin' ? '⌘' : 'Ctrl';
 
     constructor() {
-        const service = ScratchpadService.getInstance();
+        const service = PlaygroundService.getInstance();
 
         // Refresh lenses when connection/execution state changes
         this._disposables.push(
@@ -43,7 +43,7 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
         // Refresh lenses when cursor moves to a different block
         this._disposables.push(
             vscode.window.onDidChangeTextEditorSelection((e) => {
-                if (e.textEditor.document.languageId !== SCRATCHPAD_LANGUAGE_ID) {
+                if (e.textEditor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
                     return;
                 }
                 const cursorLine = e.selections[0].active.line;
@@ -82,7 +82,7 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
 
     provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
         const lenses: vscode.CodeLens[] = [];
-        const service = ScratchpadService.getInstance();
+        const service = PlaygroundService.getInstance();
         const topRange = new vscode.Range(0, 0, 0, 0);
 
         // 1. Connection status lens
@@ -91,7 +91,7 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
             lenses.push(
                 new vscode.CodeLens(topRange, {
                     title: `$(plug) ${displayName}`,
-                    command: ScratchpadCommandIds.connect,
+                    command: PlaygroundCommandIds.connect,
                     tooltip: l10n.t('Connected to {0}', displayName),
                 }),
             );
@@ -99,7 +99,7 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
             lenses.push(
                 new vscode.CodeLens(topRange, {
                     title: `$(plug) ${l10n.t('Connect to a database')}`,
-                    command: ScratchpadCommandIds.connect,
+                    command: PlaygroundCommandIds.connect,
                     tooltip: l10n.t('Click to learn how to connect'),
                 }),
             );
@@ -112,7 +112,7 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
         lenses.push(
             new vscode.CodeLens(topRange, {
                 title: runAllTitle,
-                command: ScratchpadCommandIds.runAll,
+                command: PlaygroundCommandIds.runAll,
                 tooltip: l10n.t('Run the entire file ({0}+Shift+Enter)', this._mod),
             }),
         );
@@ -133,7 +133,7 @@ export class ScratchpadCodeLensProvider implements vscode.CodeLensProvider, vsco
                 lenses.push(
                     new vscode.CodeLens(blockRange, {
                         title: runTitle,
-                        command: ScratchpadCommandIds.runSelected,
+                        command: PlaygroundCommandIds.runSelected,
                         arguments: [activeBlock.startLine, activeBlock.endLine],
                         tooltip: l10n.t('Run this block ({0}+Enter)', this._mod),
                     }),

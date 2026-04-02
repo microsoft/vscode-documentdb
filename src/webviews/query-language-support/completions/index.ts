@@ -12,7 +12,7 @@
  * - `typeSuggestions.ts` — type-aware value suggestions (Monaco CompletionItems)
  * - `jsGlobals.ts` — JS globals as Monaco CompletionItems
  *
- * Platform-neutral logic (shared with scratchpad provider) lives in `src/documentdb/query-language/shared/`.
+ * Platform-neutral logic (shared with query playground provider) lives in `src/documentdb/query-language/shared/`.
  */
 
 // Re-export platform-neutral modules from shared/

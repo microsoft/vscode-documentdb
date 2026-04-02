@@ -5,17 +5,17 @@
 
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
-import { type ExecutionResult, type ScratchpadConnection } from './types';
+import { type ExecutionResult, type PlaygroundConnection } from './types';
 
 /**
- * Formats a scratchpad execution result for display in a read-only output panel.
+ * Formats a query playground execution result for display in a read-only output panel.
  *
  * Output includes:
  * - The executed code (truncated if long)
  * - Result metadata (type, timing, document count)
  * - Formatted result value (EJSON for documents, raw for scalars)
  */
-export function formatResult(result: ExecutionResult, code: string, connection: ScratchpadConnection): string {
+export function formatResult(result: ExecutionResult, code: string, connection: PlaygroundConnection): string {
     const lines: string[] = [];
 
     // Connection and timestamp
@@ -54,13 +54,13 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
 }
 
 /**
- * Formats an error from scratchpad execution for display.
+ * Formats an error from query playground execution for display.
  */
 export function formatError(
     error: unknown,
     code: string,
     durationMs: number,
-    connection: ScratchpadConnection,
+    connection: PlaygroundConnection,
 ): string {
     const lines: string[] = [];
 

@@ -7,20 +7,20 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
-import { SCRATCHPAD_FILE_EXTENSION } from '../../documentdb/scratchpad/constants';
+import { PlaygroundService } from '../../documentd./playground/PlaygroundService';
+import { PLAYGROUND_FILE_EXTENSION } from '../../documentd./playground/constants';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 
 /**
- * Creates a new DocumentDB Scratchpad file.
+ * Creates a new Query Playground file.
  *
- * When invoked from a tree node (database or collection), the scratchpad
+ * When invoked from a tree node (database or collection), the query playground
  * connection is set to that node's cluster/database and the template
  * is pre-filled accordingly.
  */
-export async function newScratchpad(_context: IActionContext, node?: DatabaseItem | CollectionItem): Promise<void> {
-    const service = ScratchpadService.getInstance();
+export async function newPlayground(_context: IActionContext, node?: DatabaseItem | CollectionItem): Promise<void> {
+    const service = PlaygroundService.getInstance();
 
     // If invoked from a tree node, set the connection
     if (node) {
@@ -34,8 +34,8 @@ export async function newScratchpad(_context: IActionContext, node?: DatabaseIte
     // Build template — customize when launched from a collection node
     const collectionName = isCollectionItem(node) ? node.collectionInfo.name : 'collectionName';
     const headerComment = node
-        ? `// DocumentDB Scratchpad — ${collectionName} @ ${node.cluster.name}/${node.databaseInfo.name}`
-        : '// DocumentDB Scratchpad — Write and run DocumentDB API queries';
+        ? `// Query Playground — ${collectionName} @ ${node.cluster.name}/${node.databaseInfo.name}`
+        : '// Query Playground — Write and run DocumentDB API queries';
 
     const template = [
         headerComment,
@@ -63,7 +63,7 @@ export async function newScratchpad(_context: IActionContext, node?: DatabaseIte
         })
         .replace(/[/\\:]/g, '-')
         .replace(/,\s*/g, '_');
-    const fileName = `scratchpad-${timestamp}${SCRATCHPAD_FILE_EXTENSION}`;
+    const fileName = `playground-${timestamp}${PLAYGROUND_FILE_EXTENSION}`;
     const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
     const filePath = path.join(folderPath, fileName);
     const uri = vscode.Uri.file(filePath).with({ scheme: 'untitled' });

@@ -4,11 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * TypeScript Server Plugin for DocumentDB Scratchpad files.
+ * TypeScript Server Plugin for Query Playground files.
  *
  * This plugin is loaded by VS Code's TypeScript language service when a file
- * with language ID `documentdb-scratchpad` is opened. It injects the DocumentDB
- * shell API type definitions into scratchpad files by prepending the `.d.ts`
+ * with language ID `documentdb-playground` is opened. It injects the DocumentDB
+ * shell API type definitions into query playground files by prepending the `.d.ts`
  * content to each file's script snapshot (Approach F: Inline Snapshot Injection).
  *
  * This enables:
@@ -24,9 +24,9 @@
  *
  * Architecture:
  *   1. At load time, reads the `.d.ts` file from disk (same `__dirname`-based
- *      resolution used by the scratchpad worker — proven cross-platform).
+ *      resolution used by the query playground worker — proven cross-platform).
  *   2. In `create()`, proxies `languageServiceHost.getScriptSnapshot()` to
- *      prepend the `.d.ts` content to scratchpad files.
+ *      prepend the `.d.ts` content to query playground files.
  *   3. Proxies position-based `LanguageService` methods to adjust character
  *      offsets by the prefix length (add on input, subtract on output).
  *
@@ -55,7 +55,7 @@ try {
 
 // --- Helpers ---
 
-function isScratchpadFile(fileName: string): boolean {
+function isPlaygroundFile(fileName: string): boolean {
     return fileName.includes('.documentdb.js');
 }
 
@@ -65,11 +65,11 @@ function adjustSpan(span: ts.TextSpan): ts.TextSpan | undefined {
 }
 
 function adjustPosition(fileName: string, position: number): number {
-    return isScratchpadFile(fileName) ? position + prefixLength : position;
+    return isPlaygroundFile(fileName) ? position + prefixLength : position;
 }
 
 function adjustDiagnostics<T extends ts.Diagnostic>(diagnostics: readonly T[], fileName: string): readonly T[] {
-    if (!isScratchpadFile(fileName)) {
+    if (!isPlaygroundFile(fileName)) {
         return diagnostics;
     }
     return diagnostics.filter((d) => {
@@ -112,7 +112,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
 
         info.languageServiceHost.getScriptSnapshot = (fileName: string): ts.IScriptSnapshot | undefined => {
             const snapshot = origGetSnapshot(fileName);
-            if (!snapshot || !isScratchpadFile(fileName)) {
+            if (!snapshot || !isPlaygroundFile(fileName)) {
                 return snapshot;
             }
             const originalText = snapshot.getText(0, snapshot.getLength());
@@ -121,7 +121,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
 
         info.languageServiceHost.getScriptVersion = (fileName: string): string => {
             const version = origGetVersion(fileName);
-            return isScratchpadFile(fileName) ? version + '-ddb-injected' : version;
+            return isPlaygroundFile(fileName) ? version + '-ddb-injected' : version;
         };
 
         // --- Create proxy LanguageService ---
@@ -144,7 +144,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
 
         proxy.getQuickInfoAtPosition = (fileName: string, position: number): ts.QuickInfo | undefined => {
             const result = ls.getQuickInfoAtPosition(fileName, adjustPosition(fileName, position));
-            if (!result || !isScratchpadFile(fileName)) {
+            if (!result || !isPlaygroundFile(fileName)) {
                 return result;
             }
             const adj = adjustSpan(result.textSpan);
@@ -163,7 +163,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
                 options,
                 formattingSettings,
             );
-            if (!result || !isScratchpadFile(fileName)) {
+            if (!result || !isPlaygroundFile(fileName)) {
                 return result;
             }
             if (result.optionalReplacementSpan) {
@@ -201,7 +201,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             options: ts.SignatureHelpItemsOptions | undefined,
         ): ts.SignatureHelpItems | undefined => {
             const result = ls.getSignatureHelpItems(fileName, adjustPosition(fileName, position), options);
-            if (!result || !isScratchpadFile(fileName)) {
+            if (!result || !isPlaygroundFile(fileName)) {
                 return result;
             }
             const adj = adjustSpan(result.applicableSpan);
@@ -213,7 +213,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             position: number,
         ): readonly ts.DefinitionInfo[] | undefined => {
             const result = ls.getDefinitionAtPosition(fileName, adjustPosition(fileName, position));
-            if (!result || !isScratchpadFile(fileName)) {
+            if (!result || !isPlaygroundFile(fileName)) {
                 return result;
             }
             return result.filter((d) => {
@@ -234,7 +234,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             position: number,
         ): ts.DefinitionInfoAndBoundSpan | undefined => {
             const result = ls.getDefinitionAndBoundSpan(fileName, adjustPosition(fileName, position));
-            if (!result || !isScratchpadFile(fileName)) {
+            if (!result || !isPlaygroundFile(fileName)) {
                 return result;
             }
             const adj = adjustSpan(result.textSpan);
@@ -251,7 +251,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
                 return result;
             }
             return result.map((dh) => {
-                if (!isScratchpadFile(dh.fileName)) {
+                if (!isPlaygroundFile(dh.fileName)) {
                     return dh;
                 }
                 return {
@@ -274,7 +274,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
                 return result;
             }
             return result.filter((ref) => {
-                if (!isScratchpadFile(ref.fileName)) {
+                if (!isPlaygroundFile(ref.fileName)) {
                     return true;
                 }
                 const adj = adjustSpan(ref.textSpan);
@@ -294,7 +294,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             return result.map((group) => ({
                 ...group,
                 references: group.references.filter((ref) => {
-                    if (!isScratchpadFile(ref.fileName)) {
+                    if (!isPlaygroundFile(ref.fileName)) {
                         return true;
                     }
                     const adj = adjustSpan(ref.textSpan);
@@ -309,7 +309,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
 
         proxy.getRenameInfo = (fileName: string, position: number, preferences?: ts.UserPreferences): ts.RenameInfo => {
             const result = ls.getRenameInfo(fileName, adjustPosition(fileName, position), preferences);
-            if (!isScratchpadFile(fileName) || !result.canRename) {
+            if (!isPlaygroundFile(fileName) || !result.canRename) {
                 return result;
             }
             const adj = adjustSpan(result.triggerSpan);
@@ -335,11 +335,11 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             span: ts.TextSpan,
             format?: ts.SemanticClassificationFormat,
         ): ts.Classifications => {
-            const adjustedSpan = isScratchpadFile(fileName)
+            const adjustedSpan = isPlaygroundFile(fileName)
                 ? { start: span.start + prefixLength, length: span.length }
                 : span;
             const result = ls.getEncodedSemanticClassifications(fileName, adjustedSpan, format);
-            if (!isScratchpadFile(fileName)) {
+            if (!isPlaygroundFile(fileName)) {
                 return result;
             }
             const adjusted: number[] = [];
@@ -353,11 +353,11 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
         };
 
         proxy.getEncodedSyntacticClassifications = (fileName: string, span: ts.TextSpan): ts.Classifications => {
-            const adjustedSpan = isScratchpadFile(fileName)
+            const adjustedSpan = isPlaygroundFile(fileName)
                 ? { start: span.start + prefixLength, length: span.length }
                 : span;
             const result = ls.getEncodedSyntacticClassifications(fileName, adjustedSpan);
-            if (!isScratchpadFile(fileName)) {
+            if (!isPlaygroundFile(fileName)) {
                 return result;
             }
             const adjusted: number[] = [];
@@ -372,7 +372,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
 
         proxy.getOutliningSpans = (fileName: string): ts.OutliningSpan[] => {
             const result = ls.getOutliningSpans(fileName);
-            if (!isScratchpadFile(fileName)) {
+            if (!isPlaygroundFile(fileName)) {
                 return result;
             }
             return result.filter((span) => {
@@ -389,7 +389,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
 
         proxy.getNavigationTree = (fileName: string): ts.NavigationTree => {
             const result = ls.getNavigationTree(fileName);
-            if (!isScratchpadFile(fileName)) {
+            if (!isPlaygroundFile(fileName)) {
                 return result;
             }
             function adjustTree(node: ts.NavigationTree): ts.NavigationTree {
@@ -411,7 +411,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             end: number,
             options: ts.FormatCodeOptions | ts.FormatCodeSettings,
         ): ts.TextChange[] => {
-            const isSP = isScratchpadFile(fileName);
+            const isSP = isPlaygroundFile(fileName);
             const result = ls.getFormattingEditsForRange(
                 fileName,
                 isSP ? start + prefixLength : start,
@@ -443,7 +443,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
                 key,
                 options,
             );
-            if (!isScratchpadFile(fileName)) {
+            if (!isPlaygroundFile(fileName)) {
                 return result;
             }
             return result.filter((edit) => {
@@ -458,7 +458,7 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
 
         proxy.getBraceMatchingAtPosition = (fileName: string, position: number): ts.TextSpan[] => {
             const result = ls.getBraceMatchingAtPosition(fileName, adjustPosition(fileName, position));
-            if (!isScratchpadFile(fileName)) {
+            if (!isPlaygroundFile(fileName)) {
                 return result;
             }
             return result.map(adjustSpan).filter((s): s is ts.TextSpan => s !== undefined);

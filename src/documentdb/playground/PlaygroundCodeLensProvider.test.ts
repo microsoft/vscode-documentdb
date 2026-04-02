@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { ScratchpadCodeLensProvider } from './ScratchpadCodeLensProvider';
-import { ScratchpadService } from './ScratchpadService';
-import { ScratchpadCommandIds } from './constants';
+import { PlaygroundCodeLensProvider } from './PlaygroundCodeLensProvider';
+import { PlaygroundService } from './PlaygroundService';
+import { PlaygroundCommandIds } from './constants';
 
 /**
  * Helper to create a mock TextDocument from a multiline string.
@@ -24,13 +24,13 @@ function mockDocument(text: string): vscode.TextDocument {
     } as unknown as vscode.TextDocument;
 }
 
-describe('ScratchpadCodeLensProvider', () => {
-    let provider: ScratchpadCodeLensProvider;
-    let service: ScratchpadService;
+describe('PlaygroundCodeLensProvider', () => {
+    let provider: PlaygroundCodeLensProvider;
+    let service: PlaygroundService;
 
     beforeEach(() => {
-        service = ScratchpadService.getInstance();
-        provider = new ScratchpadCodeLensProvider();
+        service = PlaygroundService.getInstance();
+        provider = new PlaygroundCodeLensProvider();
     });
 
     afterEach(() => {
@@ -44,7 +44,7 @@ describe('ScratchpadCodeLensProvider', () => {
 
         // First lens should be connection status
         const connectionLens = lenses[0];
-        expect(connectionLens.command?.command).toBe(ScratchpadCommandIds.connect);
+        expect(connectionLens.command?.command).toBe(PlaygroundCommandIds.connect);
         expect(connectionLens.command?.title).toContain('Connect to a database');
         expect(connectionLens.range.start.line).toBe(0);
     });
@@ -68,7 +68,7 @@ describe('ScratchpadCodeLensProvider', () => {
         const lenses = provider.provideCodeLenses(doc);
 
         const runAllLens = lenses[1];
-        expect(runAllLens.command?.command).toBe(ScratchpadCommandIds.runAll);
+        expect(runAllLens.command?.command).toBe(PlaygroundCommandIds.runAll);
         expect(runAllLens.command?.title).toContain('Run All');
         expect(runAllLens.range.start.line).toBe(0);
     });

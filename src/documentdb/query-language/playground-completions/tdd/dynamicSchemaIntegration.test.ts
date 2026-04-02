@@ -7,7 +7,7 @@
  * TDD Behavior Tests — Dynamic Schema Integration (WI-3)
  *
  * These tests define the expected behavior CONTRACT for dynamic data
- * integration in the scratchpad completion system:
+ * integration in the query playground completion system:
  * - Collection name discovery via ClustersClient (Phase 3.1)
  * - Schema-driven field completions from SchemaStore (Phase 3.2)
  * - "Scan Schema…" action completion fallback (Phase 3.3)

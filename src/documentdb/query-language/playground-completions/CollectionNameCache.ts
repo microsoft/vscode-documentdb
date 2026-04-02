@@ -6,15 +6,15 @@
 import type * as vscode from 'vscode';
 import { ClustersClient } from '../../ClustersClient';
 import { SchemaStore } from '../../SchemaStore';
-import { ScratchpadService } from '../../scratchpad/ScratchpadService';
+import { PlaygroundService } from '../../playground/PlaygroundService';
 
 /**
- * Provides collection names for scratchpad completions.
+ * Provides collection names for query playground completions.
  *
  * Uses a two-tier strategy with NO local (L1) cache:
  *
  * 1. **Synchronous read from ClustersClient** — `getCachedCollections()` returns
- *    data already fetched by the tree view or a prior scratchpad session. This is
+ *    data already fetched by the tree view or a prior query playground session. This is
  *    the hot path and never triggers a network call.
  *
  * 2. **One-time async bootstrap** — if ClustersClient has no cached data (user
@@ -40,8 +40,8 @@ export class CollectionNameCache implements vscode.Disposable {
         // On connection change, trigger a background fetch so that
         // ClustersClient's cache is warm for the new database.
         this._disposables.push(
-            ScratchpadService.getInstance().onDidChangeState(() => {
-                const connection = ScratchpadService.getInstance().getConnection();
+            PlaygroundService.getInstance().onDidChangeState(() => {
+                const connection = PlaygroundService.getInstance().getConnection();
                 if (connection) {
                     this.ensureFetched(connection.clusterId, connection.databaseName);
                 }
@@ -139,7 +139,7 @@ export class CollectionNameCache implements vscode.Disposable {
     /**
      * Merge ClustersClient names with names from SchemaStore.
      * SchemaStore may have collections not returned by listCollections
-     * (e.g., freshly created in the scratchpad session).
+     * (e.g., freshly created in the query playground session).
      */
     private mergeWithSchemaStore(clientNames: string[], clusterId: string, databaseName: string): string[] {
         const schemaNames = this.getSchemaStoreCollectionNames(clusterId, databaseName);

@@ -6,27 +6,27 @@
 /**
  * Language ID registered in package.json for `.documentdb.js` files.
  */
-export const SCRATCHPAD_LANGUAGE_ID = 'documentdb-scratchpad';
+export const PLAYGROUND_LANGUAGE_ID = 'documentdb-playground';
 
 /**
- * Primary file extension for scratchpad files.
+ * Primary file extension for query playground files.
  * Uses `.js` suffix so the TypeScript language service recognizes them as JavaScript
  * and provides IntelliSense (completions, hover, signature help) automatically.
  */
-export const SCRATCHPAD_FILE_EXTENSION = '.documentdb.js';
+export const PLAYGROUND_FILE_EXTENSION = '.documentdb.js';
 
 /**
- * Command IDs for scratchpad features.
+ * Command IDs for query playground features.
  */
-export const ScratchpadCommandIds = {
-    /** Create a new scratchpad file and optionally connect */
-    new: 'vscode-documentdb.command.scratchpad.new',
-    /** Set the active scratchpad connection from a tree node */
-    connect: 'vscode-documentdb.command.scratchpad.connect',
-    /** Run the entire scratchpad file */
-    runAll: 'vscode-documentdb.command.scratchpad.runAll',
+export const PlaygroundCommandIds = {
+    /** Create a new query playground file and optionally connect */
+    new: 'vscode-documentdb.command.playground.new',
+    /** Set the active query playground connection from a tree node */
+    connect: 'vscode-documentdb.command.playground.connect',
+    /** Run the entire query playground file */
+    runAll: 'vscode-documentdb.command.playground.runAll',
     /** Run the selection or the statement at the cursor */
-    runSelected: 'vscode-documentdb.command.scratchpad.runSelected',
+    runSelected: 'vscode-documentdb.command.playground.runSelected',
     /** Sample documents from a collection to discover field names */
-    scanCollectionSchema: 'vscode-documentdb.command.scratchpad.scanCollectionSchema',
+    scanCollectionSchema: 'vscode-documentdb.command.playground.scanCollectionSchema',
 } as const;

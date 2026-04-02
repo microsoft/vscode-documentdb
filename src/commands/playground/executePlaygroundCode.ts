@@ -13,15 +13,15 @@ import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { SchemaStore } from '../../documentdb/SchemaStore';
-import { ScratchpadEvaluator } from '../../documentdb/scratchpad/ScratchpadEvaluator';
-import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
-import { formatError, formatResult } from '../../documentdb/scratchpad/resultFormatter';
-import { type ExecutionResult, type ScratchpadConnection } from '../../documentdb/scratchpad/types';
+import { PlaygroundEvaluator } from '../../documentd./playground/PlaygroundEvaluator';
+import { PlaygroundService } from '../../documentd./playground/PlaygroundService';
+import { formatError, formatResult } from '../../documentd./playground/resultFormatter';
+import { type ExecutionResult, type PlaygroundConnection } from '../../documentd./playground/types';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 
 /** Shared evaluator instance — lazily created, reused across runs. */
-let evaluator: ScratchpadEvaluator | undefined;
+let evaluator: PlaygroundEvaluator | undefined;
 
 /**
  * Dispose the shared evaluator instance (kills the worker thread).
@@ -34,7 +34,7 @@ export function disposeEvaluator(): void {
 
 /**
  * Gracefully shut down the evaluator's worker thread (closes MongoClient).
- * Called when the scratchpad connection is cleared or when all scratchpad editors close.
+ * Called when the query playground connection is cleared or when all query playground editors close.
  * The worker will be re-spawned lazily on the next Run.
  */
 export function shutdownEvaluator(): void {
@@ -42,13 +42,13 @@ export function shutdownEvaluator(): void {
 }
 
 /**
- * Executes scratchpad code and displays the result in a read-only side panel.
+ * Executes query playground code and displays the result in a read-only side panel.
  * Used by both `runAll` and `runSelected` commands.
  */
-export type ScratchpadRunMode = 'runAll' | 'runSelected';
+export type PlaygroundRunMode = 'runAll' | 'runSelected';
 
-export async function executeScratchpadCode(code: string, runMode: ScratchpadRunMode): Promise<void> {
-    const service = ScratchpadService.getInstance();
+export async function executePlaygroundCode(code: string, runMode: PlaygroundRunMode): Promise<void> {
+    const service = PlaygroundService.getInstance();
     const connection = service.getConnection();
     if (!connection) {
         return;
@@ -60,7 +60,7 @@ export async function executeScratchpadCode(code: string, runMode: ScratchpadRun
     }
 
     if (!evaluator) {
-        evaluator = new ScratchpadEvaluator();
+        evaluator = new PlaygroundEvaluator();
     }
 
     service.setExecuting(true);
@@ -69,8 +69,8 @@ export async function executeScratchpadCode(code: string, runMode: ScratchpadRun
     //   - duration (measured from callback start to end)
     //   - result: 'Succeeded' | 'Failed' | 'Canceled'
     //   - error / errorMessage (from thrown errors)
-    // We add custom properties for scratchpad-specific analytics.
-    await callWithTelemetryAndErrorHandling('scratchpad.execute', async (context) => {
+    // We add custom properties for playground-specific analytics.
+    await callWithTelemetryAndErrorHandling('playground.execute', async (context) => {
         context.errorHandling.suppressDisplay = true; // we show our own error UI
         context.errorHandling.rethrow = false;
 
@@ -89,7 +89,7 @@ export async function executeScratchpadCode(code: string, runMode: ScratchpadRun
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: l10n.t('DocumentDB Scratchpad'),
+                title: l10n.t('Query Playground'),
                 cancellable: true,
             },
             async (progress, token) => {
@@ -124,7 +124,7 @@ export async function executeScratchpadCode(code: string, runMode: ScratchpadRun
                     );
 
                     await openReadOnlyContent(
-                        { label: resultLabel, fullId: `scratchpad-results-${Date.now()}` },
+                        { label: resultLabel, fullId: `playground-results-${Date.now()}` },
                         formattedOutput,
                         '.jsonc',
                         { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
@@ -140,7 +140,7 @@ export async function executeScratchpadCode(code: string, runMode: ScratchpadRun
 
                     if (cancelled) {
                         // Throw UserCancelledError so framework marks result as 'Canceled'
-                        throw new UserCancelledError('scratchpad.execute');
+                        throw new UserCancelledError('playground.execute');
                     }
 
                     // Show our own error UI before re-throwing
@@ -155,13 +155,13 @@ export async function executeScratchpadCode(code: string, runMode: ScratchpadRun
                     );
 
                     await openReadOnlyContent(
-                        { label: errorLabel, fullId: `scratchpad-error-${Date.now()}` },
+                        { label: errorLabel, fullId: `playground-error-${Date.now()}` },
                         formattedOutput,
                         '.jsonc',
                         { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
                     );
 
-                    void vscode.window.showErrorMessage(l10n.t('Scratchpad execution failed: {0}', errorMessage));
+                    void vscode.window.showErrorMessage(l10n.t('Query playground execution failed: {0}', errorMessage));
 
                     // Re-throw so framework automatically captures result: 'Failed',
                     // error, and errorMessage in telemetry
@@ -177,11 +177,11 @@ export async function executeScratchpadCode(code: string, runMode: ScratchpadRun
 // ─── Domain telemetry ────────────────────────────────────────────────────────
 
 /**
- * Collects domain info from the scratchpad connection's cached credentials.
+ * Collects domain info from the query playground connection's cached credentials.
  * Reuses the same hashing logic as the connection metadata telemetry.
  */
 function collectDomainTelemetry(
-    connection: ScratchpadConnection,
+    connection: PlaygroundConnection,
     properties: Record<string, string | undefined>,
 ): void {
     try {
@@ -208,7 +208,7 @@ const SCHEMA_DOC_CAP = 100;
  *
  * Caps at {@link SCHEMA_DOC_CAP} documents (randomly sampled if more).
  */
-function feedResultToSchemaStore(result: ExecutionResult, connection: ScratchpadConnection): void {
+function feedResultToSchemaStore(result: ExecutionResult, connection: PlaygroundConnection): void {
     // Only feed known document-producing result types
     if (result.type !== 'Cursor' && result.type !== 'Document') {
         return;

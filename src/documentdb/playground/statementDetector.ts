@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 
 /**
- * A detected code block in a scratchpad document.
+ * A detected code block in a query playground document.
  * Blocks are separated by blank lines (whitespace-only lines).
  * Comment-only lines do NOT act as block separators.
  */
@@ -18,7 +18,7 @@ export interface CodeBlock {
 }
 
 /**
- * Detects code blocks in a scratchpad document using blank-line separation.
+ * Detects code blocks in a query playground document using blank-line separation.
  *
  * Rules:
  * - Lines that are completely empty or whitespace-only are block separators.

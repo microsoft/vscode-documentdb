@@ -7,7 +7,7 @@
  * Shared completion logic — platform-neutral modules.
  *
  * This folder contains completion logic that has NO dependency on Monaco or
- * VS Code APIs. Both the webview (Monaco) and scratchpad (VS Code) completion
+ * VS Code APIs. Both the webview (Monaco) and query playground (VS Code) completion
  * providers import from here.
  *
  * Modules:

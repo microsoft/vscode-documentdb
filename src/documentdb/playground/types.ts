@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Represents the active scratchpad connection.
- * All scratchpad files share a single global connection (Decision D1: Option B).
+ * Represents the active query playground connection.
+ * All query playground files share a single global connection (Decision D1: Option B).
  */
-export interface ScratchpadConnection {
+export interface PlaygroundConnection {
     /** Stable cluster ID for ClustersClient/CredentialCache lookups. */
     readonly clusterId: string;
     /** Human-readable cluster name for display in CodeLens/StatusBar. */
@@ -17,7 +17,7 @@ export interface ScratchpadConnection {
 }
 
 /**
- * Result of executing scratchpad code via the `@mongosh` eval pipeline.
+ * Result of executing query playground code via the `@mongosh` eval pipeline.
  */
 export interface ExecutionResult {
     /** The mongosh result type string (e.g. 'Cursor', 'Document', 'string'). */

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Scratchpad cursor context detection (Stage 1: JS-level).
+ * Query playground cursor context detection (Stage 1: JS-level).
  *
  * Determines whether the cursor is at the top level, after `db.`, after
  * `db.<collection>.`, in a cursor chain, inside a method argument, or
@@ -16,9 +16,9 @@
  */
 
 /**
- * The JS-level context of the cursor in a scratchpad file.
+ * The JS-level context of the cursor in a query playground file.
  */
-export type ScratchpadContext =
+export type PlaygroundContext =
     | { kind: 'top-level' }
     | { kind: 'db-dot'; prefix: string }
     | { kind: 'collection-method'; collectionName: string; prefix: string }
@@ -59,13 +59,13 @@ const DATABASE_METHODS = new Set([
 ]);
 
 /**
- * Detects the JS-level context of the cursor in a scratchpad file.
+ * Detects the JS-level context of the cursor in a query playground file.
  *
  * @param text The full document text
  * @param offset The cursor offset (0-based)
  * @returns The detected context
  */
-export function detectScratchpadContext(text: string, offset: number): ScratchpadContext {
+export function detectPlaygroundContext(text: string, offset: number): PlaygroundContext {
     // Check if we're inside a string literal
     const stringContext = detectStringContext(text, offset);
     if (stringContext) {
@@ -82,7 +82,7 @@ export function detectScratchpadContext(text: string, offset: number): Scratchpa
     // Detect: inside a method call argument — e.g., db.users.find({ | })
     // NOTE: This branch is currently unreachable. scanMemberChain() declares
     // insideArgOf but never assigns it. The working path uses
-    // detectMethodArgContext() directly in ScratchpadCompletionItemProvider.
+    // detectMethodArgContext() directly in PlaygroundCompletionItemProvider.
     // Cleanup tracked in docs/plan/future-pre-shell.md item 4.
     if (chain.insideArgOf) {
         const argStart = chain.insideArgOf.argStart;
@@ -335,7 +335,7 @@ export function detectMethodArgContext(text: string, offset: number): MethodCall
 // Internal: String literal detection
 // ---------------------------------------------------------------------------
 
-function detectStringContext(text: string, offset: number): ScratchpadContext | null {
+function detectStringContext(text: string, offset: number): PlaygroundContext | null {
     // Simple heuristic: count unescaped quotes before cursor
     let inSingle = false;
     let inDouble = false;

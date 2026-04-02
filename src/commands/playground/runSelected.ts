@@ -6,10 +6,10 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
-import { SCRATCHPAD_LANGUAGE_ID } from '../../documentdb/scratchpad/constants';
-import { detectBlocks, detectCurrentBlock } from '../../documentdb/scratchpad/statementDetector';
-import { executeScratchpadCode } from './executeScratchpadCode';
+import { PlaygroundService } from '../../documentd./playground/PlaygroundService';
+import { PLAYGROUND_LANGUAGE_ID } from '../../documentd./playground/constants';
+import { detectBlocks, detectCurrentBlock } from '../../documentd./playground/statementDetector';
+import { executePlaygroundCode } from './executePlaygroundCode';
 
 /**
  * Runs the selected text, the block specified by CodeLens arguments,
@@ -20,11 +20,11 @@ import { executeScratchpadCode } from './executeScratchpadCode';
  */
 export async function runSelected(_context: IActionContext, startLine?: number, endLine?: number): Promise<void> {
     const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.languageId !== SCRATCHPAD_LANGUAGE_ID) {
+    if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
         return;
     }
 
-    const service = ScratchpadService.getInstance();
+    const service = PlaygroundService.getInstance();
     if (!service.isConnected()) {
         void vscode.window.showWarningMessage(
             l10n.t('Connect to a database before running. Right-click a database in the DocumentDB panel.'),
@@ -68,5 +68,5 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
         return;
     }
 
-    await executeScratchpadCode(codeToRun, 'runSelected');
+    await executePlaygroundCode(codeToRun, 'runSelected');
 }

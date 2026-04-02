@@ -3,18 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ScratchpadService } from './ScratchpadService';
-import { type ScratchpadConnection } from './types';
+import { PlaygroundService } from './PlaygroundService';
+import { type PlaygroundConnection } from './types';
 
 // Access the vscode mock (auto-mock from __mocks__/vscode.js)
 import * as vscode from 'vscode';
 
-describe('ScratchpadService', () => {
-    let service: ScratchpadService;
+describe('PlaygroundService', () => {
+    let service: PlaygroundService;
 
     beforeEach(() => {
         // Reset singleton between tests
-        service = ScratchpadService.getInstance();
+        service = PlaygroundService.getInstance();
     });
 
     afterEach(() => {
@@ -23,20 +23,20 @@ describe('ScratchpadService', () => {
 
     describe('singleton', () => {
         it('returns the same instance on repeated calls', () => {
-            const second = ScratchpadService.getInstance();
+            const second = PlaygroundService.getInstance();
             expect(second).toBe(service);
         });
 
         it('creates a new instance after dispose', () => {
             service.dispose();
-            const fresh = ScratchpadService.getInstance();
+            const fresh = PlaygroundService.getInstance();
             expect(fresh).not.toBe(service);
             service = fresh; // reassign for afterEach cleanup
         });
     });
 
     describe('connection management', () => {
-        const connection: ScratchpadConnection = {
+        const connection: PlaygroundConnection = {
             clusterId: 'cluster-123',
             clusterDisplayName: 'MyCluster',
             databaseName: 'orders',
