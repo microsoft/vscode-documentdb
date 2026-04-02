@@ -29,6 +29,7 @@ import { renameConnection } from '../commands/connections-view/renameConnection/
 import { renameFolder } from '../commands/connections-view/renameFolder/renameFolder';
 import { copyCollection } from '../commands/copyCollection/copyCollection';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
+import { copyCollectionReference, copyDatabaseReference } from '../commands/copyReference/copyReference';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
@@ -385,6 +386,15 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.dropDatabase',
                     withTreeNodeCommandCorrelation(deleteAzureDatabase),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.copyDatabaseReference',
+                    withTreeNodeCommandCorrelation(copyDatabaseReference),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.copyCollectionReference',
+                    withTreeNodeCommandCorrelation(copyCollectionReference),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
