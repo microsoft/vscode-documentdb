@@ -1,9 +1,0 @@
-{
-  "scopeName": "source.documentdb-scratchpad",
-  "injectionSelector": "",
-  "patterns": [
-    {
-      "include": "source.js"
-    }
-  ]
-}

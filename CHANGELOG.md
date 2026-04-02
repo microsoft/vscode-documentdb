@@ -217,4 +217,4 @@ Version 0.7.1 was reserved for an internal validation build and was not released
 - UI for executing find queries, with table, tree, and JSON views.
 - UI for creating, viewing, and editing documents in a separate tab.
 - Import and Export capability: JSON format
-- MongoDB Scrapbook support for executing queries and managing databases.
+- Query playground support for executing queries and managing databases.

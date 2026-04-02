@@ -298,7 +298,7 @@ export class ClustersClient {
 
     /**
      * Returns the underlying MongoClient instance.
-     * Used by the scratchpad evaluator to create a `@mongosh` ServiceProvider
+     * Used by the query playground evaluator to create a `@mongosh` ServiceProvider
      * that reuses the existing, authenticated connection.
      */
     public getMongoClient(): MongoClient {

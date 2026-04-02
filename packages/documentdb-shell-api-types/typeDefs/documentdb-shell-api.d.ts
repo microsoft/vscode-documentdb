@@ -6,7 +6,7 @@
 // =============================================================================
 // DocumentDB Shell API Type Definitions
 //
-// This file declares the shell API surface available in DocumentDB scratchpad
+// This file declares the shell API surface available in DocumentDB query playground
 // (.documentdb.js) files. It is loaded by the TypeScript language service to
 // provide autocompletion, hover docs, and signature help.
 //
@@ -19,7 +19,7 @@
 // IMPORTANT:
 //   - All JSDoc content is original writing.
 //   - Only methods mapping to supported DocumentDB server commands are included.
-//   - This file is the single source of truth for the scratchpad shell API.
+//   - This file is the single source of truth for the query playground shell API.
 //   - When full MongoDB API support is added, a separate .d.ts can be swapped in.
 // =============================================================================
 

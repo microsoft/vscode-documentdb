@@ -22,7 +22,7 @@ as supported in the official Azure DocumentDB compatibility documentation.
 
 This means every method in `documentdb-shell-api.d.ts` maps to a server
 command that DocumentDB supports. Users can safely use all 67 server-backed
-methods and 10 shell-only utility methods in their scratchpad files.
+methods and 10 shell-only utility methods in their query playground files.
 
 ### ℹ️ Supported commands not referenced by the shell API
 

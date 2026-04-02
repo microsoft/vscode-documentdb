@@ -182,7 +182,7 @@ function generateReport(
             `command that DocumentDB supports. Users can safely use all ${SHELL_API_METHODS.filter((m) => !m.shellOnly).length} server-backed`,
         );
         lines.push(
-            `methods and ${SHELL_API_METHODS.filter((m) => m.shellOnly).length} shell-only utility methods in their scratchpad files.`,
+            `methods and ${SHELL_API_METHODS.filter((m) => m.shellOnly).length} shell-only utility methods in their query playground files.`,
         );
     } else {
         lines.push('### ⚠️ ISSUES FOUND');

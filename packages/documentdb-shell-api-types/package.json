@@ -1,7 +1,7 @@
 {
   "name": "@vscode-documentdb/documentdb-shell-api-types",
   "version": "1.0.0",
-  "description": "Shell API type definitions and method-to-command mapping for DocumentDB scratchpad IntelliSense",
+  "description": "Shell API type definitions and method-to-command mapping for DocumentDB query playground IntelliSense",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

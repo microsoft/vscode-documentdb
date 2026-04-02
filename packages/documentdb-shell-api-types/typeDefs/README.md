@@ -3,8 +3,8 @@
 ## About this file
 
 `documentdb-shell-api.d.ts` provides TypeScript type definitions for the
-DocumentDB scratchpad IntelliSense experience. It declares the shell API surface
-available in `.documentdb.js` scratchpad files, enabling autocompletion, hover
+DocumentDB query playground IntelliSense experience. It declares the shell API surface
+available in `.documentdb.js` query playground files, enabling autocompletion, hover
 documentation, and signature help via VS Code's built-in TypeScript language
 service.
 
@@ -20,7 +20,7 @@ protocol for compatibility. As stated in the
 > compatible with Azure DocumentDB."
 
 The methods included in this file were **manually selected** to provide a
-productive scratchpad editing experience. The selection criteria:
+productive query playground editing experience. The selection criteria:
 
 1. **Server command support**: Each method maps to a server-side command listed
    as supported (✅) in the Azure DocumentDB compatibility matrix. For example,
@@ -28,7 +28,7 @@ productive scratchpad editing experience. The selection criteria:
    to `insert`, `collection.updateOne()` maps to `update`, etc.
 
 2. **Common usage patterns**: Methods were chosen based on the most common
-   operations users perform in a database scratchpad environment — querying,
+   operations users perform in the query playground environment — querying,
    inserting, updating, deleting, indexing, and aggregation.
 
 3. **Deliberately excluded**: Methods that map to unsupported or not-applicable

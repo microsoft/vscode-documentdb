@@ -8,7 +8,7 @@
  *
  * These functions compute `sortText` prefixes used to order completion items
  * by relevance. They are shared by both the Monaco (webview) and VS Code
- * (scratchpad) completion providers.
+ * (query playground) completion providers.
  */
 
 import { type OperatorEntry } from '@vscode-documentdb/documentdb-constants';
