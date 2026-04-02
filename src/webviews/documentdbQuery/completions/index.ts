@@ -4,30 +4,28 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Completion items for the `documentdb-query` language.
+ * Completion items for the `documentdb-query` language (Monaco-specific).
  *
- * This folder contains context-sensitive completion logic:
+ * This folder contains Monaco-specific completion logic:
  * - `createCompletionItems.ts` — main entry point, context branching
- * - `mapCompletionItems.ts` — operator/field → CompletionItem mapping
- * - `typeSuggestions.ts` — type-aware value suggestions (bool → true/false, etc.)
- * - `jsGlobals.ts` — JS globals available in the shell-bson-parser sandbox (Date, Math, etc.)
- * - `snippetUtils.ts` — snippet text manipulation (brace stripping, $ escaping)
+ * - `mapCompletionItems.ts` — operator/field → Monaco CompletionItem mapping
+ * - `typeSuggestions.ts` — type-aware value suggestions (Monaco CompletionItems)
+ * - `jsGlobals.ts` — JS globals as Monaco CompletionItems
+ *
+ * Platform-neutral logic (shared with scratchpad provider) lives in `../shared/`.
  */
 
-export { INFO_INDICATOR, LABEL_PLACEHOLDER } from './completionKnowledge';
+// Re-export platform-neutral modules from shared/
+export { INFO_INDICATOR, KEY_POSITION_OPERATORS, LABEL_PLACEHOLDER } from '../shared/completionKnowledge';
+export { escapeSnippetDollars, stripOuterBraces } from '../shared/snippetUtils';
+export { getCategoryLabel, getOperatorSortPrefix } from '../shared/sortPrefixes';
+
+// Monaco-specific exports
 export {
-    KEY_POSITION_OPERATORS,
     createCompletionItems,
     getMetaTagsForEditorType,
     type CreateCompletionItemsParams,
 } from './createCompletionItems';
 export { createJsGlobalCompletionItems } from './jsGlobals';
-export {
-    getCategoryLabel,
-    getCompletionKindForMeta,
-    getOperatorSortPrefix,
-    mapFieldToCompletionItem,
-    mapOperatorToCompletionItem,
-} from './mapCompletionItems';
-export { escapeSnippetDollars, stripOuterBraces } from './snippetUtils';
+export { getCompletionKindForMeta, mapFieldToCompletionItem, mapOperatorToCompletionItem } from './mapCompletionItems';
 export { createTypeSuggestions } from './typeSuggestions';

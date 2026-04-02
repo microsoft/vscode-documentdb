@@ -27,12 +27,12 @@
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { getCompletionContext } from './completionStore';
-import { detectCursorContext } from './cursorContext';
 import { createCompletionItems } from './documentdbQueryCompletionProvider';
 import { getHoverContent } from './documentdbQueryHoverProvider';
-import { extractQuotedKey } from './extractQuotedKey';
 import { isCursorInsideString } from './isCursorInsideString';
 import { LANGUAGE_ID, parseEditorUri } from './languageConfig';
+import { detectCursorContext } from './shared/cursorContext';
+import { extractQuotedKey } from './shared/extractQuotedKey';
 
 /** Coalesces concurrent registrations into a single promise. */
 let registrationPromise: Promise<void> | undefined;

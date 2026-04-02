@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { ScratchpadService } from '../../documentdb/scratchpad/ScratchpadService';
 import { SCRATCHPAD_FILE_EXTENSION } from '../../documentdb/scratchpad/constants';
@@ -45,7 +47,9 @@ export async function newScratchpad(_context: IActionContext, node?: DatabaseIte
         '',
     ].join('\n');
 
-    // Create untitled file with a unique human-readable name
+    // Create untitled file with a workspace-relative path so VS Code's hot exit
+    // can persist the content across restarts. Without a real-looking path,
+    // untitled documents lose their content on relaunch.
     const now = new Date();
     const timestamp = now
         .toLocaleString(undefined, {
@@ -59,12 +63,15 @@ export async function newScratchpad(_context: IActionContext, node?: DatabaseIte
         })
         .replace(/[/\\:]/g, '-')
         .replace(/,\s*/g, '_');
-    const uri = vscode.Uri.from({ scheme: 'untitled', path: `scratchpad-${timestamp}${SCRATCHPAD_FILE_EXTENSION}` });
+    const fileName = `scratchpad-${timestamp}${SCRATCHPAD_FILE_EXTENSION}`;
+    const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
+    const filePath = path.join(folderPath, fileName);
+    const uri = vscode.Uri.file(filePath).with({ scheme: 'untitled' });
     const edit = new vscode.WorkspaceEdit();
     edit.insert(uri, new vscode.Position(0, 0), template);
     await vscode.workspace.applyEdit(edit);
     const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc);
+    await vscode.window.showTextDocument(doc, { preview: true });
 }
 
 function isCollectionItem(node: DatabaseItem | CollectionItem | undefined): node is CollectionItem {

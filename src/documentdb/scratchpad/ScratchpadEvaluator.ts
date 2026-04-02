@@ -518,8 +518,8 @@ export class ScratchpadEvaluator implements vscode.Disposable {
         }
 
         const helpText = [
-            'DocumentDB Scratchpad — Quick Reference',
-            '════════════════════════════════════════',
+            'DocumentDB Scratchpad - Quick Reference',
+            '═══════════════════════════════════════',
             '',
             'Collection Access:',
             '  db.getCollection("name")                       Explicit (recommended)',

@@ -4,19 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Language ID registered in package.json for `.documentdb` and `.documentdb.js` files.
+ * Language ID registered in package.json for `.documentdb.js` files.
  */
 export const SCRATCHPAD_LANGUAGE_ID = 'documentdb-scratchpad';
 
 /**
  * Primary file extension for scratchpad files.
+ * Uses `.js` suffix so the TypeScript language service recognizes them as JavaScript
+ * and provides IntelliSense (completions, hover, signature help) automatically.
  */
-export const SCRATCHPAD_FILE_EXTENSION = '.documentdb';
-
-/**
- * Secondary file extension — recognized as JavaScript by tooling.
- */
-export const SCRATCHPAD_FILE_EXTENSION_JS = '.documentdb.js';
+export const SCRATCHPAD_FILE_EXTENSION = '.documentdb.js';
 
 /**
  * Command IDs for scratchpad features.
@@ -30,4 +27,6 @@ export const ScratchpadCommandIds = {
     runAll: 'vscode-documentdb.command.scratchpad.runAll',
     /** Run the selection or the statement at the cursor */
     runSelected: 'vscode-documentdb.command.scratchpad.runSelected',
+    /** Sample documents from a collection to discover field names */
+    scanCollectionSchema: 'vscode-documentdb.command.scratchpad.scanCollectionSchema',
 } as const;

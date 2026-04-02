@@ -27,9 +27,9 @@
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { clearAllCompletionContexts, setCompletionContext } from '../completionStore';
-import { type CursorContext } from '../cursorContext';
 import { createCompletionItems } from '../documentdbQueryCompletionProvider';
 import { EditorType } from '../languageConfig';
+import { type CursorContext } from '../shared/cursorContext';
 
 // ---------- Test infrastructure ----------
 
