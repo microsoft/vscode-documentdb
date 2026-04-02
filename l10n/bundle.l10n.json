@@ -986,6 +986,7 @@
   "The name must be between {0} and {1} characters.": "The name must be between {0} and {1} characters.",
   "The output window may contain additional information.": "The output window may contain additional information.",
   "The process exited prematurely.": "The process exited prematurely.",
+  "The reference has been copied to the clipboard": "The reference has been copied to the clipboard",
   "The selected authentication method is not supported.": "The selected authentication method is not supported.",
   "The selected connection has been removed.": "The selected connection has been removed.",
   "The selected folder has been removed.": "The selected folder has been removed.",
