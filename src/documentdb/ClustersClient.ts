@@ -150,8 +150,8 @@ export class ClustersClient {
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
     /**
-     * Correlation ID linking the `connect` and `connect.getmetadata` telemetry events
-     * for the same connection attempt. Generated once per `initClient` call.
+     * Correlation ID linking the `connect`, `connect.staticmetadata`, and `connect.getmetadata`
+     * telemetry events for the same connection attempt. Generated once per `initClient` call.
      */
     public connectionCorrelationId?: string;
 
@@ -234,7 +234,7 @@ export class ClustersClient {
             const { getDomainMetadata } = await import('./utils/getClusterMetadata');
             const domainMetadata = getDomainMetadata(hosts);
             context.telemetry.properties = {
-                connectioncorrelationid: correlationId,
+                connectionCorrelationId: correlationId,
                 ...context.telemetry.properties,
                 ...domainMetadata,
             };
@@ -251,7 +251,7 @@ export class ClustersClient {
             const metadata: ClusterMetadata = await this._clusterMetadataPromise!;
             context.telemetry.properties = {
                 authmethod: authMethod,
-                connectioncorrelationid: correlationId,
+                connectionCorrelationId: correlationId,
                 ...context.telemetry.properties,
                 ...metadata,
             };

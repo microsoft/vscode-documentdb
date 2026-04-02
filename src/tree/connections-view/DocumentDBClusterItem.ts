@@ -258,7 +258,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 }),
             );
 
-            context.telemetry.properties.connectioncorrelationid = clustersClient.connectionCorrelationId ?? '';
+            context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
             return clustersClient;
         });

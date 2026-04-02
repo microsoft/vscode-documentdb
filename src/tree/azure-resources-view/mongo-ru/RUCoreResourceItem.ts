@@ -108,7 +108,7 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
                     }),
                 );
 
-                context.telemetry.properties.connectioncorrelationid = clustersClient.connectionCorrelationId ?? '';
+                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
                 return clustersClient;
             } catch (error) {
