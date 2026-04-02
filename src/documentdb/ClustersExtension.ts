@@ -89,9 +89,9 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
-import { CollectionNameCache } from './scratchpad/completions/CollectionNameCache';
-import { ScratchpadCompletionItemProvider } from './scratchpad/completions/ScratchpadCompletionItemProvider';
-import { ScratchpadHoverProvider } from './scratchpad/completions/ScratchpadHoverProvider';
+import { CollectionNameCache } from './query-language/scratchpad-completions/CollectionNameCache';
+import { ScratchpadCompletionItemProvider } from './query-language/scratchpad-completions/ScratchpadCompletionItemProvider';
+import { ScratchpadHoverProvider } from './query-language/scratchpad-completions/ScratchpadHoverProvider';
 import { SCRATCHPAD_FILE_EXTENSION, SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
 import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
 import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
