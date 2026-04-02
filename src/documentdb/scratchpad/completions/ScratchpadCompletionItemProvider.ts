@@ -159,7 +159,9 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
     // -----------------------------------------------------------------------
 
     private provideStringCompletions(enclosingCall: string): vscode.CompletionItem[] | undefined {
-        if (enclosingCall === 'getCollection' || enclosingCall === 'use') {
+        // NOTE: use() should suggest database names, not collection names.
+        // Database-name completion is tracked in docs/plan/future-nice-to-have.md.
+        if (enclosingCall === 'getCollection') {
             const connection = ScratchpadService.getInstance().getConnection();
             if (!connection) return undefined;
 
@@ -454,7 +456,7 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
         const argCtx = stringStart > 0 ? detectMethodArgContext(text, stringStart) : null;
         if (!argCtx) return undefined;
 
-        if (argCtx.methodName === 'getCollection' || argCtx.methodName === 'use') {
+        if (argCtx.methodName === 'getCollection') {
             return this.provideStringCompletions(argCtx.methodName) ?? [];
         }
 
