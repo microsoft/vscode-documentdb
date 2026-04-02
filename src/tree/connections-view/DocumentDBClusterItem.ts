@@ -87,6 +87,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 ? ConnectionType.Emulators
                 : ConnectionType.Clusters;
 
+            context.telemetry.properties.connectionType = connectionType;
+
             const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
             if (!connectionCredentials || !isConnection(connectionCredentials)) {
