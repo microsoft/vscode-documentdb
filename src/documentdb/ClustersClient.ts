@@ -285,6 +285,12 @@ export class ClustersClient {
 
         try {
             await this._mongoClient.connect();
+
+            // Remove the abort listener immediately after connect() resolves so that
+            // a late cancellation during synchronous API init below cannot close an
+            // already-connected client while the method continues as "successful".
+            abortSignal?.removeEventListener('abort', onAbort);
+
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
@@ -341,6 +347,10 @@ export class ClustersClient {
 
             try {
                 // if the client is already connected, it's a NOOP.
+                // Note: connectionCorrelationId retains the value from the initial
+                // connection (set in initClient). This is by design — the correlation
+                // ID links the original connect/staticmetadata/getmetadata events.
+                // Cached reconnects don't emit new metadata events, so no new ID is needed.
                 await client._mongoClient.connect();
             } catch (error) {
                 if (abortSignal?.aborted) {
