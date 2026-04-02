@@ -285,6 +285,12 @@ export class ClustersClient {
 
         try {
             await this._mongoClient.connect();
+
+            // Remove the abort listener immediately after connect() resolves so that
+            // a late cancellation during synchronous API init below cannot close an
+            // already-connected client while the method continues as "successful".
+            abortSignal?.removeEventListener('abort', onAbort);
+
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
