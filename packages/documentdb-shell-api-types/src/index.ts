@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * @vscode-documentdb/shell-api-types
+ * @vscode-documentdb/documentdb-shell-api-types
  *
  * Shell API type definitions and method-to-command mapping for DocumentDB
  * scratchpad IntelliSense. This package provides:

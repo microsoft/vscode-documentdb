@@ -19,7 +19,7 @@
  *
  * Usage:
  *   npm run verify
- *   npx ts-node packages/shell-api-types/scripts/verify-compatibility.ts
+ *   npx ts-node packages/documentdb-shell-api-types/scripts/verify-compatibility.ts
  */
 
 import * as fs from 'fs';
