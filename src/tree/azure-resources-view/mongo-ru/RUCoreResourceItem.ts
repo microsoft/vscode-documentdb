@@ -117,7 +117,9 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
                     throw error;
                 }
 
-                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }));
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
 
                 void vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
