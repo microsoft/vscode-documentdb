@@ -119,21 +119,21 @@ export class QueryInsightsAIService {
                 let dropRecommendationCount = 0;
                 let modifyRecommendationCount = 0;
                 for (const improvement of parsedResponse.improvements) {
+                    actionableRecommendationCount++;
+
                     switch (improvement.action) {
                         case 'create':
                             createRecommendationCount++;
-                            actionableRecommendationCount++;
                             break;
                         case 'drop':
                             dropRecommendationCount++;
-                            actionableRecommendationCount++;
                             break;
                         case 'modify':
                             modifyRecommendationCount++;
-                            actionableRecommendationCount++;
                             break;
                     }
                 }
+
                 context.telemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
                 context.telemetry.measurements.createRecommendationCount = createRecommendationCount;
                 context.telemetry.measurements.dropRecommendationCount = dropRecommendationCount;

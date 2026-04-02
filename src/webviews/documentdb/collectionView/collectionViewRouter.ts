@@ -806,21 +806,21 @@ export const collectionsViewRouter = router({
             let dropRecommendationCount = 0;
             let modifyRecommendationCount = 0;
             for (const rec of aiRecommendations.improvements) {
+                actionableRecommendationCount++;
+
                 switch (rec.action) {
                     case 'create':
                         createRecommendationCount++;
-                        actionableRecommendationCount++;
                         break;
                     case 'drop':
                         dropRecommendationCount++;
-                        actionableRecommendationCount++;
                         break;
                     case 'modify':
                         modifyRecommendationCount++;
-                        actionableRecommendationCount++;
                         break;
                 }
             }
+
             ctx.telemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
             ctx.telemetry.measurements.createRecommendationCount = createRecommendationCount;
             ctx.telemetry.measurements.dropRecommendationCount = dropRecommendationCount;
