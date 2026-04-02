@@ -9,54 +9,42 @@ import { SchemaStore } from '../../SchemaStore';
 import { ScratchpadService } from '../ScratchpadService';
 
 /**
- * Cached entry for collection names.
- */
-interface CacheEntry {
-    /** Collection names fetched from the server. */
-    readonly names: readonly string[];
-    /** Timestamp when fetched. */
-    readonly fetchedAt: number;
-}
-
-/**
- * Caches collection names per `{clusterId, databaseName}` pair.
+ * Provides collection names for scratchpad completions.
  *
- * Fetches from `ClustersClient.listCollections()` on the first request,
- * then serves from cache until invalidated by:
- * - Connection change (via `ScratchpadService.onDidChangeState`)
- * - Schema change (via `SchemaStore.onDidChangeSchema` — new collections may appear)
- * - Manual invalidation (e.g., after collection create/drop)
+ * Uses a two-tier strategy with NO local (L1) cache:
  *
- * Also merges collection names from SchemaStore so that collections
- * discovered through query execution are included even if not returned
- * by `listCollections()` (e.g., freshly created in the scratchpad).
+ * 1. **Synchronous read from ClustersClient** — `getCachedCollections()` returns
+ *    data already fetched by the tree view or a prior scratchpad session. This is
+ *    the hot path and never triggers a network call.
+ *
+ * 2. **One-time async bootstrap** — if ClustersClient has no cached data (user
+ *    hasn't expanded the database in the tree yet), a single background
+ *    `listCollections()` call populates the cache. Subsequent calls read from
+ *    ClustersClient synchronously.
+ *
+ * Collection names from SchemaStore are always merged in, so collections
+ * discovered through query execution appear even if the tree hasn't been
+ * refreshed.
+ *
+ * **Cache refresh strategy:** The tree view's refresh button / expand action
+ * calls `listCollections()` on ClustersClient, which overwrites its cache.
+ * This class reads that cache synchronously, so it always picks up fresh data
+ * after a tree refresh — no separate invalidation needed.
  */
 export class CollectionNameCache implements vscode.Disposable {
     private static _instance: CollectionNameCache | undefined;
-    private readonly _cache = new Map<string, CacheEntry>();
     private readonly _disposables: vscode.Disposable[] = [];
-    private _pendingFetches = new Map<string, Promise<readonly string[]>>();
+    private _pendingFetches = new Map<string, Promise<void>>();
 
     private constructor() {
-        // Invalidate on connection change and eagerly prefetch for new connection
+        // On connection change, trigger a background fetch so that
+        // ClustersClient's cache is warm for the new database.
         this._disposables.push(
             ScratchpadService.getInstance().onDidChangeState(() => {
-                this.invalidateAll();
-
-                // Eagerly prefetch collection names for the new connection
                 const connection = ScratchpadService.getInstance().getConnection();
                 if (connection) {
-                    this.getCollectionNames(connection.clusterId, connection.databaseName);
+                    this.ensureFetched(connection.clusterId, connection.databaseName);
                 }
-            }),
-        );
-
-        // Invalidate on schema change — a new collection may have appeared
-        this._disposables.push(
-            SchemaStore.getInstance().onDidChangeSchema((event) => {
-                const key = this.makeCacheKey(event.clusterId, event.databaseName);
-                this._cache.delete(key);
-                this._pendingFetches.delete(key);
             }),
         );
     }
@@ -71,56 +59,37 @@ export class CollectionNameCache implements vscode.Disposable {
     /**
      * Get collection names for the given connection.
      *
-     * Returns cached names if available, otherwise triggers an async fetch.
-     * The first call for a given `{clusterId, databaseName}` returns an empty
-     * array while the fetch is in progress — subsequent completion triggers
-     * will pick up the cached result.
+     * Reads synchronously from ClustersClient's cache (populated by tree
+     * expansion, refresh, or a prior background fetch). If no cached data
+     * exists, triggers a one-time async fetch and returns SchemaStore-only
+     * names in the meantime.
      */
     getCollectionNames(clusterId: string, databaseName: string): string[] {
-        const key = this.makeCacheKey(clusterId, databaseName);
+        const clientNames = this.readFromClient(clusterId, databaseName);
 
-        // Return our local cache if available
-        const cached = this._cache.get(key);
-        if (cached) {
-            return this.mergeWithSchemaStore(cached.names, clusterId, databaseName);
+        // If ClustersClient has no data yet, trigger a background fetch
+        if (clientNames.length === 0) {
+            this.ensureFetched(clusterId, databaseName);
         }
 
-        // Try ClustersClient's in-memory cache for an instant synchronous response
-        // while we fire off the real async fetch in the background
-        const instantNames = this.tryGetCachedNames(clusterId, databaseName);
-
-        // Trigger async fetch if not already in progress
-        if (!this._pendingFetches.has(key)) {
-            this._pendingFetches.set(key, this.fetchCollectionNames(clusterId, databaseName, key));
-        }
-
-        if (instantNames.length > 0) {
-            return this.mergeWithSchemaStore(instantNames, clusterId, databaseName);
-        }
-
-        // While fetch is in progress, return SchemaStore-only names
-        return this.getSchemaStoreCollectionNames(clusterId, databaseName);
+        return this.mergeWithSchemaStore(clientNames, clusterId, databaseName);
     }
 
     /**
-     * Invalidate all cached entries.
+     * Invalidate all pending fetches — used on connection change.
      */
     invalidateAll(): void {
-        this._cache.clear();
         this._pendingFetches.clear();
     }
 
     /**
-     * Invalidate cache for a specific database.
+     * Invalidate a specific pending fetch.
      */
     invalidate(clusterId: string, databaseName: string): void {
-        const key = this.makeCacheKey(clusterId, databaseName);
-        this._cache.delete(key);
-        this._pendingFetches.delete(key);
+        this._pendingFetches.delete(this.makeCacheKey(clusterId, databaseName));
     }
 
     dispose(): void {
-        this._cache.clear();
         this._pendingFetches.clear();
         this._disposables.forEach((d) => {
             d.dispose();
@@ -131,11 +100,10 @@ export class CollectionNameCache implements vscode.Disposable {
     // ───────────────────────────────────────────────────────────────────
 
     /**
-     * Attempt to get collection names from ClustersClient's in-memory cache.
-     * Returns an empty array if the client doesn't exist or has no cached data.
-     * This is fully synchronous — no network requests.
+     * Read collection names from ClustersClient's in-memory cache.
+     * Fully synchronous — no network requests.
      */
-    private tryGetCachedNames(clusterId: string, databaseName: string): string[] {
+    private readFromClient(clusterId: string, databaseName: string): string[] {
         const client = ClustersClient.getExistingClient(clusterId);
         if (!client) return [];
         const cached = client.getCachedCollections(databaseName);
@@ -143,38 +111,43 @@ export class CollectionNameCache implements vscode.Disposable {
         return cached.map((c) => c.name).sort();
     }
 
-    private async fetchCollectionNames(
-        clusterId: string,
-        databaseName: string,
-        key: string,
-    ): Promise<readonly string[]> {
-        try {
-            const client = await ClustersClient.getClient(clusterId);
-            const collections = await client.listCollections(databaseName);
-            const names = collections.map((c) => c.name).sort();
+    /**
+     * Ensure ClustersClient's cache has collection data for this database.
+     * If a fetch is already pending for this key, this is a no-op.
+     * The fetch populates ClustersClient's own cache — subsequent
+     * synchronous reads via `readFromClient()` will return the data.
+     */
+    private ensureFetched(clusterId: string, databaseName: string): void {
+        const key = this.makeCacheKey(clusterId, databaseName);
+        if (this._pendingFetches.has(key)) return;
 
-            this._cache.set(key, { names, fetchedAt: Date.now() });
-            return names;
-        } catch {
-            // Non-critical — completions degrade gracefully to SchemaStore-only
-            return [];
-        } finally {
-            this._pendingFetches.delete(key);
-        }
+        const fetchPromise = (async (): Promise<void> => {
+            try {
+                const client = await ClustersClient.getClient(clusterId);
+                // This call populates ClustersClient._collectionsCache
+                await client.listCollections(databaseName);
+            } catch {
+                // Non-critical — completions degrade gracefully to SchemaStore-only
+            } finally {
+                this._pendingFetches.delete(key);
+            }
+        })();
+
+        this._pendingFetches.set(key, fetchPromise);
     }
 
     /**
-     * Merge server-fetched collection names with names from SchemaStore.
+     * Merge ClustersClient names with names from SchemaStore.
      * SchemaStore may have collections not returned by listCollections
      * (e.g., freshly created in the scratchpad session).
      */
-    private mergeWithSchemaStore(serverNames: readonly string[], clusterId: string, databaseName: string): string[] {
+    private mergeWithSchemaStore(clientNames: string[], clusterId: string, databaseName: string): string[] {
         const schemaNames = this.getSchemaStoreCollectionNames(clusterId, databaseName);
         if (schemaNames.length === 0) {
-            return [...serverNames];
+            return clientNames;
         }
 
-        const merged = new Set(serverNames);
+        const merged = new Set(clientNames);
         for (const name of schemaNames) {
             merged.add(name);
         }
