@@ -74,6 +74,8 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
 
     const isErrorState = node.id ? ext.connectionsBranchDataProvider.hasNodeErrorState(node.id) : false;
 
+    context.telemetry.properties.calledFrom = isErrorState ? 'errorNode' : 'contextMenu';
+
     const wizardContext: UpdateCredentialsWizardContext = {
         ...context,
         nativeAuthConfig: connectionCredentials?.secrets.nativeAuthConfig,

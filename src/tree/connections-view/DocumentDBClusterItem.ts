@@ -75,6 +75,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.ConnectionsView;
+            context.telemetry.properties.connectionInitiatedFrom = Views.ConnectionsView;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -85,6 +86,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             const connectionType = this.cluster.emulatorConfiguration?.isEmulator
                 ? ConnectionType.Emulators
                 : ConnectionType.Clusters;
+
+            context.telemetry.properties.connectionType = connectionType;
 
             const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
@@ -254,6 +257,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     cluster: this.cluster.name,
                 }),
             );
+
+            context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
             return clustersClient;
         });

@@ -70,6 +70,7 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'ru';
+            context.telemetry.properties.connectionInitiatedFrom = Views.AzureResourcesView;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -106,6 +107,8 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
                         cluster: this.cluster.name,
                     }),
                 );
+
+                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
                 return clustersClient;
             } catch (error) {

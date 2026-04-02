@@ -256,6 +256,8 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
                 }),
             );
 
+            context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+
             return clustersClient;
         });
         return result ?? null;
