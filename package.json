@@ -538,13 +538,13 @@
         "//": "Copy Database Reference",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.copyDatabaseReference",
-        "title": "Copy Reference"
+        "title": "Copy Database Reference"
       },
       {
         "//": "Copy Collection Reference",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.copyCollectionReference",
-        "title": "Copy Reference"
+        "title": "Copy Collection Reference"
       }
     ],
     "submenus": [
