@@ -305,7 +305,7 @@ export class ClustersExtension implements vscode.Disposable {
                         // webpack, and vsce hardcodes `ignore: 'node_modules/**'` in its
                         // file collection, so the stub can't ship in the VSIX. We create
                         // it at runtime instead (same pattern as Vue/Volar).
-                        // Tracked by: https://github.com/nickmcummins/vscode-documentdb/issues — see npm publishing issue.
+                        // Tracked by: https://github.com/microsoft/vscode-documentdb/issues/548
                         const stubDir = path.join(
                             ext.context.extensionPath,
                             'node_modules',
