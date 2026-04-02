@@ -804,6 +804,15 @@ export const collectionsViewRouter = router({
             ctx.telemetry.measurements.actionableRecommendationCount = aiRecommendations.improvements.filter(
                 (rec) => rec.action !== 'none',
             ).length;
+            ctx.telemetry.measurements.createRecommendationCount = aiRecommendations.improvements.filter(
+                (rec) => rec.action === 'create',
+            ).length;
+            ctx.telemetry.measurements.dropRecommendationCount = aiRecommendations.improvements.filter(
+                (rec) => rec.action === 'drop',
+            ).length;
+            ctx.telemetry.measurements.modifyRecommendationCount = aiRecommendations.improvements.filter(
+                (rec) => rec.action === 'modify',
+            ).length;
 
             // Transform AI response to UI format with button payloads
             const transformed = transformAIResponseForUI(aiRecommendations, {

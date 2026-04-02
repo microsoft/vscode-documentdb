@@ -258,6 +258,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 }),
             );
 
+            context.telemetry.properties.connectioncorrelationid = clustersClient.connectionCorrelationId ?? '';
+
             return clustersClient;
         });
         return result ?? null;

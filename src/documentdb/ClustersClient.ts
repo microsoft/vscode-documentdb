@@ -17,6 +17,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
+import { randomUUID } from 'crypto';
 import {
     MongoBulkWriteError,
     MongoClient,
@@ -149,6 +150,12 @@ export class ClustersClient {
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
 
     /**
+     * Correlation ID linking the `connect` and `connect.getmetadata` telemetry events
+     * for the same connection attempt. Generated once per `initClient` call.
+     */
+    public connectionCorrelationId?: string;
+
+    /**
      * Private constructor - use getClient() instead.
      * Connections/Clients are being cached and reused.
      *
@@ -217,6 +224,22 @@ export class ClustersClient {
             options.appName = userAgentString;
         }
 
+        // Generate a correlation ID to link connect + connect.getmetadata telemetry
+        this.connectionCorrelationId = randomUUID();
+
+        // Emit static metadata (domain info) BEFORE the connection attempt.
+        // This ensures destination telemetry is available even when connections fail.
+        const correlationId = this.connectionCorrelationId;
+        void callWithTelemetryAndErrorHandling('connect.staticmetadata', async (context) => {
+            const { getDomainMetadata } = await import('./utils/getClusterMetadata');
+            const domainMetadata = getDomainMetadata(hosts);
+            context.telemetry.properties = {
+                connectioncorrelationid: correlationId,
+                ...context.telemetry.properties,
+                ...domainMetadata,
+            };
+        });
+
         // Connect with the configured options
         await this.connect(connectionString, options, credentials.emulatorConfiguration, abortSignal);
 
@@ -228,6 +251,7 @@ export class ClustersClient {
             const metadata: ClusterMetadata = await this._clusterMetadataPromise!;
             context.telemetry.properties = {
                 authmethod: authMethod,
+                connectioncorrelationid: correlationId,
                 ...context.telemetry.properties,
                 ...metadata,
             };

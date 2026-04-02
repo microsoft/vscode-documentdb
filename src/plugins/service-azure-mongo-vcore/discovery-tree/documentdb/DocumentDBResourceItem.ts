@@ -167,6 +167,7 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
                 // Add success telemetry
                 context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'success';
+                context.telemetry.properties.connectioncorrelationid = clustersClient.connectionCorrelationId ?? '';
 
                 return clustersClient;
             } catch (error) {

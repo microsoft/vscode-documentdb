@@ -156,6 +156,8 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                     }),
                 );
 
+                context.telemetry.properties.connectioncorrelationid = clustersClient.connectionCorrelationId ?? '';
+
                 return clustersClient;
             } catch (error) {
                 if (error instanceof UserCancelledError) {

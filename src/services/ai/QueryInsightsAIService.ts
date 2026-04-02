@@ -118,6 +118,15 @@ export class QueryInsightsAIService {
                     (improvement) => improvement.action !== 'none',
                 ).length;
                 context.telemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
+                context.telemetry.measurements.createRecommendationCount = parsedResponse.improvements.filter(
+                    (improvement) => improvement.action === 'create',
+                ).length;
+                context.telemetry.measurements.dropRecommendationCount = parsedResponse.improvements.filter(
+                    (improvement) => improvement.action === 'drop',
+                ).length;
+                context.telemetry.measurements.modifyRecommendationCount = parsedResponse.improvements.filter(
+                    (improvement) => improvement.action === 'modify',
+                ).length;
 
                 return parsedResponse;
             },
