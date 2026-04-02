@@ -6,9 +6,9 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { PlaygroundService } from '../../documentd./playground/PlaygroundService';
-import { PLAYGROUND_LANGUAGE_ID } from '../../documentd./playground/constants';
-import { detectBlocks, detectCurrentBlock } from '../../documentd./playground/statementDetector';
+import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
+import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
+import { detectBlocks, detectCurrentBlock } from '../../documentdb/playground/statementDetector';
 import { executePlaygroundCode } from './executePlaygroundCode';
 
 /**

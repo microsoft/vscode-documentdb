@@ -6,9 +6,9 @@
 import { getFilteredCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
 import { BSONTypes } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
-import { SchemaStore } from '../../SchemaStore';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from '../../playground/constants';
 import { PlaygroundService } from '../../playground/PlaygroundService';
+import { SchemaStore } from '../../SchemaStore';
 import {
     KEY_POSITION_OPERATORS,
     detectCursorContext,

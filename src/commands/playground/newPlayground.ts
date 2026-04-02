@@ -7,8 +7,8 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { PlaygroundService } from '../../documentd./playground/PlaygroundService';
-import { PLAYGROUND_FILE_EXTENSION } from '../../documentd./playground/constants';
+import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
+import { PLAYGROUND_FILE_EXTENSION } from '../../documentdb/playground/constants';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 

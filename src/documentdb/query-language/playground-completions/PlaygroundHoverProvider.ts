@@ -18,9 +18,9 @@
 import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
 import { BSONTypes, type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
-import { SchemaStore } from '../../SchemaStore';
 import { PLAYGROUND_LANGUAGE_ID } from '../../playground/constants';
 import { PlaygroundService } from '../../playground/PlaygroundService';
+import { SchemaStore } from '../../SchemaStore';
 import { extractQuotedKey } from '../shared';
 import { detectMethodArgContext } from './playgroundContextDetector';
 

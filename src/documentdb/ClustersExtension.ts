@@ -51,6 +51,12 @@ import { newLocalConnection } from '../commands/newLocalConnection/newLocalConne
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
+import { connectDatabase } from '../commands/playground/connectDatabase';
+import { disposeEvaluator, shutdownEvaluator } from '../commands/playground/executePlaygroundCode';
+import { newPlayground } from '../commands/playground/newPlayground';
+import { runAll } from '../commands/playground/runAll';
+import { runSelected } from '../commands/playground/runSelected';
+import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
@@ -59,12 +65,6 @@ import { retryAuthentication } from '../commands/retryAuthentication/retryAuthen
 import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
-import { connectDatabase } from '../commands/playground/connectDatabase';
-import { disposeEvaluator, shutdownEvaluator } from '../commands/playground/executePlaygroundCode';
-import { newPlayground } from '../commands/playground/newPlayground';
-import { runAll } from '../commands/playground/runAll';
-import { runSelected } from '../commands/playground/runSelected';
-import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -89,13 +89,13 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
-import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
-import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
-import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
 import { PlaygroundService } from './playground/PlaygroundService';
+import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
+import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
+import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {

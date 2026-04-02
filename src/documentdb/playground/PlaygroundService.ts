@@ -115,9 +115,7 @@ export class PlaygroundService implements vscode.Disposable {
             this._statusBarItem.tooltip = l10n.t('Query Playground connected to {0}', displayName);
         } else {
             this._statusBarItem.text = `$(warning) ${l10n.t('No database connected')}`;
-            this._statusBarItem.tooltip = l10n.t(
-                'Click to learn how to connect a database for the Query Playground',
-            );
+            this._statusBarItem.tooltip = l10n.t('Click to learn how to connect a database for the Query Playground');
         }
 
         this._statusBarItem.show();

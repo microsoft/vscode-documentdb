@@ -1,6 +1,6 @@
 # TDD Behavior Tests — Query Playground Completions
 
-This folder contains **behavior-driven TDD tests** for the scratchpad
+This folder contains **behavior-driven TDD tests** for the query playground
 autocompletion system. These tests define the expected behavior contract.
 
 ## Important: TDD Contract

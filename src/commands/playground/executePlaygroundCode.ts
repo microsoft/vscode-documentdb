@@ -13,10 +13,10 @@ import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { SchemaStore } from '../../documentdb/SchemaStore';
-import { PlaygroundEvaluator } from '../../documentd./playground/PlaygroundEvaluator';
-import { PlaygroundService } from '../../documentd./playground/PlaygroundService';
-import { formatError, formatResult } from '../../documentd./playground/resultFormatter';
-import { type ExecutionResult, type PlaygroundConnection } from '../../documentd./playground/types';
+import { PlaygroundEvaluator } from '../../documentdb/playground/PlaygroundEvaluator';
+import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
+import { formatError, formatResult } from '../../documentdb/playground/resultFormatter';
+import { type ExecutionResult, type PlaygroundConnection } from '../../documentdb/playground/types';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 

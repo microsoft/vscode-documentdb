@@ -6,7 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { PlaygroundService } from '../../documentd./playground/PlaygroundService';
+import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 
