@@ -298,10 +298,14 @@ export class ClustersExtension implements vscode.Disposable {
                     }
                     tsRestarted = true;
                     try {
-                        // Create the node_modules stub for the TS server plugin at runtime.
-                        // vsce's file collection hardcodes `ignore: 'node_modules/**'`, so
-                        // the stub cannot be shipped inside the VSIX. Instead, we create it
-                        // on first use — the same pattern used by Vue/Volar.
+                        // TODO: Remove this runtime stub once the TS plugin is published
+                        // as a standalone npm package with its own release pipeline.
+                        // The official VS Code docs say TS server plugins should be normal
+                        // npm `dependencies`. Our plugin is currently bundled inline by
+                        // webpack, and vsce hardcodes `ignore: 'node_modules/**'` in its
+                        // file collection, so the stub can't ship in the VSIX. We create
+                        // it at runtime instead (same pattern as Vue/Volar).
+                        // Tracked by: https://github.com/nickmcummins/vscode-documentdb/issues — see npm publishing issue.
                         const stubDir = path.join(
                             ext.context.extensionPath,
                             'node_modules',
