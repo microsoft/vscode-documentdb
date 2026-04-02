@@ -7,10 +7,10 @@
  * @vscode-documentdb/documentdb-shell-api-types
  *
  * Shell API type definitions and method-to-command mapping for DocumentDB
- * scratchpad IntelliSense. This package provides:
+ * query playground IntelliSense. This package provides:
  *
  *   1. The `.d.ts` content as a string — used by the TS Server Plugin to
- *      inject type declarations into scratchpad files.
+ *      inject type declarations into query playground files.
  *   2. A method registry mapping each shell method to its underlying server
  *      command(s) — used for compatibility verification.
  *   3. A verification script (`npm run verify`) that checks the method

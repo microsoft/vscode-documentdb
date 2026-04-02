@@ -1,4 +1,4 @@
-# TDD Behavior Tests — Scratchpad Completions
+# TDD Behavior Tests — Query Playground Completions
 
 This folder contains **behavior-driven TDD tests** for the scratchpad
 autocompletion system. These tests define the expected behavior contract.
@@ -17,11 +17,11 @@ autocompletion system. These tests define the expected behavior contract.
 
 | File                                | What it tests                                      |
 | ----------------------------------- | -------------------------------------------------- |
-| `scratchpadContextDetector.test.ts` | JS-level cursor context detection (Stage 1)        |
+| `playgroundContextDetector.test.ts` | JS-level cursor context detection (Stage 1)        |
 | `dynamicSchemaIntegration.test.ts`  | CollectionNameCache, schema-driven completions     |
 | `hoverAndEdgeCases.test.ts`         | HoverProvider content, edge case context detection |
 
-Note: Completion registry tests (`scratchpadCompletionBehavior.test.ts`) were
+Note: Completion registry tests (`playgroundCompletionBehavior.test.ts`) were
 removed — the static registry was replaced by the `@vscode-documentdb/documentdb-shell-api-types`
 package and the TS Server Plugin (Layer 1). The package has its own tests.
 

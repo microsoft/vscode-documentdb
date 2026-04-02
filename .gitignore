@@ -276,7 +276,7 @@ stats.json
 *.zip
 *.tsbuildinfo
 
-# Scrapbooks
+# Playgrounds
 *.mongo
 
 .DS_Store

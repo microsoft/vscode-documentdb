@@ -11,7 +11,7 @@ import { type PlaygroundConnection } from './types';
 /**
  * Singleton service managing the active query playground connection and execution state.
  *
- * Design decisions (from 06-scrapbook-rebuild.md):
+ * Design decisions (from 06-scrapbook-rebuild.md (historical reference)):
  * - D1 (Option B): All query playground files share a single global connection
  * - StatusBarItem shows connection status when a `.documentdb.js` file is active
  * - Service emits state changes so UI components (CodeLens, StatusBar) can refresh

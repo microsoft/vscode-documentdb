@@ -3,14 +3,14 @@
 TypeScript type definitions and method-to-command mapping for the DocumentDB
 shell API, used by the
 [Azure DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb)
-to provide IntelliSense in scratchpad files.
+to provide IntelliSense in query playground files.
 
 ## What this package provides
 
 1. **`documentdb-shell-api.d.ts`** — TypeScript declarations for the DocumentDB
    shell API surface (database methods, collection methods, cursor methods, BSON
    constructors, and shell globals). Used by the extension's TS Server Plugin to
-   inject type information into scratchpad files for autocompletion, hover
+   inject type information into query playground files for autocompletion, hover
    documentation, and signature help.
 
 2. **Method registry** — A structured mapping of every shell method to its
@@ -34,7 +34,7 @@ protocol. As stated in the
 > compatible with Azure DocumentDB."
 
 The methods in this package were **manually selected** to provide a productive
-scratchpad editing experience. Each method maps to a server-side command listed
+query playground editing experience. Each method maps to a server-side command listed
 as supported in the Azure DocumentDB compatibility matrix. All JSDoc
 descriptions are original writing.
 

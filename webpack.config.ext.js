@@ -22,8 +22,8 @@ module.exports = (env, { mode }) => {
         node: { __filename: false, __dirname: false },
         entry: {
             main: './main.ts',
-            scratchpadWorker: './src/documentdb/scratchpad/scratchpadWorker.ts',
-            scratchpadTsPlugin: './src/documentdb/scratchpad/tsPlugin/index.ts',
+            playgroundWorker: './src/documentdb/playground/playgroundWorker.ts',
+            playgroundTsPlugin: './src/documentdb/playground/tsPlugin/index.ts',
         },
         output: {
             path: path.resolve(__dirname, 'dist'),
@@ -146,8 +146,8 @@ module.exports = (env, { mode }) => {
                         to: 'package.nls.json',
                     },
                     {
-                        from: 'scratchpad-language-configuration.json',
-                        to: 'scratchpad-language-configuration.json',
+                        from: 'playground-language-configuration.json',
+                        to: 'playground-language-configuration.json',
                     },
                     {
                         from: 'syntaxes',
@@ -214,7 +214,7 @@ module.exports = (env, { mode }) => {
         // These are all "Critical dependency" warnings from @babel/core,
         // browserslist, and express that use dynamic require() patterns
         // webpack can't statically analyze. None execute at runtime.
-        // See docs/plan/06-scrapbook-rebuild.md §"Webpack Externals" for details.
+        // See docs/plan/06-scrapbook-rebuild.md §"Webpack Externals" for details (historical reference).
         ignoreWarnings: [
             { module: /node_modules[\\/]@babel[\\/]core/ },
             { module: /node_modules[\\/]browserslist/ },
