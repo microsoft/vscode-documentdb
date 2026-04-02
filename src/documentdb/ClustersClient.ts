@@ -326,8 +326,31 @@ export class ClustersClient {
         if (ClustersClient._clients.has(clusterId)) {
             const client = ClustersClient._clients.get(clusterId) as ClustersClient;
 
-            // if the client is already connected, it's a NOOP.
-            await client._mongoClient.connect();
+            // Wire up abort for cached client reconnection so the cancellable
+            // progress UI can also cancel a reconnection attempt.
+            if (abortSignal?.aborted) {
+                throw new UserCancelledError('abortConnection');
+            }
+
+            const onAbort = (): void => {
+                void client._mongoClient.close().catch(() => {
+                    // Ignore close errors when aborting during reconnect
+                });
+            };
+            abortSignal?.addEventListener('abort', onAbort, { once: true });
+
+            try {
+                // if the client is already connected, it's a NOOP.
+                await client._mongoClient.connect();
+            } catch (error) {
+                if (abortSignal?.aborted) {
+                    throw new UserCancelledError('abortConnection');
+                }
+                throw error;
+            } finally {
+                abortSignal?.removeEventListener('abort', onAbort);
+            }
+
             return client;
         }
 

@@ -806,16 +806,17 @@ export const collectionsViewRouter = router({
             let dropRecommendationCount = 0;
             let modifyRecommendationCount = 0;
             for (const rec of aiRecommendations.improvements) {
-                actionableRecommendationCount++;
-
                 switch (rec.action) {
                     case 'create':
+                        actionableRecommendationCount++;
                         createRecommendationCount++;
                         break;
                     case 'drop':
+                        actionableRecommendationCount++;
                         dropRecommendationCount++;
                         break;
                     case 'modify':
+                        actionableRecommendationCount++;
                         modifyRecommendationCount++;
                         break;
                 }

@@ -169,7 +169,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                         throw error;
                     });
 
-                    clustersClient = null;
+                    return [];
                 } else {
                     throw error;
                 }

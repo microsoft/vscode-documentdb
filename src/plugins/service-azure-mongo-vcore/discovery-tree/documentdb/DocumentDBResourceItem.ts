@@ -182,7 +182,9 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
                 context.telemetry.properties.connectionResult = 'failed';
                 context.telemetry.properties.connectionErrorType = error instanceof Error ? error.name : 'UnknownError';
 
-                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
 
                 void vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
@@ -191,7 +193,7 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
                         detail:
                             l10n.t('Revisit connection details and try again.') +
                             '\n\n' +
-                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                     },
                 );
 
