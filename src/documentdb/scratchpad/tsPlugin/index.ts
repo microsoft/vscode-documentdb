@@ -335,7 +335,10 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
             span: ts.TextSpan,
             format?: ts.SemanticClassificationFormat,
         ): ts.Classifications => {
-            const result = ls.getEncodedSemanticClassifications(fileName, span, format);
+            const adjustedSpan = isScratchpadFile(fileName)
+                ? { start: span.start + prefixLength, length: span.length }
+                : span;
+            const result = ls.getEncodedSemanticClassifications(fileName, adjustedSpan, format);
             if (!isScratchpadFile(fileName)) {
                 return result;
             }
@@ -350,7 +353,10 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
         };
 
         proxy.getEncodedSyntacticClassifications = (fileName: string, span: ts.TextSpan): ts.Classifications => {
-            const result = ls.getEncodedSyntacticClassifications(fileName, span);
+            const adjustedSpan = isScratchpadFile(fileName)
+                ? { start: span.start + prefixLength, length: span.length }
+                : span;
+            const result = ls.getEncodedSyntacticClassifications(fileName, adjustedSpan);
             if (!isScratchpadFile(fileName)) {
                 return result;
             }
