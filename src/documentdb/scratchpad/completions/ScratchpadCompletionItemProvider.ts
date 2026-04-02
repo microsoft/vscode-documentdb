@@ -179,6 +179,11 @@ export class ScratchpadCompletionItemProvider implements vscode.CompletionItemPr
 
     // -----------------------------------------------------------------------
     // Q1-Q8: Method argument completions (query operators, fields, BSON)
+    //
+    // NOTE (future-pre-shell.md #4): This method currently shows query
+    // operators in all method-argument positions regardless of methodName.
+    // Aggregate stages, update operators, and second-argument routing are
+    // tracked as future work in docs/plan/future-pre-shell.md item 4.
     // -----------------------------------------------------------------------
 
     private provideMethodArgumentCompletions(

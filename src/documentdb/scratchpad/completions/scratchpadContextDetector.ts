@@ -80,6 +80,10 @@ export function detectScratchpadContext(text: string, offset: number): Scratchpa
     }
 
     // Detect: inside a method call argument — e.g., db.users.find({ | })
+    // NOTE: This branch is currently unreachable. scanMemberChain() declares
+    // insideArgOf but never assigns it. The working path uses
+    // detectMethodArgContext() directly in ScratchpadCompletionItemProvider.
+    // Cleanup tracked in docs/plan/future-pre-shell.md item 4.
     if (chain.insideArgOf) {
         const argStart = chain.insideArgOf.argStart;
         const argumentText = text.substring(argStart, offset);
