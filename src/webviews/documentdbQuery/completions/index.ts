@@ -1,0 +1,31 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/**
+ * Completion items for the `documentdb-query` language (Monaco-specific).
+ *
+ * This folder contains Monaco-specific completion logic:
+ * - `createCompletionItems.ts` — main entry point, context branching
+ * - `mapCompletionItems.ts` — operator/field → Monaco CompletionItem mapping
+ * - `typeSuggestions.ts` — type-aware value suggestions (Monaco CompletionItems)
+ * - `jsGlobals.ts` — JS globals as Monaco CompletionItems
+ *
+ * Platform-neutral logic (shared with scratchpad provider) lives in `../shared/`.
+ */
+
+// Re-export platform-neutral modules from shared/
+export { INFO_INDICATOR, KEY_POSITION_OPERATORS, LABEL_PLACEHOLDER } from '../shared/completionKnowledge';
+export { escapeSnippetDollars, stripOuterBraces } from '../shared/snippetUtils';
+export { getCategoryLabel, getOperatorSortPrefix } from '../shared/sortPrefixes';
+
+// Monaco-specific exports
+export {
+    createCompletionItems,
+    getMetaTagsForEditorType,
+    type CreateCompletionItemsParams,
+} from './createCompletionItems';
+export { createJsGlobalCompletionItems } from './jsGlobals';
+export { getCompletionKindForMeta, mapFieldToCompletionItem, mapOperatorToCompletionItem } from './mapCompletionItems';
+export { createTypeSuggestions } from './typeSuggestions';

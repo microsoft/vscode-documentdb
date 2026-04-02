@@ -17,6 +17,8 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import { type AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { accessDataMigrationServices } from '../commands/accessDataMigrationServices/accessDataMigrationServices';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
@@ -55,6 +57,14 @@ import { removeConnection } from '../commands/removeConnection/removeConnection'
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
+import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
+import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
+import { connectDatabase } from '../commands/scratchpad/connectDatabase';
+import { disposeEvaluator, shutdownEvaluator } from '../commands/scratchpad/executeScratchpadCode';
+import { newScratchpad } from '../commands/scratchpad/newScratchpad';
+import { runAll } from '../commands/scratchpad/runAll';
+import { runSelected } from '../commands/scratchpad/runSelected';
+import { scanCollectionSchema } from '../commands/scratchpad/scanCollectionSchema';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -79,7 +89,13 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
-import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
+import { CollectionNameCache } from './scratchpad/completions/CollectionNameCache';
+import { ScratchpadCompletionItemProvider } from './scratchpad/completions/ScratchpadCompletionItemProvider';
+import { ScratchpadHoverProvider } from './scratchpad/completions/ScratchpadHoverProvider';
+import { SCRATCHPAD_FILE_EXTENSION, SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from './scratchpad/constants';
+import { ScratchpadBlockHighlighter } from './scratchpad/ScratchpadBlockHighlighter';
+import { ScratchpadCodeLensProvider } from './scratchpad/ScratchpadCodeLensProvider';
+import { ScratchpadService } from './scratchpad/ScratchpadService';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -191,6 +207,184 @@ export class ClustersExtension implements vscode.Disposable {
 
                 // Initialize TaskService and TaskProgressReportingService
                 TaskProgressReportingService.attach(TaskService);
+
+                // Initialize ScratchpadService (connection state + StatusBarItem)
+                const scratchpadService = ScratchpadService.getInstance();
+                ext.context.subscriptions.push(scratchpadService);
+
+                // Register evaluator disposal for clean worker shutdown on deactivation
+                ext.context.subscriptions.push({ dispose: disposeEvaluator });
+
+                // Shut down the scratchpad worker when connection is cleared
+                ext.context.subscriptions.push(
+                    scratchpadService.onDidChangeState(() => {
+                        if (!scratchpadService.isConnected()) {
+                            ext.outputChannel.debug('[Scratchpad] Connection cleared — shutting down worker');
+                            shutdownEvaluator();
+                        }
+                    }),
+                );
+
+                // Shut down the scratchpad worker when the last .documentdb.js editor closes
+                ext.context.subscriptions.push(
+                    vscode.window.tabGroups.onDidChangeTabs((event) => {
+                        // Only react when tabs are closed
+                        if (event.closed.length === 0) {
+                            return;
+                        }
+
+                        // Check if any closed tab was a scratchpad
+                        const closedScratchpad = event.closed.some((tab) => {
+                            const input = tab.input;
+                            return (
+                                input instanceof vscode.TabInputText &&
+                                input.uri.path.endsWith(SCRATCHPAD_FILE_EXTENSION)
+                            );
+                        });
+
+                        if (!closedScratchpad) {
+                            return;
+                        }
+
+                        // Check if any scratchpad tabs remain open
+                        const hasOpenScratchpad = vscode.window.tabGroups.all.some((group) =>
+                            group.tabs.some((tab) => {
+                                const input = tab.input;
+                                return (
+                                    input instanceof vscode.TabInputText &&
+                                    input.uri.path.endsWith(SCRATCHPAD_FILE_EXTENSION)
+                                );
+                            }),
+                        );
+
+                        if (!hasOpenScratchpad) {
+                            ext.outputChannel.debug('[Scratchpad] All editors closed — shutting down worker');
+                            shutdownEvaluator();
+                        }
+                    }),
+                );
+
+                // Register CodeLens provider for scratchpad files
+                const codeLensProvider = new ScratchpadCodeLensProvider();
+                ext.context.subscriptions.push(codeLensProvider);
+                ext.context.subscriptions.push(
+                    vscode.languages.registerCodeLensProvider({ language: SCRATCHPAD_LANGUAGE_ID }, codeLensProvider),
+                );
+
+                // Register block highlighter for scratchpad files
+                const blockHighlighter = new ScratchpadBlockHighlighter(ext.context.extensionPath);
+                ext.context.subscriptions.push(blockHighlighter);
+
+                // Register completion provider for scratchpad files (Layer 2).
+                // Provides query operators, field names, collection names, and BSON
+                // constructors that the TypeScript service (Layer 1) doesn't know about.
+                ext.context.subscriptions.push(CollectionNameCache.getInstance());
+                ext.context.subscriptions.push(ScratchpadCompletionItemProvider.register());
+
+                // Register hover provider for scratchpad files.
+                // Provides inline docs for query operators, BSON constructors,
+                // and field names. Method hovers are handled by Layer 1 (TS Plugin).
+                ext.context.subscriptions.push(ScratchpadHoverProvider.register());
+
+                // Ensure the TypeScript extension recognizes our plugin and restarts
+                // its TS server to load it. The TS extension may have started before our
+                // extension was discovered, so its TS server might not include our plugin.
+                // We restart it once when the first scratchpad file is opened.
+                let tsRestarted = false;
+
+                const ensureTsRestart = async (): Promise<void> => {
+                    if (tsRestarted) {
+                        return;
+                    }
+                    tsRestarted = true;
+                    try {
+                        // TODO: Remove this runtime stub once the TS plugin is published
+                        // as a standalone npm package with its own release pipeline.
+                        // The official VS Code docs say TS server plugins should be normal
+                        // npm `dependencies`. Our plugin is currently bundled inline by
+                        // webpack, and vsce hardcodes `ignore: 'node_modules/**'` in its
+                        // file collection, so the stub can't ship in the VSIX. We create
+                        // it at runtime instead (same pattern as Vue/Volar).
+                        // Tracked by: https://github.com/microsoft/vscode-documentdb/issues/548
+                        const stubDir = path.join(
+                            ext.context.extensionPath,
+                            'node_modules',
+                            'documentdb-scratchpad-ts-plugin',
+                        );
+                        const stubEntry = path.join(stubDir, 'index.js');
+                        if (!fs.existsSync(stubEntry)) {
+                            fs.mkdirSync(stubDir, { recursive: true });
+                            // Point to the bundled plugin at the extension root
+                            fs.writeFileSync(stubEntry, 'module.exports = require("../../scratchpadTsPlugin.js");\n');
+                        }
+
+                        const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
+                        if (tsExt) {
+                            if (!tsExt.isActive) {
+                                await tsExt.activate();
+                            }
+                            // Wait a moment for the TS server to fully initialize before
+                            // restarting it. Without this delay, the restart command can
+                            // arrive while the server is still starting, causing a crash.
+                            await new Promise((resolve) => setTimeout(resolve, 2000));
+                            // Restart the TS server so it picks up our plugin from
+                            // contributes.typescriptServerPlugins. Without this, the server
+                            // may have started before our extension was loaded and won't
+                            // have our plugin in --globalPlugins.
+                            await vscode.commands.executeCommand('typescript.restartTsServer');
+                        }
+                    } catch (error) {
+                        const message = error instanceof Error ? error.message : String(error);
+                        ext.outputChannel.debug(`[Scratchpad] TS server restart failed: ${message}`);
+                    }
+                };
+
+                ext.context.subscriptions.push(
+                    vscode.workspace.onDidOpenTextDocument((doc) => {
+                        if (doc.languageId === SCRATCHPAD_LANGUAGE_ID) {
+                            void ensureTsRestart();
+                        }
+                    }),
+                );
+
+                // If a scratchpad file was already open before the extension activated
+                // (e.g., restored by hot-exit), the onDidOpenTextDocument event will not
+                // fire. Check existing documents to cover that path.
+                const hasScratchpadOpen = vscode.workspace.textDocuments.some(
+                    (doc) => doc.languageId === SCRATCHPAD_LANGUAGE_ID,
+                );
+                if (hasScratchpadOpen) {
+                    void ensureTsRestart();
+                }
+
+                //// Scratchpad Commands:
+
+                registerCommandWithTreeNodeUnwrapping(
+                    ScratchpadCommandIds.new,
+                    withTreeNodeCommandCorrelation(newScratchpad),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    ScratchpadCommandIds.connect,
+                    withTreeNodeCommandCorrelation(connectDatabase),
+                );
+
+                registerCommand(ScratchpadCommandIds.runAll, withCommandCorrelation(runAll));
+
+                registerCommand(ScratchpadCommandIds.runSelected, withCommandCorrelation(runSelected));
+
+                // Register scan schema command (triggered by "Discover Fields" completion item)
+                registerCommand(
+                    ScratchpadCommandIds.scanCollectionSchema,
+                    withCommandCorrelation(scanCollectionSchema),
+                );
+
+                registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
+
+                registerCommand(
+                    'vscode-documentdb.command.showSchemaStoreStats',
+                    withCommandCorrelation(showSchemaStoreStats),
+                );
 
                 //// General Commands:
 
@@ -414,8 +608,6 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.importDocuments',
                     withTreeNodeCommandCorrelation(importDocuments),
                 );
-
-                registerScrapbookCommands();
 
                 /**
                  * Here, exporting documents is done in two ways: one is accessible from the tree view

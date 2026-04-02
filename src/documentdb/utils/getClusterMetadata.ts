@@ -122,6 +122,17 @@ async function fetchHostInfo(adminDb: Admin, result: ClusterMetadata): Promise<v
 }
 
 function processDomainInfo(hosts: string[], result: ClusterMetadata): void {
+    addDomainInfoToProperties(hosts, result);
+}
+
+/**
+ * Extracts domain information from hosts and adds it to a properties object.
+ * Reusable for both cluster metadata telemetry and scratchpad telemetry.
+ *
+ * For Azure domains, records the API type (RU, vCore).
+ * For non-Azure domains, produces SHA-256 hashed domain fragments for privacy-safe diagnostics.
+ */
+export function addDomainInfoToProperties(hosts: string[], result: Record<string, string | undefined>): void {
     for (const [index, host] of hosts.entries()) {
         const telemetrySuffix = index > 0 ? `_h${index}` : '';
         try {
