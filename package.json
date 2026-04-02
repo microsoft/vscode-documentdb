@@ -208,7 +208,7 @@
   "extensionDependencies": [],
   "contributes": {
     "configurationDefaults": {
-      "[documentdb-scratchpad]": {
+      "[documentdb-playground]": {
         "editor.quickSuggestions": {
           "strings": true,
           "other": true,
@@ -259,28 +259,28 @@
     ],
     "languages": [
       {
-        "id": "documentdb-scratchpad",
+        "id": "documentdb-playground",
         "extensions": [
           ".documentdb.js"
         ],
         "aliases": [
-          "DocumentDB Scratchpad"
+          "Query Playground"
         ],
-        "configuration": "./scratchpad-language-configuration.json"
+        "configuration": "./playground-language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "documentdb-scratchpad",
-        "scopeName": "source.documentdb-scratchpad",
-        "path": "./syntaxes/documentdb-scratchpad.tmGrammar.json"
+        "language": "documentdb-playground",
+        "scopeName": "source.documentdb-playground",
+        "path": "./syntaxes/documentdb-playground.tmGrammar.json"
       }
     ],
     "typescriptServerPlugins": [
       {
-        "name": "documentdb-scratchpad-ts-plugin",
+        "name": "documentdb-playground-ts-plugin",
         "languages": [
-          "documentdb-scratchpad"
+          "documentdb-playground"
         ],
         "enableForWorkspaceTypeScriptVersions": true
       }
@@ -537,37 +537,37 @@
         "title": "Paste Collection…"
       },
       {
-        "//": "[Scratchpad] New DocumentDB Scratchpad",
+        "//": "[Query Playground] New Query Playground",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scratchpad.new",
-        "title": "New Scratchpad",
+        "command": "vscode-documentdb.command.playground.new",
+        "title": "New Query Playground",
         "icon": "$(new-file)"
       },
       {
-        "//": "[Scratchpad] Connect Scratchpad to Database",
+        "//": "[Query Playground] Connect Query Playground to Database",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scratchpad.connect",
-        "title": "Connect Scratchpad to this database"
+        "command": "vscode-documentdb.command.playground.connect",
+        "title": "Connect Query Playground to this database"
       },
       {
-        "//": "[Scratchpad] Run All",
+        "//": "[Query Playground] Run All",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scratchpad.runAll",
-        "title": "Scratchpad: Run All",
+        "command": "vscode-documentdb.command.playground.runAll",
+        "title": "Query Playground: Run All",
         "icon": "$(run-all)"
       },
       {
-        "//": "[Scratchpad] Run Selected / Current Block",
+        "//": "[Query Playground] Run Selected / Current Block",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scratchpad.runSelected",
-        "title": "Scratchpad: Run Selected",
+        "command": "vscode-documentdb.command.playground.runSelected",
+        "title": "Query Playground: Run Selected",
         "icon": "$(play)"
       },
       {
-        "//": "[Scratchpad] Scan Collection Schema for field completions",
+        "//": "[Query Playground] Scan Collection Schema for field completions",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scratchpad.scanCollectionSchema",
-        "title": "Scratchpad: Scan Collection Schema"
+        "command": "vscode-documentdb.command.playground.scanCollectionSchema",
+        "title": "Query Playground: Scan Collection Schema"
       },
       {
         "//": "[Diagnostics] Clear Schema Cache",
@@ -584,8 +584,8 @@
     ],
     "submenus": [
       {
-        "id": "documentDB.submenus.scratchpad",
-        "label": "DocumentDB Scratchpad"
+        "id": "documentDB.submenus.playground",
+        "label": "Query Playground"
       }
     ],
     "menus": {
@@ -834,8 +834,8 @@
           "group": "5@1"
         },
         {
-          "//": "[Database/Collection] Scratchpad submenu",
-          "submenu": "documentDB.submenus.scratchpad",
+          "//": "[Database/Collection] Query Playground submenu",
+          "submenu": "documentDB.submenus.playground",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "5@2"
         },
@@ -870,13 +870,13 @@
           "group": "3@4"
         }
       ],
-      "documentDB.submenus.scratchpad": [
+      "documentDB.submenus.playground": [
         {
-          "command": "vscode-documentdb.command.scratchpad.new",
+          "command": "vscode-documentdb.command.playground.new",
           "group": "1@1"
         },
         {
-          "command": "vscode-documentdb.command.scratchpad.connect",
+          "command": "vscode-documentdb.command.playground.connect",
           "group": "1@2"
         }
       ],
@@ -999,31 +999,31 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.scratchpad.connect",
+          "command": "vscode-documentdb.command.playground.connect",
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.scratchpad.runAll",
+          "command": "vscode-documentdb.command.playground.runAll",
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.scratchpad.runSelected",
+          "command": "vscode-documentdb.command.playground.runSelected",
           "when": "never"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "vscode-documentdb.command.scratchpad.runAll",
+        "command": "vscode-documentdb.command.playground.runAll",
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
-        "when": "editorLangId == 'documentdb-scratchpad' && editorTextFocus"
+        "when": "editorLangId == 'documentdb-playground' && editorTextFocus"
       },
       {
-        "command": "vscode-documentdb.command.scratchpad.runSelected",
+        "command": "vscode-documentdb.command.playground.runSelected",
         "key": "ctrl+enter",
         "mac": "cmd+enter",
-        "when": "editorLangId == 'documentdb-scratchpad' && editorTextFocus"
+        "when": "editorLangId == 'documentdb-playground' && editorTextFocus"
       }
     ],
     "configuration": [

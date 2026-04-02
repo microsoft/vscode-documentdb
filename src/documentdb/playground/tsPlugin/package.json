@@ -1,6 +1,6 @@
 {
-  "name": "documentdb-scratchpad-ts-plugin",
+  "name": "documentdb-playground-ts-plugin",
   "version": "1.0.0",
   "private": true,
-  "main": "../../scratchpadTsPlugin.js"
+  "main": "../../playgroundTsPlugin.js"
 }
