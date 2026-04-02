@@ -6,6 +6,9 @@
 import { getFilteredCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
 import { BSONTypes } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
+import { SchemaStore } from '../../SchemaStore';
+import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from '../../scratchpad/constants';
+import { ScratchpadService } from '../../scratchpad/ScratchpadService';
 import {
     KEY_POSITION_OPERATORS,
     detectCursorContext,
@@ -14,10 +17,7 @@ import {
     getTypeSuggestionDefs,
     stripOuterBraces,
     type CursorContext,
-} from '../../../webviews/documentdbQuery/shared';
-import { SchemaStore } from '../../SchemaStore';
-import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from '../constants';
-import { ScratchpadService } from '../ScratchpadService';
+} from '../shared';
 import { CollectionNameCache } from './CollectionNameCache';
 import { detectMethodArgContext, detectScratchpadContext } from './scratchpadContextDetector';
 

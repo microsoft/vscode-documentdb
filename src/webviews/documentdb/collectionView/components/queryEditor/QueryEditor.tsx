@@ -19,7 +19,7 @@ import {
     registerDocumentDBQueryLanguage,
     validateExpression,
     type Diagnostic,
-} from '../../../../documentdbQuery';
+} from '../../../../query-language-support';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 
 import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from '@fluentui/react-icons';

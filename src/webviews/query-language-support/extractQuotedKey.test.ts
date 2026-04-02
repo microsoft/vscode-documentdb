@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { extractQuotedKey } from './shared/extractQuotedKey';
+import { extractQuotedKey } from '../../documentdb/query-language/shared/extractQuotedKey';
 
 describe('extractQuotedKey', () => {
     test('extracts double-quoted key when cursor is inside', () => {

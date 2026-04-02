@@ -7,14 +7,14 @@
  * Monaco-specific JS global completion items.
  *
  * Platform-neutral definitions (JsGlobalDef interface, JS_GLOBALS data)
- * have been extracted to `../shared/jsGlobalDefs.ts`.
+ * have been extracted to `src/documentdb/query-language/shared/jsGlobalDefs.ts`.
  * This module handles only the Monaco CompletionItem creation.
  */
 
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
-import { JS_GLOBALS } from '../shared/jsGlobalDefs';
-import { escapeSnippetDollars } from '../shared/snippetUtils';
+import { JS_GLOBALS } from '../../../documentdb/query-language/shared/jsGlobalDefs';
+import { escapeSnippetDollars } from '../../../documentdb/query-language/shared/snippetUtils';
 
 /**
  * Creates completion items for JavaScript globals supported by the

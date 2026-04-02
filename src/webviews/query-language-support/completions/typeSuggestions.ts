@@ -7,17 +7,20 @@
  * Monaco-specific type-aware value suggestions.
  *
  * Platform-neutral definitions (TypeSuggestionDef, TYPE_SUGGESTIONS data,
- * getTypeSuggestionDefs) have been extracted to `../shared/typeSuggestionData.ts`.
+ * getTypeSuggestionDefs) have been extracted to `src/documentdb/query-language/shared/typeSuggestionData.ts`.
  * This module handles only the Monaco CompletionItem creation.
  */
 
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
-import { escapeSnippetDollars } from '../shared/snippetUtils';
-import { getTypeSuggestionDefs } from '../shared/typeSuggestionData';
+import { escapeSnippetDollars } from '../../../documentdb/query-language/shared/snippetUtils';
+import { getTypeSuggestionDefs } from '../../../documentdb/query-language/shared/typeSuggestionData';
 
 // Re-export platform-neutral types for backward compatibility
-export { getTypeSuggestionDefs, type TypeSuggestionDef } from '../shared/typeSuggestionData';
+export {
+    getTypeSuggestionDefs,
+    type TypeSuggestionDef,
+} from '../../../documentdb/query-language/shared/typeSuggestionData';
 
 /**
  * Creates type-aware value suggestions based on the field's BSON type.

@@ -18,10 +18,10 @@
 import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
 import { BSONTypes, type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
-import { extractQuotedKey } from '../../../webviews/documentdbQuery/shared';
 import { SchemaStore } from '../../SchemaStore';
-import { SCRATCHPAD_LANGUAGE_ID } from '../constants';
-import { ScratchpadService } from '../ScratchpadService';
+import { SCRATCHPAD_LANGUAGE_ID } from '../../scratchpad/constants';
+import { ScratchpadService } from '../../scratchpad/ScratchpadService';
+import { extractQuotedKey } from '../shared';
 import { detectMethodArgContext } from './scratchpadContextDetector';
 
 /**

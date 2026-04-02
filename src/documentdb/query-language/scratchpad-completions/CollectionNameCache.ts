@@ -6,7 +6,7 @@
 import type * as vscode from 'vscode';
 import { ClustersClient } from '../../ClustersClient';
 import { SchemaStore } from '../../SchemaStore';
-import { ScratchpadService } from '../ScratchpadService';
+import { ScratchpadService } from '../../scratchpad/ScratchpadService';
 
 /**
  * Provides collection names for scratchpad completions.

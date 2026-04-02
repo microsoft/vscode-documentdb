@@ -12,7 +12,7 @@ import { Announcer } from '../../api/webview-client/accessibility';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
-import { setCompletionContext } from '../../documentdbQuery';
+import { setCompletionContext } from '../../query-language-support';
 import './collectionView.scss';
 import {
     CollectionViewContext,

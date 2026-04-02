@@ -7,15 +7,15 @@
  * Functions for mapping operator and field data to Monaco CompletionItems.
  *
  * Platform-neutral sort logic (`getOperatorSortPrefix`, `getCategoryLabel`)
- * has been extracted to `../shared/sortPrefixes.ts`.
+ * has been extracted to `src/documentdb/query-language/shared/sortPrefixes.ts`.
  */
 
 import { type OperatorEntry } from '@vscode-documentdb/documentdb-constants';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
+import { escapeSnippetDollars, stripOuterBraces } from '../../../documentdb/query-language/shared/snippetUtils';
+import { getCategoryLabel, getOperatorSortPrefix } from '../../../documentdb/query-language/shared/sortPrefixes';
 import { type FieldCompletionData } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
-import { escapeSnippetDollars, stripOuterBraces } from '../shared/snippetUtils';
-import { getCategoryLabel, getOperatorSortPrefix } from '../shared/sortPrefixes';
 
 /**
  * Maps a meta tag category to a Monaco CompletionItemKind.
