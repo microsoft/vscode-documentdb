@@ -75,6 +75,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.ConnectionsView;
+            context.telemetry.properties.connectionInitiatedFrom = Views.ConnectionsView;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
