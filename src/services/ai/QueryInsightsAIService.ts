@@ -119,16 +119,17 @@ export class QueryInsightsAIService {
                 let dropRecommendationCount = 0;
                 let modifyRecommendationCount = 0;
                 for (const improvement of parsedResponse.improvements) {
-                    actionableRecommendationCount++;
-
                     switch (improvement.action) {
                         case 'create':
+                            actionableRecommendationCount++;
                             createRecommendationCount++;
                             break;
                         case 'drop':
+                            actionableRecommendationCount++;
                             dropRecommendationCount++;
                             break;
                         case 'modify':
+                            actionableRecommendationCount++;
                             modifyRecommendationCount++;
                             break;
                     }
