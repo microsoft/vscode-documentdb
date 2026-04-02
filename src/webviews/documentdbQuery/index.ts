@@ -22,8 +22,12 @@
  * ```
  */
 
+export {
+    detectCursorContext,
+    type CursorContext,
+    type FieldTypeLookup,
+} from '../../documentdb/query-language/shared/cursorContext';
 export { clearCompletionContext, getCompletionContext, setCompletionContext } from './completionStore';
 export { validateExpression, type Diagnostic } from './documentdbQueryValidator';
 export { EditorType, LANGUAGE_ID, URI_SCHEME, buildEditorUri, parseEditorUri } from './languageConfig';
 export { registerDocumentDBQueryLanguage } from './registerLanguage';
-export { detectCursorContext, type CursorContext, type FieldTypeLookup } from './shared/cursorContext';

@@ -12,13 +12,17 @@
  * - `typeSuggestions.ts` — type-aware value suggestions (Monaco CompletionItems)
  * - `jsGlobals.ts` — JS globals as Monaco CompletionItems
  *
- * Platform-neutral logic (shared with scratchpad provider) lives in `../shared/`.
+ * Platform-neutral logic (shared with scratchpad provider) lives in `src/documentdb/query-language/shared/`.
  */
 
 // Re-export platform-neutral modules from shared/
-export { INFO_INDICATOR, KEY_POSITION_OPERATORS, LABEL_PLACEHOLDER } from '../shared/completionKnowledge';
-export { escapeSnippetDollars, stripOuterBraces } from '../shared/snippetUtils';
-export { getCategoryLabel, getOperatorSortPrefix } from '../shared/sortPrefixes';
+export {
+    INFO_INDICATOR,
+    KEY_POSITION_OPERATORS,
+    LABEL_PLACEHOLDER,
+} from '../../../documentdb/query-language/shared/completionKnowledge';
+export { escapeSnippetDollars, stripOuterBraces } from '../../../documentdb/query-language/shared/snippetUtils';
+export { getCategoryLabel, getOperatorSortPrefix } from '../../../documentdb/query-language/shared/sortPrefixes';
 
 // Monaco-specific exports
 export {

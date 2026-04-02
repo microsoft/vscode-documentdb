@@ -14,7 +14,7 @@ import {
     getTypeSuggestionDefs,
     stripOuterBraces,
     type CursorContext,
-} from '../../../webviews/documentdbQuery/shared';
+} from '../../query-language/shared';
 import { SchemaStore } from '../../SchemaStore';
 import { SCRATCHPAD_LANGUAGE_ID, ScratchpadCommandIds } from '../constants';
 import { ScratchpadService } from '../ScratchpadService';

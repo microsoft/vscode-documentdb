@@ -18,10 +18,10 @@ import {
 } from '@vscode-documentdb/documentdb-constants';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
+import { KEY_POSITION_OPERATORS } from '../../../documentdb/query-language/shared/completionKnowledge';
+import { type CursorContext } from '../../../documentdb/query-language/shared/cursorContext';
 import { getCompletionContext } from '../completionStore';
 import { EditorType } from '../languageConfig';
-import { KEY_POSITION_OPERATORS } from '../shared/completionKnowledge';
-import { type CursorContext } from '../shared/cursorContext';
 import { createJsGlobalCompletionItems } from './jsGlobals';
 import { mapFieldToCompletionItem, mapOperatorToCompletionItem } from './mapCompletionItems';
 import { createTypeSuggestions } from './typeSuggestions';
@@ -62,7 +62,7 @@ export interface CreateCompletionItemsParams {
 
 // KEY_POSITION_OPERATORS is imported from ./completionKnowledge
 // Re-export for backwards compatibility and testing
-export { KEY_POSITION_OPERATORS } from '../shared/completionKnowledge';
+export { KEY_POSITION_OPERATORS } from '../../../documentdb/query-language/shared/completionKnowledge';
 
 /**
  * Returns the completion meta tags appropriate for the given editor type.

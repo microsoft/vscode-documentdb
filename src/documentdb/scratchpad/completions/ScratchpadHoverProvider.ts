@@ -18,7 +18,7 @@
 import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
 import { BSONTypes, type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
-import { extractQuotedKey } from '../../../webviews/documentdbQuery/shared';
+import { extractQuotedKey } from '../../query-language/shared';
 import { SchemaStore } from '../../SchemaStore';
 import { SCRATCHPAD_LANGUAGE_ID } from '../constants';
 import { ScratchpadService } from '../ScratchpadService';
