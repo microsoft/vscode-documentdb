@@ -17,6 +17,8 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import { type AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { accessDataMigrationServices } from '../commands/accessDataMigrationServices/accessDataMigrationServices';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
@@ -296,6 +298,22 @@ export class ClustersExtension implements vscode.Disposable {
                     }
                     tsRestarted = true;
                     try {
+                        // Create the node_modules stub for the TS server plugin at runtime.
+                        // vsce's file collection hardcodes `ignore: 'node_modules/**'`, so
+                        // the stub cannot be shipped inside the VSIX. Instead, we create it
+                        // on first use — the same pattern used by Vue/Volar.
+                        const stubDir = path.join(
+                            ext.context.extensionPath,
+                            'node_modules',
+                            'documentdb-scratchpad-ts-plugin',
+                        );
+                        const stubEntry = path.join(stubDir, 'index.js');
+                        if (!fs.existsSync(stubEntry)) {
+                            fs.mkdirSync(stubDir, { recursive: true });
+                            // Point to the bundled plugin at the extension root
+                            fs.writeFileSync(stubEntry, 'module.exports = require("../../scratchpadTsPlugin.js");\n');
+                        }
+
                         const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
                         if (tsExt) {
                             if (!tsExt.isActive) {
