@@ -80,6 +80,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'documentdb';
+            context.telemetry.properties.connectionInitiatedFrom = Views.AzureResourcesView;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -147,7 +148,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
             }
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+                const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -155,9 +156,18 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                     }),
                 );
 
+                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+
                 return clustersClient;
             } catch (error) {
-                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
+                    throw error;
+                }
+
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
 
                 void vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
@@ -166,7 +176,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                         detail:
                             l10n.t('Revisit connection details and try again.') +
                             '\n\n' +
-                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                     },
                 );
 

@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    callWithTelemetryAndErrorHandling,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
@@ -103,7 +107,7 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
                 );
 
                 // Connect using the cached credentials
-                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+                const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -114,15 +118,24 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
                 // Add success telemetry
                 context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'success';
+                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
                 return clustersClient;
             } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                    context.telemetry.properties.connectionResult = 'cancelled';
+                    throw error;
+                }
+
                 // Add error telemetry
                 context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'failed';
                 context.telemetry.properties.connectionErrorType = error instanceof Error ? error.name : 'UnknownError';
 
-                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
 
                 void vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
@@ -131,7 +144,7 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
                         detail:
                             l10n.t('Revisit connection details and try again.') +
                             '\n\n' +
-                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                     },
                 );
 

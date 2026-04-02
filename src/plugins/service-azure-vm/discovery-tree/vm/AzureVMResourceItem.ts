@@ -227,22 +227,25 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
 
             let clustersClient: ClustersClient;
             try {
-                // GetClient will use the cached credentials including the password
-                clustersClient = await ClustersClient.getClient(this.cluster.clusterId).catch((error: Error) => {
-                    ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: error.message }));
-                    void vscode.window.showErrorMessage(
-                        l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
-                        {
-                            modal: true,
-                            detail:
-                                l10n.t('Revisit connection details and try again.') +
-                                '\n\n' +
-                                l10n.t('Error: {error}', { error: error.message }),
-                        },
-                    );
+                clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
+            } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
-                });
-            } catch {
+                }
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
+                void vscode.window.showErrorMessage(
+                    l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
+                    {
+                        modal: true,
+                        detail:
+                            l10n.t('Revisit connection details and try again.') +
+                            '\n\n' +
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                    },
+                );
                 await ClustersClient.deleteClient(this.cluster.clusterId);
                 CredentialCache.deleteCredentials(this.cluster.clusterId);
                 return null;
@@ -254,6 +257,8 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
                     username: wizardContext.selectedUserName ?? '',
                 }),
             );
+
+            context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
             return clustersClient;
         });

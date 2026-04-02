@@ -75,6 +75,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.ConnectionsView;
+            context.telemetry.properties.connectionInitiatedFrom = Views.ConnectionsView;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -85,6 +86,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             const connectionType = this.cluster.emulatorConfiguration?.isEmulator
                 ? ConnectionType.Emulators
                 : ConnectionType.Clusters;
+
+            context.telemetry.properties.connectionType = connectionType;
 
             const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
@@ -222,9 +225,15 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
             // Attempt to create the client with the provided credentials
             try {
-                clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+                clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
             } catch (error) {
-                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
+                    throw error;
+                }
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
 
                 void vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
@@ -233,7 +242,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         detail:
                             l10n.t('Revisit connection details and try again.') +
                             '\n\n' +
-                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                     },
                 );
 
@@ -250,6 +259,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     cluster: this.cluster.name,
                 }),
             );
+
+            context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
             return clustersClient;
         });

@@ -43,6 +43,8 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
             ? Views.AzureResourcesView
             : Views.DiscoveryView;
 
+    context.telemetry.properties.sourceView = sourceViewId;
+
     if (sourceViewId === Views.AzureResourcesView) {
         // Show a modal dialog informing the user that the details will be saved for future use
         const continueButton = l10n.t('Yes, continue');

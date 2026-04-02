@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    callWithTelemetryAndErrorHandling,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
@@ -66,6 +70,7 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'ru';
+            context.telemetry.properties.connectionInitiatedFrom = Views.AzureResourcesView;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -95,7 +100,7 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
             );
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+                const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -103,9 +108,18 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
                     }),
                 );
 
+                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+
                 return clustersClient;
             } catch (error) {
-                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
+                    throw error;
+                }
+
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
 
                 void vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
@@ -114,7 +128,7 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
                         detail:
                             l10n.t('Revisit connection details and try again.') +
                             '\n\n' +
-                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                     },
                 );
 

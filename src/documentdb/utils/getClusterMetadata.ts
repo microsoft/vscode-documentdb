@@ -17,6 +17,20 @@ export interface ClusterMetadata {
 }
 
 /**
+ * Retrieves domain-only metadata from hosts without requiring a server connection.
+ * This can be called before the actual MongoDB connection to capture destination info
+ * even when the connection fails.
+ *
+ * @param hosts An array of host strings from the connection string.
+ * @returns An object containing domain metadata (isAzure, api, hashed domain segments).
+ */
+export function getDomainMetadata(hosts: string[]): ClusterMetadata {
+    const result: ClusterMetadata = {};
+    processDomainInfo(hosts, result);
+    return result;
+}
+
+/**
  * Retrieves non-sensitive metadata for a MongoDB cluster.
  * Telemetry-friendly techniques (such as hashing parts of a host) are used to avoid exposing sensitive data.
  *

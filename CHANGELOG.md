@@ -1,5 +1,16 @@
 # Change Log
 
+## 0.7.3
+
+### New Features
+
+- **Cancellable Connection**: Users can now cancel in-progress cluster connection attempts via the progress notification. [#529](https://github.com/microsoft/vscode-documentdb/pull/529)
+
+### Improvements
+
+- **Dependency Updates**: Upgrades Node.js from 20 to 22 and bumps `undici`, `handlebars`, `brace-expansion`, `picomatch`, and `flatted` to their latest versions. [#523](https://github.com/microsoft/vscode-documentdb/pull/523), [#534](https://github.com/microsoft/vscode-documentdb/pull/534), [#537](https://github.com/microsoft/vscode-documentdb/pull/537), [#539](https://github.com/microsoft/vscode-documentdb/pull/539), [#541](https://github.com/microsoft/vscode-documentdb/pull/541), [#542](https://github.com/microsoft/vscode-documentdb/pull/542)
+- **Telemetry Improvements**: Refines connection and discovery action telemetry with more specific, actionable diagnostic properties. [#544](https://github.com/microsoft/vscode-documentdb/pull/544)
+
 ## 0.7.2
 
 ### Improvements

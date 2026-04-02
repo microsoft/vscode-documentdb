@@ -16,6 +16,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<AddRegistryWizardContext
         activeDiscoveryProviderIds.push(context.discoveryProviderId!);
         await ext.context.globalState.update('activeDiscoveryProviderIds', activeDiscoveryProviderIds);
 
+        context.telemetry.properties.discoveryProviderId = context.discoveryProviderId!;
+        context.telemetry.measurements.activeDiscoveryProviders = activeDiscoveryProviderIds.length;
+
         // Refresh the discovery branch data provider to show the newly added provider
         ext.discoveryBranchDataProvider.refresh();
     }
