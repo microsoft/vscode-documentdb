@@ -144,12 +144,7 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
             return undefined;
         }
 
-        return collectionNames.map((name) => {
-            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
-            item.detail = 'discovered collection';
-            item.sortText = `!0_${name}`;
-            return item;
-        });
+        return collectionNames.map((name) => collectionNameToCompletionItem(name));
     }
 
     // -----------------------------------------------------------------------
@@ -544,4 +539,39 @@ function getVscodeOperatorSortPrefix(
     // Remap '2_' (non-matching) to '5_' so it sorts below BSON (3_) and globals (4_)
     const remapped = shared === '2_' ? '5_' : shared;
     return `!${remapped}`;
+}
+
+/**
+ * A valid JS identifier can be used directly as a property accessor: `db.myCollection`.
+ * Names that don't match (spaces, parens, hyphens, starting with a digit, etc.)
+ * must use the bracket/getCollection form: `db.getCollection('my collection')`.
+ */
+const JS_IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
+
+/**
+ * Creates a CompletionItem for a collection name in the `db.` context.
+ *
+ * - Simple identifiers (e.g. `stores`) insert as-is → `db.stores`
+ * - Names with special characters (e.g. `stores (10)`) insert via
+ *   `getCollection('...')` → `db.getCollection('stores (10)')`
+ *
+ * Exported for testing.
+ */
+export function collectionNameToCompletionItem(name: string): vscode.CompletionItem {
+    const needsGetCollection = !JS_IDENTIFIER_PATTERN.test(name);
+
+    const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
+    item.detail = 'discovered collection';
+    item.sortText = `!0_${name}`;
+
+    if (needsGetCollection) {
+        // Escape single quotes inside the collection name
+        const escaped = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        item.insertText = `getCollection('${escaped}')`;
+        // filterText must match what the user typed after `db.` so the item
+        // still appears when filtering by the bare collection name.
+        item.filterText = name;
+    }
+
+    return item;
 }
