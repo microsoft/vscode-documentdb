@@ -49,6 +49,7 @@ export async function activateInternal(
 
     ext.playgroundResultProvider = new PlaygroundResultProvider();
     context.subscriptions.push(
+        ext.playgroundResultProvider,
         vscode.workspace.registerTextDocumentContentProvider(PLAYGROUND_RESULT_SCHEME, ext.playgroundResultProvider),
     );
 
