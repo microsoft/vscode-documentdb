@@ -595,6 +595,11 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             '  • Variables persist within a block but not between separate runs',
             '  • When running multiple statements, only the last result is shown',
             '  • Use .toArray() to get all results (default: first 20 documents)',
+            '',
+            'Console Output:',
+            '  console.log(value)                             Log to output channel',
+            '  print() and printjson() are also supported',
+            '  Output appears in the "DocumentDB Query Playground Output" panel',
         ].join('\n');
 
         return { type: 'Help', printable: helpText };
