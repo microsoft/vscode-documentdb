@@ -118,7 +118,8 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
 
                     // If console output was produced, append a hint to check the output channel
                     if (evaluator!.lastEvalConsoleOutputCount > 0) {
-                        formattedOutput += '\n\n// ℹ Output was printed to the "DocumentDB Query Playground Output" channel';
+                        formattedOutput +=
+                            '\n\n// Note: Output was printed to the "DocumentDB Query Playground Output" channel';
                     }
 
                     if (sourceUri) {
