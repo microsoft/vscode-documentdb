@@ -174,7 +174,16 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     instanceState.setEvaluationListener({
         onPrint(values: Array<{ printable: unknown }>, _type: 'print' | 'printjson'): void {
             const output = values
-                .map((v) => (typeof v.printable === 'string' ? v.printable : JSON.stringify(v.printable, null, 2)))
+                .map((v) => {
+                    if (typeof v.printable === 'string') {
+                        return v.printable;
+                    }
+                    try {
+                        return JSON.stringify(v.printable, null, 2);
+                    } catch {
+                        return String(v.printable);
+                    }
+                })
                 .join(' ');
             const consoleMsg: WorkerToMainMessage = { type: 'consoleOutput', output };
             parentPort!.postMessage(consoleMsg);
