@@ -19,6 +19,7 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersExtension } from './documentdb/ClustersExtension';
+import { PLAYGROUND_RESULT_SCHEME, PlaygroundResultProvider } from './documentdb/playground/PlaygroundResultProvider';
 import { SchemaStore } from './documentdb/SchemaStore';
 import { ext } from './extensionVariables';
 import { globalUriHandler } from './vscodeUriHandler';
@@ -45,6 +46,11 @@ export async function activateInternal(
 
     ext.playgroundOutputChannel = vscode.window.createOutputChannel('DocumentDB Query Playground Output');
     context.subscriptions.push(ext.playgroundOutputChannel);
+
+    ext.playgroundResultProvider = new PlaygroundResultProvider();
+    context.subscriptions.push(
+        vscode.workspace.registerTextDocumentContentProvider(PLAYGROUND_RESULT_SCHEME, ext.playgroundResultProvider),
+    );
 
     registerUIExtensionVariables(ext);
     registerAzureUtilsExtensionVariables(ext);

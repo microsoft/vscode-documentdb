@@ -3,11 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    UserCancelledError,
-    callWithTelemetryAndErrorHandling,
-    openReadOnlyContent,
-} from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
@@ -19,6 +15,7 @@ import { formatError, formatResult } from '../../documentdb/playground/resultFor
 import { type ExecutionResult, type PlaygroundConnection } from '../../documentdb/playground/types';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
+import { ext } from '../../extensionVariables';
 
 /** Shared evaluator instance — lazily created, reused across runs. */
 let evaluator: PlaygroundEvaluator | undefined;
@@ -101,6 +98,8 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                 });
 
                 const startTime = Date.now();
+                const sourceUri = vscode.window.activeTextEditor?.document.uri;
+
                 try {
                     const result = await evaluator!.evaluate(connection, code, (message) => {
                         progress.report({ message });
@@ -117,18 +116,11 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     const formattedOutput = formatResult(result, code, connection);
                     feedResultToSchemaStore(result, connection);
 
-                    const resultLabel = l10n.t(
-                        '{0}/{1} — Results',
-                        connection.clusterDisplayName,
-                        connection.databaseName,
-                    );
+                    const languageId = getResultLanguageId(result);
 
-                    await openReadOnlyContent(
-                        { label: resultLabel, fullId: `playground-results-${Date.now()}` },
-                        formattedOutput,
-                        '.jsonc',
-                        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-                    );
+                    if (sourceUri) {
+                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput, languageId);
+                    }
 
                     // result: 'Succeeded' is set automatically by the framework
                 } catch (error: unknown) {
@@ -148,18 +140,9 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     const durationMs = Date.now() - startTime;
                     const formattedOutput = formatError(error, code, durationMs, connection);
 
-                    const errorLabel = l10n.t(
-                        '{0}/{1} — Error',
-                        connection.clusterDisplayName,
-                        connection.databaseName,
-                    );
-
-                    await openReadOnlyContent(
-                        { label: errorLabel, fullId: `playground-error-${Date.now()}` },
-                        formattedOutput,
-                        '.jsonc',
-                        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-                    );
+                    if (sourceUri) {
+                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput, 'jsonc');
+                    }
 
                     void vscode.window.showErrorMessage(l10n.t('Query playground execution failed: {0}', errorMessage));
 
@@ -175,6 +158,36 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
 }
 
 // ─── Domain telemetry ────────────────────────────────────────────────────────
+
+/**
+ * Determine the VS Code language ID for the result document based on the
+ * mongosh result type. Documents, cursors, and arrays get `jsonc` (JSON with
+ * comments — the header uses `//` comment lines). Scalars and help text get
+ * `plaintext`.
+ */
+function getResultLanguageId(result: ExecutionResult): string {
+    switch (result.type) {
+        case 'Cursor':
+        case 'Document':
+        case 'InsertOneResult':
+        case 'InsertManyResult':
+        case 'UpdateResult':
+        case 'DeleteResult':
+        case 'BulkWriteResult':
+            return 'jsonc';
+        case 'string':
+        case 'Help':
+            return 'plaintext';
+        default: {
+            // If printable is an object/array, use jsonc; otherwise plaintext
+            const p = result.printable;
+            if (p !== null && p !== undefined && typeof p === 'object') {
+                return 'jsonc';
+            }
+            return 'plaintext';
+        }
+    }
+}
 
 /**
  * Collects domain info from the query playground connection's cached credentials.

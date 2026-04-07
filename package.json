@@ -267,6 +267,16 @@
           "Query Playground"
         ],
         "configuration": "./playground-language-configuration.json"
+      },
+      {
+        "id": "documentdb-playground-result",
+        "aliases": [
+          "Query Playground Result"
+        ],
+        "icon": {
+          "light": "./resources/icons/playground-result-light.svg",
+          "dark": "./resources/icons/playground-result-dark.svg"
+        }
       }
     ],
     "grammars": [
@@ -274,6 +284,15 @@
         "language": "documentdb-playground",
         "scopeName": "source.documentdb-playground",
         "path": "./syntaxes/documentdb-playground.tmGrammar.json"
+      }
+    ],
+    "resourceLabelFormatters": [
+      {
+        "scheme": "documentdb-playground-result",
+        "formatting": {
+          "label": "${path}",
+          "separator": "/"
+        }
       }
     ],
     "typescriptServerPlugins": [
