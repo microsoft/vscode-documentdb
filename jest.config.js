@@ -14,5 +14,6 @@ module.exports = {
         },
         '<rootDir>/packages/schema-analyzer',
         '<rootDir>/packages/documentdb-constants',
+        '<rootDir>/packages/documentdb-shell-runtime',
     ],
 };

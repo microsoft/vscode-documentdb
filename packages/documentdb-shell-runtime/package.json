@@ -1,0 +1,30 @@
+{
+  "name": "@microsoft/documentdb-vscode-shell-runtime",
+  "version": "1.0.0",
+  "description": "Shell runtime abstraction for DocumentDB VS Code extension — wraps @mongosh evaluation pipeline",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "test": "jest --config jest.config.js",
+    "prettier-fix": "prettier -w \"src/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode-documentdb",
+    "directory": "packages/documentdb-shell-runtime"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "mongodb": ">=6.0.0"
+  },
+  "dependencies": {
+    "@mongosh/service-provider-node-driver": "^5.0.6",
+    "@mongosh/shell-api": "^5.1.4",
+    "@mongosh/shell-evaluator": "^5.1.4"
+  }
+}
