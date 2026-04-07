@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CommandInterceptor } from '@microsoft/documentdb-vscode-shell-runtime';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
@@ -39,12 +38,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     private _workerState: WorkerState = 'idle';
     /** Which cluster the live worker is connected to (to detect cluster switches) */
     private _workerClusterId: string | undefined;
-
-    /**
-     * Command interceptor from the shell-runtime package.
-     * Handles `help`/`help()` on the main thread to avoid spawning a worker.
-     */
-    private readonly _commandInterceptor = new CommandInterceptor();
 
     /**
      * Telemetry session ID — generated on worker spawn, stable across evals within the
@@ -104,13 +97,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         code: string,
         onProgress?: (message: string) => void,
     ): Promise<ExecutionResult> {
-        // Intercept playground-specific commands before they reach the worker
-        const trimmed = code.trim();
-        const intercepted = this._commandInterceptor.tryIntercept(trimmed);
-        if (intercepted) {
-            return { ...intercepted, durationMs: 0 };
-        }
-
         // Ensure worker is alive and connected to the right cluster
         const needsSpawn =
             !this._worker || this._workerState === 'idle' || this._workerClusterId !== connection.clusterId;
