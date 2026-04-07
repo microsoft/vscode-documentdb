@@ -18,6 +18,7 @@ import {
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
+import { randomUUID } from 'crypto';
 import {
     MongoBulkWriteError,
     MongoClient,
@@ -156,6 +157,12 @@ export class ClustersClient {
     private _collectionsCache = new Map<string, CollectionItemModel[]>();
 
     /**
+     * Correlation ID linking the `connect`, `connect.staticmetadata`, and `connect.getmetadata`
+     * telemetry events for the same connection attempt. Generated once per `initClient` call.
+     */
+    public connectionCorrelationId?: string;
+
+    /**
      * Private constructor - use getClient() instead.
      * Connections/Clients are being cached and reused.
      *
@@ -224,6 +231,22 @@ export class ClustersClient {
             options.appName = userAgentString;
         }
 
+        // Generate a correlation ID to link connect + connect.getmetadata telemetry
+        this.connectionCorrelationId = randomUUID();
+
+        // Emit static metadata (domain info) BEFORE the connection attempt.
+        // This ensures destination telemetry is available even when connections fail.
+        const correlationId = this.connectionCorrelationId;
+        void callWithTelemetryAndErrorHandling('connect.staticmetadata', async (context) => {
+            const { getDomainMetadata } = await import('./utils/getClusterMetadata');
+            const domainMetadata = getDomainMetadata(hosts);
+            context.telemetry.properties = {
+                connectionCorrelationId: correlationId,
+                ...context.telemetry.properties,
+                ...domainMetadata,
+            };
+        });
+
         // Connect with the configured options
         await this.connect(connectionString, options, credentials.emulatorConfiguration, abortSignal);
 
@@ -235,6 +258,7 @@ export class ClustersClient {
             const metadata: ClusterMetadata = await this._clusterMetadataPromise!;
             context.telemetry.properties = {
                 authmethod: authMethod,
+                connectionCorrelationId: correlationId,
                 ...context.telemetry.properties,
                 ...metadata,
             };
@@ -268,6 +292,12 @@ export class ClustersClient {
 
         try {
             await this._mongoClient.connect();
+
+            // Remove the abort listener immediately after connect() resolves so that
+            // a late cancellation during synchronous API init below cannot close an
+            // already-connected client while the method continues as "successful".
+            abortSignal?.removeEventListener('abort', onAbort);
+
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
@@ -318,8 +348,35 @@ export class ClustersClient {
         if (ClustersClient._clients.has(clusterId)) {
             const client = ClustersClient._clients.get(clusterId) as ClustersClient;
 
-            // if the client is already connected, it's a NOOP.
-            await client._mongoClient.connect();
+            // Wire up abort for cached client reconnection so the cancellable
+            // progress UI can also cancel a reconnection attempt.
+            if (abortSignal?.aborted) {
+                throw new UserCancelledError('abortConnection');
+            }
+
+            const onAbort = (): void => {
+                void client._mongoClient.close().catch(() => {
+                    // Ignore close errors when aborting during reconnect
+                });
+            };
+            abortSignal?.addEventListener('abort', onAbort, { once: true });
+
+            try {
+                // if the client is already connected, it's a NOOP.
+                // Note: connectionCorrelationId retains the value from the initial
+                // connection (set in initClient). This is by design — the correlation
+                // ID links the original connect/staticmetadata/getmetadata events.
+                // Cached reconnects don't emit new metadata events, so no new ID is needed.
+                await client._mongoClient.connect();
+            } catch (error) {
+                if (abortSignal?.aborted) {
+                    throw new UserCancelledError('abortConnection');
+                }
+                throw error;
+            } finally {
+                abortSignal?.removeEventListener('abort', onAbort);
+            }
+
             return client;
         }
 

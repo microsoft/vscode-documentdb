@@ -166,10 +166,12 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
 
                     void callWithTelemetryAndErrorHandling('connect', (context) => {
                         context.telemetry.properties.connectionResult = 'cancelled';
+                        context.telemetry.properties.source = 'treeExpansion';
+                        context.telemetry.properties.experience = this.experience.api;
                         throw error;
                     });
 
-                    clustersClient = null;
+                    return [];
                 } else {
                     throw error;
                 }

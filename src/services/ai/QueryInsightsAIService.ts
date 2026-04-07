@@ -113,11 +113,32 @@ export class QueryInsightsAIService {
                 // Parse the AI response to extract structured recommendations
                 const parsedResponse = this.parseAIResponse(optimizationResult.recommendations);
 
-                // count all actionable recommendations like create, drop, modify..
-                const actionableRecommendationCount = parsedResponse.improvements.filter(
-                    (improvement) => improvement.action !== 'none',
-                ).length;
+                // Count all actionable recommendations by action type in a single pass
+                let actionableRecommendationCount = 0;
+                let createRecommendationCount = 0;
+                let dropRecommendationCount = 0;
+                let modifyRecommendationCount = 0;
+                for (const improvement of parsedResponse.improvements) {
+                    switch (improvement.action) {
+                        case 'create':
+                            actionableRecommendationCount++;
+                            createRecommendationCount++;
+                            break;
+                        case 'drop':
+                            actionableRecommendationCount++;
+                            dropRecommendationCount++;
+                            break;
+                        case 'modify':
+                            actionableRecommendationCount++;
+                            modifyRecommendationCount++;
+                            break;
+                    }
+                }
+
                 context.telemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
+                context.telemetry.measurements.createRecommendationCount = createRecommendationCount;
+                context.telemetry.measurements.dropRecommendationCount = dropRecommendationCount;
+                context.telemetry.measurements.modifyRecommendationCount = modifyRecommendationCount;
 
                 return parsedResponse;
             },

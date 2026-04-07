@@ -10,7 +10,7 @@ import { ext } from '../../extensionVariables';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 
-export async function removeDiscoveryRegistry(_context: IActionContext, node: TreeElement): Promise<void> {
+export async function removeDiscoveryRegistry(context: IActionContext, node: TreeElement): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
@@ -47,6 +47,9 @@ export async function removeDiscoveryRegistry(_context: IActionContext, node: Tr
 
     // Update global state with the filtered list
     await ext.context.globalState.update('activeDiscoveryProviderIds', updatedProviderIds);
+
+    context.telemetry.properties.discoveryProviderId = provider.id;
+    context.telemetry.measurements.activeDiscoveryProviders = updatedProviderIds.length;
 
     // Refresh the discovery branch data provider to show the updated list
     ext.discoveryBranchDataProvider.refresh();
