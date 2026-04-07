@@ -113,8 +113,13 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
 
-                    const formattedOutput = formatResult(result, code, connection);
+                    let formattedOutput = formatResult(result, code, connection);
                     feedResultToSchemaStore(result, connection);
+
+                    // If console output was produced, append a hint to check the output channel
+                    if (evaluator!.lastEvalConsoleOutputCount > 0) {
+                        formattedOutput += '\n\n// ℹ Output was printed to the "DocumentDB Query Playground Output" channel';
+                    }
 
                     if (sourceUri) {
                         await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
