@@ -295,7 +295,7 @@
       {
         "scheme": "documentdb-playground-result",
         "formatting": {
-          "label": "${path}",
+          "label": "Query Playground Result",
           "separator": "/"
         }
       }
