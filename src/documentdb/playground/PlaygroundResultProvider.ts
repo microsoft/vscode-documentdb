@@ -110,7 +110,9 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
     }
 
     dispose(): void {
-        this._disposables.forEach((d) => d.dispose());
+        for (const d of this._disposables) {
+            d.dispose();
+        }
         this._onDidChange.dispose();
         this._contents.clear();
     }
