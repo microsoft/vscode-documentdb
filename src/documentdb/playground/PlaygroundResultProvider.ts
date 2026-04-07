@@ -54,9 +54,16 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
      * Same source file → same URI → same tab.
      */
     getResultUri(sourceUri: vscode.Uri): vscode.Uri {
-        // Encode the source URI to keep result URIs unique per playground file.
+        // Keep the path short and readable for tab labels. Store the unique
+        // source identifier in the query string so each playground file gets
+        // its own stable result tab without polluting the display path.
         const encoded = encodeURIComponent(sourceUri.toString());
-        return vscode.Uri.parse(`${PLAYGROUND_RESULT_SCHEME}://results/${encoded}/Query Playground Result`);
+        return vscode.Uri.from({
+            scheme: PLAYGROUND_RESULT_SCHEME,
+            authority: 'results',
+            path: '/Query Playground Result',
+            query: `source=${encoded}`,
+        });
     }
 
     /**
