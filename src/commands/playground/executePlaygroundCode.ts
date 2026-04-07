@@ -116,10 +116,8 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     const formattedOutput = formatResult(result, code, connection);
                     feedResultToSchemaStore(result, connection);
 
-                    const languageId = getResultLanguageId(result);
-
                     if (sourceUri) {
-                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput, languageId);
+                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
                     }
 
                     // result: 'Succeeded' is set automatically by the framework
@@ -141,7 +139,7 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     const formattedOutput = formatError(error, code, durationMs, connection);
 
                     if (sourceUri) {
-                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput, 'jsonc');
+                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
                     }
 
                     void vscode.window.showErrorMessage(l10n.t('Query playground execution failed: {0}', errorMessage));
@@ -158,36 +156,6 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
 }
 
 // ─── Domain telemetry ────────────────────────────────────────────────────────
-
-/**
- * Determine the VS Code language ID for the result document based on the
- * mongosh result type. Documents, cursors, and arrays get `jsonc` (JSON with
- * comments — the header uses `//` comment lines). Scalars and help text get
- * `plaintext`.
- */
-function getResultLanguageId(result: ExecutionResult): string {
-    switch (result.type) {
-        case 'Cursor':
-        case 'Document':
-        case 'InsertOneResult':
-        case 'InsertManyResult':
-        case 'UpdateResult':
-        case 'DeleteResult':
-        case 'BulkWriteResult':
-            return 'jsonc';
-        case 'string':
-        case 'Help':
-            return 'plaintext';
-        default: {
-            // If printable is an object/array, use jsonc; otherwise plaintext
-            const p = result.printable;
-            if (p !== null && p !== undefined && typeof p === 'object') {
-                return 'jsonc';
-            }
-            return 'plaintext';
-        }
-    }
-}
 
 /**
  * Collects domain info from the query playground connection's cached credentials.

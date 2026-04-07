@@ -284,6 +284,11 @@
         "language": "documentdb-playground",
         "scopeName": "source.documentdb-playground",
         "path": "./syntaxes/documentdb-playground.tmGrammar.json"
+      },
+      {
+        "language": "documentdb-playground-result",
+        "scopeName": "source.documentdb-playground-result",
+        "path": "./syntaxes/documentdb-playground-result.tmGrammar.json"
       }
     ],
     "resourceLabelFormatters": [

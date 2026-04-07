@@ -11,6 +11,9 @@ import * as vscode from 'vscode';
  */
 export const PLAYGROUND_RESULT_SCHEME = 'documentdb-playground-result';
 
+/** Language ID registered in package.json for result documents. */
+const PLAYGROUND_RESULT_LANGUAGE_ID = 'documentdb-playground-result';
+
 /**
  * Virtual document content provider for query playground results.
  *
@@ -51,8 +54,7 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
      * Same source file → same URI → same tab.
      */
     getResultUri(sourceUri: vscode.Uri): vscode.Uri {
-        // Use the source file path as the authority to keep URIs unique per file.
-        // The path gets a .jsonc extension so VS Code applies JSON-with-comments language.
+        // Encode the source URI to keep result URIs unique per playground file.
         const encoded = encodeURIComponent(sourceUri.toString());
         return vscode.Uri.parse(`${PLAYGROUND_RESULT_SCHEME}://results/${encoded}/Query Playground Result`);
     }
@@ -68,13 +70,18 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
     /**
      * Open (or reveal) the result document beside the active editor.
      * If the tab already exists, its content is updated in place.
+     *
+     * The document language is always `documentdb-playground-result`, which
+     * delegates syntax highlighting to JSONC via its TextMate grammar while
+     * keeping the custom DocumentDB icon on the tab.
      */
-    async showResult(sourceUri: vscode.Uri, content: string, languageId: string): Promise<void> {
+    async showResult(sourceUri: vscode.Uri, content: string): Promise<void> {
         const resultUri = this.getResultUri(sourceUri);
         this.updateContent(resultUri, content);
 
-        // If the document is already visible, just fire the change event (content already updated).
-        // Otherwise, open it beside the active editor.
+        // If the document is already open, the onDidChange event (fired by
+        // updateContent) is enough — VS Code will re-pull the content.
+        // We just need to ensure it's visible.
         const existingDoc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === resultUri.toString());
         if (!existingDoc) {
             const doc = await vscode.workspace.openTextDocument(resultUri);
@@ -83,7 +90,10 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
                 preserveFocus: true,
                 preview: false,
             });
-            await vscode.languages.setTextDocumentLanguage(doc, languageId);
+            // Set our language so VS Code uses our icon and JSONC-delegating grammar.
+            // Must happen after openTextDocument since VS Code can't infer language
+            // from our scheme-only URI (no file extension).
+            await vscode.languages.setTextDocumentLanguage(doc, PLAYGROUND_RESULT_LANGUAGE_ID);
         } else {
             // Document exists — ensure it's visible in an editor
             const visibleEditor = vscode.window.visibleTextEditors.find(
@@ -95,11 +105,6 @@ export class PlaygroundResultProvider implements vscode.TextDocumentContentProvi
                     preserveFocus: true,
                     preview: false,
                 });
-            }
-
-            // Update language if it changed
-            if (existingDoc.languageId !== languageId) {
-                await vscode.languages.setTextDocumentLanguage(existingDoc, languageId);
             }
         }
     }
