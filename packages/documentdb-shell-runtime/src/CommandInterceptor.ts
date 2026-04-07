@@ -20,6 +20,17 @@ import { type ShellEvaluationResult } from './types';
 export class CommandInterceptor {
     private readonly _helpProvider: HelpProvider;
 
+    /**
+     * Matches standalone `help` invocations:
+     * - `help` (bare keyword)
+     * - `help()` (function call, no arguments)
+     * - `` help`...` `` (tagged template literal — any content between backticks)
+     *
+     * Does NOT match when `help` is part of a larger expression
+     * (e.g. `helper()`, `var help = 1`, `help("topic")`).
+     */
+    private static readonly HELP_PATTERN = /^help(?:\(\)|\s*`[^]*`)?$/;
+
     constructor(helpProvider?: HelpProvider) {
         this._helpProvider = helpProvider ?? new HelpProvider();
     }
@@ -27,13 +38,13 @@ export class CommandInterceptor {
     /**
      * Check if the input is a command that should be intercepted.
      * Returns a result if intercepted, undefined if the input should
-     * proceed through normal @mongosh evaluation.
+     * proceed through normal evaluation.
      */
     tryIntercept(input: string): ShellEvaluationResult | undefined {
         const trimmed = input.trim();
 
-        // Help command
-        if (trimmed === 'help' || trimmed === 'help()') {
+        // Help command (bare, function call, or tagged template literal)
+        if (CommandInterceptor.HELP_PATTERN.test(trimmed)) {
             return this._helpProvider.getHelpResult();
         }
 

@@ -38,6 +38,31 @@ describe('CommandInterceptor', () => {
             expect(result!.type).toBe('Help');
         });
 
+        it('intercepts help with empty tagged template literal', () => {
+            const result = interceptor.tryIntercept('help``');
+            expect(result).toBeDefined();
+            expect(result!.type).toBe('Help');
+            expect(result!.durationMs).toBe(0);
+        });
+
+        it('intercepts help with non-empty tagged template literal', () => {
+            const result = interceptor.tryIntercept('help`some content`');
+            expect(result).toBeDefined();
+            expect(result!.type).toBe('Help');
+        });
+
+        it('intercepts help with tagged template literal with whitespace before backtick', () => {
+            const result = interceptor.tryIntercept('help `text`');
+            expect(result).toBeDefined();
+            expect(result!.type).toBe('Help');
+        });
+
+        it('intercepts help tagged template literal with leading/trailing whitespace', () => {
+            const result = interceptor.tryIntercept('  help``  ');
+            expect(result).toBeDefined();
+            expect(result!.type).toBe('Help');
+        });
+
         it('does not intercept "help(arg)"', () => {
             const result = interceptor.tryIntercept('help("collections")');
             expect(result).toBeUndefined();
