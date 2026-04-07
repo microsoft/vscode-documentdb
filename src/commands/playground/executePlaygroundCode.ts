@@ -3,11 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    UserCancelledError,
-    callWithTelemetryAndErrorHandling,
-    openReadOnlyContent,
-} from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
@@ -19,6 +15,7 @@ import { formatError, formatResult } from '../../documentdb/playground/resultFor
 import { type ExecutionResult, type PlaygroundConnection } from '../../documentdb/playground/types';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
+import { ext } from '../../extensionVariables';
 
 /** Shared evaluator instance — lazily created, reused across runs. */
 let evaluator: PlaygroundEvaluator | undefined;
@@ -101,6 +98,8 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                 });
 
                 const startTime = Date.now();
+                const sourceUri = vscode.window.activeTextEditor?.document.uri;
+
                 try {
                     const result = await evaluator!.evaluate(connection, code, (message) => {
                         progress.report({ message });
@@ -114,21 +113,18 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
 
-                    const formattedOutput = formatResult(result, code, connection);
+                    let formattedOutput = formatResult(result, code, connection);
                     feedResultToSchemaStore(result, connection);
 
-                    const resultLabel = l10n.t(
-                        '{0}/{1} — Results',
-                        connection.clusterDisplayName,
-                        connection.databaseName,
-                    );
+                    // If console output was produced, append a hint to check the output channel
+                    if (evaluator!.lastEvalConsoleOutputCount > 0) {
+                        formattedOutput +=
+                            '\n\n// Note: Output was printed to the "DocumentDB Query Playground Output" channel';
+                    }
 
-                    await openReadOnlyContent(
-                        { label: resultLabel, fullId: `playground-results-${Date.now()}` },
-                        formattedOutput,
-                        '.jsonc',
-                        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-                    );
+                    if (sourceUri) {
+                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
+                    }
 
                     // result: 'Succeeded' is set automatically by the framework
                 } catch (error: unknown) {
@@ -148,18 +144,9 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     const durationMs = Date.now() - startTime;
                     const formattedOutput = formatError(error, code, durationMs, connection);
 
-                    const errorLabel = l10n.t(
-                        '{0}/{1} — Error',
-                        connection.clusterDisplayName,
-                        connection.databaseName,
-                    );
-
-                    await openReadOnlyContent(
-                        { label: errorLabel, fullId: `playground-error-${Date.now()}` },
-                        formattedOutput,
-                        '.jsonc',
-                        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-                    );
+                    if (sourceUri) {
+                        await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
+                    }
 
                     void vscode.window.showErrorMessage(l10n.t('Query playground execution failed: {0}', errorMessage));
 

@@ -170,6 +170,26 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     const instanceState = new ShellInstanceState(serviceProvider, bus);
     const evaluator = new ShellEvaluator(instanceState);
 
+    // Register evaluation listener to capture console.log(), print(), printjson() output
+    instanceState.setEvaluationListener({
+        onPrint(values: Array<{ printable: unknown }>, _type: 'print' | 'printjson'): void {
+            const output = values
+                .map((v) => {
+                    if (typeof v.printable === 'string') {
+                        return v.printable;
+                    }
+                    try {
+                        return JSON.stringify(v.printable, null, 2);
+                    } catch {
+                        return String(v.printable);
+                    }
+                })
+                .join(' ');
+            const consoleMsg: WorkerToMainMessage = { type: 'consoleOutput', output };
+            parentPort!.postMessage(consoleMsg);
+        },
+    });
+
     // Set up eval context with shell globals (db, ObjectId, ISODate, etc.)
     const context = {};
     instanceState.setCtx(context);

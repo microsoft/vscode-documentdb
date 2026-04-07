@@ -78,6 +78,12 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         return this._lastInitDurationMs;
     }
 
+    /** Number of console output messages (console.log/print/printjson) produced during the last eval. */
+    private _lastEvalConsoleOutputCount: number = 0;
+    get lastEvalConsoleOutputCount(): number {
+        return this._lastEvalConsoleOutputCount;
+    }
+
     /**
      * Evaluate user code against the connected database.
      *
@@ -108,6 +114,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         const initStartTime = Date.now();
         await this.ensureWorker(connection, onProgress);
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
+
+        // Reset console output counter for this eval run
+        this._lastEvalConsoleOutputCount = 0;
 
         // Send eval message and await result
         onProgress?.(l10n.t('Running query…'));
@@ -435,6 +444,13 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 }
                 break;
             }
+
+            case 'consoleOutput': {
+                this._lastEvalConsoleOutputCount++;
+                ext.playgroundOutputChannel.show(true);
+                ext.playgroundOutputChannel.appendLine(msg.output);
+                break;
+            }
         }
     }
 
@@ -579,6 +595,11 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             '  • Variables persist within a block but not between separate runs',
             '  • When running multiple statements, only the last result is shown',
             '  • Use .toArray() to get all results (default: first 20 documents)',
+            '',
+            'Console Output:',
+            '  console.log(value)                             Log to output channel',
+            '  print() and printjson() are also supported',
+            '  Output appears in the "DocumentDB Query Playground Output" panel',
         ].join('\n');
 
         return { type: 'Help', printable: helpText };

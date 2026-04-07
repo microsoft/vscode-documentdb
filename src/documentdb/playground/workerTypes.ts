@@ -122,4 +122,9 @@ export type WorkerToMainMessage =
           readonly type: 'log';
           readonly level: 'trace' | 'debug' | 'info' | 'warn' | 'error';
           readonly message: string;
+      }
+    | {
+          /** User-facing console output from console.log(), print(), printjson() */
+          readonly type: 'consoleOutput';
+          readonly output: string;
       };
