@@ -435,6 +435,12 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 }
                 break;
             }
+
+            case 'consoleOutput': {
+                ext.playgroundOutputChannel.show(true);
+                ext.playgroundOutputChannel.appendLine(msg.output);
+                break;
+            }
         }
     }
 

@@ -23,6 +23,7 @@ import { type TreeElement } from './tree/TreeElement';
 export namespace ext {
     export let context: vscode.ExtensionContext;
     export let outputChannel: IAzExtLogOutputChannel;
+    export let playgroundOutputChannel: vscode.OutputChannel;
     export let isBundle: boolean | undefined;
     export let secretStorage: vscode.SecretStorage;
     export const prefix: string = 'documentDB';

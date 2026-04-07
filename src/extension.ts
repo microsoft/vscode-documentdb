@@ -42,6 +42,10 @@ export async function activateInternal(
 
     ext.outputChannel = createAzExtLogOutputChannel('DocumentDB for VS Code');
     context.subscriptions.push(ext.outputChannel);
+
+    ext.playgroundOutputChannel = vscode.window.createOutputChannel('DocumentDB Query Playground Output');
+    context.subscriptions.push(ext.playgroundOutputChannel);
+
     registerUIExtensionVariables(ext);
     registerAzureUtilsExtensionVariables(ext);
 
