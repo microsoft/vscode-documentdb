@@ -108,9 +108,10 @@ export class PlaygroundDiagnostics implements vscode.Disposable {
                 const diagnostic = new vscode.Diagnostic(
                     range,
                     l10n.t(
-                        '.limit({0}) exceeds display batch size ({1}) — only {1} documents will be shown. Use .toArray() to get all {0}.',
+                        '.limit({0}) exceeds the display batch size ({1}), so only {1} documents will be shown. Use .toArray() to retrieve all {0}, or increase "{2}" in Settings.',
                         limitValue,
                         batchSize,
+                        ext.settingsKeys.batchSize,
                     ),
                     vscode.DiagnosticSeverity.Warning,
                 );
@@ -171,7 +172,7 @@ class PlaygroundCodeActionProvider implements vscode.CodeActionProvider {
 
             // Action 2: Open batch size setting
             const settingsAction = new vscode.CodeAction(
-                l10n.t('Change display batch size ({0}) in settings', getBatchSizeSetting()),
+                l10n.t('Change display batch size (currently {0}) in settings', getBatchSizeSetting()),
                 vscode.CodeActionKind.QuickFix,
             );
             settingsAction.diagnostics = [diagnostic];
