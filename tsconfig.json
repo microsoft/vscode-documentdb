@@ -31,5 +31,9 @@
       */
   },
   "exclude": ["node_modules", ".vscode-test", "packages/*/dist"],
-  "references": [{ "path": "packages/schema-analyzer" }, { "path": "packages/documentdb-constants" }]
+  "references": [
+    { "path": "packages/schema-analyzer" },
+    { "path": "packages/documentdb-constants" },
+    { "path": "packages/documentdb-shell-runtime" }
+  ]
 }

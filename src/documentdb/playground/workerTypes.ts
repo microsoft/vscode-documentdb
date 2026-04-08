@@ -40,6 +40,8 @@ export interface SerializableExecutionResult {
     /** EJSON-serialized printable value */
     readonly printable: string;
     readonly durationMs: number;
+    /** Whether the cursor has more documents beyond the returned batch (Cursor results only). */
+    readonly cursorHasMore?: boolean;
     readonly source?: {
         readonly namespace?: {
             readonly db: string;
@@ -61,9 +63,6 @@ export type MainToWorkerMessage =
           readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID';
           /** Tenant ID for Entra ID clusters */
           readonly tenantId?: string;
-          // TODO(F11): Wire displayBatchSize end-to-end — currently sent but not read by the worker.
-          // See future-work.md §F11 for the plan to honor documentDB.mongoShell.batchSize.
-          readonly displayBatchSize: number;
       }
     | {
           readonly type: 'eval';
@@ -72,6 +71,8 @@ export type MainToWorkerMessage =
           readonly code: string;
           /** Target database name (may differ from init if user switched databases) */
           readonly databaseName: string;
+          /** Display batch size — number of documents per cursor iteration. Read from settings per-eval. */
+          readonly displayBatchSize: number;
       }
     | {
           readonly type: 'shutdown';

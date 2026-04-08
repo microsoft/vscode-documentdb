@@ -29,11 +29,10 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
         lines.push(`// ▶ ${codeLine}`);
     }
 
-    // Result metadata
-    // Result metadata — state what we know from @mongosh, don't guess
+    // Result metadata — state what we know, don't guess
     const unwrapped = unwrapCursorResult(result.printable);
     if (result.type === 'Cursor' && Array.isArray(unwrapped)) {
-        // Cursor with a known batch: "Result: Cursor (20 documents)"
+        // Cursor with a known batch: "Result: Cursor (50 documents)"
         lines.push(`// ${l10n.t('Result: Cursor ({0} documents)', unwrapped.length)}`);
     } else if (result.type) {
         // Typed result: "Result: Document", "Result: string", etc.
@@ -44,6 +43,14 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
     }
 
     lines.push(`// ${l10n.t('Executed in {0}ms', result.durationMs)}`);
+
+    // Batch size hint -- shown only when the cursor explicitly reports more documents
+    if (result.type === 'Cursor' && result.cursorHasMore === true && Array.isArray(unwrapped)) {
+        lines.push(
+            `// ${l10n.t("Showing first {0} documents (batch size). To change: Settings → 'documentDB.shell.batchSize'", unwrapped.length)}`,
+        );
+    }
+
     lines.push('// ─────────────────────────');
     lines.push('');
 

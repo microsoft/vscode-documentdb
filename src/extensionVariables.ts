@@ -66,7 +66,7 @@ export namespace ext {
         export const shellPath = 'documentDB.mongoShell.path';
         export const shellArgs = 'documentDB.mongoShell.args';
         export const shellTimeout = 'documentDB.mongoShell.timeout';
-        export const batchSize = 'documentDB.mongoShell.batchSize';
+        export const batchSize = 'documentDB.shell.batchSize';
         export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
         export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';

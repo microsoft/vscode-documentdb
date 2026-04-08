@@ -14,6 +14,7 @@
  * See workerTypes.ts for the message protocol.
  */
 
+import { DocumentDBShellRuntime } from '@microsoft/documentdb-vscode-shell-runtime';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
@@ -26,7 +27,7 @@ if (!parentPort) {
 // ─── Worker state ────────────────────────────────────────────────────────────
 
 let mongoClient: MongoClientType | undefined;
-let currentDatabaseName: string | undefined;
+let shellRuntime: DocumentDBShellRuntime | undefined;
 
 /**
  * Cache for pending Entra ID token requests from the OIDC callback.
@@ -127,7 +128,22 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
     // Create and connect the database client
     mongoClient = new MongoClient(msg.connectionString, options);
     await mongoClient.connect();
-    currentDatabaseName = msg.databaseName;
+
+    // Create the shell runtime with console output routing to the main thread
+    shellRuntime = new DocumentDBShellRuntime(
+        mongoClient,
+        {
+            onConsoleOutput: (output: string) => {
+                const consoleMsg: WorkerToMainMessage = { type: 'consoleOutput', output };
+                parentPort!.postMessage(consoleMsg);
+            },
+            onLog: log,
+        },
+        {
+            productName: 'DocumentDB for VS Code Query Playground',
+            productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
+        },
+    );
 
     log('debug', 'Worker initialized — client connected');
 
@@ -142,134 +158,55 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
 // ─── Eval handler ────────────────────────────────────────────────────────────
 
 async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): Promise<void> {
-    if (!mongoClient) {
+    if (!mongoClient || !shellRuntime) {
         throw new Error('Worker not initialized — call init first');
     }
 
-    const lineCount = msg.code.split('\n').length;
-    log(
-        'trace',
-        `Evaluating code (${String(lineCount)} lines, ${String(msg.code.length)} chars, db: ${msg.databaseName})`,
-    );
-
-    // Lazy-import @mongosh packages
-    const { EventEmitter } = await import('events');
-    const vm = await import('vm');
-    const { NodeDriverServiceProvider } = await import('@mongosh/service-provider-node-driver');
-    const { ShellInstanceState } = await import('@mongosh/shell-api');
-    const { ShellEvaluator } = await import('@mongosh/shell-evaluator');
-
-    const startTime = Date.now();
-
-    // Create fresh shell context per execution (no variable leakage between runs)
-    const bus = new EventEmitter();
-    const serviceProvider = new NodeDriverServiceProvider(mongoClient, bus, {
-        productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
-        productName: 'DocumentDB for VS Code Query Playground',
-    });
-    const instanceState = new ShellInstanceState(serviceProvider, bus);
-    const evaluator = new ShellEvaluator(instanceState);
-
-    // Register evaluation listener to capture console.log(), print(), printjson() output
-    instanceState.setEvaluationListener({
-        onPrint(values: Array<{ printable: unknown }>, _type: 'print' | 'printjson'): void {
-            const output = values
-                .map((v) => {
-                    if (typeof v.printable === 'string') {
-                        return v.printable;
-                    }
-                    try {
-                        return JSON.stringify(v.printable, null, 2);
-                    } catch {
-                        return String(v.printable);
-                    }
-                })
-                .join(' ');
-            const consoleMsg: WorkerToMainMessage = { type: 'consoleOutput', output };
-            parentPort!.postMessage(consoleMsg);
-        },
+    // Evaluate via shell-runtime (handles @mongosh setup, command interception, result transformation)
+    const result = await shellRuntime.evaluate(msg.code, msg.databaseName, {
+        displayBatchSize: msg.displayBatchSize,
     });
 
-    // Set up eval context with shell globals (db, ObjectId, ISODate, etc.)
-    const context = {};
-    instanceState.setCtx(context);
-
-    // The eval function using vm.runInContext for @mongosh
-    // eslint-disable-next-line @typescript-eslint/require-await
-    const customEvalFn = async (code: string, ctx: object): Promise<unknown> => {
-        const vmContext = vm.isContext(ctx) ? ctx : vm.createContext(ctx);
-        return vm.runInContext(code, vmContext) as unknown;
-    };
-
-    // Switch database if different from current
-    if (msg.databaseName !== currentDatabaseName) {
-        await evaluator.customEval(customEvalFn, `use(${JSON.stringify(msg.databaseName)})`, context, 'playground');
-        currentDatabaseName = msg.databaseName;
-    } else {
-        // Pre-select the target database (fresh context each time)
-        await evaluator.customEval(customEvalFn, `use(${JSON.stringify(msg.databaseName)})`, context, 'playground');
-    }
-
-    // Evaluate user code
-    const result = await evaluator.customEval(customEvalFn, msg.code, context, 'playground');
-    const durationMs = Date.now() - startTime;
-
-    // result is a ShellResult { type, printable, rawValue, source? }
-    const shellResult = result as {
-        type: string | null;
-        printable: unknown;
-        source?: { namespace?: { db: string; collection: string } };
-    };
-
-    // Normalize the printable value for IPC transfer.
-    // @mongosh's ShellEvaluator wraps cursor results as { cursorHasMore, documents }
-    // when running in a worker context. Extract the documents array so that the
-    // main thread receives a clean array (matching the in-process behavior where
-    // printable was a CursorIterationResult array).
-    let printableValue: unknown = shellResult.printable;
-    if (
-        shellResult.type === 'Cursor' &&
-        typeof shellResult.printable === 'object' &&
-        shellResult.printable !== null &&
-        'documents' in shellResult.printable &&
-        Array.isArray((shellResult.printable as { documents?: unknown }).documents)
-    ) {
-        printableValue = (shellResult.printable as { documents: unknown[] }).documents;
-    } else if (Array.isArray(shellResult.printable)) {
-        // Array subclass (CursorIterationResult) — normalize to plain Array
-        printableValue = Array.from(shellResult.printable as unknown[]);
-    }
-
-    let printableStr: string;
-    try {
-        const { EJSON } = await import('bson');
-        printableStr = EJSON.stringify(printableValue, { relaxed: false });
-    } catch {
-        // Fallback: try JSON, then plain string
-        try {
-            printableStr = JSON.stringify(printableValue);
-        } catch {
-            printableStr = String(printableValue);
+    // Proactively extract cursorHasMore before serialization.
+    // The ResultTransformer may have already extracted it from the { cursorHasMore, documents }
+    // wrapper, but in some @mongosh/vm contexts the property survives on the normalized
+    // printable array as an own property. Check both the runtime result and the raw printable.
+    let cursorHasMore = result.cursorHasMore;
+    if (cursorHasMore === undefined && result.type === 'Cursor') {
+        const p = result.printable;
+        if (typeof p === 'object' && p !== null && 'cursorHasMore' in p) {
+            const fallbackValue = (p as { cursorHasMore: unknown }).cursorHasMore;
+            if (typeof fallbackValue === 'boolean') {
+                cursorHasMore = fallbackValue;
+            }
         }
     }
 
-    log('trace', `Evaluation complete (${durationMs}ms, type: ${shellResult.type ?? 'null'})`);
+    // Serialize the result for IPC transfer (the runtime returns raw values;
+    // serialization to EJSON is the worker's IPC concern)
+    let printableStr: string;
+    try {
+        const { EJSON } = await import('bson');
+        printableStr = EJSON.stringify(result.printable, { relaxed: false });
+    } catch {
+        try {
+            printableStr = JSON.stringify(result.printable);
+        } catch {
+            printableStr = String(result.printable);
+        }
+    }
+
+    log('trace', `Evaluation complete (${String(result.durationMs)}ms, type: ${result.type ?? 'null'})`);
 
     const response: WorkerToMainMessage = {
         type: 'evalResult',
         requestId: msg.requestId,
         result: {
-            type: shellResult.type,
+            type: result.type,
             printable: printableStr,
-            durationMs,
-            source: shellResult.source?.namespace
-                ? {
-                      namespace: {
-                          db: shellResult.source.namespace.db,
-                          collection: shellResult.source.namespace.collection,
-                      },
-                  }
-                : undefined,
+            durationMs: result.durationMs,
+            cursorHasMore,
+            source: result.source,
         },
     };
     parentPort!.postMessage(response);
@@ -281,6 +218,10 @@ async function handleShutdown(msg: Extract<MainToWorkerMessage, { type: 'shutdow
     log('debug', 'Shutting down worker — closing client');
 
     try {
+        if (shellRuntime) {
+            shellRuntime.dispose();
+            shellRuntime = undefined;
+        }
         if (mongoClient) {
             await mongoClient.close();
             mongoClient = undefined;

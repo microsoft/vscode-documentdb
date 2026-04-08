@@ -26,6 +26,8 @@ export interface ExecutionResult {
     readonly printable: unknown;
     /** Execution duration in milliseconds. */
     readonly durationMs: number;
+    /** Whether the cursor has more documents beyond the returned batch (Cursor results only). */
+    readonly cursorHasMore?: boolean;
     /** Source namespace from the `@mongosh` ShellResult, if available. */
     readonly source?: {
         readonly namespace?: {

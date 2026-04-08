@@ -9,6 +9,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
+import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
 import {
@@ -97,13 +98,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         code: string,
         onProgress?: (message: string) => void,
     ): Promise<ExecutionResult> {
-        // Intercept playground-specific commands before they reach the worker
-        const trimmed = code.trim();
-        const helpResult = this.tryHandleHelp(trimmed);
-        if (helpResult) {
-            return { ...helpResult, durationMs: 0 };
-        }
-
         // Ensure worker is alive and connected to the right cluster
         const needsSpawn =
             !this._worker || this._workerState === 'idle' || this._workerClusterId !== connection.clusterId;
@@ -264,8 +258,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             databaseName: connection.databaseName,
             authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID',
             tenantId: credentials.entraIdConfig?.tenantId,
-            // TODO(F11): Read from documentDB.mongoShell.batchSize setting and wire in worker
-            displayBatchSize: 50,
         };
     }
 
@@ -285,6 +277,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             requestId: '',
             code,
             databaseName: connection.databaseName,
+            displayBatchSize: getBatchSizeSetting(),
         };
 
         try {
@@ -311,6 +304,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 type: serResult.type,
                 printable,
                 durationMs: serResult.durationMs,
+                cursorHasMore: serResult.cursorHasMore,
                 source: serResult.source,
             };
         } finally {
@@ -520,88 +514,5 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             entry.reject(new Error('Worker exited unexpectedly'));
         }
         this._pendingRequests.clear();
-    }
-
-    // ─── Help command interception ───────────────────────────────────────────
-
-    /**
-     * Handle `help` command with playground-specific output.
-     * Returns undefined if the input is not a help command.
-     */
-    private tryHandleHelp(input: string): Omit<ExecutionResult, 'durationMs'> | undefined {
-        if (input !== 'help' && input !== 'help()') {
-            return undefined;
-        }
-
-        const helpText = [
-            'Query Playground - Quick Reference',
-            '═══════════════════════════════════════',
-            '',
-            'Collection Access:',
-            '  db.getCollection("name")                       Explicit (recommended)',
-            '  db.name                                        Shorthand (also works)',
-            '',
-            'Query Commands:',
-            '  db.getCollection("name").find({})              Find documents',
-            '  db.getCollection("name").findOne({})           Find one document',
-            '  db.getCollection("name").countDocuments({})     Count documents',
-            '  db.getCollection("name").estimatedDocumentCount()  Fast count',
-            '  db.getCollection("name").distinct("field")     Distinct values',
-            '  db.getCollection("name").aggregate([...])      Aggregation pipeline',
-            '',
-            'Write Commands:',
-            '  db.getCollection("name").insertOne({...})      Insert a document',
-            '  db.getCollection("name").insertMany([...])     Insert multiple documents',
-            '  db.getCollection("name").updateOne({}, {$set:{}})  Update one',
-            '  db.getCollection("name").replaceOne({}, {...})  Replace one',
-            '  db.getCollection("name").deleteOne({})         Delete one',
-            '  db.getCollection("name").bulkWrite([...])      Batch operations',
-            '',
-            'Index Commands:',
-            '  db.getCollection("name").createIndex({field:1})  Create index',
-            '  db.getCollection("name").getIndexes()          List indexes',
-            '  db.getCollection("name").dropIndex("name")     Drop index',
-            '',
-            'Cursor Modifiers:',
-            '  .limit(n)                                      Limit results',
-            '  .skip(n)                                       Skip results',
-            '  .sort({field: 1})                              Sort results',
-            '  .project({field: 1})                           Field projection',
-            '  .toArray()                                     Get all results',
-            '  .count()                                       Count matching',
-            '  .explain()                                     Query plan',
-            '',
-            'Database Commands:',
-            '  show dbs                                       List databases',
-            '  show collections                               List collections',
-            '  db.getCollectionNames()                        List collection names',
-            '  db.getCollectionInfos()                        Collection metadata',
-            '  db.createCollection("name")                    Create collection',
-            '  db.getCollection("name").drop()                Drop collection',
-            '  db.runCommand({...})                           Run database command',
-            '  db.adminCommand({...})                         Run admin command',
-            '',
-            'BSON Constructors:',
-            '  ObjectId("...")                                Create ObjectId',
-            '  ISODate("...")                                 Create Date',
-            '  NumberDecimal("...")                           Create Decimal128',
-            '',
-            'Keyboard Shortcuts:',
-            `  ${process.platform === 'darwin' ? '⌘' : 'Ctrl'}+Enter             Run current block`,
-            `  ${process.platform === 'darwin' ? '⌘' : 'Ctrl'}+Shift+Enter       Run entire file`,
-            '',
-            'Tips:',
-            '  • Separate code blocks with blank lines',
-            '  • Variables persist within a block but not between separate runs',
-            '  • When running multiple statements, only the last result is shown',
-            '  • Use .toArray() to get all results (default: first 20 documents)',
-            '',
-            'Console Output:',
-            '  console.log(value)                             Log to output channel',
-            '  print() and printjson() are also supported',
-            '  Output appears in the "DocumentDB Query Playground Output" panel',
-        ].join('\n');
-
-        return { type: 'Help', printable: helpText };
     }
 }
