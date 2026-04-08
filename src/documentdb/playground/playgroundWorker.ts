@@ -190,6 +190,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
             type: result.type,
             printable: printableStr,
             durationMs: result.durationMs,
+            cursorHasMore: result.cursorHasMore,
             source: result.source,
         },
     };

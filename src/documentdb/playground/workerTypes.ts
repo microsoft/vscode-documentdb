@@ -40,6 +40,8 @@ export interface SerializableExecutionResult {
     /** EJSON-serialized printable value */
     readonly printable: string;
     readonly durationMs: number;
+    /** Whether the cursor has more documents beyond the returned batch (Cursor results only). */
+    readonly cursorHasMore?: boolean;
     readonly source?: {
         readonly namespace?: {
             readonly db: string;

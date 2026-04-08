@@ -151,4 +151,42 @@ describe('ResultTransformer', () => {
             expect(result.printable).toEqual({ documents: [{ _id: 1 }] });
         });
     });
+
+    describe('cursorHasMore extraction', () => {
+        it('extracts cursorHasMore: true from cursor result', () => {
+            const shellResult: ShellResultLike = {
+                type: 'Cursor',
+                printable: { cursorHasMore: true, documents: [{ _id: 1 }] },
+            };
+            const result = transformer.transform(shellResult, 10);
+            expect(result.cursorHasMore).toBe(true);
+        });
+
+        it('extracts cursorHasMore: false from cursor result', () => {
+            const shellResult: ShellResultLike = {
+                type: 'Cursor',
+                printable: { cursorHasMore: false, documents: [{ _id: 1 }] },
+            };
+            const result = transformer.transform(shellResult, 10);
+            expect(result.cursorHasMore).toBe(false);
+        });
+
+        it('returns undefined cursorHasMore for non-Cursor types', () => {
+            const shellResult: ShellResultLike = {
+                type: 'Document',
+                printable: { name: 'test' },
+            };
+            const result = transformer.transform(shellResult, 10);
+            expect(result.cursorHasMore).toBeUndefined();
+        });
+
+        it('returns undefined cursorHasMore for plain array cursor results', () => {
+            const shellResult: ShellResultLike = {
+                type: 'Cursor',
+                printable: [{ _id: 1 }],
+            };
+            const result = transformer.transform(shellResult, 10);
+            expect(result.cursorHasMore).toBeUndefined();
+        });
+    });
 });

@@ -304,6 +304,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 type: serResult.type,
                 printable,
                 durationMs: serResult.durationMs,
+                cursorHasMore: serResult.cursorHasMore,
                 source: serResult.source,
             };
         } finally {

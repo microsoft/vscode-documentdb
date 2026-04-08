@@ -23,12 +23,14 @@ export class ResultTransformer {
      */
     transform(shellResult: ShellResultLike, durationMs: number): ShellEvaluationResult {
         const printable = this.normalizePrintable(shellResult.type, shellResult.printable);
+        const cursorHasMore = this.extractCursorHasMore(shellResult.type, shellResult.printable);
         const source = this.extractSource(shellResult.source);
 
         return {
             type: shellResult.type,
             printable,
             durationMs,
+            cursorHasMore,
             source,
         };
     }
@@ -60,6 +62,17 @@ export class ResultTransformer {
         }
 
         return printable;
+    }
+
+    /**
+     * Extract the cursorHasMore flag from the raw @mongosh result.
+     * Only meaningful for Cursor results that come as `{ cursorHasMore, documents }`.
+     */
+    private extractCursorHasMore(type: string | null, printable: unknown): boolean | undefined {
+        if (type === 'Cursor' && typeof printable === 'object' && printable !== null && 'cursorHasMore' in printable) {
+            return (printable as { cursorHasMore: boolean }).cursorHasMore;
+        }
+        return undefined;
     }
 
     /**
