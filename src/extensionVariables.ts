@@ -63,9 +63,6 @@ export namespace ext {
     export let helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
 
     export namespace settingsKeys {
-        export const shellPath = 'documentDB.mongoShell.path';
-        export const shellArgs = 'documentDB.mongoShell.args';
-        export const shellTimeout = 'documentDB.mongoShell.timeout';
         export const batchSize = 'documentDB.shell.batchSize';
         export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';

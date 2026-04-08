@@ -538,10 +538,10 @@
         "title": "Create Document…"
       },
       {
-        "//": "Launch Shell",
+        "//": "Open Interactive Shell",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.launchShell",
-        "title": "Launch Shell"
+        "command": "vscode-documentdb.command.openInteractiveShell",
+        "title": "Open Interactive Shell"
       },
       {
         "//": "Open Container View",
@@ -769,8 +769,8 @@
           "group": "2@1"
         },
         {
-          "//": "[Account] Mongo DB|Cluster Launch Shell",
-          "command": "vscode-documentdb.command.launchShell",
+          "//": "[Account] Open Interactive Shell",
+          "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "5@1"
         },
@@ -793,8 +793,8 @@
           "group": "1@2"
         },
         {
-          "//": "[Database] Mongo DB|Cluster Launch Shell",
-          "command": "vscode-documentdb.command.launchShell",
+          "//": "[Database] Open Interactive Shell",
+          "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "3@1"
         },
@@ -853,8 +853,8 @@
           "group": "4@1"
         },
         {
-          "//": "[Collection] Launch shell",
-          "command": "vscode-documentdb.command.launchShell",
+          "//": "[Collection] Open Interactive Shell",
+          "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "5@1"
         },
@@ -1016,7 +1016,7 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.launchShell",
+          "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "never"
         },
         {
@@ -1107,34 +1107,21 @@
             "default": 10260,
             "description": "Port to use when connecting to DocumentDB Local instance"
           },
-          "documentDB.mongoShell.path": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Full path to folder and executable to start the Mongo shell. The default is to search in the system path for 'mongosh'.",
-            "default": null
-          },
-          "documentDB.mongoShell.args": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Arguments to pass when starting the Mongo shell.",
-            "default": [
-              "--quiet"
-            ]
-          },
-          "documentDB.mongoShell.timeout": {
-            "type": "number",
-            "description": "The duration allowed (in seconds) for the Mongo shell to execute a command. Default value is 30 seconds.",
-            "default": 30
-          },
           "documentDB.shell.batchSize": {
             "type": "integer",
-            "description": "Number of documents to display per cursor iteration in the Query Playground. Applies to find(), aggregate(), and other cursor-returning operations.",
+            "description": "Number of documents to display per cursor iteration in the Query Playground and Interactive Shell. Applies to find(), aggregate(), and other cursor-returning operations.",
             "default": 50,
             "minimum": 1
+          },
+          "documentDB.shell.display.colorOutput": {
+            "type": "boolean",
+            "description": "Enable ANSI color-coded JSON output in the Interactive Shell. Disable for accessibility (screen readers) or piped output.",
+            "default": true
+          },
+          "documentDB.shell.display.autocompletion": {
+            "type": "boolean",
+            "description": "Enable autocompletion in the Interactive Shell (when available). Reserved for future use.",
+            "default": true
           },
           "documentDB.collectionView.defaultPageSize": {
             "type": "number",

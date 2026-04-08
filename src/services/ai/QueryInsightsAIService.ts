@@ -51,7 +51,7 @@ interface ModifyIndexPayload {
     sessionId: string;
     databaseName: string;
     collectionName: string;
-    mongoShell: string;
+    shellCommand: string;
 }
 
 /**
@@ -170,7 +170,7 @@ export class QueryInsightsAIService {
                     indexSpec: Record<string, number>;
                     indexOptions?: Record<string, unknown>;
                     indexName: string;
-                    mongoShell: string;
+                    shellCommand: string;
                     justification: string;
                     priority: 'high' | 'medium' | 'low';
                     risks?: string;
@@ -320,10 +320,10 @@ export class QueryInsightsAIService {
             payload !== null &&
             'databaseName' in payload &&
             'collectionName' in payload &&
-            'mongoShell' in payload &&
+            'shellCommand' in payload &&
             typeof (payload as ModifyIndexPayload).databaseName === 'string' &&
             typeof (payload as ModifyIndexPayload).collectionName === 'string' &&
-            typeof (payload as ModifyIndexPayload).mongoShell === 'string'
+            typeof (payload as ModifyIndexPayload).shellCommand === 'string'
         );
     }
 
@@ -556,17 +556,17 @@ export class QueryInsightsAIService {
             }
 
             const parseOperationPattern = /db\.getCollection\(['"]([^'"]+)['"]\)\.(\w+)\((.*)\)/;
-            const match = payload.mongoShell.match(parseOperationPattern);
+            const match = payload.shellCommand.match(parseOperationPattern);
             if (!match || match.length < 3 || (match[2] !== 'hideIndex' && match[2] !== 'unhideIndex')) {
-                context.telemetry.properties.actionError = 'invalidMongoShellFormat';
+                context.telemetry.properties.actionError = 'invalidShellCommandFormat';
                 ext.outputChannel.warn(
-                    l10n.t('[Query Insights Action] Invalid mongoShell command format: {command}', {
-                        command: payload.mongoShell,
+                    l10n.t('[Query Insights Action] Invalid shell command format: {command}', {
+                        command: payload.shellCommand,
                     }),
                 );
                 return {
                     success: false,
-                    message: l10n.t('Invalid mongoShell command format'),
+                    message: l10n.t('Invalid shell command format'),
                 };
             }
 

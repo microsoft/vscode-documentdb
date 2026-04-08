@@ -71,7 +71,7 @@ function createImprovementCard(
         improvement.indexOptions && Object.keys(improvement.indexOptions).length > 0
             ? JSON.stringify(improvement.indexOptions, null, 2)
             : undefined;
-    const primaryButtonLabel = getPrimaryButtonLabel(improvement.action, improvement.mongoShell);
+    const primaryButtonLabel = getPrimaryButtonLabel(improvement.action, improvement.shellCommand);
 
     return {
         type: 'improvement',
@@ -84,7 +84,7 @@ function createImprovementCard(
         recommendedIndexDetails: generateIndexExplanation(improvement),
         indexOptions: indexOptionsStr,
         details: improvement.risks || l10n.t('Additional write and storage overhead for maintaining a new index.'),
-        mongoShellCommand: improvement.mongoShell,
+        shellCommand: improvement.shellCommand,
         primaryButton: {
             label: primaryButtonLabel,
             actionId: getPrimaryActionId(improvement.action),
@@ -95,7 +95,7 @@ function createImprovementCard(
                 action: improvement.action,
                 indexSpec: improvement.indexSpec,
                 indexOptions: improvement.indexOptions,
-                mongoShell: improvement.mongoShell,
+                mongoShell: improvement.shellCommand,
             },
         },
         // TODO: Temporarily removing secondary button until we have relevant content
