@@ -7,8 +7,8 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
+import { PLAYGROUND_LANGUAGE_ID } from './constants';
 
-const PLAYGROUND_LANGUAGE_ID = 'documentdb-playground';
 const DIAGNOSTIC_SOURCE = 'DocumentDB';
 
 /**

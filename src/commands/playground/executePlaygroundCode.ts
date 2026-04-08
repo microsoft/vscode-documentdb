@@ -16,7 +16,6 @@ import { type ExecutionResult, type PlaygroundConnection } from '../../documentd
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
-import { getBatchSizeSetting } from '../../utils/workspacUtils';
 
 /** Shared evaluator instance — lazily created, reused across runs. */
 let evaluator: PlaygroundEvaluator | undefined;
@@ -114,7 +113,7 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
 
-                    let formattedOutput = formatResult(result, code, connection, getBatchSizeSetting());
+                    let formattedOutput = formatResult(result, code, connection);
                     feedResultToSchemaStore(result, connection);
 
                     // If console output was produced, append a hint to check the output channel

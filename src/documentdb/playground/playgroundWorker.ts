@@ -175,7 +175,10 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     if (cursorHasMore === undefined && result.type === 'Cursor') {
         const p = result.printable;
         if (typeof p === 'object' && p !== null && 'cursorHasMore' in p) {
-            cursorHasMore = Boolean((p as { cursorHasMore: unknown }).cursorHasMore);
+            const fallbackValue = (p as { cursorHasMore: unknown }).cursorHasMore;
+            if (typeof fallbackValue === 'boolean') {
+                cursorHasMore = fallbackValue;
+            }
         }
     }
 
