@@ -167,6 +167,18 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
         displayBatchSize: msg.displayBatchSize,
     });
 
+    // Proactively extract cursorHasMore before serialization.
+    // The ResultTransformer may have already extracted it from the { cursorHasMore, documents }
+    // wrapper, but in some @mongosh/vm contexts the property survives on the normalized
+    // printable array as an own property. Check both the runtime result and the raw printable.
+    let cursorHasMore = result.cursorHasMore;
+    if (cursorHasMore === undefined && result.type === 'Cursor') {
+        const p = result.printable;
+        if (typeof p === 'object' && p !== null && 'cursorHasMore' in p) {
+            cursorHasMore = Boolean((p as { cursorHasMore: unknown }).cursorHasMore);
+        }
+    }
+
     // Serialize the result for IPC transfer (the runtime returns raw values;
     // serialization to EJSON is the worker's IPC concern)
     let printableStr: string;
@@ -190,7 +202,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
             type: result.type,
             printable: printableStr,
             durationMs: result.durationMs,
-            cursorHasMore: result.cursorHasMore,
+            cursorHasMore,
             source: result.source,
         },
     };

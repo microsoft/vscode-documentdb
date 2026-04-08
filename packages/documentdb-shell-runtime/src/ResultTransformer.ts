@@ -66,12 +66,23 @@ export class ResultTransformer {
 
     /**
      * Extract the cursorHasMore flag from the raw @mongosh result.
-     * Only meaningful for Cursor results that come as `{ cursorHasMore, documents }`.
+     *
+     * @mongosh may deliver cursor results in two forms:
+     * - Object: `{ cursorHasMore: boolean, documents: unknown[] }` (from CursorIterationResult.asPrintable)
+     * - Array with property: `CursorIterationResult` (Array subclass with `cursorHasMore` as own property)
+     *
+     * Both are checked. Non-Cursor types always return undefined.
      */
     private extractCursorHasMore(type: string | null, printable: unknown): boolean | undefined {
-        if (type === 'Cursor' && typeof printable === 'object' && printable !== null && 'cursorHasMore' in printable) {
+        if (type !== 'Cursor' || typeof printable !== 'object' || printable === null) {
+            return undefined;
+        }
+
+        // Object shape: { cursorHasMore, documents }
+        if ('cursorHasMore' in printable && typeof (printable as { cursorHasMore: unknown }).cursorHasMore === 'boolean') {
             return (printable as { cursorHasMore: boolean }).cursorHasMore;
         }
+
         return undefined;
     }
 

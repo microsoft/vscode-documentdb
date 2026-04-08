@@ -15,7 +15,12 @@ import { type ExecutionResult, type PlaygroundConnection } from './types';
  * - Result metadata (type, timing, document count)
  * - Formatted result value (EJSON for documents, raw for scalars)
  */
-export function formatResult(result: ExecutionResult, code: string, connection: PlaygroundConnection): string {
+export function formatResult(
+    result: ExecutionResult,
+    code: string,
+    connection: PlaygroundConnection,
+    displayBatchSize?: number,
+): string {
     const lines: string[] = [];
 
     // Connection and timestamp
@@ -44,11 +49,19 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
 
     lines.push(`// ${l10n.t('Executed in {0}ms', result.durationMs)}`);
 
-    // Batch size hint — shown when the cursor has more documents beyond the returned batch
-    if (result.type === 'Cursor' && result.cursorHasMore === true && Array.isArray(unwrapped)) {
-        lines.push(
-            `// ${l10n.t('Showing first {0} documents (batch size). To change: Settings → documentDB.shell.batchSize', unwrapped.length)}`,
-        );
+    // Batch size hint — shown when the cursor has more documents beyond the returned batch.
+    // Primary signal: cursorHasMore from @mongosh. Fallback: count matches displayBatchSize.
+    if (result.type === 'Cursor' && Array.isArray(unwrapped)) {
+        const truncated =
+            result.cursorHasMore === true ||
+            (result.cursorHasMore === undefined &&
+                displayBatchSize !== undefined &&
+                unwrapped.length === displayBatchSize);
+        if (truncated) {
+            lines.push(
+                `// ${l10n.t('Showing first {0} documents (batch size). To change: Settings → documentDB.shell.batchSize', unwrapped.length)}`,
+            );
+        }
     }
 
     lines.push('// ─────────────────────────');
