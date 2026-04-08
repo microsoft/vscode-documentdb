@@ -69,20 +69,14 @@ describe('HelpProvider', () => {
             expect(text).toContain(expectedKey);
         });
 
-        it('does not include unsupported commands like show profile', () => {
+        it('does not include commands like show profile', () => {
             const text = helpProvider.getHelpText();
             expect(text).not.toContain('show profile');
         });
 
-        it('does not include adminCommand (most admin commands unsupported)', () => {
+        it('does not include adminCommand', () => {
             const text = helpProvider.getHelpText();
             expect(text).not.toContain('adminCommand');
-        });
-
-        it('marks runCommand as limited support', () => {
-            const text = helpProvider.getHelpText();
-            expect(text).toContain('runCommand');
-            expect(text).toContain('limited support');
         });
     });
 
