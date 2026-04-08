@@ -13,4 +13,9 @@ export { HelpProvider } from './HelpProvider';
 export { ResultTransformer, type ShellResultLike } from './ResultTransformer';
 
 // Types
-export { type ShellEvaluationResult, type ShellRuntimeCallbacks, type ShellRuntimeOptions } from './types';
+export {
+    type ShellEvalOptions,
+    type ShellEvaluationResult,
+    type ShellRuntimeCallbacks,
+    type ShellRuntimeOptions,
+} from './types';

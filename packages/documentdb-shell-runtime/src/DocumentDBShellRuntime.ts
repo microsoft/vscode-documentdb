@@ -10,11 +10,17 @@ import vm from 'vm';
 import { CommandInterceptor } from './CommandInterceptor';
 import { DocumentDBServiceProvider } from './DocumentDBServiceProvider';
 import { ResultTransformer } from './ResultTransformer';
-import { type ShellEvaluationResult, type ShellRuntimeCallbacks, type ShellRuntimeOptions } from './types';
+import {
+    type ShellEvalOptions,
+    type ShellEvaluationResult,
+    type ShellRuntimeCallbacks,
+    type ShellRuntimeOptions,
+} from './types';
 
 const DEFAULT_OPTIONS: ShellRuntimeOptions = {
     productName: 'DocumentDB for VS Code',
     productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
+    displayBatchSize: 50,
 };
 
 /**
@@ -69,11 +75,12 @@ export class DocumentDBShellRuntime {
      *
      * @param code - JavaScript/shell code string to evaluate
      * @param databaseName - Target database name for execution
+     * @param evalOptions - Per-eval overrides (e.g. displayBatchSize from user settings)
      * @returns Evaluation result with type, printable value, and timing
      * @throws Error if the runtime has been disposed
      * @throws Error if @mongosh evaluation fails (syntax error, runtime error, etc.)
      */
-    async evaluate(code: string, databaseName: string): Promise<ShellEvaluationResult> {
+    async evaluate(code: string, databaseName: string, evalOptions?: ShellEvalOptions): Promise<ShellEvaluationResult> {
         if (this._disposed) {
             throw new Error('Shell runtime has been disposed');
         }
@@ -99,6 +106,15 @@ export class DocumentDBShellRuntime {
         );
         const instanceState = new ShellInstanceState(serviceProvider, bus);
         const evaluator = new ShellEvaluator(instanceState);
+
+        // Set the display batch size directly on the instance state.
+        // This uses @mongosh's displayBatchSizeFromDBQuery property which takes
+        // precedence over config.get('displayBatchSize') in cursor iteration.
+        // We set it here (not via config.set()) because config.set() requires an
+        // evaluationListener with setConfig/getConfig — which we don't provide.
+        const batchSize =
+            evalOptions?.displayBatchSize ?? this._options.displayBatchSize ?? DEFAULT_OPTIONS.displayBatchSize!;
+        instanceState.displayBatchSizeFromDBQuery = batchSize;
 
         // Register evaluation listener for console output
         this.registerConsoleOutputListener(instanceState);

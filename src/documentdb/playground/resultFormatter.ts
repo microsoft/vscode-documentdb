@@ -15,7 +15,12 @@ import { type ExecutionResult, type PlaygroundConnection } from './types';
  * - Result metadata (type, timing, document count)
  * - Formatted result value (EJSON for documents, raw for scalars)
  */
-export function formatResult(result: ExecutionResult, code: string, connection: PlaygroundConnection): string {
+export function formatResult(
+    result: ExecutionResult,
+    code: string,
+    connection: PlaygroundConnection,
+    displayBatchSize?: number,
+): string {
     const lines: string[] = [];
 
     // Connection and timestamp
@@ -29,11 +34,10 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
         lines.push(`// ▶ ${codeLine}`);
     }
 
-    // Result metadata
-    // Result metadata — state what we know from @mongosh, don't guess
+    // Result metadata — state what we know, don't guess
     const unwrapped = unwrapCursorResult(result.printable);
     if (result.type === 'Cursor' && Array.isArray(unwrapped)) {
-        // Cursor with a known batch: "Result: Cursor (20 documents)"
+        // Cursor with a known batch: "Result: Cursor (50 documents)"
         lines.push(`// ${l10n.t('Result: Cursor ({0} documents)', unwrapped.length)}`);
     } else if (result.type) {
         // Typed result: "Result: Document", "Result: string", etc.
@@ -44,6 +48,20 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
     }
 
     lines.push(`// ${l10n.t('Executed in {0}ms', result.durationMs)}`);
+
+    // Batch size hint — shown when cursor result count matches the batch size,
+    // indicating the result was likely truncated
+    if (
+        result.type === 'Cursor' &&
+        Array.isArray(unwrapped) &&
+        displayBatchSize !== undefined &&
+        unwrapped.length === displayBatchSize
+    ) {
+        lines.push(
+            `// ${l10n.t('Showing first {0} documents (batch size). To change: Settings → documentDB.shell.batchSize', displayBatchSize)}`,
+        );
+    }
+
     lines.push('// ─────────────────────────');
     lines.push('');
 

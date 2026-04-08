@@ -80,7 +80,7 @@ export class HelpProvider {
             '  • Separate code blocks with blank lines',
             '  • Variables persist within a block but not between separate runs',
             '  • When running multiple statements, only the last result is shown',
-            '  • Use .toArray() to get all results (default: first 20 documents)',
+            '  • Use .toArray() to get all results (default batch size: documentDB.shell.batchSize)',
             '',
             'Console Output:',
             '  console.log(value)                             Log to output channel',

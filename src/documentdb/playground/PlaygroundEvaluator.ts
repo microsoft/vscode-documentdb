@@ -9,6 +9,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
+import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
 import {
@@ -257,8 +258,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             databaseName: connection.databaseName,
             authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID',
             tenantId: credentials.entraIdConfig?.tenantId,
-            // TODO(F11): Read from documentDB.mongoShell.batchSize setting and wire in worker
-            displayBatchSize: 50,
         };
     }
 
@@ -278,6 +277,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             requestId: '',
             code,
             databaseName: connection.databaseName,
+            displayBatchSize: getBatchSizeSetting(),
         };
 
         try {

@@ -45,4 +45,15 @@ export interface ShellRuntimeOptions {
     productName?: string;
     /** Product documentation link passed to @mongosh service provider. */
     productDocsLink?: string;
+    /** Default number of documents to display per cursor iteration (default: 50). */
+    displayBatchSize?: number;
+}
+
+/**
+ * Per-evaluation options that can override runtime defaults.
+ * Used to pass current user settings at eval time (F2: read per-eval).
+ */
+export interface ShellEvalOptions {
+    /** Override the display batch size for this evaluation. */
+    displayBatchSize?: number;
 }

@@ -19,6 +19,7 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersExtension } from './documentdb/ClustersExtension';
+import { PlaygroundDiagnostics } from './documentdb/playground/PlaygroundDiagnostics';
 import { PLAYGROUND_RESULT_SCHEME, PlaygroundResultProvider } from './documentdb/playground/PlaygroundResultProvider';
 import { SchemaStore } from './documentdb/SchemaStore';
 import { ext } from './extensionVariables';
@@ -51,6 +52,7 @@ export async function activateInternal(
     context.subscriptions.push(
         ext.playgroundResultProvider,
         vscode.workspace.registerTextDocumentContentProvider(PLAYGROUND_RESULT_SCHEME, ext.playgroundResultProvider),
+        new PlaygroundDiagnostics(),
     );
 
     registerUIExtensionVariables(ext);
