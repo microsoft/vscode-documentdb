@@ -44,14 +44,21 @@ export interface PlaygroundHoverData {
  *
  * @param word - The word at the cursor position
  * @param fieldLookup - Optional callback to resolve field names to FieldEntry
+ * @param isMemberAccess - If true, the word follows a `.` (property access) — skip `$`-prefix operator lookup
  * @returns Hover data or null if no match
  */
-export function getPlaygroundHoverContent(word: string, fieldLookup?: FieldEntryLookup): PlaygroundHoverData | null {
+export function getPlaygroundHoverContent(
+    word: string,
+    fieldLookup?: FieldEntryLookup,
+    isMemberAccess?: boolean,
+): PlaygroundHoverData | null {
     if (!word) return null;
 
     // Try with '$' prefix first (for operators where cursor lands after $)
     // Then try the word as-is (for BSON constructors like ObjectId)
-    const candidates = word.startsWith('$') ? [word] : [`$${word}`, word];
+    // Skip the $-prefix candidate when the word is in a property access context
+    // (e.g., console.log should not match $log)
+    const candidates = word.startsWith('$') ? [word] : isMemberAccess ? [word] : [`$${word}`, word];
 
     const allEntries = getAllCompletions();
 
@@ -193,7 +200,7 @@ export class PlaygroundHoverProvider implements vscode.HoverProvider {
         const effectiveRange =
             charBefore === '$' ? new vscode.Range(wordRange.start.translate(0, -1), wordRange.end) : wordRange;
 
-        const hoverData = getPlaygroundHoverContent(effectiveWord, fieldLookup);
+        const hoverData = getPlaygroundHoverContent(effectiveWord, fieldLookup, charBefore === '.');
         if (!hoverData) return null;
 
         return this.toVscodeHover(hoverData, effectiveRange);
