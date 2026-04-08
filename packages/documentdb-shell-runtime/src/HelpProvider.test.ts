@@ -73,6 +73,17 @@ describe('HelpProvider', () => {
             const text = helpProvider.getHelpText();
             expect(text).not.toContain('show profile');
         });
+
+        it('does not include adminCommand (most admin commands unsupported)', () => {
+            const text = helpProvider.getHelpText();
+            expect(text).not.toContain('adminCommand');
+        });
+
+        it('marks runCommand as limited support', () => {
+            const text = helpProvider.getHelpText();
+            expect(text).toContain('runCommand');
+            expect(text).toContain('limited support');
+        });
     });
 
     describe('getHelpResult', () => {
