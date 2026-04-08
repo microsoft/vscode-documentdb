@@ -884,7 +884,7 @@
   "Shard: {0}": "Shard: {0}",
   "Show Output": "Show Output",
   "Show Stage Details": "Show Stage Details",
-  "Showing first {0} documents (batch size). To change: Settings → documentDB.shell.batchSize": "Showing first {0} documents (batch size). To change: Settings → documentDB.shell.batchSize",
+  "Showing first {0} documents (batch size). To change: Settings → 'documentDB.shell.batchSize'": "Showing first {0} documents (batch size). To change: Settings → 'documentDB.shell.batchSize'",
   "Sign in to additional accounts or authenticate with other tenants to see more options.": "Sign in to additional accounts or authenticate with other tenants to see more options.",
   "Sign in to additional accounts or authenticate with other tenants to see more subscriptions.": "Sign in to additional accounts or authenticate with other tenants to see more subscriptions.",
   "Sign in to Azure to continue…": "Sign in to Azure to continue…",
