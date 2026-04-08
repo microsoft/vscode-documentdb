@@ -79,7 +79,10 @@ export class ResultTransformer {
         }
 
         // Object shape: { cursorHasMore, documents }
-        if ('cursorHasMore' in printable && typeof (printable as { cursorHasMore: unknown }).cursorHasMore === 'boolean') {
+        if (
+            'cursorHasMore' in printable &&
+            typeof (printable as { cursorHasMore: unknown }).cursorHasMore === 'boolean'
+        ) {
             return (printable as { cursorHasMore: boolean }).cursorHasMore;
         }
 
