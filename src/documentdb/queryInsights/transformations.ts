@@ -95,7 +95,7 @@ function createImprovementCard(
                 action: improvement.action,
                 indexSpec: improvement.indexSpec,
                 indexOptions: improvement.indexOptions,
-                mongoShell: improvement.shellCommand,
+                shellCommand: improvement.shellCommand,
             },
         },
         // TODO: Temporarily removing secondary button until we have relevant content
@@ -110,18 +110,18 @@ function createImprovementCard(
 }
 
 /**
- * Gets the primary button label based on action and mongoShell command
+ * Gets the primary button label based on action and shell command
  */
-function getPrimaryButtonLabel(action: string, mongoShell: string): string {
+function getPrimaryButtonLabel(action: string, shellCommand: string): string {
     switch (action) {
         case 'create':
             return l10n.t('Create Index…');
         case 'drop':
             return l10n.t('Drop Index…');
         case 'modify':
-            if (mongoShell.includes('.hideIndex(')) {
+            if (shellCommand.includes('.hideIndex(')) {
                 return l10n.t('Hide Index…');
-            } else if (mongoShell.includes('.unhideIndex(')) {
+            } else if (shellCommand.includes('.unhideIndex(')) {
                 return l10n.t('Unhide Index…');
             }
             return l10n.t('Modify Index…');
