@@ -89,36 +89,53 @@ export class PlaygroundDiagnostics implements vscode.Disposable {
     /**
      * Analyze a playground document for `.limit(N)` calls that exceed
      * the configured display batch size.
+     *
+     * Skips matches inside comments, strings, and chains that already
+     * include `.toArray()`.
      */
     private analyzeDocument(document: vscode.TextDocument): void {
         const batchSize = getBatchSizeSetting();
         const diagnostics: vscode.Diagnostic[] = [];
         const text = document.getText();
+        const commentRanges = computeCommentAndStringRanges(text);
 
         let match: RegExpExecArray | null;
         LIMIT_CALL_PATTERN.lastIndex = 0;
 
         while ((match = LIMIT_CALL_PATTERN.exec(text)) !== null) {
             const limitValue = parseInt(match[1], 10);
-            if (limitValue > batchSize) {
-                const startPos = document.positionAt(match.index);
-                const endPos = document.positionAt(match.index + match[0].length);
-                const range = new vscode.Range(startPos, endPos);
-
-                const diagnostic = new vscode.Diagnostic(
-                    range,
-                    l10n.t(
-                        '.limit({0}) exceeds the display batch size ({1}), so only {1} documents will be shown. Use .toArray() to retrieve all {0}, or increase "{2}" in Settings.',
-                        limitValue,
-                        batchSize,
-                        ext.settingsKeys.batchSize,
-                    ),
-                    vscode.DiagnosticSeverity.Warning,
-                );
-                diagnostic.source = DIAGNOSTIC_SOURCE;
-                diagnostic.code = 'limit-exceeds-batch-size';
-                diagnostics.push(diagnostic);
+            if (limitValue <= batchSize) {
+                continue;
             }
+
+            // Skip matches inside comments or string literals
+            if (isInsideCommentOrString(match.index, commentRanges)) {
+                continue;
+            }
+
+            // Skip if the same line already contains .toArray()
+            const startPos = document.positionAt(match.index);
+            const lineText = document.lineAt(startPos.line).text;
+            if (lineText.includes('.toArray()')) {
+                continue;
+            }
+
+            const endPos = document.positionAt(match.index + match[0].length);
+            const range = new vscode.Range(startPos, endPos);
+
+            const diagnostic = new vscode.Diagnostic(
+                range,
+                l10n.t(
+                    '.limit({0}) exceeds the display batch size ({1}), so only {1} documents will be shown. Use .toArray() to retrieve all {0}, or increase "{2}" in Settings.',
+                    limitValue,
+                    batchSize,
+                    ext.settingsKeys.batchSize,
+                ),
+                vscode.DiagnosticSeverity.Warning,
+            );
+            diagnostic.source = DIAGNOSTIC_SOURCE;
+            diagnostic.code = 'limit-exceeds-batch-size';
+            diagnostics.push(diagnostic);
         }
 
         this._diagnosticCollection.set(document.uri, diagnostics);
@@ -136,7 +153,7 @@ export class PlaygroundDiagnostics implements vscode.Disposable {
  */
 class PlaygroundCodeActionProvider implements vscode.CodeActionProvider {
     provideCodeActions(
-        document: vscode.TextDocument,
+        _document: vscode.TextDocument,
         _range: vscode.Range | vscode.Selection,
         context: vscode.CodeActionContext,
     ): vscode.CodeAction[] {
@@ -147,35 +164,13 @@ class PlaygroundCodeActionProvider implements vscode.CodeActionProvider {
                 continue;
             }
 
-            // Extract the limit value from the diagnostic range
-            const limitText = document.getText(diagnostic.range);
-            const limitMatch = /\.limit\(\s*(\d+)\s*\)/.exec(limitText);
-            if (!limitMatch) {
-                continue;
-            }
-
-            const limitValue = parseInt(limitMatch[1], 10);
-
-            // Action 1: Insert .toArray() after the expression
-            const toArrayAction = new vscode.CodeAction(
-                l10n.t('Insert .toArray() to get all {0} documents', limitValue),
-                vscode.CodeActionKind.QuickFix,
-            );
-            toArrayAction.diagnostics = [diagnostic];
-            toArrayAction.isPreferred = true;
-            toArrayAction.edit = new vscode.WorkspaceEdit();
-
-            // Find the end of the statement — insert .toArray() right after .limit(N)
-            const insertPosition = diagnostic.range.end;
-            toArrayAction.edit.insert(document.uri, insertPosition, '.toArray()');
-            actions.push(toArrayAction);
-
-            // Action 2: Open batch size setting
+            // Quick fix: open the batch size setting
             const settingsAction = new vscode.CodeAction(
                 l10n.t('Change display batch size (currently {0}) in settings', getBatchSizeSetting()),
                 vscode.CodeActionKind.QuickFix,
             );
             settingsAction.diagnostics = [diagnostic];
+            settingsAction.isPreferred = true;
             settingsAction.command = {
                 title: l10n.t('Open batch size setting'),
                 command: 'workbench.action.openSettings',
@@ -186,4 +181,77 @@ class PlaygroundCodeActionProvider implements vscode.CodeActionProvider {
 
         return actions;
     }
+}
+
+// ─── Comment/string range detection ──────────────────────────────────────────
+
+interface TextRange {
+    readonly start: number;
+    readonly end: number;
+}
+
+/**
+ * Compute the character ranges of line comments (`//`), block comments,
+ * and string literals (single/double/backtick) in the given source text.
+ * Used to suppress diagnostics inside non-code regions.
+ */
+function computeCommentAndStringRanges(text: string): TextRange[] {
+    const ranges: TextRange[] = [];
+    let i = 0;
+    while (i < text.length) {
+        const ch = text[i];
+
+        // Line comment
+        if (ch === '/' && text[i + 1] === '/') {
+            const start = i;
+            i += 2;
+            while (i < text.length && text[i] !== '\n') {
+                i++;
+            }
+            ranges.push({ start, end: i });
+            continue;
+        }
+
+        // Block comment
+        if (ch === '/' && text[i + 1] === '*') {
+            const start = i;
+            i += 2;
+            while (i < text.length - 1 && !(text[i] === '*' && text[i + 1] === '/')) {
+                i++;
+            }
+            i += 2; // skip */
+            ranges.push({ start, end: i });
+            continue;
+        }
+
+        // String literals (single, double, backtick)
+        if (ch === "'" || ch === '"' || ch === '`') {
+            const start = i;
+            const quote = ch;
+            i++;
+            while (i < text.length) {
+                if (text[i] === '\\') {
+                    i += 2; // skip escaped character
+                    continue;
+                }
+                if (text[i] === quote) {
+                    i++;
+                    break;
+                }
+                i++;
+            }
+            ranges.push({ start, end: i });
+            continue;
+        }
+
+        i++;
+    }
+    return ranges;
+}
+
+/**
+ * Check if an offset falls inside any of the computed comment/string ranges.
+ */
+function isInsideCommentOrString(offset: number, ranges: TextRange[]): boolean {
+    return ranges.some((r) => offset >= r.start && offset < r.end);
 }

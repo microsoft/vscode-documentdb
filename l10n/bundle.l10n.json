@@ -600,7 +600,6 @@
   "Information was confusing": "Information was confusing",
   "Initializing task...": "Initializing task...",
   "Initializing…": "Initializing…",
-  "Insert .toArray() to get all {0} documents": "Insert .toArray() to get all {0} documents",
   "Inserted {0} document(s).": "Inserted {0} document(s).",
   "Install Azure Account Extension...": "Install Azure Account Extension...",
   "Internal error: connectionString must be defined.": "Internal error: connectionString must be defined.",
