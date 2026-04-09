@@ -86,10 +86,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Display welcome banner and start initialization
         this.writeLine(
             this._outputFormatter.formatSystemMessage(
-                l10n.t('DocumentDB Shell — {0}', this._connectionInfo.clusterDisplayName),
+                l10n.t('DocumentDB Shell: {0}', this._connectionInfo.clusterDisplayName),
             ),
         );
-        this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Authenticating and connecting...')));
+        this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connecting and authenticating...')));
         this.writeLine('');
 
         void this.initializeSession();
@@ -114,7 +114,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             const authLabel = metadata.authMechanism === 'MicrosoftEntraID' ? 'Entra ID' : 'SCRAM';
             const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
 
-            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to {0}', hostLabel)));
+            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', hostLabel)));
             this.writeLine(
                 this._outputFormatter.formatSystemMessage(
                     l10n.t('Authentication: {0} | Database: {1}', authLabel, this._currentDatabase),
