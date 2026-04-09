@@ -21,6 +21,7 @@ const DEFAULT_OPTIONS: ShellRuntimeOptions = {
     productName: 'DocumentDB for VS Code',
     productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
     displayBatchSize: 50,
+    persistent: false,
 };
 
 /**
@@ -57,6 +58,13 @@ export class DocumentDBShellRuntime {
     private readonly _commandInterceptor: CommandInterceptor;
     private readonly _resultTransformer: ResultTransformer;
     private _disposed = false;
+
+    // Persistent mode state — reused across evaluate() calls when options.persistent is true
+    private _persistentInstanceState: ShellInstanceState | undefined;
+    private _persistentEvaluator: ShellEvaluator | undefined;
+    private _persistentContext: Record<string, unknown> | undefined;
+    private _persistentVmContext: vm.Context | undefined;
+    private _persistentInitialized = false;
 
     constructor(mongoClient: MongoClient, callbacks?: ShellRuntimeCallbacks, options?: ShellRuntimeOptions) {
         this._mongoClient = mongoClient;
@@ -98,6 +106,23 @@ export class DocumentDBShellRuntime {
 
         const startTime = Date.now();
 
+        if (this._options.persistent) {
+            return this.evaluatePersistent(code, databaseName, evalOptions, startTime);
+        } else {
+            return this.evaluateFresh(code, databaseName, evalOptions, startTime);
+        }
+    }
+
+    /**
+     * Fresh-context evaluation (playground mode).
+     * Creates a new @mongosh context per call — no variable leakage between evaluations.
+     */
+    private async evaluateFresh(
+        code: string,
+        databaseName: string,
+        evalOptions: ShellEvalOptions | undefined,
+        startTime: number,
+    ): Promise<ShellEvaluationResult> {
         // Create fresh shell context per execution
         const { serviceProvider, bus } = DocumentDBServiceProvider.createForDocumentDB(
             this._mongoClient,
@@ -107,16 +132,7 @@ export class DocumentDBShellRuntime {
         const instanceState = new ShellInstanceState(serviceProvider, bus);
         const evaluator = new ShellEvaluator(instanceState);
 
-        // Set the display batch size directly on the instance state.
-        // This uses @mongosh's displayBatchSizeFromDBQuery property which takes
-        // precedence over config.get('displayBatchSize') in cursor iteration.
-        // We set it here (not via config.set()) because config.set() requires an
-        // evaluationListener with setConfig/getConfig — which we don't provide.
-        const batchSize =
-            evalOptions?.displayBatchSize ?? this._options.displayBatchSize ?? DEFAULT_OPTIONS.displayBatchSize!;
-        instanceState.displayBatchSizeFromDBQuery = batchSize;
-
-        // Register evaluation listener for console output
+        this.applyBatchSize(instanceState, evalOptions);
         this.registerConsoleOutputListener(instanceState);
 
         // Set up eval context with shell globals (db, ObjectId, ISODate, etc.)
@@ -139,7 +155,6 @@ export class DocumentDBShellRuntime {
 
         this.log('trace', `Evaluation complete (${durationMs}ms)`);
 
-        // Transform the raw @mongosh result
         return this._resultTransformer.transform(
             result as {
                 type: string | null;
@@ -151,11 +166,98 @@ export class DocumentDBShellRuntime {
     }
 
     /**
+     * Persistent-context evaluation (interactive shell mode).
+     * Reuses the same @mongosh context across calls — variables, cursor state,
+     * and the `db` reference persist between evaluations.
+     */
+    private async evaluatePersistent(
+        code: string,
+        databaseName: string,
+        evalOptions: ShellEvalOptions | undefined,
+        startTime: number,
+    ): Promise<ShellEvaluationResult> {
+        // Initialize persistent state on first call
+        if (!this._persistentInitialized) {
+            const { serviceProvider, bus } = DocumentDBServiceProvider.createForDocumentDB(
+                this._mongoClient,
+                this._options.productName,
+                this._options.productDocsLink,
+            );
+
+            this._persistentInstanceState = new ShellInstanceState(serviceProvider, bus);
+            this._persistentEvaluator = new ShellEvaluator(this._persistentInstanceState);
+            this._persistentContext = {};
+            this._persistentInstanceState.setCtx(this._persistentContext);
+            this._persistentVmContext = vm.createContext(this._persistentContext);
+
+            this.registerConsoleOutputListener(this._persistentInstanceState);
+
+            // Pre-select the initial database
+            await this._persistentEvaluator.customEval(
+                this.persistentCustomEvalFn.bind(this),
+                `use(${JSON.stringify(databaseName)})`,
+                this._persistentContext,
+                'shell',
+            );
+
+            this._persistentInitialized = true;
+        }
+
+        // Apply batch size per-eval (may change between evaluations via settings)
+        this.applyBatchSize(this._persistentInstanceState!, evalOptions);
+
+        // Evaluate user code using the persistent context
+        const result = await this._persistentEvaluator!.customEval(
+            this.persistentCustomEvalFn.bind(this),
+            code,
+            this._persistentContext!,
+            'shell',
+        );
+        const durationMs = Date.now() - startTime;
+
+        this.log('trace', `Evaluation complete (${durationMs}ms)`);
+
+        return this._resultTransformer.transform(
+            result as {
+                type: string | null;
+                printable: unknown;
+                source?: { namespace?: { db: string; collection: string } };
+            },
+            durationMs,
+        );
+    }
+
+    /**
+     * Custom eval function for persistent mode. Reuses the existing vm.Context
+     * across evaluations so variables and state survive.
+     */
+    // eslint-disable-next-line @typescript-eslint/require-await
+    private async persistentCustomEvalFn(evalCode: string, _ctx: object): Promise<unknown> {
+        return vm.runInContext(evalCode, this._persistentVmContext!) as unknown;
+    }
+
+    /**
      * Dispose the runtime. After disposal, `evaluate()` calls will throw.
      * Does NOT close the MongoClient — the caller owns its lifecycle.
      */
     dispose(): void {
         this._disposed = true;
+        this._persistentInstanceState = undefined;
+        this._persistentEvaluator = undefined;
+        this._persistentContext = undefined;
+        this._persistentVmContext = undefined;
+        this._persistentInitialized = false;
+    }
+
+    /**
+     * Apply the display batch size to the instance state.
+     * Uses @mongosh's displayBatchSizeFromDBQuery property which takes
+     * precedence over config.get('displayBatchSize') in cursor iteration.
+     */
+    private applyBatchSize(instanceState: ShellInstanceState, evalOptions?: ShellEvalOptions): void {
+        const batchSize =
+            evalOptions?.displayBatchSize ?? this._options.displayBatchSize ?? DEFAULT_OPTIONS.displayBatchSize!;
+        instanceState.displayBatchSizeFromDBQuery = batchSize;
     }
 
     /**

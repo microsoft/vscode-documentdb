@@ -5,22 +5,13 @@
 
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
-import * as path from 'path';
 import * as vscode from 'vscode';
-import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
-import {
-    type MainToWorkerMessage,
-    type SerializableExecutionResult,
-    type SerializableMongoClientOptions,
-    type WorkerToMainMessage,
-} from './workerTypes';
-
-/** Worker lifecycle states */
-type WorkerState = 'idle' | 'spawning' | 'ready' | 'executing';
+import { WorkerSessionManager } from './WorkerSessionManager';
+import { type MainToWorkerMessage, type SerializableMongoClientOptions, type WorkerToMainMessage } from './workerTypes';
 
 /**
  * Evaluates query playground code in a persistent worker thread.
@@ -31,14 +22,13 @@ type WorkerState = 'idle' | 'spawning' | 'ready' | 'executing';
  * - Client isolation from the Collection View
  * - Zero re-auth overhead after the first run
  *
+ * Delegates worker lifecycle and IPC to `WorkerSessionManager`.
+ *
  * The public API is unchanged from the in-process evaluator:
  * `evaluate(connection, code) → Promise<ExecutionResult>`
  */
 export class PlaygroundEvaluator implements vscode.Disposable {
-    private _worker: Worker | undefined;
-    private _workerState: WorkerState = 'idle';
-    /** Which cluster the live worker is connected to (to detect cluster switches) */
-    private _workerClusterId: string | undefined;
+    private readonly _workerManager: WorkerSessionManager;
 
     /**
      * Telemetry session ID — generated on worker spawn, stable across evals within the
@@ -52,15 +42,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
     /** Auth mechanism used for the current worker session (for telemetry). */
     private _sessionAuthMethod: string | undefined;
-
-    /** Pending request correlation map: requestId → { resolve, reject } */
-    private _pendingRequests = new Map<
-        string,
-        {
-            resolve: (value: unknown) => void;
-            reject: (error: Error) => void;
-        }
-    >();
 
     /** Telemetry accessors — read by the command layer for telemetry properties. */
     get sessionId(): string | undefined {
@@ -85,6 +66,42 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         return this._lastEvalConsoleOutputCount;
     }
 
+    constructor() {
+        const logPrefix = '[Playground Worker]';
+
+        this._workerManager = new WorkerSessionManager({
+            onConsoleOutput: (output: string) => {
+                this._lastEvalConsoleOutputCount++;
+                ext.playgroundOutputChannel.show(true);
+                ext.playgroundOutputChannel.appendLine(output);
+            },
+            onLog: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string) => {
+                switch (level) {
+                    case 'error':
+                        ext.outputChannel.error(`${logPrefix} ${message}`);
+                        break;
+                    case 'warn':
+                        ext.outputChannel.warn(`${logPrefix} ${message}`);
+                        break;
+                    case 'debug':
+                        ext.outputChannel.debug(`${logPrefix} ${message}`);
+                        break;
+                    default:
+                        ext.outputChannel.trace(`${logPrefix} ${message}`);
+                        break;
+                }
+            },
+            onTokenRequest: (
+                msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
+                postResponse: (response: MainToWorkerMessage) => void,
+            ) => this.handleTokenRequest(msg, postResponse),
+            onWorkerExit: (exitCode: number) => {
+                ext.outputChannel.debug(`${logPrefix} Worker exited with code ${String(exitCode)}`);
+                this.resetSession();
+            },
+        });
+    }
+
     /**
      * Evaluate user code against the connected database.
      *
@@ -99,14 +116,23 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         onProgress?: (message: string) => void,
     ): Promise<ExecutionResult> {
         // Ensure worker is alive and connected to the right cluster
-        const needsSpawn =
-            !this._worker || this._workerState === 'idle' || this._workerClusterId !== connection.clusterId;
+        const needsSpawn = !this._workerManager.isConnectedTo(connection.clusterId);
         if (needsSpawn) {
             onProgress?.(l10n.t('Initializing…'));
         }
 
         const initStartTime = Date.now();
-        await this.ensureWorker(connection, onProgress);
+        const initMsg = this.buildInitMessage(connection);
+
+        // Start a new telemetry session if we're spawning a new worker
+        if (needsSpawn) {
+            this._sessionId = randomUUID();
+            this._sessionEvalCount = 0;
+            this._sessionAuthMethod = initMsg.authMechanism;
+        }
+
+        onProgress?.(l10n.t('Authenticating…'));
+        await this._workerManager.ensureWorker(connection.clusterId, initMsg);
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 
         // Reset console output counter for this eval run
@@ -117,8 +143,18 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         const timeoutSec = vscode.workspace.getConfiguration().get<number>(ext.settingsKeys.shellTimeout) ?? 30;
         const timeoutMs = timeoutSec * 1000;
 
-        const result = await this.sendEval(connection, code, timeoutMs);
-        return result;
+        this._sessionEvalCount++;
+
+        const evalMsg: MainToWorkerMessage & { type: 'eval' } = {
+            type: 'eval',
+            requestId: '',
+            code,
+            databaseName: connection.databaseName,
+            displayBatchSize: getBatchSizeSetting(),
+        };
+
+        const workerResult = await this._workerManager.sendEval(evalMsg, timeoutMs);
+        return this.deserializeResult(workerResult.result);
     }
 
     /**
@@ -126,17 +162,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
      * Returns after the worker has confirmed shutdown or after a timeout.
      */
     async shutdown(): Promise<void> {
-        if (!this._worker || this._workerState === 'idle') {
-            return;
-        }
-
-        try {
-            await this.sendRequest<void>({ type: 'shutdown', requestId: '' }, 5000);
-        } catch {
-            // Shutdown timed out or failed — force-kill
-        }
-
-        this.terminateWorker();
+        await this._workerManager.shutdown();
+        this.resetSession();
     }
 
     /**
@@ -144,81 +171,16 @@ export class PlaygroundEvaluator implements vscode.Disposable {
      * Used for infinite loop recovery (timeout) and cancellation.
      */
     killWorker(): void {
-        this.terminateWorker();
+        this._workerManager.killWorker();
+        this.resetSession();
     }
 
     dispose(): void {
-        this.terminateWorker();
+        this._workerManager.dispose();
+        this.resetSession();
     }
 
-    // ─── Private: Worker lifecycle ───────────────────────────────────────────
-
-    /**
-     * Ensure a worker is alive and connected to the correct cluster.
-     * Spawns a new worker if needed (lazy), or kills and respawns if the
-     * cluster has changed.
-     */
-    private async ensureWorker(
-        connection: PlaygroundConnection,
-        onProgress?: (message: string) => void,
-    ): Promise<void> {
-        // If worker is alive but connected to a different cluster, shut it down
-        if (this._worker && this._workerClusterId !== connection.clusterId) {
-            this.terminateWorker();
-        }
-
-        // If no worker exists, spawn one
-        if (!this._worker || this._workerState === 'idle') {
-            await this.spawnWorker(connection, onProgress);
-        }
-    }
-
-    /**
-     * Spawn a new worker thread and send the init message.
-     */
-    private async spawnWorker(connection: PlaygroundConnection, onProgress?: (message: string) => void): Promise<void> {
-        this._workerState = 'spawning';
-
-        // Resolve worker script path (same directory as the main bundle in dist/)
-        const workerPath = path.join(__dirname, 'playgroundWorker.js');
-        this._worker = new Worker(workerPath);
-        this._workerClusterId = connection.clusterId;
-
-        // Listen for messages from the worker
-        this._worker.on('message', (msg: WorkerToMainMessage) => {
-            this.handleWorkerMessage(msg);
-        });
-
-        // Listen for worker exit (crash or termination)
-        this._worker.on('exit', (exitCode: number) => {
-            ext.outputChannel.debug(`[Playground Worker] Worker exited with code ${String(exitCode)}`);
-            this.handleWorkerExit();
-        });
-
-        this._worker.on('error', (error: Error) => {
-            ext.outputChannel.error(`[Playground Worker] ${error.message}`);
-        });
-
-        // Build init message from cached credentials and send to worker.
-        // If init fails (bad credentials, unreachable host, etc.), tear down
-        // the worker so the next evaluate() call can respawn cleanly.
-        try {
-            const initMsg = this.buildInitMessage(connection);
-
-            // Start a new telemetry session for this worker lifecycle
-            this._sessionId = randomUUID();
-            this._sessionEvalCount = 0;
-            this._sessionAuthMethod = initMsg.authMechanism;
-
-            // Send init and wait for acknowledgment
-            onProgress?.(l10n.t('Authenticating…'));
-            await this.sendRequest<void>(initMsg, 30000);
-            this._workerState = 'ready';
-        } catch (error) {
-            this.terminateWorker();
-            throw error;
-        }
-    }
+    // ─── Private: Init message ───────────────────────────────────────────────
 
     /**
      * Build the init message from CredentialCache data.
@@ -261,198 +223,52 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         };
     }
 
+    // ─── Private: Result deserialization ─────────────────────────────────────
+
     /**
-     * Send an eval message to the worker and await the result.
+     * Deserialize the worker result — printable is a canonical EJSON string from the worker.
+     * Canonical EJSON preserves all BSON types (ObjectId, Date, Decimal128, Int32,
+     * Long, Double, etc.) so that SchemaAnalyzer correctly identifies field types.
      */
-    private async sendEval(
-        connection: PlaygroundConnection,
-        code: string,
-        timeoutMs: number,
-    ): Promise<ExecutionResult> {
-        this._workerState = 'executing';
-        this._sessionEvalCount++;
-
-        const evalMsg: MainToWorkerMessage = {
-            type: 'eval',
-            requestId: '',
-            code,
-            databaseName: connection.databaseName,
-            displayBatchSize: getBatchSizeSetting(),
-        };
-
+    private async deserializeResult(serResult: {
+        type: string | null;
+        printable: string;
+        durationMs: number;
+        cursorHasMore?: boolean;
+        source?: { namespace?: { db: string; collection: string } };
+    }): Promise<ExecutionResult> {
+        let printable: unknown;
         try {
-            const result = await this.sendRequest<{ result: SerializableExecutionResult }>(evalMsg, timeoutMs);
-
-            // Deserialize the result — printable is a canonical EJSON string from the worker.
-            // Canonical EJSON preserves all BSON types (ObjectId, Date, Decimal128, Int32,
-            // Long, Double, etc.) so that SchemaAnalyzer correctly identifies field types.
-            const serResult = result.result;
-            let printable: unknown;
+            const { EJSON } = await import('bson');
+            printable = EJSON.parse(serResult.printable, { relaxed: false });
+        } catch {
+            // Fallback to JSON.parse if EJSON fails, then raw string
             try {
-                const { EJSON } = await import('bson');
-                printable = EJSON.parse(serResult.printable, { relaxed: false });
+                printable = JSON.parse(serResult.printable) as unknown;
             } catch {
-                // Fallback to JSON.parse if EJSON fails, then raw string
-                try {
-                    printable = JSON.parse(serResult.printable) as unknown;
-                } catch {
-                    printable = serResult.printable;
-                }
-            }
-
-            return {
-                type: serResult.type,
-                printable,
-                durationMs: serResult.durationMs,
-                cursorHasMore: serResult.cursorHasMore,
-                source: serResult.source,
-            };
-        } finally {
-            if (this._workerState === 'executing') {
-                this._workerState = 'ready';
+                printable = serResult.printable;
             }
         }
+
+        return {
+            type: serResult.type,
+            printable,
+            durationMs: serResult.durationMs,
+            cursorHasMore: serResult.cursorHasMore,
+            source: serResult.source,
+        };
     }
 
-    // ─── Private: IPC request/response ───────────────────────────────────────
-
-    /**
-     * Send a message to the worker and return a promise that resolves
-     * when the corresponding response arrives.
-     */
-    private sendRequest<T>(msg: MainToWorkerMessage, timeoutMs: number): Promise<T> {
-        if (!this._worker) {
-            return Promise.reject(new Error(l10n.t('Worker is not running')));
-        }
-
-        const requestId = randomUUID();
-        const msgWithId = { ...msg, requestId };
-
-        return new Promise<T>((resolve, reject) => {
-            this._pendingRequests.set(requestId, {
-                resolve: resolve as (value: unknown) => void,
-                reject,
-            });
-
-            // Timeout — kills the worker for safety (infinite loop protection)
-            const timer = setTimeout(() => {
-                const pending = this._pendingRequests.get(requestId);
-                if (pending) {
-                    this._pendingRequests.delete(requestId);
-                    this.killWorker();
-                    pending.reject(
-                        new Error(
-                            l10n.t('Operation timed out after {0} seconds', String(Math.round(timeoutMs / 1000))),
-                        ),
-                    );
-                }
-            }, timeoutMs);
-
-            // Store timer reference on the pending entry so we can clear it
-            const entry = this._pendingRequests.get(requestId)!;
-            const originalResolve = entry.resolve;
-            const originalReject = entry.reject;
-            entry.resolve = (value: unknown) => {
-                clearTimeout(timer);
-                originalResolve(value);
-            };
-            entry.reject = (error: Error) => {
-                clearTimeout(timer);
-                originalReject(error);
-            };
-
-            this._worker!.postMessage(msgWithId);
-        });
-    }
-
-    /**
-     * Handle an incoming message from the worker.
-     */
-    private handleWorkerMessage(msg: WorkerToMainMessage): void {
-        switch (msg.type) {
-            case 'initResult': {
-                const pending = this._pendingRequests.get(msg.requestId);
-                if (pending) {
-                    this._pendingRequests.delete(msg.requestId);
-                    if (msg.success) {
-                        pending.resolve(undefined);
-                    } else {
-                        pending.reject(new Error(msg.error ?? 'Worker init failed'));
-                    }
-                }
-                break;
-            }
-
-            case 'evalResult': {
-                const pending = this._pendingRequests.get(msg.requestId);
-                if (pending) {
-                    this._pendingRequests.delete(msg.requestId);
-                    pending.resolve(msg);
-                }
-                break;
-            }
-
-            case 'evalError': {
-                const pending = this._pendingRequests.get(msg.requestId);
-                if (pending) {
-                    this._pendingRequests.delete(msg.requestId);
-                    const error = new Error(msg.error);
-                    if (msg.stack) {
-                        error.stack = msg.stack;
-                    }
-                    pending.reject(error);
-                }
-                break;
-            }
-
-            case 'shutdownComplete': {
-                const pending = this._pendingRequests.get(msg.requestId);
-                if (pending) {
-                    this._pendingRequests.delete(msg.requestId);
-                    pending.resolve(undefined);
-                }
-                break;
-            }
-
-            case 'tokenRequest': {
-                // Entra ID: worker needs an OIDC token — delegate to main thread VS Code API
-                void this.handleTokenRequest(msg);
-                break;
-            }
-
-            case 'log': {
-                const prefix = '[Playground Worker]';
-                switch (msg.level) {
-                    case 'error':
-                        ext.outputChannel.error(`${prefix} ${msg.message}`);
-                        break;
-                    case 'warn':
-                        ext.outputChannel.warn(`${prefix} ${msg.message}`);
-                        break;
-                    case 'debug':
-                        ext.outputChannel.debug(`${prefix} ${msg.message}`);
-                        break;
-                    default:
-                        ext.outputChannel.trace(`${prefix} ${msg.message}`);
-                        break;
-                }
-                break;
-            }
-
-            case 'consoleOutput': {
-                this._lastEvalConsoleOutputCount++;
-                ext.playgroundOutputChannel.show(true);
-                ext.playgroundOutputChannel.appendLine(msg.output);
-                break;
-            }
-        }
-    }
+    // ─── Private: Token handling ─────────────────────────────────────────────
 
     /**
      * Handle a token request from the worker (Entra ID OIDC).
      * Calls VS Code's auth API on the main thread and sends the token back.
      */
-    private async handleTokenRequest(msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>): Promise<void> {
+    private async handleTokenRequest(
+        msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
+        postResponse: (response: MainToWorkerMessage) => void,
+    ): Promise<void> {
         try {
             const { getSessionFromVSCode } = await import(
                 // eslint-disable-next-line import/no-internal-modules
@@ -464,55 +280,26 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 throw new Error('Failed to obtain Entra ID session');
             }
 
-            const response: MainToWorkerMessage = {
+            postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,
                 accessToken: session.accessToken,
-            };
-            this._worker?.postMessage(response);
+            });
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            const response: MainToWorkerMessage = {
+            postResponse({
                 type: 'tokenError',
                 requestId: msg.requestId,
                 error: errorMessage,
-            };
-            this._worker?.postMessage(response);
+            });
         }
     }
 
-    // ─── Private: Worker cleanup ─────────────────────────────────────────────
+    // ─── Private: Session telemetry ──────────────────────────────────────────
 
-    private terminateWorker(): void {
-        if (this._worker) {
-            void this._worker.terminate();
-            this._worker = undefined;
-        }
-        this._workerState = 'idle';
-        this._workerClusterId = undefined;
+    private resetSession(): void {
         this._sessionId = undefined;
         this._sessionEvalCount = 0;
         this._sessionAuthMethod = undefined;
-
-        // Reject all pending requests
-        for (const [, entry] of this._pendingRequests) {
-            entry.reject(new Error('Worker terminated'));
-        }
-        this._pendingRequests.clear();
-    }
-
-    private handleWorkerExit(): void {
-        this._worker = undefined;
-        this._workerState = 'idle';
-        this._workerClusterId = undefined;
-        this._sessionId = undefined;
-        this._sessionEvalCount = 0;
-        this._sessionAuthMethod = undefined;
-
-        // Reject any still-pending requests
-        for (const [, entry] of this._pendingRequests) {
-            entry.reject(new Error('Worker exited unexpectedly'));
-        }
-        this._pendingRequests.clear();
     }
 }

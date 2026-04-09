@@ -142,6 +142,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         {
             productName: 'DocumentDB for VS Code Query Playground',
             productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
+            persistent: msg.persistent ?? false,
         },
     );
 

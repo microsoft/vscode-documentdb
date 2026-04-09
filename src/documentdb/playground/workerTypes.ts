@@ -63,6 +63,12 @@ export type MainToWorkerMessage =
           readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID';
           /** Tenant ID for Entra ID clusters */
           readonly tenantId?: string;
+          /**
+           * When `true`, the worker keeps the @mongosh eval context alive across
+           * evaluations (interactive shell mode). When `false` (default), each eval
+           * gets a fresh context (query playground mode).
+           */
+          readonly persistent?: boolean;
       }
     | {
           readonly type: 'eval';
