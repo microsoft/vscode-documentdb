@@ -115,7 +115,12 @@ export class ShellInputHandler {
      * - Ctrl+Left/Right: word navigation
      */
     handleInput(data: string): void {
+        // Ctrl+C must always be processed, even when input is disabled,
+        // so the user can cancel a running evaluation.
         if (!this._enabled) {
+            if (data === '\x03') {
+                this._callbacks.onInterrupt();
+            }
             return;
         }
 

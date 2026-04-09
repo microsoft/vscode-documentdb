@@ -52,6 +52,8 @@ export class WorkerSessionManager implements vscode.Disposable {
     private _worker: Worker | undefined;
     private _workerState: WorkerState = 'idle';
     private _workerClusterId: string | undefined;
+    /** Set before intentional worker termination to suppress the onWorkerExit callback. */
+    private _terminatingIntentionally = false;
 
     /** Pending request correlation map: requestId → { resolve, reject } */
     private readonly _pendingRequests = new Map<
@@ -189,7 +191,9 @@ export class WorkerSessionManager implements vscode.Disposable {
         // Listen for worker exit (crash or termination)
         this._worker.on('exit', (exitCode: number) => {
             this._callbacks.onLog?.('debug', `Worker exited with code ${String(exitCode)}`);
-            this._callbacks.onWorkerExit?.(exitCode);
+            if (!this._terminatingIntentionally) {
+                this._callbacks.onWorkerExit?.(exitCode);
+            }
             this.handleWorkerExit();
         });
 
@@ -334,6 +338,7 @@ export class WorkerSessionManager implements vscode.Disposable {
 
     private terminateWorker(): void {
         if (this._worker) {
+            this._terminatingIntentionally = true;
             void this._worker.terminate();
             this._worker = undefined;
         }
@@ -351,6 +356,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         this._worker = undefined;
         this._workerState = 'idle';
         this._workerClusterId = undefined;
+        this._terminatingIntentionally = false;
 
         // Reject any still-pending requests
         for (const [, entry] of this._pendingRequests) {

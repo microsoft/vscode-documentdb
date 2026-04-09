@@ -326,10 +326,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private handleInterrupt(): void {
         if (this._evaluating) {
-            // Kill the worker to cancel a running evaluation
+            // Kill the worker to cancel a running evaluation.
+            // The _terminatingIntentionally flag in WorkerSessionManager prevents
+            // the onWorkerExit callback from showing "ended unexpectedly".
             this._sessionManager.killWorker();
+            this._evaluating = false;
+            this._inputHandler.setEnabled(true);
             this.writeLine('');
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('^C')));
+            this.showPrompt();
         } else {
             // Not evaluating — just clear the current line and show a new prompt
             this.writeLine('');
