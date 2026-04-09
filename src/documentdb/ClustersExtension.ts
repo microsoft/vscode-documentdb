@@ -96,6 +96,7 @@ import { PlaygroundService } from './playground/PlaygroundService';
 import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
 import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
 import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
+import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -570,6 +571,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.openInteractiveShell',
                     withTreeNodeCommandCorrelation(openInteractiveShell),
+                );
+
+                // Register the terminal link provider for "Open in Collection View" action lines
+                ext.context.subscriptions.push(
+                    vscode.window.registerTerminalLinkProvider(new ShellTerminalLinkProvider()),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(

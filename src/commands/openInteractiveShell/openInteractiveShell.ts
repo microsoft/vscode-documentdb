@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBShellPty } from '../../documentdb/shell/DocumentDBShellPty';
 import { type ShellConnectionInfo } from '../../documentdb/shell/ShellSessionManager';
+import { registerShellTerminal } from '../../documentdb/shell/ShellTerminalLinkProvider';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -56,6 +57,9 @@ export async function openInteractiveShell(
         pty,
         iconPath: new vscode.ThemeIcon('terminal'),
     });
+
+    pty.setTerminal(terminal);
+    registerShellTerminal(terminal, () => pty.getTerminalInfo());
 
     terminal.show();
 }

@@ -749,6 +749,8 @@
   "OK": "OK",
   "Open batch size setting": "Open batch size setting",
   "Open Collection": "Open Collection",
+  "Open collection \"{0}.{1}\" in Collection View": "Open collection \"{0}.{1}\" in Collection View",
+  "Open collection [{0}.{1}] in Collection View": "Open collection [{0}.{1}] in Collection View",
   "Open the VS Code Marketplace to learn more about \"{0}\"": "Open the VS Code Marketplace to learn more about \"{0}\"",
   "Opening DocumentDB connection…": "Opening DocumentDB connection…",
   "Operation cancelled.": "Operation cancelled.",

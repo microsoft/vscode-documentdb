@@ -288,4 +288,103 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('testdb> ');
         });
     });
+
+    describe('action line — Open in Collection View', () => {
+        beforeEach(async () => {
+            mockInitialize.mockResolvedValue(undefined);
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('should show action line after Cursor result with namespace', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'Cursor',
+                printable: '[{"name":"Alice"}]',
+                durationMs: 5,
+                source: { namespace: { db: 'mydb', collection: 'users' } },
+            });
+
+            pty.handleInput('db.users.find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('Open collection [mydb.users] in Collection View');
+        });
+
+        it('should show action line after Document result with namespace', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'Document',
+                printable: '{"name":"Alice"}',
+                durationMs: 5,
+                source: { namespace: { db: 'mydb', collection: 'users' } },
+            });
+
+            pty.handleInput('db.users.findOne()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('Open collection [mydb.users] in Collection View');
+        });
+
+        it('should NOT show action line when namespace is missing', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'Cursor',
+                printable: '[{"x":1}]',
+                durationMs: 5,
+            });
+
+            pty.handleInput('db.users.find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).not.toContain('Open collection');
+        });
+
+        it('should NOT show action line for non-query result types', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'string',
+                printable: '"hello"',
+                durationMs: 5,
+                source: { namespace: { db: 'mydb', collection: 'users' } },
+            });
+
+            pty.handleInput('db.users.count()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).not.toContain('Open collection');
+        });
+
+        it('should NOT show action line for suppressed output', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'Document',
+                printable: 'null',
+                durationMs: 5,
+                printableIsUndefined: true,
+                source: { namespace: { db: 'mydb', collection: 'users' } },
+            });
+
+            pty.handleInput('db.users.insertOne({})');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).not.toContain('Open collection');
+        });
+
+        it('should handle collection names with special characters', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'Cursor',
+                printable: '[{"x":1}]',
+                durationMs: 5,
+                source: { namespace: { db: 'mydb', collection: 'stores (10)' } },
+            });
+
+            pty.handleInput('db["stores (10)"].find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('Open collection [mydb.stores (10)] in Collection View');
+        });
+    });
 });
