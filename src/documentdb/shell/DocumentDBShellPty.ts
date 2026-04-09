@@ -47,6 +47,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /** Current database name — updated when `use <db>` changes it. */
     private _currentDatabase: string;
+    /** Cached username from initialization (used for terminal tab title). */
+    private _username: string | undefined;
     /** Whether the shell is currently evaluating a command. */
     private _evaluating = false;
     /** Whether the shell has been closed. */
@@ -174,14 +176,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // Update terminal tab name to include the user (if known)
             if (metadata.username) {
-                this._nameEmitter.fire(
-                    l10n.t(
-                        'DocumentDB: {0}@{1}/{2}',
-                        metadata.username,
-                        this._connectionInfo.clusterDisplayName,
-                        this._currentDatabase,
-                    ),
-                );
+                this._username = metadata.username;
+                this.updateTerminalTitle();
             }
 
             this.showPrompt();
@@ -307,6 +303,23 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (newDb) {
             this._currentDatabase = newDb;
             this._sessionManager.setActiveDatabase(newDb);
+            this.updateTerminalTitle();
+        }
+    }
+
+    /**
+     * Update the terminal tab title to reflect the current database.
+     */
+    private updateTerminalTitle(): void {
+        if (this._username) {
+            this._nameEmitter.fire(
+                l10n.t(
+                    'DocumentDB: {0}@{1}/{2}',
+                    this._username,
+                    this._connectionInfo.clusterDisplayName,
+                    this._currentDatabase,
+                ),
+            );
         }
     }
 
