@@ -30,17 +30,18 @@ export class CommandInterceptor {
     private static readonly HELP_PATTERN = /^help(?:\(\)|\s*`[^]*`)?$/;
 
     /**
-     * Matches standalone `exit` or `quit` keywords, with optional trailing semicolon.
+     * Matches standalone `exit` or `quit` keywords, with optional parens and trailing semicolon.
      * - `exit`, `quit` (bare keywords)
-     * - `exit;`, `quit;` (with semicolon)
+     * - `exit()`, `quit()` (function call form — common in mongosh)
+     * - `exit;`, `quit;`, `exit();`, `quit();` (with semicolon)
      * - `  exit  `, `  quit  ` (with whitespace — trimmed before matching)
      *
      * Does NOT match:
-     * - `exit()`, `quit()` (function calls — these are JS expressions)
+     * - `exit(0)`, `quit(0)` (function calls with arguments)
      * - `exitFunction()`, `var exit = 1` (substrings)
      * - `db.exit` (property access)
      */
-    private static readonly EXIT_PATTERN = /^(?:exit|quit);?$/;
+    private static readonly EXIT_PATTERN = /^(?:exit|quit)(?:\(\))?;?$/;
 
     /**
      * Matches standalone `cls` or `clear` keywords, with optional trailing semicolon.

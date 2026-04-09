@@ -113,12 +113,28 @@ describe('CommandInterceptor', () => {
             expect(result!.type).toBe('exit');
         });
 
-        it('does not intercept "exit()"', () => {
-            expect(interceptor.tryIntercept('exit()')).toBeUndefined();
+        it('intercepts "exit()" as exit command', () => {
+            const result = interceptor.tryIntercept('exit()');
+            expect(result).toBeDefined();
+            expect(result!.type).toBe('exit');
         });
 
-        it('does not intercept "quit()"', () => {
-            expect(interceptor.tryIntercept('quit()')).toBeUndefined();
+        it('intercepts "quit()" as exit command', () => {
+            const result = interceptor.tryIntercept('quit()');
+            expect(result).toBeDefined();
+            expect(result!.type).toBe('exit');
+        });
+
+        it('intercepts "exit();" with trailing semicolon', () => {
+            const result = interceptor.tryIntercept('exit();');
+            expect(result).toBeDefined();
+            expect(result!.type).toBe('exit');
+        });
+
+        it('intercepts "quit();" with trailing semicolon', () => {
+            const result = interceptor.tryIntercept('quit();');
+            expect(result).toBeDefined();
+            expect(result!.type).toBe('exit');
         });
 
         it('does not intercept "exitFunction()"', () => {
