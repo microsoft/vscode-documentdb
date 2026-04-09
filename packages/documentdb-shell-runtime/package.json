@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/documentdb-vscode-shell-runtime",
   "version": "1.0.0",
-  "description": "Shell runtime abstraction for DocumentDB VS Code extension — wraps @mongosh evaluation pipeline",
+  "description": "Shell runtime for the DocumentDB VS Code extension — sandboxed JavaScript evaluation, shell commands, and result formatting for Query Playground and Interactive Shell",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
