@@ -75,8 +75,7 @@ export const ACTION_LINE_PREFIX = '\u{1F517} '; // 🔗 + space
  * followed by `[db.collection]`, with no English text to translate.
  */
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
-const ACTION_LINE_PATTERN =
-    /(?:\x1b\[\d+m)*\u{1F517} \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
+const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{1F517} \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
 /* eslint-enable no-control-regex */
 
 /**

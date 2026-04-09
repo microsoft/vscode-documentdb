@@ -125,7 +125,6 @@ export class ShellInputHandler {
         }
 
         for (const ch of data) {
-
             if (this._inEscape) {
                 this._escapeBuffer += ch;
                 if (this.isEscapeComplete(this._escapeBuffer)) {
