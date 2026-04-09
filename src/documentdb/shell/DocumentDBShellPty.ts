@@ -401,7 +401,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private getShellTimeoutMs(): number {
         const config = vscode.workspace.getConfiguration();
-        const timeoutSec = config.get<number>(ext.settingsKeys.shellTimeout, 120);
+        const timeoutSec = config.get<number>(ext.settingsKeys.shellTimeout, 30);
         return timeoutSec * 1000;
     }
 }
