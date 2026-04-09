@@ -1,0 +1,236 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import * as l10n from '@vscode/l10n';
+import { EJSON } from 'bson';
+import * as vscode from 'vscode';
+import { type SerializableExecutionResult } from '../playground/workerTypes';
+
+/**
+ * ANSI color codes for terminal output.
+ */
+const ANSI = {
+    reset: '\x1b[0m',
+    bold: '\x1b[1m',
+    red: '\x1b[31m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    magenta: '\x1b[35m',
+    cyan: '\x1b[36m',
+    gray: '\x1b[90m',
+} as const;
+
+/**
+ * Formats shell evaluation results for terminal output.
+ *
+ * Handles EJSON deserialization, pretty-printing, and optional ANSI coloring
+ * based on the `documentDB.shell.display.colorOutput` setting.
+ */
+export class ShellOutputFormatter {
+    /**
+     * Format a successful evaluation result for terminal display.
+     *
+     * @param result - The serializable result from the worker.
+     * @returns Formatted string ready to write to the terminal.
+     */
+    formatResult(result: SerializableExecutionResult): string {
+        const printable = this.deserializePrintable(result.printable);
+        const colorEnabled = this.isColorEnabled();
+
+        // Handle special result types
+        if (result.type === 'Help') {
+            return this.formatHelpText(printable);
+        }
+
+        // Format the printable value
+        let output = this.formatValue(printable, colorEnabled);
+
+        // Add cursor "more" indicator
+        if (result.cursorHasMore) {
+            const moreText = l10n.t('Type "it" for more');
+            output += '\r\n' + (colorEnabled ? `${ANSI.gray}${moreText}${ANSI.reset}` : moreText);
+        }
+
+        return output;
+    }
+
+    /**
+     * Format an error for terminal display.
+     *
+     * @param error - The error message string.
+     * @returns Red-colored error text (if color enabled).
+     */
+    formatError(error: string): string {
+        const colorEnabled = this.isColorEnabled();
+        if (colorEnabled) {
+            return `${ANSI.red}${error}${ANSI.reset}`;
+        }
+        return error;
+    }
+
+    /**
+     * Format a system message (e.g., "Connecting...", "Disconnected").
+     */
+    formatSystemMessage(message: string): string {
+        const colorEnabled = this.isColorEnabled();
+        if (colorEnabled) {
+            return `${ANSI.gray}${message}${ANSI.reset}`;
+        }
+        return message;
+    }
+
+    // ─── Private: Value formatting ───────────────────────────────────────────
+
+    private formatValue(value: unknown, colorEnabled: boolean): string {
+        if (value === undefined) {
+            return '';
+        }
+        if (value === null) {
+            return colorEnabled ? `${ANSI.magenta}null${ANSI.reset}` : 'null';
+        }
+        if (typeof value === 'string') {
+            return value;
+        }
+        if (typeof value === 'number') {
+            return colorEnabled ? `${ANSI.yellow}${String(value)}${ANSI.reset}` : String(value);
+        }
+        if (typeof value === 'boolean') {
+            return colorEnabled ? `${ANSI.magenta}${String(value)}${ANSI.reset}` : String(value);
+        }
+
+        // Objects and arrays — pretty-print as EJSON
+        const jsonStr = this.toEjsonString(value);
+        if (colorEnabled) {
+            return this.colorizeJson(jsonStr);
+        }
+        return jsonStr;
+    }
+
+    /**
+     * Deserialize the printable value from the worker.
+     *
+     * The worker serializes results as EJSON strings. We parse them back
+     * to get structured objects. Also unwraps the @mongosh CursorIterationResult
+     * wrapper `{ cursorHasMore, documents }` if present.
+     */
+    private deserializePrintable(printable: string): unknown {
+        try {
+            const parsed: unknown = EJSON.parse(printable);
+            return this.unwrapCursorResult(parsed);
+        } catch {
+            // If EJSON parsing fails, return the raw string
+            return printable;
+        }
+    }
+
+    /**
+     * Unwrap CursorIterationResult from @mongosh.
+     *
+     * @mongosh produces `{ cursorHasMore, documents }` for cursor results.
+     * We unwrap to display just the documents array.
+     */
+    private unwrapCursorResult(value: unknown): unknown {
+        if (
+            value !== null &&
+            value !== undefined &&
+            typeof value === 'object' &&
+            !Array.isArray(value) &&
+            'cursorHasMore' in value &&
+            typeof (value as Record<string, unknown>).cursorHasMore === 'boolean' &&
+            'documents' in value &&
+            Array.isArray((value as { documents: unknown }).documents)
+        ) {
+            return (value as { documents: unknown[] }).documents;
+        }
+        return value;
+    }
+
+    private toEjsonString(value: unknown): string {
+        try {
+            return EJSON.stringify(value, undefined, 2, { relaxed: true });
+        } catch {
+            try {
+                return JSON.stringify(value, undefined, 2);
+            } catch {
+                return String(value);
+            }
+        }
+    }
+
+    /**
+     * Add ANSI color codes to a JSON string for terminal display.
+     *
+     * Colors:
+     * - Keys: cyan
+     * - String values: green
+     * - Number values: yellow
+     * - Boolean/null: magenta
+     * - `_id` field: bold
+     */
+    private colorizeJson(json: string): string {
+        // Process line by line to handle indented JSON
+        return json
+            .split('\n')
+            .map((line) => this.colorizeLine(line))
+            .join('\r\n');
+    }
+
+    private colorizeLine(line: string): string {
+        // Match JSON key-value patterns: "key": value
+        // This regex handles the common cases in pretty-printed JSON
+        return line.replace(
+            /^(\s*)"([^"]+)"(\s*:\s*)(.*)/,
+            (_match: string, indent: string, key: string, colon: string, rest: string) => {
+                const keyColor = key === '_id' ? `${ANSI.bold}${ANSI.cyan}` : ANSI.cyan;
+                const coloredKey = `${indent}${keyColor}"${key}"${ANSI.reset}${colon}`;
+                return coloredKey + this.colorizeValue(rest);
+            },
+        );
+    }
+
+    private colorizeValue(value: string): string {
+        const trimmed = value.trim();
+
+        // String value: "..."
+        if (trimmed.startsWith('"')) {
+            return value.replace(/"[^"]*"/, (match) => `${ANSI.green}${match}${ANSI.reset}`);
+        }
+
+        // Boolean or null
+        const boolOrNull = trimmed.replace(/[,\s]/g, '');
+        if (boolOrNull === 'true' || boolOrNull === 'false' || boolOrNull === 'null') {
+            return value.replace(/(true|false|null)/, (match) => `${ANSI.magenta}${match}${ANSI.reset}`);
+        }
+
+        // Number
+        if (/^-?\d+(\.\d+)?[,\s]*$/.test(trimmed)) {
+            return value.replace(/-?\d+(\.\d+)?/, (match) => `${ANSI.yellow}${match}${ANSI.reset}`);
+        }
+
+        return value;
+    }
+
+    // ─── Private: Help formatting ────────────────────────────────────────────
+
+    private formatHelpText(printable: unknown): string {
+        if (typeof printable === 'string') {
+            return printable;
+        }
+
+        // @mongosh Help results have a .help property with the help text
+        if (typeof printable === 'object' && printable !== null && 'help' in printable) {
+            return String((printable as { help: unknown }).help);
+        }
+
+        return this.toEjsonString(printable);
+    }
+
+    // ─── Private: Settings ───────────────────────────────────────────────────
+
+    private isColorEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration();
+        return config.get<boolean>('documentDB.shell.display.colorOutput', true);
+    }
+}

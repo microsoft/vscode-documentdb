@@ -1,0 +1,262 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import * as vscode from 'vscode';
+import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
+
+// Mock ShellSessionManager
+const mockInitialize = jest.fn().mockResolvedValue(undefined);
+const mockEvaluate = jest.fn();
+const mockDispose = jest.fn();
+const mockKillWorker = jest.fn();
+
+jest.mock('./ShellSessionManager', () => ({
+    ShellSessionManager: jest.fn().mockImplementation((_connectionInfo, callbacks) => {
+        // Store callbacks so tests can trigger events
+        (mockInitialize as jest.Mock & { _callbacks?: unknown })._callbacks = callbacks;
+        return {
+            initialize: mockInitialize,
+            evaluate: mockEvaluate,
+            dispose: mockDispose,
+            killWorker: mockKillWorker,
+            isInitialized: true,
+        };
+    }),
+}));
+
+describe('DocumentDBShellPty', () => {
+    let pty: DocumentDBShellPty;
+    let written: string;
+    let closeCode: number | void | undefined;
+
+    const defaultOptions: DocumentDBShellPtyOptions = {
+        connectionInfo: {
+            clusterId: 'test-cluster-id',
+            clusterDisplayName: 'TestCluster',
+            databaseName: 'testdb',
+        },
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        written = '';
+        closeCode = undefined;
+
+        // Mock settings
+        jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+            get: jest.fn((_key: string, defaultValue?: unknown) => {
+                if (_key === 'documentDB.shell.display.colorOutput') {
+                    return false; // Disable colors for easier test assertions
+                }
+                if (_key === 'documentDB.shell.timeout') {
+                    return 120;
+                }
+                return defaultValue;
+            }),
+        } as unknown as vscode.WorkspaceConfiguration);
+
+        pty = new DocumentDBShellPty(defaultOptions);
+
+        // Subscribe to events
+        pty.onDidWrite((data) => {
+            written += data;
+        });
+        pty.onDidClose((code) => {
+            closeCode = code;
+        });
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    describe('open', () => {
+        it('should display welcome banner', () => {
+            pty.open(undefined);
+            expect(written).toContain('DocumentDB Shell');
+            expect(written).toContain('TestCluster');
+        });
+
+        it('should show connecting message', () => {
+            pty.open(undefined);
+            expect(written).toContain('Connecting to testdb');
+        });
+
+        it('should initialize session on open', () => {
+            pty.open(undefined);
+            expect(mockInitialize).toHaveBeenCalled();
+        });
+
+        it('should show prompt after successful connection', async () => {
+            mockInitialize.mockResolvedValue(undefined);
+            pty.open(undefined);
+            // Wait for async init to complete
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(written).toContain('testdb> ');
+        });
+
+        it('should show error and close on connection failure', async () => {
+            mockInitialize.mockRejectedValue(new Error('Connection refused'));
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(written).toContain('Failed to connect: Connection refused');
+            expect(closeCode).toBe(1);
+        });
+    });
+
+    describe('handleInput — line submission', () => {
+        beforeEach(async () => {
+            mockInitialize.mockResolvedValue(undefined);
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = ''; // Reset to capture only subsequent output
+        });
+
+        it('should show new prompt on empty Enter', async () => {
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(written).toContain('testdb> ');
+        });
+
+        it('should evaluate non-empty input', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'string',
+                printable: '"hello"',
+                durationMs: 5,
+            });
+
+            pty.handleInput('db.test.find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find()', expect.any(Number));
+        });
+
+        it('should display evaluation result', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'string',
+                printable: '"test result"',
+                durationMs: 5,
+            });
+
+            pty.handleInput('db.test.find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('test result');
+        });
+
+        it('should display error message on evaluation failure', async () => {
+            mockEvaluate.mockRejectedValue(new Error('Syntax error'));
+
+            pty.handleInput('invalid{}');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('Syntax error');
+        });
+
+        it('should show prompt after evaluation completes', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: null,
+                printable: '"done"',
+                durationMs: 1,
+            });
+
+            pty.handleInput('x');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // Count prompts — should have a new one after result
+            const prompts = written.split('testdb> ');
+            expect(prompts.length).toBeGreaterThanOrEqual(2);
+        });
+    });
+
+    describe('special results', () => {
+        beforeEach(async () => {
+            mockInitialize.mockResolvedValue(undefined);
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('should close terminal on exit result', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'exit',
+                printable: '""',
+                durationMs: 0,
+            });
+
+            pty.handleInput('exit');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(closeCode).toBe(0);
+            expect(mockDispose).toHaveBeenCalled();
+        });
+
+        it('should clear screen on clear result', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'clear',
+                printable: '""',
+                durationMs: 0,
+            });
+
+            pty.handleInput('cls');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // ANSI clear screen sequence
+            expect(written).toContain('\x1b[2J\x1b[H');
+        });
+    });
+
+    describe('database switching', () => {
+        beforeEach(async () => {
+            mockInitialize.mockResolvedValue(undefined);
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('should update prompt after use <db> result', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'string',
+                printable: JSON.stringify('switched to db newdb'),
+                durationMs: 1,
+            });
+
+            pty.handleInput('use newdb');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('newdb> ');
+        });
+    });
+
+    describe('close', () => {
+        it('should dispose session manager on close', () => {
+            pty.open(undefined);
+            pty.close();
+            expect(mockDispose).toHaveBeenCalled();
+        });
+    });
+
+    describe('Ctrl+C interrupt', () => {
+        beforeEach(async () => {
+            mockInitialize.mockResolvedValue(undefined);
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('should show new prompt on Ctrl+C when not evaluating', () => {
+            pty.handleInput('partial input');
+            pty.handleInput('\x03'); // Ctrl+C
+            expect(written).toContain('testdb> ');
+        });
+    });
+});
