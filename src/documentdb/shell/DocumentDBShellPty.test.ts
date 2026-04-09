@@ -85,7 +85,7 @@ describe('DocumentDBShellPty', () => {
 
         it('should show connecting message', () => {
             pty.open(undefined);
-            expect(written).toContain('Authenticating and connecting');
+            expect(written).toContain('Connecting and authenticating');
         });
 
         it('should initialize session on open', () => {

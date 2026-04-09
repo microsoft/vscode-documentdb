@@ -12,10 +12,19 @@ jest.mock('../../documentdb/shell/DocumentDBShellPty', () => ({
     DocumentDBShellPty: jest.fn().mockImplementation(() => ({
         onDidWrite: jest.fn(),
         onDidClose: jest.fn(),
+        onDidChangeName: jest.fn(),
         open: jest.fn(),
         close: jest.fn(),
         handleInput: jest.fn(),
+        setTerminal: jest.fn(),
+        getTerminalInfo: jest.fn().mockReturnValue({ clusterId: 'test-cluster-id' }),
     })),
+}));
+
+// Mock ShellTerminalLinkProvider registry
+jest.mock('../../documentdb/shell/ShellTerminalLinkProvider', () => ({
+    registerShellTerminal: jest.fn(),
+    unregisterShellTerminal: jest.fn(),
 }));
 
 // Mock CredentialCache
