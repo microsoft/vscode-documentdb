@@ -9,7 +9,7 @@ import {
     getPropertyNamesAtLevel,
     type FieldEntry,
     type JSONSchema,
-} from '@vscode-documentdb/schema-analyzer';
+} from '@microsoft/vscode-documentdb-schema-analyzer';
 import * as vscode from 'vscode';
 
 import { type Document, type WithId } from 'mongodb';

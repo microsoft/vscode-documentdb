@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
-import { type FieldEntry } from '@vscode-documentdb/schema-analyzer';
+import { type FieldEntry } from '@microsoft/vscode-documentdb-schema-analyzer';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';

@@ -16,7 +16,7 @@
  */
 
 import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
-import { BSONTypes, type FieldEntry } from '@vscode-documentdb/schema-analyzer';
+import { BSONTypes, type FieldEntry } from '@microsoft/vscode-documentdb-schema-analyzer';
 import * as vscode from 'vscode';
 import { PLAYGROUND_LANGUAGE_ID } from '../../playground/constants';
 import { PlaygroundService } from '../../playground/PlaygroundService';
