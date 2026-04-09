@@ -201,7 +201,7 @@ export class ShellOutputFormatter {
 
         // String value: "..."
         if (trimmed.startsWith('"')) {
-            return value.replace(/"[^"]*"/, (match) => `${ANSI.green}${match}${ANSI.reset}`);
+            return value.replace(/"(?:[^"\\]|\\.)*"/, (match) => `${ANSI.green}${match}${ANSI.reset}`);
         }
 
         // Boolean or null
