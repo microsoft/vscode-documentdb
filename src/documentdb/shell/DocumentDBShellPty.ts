@@ -90,6 +90,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Pseudoterminal interface ────────────────────────────────────────────
 
     open(_initialDimensions: vscode.TerminalDimensions | undefined): void {
+        // Disable input during initialization to prevent race conditions
+        this._inputHandler.setEnabled(false);
+
         // Display welcome banner and start initialization
         this.writeLine(
             this._outputFormatter.formatSystemMessage(
@@ -166,6 +169,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Type "help" for available commands.')));
             this.writeLine('');
 
+            // Re-enable input after successful initialization
+            this._inputHandler.setEnabled(true);
+
             // Update terminal tab name to include the user (if known)
             if (metadata.username) {
                 this._nameEmitter.fire(
@@ -182,6 +188,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.writeLine(this._outputFormatter.formatError(l10n.t('Failed to connect: {0}', errorMessage)));
+            this._inputHandler.setEnabled(true);
             this._closeEmitter.fire(1);
         }
     }
