@@ -39,6 +39,26 @@ describe('ShellOutputFormatter', () => {
     }
 
     describe('formatResult', () => {
+        it('should suppress output when printableIsUndefined is true', () => {
+            const result = makeResult({
+                type: null,
+                printable: 'null',
+                printableIsUndefined: true,
+            });
+            const output = formatter.formatResult(result);
+            expect(output).toBe('');
+        });
+
+        it('should display null when printableIsUndefined is false', () => {
+            const result = makeResult({
+                type: null,
+                printable: EJSON.stringify(null, { relaxed: false }),
+                printableIsUndefined: false,
+            });
+            const output = formatter.formatResult(result);
+            expect(output).toContain('null');
+        });
+
         it('should format a simple string result', () => {
             const result = makeResult({
                 type: 'string',

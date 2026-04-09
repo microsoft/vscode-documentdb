@@ -7,7 +7,11 @@ import * as vscode from 'vscode';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
 
 // Mock ShellSessionManager
-const mockInitialize = jest.fn().mockResolvedValue(undefined);
+const mockInitialize = jest.fn().mockResolvedValue({
+    host: 'test-host.documents.azure.com:10255',
+    authMechanism: 'NativeAuth',
+    isEmulator: false,
+});
 const mockEvaluate = jest.fn();
 const mockDispose = jest.fn();
 const mockKillWorker = jest.fn();
@@ -81,7 +85,7 @@ describe('DocumentDBShellPty', () => {
 
         it('should show connecting message', () => {
             pty.open(undefined);
-            expect(written).toContain('Connecting to testdb');
+            expect(written).toContain('Authenticating and connecting');
         });
 
         it('should initialize session on open', () => {
@@ -90,11 +94,12 @@ describe('DocumentDBShellPty', () => {
         });
 
         it('should show prompt after successful connection', async () => {
-            mockInitialize.mockResolvedValue(undefined);
             pty.open(undefined);
             // Wait for async init to complete
             await new Promise((resolve) => setTimeout(resolve, 10));
             expect(written).toContain('testdb> ');
+            expect(written).toContain('Connected to');
+            expect(written).toContain('SCRAM');
         });
 
         it('should show error and close on connection failure', async () => {
@@ -224,7 +229,7 @@ describe('DocumentDBShellPty', () => {
 
         it('should update prompt after use <db> result', async () => {
             mockEvaluate.mockResolvedValue({
-                type: 'string',
+                type: null,
                 printable: JSON.stringify('switched to db newdb'),
                 durationMs: 1,
             });
@@ -234,6 +239,30 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
 
             expect(written).toContain('newdb> ');
+        });
+    });
+
+    describe('print suppression', () => {
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('should suppress null display when printableIsUndefined is true', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: null,
+                printable: 'null',
+                durationMs: 1,
+                printableIsUndefined: true,
+            });
+
+            pty.handleInput("print('hello')");
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // Should NOT contain "null" in output (only the prompt)
+            expect(written).not.toContain('null');
         });
     });
 

@@ -29,6 +29,19 @@ export interface ShellConnectionInfo {
 }
 
 /**
+ * Connection metadata returned after successful initialization.
+ * Used by the PTY to display connection summary in the terminal.
+ */
+export interface ShellConnectionMetadata {
+    /** Host extracted from the connection string (without credentials). */
+    readonly host: string;
+    /** Authentication method used for the connection. */
+    readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID';
+    /** Whether this is an emulator connection. */
+    readonly isEmulator: boolean;
+}
+
+/**
  * Callbacks for shell session events.
  */
 export interface ShellSessionCallbacks {
@@ -96,11 +109,19 @@ export class ShellSessionManager implements vscode.Disposable {
     /**
      * Initialize the shell session: spawn the worker, connect to the cluster,
      * and set the initial database.
+     *
+     * @returns Connection metadata for display in the terminal banner.
      */
-    async initialize(): Promise<void> {
+    async initialize(): Promise<ShellConnectionMetadata> {
         const initMsg = this.buildInitMessage();
         await this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg);
         this._initialized = true;
+
+        return {
+            host: this.extractHost(initMsg.connectionString),
+            authMechanism: initMsg.authMechanism,
+            isEmulator: initMsg.clientOptions.serverSelectionTimeoutMS === 4000,
+        };
     }
 
     /**
@@ -191,6 +212,21 @@ export class ShellSessionManager implements vscode.Disposable {
     }
 
     // ─── Private: Token handling ─────────────────────────────────────────────
+
+    /**
+     * Extract the host portion from a connection string, stripping credentials.
+     * Returns just the hostname:port for safe display.
+     */
+    private extractHost(connectionString: string): string {
+        try {
+            const url = new URL(connectionString);
+            return url.host || url.hostname || 'unknown';
+        } catch {
+            // Fallback: try to extract host from mongodb:// or mongodb+srv:// pattern
+            const match = /mongodb(?:\+srv)?:\/\/(?:[^@]+@)?([^/?]+)/.exec(connectionString);
+            return match?.[1] ?? 'unknown';
+        }
+    }
 
     private async handleTokenRequest(
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,

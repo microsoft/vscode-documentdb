@@ -36,6 +36,12 @@ export class ShellOutputFormatter {
      * @returns Formatted string ready to write to the terminal.
      */
     formatResult(result: SerializableExecutionResult): string {
+        // Suppress display for undefined results (e.g. print(), side-effect-only expressions).
+        // mongosh convention: undefined return values produce no output.
+        if (result.printableIsUndefined) {
+            return '';
+        }
+
         const printable = this.deserializePrintable(result.printable);
         const colorEnabled = this.isColorEnabled();
 

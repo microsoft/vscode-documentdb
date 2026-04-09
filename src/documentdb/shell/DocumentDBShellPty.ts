@@ -89,9 +89,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 l10n.t('DocumentDB Shell — {0}', this._connectionInfo.clusterDisplayName),
             ),
         );
-        this.writeLine(
-            this._outputFormatter.formatSystemMessage(l10n.t('Connecting to {0}...', this._currentDatabase)),
-        );
+        this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Authenticating and connecting...')));
         this.writeLine('');
 
         void this.initializeSession();
@@ -110,10 +108,19 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private async initializeSession(): Promise<void> {
         try {
-            await this._sessionManager.initialize();
+            const metadata = await this._sessionManager.initialize();
+
+            // Display connection summary
+            const authLabel = metadata.authMechanism === 'MicrosoftEntraID' ? 'Entra ID' : 'SCRAM';
+            const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
+
+            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to {0}', hostLabel)));
             this.writeLine(
-                this._outputFormatter.formatSystemMessage(l10n.t('Connected. Type "help" for available commands.')),
+                this._outputFormatter.formatSystemMessage(
+                    l10n.t('Authentication: {0} | Database: {1}', authLabel, this._currentDatabase),
+                ),
             );
+            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Type "help" for available commands.')));
             this.writeLine('');
             this.showPrompt();
         } catch (error: unknown) {
@@ -198,16 +205,21 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     /**
      * Update the current database name if the eval result indicates a database switch.
      * This happens when the user runs `use <db>`.
+     *
+     * Detection strategy:
+     * 1. Check source namespace from @mongosh (set on query results)
+     * 2. Parse the printable value for "switched to db <name>" pattern
+     *    (@mongosh returns this as a string with type: null for primitives)
      */
     private updateDatabaseFromResult(result: SerializableExecutionResult): void {
         if (result.source?.namespace?.db && result.source.namespace.db !== this._currentDatabase) {
             this._currentDatabase = result.source.namespace.db;
         }
 
-        // Also detect `use <db>` results — @mongosh returns a string like "switched to db <name>"
-        if (result.type === 'string' && typeof result.printable === 'string') {
-            // Pattern: the printable value from `use <db>` is an EJSON-serialized string
-            // that contains "switched to db <name>"
+        // Detect `use <db>` results — @mongosh returns the string "switched to db <name>"
+        // The type is null (not 'string') because @mongosh uses null for all primitives.
+        // The printable is EJSON-serialized, so we parse it back.
+        if (typeof result.printable === 'string') {
             try {
                 const parsed = JSON.parse(result.printable) as unknown;
                 if (typeof parsed === 'string') {

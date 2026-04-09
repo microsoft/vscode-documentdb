@@ -42,6 +42,12 @@ export interface SerializableExecutionResult {
     readonly durationMs: number;
     /** Whether the cursor has more documents beyond the returned batch (Cursor results only). */
     readonly cursorHasMore?: boolean;
+    /**
+     * True when the original printable value was `undefined` (e.g. `print()`, side-effect-only
+     * expressions). EJSON.stringify(undefined) produces "null", losing the distinction.
+     * Consumers should suppress display when this flag is true.
+     */
+    readonly printableIsUndefined?: boolean;
     readonly source?: {
         readonly namespace?: {
             readonly db: string;

@@ -183,6 +183,11 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
         }
     }
 
+    // Detect undefined printable before EJSON serialization destroys the distinction.
+    // print(), console.log(), and side-effect-only expressions return undefined.
+    // EJSON.stringify(undefined) produces "null", losing the undefined/null distinction.
+    const printableIsUndefined = result.printable === undefined;
+
     // Serialize the result for IPC transfer (the runtime returns raw values;
     // serialization to EJSON is the worker's IPC concern)
     let printableStr: string;
@@ -207,6 +212,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
             printable: printableStr,
             durationMs: result.durationMs,
             cursorHasMore,
+            printableIsUndefined: printableIsUndefined || undefined,
             source: result.source,
         },
     };
