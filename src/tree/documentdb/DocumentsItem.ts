@@ -64,7 +64,7 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
                     },
                 ],
             },
-            iconPath: new ThemeIcon('explorer-view-icon'),
+            iconPath: new ThemeIcon('files'),
         };
     }
 }
