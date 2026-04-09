@@ -53,8 +53,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _evaluating = false;
     /** Whether the shell has been closed. */
     private _closed = false;
-    /** Whether the last output ended with a clickable "Open in Collection View" action line. */
-    private _hasActiveActionLine = false;
     /** The terminal instance this PTY is attached to (set via {@link setTerminal}). */
     private _terminal: vscode.Terminal | undefined;
 
@@ -220,9 +218,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     private async evaluateInput(input: string): Promise<void> {
-        // Erase the previous action line before showing new output
-        this.eraseActionLine();
-
         try {
             const timeoutMs = this.getShellTimeoutMs();
             const result = await this._sessionManager.evaluate(input, timeoutMs);
@@ -378,9 +373,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * If the result came from a query with a known namespace (db + collection),
      * write a clickable action line below the output.
      *
-     * The line uses a unique prefix (📊) matched by {@link ShellTerminalLinkProvider}.
-     * Database and collection names are wrapped in brackets to handle names with
-     * special characters (e.g., `stores (10)`).
+     * The line uses the {@link ACTION_LINE_PREFIX} sentinel matched by
+     * {@link ShellTerminalLinkProvider}. Database and collection names are
+     * wrapped in brackets to handle names with special characters.
      */
     private maybeWriteActionLine(result: SerializableExecutionResult): void {
         const ns = result.source?.namespace;
@@ -400,39 +395,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const actionText = `${ACTION_LINE_PREFIX}[${ns.db}.${ns.collection}]`;
         this.writeLine(this._outputFormatter.formatSystemMessage(actionText));
-        this._hasActiveActionLine = true;
-    }
-
-    /**
-     * Erase the previous "Open in Collection View" action line, if present.
-     *
-     * Uses ANSI escape sequences to move the cursor up and clear the line.
-     * Called at the start of each new evaluation so only the most recent
-     * query result has an action line.
-     */
-    private eraseActionLine(): void {
-        if (!this._hasActiveActionLine) {
-            return;
-        }
-
-        // The action line is the line directly above the prompt that was just submitted.
-        // The prompt line has already been submitted (Enter pressed), so the cursor
-        // is now on a new line. We need to go up past the prompt line and the action line.
-        // Sequence: move up 1 line (action line), erase it, then move back down.
-        // Actually, the flow is: action line → prompt → user types → Enter.
-        // After Enter, handleLineInput writes nothing before calling evaluateInput.
-        // The cursor is at the start of a new line after the echoed input.
-        // We erase upward: 1 up = the input line (already echoed by handleInput),
-        // but that's handled by the shell input flow. The action line is above the prompt.
-        //
-        // Simpler approach: just emit ANSI to move up 1 line and clear it.
-        // This erases the action line that sits between the result output and the prompt.
-        // Since the prompt was already re-drawn on top, we can't easily reach the action line.
-        //
-        // Best approach: The action line is visual-only. We just reset the flag.
-        // Old action lines in scroll-back are harmless — the link provider will still
-        // match them, but they remain clickable (which is fine for the user).
-        this._hasActiveActionLine = false;
     }
 
     // ─── Private: Settings ───────────────────────────────────────────────────
