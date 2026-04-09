@@ -49,6 +49,7 @@ import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
+import { openInteractiveShell } from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { connectDatabase } from '../commands/playground/connectDatabase';
 import { disposeEvaluator, shutdownEvaluator } from '../commands/playground/executePlaygroundCode';
@@ -566,16 +567,9 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(revealView),
                 );
 
-                // WI-0: Legacy launchShell removed. Stub registration for openInteractiveShell
-                // will be implemented in WI-4 (Connection & Launch).
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.openInteractiveShell',
-                    (context: IActionContext) => {
-                        void vscode.window.showInformationMessage(
-                            vscode.l10n.t('Interactive Shell is not yet implemented.'),
-                        );
-                        context.telemetry.properties.stub = 'true';
-                    },
+                    withTreeNodeCommandCorrelation(openInteractiveShell),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
