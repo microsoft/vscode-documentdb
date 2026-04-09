@@ -9,6 +9,7 @@ import { type MongoClient } from 'mongodb';
 import vm from 'vm';
 import { CommandInterceptor } from './CommandInterceptor';
 import { DocumentDBServiceProvider } from './DocumentDBServiceProvider';
+import { HelpProvider } from './HelpProvider';
 import { ResultTransformer } from './ResultTransformer';
 import {
     type ShellEvalOptions,
@@ -70,7 +71,8 @@ export class DocumentDBShellRuntime {
         this._mongoClient = mongoClient;
         this._callbacks = callbacks ?? {};
         this._options = { ...DEFAULT_OPTIONS, ...options };
-        this._commandInterceptor = new CommandInterceptor();
+        const helpSurface = this._options.persistent ? 'shell' : 'playground';
+        this._commandInterceptor = new CommandInterceptor(new HelpProvider(helpSurface));
         this._resultTransformer = new ResultTransformer();
     }
 

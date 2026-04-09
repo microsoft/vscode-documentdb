@@ -9,7 +9,7 @@ export { DocumentDBShellRuntime } from './DocumentDBShellRuntime';
 // Components (exposed for advanced usage and testing)
 export { CommandInterceptor } from './CommandInterceptor';
 export { DocumentDBServiceProvider, type ServiceProviderWithBus } from './DocumentDBServiceProvider';
-export { HelpProvider } from './HelpProvider';
+export { HelpProvider, type HelpSurface } from './HelpProvider';
 export { ResultTransformer, type ShellResultLike } from './ResultTransformer';
 
 // Types
