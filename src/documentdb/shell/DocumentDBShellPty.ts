@@ -290,7 +290,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             try {
                 const parsed = JSON.parse(result.printable) as unknown;
                 if (typeof parsed === 'string') {
-                    const match = /^switched to db (\S+)$/.exec(parsed);
+                    const match = /^switched to db (.+)$/.exec(parsed);
                     if (match?.[1]) {
                         newDb = match[1];
                     }
