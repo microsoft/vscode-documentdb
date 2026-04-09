@@ -115,7 +115,6 @@ describe('DocumentDBShellPty', () => {
 
     describe('handleInput — line submission', () => {
         beforeEach(async () => {
-            mockInitialize.mockResolvedValue(undefined);
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = ''; // Reset to capture only subsequent output
@@ -184,7 +183,6 @@ describe('DocumentDBShellPty', () => {
 
     describe('special results', () => {
         beforeEach(async () => {
-            mockInitialize.mockResolvedValue(undefined);
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = '';
@@ -223,7 +221,6 @@ describe('DocumentDBShellPty', () => {
 
     describe('database switching', () => {
         beforeEach(async () => {
-            mockInitialize.mockResolvedValue(undefined);
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = '';
@@ -278,7 +275,6 @@ describe('DocumentDBShellPty', () => {
 
     describe('Ctrl+C interrupt', () => {
         beforeEach(async () => {
-            mockInitialize.mockResolvedValue(undefined);
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = '';
@@ -293,7 +289,6 @@ describe('DocumentDBShellPty', () => {
 
     describe('action line — Open in Collection View', () => {
         beforeEach(async () => {
-            mockInitialize.mockResolvedValue(undefined);
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = '';
