@@ -120,7 +120,26 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 };
                 parentPort!.postMessage(tokenRequest);
                 const accessToken = await tokenPromise;
-                return { accessToken, expiresInSeconds: 0 };
+
+                // Parse the JWT exp claim for a meaningful cache duration.
+                // This avoids re-acquiring the token on every database operation
+                // in persistent shell sessions.
+                let expiresInSeconds = 3500; // Conservative default (~1 hour)
+                try {
+                    const payload = accessToken.split('.')[1];
+                    if (payload) {
+                        const decoded = JSON.parse(Buffer.from(payload, 'base64').toString()) as {
+                            exp?: number;
+                        };
+                        if (typeof decoded.exp === 'number') {
+                            expiresInSeconds = Math.max(0, decoded.exp - Math.floor(Date.now() / 1000));
+                        }
+                    }
+                } catch {
+                    // JWT parsing failed — use conservative default
+                }
+
+                return { accessToken, expiresInSeconds };
             },
         };
     }
@@ -142,6 +161,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         {
             productName: 'DocumentDB for VS Code Query Playground',
             productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
+            persistent: msg.persistent ?? false,
         },
     );
 
@@ -182,6 +202,11 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
         }
     }
 
+    // Detect undefined printable before EJSON serialization destroys the distinction.
+    // print(), console.log(), and side-effect-only expressions return undefined.
+    // EJSON.stringify(undefined) produces "null", losing the undefined/null distinction.
+    const printableIsUndefined = result.printable === undefined;
+
     // Serialize the result for IPC transfer (the runtime returns raw values;
     // serialization to EJSON is the worker's IPC concern)
     let printableStr: string;
@@ -206,6 +231,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
             printable: printableStr,
             durationMs: result.durationMs,
             cursorHasMore,
+            printableIsUndefined: printableIsUndefined || undefined,
             source: result.source,
         },
     };

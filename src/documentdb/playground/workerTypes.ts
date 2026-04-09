@@ -42,6 +42,12 @@ export interface SerializableExecutionResult {
     readonly durationMs: number;
     /** Whether the cursor has more documents beyond the returned batch (Cursor results only). */
     readonly cursorHasMore?: boolean;
+    /**
+     * True when the original printable value was `undefined` (e.g. `print()`, side-effect-only
+     * expressions). EJSON.stringify(undefined) produces "null", losing the distinction.
+     * Consumers should suppress display when this flag is true.
+     */
+    readonly printableIsUndefined?: boolean;
     readonly source?: {
         readonly namespace?: {
             readonly db: string;
@@ -63,6 +69,12 @@ export type MainToWorkerMessage =
           readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID';
           /** Tenant ID for Entra ID clusters */
           readonly tenantId?: string;
+          /**
+           * When `true`, the worker keeps the @mongosh eval context alive across
+           * evaluations (interactive shell mode). When `false` (default), each eval
+           * gets a fresh context (query playground mode).
+           */
+          readonly persistent?: boolean;
       }
     | {
           readonly type: 'eval';

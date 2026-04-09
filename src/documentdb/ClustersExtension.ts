@@ -44,12 +44,12 @@ import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { dropIndex } from '../commands/index.dropIndex/dropIndex';
 import { hideIndex } from '../commands/index.hideIndex/hideIndex';
 import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
-import { launchShell } from '../commands/launchShell/launchShell';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
+import { openInteractiveShell } from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { connectDatabase } from '../commands/playground/connectDatabase';
 import { disposeEvaluator, shutdownEvaluator } from '../commands/playground/executePlaygroundCode';
@@ -96,6 +96,7 @@ import { PlaygroundService } from './playground/PlaygroundService';
 import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
 import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
 import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
+import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -568,8 +569,13 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.launchShell',
-                    withTreeNodeCommandCorrelation(launchShell),
+                    'vscode-documentdb.command.openInteractiveShell',
+                    withTreeNodeCommandCorrelation(openInteractiveShell),
+                );
+
+                // Register the terminal link provider for "Open in Collection View" action lines
+                ext.context.subscriptions.push(
+                    vscode.window.registerTerminalLinkProvider(new ShellTerminalLinkProvider()),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(

@@ -44,8 +44,6 @@ Your feedback, contributions, and ideas shape the future of the extension.
 
 # Prerequisites
 
-- **Shell Requirement (Optional)**: Use of the DocumentDB shell requires installing [mongosh](https://www.mongodb.com/docs/mongodb-shell/install/).
-
 ## Known Issues
 
 Here are some known issues and limitations to be aware of when using the DocumentDB VS Code extension:

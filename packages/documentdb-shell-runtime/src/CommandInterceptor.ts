@@ -10,12 +10,10 @@ import { type ShellEvaluationResult } from './types';
  * Pre-eval command routing for shell input.
  *
  * Intercepts commands that should be handled without going through the
- * @mongosh evaluation pipeline. Currently handles `help` / `help()`.
- *
- * Future extensions (Step 9 — Interactive Shell):
+ * @mongosh evaluation pipeline. Handles:
+ * - `help` / `help()` → show help text
  * - `exit` / `quit` → signal shell exit
  * - `cls` / `clear` → signal screen clear
- * - `it` → cursor iteration (when persistent mode is added)
  */
 export class CommandInterceptor {
     private readonly _helpProvider: HelpProvider;
@@ -30,6 +28,31 @@ export class CommandInterceptor {
      * (e.g. `helper()`, `var help = 1`, `help("topic")`).
      */
     private static readonly HELP_PATTERN = /^help(?:\(\)|\s*`[^]*`)?$/;
+
+    /**
+     * Matches standalone `exit` or `quit` keywords, with optional parens and trailing semicolon.
+     * - `exit`, `quit` (bare keywords)
+     * - `exit()`, `quit()` (function call form — common in mongosh)
+     * - `exit;`, `quit;`, `exit();`, `quit();` (with semicolon)
+     * - `  exit  `, `  quit  ` (with whitespace — trimmed before matching)
+     *
+     * Does NOT match:
+     * - `exit(0)`, `quit(0)` (function calls with arguments)
+     * - `exitFunction()`, `var exit = 1` (substrings)
+     * - `db.exit` (property access)
+     */
+    private static readonly EXIT_PATTERN = /^(?:exit|quit)(?:\(\))?;?$/;
+
+    /**
+     * Matches standalone `cls` or `clear` keywords, with optional trailing semicolon.
+     * - `cls`, `clear` (bare keywords)
+     * - `cls;`, `clear;` (with semicolon)
+     *
+     * Does NOT match:
+     * - `clear()`, `cls()` (function calls)
+     * - `clearInterval()`, `clearTimeout()` (substrings)
+     */
+    private static readonly CLEAR_PATTERN = /^(?:cls|clear);?$/;
 
     constructor(helpProvider?: HelpProvider) {
         this._helpProvider = helpProvider ?? new HelpProvider();
@@ -46,6 +69,24 @@ export class CommandInterceptor {
         // Help command (bare, function call, or tagged template literal)
         if (CommandInterceptor.HELP_PATTERN.test(trimmed)) {
             return this._helpProvider.getHelpResult();
+        }
+
+        // Exit / quit — signal shell close
+        if (CommandInterceptor.EXIT_PATTERN.test(trimmed)) {
+            return {
+                type: 'exit',
+                printable: '',
+                durationMs: 0,
+            };
+        }
+
+        // Clear / cls — signal screen clear
+        if (CommandInterceptor.CLEAR_PATTERN.test(trimmed)) {
+            return {
+                type: 'clear',
+                printable: '',
+                durationMs: 0,
+            };
         }
 
         return undefined;

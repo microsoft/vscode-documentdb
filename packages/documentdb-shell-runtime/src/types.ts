@@ -49,6 +49,17 @@ export interface ShellRuntimeOptions {
     productDocsLink?: string;
     /** Default number of documents to display per cursor iteration (default: 50). */
     displayBatchSize?: number;
+    /**
+     * When `true`, the runtime keeps the @mongosh `ShellInstanceState`,
+     * `ShellEvaluator`, and `vm.Context` alive across `evaluate()` calls.
+     * Variables, cursor state, and the `db` reference persist between evaluations.
+     *
+     * When `false` (default), a fresh context is created per `evaluate()` call —
+     * no variable leakage between runs.
+     *
+     * The interactive shell uses `persistent: true`; the query playground uses `false`.
+     */
+    persistent?: boolean;
 }
 
 /**
