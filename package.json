@@ -267,6 +267,10 @@
         "aliases": [
           "Query Playground"
         ],
+        "icon": {
+          "light": "./resources/icons/playground-light.svg",
+          "dark": "./resources/icons/playground-dark.svg"
+        },
         "configuration": "./playground-language-configuration.json"
       },
       {
