@@ -311,7 +311,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(written).toContain('Open collection [mydb.users] in Collection View');
+            expect(written).toContain('[mydb.users]');
         });
 
         it('should show action line after Document result with namespace', async () => {
@@ -326,7 +326,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(written).toContain('Open collection [mydb.users] in Collection View');
+            expect(written).toContain('[mydb.users]');
         });
 
         it('should NOT show action line when namespace is missing', async () => {
@@ -340,7 +340,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(written).not.toContain('Open collection');
+            expect(written).not.toContain('[mydb');
         });
 
         it('should NOT show action line for non-query result types', async () => {
@@ -355,7 +355,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(written).not.toContain('Open collection');
+            expect(written).not.toContain('[mydb');
         });
 
         it('should NOT show action line for suppressed output', async () => {
@@ -371,7 +371,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(written).not.toContain('Open collection');
+            expect(written).not.toContain('[mydb');
         });
 
         it('should handle collection names with special characters', async () => {
@@ -386,7 +386,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(written).toContain('Open collection [mydb.stores (10)] in Collection View');
+            expect(written).toContain('[mydb.stores (10)]');
         });
     });
 });

@@ -54,8 +54,11 @@ export function unregisterShellTerminal(terminal: vscode.Terminal): void {
  *
  * The database and collection names are enclosed in brackets so that names
  * containing special characters (e.g., `stores (10)`) are unambiguous.
+ *
+ * The action line format is locale-independent — only the link tooltip is localized.
+ * Format: `🔗 [<db>.<collection>]`
  */
-export const ACTION_LINE_PREFIX = '\u{1F4CA} '; // 📊 + space
+export const ACTION_LINE_PREFIX = '\u{1F517} '; // 🔗 + space
 
 /**
  * Regex to match the "Open in Collection View" action line.
@@ -67,10 +70,13 @@ export const ACTION_LINE_PREFIX = '\u{1F4CA} '; // 📊 + space
  * The pattern accounts for optional ANSI color codes (gray) that wrap the line.
  * Names are inside brackets `[db.collection]` to handle special chars in names.
  * The dot between db and collection is the first dot after the opening bracket.
+ *
+ * The format is locale-independent — uses the ACTION_LINE_PREFIX sentinel
+ * followed by `[db.collection]`, with no English text to translate.
  */
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
 const ACTION_LINE_PATTERN =
-    /(?:\x1b\[\d+m)*\u{1F4CA} Open collection \[([^\].]+)\.([^\]]+)\] in Collection View(?:\x1b\[\d+m)*/u;
+    /(?:\x1b\[\d+m)*\u{1F517} \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
 /* eslint-enable no-control-regex */
 
 /**

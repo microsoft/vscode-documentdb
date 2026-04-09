@@ -382,7 +382,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
-        const actionText = `${ACTION_LINE_PREFIX}${l10n.t('Open collection [{0}.{1}] in Collection View', ns.db, ns.collection)}`;
+        const actionText = `${ACTION_LINE_PREFIX}[${ns.db}.${ns.collection}]`;
         this.writeLine(this._outputFormatter.formatSystemMessage(actionText));
         this._hasActiveActionLine = true;
     }

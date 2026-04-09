@@ -124,8 +124,7 @@ export class ShellInputHandler {
             return;
         }
 
-        for (let i = 0; i < data.length; i++) {
-            const ch = data[i];
+        for (const ch of data) {
 
             if (this._inEscape) {
                 this._escapeBuffer += ch;

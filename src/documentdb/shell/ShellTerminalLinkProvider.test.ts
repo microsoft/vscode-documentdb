@@ -33,7 +33,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should return empty array for non-shell terminals', () => {
             const context = {
                 terminal: { name: 'bash' } as unknown as vscode.Terminal,
-                line: `${ACTION_LINE_PREFIX}Open collection [mydb.users] in Collection View`,
+                line: `${ACTION_LINE_PREFIX}[mydb.users]`,
             } as vscode.TerminalLinkContext;
 
             const links = provider.provideTerminalLinks(context);
@@ -55,7 +55,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should detect action line and return a link', () => {
             registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-cluster-id' }));
 
-            const actionLine = `${ACTION_LINE_PREFIX}Open collection [mydb.users] in Collection View`;
+            const actionLine = `${ACTION_LINE_PREFIX}[mydb.users]`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -71,7 +71,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should handle collection names with dots', () => {
             registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
 
-            const actionLine = `${ACTION_LINE_PREFIX}Open collection [analytics.events.2024] in Collection View`;
+            const actionLine = `${ACTION_LINE_PREFIX}[analytics.events.2024]`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -87,7 +87,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should handle collection names with parentheses', () => {
             registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
 
-            const actionLine = `${ACTION_LINE_PREFIX}Open collection [mydb.stores (10)] in Collection View`;
+            const actionLine = `${ACTION_LINE_PREFIX}[mydb.stores (10)]`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -102,7 +102,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should handle collection names with spaces', () => {
             registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
 
-            const actionLine = `${ACTION_LINE_PREFIX}Open collection [mydb.my collection] in Collection View`;
+            const actionLine = `${ACTION_LINE_PREFIX}[mydb.my collection]`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -118,7 +118,7 @@ describe('ShellTerminalLinkProvider', () => {
             registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
 
             // Gray ANSI wrapping: \x1b[90m ... \x1b[0m
-            const actionLine = `\x1b[90m${ACTION_LINE_PREFIX}Open collection [mydb.users] in Collection View\x1b[0m`;
+            const actionLine = `\x1b[90m${ACTION_LINE_PREFIX}[mydb.users]\x1b[0m`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -135,7 +135,7 @@ describe('ShellTerminalLinkProvider', () => {
 
             const context = {
                 terminal: mockTerminal,
-                line: 'Open collection [mydb.users] in Collection View', // Missing 📊 prefix
+                line: '[mydb.users]', // Missing � prefix
             } as vscode.TerminalLinkContext;
 
             const links = provider.provideTerminalLinks(context);
@@ -180,7 +180,7 @@ describe('ShellTerminalLinkProvider', () => {
             registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
             unregisterShellTerminal(mockTerminal);
 
-            const actionLine = `${ACTION_LINE_PREFIX}Open collection [mydb.users] in Collection View`;
+            const actionLine = `${ACTION_LINE_PREFIX}[mydb.users]`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
