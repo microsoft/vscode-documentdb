@@ -51,6 +51,8 @@ export interface ShellSessionCallbacks {
     onConsoleOutput?: (output: string) => void;
     /** Called when the worker exits unexpectedly. */
     onWorkerExit?: (exitCode: number) => void;
+    /** Called when the session is re-initializing after a worker restart (e.g., after Ctrl+C). */
+    onReconnecting?: () => void;
 }
 
 /**
@@ -66,6 +68,7 @@ export interface ShellSessionCallbacks {
 export class ShellSessionManager implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
     private readonly _connectionInfo: ShellConnectionInfo;
+    private readonly _callbacks: ShellSessionCallbacks | undefined;
     private _initialized = false;
     /** Tracks the active database, surviving worker restarts. Updated on `use <db>`. */
     private _activeDatabase: string;
@@ -73,6 +76,7 @@ export class ShellSessionManager implements vscode.Disposable {
     constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
         this._connectionInfo = connectionInfo;
         this._activeDatabase = connectionInfo.databaseName;
+        this._callbacks = callbacks;
 
         const logPrefix = '[Shell Worker]';
 
@@ -162,6 +166,7 @@ export class ShellSessionManager implements vscode.Disposable {
      */
     async evaluate(code: string, timeoutMs: number): Promise<SerializableExecutionResult> {
         if (!this._initialized) {
+            this._callbacks?.onReconnecting?.();
             await this.initialize();
         }
 
