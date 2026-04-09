@@ -39,6 +39,8 @@ export interface ShellConnectionMetadata {
     readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID';
     /** Whether this is an emulator connection. */
     readonly isEmulator: boolean;
+    /** Username for SCRAM auth (undefined for Entra ID). */
+    readonly username: string | undefined;
 }
 
 /**
@@ -117,10 +119,16 @@ export class ShellSessionManager implements vscode.Disposable {
         await this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg);
         this._initialized = true;
 
+        const username =
+            initMsg.authMechanism === 'NativeAuth'
+                ? CredentialCache.getConnectionUser(this._connectionInfo.clusterId)
+                : undefined;
+
         return {
             host: this.extractHost(initMsg.connectionString),
             authMechanism: initMsg.authMechanism,
             isEmulator: initMsg.clientOptions.serverSelectionTimeoutMS === 4000,
+            username,
         };
     }
 

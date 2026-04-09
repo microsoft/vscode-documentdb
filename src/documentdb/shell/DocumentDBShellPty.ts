@@ -34,9 +34,11 @@ export interface DocumentDBShellPtyOptions {
 export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private readonly _writeEmitter = new vscode.EventEmitter<string>();
     private readonly _closeEmitter = new vscode.EventEmitter<number | void>();
+    private readonly _nameEmitter = new vscode.EventEmitter<string>();
 
     readonly onDidWrite: vscode.Event<string> = this._writeEmitter.event;
     readonly onDidClose: vscode.Event<number | void> = this._closeEmitter.event;
+    readonly onDidChangeName: vscode.Event<string> = this._nameEmitter.event;
 
     private readonly _sessionManager: ShellSessionManager;
     private readonly _inputHandler: ShellInputHandler;
@@ -141,13 +143,41 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
 
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', hostLabel)));
-            this.writeLine(
-                this._outputFormatter.formatSystemMessage(
-                    l10n.t('Authentication: {0} | Database: {1}', authLabel, this._currentDatabase),
-                ),
-            );
+
+            if (metadata.username) {
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(
+                        l10n.t(
+                            'User: {0} | Authentication: {1} | Database: {2}',
+                            metadata.username,
+                            authLabel,
+                            this._currentDatabase,
+                        ),
+                    ),
+                );
+            } else {
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(
+                        l10n.t('Authentication: {0} | Database: {1}', authLabel, this._currentDatabase),
+                    ),
+                );
+            }
+
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Type "help" for available commands.')));
             this.writeLine('');
+
+            // Update terminal tab name to include the user (if known)
+            if (metadata.username) {
+                this._nameEmitter.fire(
+                    l10n.t(
+                        'DocumentDB: {0}@{1}/{2}',
+                        metadata.username,
+                        this._connectionInfo.clusterDisplayName,
+                        this._currentDatabase,
+                    ),
+                );
+            }
+
             this.showPrompt();
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
