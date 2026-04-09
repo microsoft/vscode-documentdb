@@ -67,9 +67,12 @@ export class ShellSessionManager implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
     private readonly _connectionInfo: ShellConnectionInfo;
     private _initialized = false;
+    /** Tracks the active database, surviving worker restarts. Updated on `use <db>`. */
+    private _activeDatabase: string;
 
     constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
         this._connectionInfo = connectionInfo;
+        this._activeDatabase = connectionInfo.databaseName;
 
         const logPrefix = '[Shell Worker]';
 
@@ -106,6 +109,20 @@ export class ShellSessionManager implements vscode.Disposable {
      */
     get isInitialized(): boolean {
         return this._initialized && this._workerManager.isAlive;
+    }
+
+    /**
+     * The current active database name, updated when `use <db>` succeeds.
+     */
+    get activeDatabase(): string {
+        return this._activeDatabase;
+    }
+
+    /**
+     * Update the active database. Called by the PTY when `use <db>` result is detected.
+     */
+    setActiveDatabase(databaseName: string): void {
+        this._activeDatabase = databaseName;
     }
 
     /**
@@ -152,7 +169,7 @@ export class ShellSessionManager implements vscode.Disposable {
             type: 'eval',
             requestId: '',
             code,
-            databaseName: this._connectionInfo.databaseName,
+            databaseName: this._activeDatabase,
             displayBatchSize: getBatchSizeSetting(),
         };
 
@@ -212,7 +229,7 @@ export class ShellSessionManager implements vscode.Disposable {
             requestId: '',
             connectionString,
             clientOptions,
-            databaseName: this._connectionInfo.databaseName,
+            databaseName: this._activeDatabase,
             authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID',
             tenantId: credentials.entraIdConfig?.tenantId,
             persistent: true,

@@ -274,8 +274,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      *    (@mongosh returns this as a string with type: null for primitives)
      */
     private updateDatabaseFromResult(result: SerializableExecutionResult): void {
+        let newDb: string | undefined;
+
         if (result.source?.namespace?.db && result.source.namespace.db !== this._currentDatabase) {
-            this._currentDatabase = result.source.namespace.db;
+            newDb = result.source.namespace.db;
         }
 
         // Detect `use <db>` results — @mongosh returns the string "switched to db <name>"
@@ -287,12 +289,17 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 if (typeof parsed === 'string') {
                     const match = /^switched to db (\S+)$/.exec(parsed);
                     if (match?.[1]) {
-                        this._currentDatabase = match[1];
+                        newDb = match[1];
                     }
                 }
             } catch {
                 // Not JSON — ignore
             }
+        }
+
+        if (newDb) {
+            this._currentDatabase = newDb;
+            this._sessionManager.setActiveDatabase(newDb);
         }
     }
 

@@ -15,6 +15,7 @@ const mockInitialize = jest.fn().mockResolvedValue({
 const mockEvaluate = jest.fn();
 const mockDispose = jest.fn();
 const mockKillWorker = jest.fn();
+const mockSetActiveDatabase = jest.fn();
 
 jest.mock('./ShellSessionManager', () => ({
     ShellSessionManager: jest.fn().mockImplementation((_connectionInfo, callbacks) => {
@@ -25,6 +26,7 @@ jest.mock('./ShellSessionManager', () => ({
             evaluate: mockEvaluate,
             dispose: mockDispose,
             killWorker: mockKillWorker,
+            setActiveDatabase: mockSetActiveDatabase,
             isInitialized: true,
         };
     }),
