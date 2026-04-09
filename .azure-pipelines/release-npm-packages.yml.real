@@ -7,9 +7,6 @@
 #   3. Set the pipeline variables listed in the TODO comments below
 #      (or use a variable group linked to this pipeline)
 
-trigger: none
-pr: none
-
 parameters:
     # Which package to publish (directory name under packages/)
     - name: packageName
@@ -44,7 +41,7 @@ resources:
     pipelines:
         - pipeline: npmBuild
           project: 'CosmosDB'
-          source: '\VSCode Extensions\vscode-documentdb Build npm packages'
+          source: '\VSCode Extensions\vscode-documentdb Build NPM Packages' # TODO: Update to match the actual build pipeline name in ADO
 
 variables:
     system.debug: ${{ parameters.debug }}
@@ -220,7 +217,7 @@ extends:
                     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false))
                     dependsOn: ReleaseValidation
                     pool:
-                        type: release
+                        type: windows
                     variables:
                         tgzFileName: $[ dependencies.ReleaseValidation.outputs['findTgzStep.tgzFileName'] ]
                         ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
@@ -258,8 +255,7 @@ extends:
                         # Publish to npmjs.org via ESRP Release
                         # Docs: https://microsoft.sharepoint.com/teams/prss/release/
                         #
-                        # TODO: Uncomment the EsrpRelease@7 task below once the ESRP service connection
-                        # and pipeline variables are configured. Required variables:
+                        # TODO: Configure these pipeline variables (or use a variable group):
                         #   - EsrpServiceConnection : ESRP ADO service connection name
                         #   - EsrpKeyVaultName      : Azure Key Vault with ESRP certs
                         #   - EsrpAuthCertName       : Auth certificate name in Key Vault
@@ -267,28 +263,21 @@ extends:
                         #   - EsrpClientId           : AAD app registration client ID
                         #   - EsrpOwners             : Owner email(s) for the release (e.g., alias@microsoft.com)
                         #   - EsrpApprovers          : Approver email(s) for the release (e.g., alias@microsoft.com)
-                        - task: PowerShell@2
-                          displayName: "\U0001F680 Publish to npmjs.org via ESRP (placeholder)"
+                        - task: EsrpRelease@7
+                          displayName: "\U0001F680 Publish to npmjs.org via ESRP"
                           inputs:
-                              targetType: 'inline'
-                              script: |
-                                  Write-Error "[Error] EsrpRelease@7 task is not yet configured. Set up the ESRP service connection and uncomment the task in release-npm-packages.yml."
-                                  exit 1
-                        # - task: EsrpRelease@7
-                        #   displayName: "\U0001F680 Publish to npmjs.org via ESRP"
-                        #   inputs:
-                        #       connectedservicename: '$(EsrpServiceConnection)'
-                        #       keyvaultname: '$(EsrpKeyVaultName)'
-                        #       authcertname: '$(EsrpAuthCertName)'
-                        #       signcertname: '$(EsrpSignCertName)'
-                        #       clientid: '$(EsrpClientId)'
-                        #       intent: 'PackageDistribution'
-                        #       contenttype: 'npm'
-                        #       contentsource: 'Folder'
-                        #       folderlocation: '$(Build.ArtifactStagingDirectory)/npm-publish'
-                        #       waitforreleasecompletion: true
-                        #       owners: '$(EsrpOwners)'
-                        #       approvers: '$(EsrpApprovers)'
-                        #       serviceendpointurl: 'https://api.esrp.microsoft.com'
-                        #       mainpublisher: 'ESRPRELPACMAN'
-                        #       domaintenantid: '72f988bf-86f1-41af-91ab-2d7cd011db47'
+                              connectedservicename: '$(EsrpServiceConnection)'
+                              keyvaultname: '$(EsrpKeyVaultName)'
+                              authcertname: '$(EsrpAuthCertName)'
+                              signcertname: '$(EsrpSignCertName)'
+                              clientid: '$(EsrpClientId)'
+                              intent: 'PackageDistribution'
+                              contenttype: 'npm'
+                              contentsource: 'Folder'
+                              folderlocation: '$(Build.ArtifactStagingDirectory)/npm-publish'
+                              waitforreleasecompletion: true
+                              owners: '$(EsrpOwners)'
+                              approvers: '$(EsrpApprovers)'
+                              serviceendpointurl: 'https://api.esrp.microsoft.com'
+                              mainpublisher: 'ESRPRELPACMAN'
+                              domaintenantid: '72f988bf-86f1-41af-91ab-2d7cd011db47'
