@@ -5,6 +5,9 @@
 
 import { ShellSpinner } from './ShellSpinner';
 
+/** Backspace-space-backspace sequence used to erase one character. */
+const BS = '\b \b';
+
 describe('ShellSpinner', () => {
     let output: string;
     let write: (data: string) => void;
@@ -26,9 +29,8 @@ describe('ShellSpinner', () => {
             const spinner = new ShellSpinner(write, false, 300);
             spinner.start();
 
-            // No output yet — delay hasn't elapsed
             expect(output).toBe('');
-            expect(spinner.isVisible).toBe(false);
+            expect(spinner.isVisible).toBe(true); // active, just not rendered yet
 
             spinner.stop();
         });
@@ -39,73 +41,57 @@ describe('ShellSpinner', () => {
 
             jest.advanceTimersByTime(300);
 
-            expect(spinner.isVisible).toBe(true);
-            // First frame is the first Braille dot
+            // cursor-hide + first frame character
+            expect(output).toContain('\x1b[?25l');
             expect(output).toContain('⠋');
 
             spinner.stop();
         });
 
-        it('should animate through frames', () => {
+        it('should animate through frames using backspace', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
-
-            // Frame 0 appears immediately (delay=0)
             jest.advanceTimersByTime(0);
+
+            // First frame
             expect(output).toContain('⠋');
 
-            // Advance to next frame
             output = '';
             jest.advanceTimersByTime(80);
+            // Should backspace over previous frame & write new one
+            expect(output).toContain(BS);
             expect(output).toContain('⠙');
 
-            // Advance again
             output = '';
             jest.advanceTimersByTime(80);
+            expect(output).toContain(BS);
             expect(output).toContain('⠹');
 
             spinner.stop();
         });
 
-        it('should hide cursor when spinner becomes visible', () => {
+        it('should erase spinner character on stop', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
             jest.advanceTimersByTime(0);
-
-            // Should contain the cursor-hide escape
-            expect(output).toContain('\x1b[?25l');
-
-            spinner.stop();
-        });
-
-        it('should clear the line and restore cursor when stopped', () => {
-            const spinner = new ShellSpinner(write, false, 0);
-            spinner.start();
-            jest.advanceTimersByTime(0);
-
-            expect(spinner.isVisible).toBe(true);
 
             output = '';
             spinner.stop();
 
-            // Should have written clear-line and cursor-show escapes
-            expect(output).toContain('\r\x1b[K');
+            // Should erase the character + restore cursor
+            expect(output).toContain(BS);
             expect(output).toContain('\x1b[?25h');
-            expect(spinner.isVisible).toBe(false);
         });
 
         it('should not render if stopped before delay elapses', () => {
             const spinner = new ShellSpinner(write, false, 300);
             spinner.start();
 
-            // Stop before 300ms
             jest.advanceTimersByTime(100);
             spinner.stop();
 
-            // Advance past original delay — should not render
             jest.advanceTimersByTime(500);
             expect(output).toBe('');
-            expect(spinner.isVisible).toBe(false);
         });
 
         it('should be safe to call stop multiple times', () => {
@@ -117,7 +103,6 @@ describe('ShellSpinner', () => {
             spinner.stop();
             spinner.stop();
 
-            // No error; still cleaned up
             expect(spinner.isVisible).toBe(false);
         });
 
@@ -134,7 +119,6 @@ describe('ShellSpinner', () => {
             spinner.start();
             jest.advanceTimersByTime(0);
 
-            // ANSI blue escape code
             expect(output).toContain('\x1b[34m');
             expect(output).toContain('\x1b[0m');
 
@@ -147,85 +131,48 @@ describe('ShellSpinner', () => {
             jest.advanceTimersByTime(0);
 
             expect(output).not.toContain('\x1b[34m');
-            expect(output).not.toContain('\x1b[0m');
-            // Still has the Braille character
             expect(output).toContain('⠋');
 
             spinner.stop();
         });
     });
 
-    describe('hide and show', () => {
-        it('should clear the line on hide without stopping', () => {
+    describe('hide', () => {
+        it('should erase the spinner character on hide', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
             jest.advanceTimersByTime(0);
 
             output = '';
             spinner.hide();
-            expect(output).toContain('\r\x1b[K');
-            // Still visible — hide doesn't change the visible flag
-            expect(spinner.isVisible).toBe(true);
+            expect(output).toContain(BS);
 
             spinner.stop();
         });
 
-        it('should re-render current frame on show', () => {
+        it('should re-render on next interval tick after hide', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
             jest.advanceTimersByTime(0);
 
             spinner.hide();
             output = '';
-            spinner.show();
 
-            // Re-renders the current frame
-            expect(output).toContain('⠋');
+            // Next tick should re-render without first erasing (since _rendered is false)
+            jest.advanceTimersByTime(80);
+            expect(output).toContain('⠙');
+            // Should NOT contain a backspace before — nothing to erase
+            expect(output).toBe('⠙');
 
             spinner.stop();
         });
 
-        it('should not render on show if stopped', () => {
-            const spinner = new ShellSpinner(write, false, 0);
-            spinner.start();
-            jest.advanceTimersByTime(0);
-
-            spinner.stop();
-            output = '';
-            spinner.show();
-
-            // Nothing rendered — spinner was stopped
-            expect(output).toBe('');
-        });
-
-        it('should not clear on hide if not visible', () => {
+        it('should be a no-op if spinner is not rendered', () => {
             const spinner = new ShellSpinner(write, false, 300);
             spinner.start();
-            // Don't advance — spinner not yet visible
 
             spinner.hide();
             expect(output).toBe('');
-
-            spinner.stop();
-        });
-    });
-
-    describe('frame cycling', () => {
-        it('should cycle back to first frame after full sequence', () => {
-            const spinner = new ShellSpinner(write, false, 0);
-            spinner.start();
-            jest.advanceTimersByTime(0);
-
-            // 10 frames in the Braille sequence
-            // Advance through all 10 frames (9 intervals to get back to frame 0)
-            for (let i = 0; i < 9; i++) {
-                jest.advanceTimersByTime(80);
-            }
-
-            // After 9 intervals we're at frame 9; one more wraps to frame 0 (⠋)
-            output = '';
-            jest.advanceTimersByTime(80);
-            expect(output).toContain('⠋');
 
             spinner.stop();
         });
@@ -242,6 +189,21 @@ describe('ShellSpinner', () => {
             spinner.stop();
         });
 
+        it('should erase full label+spinner on stop', () => {
+            const spinner = new ShellSpinner(write, false, 0, 'Working...');
+            spinner.start();
+            jest.advanceTimersByTime(0);
+
+            output = '';
+            spinner.stop();
+
+            // "⠋ Working..." = 1 + 1 + 10 = 12 visible chars → 12 backspace sequences
+            // Count literal \x08 (backspace) characters in the output
+            const bsCount = output.split('\x08').length - 1;
+            // Each erase is \b \b = 2 backspace chars per visible char → 24 total
+            expect(bsCount).toBe(24);
+        });
+
         it('should update label via setLabel', () => {
             const spinner = new ShellSpinner(write, false, 0, 'Step 1');
             spinner.start();
@@ -250,6 +212,7 @@ describe('ShellSpinner', () => {
 
             output = '';
             spinner.setLabel('Step 2');
+            // Should erase old label+spinner then write new
             expect(output).toContain('Step 2');
 
             spinner.stop();
@@ -259,24 +222,41 @@ describe('ShellSpinner', () => {
             const spinner = new ShellSpinner(write, false, 0, 'Working...');
             spinner.start();
             jest.advanceTimersByTime(0);
-            expect(output).toContain('⠋ Working...');
 
             output = '';
             spinner.setLabel(undefined);
-            // Should render just the spinner character, no trailing text
+            // Should contain just the spinner character, no label text
             expect(output).toContain('⠋');
             expect(output).not.toContain('Working');
 
             spinner.stop();
         });
 
-        it('should not re-render on setLabel if spinner is not visible', () => {
+        it('should not re-render on setLabel if spinner is not rendered', () => {
             const spinner = new ShellSpinner(write, false, 300, 'Waiting...');
             spinner.start();
 
-            // Not yet visible — setLabel should not produce output
             spinner.setLabel('Changed');
             expect(output).toBe('');
+
+            spinner.stop();
+        });
+    });
+
+    describe('frame cycling', () => {
+        it('should cycle back to first frame after full sequence', () => {
+            const spinner = new ShellSpinner(write, false, 0);
+            spinner.start();
+            jest.advanceTimersByTime(0);
+
+            // 10 frames — advance through 9 to reach last, then 1 more wraps
+            for (let i = 0; i < 9; i++) {
+                jest.advanceTimersByTime(80);
+            }
+
+            output = '';
+            jest.advanceTimersByTime(80);
+            expect(output).toContain('⠋');
 
             spinner.stop();
         });

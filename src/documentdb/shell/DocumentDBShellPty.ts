@@ -69,8 +69,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const sessionCallbacks: ShellSessionCallbacks = {
             onConsoleOutput: (output: string) => {
-                // If the spinner is visible, hide it before writing console
-                // output so the two don't collide on the same line.
+                // Erase the spinner character before writing console output
+                // so the two don't collide. The spinner re-renders itself
+                // on the next interval tick automatically.
                 if (this._spinner?.isVisible) {
                     this._spinner.hide();
                 }
@@ -78,10 +79,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 // Track that we received console output so we can ensure
                 // a newline before the next prompt (print() doesn't add one).
                 this._lastOutputHadTrailingNewline = output.endsWith('\n');
-                // Resume the spinner after the console output is written.
-                if (this._spinner?.isVisible) {
-                    this._spinner.show();
-                }
             },
             onWorkerExit: (_exitCode: number) => {
                 if (!this._closed) {
