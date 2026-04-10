@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { BSONTypes } from '@microsoft/vscode-documentdb-schema-analyzer';
 import { getFilteredCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
-import { BSONTypes } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from '../../playground/constants';
 import { PlaygroundService } from '../../playground/PlaygroundService';

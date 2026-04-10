@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type FieldEntry } from '@vscode-documentdb/schema-analyzer';
+import { type FieldEntry } from '@microsoft/vscode-documentdb-schema-analyzer';
 import * as fs from 'fs';
 import { type Document } from 'mongodb';
 import * as path from 'path';
