@@ -67,6 +67,7 @@ import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
+import { doubleClickDebounceDelay } from '../constants';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
@@ -89,6 +90,7 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
+import { registerDoubleClickCommand } from '../utils/registerDoubleClickCommand';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
@@ -543,6 +545,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(
                     'vscode-documentdb.command.internal.containerView.open',
                     withCommandCorrelation(openCollectionViewInternal),
+                );
+                registerDoubleClickCommand(
+                    'vscode-documentdb.command.internal.containerView.openFromTree',
+                    withCommandCorrelation(openCollectionViewInternal),
+                    doubleClickDebounceDelay,
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.containerView.open',

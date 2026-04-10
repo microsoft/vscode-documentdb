@@ -381,6 +381,7 @@
   "Don't Ask Again": "Don't Ask Again",
   "Don't upload": "Don't upload",
   "Don't warn again": "Don't warn again",
+  "Double-click to open the collection view": "Double-click to open the collection view",
   "Drop Index…": "Drop Index…",
   "Dropping index \"{indexName}\" from collection: {collection}": "Dropping index \"{indexName}\" from collection: {collection}",
   "Duplicate key error for document with _id: {0}. {1}": "Duplicate key error for document with _id: {0}. {1}",
