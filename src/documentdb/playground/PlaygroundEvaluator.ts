@@ -188,7 +188,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     private buildInitMessage(connection: PlaygroundConnection): MainToWorkerMessage & { type: 'init' } {
         const credentials = CredentialCache.getCredentials(connection.clusterId);
         if (!credentials) {
-            throw new Error(l10n.t('No credentials found for cluster {0}', connection.clusterId));
+            throw new Error(l10n.t('No credentials found for cluster "{0}"', connection.clusterDisplayName));
         }
 
         const authMechanism = credentials.authMechanism ?? 'NativeAuth';
