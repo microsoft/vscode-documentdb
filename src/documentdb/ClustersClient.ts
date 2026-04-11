@@ -136,10 +136,7 @@ export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
  */
 function assertDocumentObject(value: unknown, errorCode: 'INVALID_PROJECTION' | 'INVALID_SORT'): Document {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        throw new QueryError(
-            errorCode,
-            l10n.t('Expected a document object like { field: 1 }, got: {0}', typeof value),
-        );
+        throw new QueryError(errorCode, l10n.t('Expected a document object like { field: 1 }, got: {0}', typeof value));
     }
     return value as Document;
 }
@@ -686,7 +683,7 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                const parsed = parseShellBSON(queryParams.project, {
+                const parsed: unknown = parseShellBSON(queryParams.project, {
                     mode: ParseMode.Loose,
                 });
                 options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
@@ -707,7 +704,7 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                const parsed = parseShellBSON(queryParams.sort, {
+                const parsed: unknown = parseShellBSON(queryParams.sort, {
                     mode: ParseMode.Loose,
                 });
                 options.sort = assertDocumentObject(parsed, 'INVALID_SORT');
@@ -843,7 +840,7 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                const parsed = parseShellBSON(queryParams.project, {
+                const parsed: unknown = parseShellBSON(queryParams.project, {
                     mode: ParseMode.Loose,
                 });
                 options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
@@ -864,7 +861,7 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                const parsed = parseShellBSON(queryParams.sort, {
+                const parsed: unknown = parseShellBSON(queryParams.sort, {
                     mode: ParseMode.Loose,
                 });
                 options.sort = assertDocumentObject(parsed, 'INVALID_SORT');

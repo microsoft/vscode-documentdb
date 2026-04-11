@@ -65,7 +65,9 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
     }
 
     if (!codeToRun.trim()) {
-        void vscode.window.showInformationMessage(l10n.t('No code to run. Select some code or place the cursor in a code block.'));
+        void vscode.window.showInformationMessage(
+            l10n.t('No code to run. Select some code or place the cursor in a code block.'),
+        );
         return;
     }
 

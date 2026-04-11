@@ -51,12 +51,7 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
     // can persist the content across restarts. Without a real-looking path,
     // untitled documents lose their content on relaunch.
     const now = new Date();
-    const timestamp = now
-        .toISOString()
-        .replace(/:/g, '-')
-        .replace(/\./g, '-')
-        .replace('T', '_')
-        .replace('Z', '');
+    const timestamp = now.toISOString().replace(/:/g, '-').replace(/\./g, '-').replace('T', '_').replace('Z', '');
     const fileName = `playground-${timestamp}${PLAYGROUND_FILE_EXTENSION}`;
     const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
     const filePath = path.join(folderPath, fileName);
