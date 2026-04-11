@@ -644,17 +644,17 @@ export class ClusterSession {
      * Initializes a new session for the MongoDB DocumentDB cluster.
      * Initializes a new session for the MongoDB DocumentDB cluster.
      *
-     * @param credentialId - The stable cluster identifier (clusterId) used to
+     * @param clusterId - The stable cluster identifier used to
      *   look up credentials and create a MongoDB client.
      *   - Connections View: storageId (UUID from ConnectionStorageService)
      *   - Azure Resources View: Azure Resource ID
      *   ⚠️ This is NOT the tree item ID - it must be the stable clusterId.
      * @returns A promise that resolves to the session ID of the newly created session.
      *
-     * @throws Will throw an error if the client cannot be obtained using the provided credential ID.
+     * @throws Will throw an error if the client cannot be obtained using the provided cluster ID.
      */
-    public static async initNewSession(credentialId: string): Promise<string> {
-        const client = await ClustersClient.getClient(credentialId);
+    public static async initNewSession(clusterId: string): Promise<string> {
+        const client = await ClustersClient.getClient(clusterId);
 
         const sessionId = Math.random().toString(16).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
