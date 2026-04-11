@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as vscode from 'vscode';
+
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { SettingsService } from '../../../services/SettingsService';
@@ -48,7 +50,10 @@ export class CollectionViewController extends WebviewController<CollectionViewWe
             enableAIQueryGeneration,
         };
 
-        super(ext.context, title, 'collectionView', fullInitialData);
+        super(ext.context, title, 'collectionView', fullInitialData, vscode.ViewColumn.One, {
+            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),
+            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-dark.svg'),
+        });
 
         const trpcContext: RouterContext = {
             dbExperience: API.DocumentDB,

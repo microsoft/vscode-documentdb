@@ -12,6 +12,7 @@ import { Announcer } from '../../api/webview-client/accessibility';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
+import { setCompletionContext } from '../../query-language-support';
 import './collectionView.scss';
 import {
     CollectionViewContext,
@@ -265,17 +266,24 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function updateAutoCompletionData(): void {
-        trpcClient.mongoClusters.collectionView.getAutocompletionSchema
+        trpcClient.mongoClusters.collectionView.getFieldCompletionData
             .query()
-            .then(async (schema) => {
-                void (await currentContextRef.current.queryEditor?.setJsonSchema(schema));
+            .then((fields) => {
+                setCompletionContext(configuration.sessionId, { fields });
             })
             .catch((error) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error while loading the autocompletion data'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
+                console.debug('Failed to update field completion data:', error);
+                // Non-blocking — completion will work without fields
+                trpcClient.common.reportEvent
+                    .mutate({
+                        eventName: 'fieldCompletionDataFetchFailed',
+                        properties: {
+                            error: error instanceof Error ? error.message : String(error),
+                        },
+                    })
+                    .catch(() => {
+                        // best-effort telemetry, swallow errors
+                    });
             });
     }
 

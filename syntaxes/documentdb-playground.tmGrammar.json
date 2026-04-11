@@ -1,0 +1,9 @@
+{
+  "scopeName": "source.documentdb-playground",
+  "injectionSelector": "",
+  "patterns": [
+    {
+      "include": "source.js"
+    }
+  ]
+}

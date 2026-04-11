@@ -21,10 +21,9 @@ module.exports = (env, { mode }) => {
         mode: mode || 'none',
         node: { __filename: false, __dirname: false },
         entry: {
-            // 'extension.bundle.ts': './src/extension.ts', // Is still necessary?
-            './vscode-documentdb-scrapbook-language-languageServer.bundle':
-                './src/documentdb/scrapbook/languageServer.ts',
             main: './main.ts',
+            playgroundWorker: './src/documentdb/playground/playgroundWorker.ts',
+            playgroundTsPlugin: './src/documentdb/playground/tsPlugin/index.ts',
         },
         output: {
             path: path.resolve(__dirname, 'dist'),
@@ -33,14 +32,7 @@ module.exports = (env, { mode }) => {
             libraryTarget: 'commonjs2',
             devtoolModuleFilenameTemplate: '[resource-path]',
         },
-        cache: {
-            type: 'filesystem',
-            name: `extension-build${isDev ? '-dev' : ''}`,
-            cacheDirectory: path.resolve(__dirname, 'node_modules/.cache/webpack/extension'),
-            buildDependencies: {
-                config: [__filename],
-            },
-        },
+        cache: false,
         optimization: {
             minimize: !isDev,
             minimizer: [
@@ -56,32 +48,42 @@ module.exports = (env, { mode }) => {
             ],
         },
         externalsType: 'node-commonjs',
-        externals: {
-            vs: 'vs',
-            vscode: 'commonjs vscode',
-            /* Mongodb optional dependencies */
-            kerberos: 'commonjs kerberos',
-            '@mongodb-js/zstd': 'commonjs @mongodb-js/zstd',
-            '@aws-sdk/credential-providers': 'commonjs @aws-sdk/credential-providers',
-            'gcp-metadata': 'commonjs gcp-metadata',
-            snappy: 'commonjs snappy',
-            socks: 'commonjs socks',
-            aws4: 'commonjs aws4',
-            'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
-            /* PG optional dependencies */
-            'pg-native': 'commonjs pg-native',
-        },
+        externals: [
+            {
+                vs: 'vs',
+                vscode: 'commonjs vscode',
+                /* Mongodb optional dependencies */
+                kerberos: 'commonjs kerberos',
+                '@mongodb-js/zstd': 'commonjs @mongodb-js/zstd',
+                '@aws-sdk/credential-providers': 'commonjs @aws-sdk/credential-providers',
+                'gcp-metadata': 'commonjs gcp-metadata',
+                snappy: 'commonjs snappy',
+                socks: 'commonjs socks',
+                aws4: 'commonjs aws4',
+                'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
+                /* @mongosh transitive optional dependencies */
+                electron: 'commonjs electron',
+                'os-dns-native': 'commonjs os-dns-native',
+                'cpu-features': 'commonjs cpu-features',
+                ssh2: 'commonjs ssh2',
+                'win-export-certificate-and-key': 'commonjs win-export-certificate-and-key',
+                'macos-export-certificate-and-key': 'commonjs macos-export-certificate-and-key',
+                /* PG optional dependencies */
+                'pg-native': 'commonjs pg-native',
+            },
+            // Handle @babel/preset-typescript and its subpath imports (e.g. /package.json)
+            ({ request }, callback) => {
+                if (request && request.startsWith('@babel/preset-typescript')) {
+                    return callback(null, `commonjs ${request}`);
+                }
+                callback();
+            },
+        ],
         resolve: {
             roots: [__dirname],
             // conditionNames: ['import', 'require', 'node'], // Uncomment when we will use VSCode what supports modules
             mainFields: ['module', 'main'],
             extensions: ['.js', '.ts'],
-            alias: {
-                'vscode-languageserver-types': path.resolve(
-                    __dirname,
-                    'node_modules/vscode-languageserver-types/lib/esm/main.js',
-                ),
-            },
         },
         module: {
             rules: [
@@ -125,10 +127,6 @@ module.exports = (env, { mode }) => {
             new CopyWebpackPlugin({
                 patterns: [
                     {
-                        from: 'grammar',
-                        to: 'grammar',
-                    },
-                    {
                         from: 'l10n',
                         to: 'l10n',
                         noErrorOnMissing: true,
@@ -146,6 +144,14 @@ module.exports = (env, { mode }) => {
                     {
                         from: 'package.nls.json',
                         to: 'package.nls.json',
+                    },
+                    {
+                        from: 'playground-language-configuration.json',
+                        to: 'playground-language-configuration.json',
+                    },
+                    {
+                        from: 'syntaxes',
+                        to: 'syntaxes',
                     },
                     {
                         from: 'package.nls.*.json',
@@ -185,6 +191,10 @@ module.exports = (env, { mode }) => {
                         toType: 'file',
                     },
                     {
+                        from: './packages/documentdb-shell-api-types/typeDefs',
+                        to: 'typeDefs',
+                    },
+                    {
                         from: './node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
                         to: 'resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
                     },
@@ -200,6 +210,16 @@ module.exports = (env, { mode }) => {
             }),
         ].filter(Boolean),
         devtool: isDev ? 'source-map' : false,
+        // Filter known warnings from @mongosh transitive dependencies.
+        // These are all "Critical dependency" warnings from @babel/core,
+        // browserslist, and express that use dynamic require() patterns
+        // webpack can't statically analyze. None execute at runtime.
+        // See docs/plan/06-scrapbook-rebuild.md §"Webpack Externals" for details (historical reference).
+        ignoreWarnings: [
+            { module: /node_modules[\\/]@babel[\\/]core/ },
+            { module: /node_modules[\\/]browserslist/ },
+            { module: /node_modules[\\/]@mongodb-js[\\/]oidc-plugin[\\/]node_modules[\\/]express/ },
+        ],
         infrastructureLogging: {
             level: 'log', // enables logging required for problem matchers
         },

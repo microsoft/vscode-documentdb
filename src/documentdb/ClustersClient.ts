@@ -15,6 +15,7 @@ import {
     callWithTelemetryAndErrorHandling,
     parseError,
 } from '@microsoft/vscode-azext-utils';
+import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
@@ -54,6 +55,7 @@ import {
     type IndexSpecification,
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
+import { SchemaStore } from './SchemaStore';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
@@ -128,6 +130,17 @@ export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
     return error instanceof MongoBulkWriteError;
 }
 
+/**
+ * Validates that a parsed BSON value is a plain object (not a scalar, array, or null).
+ * Throws a QueryError if the value is not a plain object.
+ */
+function assertDocumentObject(value: unknown, errorCode: 'INVALID_PROJECTION' | 'INVALID_SORT'): Document {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new QueryError(errorCode, l10n.t('Expected a document object like { field: 1 }, got: {0}', typeof value));
+    }
+    return value as Document;
+}
+
 export class ClustersClient {
     /**
      * Cache of active MongoDB clients, keyed by clusterId.
@@ -148,6 +161,11 @@ export class ClustersClient {
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
     private _queryInsightsApis: QueryInsightsApis | null = null;
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
+
+    /** In-memory cache for listDatabases results. */
+    private _databasesCache: DatabaseItemModel[] | null = null;
+    /** In-memory cache for listCollections results, keyed by database name. */
+    private _collectionsCache = new Map<string, CollectionItemModel[]>();
 
     /**
      * Correlation ID linking the `connect`, `connect.staticmetadata`, and `connect.getmetadata`
@@ -320,6 +338,15 @@ export class ClustersClient {
     }
 
     /**
+     * Returns the underlying MongoClient instance.
+     * Used by the query playground evaluator to create a `@mongosh` ServiceProvider
+     * that reuses the existing, authenticated connection.
+     */
+    public getMongoClient(): MongoClient {
+        return this._mongoClient;
+    }
+
+    /**
      * Retrieves an instance of `ClustersClient` based on the provided `clusterId`.
      *
      * @param clusterId - A required string used to find the cached connection string to connect.
@@ -402,11 +429,24 @@ export class ClustersClient {
         return ClustersClient._clients.has(credentialId);
     }
 
+    /**
+     * Returns an existing client synchronously if it is already in the connection pool.
+     * Returns `undefined` if the client is not yet connected. This is useful for
+     * accessing cached data (e.g., cached collection/database listings) without
+     * triggering a connection or blocking on async operations.
+     */
+    public static getExistingClient(clusterId: string): ClustersClient | undefined {
+        return ClustersClient._clients.get(clusterId);
+    }
+
     public static async deleteClient(credentialId: string): Promise<void> {
         if (ClustersClient._clients.has(credentialId)) {
             const client = ClustersClient._clients.get(credentialId) as ClustersClient;
             await client._mongoClient.close(true);
             ClustersClient._clients.delete(credentialId);
+
+            // Clear cached schema data for this cluster
+            SchemaStore.getInstance().clearCluster(credentialId);
         }
     }
 
@@ -512,7 +552,11 @@ export class ClustersClient {
         }
     }
 
-    async listDatabases(): Promise<DatabaseItemModel[]> {
+    async listDatabases(useCached?: boolean): Promise<DatabaseItemModel[]> {
+        if (useCached && this._databasesCache) {
+            return this._databasesCache;
+        }
+
         const rawDatabases: ListDatabasesResult = await this._mongoClient.db().admin().listDatabases();
         const databases: DatabaseItemModel[] = rawDatabases.databases.filter(
             // Filter out the 'admin' database if it's empty
@@ -542,14 +586,41 @@ export class ClustersClient {
                              }
          */
 
+        this._databasesCache = databases;
+
         return databases;
     }
 
-    async listCollections(databaseName: string): Promise<CollectionItemModel[]> {
+    async listCollections(databaseName: string, useCached?: boolean): Promise<CollectionItemModel[]> {
+        if (useCached) {
+            const cached = this._collectionsCache.get(databaseName);
+            if (cached) {
+                return cached;
+            }
+        }
+
         const rawCollections = await this._mongoClient.db(databaseName).listCollections().toArray();
         const collections: CollectionItemModel[] = rawCollections;
 
+        this._collectionsCache.set(databaseName, collections);
+
         return collections;
+    }
+
+    /**
+     * Returns cached collection names for the given database, if available.
+     * Does NOT trigger a network request. Returns `undefined` if no cache exists.
+     */
+    getCachedCollections(databaseName: string): CollectionItemModel[] | undefined {
+        return this._collectionsCache.get(databaseName);
+    }
+
+    /**
+     * Returns cached database list, if available.
+     * Does NOT trigger a network request. Returns `undefined` if no cache exists.
+     */
+    getCachedDatabases(): DatabaseItemModel[] | undefined {
+        return this._databasesCache ?? undefined;
     }
 
     async listIndexes(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {
@@ -612,13 +683,17 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = EJSON.parse(queryParams.project) as Document;
+                const parsed: unknown = parseShellBSON(queryParams.project, {
+                    mode: ParseMode.Loose,
+                });
+                options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
             } catch (error) {
+                if (error instanceof QueryError) throw error;
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_PROJECTION',
                     l10n.t(
-                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid projection syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -629,13 +704,17 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = EJSON.parse(queryParams.sort) as Document;
+                const parsed: unknown = parseShellBSON(queryParams.sort, {
+                    mode: ParseMode.Loose,
+                });
+                options.sort = assertDocumentObject(parsed, 'INVALID_SORT');
             } catch (error) {
+                if (error instanceof QueryError) throw error;
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_SORT',
                     l10n.t(
-                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid sort syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -761,13 +840,17 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = EJSON.parse(queryParams.project) as Document;
+                const parsed: unknown = parseShellBSON(queryParams.project, {
+                    mode: ParseMode.Loose,
+                });
+                options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
             } catch (error) {
+                if (error instanceof QueryError) throw error;
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_PROJECTION',
                     l10n.t(
-                        'Invalid projection syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid projection syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -778,13 +861,17 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = EJSON.parse(queryParams.sort) as Document;
+                const parsed: unknown = parseShellBSON(queryParams.sort, {
+                    mode: ParseMode.Loose,
+                });
+                options.sort = assertDocumentObject(parsed, 'INVALID_SORT');
             } catch (error) {
+                if (error instanceof QueryError) throw error;
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_SORT',
                     l10n.t(
-                        'Invalid sort syntax: {0}. Please use valid JSON, for example: { "fieldName": 1 }',
+                        'Invalid sort syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
                         cause.message,
                     ),
                     cause,
@@ -917,15 +1004,22 @@ export class ClustersClient {
     }
 
     async dropCollection(databaseName: string, collectionName: string): Promise<boolean> {
-        return this._mongoClient.db(databaseName).collection(collectionName).drop();
+        const result = await this._mongoClient.db(databaseName).collection(collectionName).drop();
+        this._collectionsCache.delete(databaseName);
+        return result;
     }
 
     async dropDatabase(databaseName: string): Promise<boolean> {
-        return this._mongoClient.db(databaseName).dropDatabase();
+        const result = await this._mongoClient.db(databaseName).dropDatabase();
+        this._databasesCache = null;
+        this._collectionsCache.delete(databaseName);
+        return result;
     }
 
     async createCollection(databaseName: string, collectionName: string): Promise<Collection<Document>> {
-        return this._mongoClient.db(databaseName).createCollection(collectionName);
+        const result = await this._mongoClient.db(databaseName).createCollection(collectionName);
+        this._collectionsCache.delete(databaseName);
+        return result;
     }
 
     async createDatabase(databaseName: string): Promise<void> {
@@ -934,6 +1028,7 @@ export class ClustersClient {
             .db(databaseName)
             .createCollection('_dummy_collection_creation_forces_db_creation');
         await newCollection.drop({ writeConcern: { w: 'majority', wtimeoutMS: 5000 } });
+        this._databasesCache = null;
     }
 
     async insertDocuments(

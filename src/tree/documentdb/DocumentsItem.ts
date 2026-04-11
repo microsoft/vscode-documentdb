@@ -47,9 +47,10 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
             id: this.id,
             contextValue: this.contextValue,
             label: l10n.t('Documents'),
+            tooltip: l10n.t('Double-click to open the collection view'),
             command: {
                 title: l10n.t('Open Collection'), // unused, but required by TreeItem
-                command: 'vscode-documentdb.command.internal.containerView.open',
+                command: 'vscode-documentdb.command.internal.containerView.openFromTree',
                 arguments: [
                     {
                         id: this.id,
@@ -64,7 +65,7 @@ export class DocumentsItem implements TreeElement, TreeElementWithExperience, Tr
                     },
                 ],
             },
-            iconPath: new ThemeIcon('explorer-view-icon'),
+            iconPath: new ThemeIcon('files'),
         };
     }
 }

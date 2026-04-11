@@ -19,6 +19,9 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersExtension } from './documentdb/ClustersExtension';
+import { PlaygroundDiagnostics } from './documentdb/playground/PlaygroundDiagnostics';
+import { PLAYGROUND_RESULT_SCHEME, PlaygroundResultProvider } from './documentdb/playground/PlaygroundResultProvider';
+import { SchemaStore } from './documentdb/SchemaStore';
 import { ext } from './extensionVariables';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
@@ -41,6 +44,17 @@ export async function activateInternal(
 
     ext.outputChannel = createAzExtLogOutputChannel('DocumentDB for VS Code');
     context.subscriptions.push(ext.outputChannel);
+
+    ext.playgroundOutputChannel = vscode.window.createOutputChannel('DocumentDB Query Playground Output');
+    context.subscriptions.push(ext.playgroundOutputChannel);
+
+    ext.playgroundResultProvider = new PlaygroundResultProvider();
+    context.subscriptions.push(
+        ext.playgroundResultProvider,
+        vscode.workspace.registerTextDocumentContentProvider(PLAYGROUND_RESULT_SCHEME, ext.playgroundResultProvider),
+        new PlaygroundDiagnostics(),
+    );
+
     registerUIExtensionVariables(ext);
     registerAzureUtilsExtensionVariables(ext);
 
@@ -58,6 +72,7 @@ export async function activateInternal(
 
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
+        context.subscriptions.push(SchemaStore.getInstance());
         await clustersSupport.activateClustersSupport();
 
         context.subscriptions.push(

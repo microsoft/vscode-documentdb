@@ -70,5 +70,10 @@ export async function openCollectionViewInternal(
         feedbackSignalsEnabled: feedbackSignalsEnabled,
     });
 
+    // Clean up the ClusterSession when the tab is closed
+    view.onDisposed(() => {
+        ClusterSession.closeSession(sessionId);
+    });
+
     view.revealToForeground();
 }
