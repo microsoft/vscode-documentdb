@@ -61,11 +61,14 @@ export class DocumentDBShellRuntime {
     private _disposed = false;
 
     // Persistent mode state — reused across evaluate() calls when options.persistent is true
-    private _persistentInstanceState: ShellInstanceState | undefined;
-    private _persistentEvaluator: ShellEvaluator | undefined;
-    private _persistentContext: Record<string, unknown> | undefined;
-    private _persistentVmContext: vm.Context | undefined;
-    private _persistentInitialized = false;
+    private _persistent:
+        | {
+              instanceState: ShellInstanceState;
+              evaluator: ShellEvaluator;
+              context: Record<string, unknown>;
+              vmContext: vm.Context;
+          }
+        | undefined;
 
     constructor(mongoClient: MongoClient, callbacks?: ShellRuntimeCallbacks, options?: ShellRuntimeOptions) {
         this._mongoClient = mongoClient;
@@ -183,40 +186,48 @@ export class DocumentDBShellRuntime {
         startTime: number,
     ): Promise<ShellEvaluationResult> {
         // Initialize persistent state on first call
-        if (!this._persistentInitialized) {
+        if (!this._persistent) {
             const { serviceProvider, bus } = DocumentDBServiceProvider.createForDocumentDB(
                 this._mongoClient,
                 this._options.productName,
                 this._options.productDocsLink,
             );
 
-            this._persistentInstanceState = new ShellInstanceState(serviceProvider, bus);
-            this._persistentEvaluator = new ShellEvaluator(this._persistentInstanceState);
-            this._persistentContext = {};
-            this._persistentInstanceState.setCtx(this._persistentContext);
-            this._persistentVmContext = vm.createContext(this._persistentContext);
+            const instanceState = new ShellInstanceState(serviceProvider, bus);
+            const evaluator = new ShellEvaluator(instanceState);
+            const context: Record<string, unknown> = {};
+            instanceState.setCtx(context);
+            const vmContext = vm.createContext(context);
 
-            this.registerConsoleOutputListener(this._persistentInstanceState);
+            this.registerConsoleOutputListener(instanceState);
 
             // Pre-select the initial database
-            await this._persistentEvaluator.customEval(
-                this.persistentCustomEvalFn.bind(this),
+            await evaluator.customEval(
+                // eslint-disable-next-line @typescript-eslint/require-await
+                async (evalCode: string, _ctx: object): Promise<unknown> => {
+                    return vm.runInContext(evalCode, vmContext) as unknown;
+                },
                 `use(${JSON.stringify(databaseName)})`,
-                this._persistentContext,
+                context,
                 'shell',
             );
 
-            this._persistentInitialized = true;
+            this._persistent = { instanceState, evaluator, context, vmContext };
         }
 
+        const { instanceState, evaluator, context, vmContext } = this._persistent;
+
         // Apply batch size per-eval (may change between evaluations via settings)
-        this.applyBatchSize(this._persistentInstanceState!, evalOptions);
+        this.applyBatchSize(instanceState, evalOptions);
 
         // Evaluate user code using the persistent context
-        const result = await this._persistentEvaluator!.customEval(
-            this.persistentCustomEvalFn.bind(this),
+        const result = await evaluator.customEval(
+            // eslint-disable-next-line @typescript-eslint/require-await
+            async (evalCode: string, _ctx: object): Promise<unknown> => {
+                return vm.runInContext(evalCode, vmContext) as unknown;
+            },
             code,
-            this._persistentContext!,
+            context,
             'shell',
         );
         const durationMs = Date.now() - startTime;
@@ -234,25 +245,12 @@ export class DocumentDBShellRuntime {
     }
 
     /**
-     * Custom eval function for persistent mode. Reuses the existing vm.Context
-     * across evaluations so variables and state survive.
-     */
-    // eslint-disable-next-line @typescript-eslint/require-await
-    private async persistentCustomEvalFn(evalCode: string, _ctx: object): Promise<unknown> {
-        return vm.runInContext(evalCode, this._persistentVmContext!) as unknown;
-    }
-
-    /**
      * Dispose the runtime. After disposal, `evaluate()` calls will throw.
      * Does NOT close the MongoClient — the caller owns its lifecycle.
      */
     dispose(): void {
         this._disposed = true;
-        this._persistentInstanceState = undefined;
-        this._persistentEvaluator = undefined;
-        this._persistentContext = undefined;
-        this._persistentVmContext = undefined;
-        this._persistentInitialized = false;
+        this._persistent = undefined;
     }
 
     /**

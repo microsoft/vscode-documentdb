@@ -13,6 +13,7 @@ jest.mock('@mongosh/shell-api', () => ({
         displayBatchSizeFromDBQuery: 50,
         setCtx: jest.fn(),
         setEvaluationListener: jest.fn(),
+        close: jest.fn().mockResolvedValue(undefined),
     })),
 }));
 
