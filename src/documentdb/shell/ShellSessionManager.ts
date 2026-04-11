@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
@@ -138,10 +138,20 @@ export class ShellSessionManager implements vscode.Disposable {
      * and set the initial database.
      *
      * @returns Connection metadata for display in the terminal banner.
+     * @throws Error if initialization exceeds the configured timeout.
      */
     async initialize(): Promise<ShellConnectionMetadata> {
         const initMsg = this.buildInitMessage();
-        await this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg);
+
+        const timeoutMs = this.getInitTimeoutMs();
+        const timeoutPromise = new Promise<never>((_resolve, reject) => {
+            setTimeout(
+                () => reject(new Error(l10n.t('Shell initialization timed out after {0} seconds', timeoutMs / 1000))),
+                timeoutMs,
+            );
+        });
+
+        await Promise.race([this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg), timeoutPromise]);
         this._initialized = true;
 
         const username =
@@ -252,6 +262,12 @@ export class ShellSessionManager implements vscode.Disposable {
     }
 
     // ─── Private: Token handling ─────────────────────────────────────────────
+
+    private getInitTimeoutMs(): number {
+        const config = vscode.workspace.getConfiguration();
+        const timeoutSec = config.get<number>(ext.settingsKeys.shellInitTimeout, 60);
+        return timeoutSec * 1000;
+    }
 
     /**
      * Extract the host portion from a connection string, stripping credentials.

@@ -1154,6 +1154,12 @@
             "description": "The duration allowed (in seconds) for a query to execute in the Query Playground or Interactive Shell. Default value is 30 seconds.",
             "default": 30
           },
+          "documentDB.shell.initTimeout": {
+            "type": "number",
+            "description": "Maximum time (in seconds) to wait for the Interactive Shell to connect during initialization. Default value is 60 seconds.",
+            "default": 60,
+            "minimum": 5
+          },
           "documentDB.shell.display.colorOutput": {
             "type": "boolean",
             "description": "Enable ANSI color-coded JSON output in the Interactive Shell. Disable for accessibility (screen readers) or piped output.",

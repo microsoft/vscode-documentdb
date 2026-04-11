@@ -65,6 +65,7 @@ export namespace ext {
     export namespace settingsKeys {
         export const batchSize = 'documentDB.shell.batchSize';
         export const shellTimeout = 'documentDB.shell.timeout';
+        export const shellInitTimeout = 'documentDB.shell.initTimeout';
         export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
         export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
