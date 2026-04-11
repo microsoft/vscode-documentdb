@@ -312,8 +312,10 @@ export function validateExpression(code: string): Diagnostic[] {
                 }
             },
         });
-    } catch {
-        // If walking fails, just return syntax diagnostics we already have
+    } catch (error) {
+        if (!(error instanceof SyntaxError)) {
+            console.error('Unexpected error during AST walk:', error);
+        }
     }
 
     return diagnostics;

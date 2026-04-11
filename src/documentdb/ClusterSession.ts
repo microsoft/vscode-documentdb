@@ -157,7 +157,7 @@ export class ClusterSession {
                 limit: this._currentUserQueryParams.limit ?? 0,
             });
 
-            if (previousQueryKey.localeCompare(userQueryKey, undefined, { sensitivity: 'base' }) === 0) {
+            if (previousQueryKey === userQueryKey) {
                 // Same query, no need to reset caches
                 return;
             }
