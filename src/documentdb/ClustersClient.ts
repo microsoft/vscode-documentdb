@@ -130,6 +130,20 @@ export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
     return error instanceof MongoBulkWriteError;
 }
 
+/**
+ * Validates that a parsed BSON value is a plain object (not a scalar, array, or null).
+ * Throws a QueryError if the value is not a plain object.
+ */
+function assertDocumentObject(value: unknown, errorCode: 'INVALID_PROJECTION' | 'INVALID_SORT'): Document {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new QueryError(
+            errorCode,
+            l10n.t('Expected a document object like { field: 1 }, got: {0}', typeof value),
+        );
+    }
+    return value as Document;
+}
+
 export class ClustersClient {
     /**
      * Cache of active MongoDB clients, keyed by clusterId.
@@ -672,10 +686,12 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = parseShellBSON(queryParams.project, {
+                const parsed = parseShellBSON(queryParams.project, {
                     mode: ParseMode.Loose,
-                }) as Document;
+                });
+                options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
             } catch (error) {
+                if (error instanceof QueryError) throw error;
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_PROJECTION',
@@ -691,10 +707,12 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = parseShellBSON(queryParams.sort, {
+                const parsed = parseShellBSON(queryParams.sort, {
                     mode: ParseMode.Loose,
-                }) as Document;
+                });
+                options.sort = assertDocumentObject(parsed, 'INVALID_SORT');
             } catch (error) {
+                if (error instanceof QueryError) throw error;
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_SORT',
@@ -825,10 +843,12 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = parseShellBSON(queryParams.project, {
+                const parsed = parseShellBSON(queryParams.project, {
                     mode: ParseMode.Loose,
-                }) as Document;
+                });
+                options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
             } catch (error) {
+                if (error instanceof QueryError) throw error;
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_PROJECTION',
@@ -844,10 +864,12 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = parseShellBSON(queryParams.sort, {
+                const parsed = parseShellBSON(queryParams.sort, {
                     mode: ParseMode.Loose,
-                }) as Document;
+                });
+                options.sort = assertDocumentObject(parsed, 'INVALID_SORT');
             } catch (error) {
+                if (error instanceof QueryError) throw error;
                 const cause = error instanceof Error ? error : new Error(String(error));
                 throw new QueryError(
                     'INVALID_SORT',
