@@ -28,6 +28,12 @@ export interface ShellInputHandlerCallbacks {
     onInterrupt: () => void;
 }
 
+/** Word character pattern for word navigation (Ctrl+Left/Right). */
+const WORD_CHAR_PATTERN = /[a-zA-Z0-9_$]/;
+function isWordChar(ch: string): boolean {
+    return WORD_CHAR_PATTERN.test(ch);
+}
+
 export class ShellInputHandler {
     /** Current line buffer (characters the user has typed). */
     private _buffer: string = '';
@@ -331,12 +337,12 @@ export class ShellInputHandler {
             return;
         }
         let pos = this._cursor - 1;
-        // Skip whitespace
-        while (pos > 0 && this._buffer[pos] === ' ') {
+        // Skip non-word characters (whitespace, punctuation)
+        while (pos > 0 && !isWordChar(this._buffer[pos])) {
             pos--;
         }
         // Skip word characters
-        while (pos > 0 && this._buffer[pos - 1] !== ' ') {
+        while (pos > 0 && isWordChar(this._buffer[pos - 1])) {
             pos--;
         }
         this.moveCursorTo(pos);
@@ -348,11 +354,11 @@ export class ShellInputHandler {
         }
         let pos = this._cursor;
         // Skip current word characters
-        while (pos < this._buffer.length && this._buffer[pos] !== ' ') {
+        while (pos < this._buffer.length && isWordChar(this._buffer[pos])) {
             pos++;
         }
-        // Skip whitespace
-        while (pos < this._buffer.length && this._buffer[pos] === ' ') {
+        // Skip non-word characters (whitespace, punctuation)
+        while (pos < this._buffer.length && !isWordChar(this._buffer[pos])) {
             pos++;
         }
         this.moveCursorTo(pos);
