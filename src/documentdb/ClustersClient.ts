@@ -1007,15 +1007,22 @@ export class ClustersClient {
     }
 
     async dropCollection(databaseName: string, collectionName: string): Promise<boolean> {
-        return this._mongoClient.db(databaseName).collection(collectionName).drop();
+        const result = await this._mongoClient.db(databaseName).collection(collectionName).drop();
+        this._collectionsCache.delete(databaseName);
+        return result;
     }
 
     async dropDatabase(databaseName: string): Promise<boolean> {
-        return this._mongoClient.db(databaseName).dropDatabase();
+        const result = await this._mongoClient.db(databaseName).dropDatabase();
+        this._databasesCache = null;
+        this._collectionsCache.delete(databaseName);
+        return result;
     }
 
     async createCollection(databaseName: string, collectionName: string): Promise<Collection<Document>> {
-        return this._mongoClient.db(databaseName).createCollection(collectionName);
+        const result = await this._mongoClient.db(databaseName).createCollection(collectionName);
+        this._collectionsCache.delete(databaseName);
+        return result;
     }
 
     async createDatabase(databaseName: string): Promise<void> {
@@ -1024,6 +1031,7 @@ export class ClustersClient {
             .db(databaseName)
             .createCollection('_dummy_collection_creation_forces_db_creation');
         await newCollection.drop({ writeConcern: { w: 'majority', wtimeoutMS: 5000 } });
+        this._databasesCache = null;
     }
 
     async insertDocuments(
