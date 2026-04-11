@@ -10,6 +10,7 @@ import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { ShellInputHandler } from './ShellInputHandler';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
 import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManager } from './ShellSessionManager';
+import { ShellSpinner } from './ShellSpinner';
 import { ACTION_LINE_PREFIX, type ShellTerminalInfo, unregisterShellTerminal } from './ShellTerminalLinkProvider';
 
 /**
@@ -57,6 +58,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _closed = false;
     /** Whether the current evaluation was cancelled by Ctrl+C. */
     private _interrupted = false;
+    /** Spinner shown during long-running evaluations. */
+    private _spinner: ShellSpinner | undefined;
     /** The terminal instance this PTY is attached to (set via {@link setTerminal}). */
     private _terminal: vscode.Terminal | undefined;
 
@@ -66,6 +69,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const sessionCallbacks: ShellSessionCallbacks = {
             onConsoleOutput: (output: string) => {
+                // Erase the spinner character before writing console output
+                // so the two don't collide. The spinner re-renders itself
+                // on the next interval tick automatically.
+                if (this._spinner?.isVisible) {
+                    this._spinner.hide();
+                }
                 this.writeOutput(output);
                 // Track that we received console output so we can ensure
                 // a newline before the next prompt (print() doesn't add one).
@@ -82,7 +91,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 }
             },
             onReconnecting: () => {
-                this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Reconnecting...')));
+                if (this._spinner) {
+                    this._spinner.setLabel(l10n.t('Reconnecting...'));
+                }
+            },
+            onReconnected: () => {
+                if (this._spinner) {
+                    this._spinner.setLabel(undefined);
+                }
             },
         };
 
@@ -103,14 +119,21 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Disable input during initialization to prevent race conditions
         this._inputHandler.setEnabled(false);
 
-        // Display welcome banner and start initialization
+        // Display welcome banner
         this.writeLine(
             this._outputFormatter.formatSystemMessage(
                 l10n.t('DocumentDB Shell: {0}', this._connectionInfo.clusterDisplayName),
             ),
         );
-        this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connecting and authenticating...')));
-        this.writeLine('');
+
+        // Show a labeled spinner during connection
+        this._spinner = new ShellSpinner(
+            (data) => this._writeEmitter.fire(data),
+            this.isColorEnabled(),
+            0,
+            l10n.t('Connecting and authenticating...'),
+        );
+        this._spinner.start();
 
         void this.initializeSession();
     }
@@ -154,6 +177,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             const metadata = await this._sessionManager.initialize();
 
+            // Stop the connection spinner
+            this._spinner?.stop();
+            this._spinner = undefined;
+
             // Display connection summary
             const authLabel = metadata.authMechanism === 'MicrosoftEntraID' ? 'Entra ID' : 'SCRAM';
             const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
@@ -193,6 +220,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             this.showPrompt();
         } catch (error: unknown) {
+            // Stop the connection spinner on failure
+            this._spinner?.stop();
+            this._spinner = undefined;
+
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.writeLine(this._outputFormatter.formatError(l10n.t('Failed to connect: {0}', errorMessage)));
             this._inputHandler.setEnabled(true);
@@ -217,9 +248,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._lastOutputHadTrailingNewline = true;
         this._inputHandler.setEnabled(false);
 
+        // Start the spinner — it appears after a short delay so fast
+        // commands complete without any visual noise.
+        this._spinner = new ShellSpinner((data) => this._writeEmitter.fire(data), this.isColorEnabled());
+        this._spinner.start();
+
         try {
             await this.evaluateInput(trimmed);
         } finally {
+            // Stop the spinner before writing results or the next prompt.
+            this._spinner?.stop();
+            this._spinner = undefined;
+
             this._evaluating = false;
 
             // If Ctrl+C was pressed, the interrupt handler already re-enabled
@@ -391,6 +431,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // error/result output and handleLineInput() skips the double prompt.
             this._interrupted = true;
 
+            // Stop the spinner immediately on Ctrl+C.
+            this._spinner?.stop();
+            this._spinner = undefined;
+
             // Kill the worker to cancel a running evaluation.
             // The _terminatingIntentionally flag in WorkerSessionManager prevents
             // the onWorkerExit callback from showing "ended unexpectedly".
@@ -443,5 +487,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const config = vscode.workspace.getConfiguration();
         const timeoutSec = config.get<number>(ext.settingsKeys.shellTimeout, 30);
         return timeoutSec * 1000;
+    }
+
+    private isColorEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration();
+        return config.get<boolean>('documentDB.shell.display.colorOutput', true);
     }
 }

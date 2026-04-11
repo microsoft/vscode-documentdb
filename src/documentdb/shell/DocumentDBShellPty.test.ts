@@ -85,9 +85,30 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('TestCluster');
         });
 
-        it('should show connecting message', () => {
+        it('should show spinner during connection and clear it after', async () => {
+            // Slow down init so we can observe the spinner label
+            let resolveInit!: (value: unknown) => void;
+            mockInitialize.mockReturnValue(
+                new Promise((resolve) => {
+                    resolveInit = resolve;
+                }),
+            );
             pty.open(undefined);
+
+            // Wait for the spinner's setTimeout(…, 0) to fire
+            await new Promise((resolve) => setTimeout(resolve, 10));
             expect(written).toContain('Connecting and authenticating');
+
+            // Resolve initialization
+            resolveInit({
+                host: 'test-host.documents.azure.com:10255',
+                authMechanism: 'NativeAuth',
+                isEmulator: false,
+            });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // Spinner output should be cleared; connection info should appear
+            expect(written).toContain('Connected to');
         });
 
         it('should initialize session on open', () => {

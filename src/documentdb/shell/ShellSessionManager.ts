@@ -53,6 +53,8 @@ export interface ShellSessionCallbacks {
     onWorkerExit?: (exitCode: number) => void;
     /** Called when the session is re-initializing after a worker restart (e.g., after Ctrl+C). */
     onReconnecting?: () => void;
+    /** Called when re-initialization completes and eval is about to proceed. */
+    onReconnected?: () => void;
 }
 
 /**
@@ -168,6 +170,7 @@ export class ShellSessionManager implements vscode.Disposable {
         if (!this._initialized) {
             this._callbacks?.onReconnecting?.();
             await this.initialize();
+            this._callbacks?.onReconnected?.();
         }
 
         const evalMsg: MainToWorkerMessage & { type: 'eval' } = {
