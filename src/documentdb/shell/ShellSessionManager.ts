@@ -72,6 +72,8 @@ export class ShellSessionManager implements vscode.Disposable {
     private readonly _connectionInfo: ShellConnectionInfo;
     private readonly _callbacks: ShellSessionCallbacks | undefined;
     private _initialized = false;
+    /** Cached initialization promise to prevent concurrent init calls. */
+    private _initPromise: Promise<ShellConnectionMetadata> | undefined;
     /** Tracks the active database, surviving worker restarts. Updated on `use <db>`. */
     private _activeDatabase: string;
 
@@ -169,7 +171,12 @@ export class ShellSessionManager implements vscode.Disposable {
     async evaluate(code: string, timeoutMs: number): Promise<SerializableExecutionResult> {
         if (!this._initialized) {
             this._callbacks?.onReconnecting?.();
-            await this.initialize();
+            if (!this._initPromise) {
+                this._initPromise = this.initialize().finally(() => {
+                    this._initPromise = undefined;
+                });
+            }
+            await this._initPromise;
             this._callbacks?.onReconnected?.();
         }
 
