@@ -29,6 +29,7 @@ export async function runAll(_context: IActionContext): Promise<void> {
 
     const code = editor.document.getText();
     if (!code.trim()) {
+        void vscode.window.showInformationMessage(l10n.t('The playground file is empty. Add some code to run.'));
         return;
     }
 

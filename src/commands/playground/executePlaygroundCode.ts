@@ -48,11 +48,15 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
     const service = PlaygroundService.getInstance();
     const connection = service.getConnection();
     if (!connection) {
+        void vscode.window.showInformationMessage(
+            l10n.t('Connect to a database before running. Right-click a database in the DocumentDB panel.'),
+        );
         return;
     }
 
     // Prevent concurrent runs — no queuing
     if (service.isExecuting) {
+        void vscode.window.showInformationMessage(l10n.t('A playground is already running. Wait for it to finish.'));
         return;
     }
 
