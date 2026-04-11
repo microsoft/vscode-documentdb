@@ -132,39 +132,43 @@ export class DocumentDBShellRuntime {
             this._options.productDocsLink,
         );
         const instanceState = new ShellInstanceState(serviceProvider, bus);
-        const evaluator = new ShellEvaluator(instanceState);
+        try {
+            const evaluator = new ShellEvaluator(instanceState);
 
-        this.applyBatchSize(instanceState, evalOptions);
-        this.registerConsoleOutputListener(instanceState);
+            this.applyBatchSize(instanceState, evalOptions);
+            this.registerConsoleOutputListener(instanceState);
 
-        // Set up eval context with shell globals (db, ObjectId, ISODate, etc.)
-        const context = {};
-        instanceState.setCtx(context);
+            // Set up eval context with shell globals (db, ObjectId, ISODate, etc.)
+            const context = {};
+            instanceState.setCtx(context);
 
-        // Custom eval function using vm.runInContext for sandboxed execution
-        // eslint-disable-next-line @typescript-eslint/require-await
-        const customEvalFn = async (evalCode: string, ctx: object): Promise<unknown> => {
-            const vmContext = vm.isContext(ctx) ? ctx : vm.createContext(ctx);
-            return vm.runInContext(evalCode, vmContext) as unknown;
-        };
+            // Custom eval function using vm.runInContext for sandboxed execution
+            // eslint-disable-next-line @typescript-eslint/require-await
+            const customEvalFn = async (evalCode: string, ctx: object): Promise<unknown> => {
+                const vmContext = vm.isContext(ctx) ? ctx : vm.createContext(ctx);
+                return vm.runInContext(evalCode, vmContext) as unknown;
+            };
 
-        // Pre-select the target database (fresh context each time)
-        await evaluator.customEval(customEvalFn, `use(${JSON.stringify(databaseName)})`, context, 'playground');
+            // Pre-select the target database (fresh context each time)
+            await evaluator.customEval(customEvalFn, `use(${JSON.stringify(databaseName)})`, context, 'playground');
 
-        // Evaluate user code
-        const result = await evaluator.customEval(customEvalFn, code, context, 'playground');
-        const durationMs = Date.now() - startTime;
+            // Evaluate user code
+            const result = await evaluator.customEval(customEvalFn, code, context, 'playground');
+            const durationMs = Date.now() - startTime;
 
-        this.log('trace', `Evaluation complete (${durationMs}ms)`);
+            this.log('trace', `Evaluation complete (${durationMs}ms)`);
 
-        return this._resultTransformer.transform(
-            result as {
-                type: string | null;
-                printable: unknown;
-                source?: { namespace?: { db: string; collection: string } };
-            },
-            durationMs,
-        );
+            return this._resultTransformer.transform(
+                result as {
+                    type: string | null;
+                    printable: unknown;
+                    source?: { namespace?: { db: string; collection: string } };
+                },
+                durationMs,
+            );
+        } finally {
+            await instanceState.close();
+        }
     }
 
     /**
