@@ -32,6 +32,9 @@ export async function scanCollectionSchema(
         const client = await ClustersClient.getClient(clusterId);
         const collection = client.getMongoClient().db(databaseName).collection(collectionName);
 
+        // Clear existing schema data so a fresh scan replaces stale entries
+        SchemaStore.getInstance().clearSchema(clusterId, databaseName, collectionName);
+
         // Use $sample for random sampling when possible
         const docs = await collection.aggregate([{ $sample: { size: SCHEMA_SAMPLE_SIZE } }]).toArray();
 

@@ -28,6 +28,7 @@ const LIMIT_CALL_PATTERN = /\.limit\(\s*(\d+)\s*\)/g;
 export class PlaygroundDiagnostics implements vscode.Disposable {
     private readonly _diagnosticCollection: vscode.DiagnosticCollection;
     private readonly _disposables: vscode.Disposable[] = [];
+    private _debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
     constructor() {
         this._diagnosticCollection = vscode.languages.createDiagnosticCollection('documentdb-playground');
@@ -37,7 +38,7 @@ export class PlaygroundDiagnostics implements vscode.Disposable {
         this._disposables.push(
             vscode.workspace.onDidChangeTextDocument((e) => {
                 if (e.document.languageId === PLAYGROUND_LANGUAGE_ID) {
-                    this.analyzeDocument(e.document);
+                    this.debouncedAnalyze(e.document);
                 }
             }),
         );
@@ -84,6 +85,19 @@ export class PlaygroundDiagnostics implements vscode.Disposable {
                 this.analyzeDocument(doc);
             }
         }
+    }
+
+    /**
+     * Debounce document analysis to avoid O(n) regex scans on every keystroke.
+     */
+    private debouncedAnalyze(document: vscode.TextDocument): void {
+        if (this._debounceTimer) {
+            clearTimeout(this._debounceTimer);
+        }
+        this._debounceTimer = setTimeout(() => {
+            this._debounceTimer = undefined;
+            this.analyzeDocument(document);
+        }, 300);
     }
 
     /**
@@ -142,6 +156,9 @@ export class PlaygroundDiagnostics implements vscode.Disposable {
     }
 
     dispose(): void {
+        if (this._debounceTimer) {
+            clearTimeout(this._debounceTimer);
+        }
         for (const d of this._disposables) {
             d.dispose();
         }
