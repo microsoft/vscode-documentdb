@@ -258,10 +258,11 @@ function feedResultToSchemaStore(result: ExecutionResult, connection: Playground
  * Only performs `count` swaps instead of shuffling the entire array.
  */
 function randomSample<T>(array: T[], count: number): T[] {
+    const n = Math.min(count, array.length);
     const copy = [...array];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < n; i++) {
         const j = i + Math.floor(Math.random() * (copy.length - i));
         [copy[i], copy[j]] = [copy[j], copy[i]];
     }
-    return copy.slice(0, count);
+    return copy.slice(0, n);
 }
