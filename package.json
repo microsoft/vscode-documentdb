@@ -611,6 +611,12 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.showSchemaStoreStats",
         "title": "Show Schema Store Stats"
+      },
+      {
+        "//": "[Diagnostics] Show Worker Stats",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.showWorkerStats",
+        "title": "Show Worker Stats"
       }
     ],
     "submenus": [

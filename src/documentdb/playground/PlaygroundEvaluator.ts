@@ -66,6 +66,21 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         return this._lastEvalConsoleOutputCount;
     }
 
+    /** Worker state from the underlying WorkerSessionManager. */
+    get workerState(): string {
+        return this._workerManager.workerState;
+    }
+
+    /** Whether the worker is alive. */
+    get isAlive(): boolean {
+        return this._workerManager.isAlive;
+    }
+
+    /** Cluster ID the worker is connected to (if any). */
+    get workerClusterId(): string | undefined {
+        return this._workerManager.workerClusterId;
+    }
+
     constructor() {
         const logPrefix = '[Playground Worker]';
 

@@ -47,6 +47,20 @@ export function unregisterShellTerminal(terminal: vscode.Terminal): void {
 }
 
 /**
+ * Returns a snapshot of all registered shell terminals with their info.
+ * Used by the worker task manager debug command.
+ */
+export function getRegisteredShellTerminals(): ReadonlyArray<{
+    terminal: vscode.Terminal;
+    info: ShellTerminalInfo;
+}> {
+    return Array.from(shellTerminalRegistry.entries()).map(([terminal, provider]) => ({
+        terminal,
+        info: provider(),
+    }));
+}
+
+/**
  * The marker prefix for the "Open in Collection View" action line.
  *
  * The full action line format is:

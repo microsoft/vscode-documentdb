@@ -39,6 +39,14 @@ export function shutdownEvaluator(): void {
 }
 
 /**
+ * Returns the current playground evaluator instance (if any).
+ * Used by the worker task manager debug command to report stats.
+ */
+export function getPlaygroundEvaluator(): PlaygroundEvaluator | undefined {
+    return evaluator;
+}
+
+/**
  * Executes query playground code and displays the result in a read-only side panel.
  * Used by both `runAll` and `runSelected` commands.
  */

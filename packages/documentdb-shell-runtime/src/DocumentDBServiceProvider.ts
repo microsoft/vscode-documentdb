@@ -56,4 +56,17 @@ export class DocumentDBServiceProvider extends NodeDriverServiceProvider {
         });
         return { serviceProvider, bus };
     }
+
+    /**
+     * Override close() to NOT close the underlying MongoClient.
+     *
+     * The caller (worker thread) owns the MongoClient lifecycle. The base
+     * class's close() calls `mongoClient.close()`, which would break
+     * subsequent evaluations in fresh-context mode (playground) where
+     * `ShellInstanceState.close()` cascades through the service provider.
+     */
+    override async close(): Promise<void> {
+        // Intentionally empty — the MongoClient is owned by the worker thread
+        // and will be closed when the worker shuts down.
+    }
 }

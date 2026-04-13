@@ -33,7 +33,13 @@ The runtime supports two modes via the `persistent` option:
 ## Usage
 
 ```typescript
+import { MongoClient } from 'mongodb';
 import { DocumentDBShellRuntime } from '@microsoft/documentdb-vscode-shell-runtime';
+
+// The caller owns the MongoClient — create, connect, and close it yourself.
+// The runtime never opens or closes the connection.
+const mongoClient = new MongoClient(connectionString);
+await mongoClient.connect();
 
 // Fresh context (playground mode — default)
 const playground = new DocumentDBShellRuntime(mongoClient, {
@@ -48,7 +54,11 @@ const shell = new DocumentDBShellRuntime(mongoClient, callbacks, {
 await shell.evaluate('const x = 1', 'myDatabase');
 await shell.evaluate('x + 1', 'myDatabase'); // returns 2 — variable survived
 
+// Dispose the runtime when done — this does NOT close the MongoClient.
 shell.dispose();
-```
 
-The caller owns the `MongoClient` lifecycle — the runtime only uses it.
+// Close the MongoClient when the session is over.
+// The runtime intentionally never closes it, so the same client
+// can be reused across multiple evaluate() calls and runtime instances.
+await mongoClient.close();
+```
