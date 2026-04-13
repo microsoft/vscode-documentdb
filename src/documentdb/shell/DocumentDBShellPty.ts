@@ -212,11 +212,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // Re-enable input after successful initialization
             this._inputHandler.setEnabled(true);
 
-            // Update terminal tab name to include the user (if known)
-            if (metadata.username) {
-                this._username = metadata.username;
-                this.updateTerminalTitle();
-            }
+            // Cache the username when available, but always refresh the tab
+            // title so database changes remain visible for all auth modes.
+            this._username = metadata.username;
+            this.updateTerminalTitle();
 
             this.showPrompt();
         } catch (error: unknown) {
@@ -393,6 +392,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     this._connectionInfo.clusterDisplayName,
                     this._currentDatabase,
                 ),
+            );
+        } else {
+            this._nameEmitter.fire(
+                l10n.t('DocumentDB: {0}/{1}', this._connectionInfo.clusterDisplayName, this._currentDatabase),
             );
         }
     }

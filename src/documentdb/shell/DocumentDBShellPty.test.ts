@@ -36,6 +36,7 @@ describe('DocumentDBShellPty', () => {
     let pty: DocumentDBShellPty;
     let written: string;
     let closeCode: number | void | undefined;
+    let terminalName: string | undefined;
 
     const defaultOptions: DocumentDBShellPtyOptions = {
         connectionInfo: {
@@ -49,6 +50,7 @@ describe('DocumentDBShellPty', () => {
         jest.clearAllMocks();
         written = '';
         closeCode = undefined;
+        terminalName = undefined;
 
         // Mock settings
         jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
@@ -71,6 +73,9 @@ describe('DocumentDBShellPty', () => {
         });
         pty.onDidClose((code) => {
             closeCode = code;
+        });
+        pty.onDidChangeName((name) => {
+            terminalName = name;
         });
     });
 
@@ -259,6 +264,41 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
 
             expect(written).toContain('newdb> ');
+        });
+
+        it('should update terminal title after use <db> for Entra ID sessions', async () => {
+            mockInitialize.mockResolvedValue({
+                host: 'test-host.documents.azure.com:10255',
+                authMechanism: 'MicrosoftEntraID',
+                isEmulator: false,
+                username: undefined,
+            });
+
+            pty = new DocumentDBShellPty(defaultOptions);
+            pty.onDidWrite((data) => {
+                written += data;
+            });
+            pty.onDidClose((code) => {
+                closeCode = code;
+            });
+            pty.onDidChangeName((name) => {
+                terminalName = name;
+            });
+
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            mockEvaluate.mockResolvedValue({
+                type: null,
+                printable: JSON.stringify('switched to db newdb'),
+                durationMs: 1,
+            });
+
+            pty.handleInput('use newdb');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(terminalName).toBe('DocumentDB: TestCluster/newdb');
         });
     });
 
