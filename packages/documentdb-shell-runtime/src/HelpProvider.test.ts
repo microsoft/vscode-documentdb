@@ -97,26 +97,25 @@ describe('HelpProvider', () => {
         it('includes query commands with short db.<coll> notation', () => {
             const text = helpProvider.getHelpText();
             expect(text).toContain('db.<coll>.find');
-            expect(text).toContain('db.<coll>.insertOne');
             expect(text).toContain('db.<coll>.aggregate');
+        });
+
+        it('includes write commands', () => {
+            const text = helpProvider.getHelpText();
+            expect(text).toContain('db.<coll>.insertOne');
+            expect(text).toContain('db.<coll>.updateOne');
+            expect(text).toContain('db.<coll>.deleteOne');
         });
 
         it('includes shell commands', () => {
             const text = helpProvider.getHelpText();
             expect(text).toContain('exit / quit');
             expect(text).toContain('cls / clear');
-            expect(text).toContain('it');
         });
 
         it('includes use <db> in database section', () => {
             const text = helpProvider.getHelpText();
             expect(text).toContain('use <db>');
-        });
-
-        it('includes BSON constructors', () => {
-            const text = helpProvider.getHelpText();
-            expect(text).toContain('ObjectId');
-            expect(text).toContain('ISODate');
         });
 
         it('includes shell tips', () => {

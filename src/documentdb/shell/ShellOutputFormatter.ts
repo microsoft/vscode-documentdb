@@ -263,8 +263,10 @@ export class ShellOutputFormatter {
                 }
 
                 // Command entries: "  command(padded)     description"
-                // Detect two-column layout: starts with 2+ spaces, has a command, then whitespace gap + description
-                const entryMatch = /^( {2})(\S.*?\S)( {2,})(.+)$/.exec(line);
+                // The command column may itself contain internal double-spaces (e.g. ".limit(n)  .skip(n)"),
+                // so we use a greedy match for the command and non-greedy for the gap so the split
+                // happens at the LAST run of 2+ spaces before the description, not the first.
+                const entryMatch = /^( {2})(\S.*\S)( {2,})(\S.+)$/.exec(line);
                 if (entryMatch) {
                     const [, indent, command, gap, description] = entryMatch;
                     return `${indent}${ANSI.yellow}${command}${ANSI.reset}${gap}${ANSI.gray}${description}${ANSI.reset}`;
