@@ -1,6 +1,6 @@
 {
   "name": "vscode-documentdb",
-  "version": "0.7.3",
+  "version": "0.8.0-beta",
   "releaseNotesUrl": "https://github.com/microsoft/vscode-documentdb/discussions/489",
   "aiKey": "0c6ae279ed8443289764825290e4f9e2-1a736e7c-1324-4338-be46-fc2a58ae4d14-7255",
   "publisher": "ms-azuretools",
@@ -46,6 +46,9 @@
     "type": "git",
     "url": "https://github.com/microsoft/vscode-documentdb"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "main": "./main",
   "l10n": "./l10n",
   "activationEvents": [
@@ -55,8 +58,9 @@
     "onUri"
   ],
   "scripts": {
+    "prebuild": "npm run build --workspaces --if-present",
     "build": "tsc",
-    "clean": "git clean -dfx",
+    "clean": "rimraf out dist coverage && npm run clean --workspaces --if-present",
     "compile": "tsc -watch",
     "package": "run-script-os",
     "package:win32": "npm run webpack-prod && cd dist && npm pkg delete \"scripts.vscode:prepublish\" && npx vsce package --no-dependencies --out ../%npm_package_name%-%npm_package_version%.vsix",
@@ -66,12 +70,12 @@
     "package-prerelease:default": "npm run webpack-prod && cd dist && npm pkg delete \"scripts.vscode:prepublish\" && npx vsce package --pre-release --no-dependencies --out ../${npm_package_name}-${npm_package_version}-pre-release.vsix",
     "lint": "eslint --quiet .",
     "lint-fix": "eslint . --fix",
-    "prettier": "prettier -c \"(src|test|l10n|grammar|docs)/**/*.@(js|ts|jsx|tsx|json)\" \"./*.@(js|ts|jsx|tsx|json)\"",
-    "prettier-fix": "prettier -w \"(src|test|l10n|grammar|docs)/**/*.@(js|ts|jsx|tsx|json)\" \"./*.@(js|ts|jsx|tsx|json)\"",
+    "prettier": "prettier -c \"(src|test|l10n|grammar|docs|packages)/**/*.@(js|ts|jsx|tsx|json)\" \"./*.@(js|ts|jsx|tsx|json)\"",
+    "prettier-fix": "prettier -w \"(src|test|l10n|grammar|docs|packages)/**/*.@(js|ts|jsx|tsx|json)\" \"./*.@(js|ts|jsx|tsx|json)\"",
     "pretest": "npm run build",
     "test": "vscode-test",
+    "prejesttest": "npm run build --workspaces --if-present",
     "jesttest": "jest",
-    "update-grammar": "antlr4ts -visitor ./grammar/mongo.g4 -o src/documentdb/grammar",
     "webpack-dev": "rimraf ./dist && npm run webpack-dev-ext && npm run webpack-dev-wv",
     "webpack-prod": "rimraf ./dist && npm run webpack-prod-ext && npm run webpack-prod-wv",
     "webpack-dev-ext": "webpack --mode development --config ./webpack.config.ext.js",
@@ -165,15 +169,25 @@
     "@microsoft/vscode-azureresources-api": "~2.5.0",
     "@monaco-editor/react": "~4.7.0",
     "@mongodb-js/explain-plan-helper": "1.4.24",
+    "@mongodb-js/shell-bson-parser": "^1.5.6",
+    "@mongosh/errors": "^2.4.6",
+    "@mongosh/service-provider-core": "^5.0.3",
+    "@mongosh/service-provider-node-driver": "^5.0.6",
+    "@mongosh/shell-api": "^5.1.4",
+    "@mongosh/shell-evaluator": "^5.1.4",
     "@trpc/client": "~11.10.0",
     "@trpc/server": "~11.10.0",
+    "@vscode-documentdb/documentdb-constants": "*",
+    "@microsoft/documentdb-vscode-shell-runtime": "*",
+    "@vscode-documentdb/schema-analyzer": "*",
     "@vscode/l10n": "~0.0.18",
-    "antlr4ts": "^0.5.0-alpha.4",
-    "bson": "~7.0.0",
+    "acorn": "^8.16.0",
+    "acorn-walk": "^8.3.5",
+    "bson": "^7.2.0",
     "denque": "~2.1.0",
     "es-toolkit": "~1.45.1",
     "monaco-editor": "~0.52.2",
-    "mongodb": "~7.0.0",
+    "mongodb": "^7.1.0",
     "mongodb-connection-string-url": "~3.0.2",
     "react-hotkeys-hook": "~5.2.1",
     "react-markdown": "^10.1.0",
@@ -194,6 +208,15 @@
   },
   "extensionDependencies": [],
   "contributes": {
+    "configurationDefaults": {
+      "[documentdb-playground]": {
+        "editor.quickSuggestions": {
+          "strings": true,
+          "other": true,
+          "comments": false
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -237,25 +260,58 @@
     ],
     "languages": [
       {
-        "id": "vscode-documentdb-scrapbook-language",
-        "aliases": [
-          "DocumentDB Scrapbook"
-        ],
+        "id": "documentdb-playground",
         "extensions": [
-          ".vscode-documentdb-scrapbook"
+          ".documentdb.js"
         ],
-        "configuration": "./grammar/configuration.json"
+        "aliases": [
+          "Query Playground"
+        ],
+        "icon": {
+          "light": "./resources/icons/playground-light.svg",
+          "dark": "./resources/icons/playground-dark.svg"
+        },
+        "configuration": "./playground-language-configuration.json"
+      },
+      {
+        "id": "documentdb-playground-result",
+        "aliases": [
+          "Query Playground Result"
+        ],
+        "icon": {
+          "light": "./resources/icons/playground-result-light.svg",
+          "dark": "./resources/icons/playground-result-dark.svg"
+        }
       }
     ],
     "grammars": [
       {
-        "language": "vscode-documentdb-scrapbook-language",
-        "scopeName": "source.mongo.js",
-        "path": "./grammar/JavaScript.tmLanguage.json"
+        "language": "documentdb-playground",
+        "scopeName": "source.documentdb-playground",
+        "path": "./syntaxes/documentdb-playground.tmGrammar.json"
       },
       {
-        "scopeName": "source.mongo.js.regexp",
-        "path": "./grammar/Regular Expressions (JavaScript).tmLanguage"
+        "language": "documentdb-playground-result",
+        "scopeName": "source.documentdb-playground-result",
+        "path": "./syntaxes/documentdb-playground-result.tmGrammar.json"
+      }
+    ],
+    "resourceLabelFormatters": [
+      {
+        "scheme": "documentdb-playground-result",
+        "formatting": {
+          "label": "Query Playground Result",
+          "separator": "/"
+        }
+      }
+    ],
+    "typescriptServerPlugins": [
+      {
+        "name": "documentdb-playground-ts-plugin",
+        "languages": [
+          "documentdb-playground"
+        ],
+        "enableForWorkspaceTypeScriptVersions": true
       }
     ],
     "commands": [
@@ -426,31 +482,6 @@
         "title": "Create Database…"
       },
       {
-        "//": "Scrapbook: Connect Database",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scrapbook.connect",
-        "title": "Connect to this database"
-      },
-      {
-        "//": "Scrapbook: Execute All Commands",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
-        "title": "Execute All Commands"
-      },
-      {
-        "//": "Scrapbook: Execute Command",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scrapbook.executeCommand",
-        "title": "Execute Command"
-      },
-      {
-        "//": "Scrapbook: New Scrapbook",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.scrapbook.new",
-        "title": "New DocumentDB Scrapbook",
-        "icon": "$(new-file)"
-      },
-      {
         "//": "Delete Collection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.dropCollection",
@@ -511,16 +542,18 @@
         "title": "Create Document…"
       },
       {
-        "//": "Launch Shell",
+        "//": "Open Interactive Shell",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.launchShell",
-        "title": "Launch Shell"
+        "command": "vscode-documentdb.command.openInteractiveShell",
+        "title": "Open Interactive Shell",
+        "icon": "$(terminal)"
       },
       {
         "//": "Open Container View",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open",
-        "title": "Open Collection"
+        "title": "Open Collection",
+        "icon": "$(files)"
       },
       {
         "//": "Copy Collection",
@@ -533,43 +566,60 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.pasteCollection",
         "title": "Paste Collection…"
+      },
+      {
+        "//": "[Query Playground] New Query Playground",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.new",
+        "title": "New Query Playground",
+        "icon": "$(keyboard)"
+      },
+      {
+        "//": "[Query Playground] Connect Query Playground to Database",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.connect",
+        "title": "Connect Query Playground to this database"
+      },
+      {
+        "//": "[Query Playground] Run All",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.runAll",
+        "title": "Query Playground: Run All",
+        "icon": "$(run-all)"
+      },
+      {
+        "//": "[Query Playground] Run Selected / Current Block",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.runSelected",
+        "title": "Query Playground: Run Selected",
+        "icon": "$(play)"
+      },
+      {
+        "//": "[Query Playground] Scan Collection Schema for field completions",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.scanCollectionSchema",
+        "title": "Query Playground: Scan Collection Schema"
+      },
+      {
+        "//": "[Diagnostics] Clear Schema Cache",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.clearSchemaCache",
+        "title": "Clear Schema Cache"
+      },
+      {
+        "//": "[Diagnostics] Show Schema Store Stats",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.showSchemaStoreStats",
+        "title": "Show Schema Store Stats"
       }
     ],
     "submenus": [
       {
-        "id": "documentDB.submenus.mongo.database.scrapbook",
-        "label": "DocumentDB Scrapbook"
-      },
-      {
-        "id": "documentDB.submenus.mongo.collection.scrapbook",
-        "label": "DocumentDB Scrapbook"
+        "id": "documentDB.submenus.playground",
+        "label": "Query Playground"
       }
     ],
     "menus": {
-      "documentDB.submenus.mongo.database.scrapbook": [
-        {
-          "//": "[Database] Scrapbook: New Scrapbook",
-          "command": "vscode-documentdb.command.scrapbook.new",
-          "group": "1@1"
-        },
-        {
-          "//": "[Database] Scrapbook: Connect",
-          "command": "vscode-documentdb.command.scrapbook.connect",
-          "group": "1@2"
-        }
-      ],
-      "documentDB.submenus.mongo.collection.scrapbook": [
-        {
-          "//": "[Collection] Mongo DB|Cluster Scrapbook New",
-          "command": "vscode-documentdb.command.scrapbook.new",
-          "group": "1@1"
-        },
-        {
-          "//": "[Collection] Scrapbook / Connect",
-          "command": "vscode-documentdb.command.scrapbook.connect",
-          "group": "1@2"
-        }
-      ],
       "view/title": [
         {
           "command": "vscode-documentdb.command.connectionsView.refresh",
@@ -597,16 +647,7 @@
           "group": "navigation@5"
         }
       ],
-      "editor/context": [
-        {
-          "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
-          "when": "resourceLangId==mongo"
-        },
-        {
-          "command": "vscode-documentdb.command.scrapbook.executeCommand",
-          "when": "resourceLangId==mongo"
-        }
-      ],
+      "editor/context": [],
       "editor/title": [],
       "view/item/context": [
         {
@@ -734,8 +775,8 @@
           "group": "2@1"
         },
         {
-          "//": "[Account] Mongo DB|Cluster Launch Shell",
-          "command": "vscode-documentdb.command.launchShell",
+          "//": "[Account] Open Interactive Shell",
+          "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "5@1"
         },
@@ -758,16 +799,22 @@
           "group": "1@2"
         },
         {
-          "//": "[Database] Mongo DB|Cluster Launch Shell",
-          "command": "vscode-documentdb.command.launchShell",
+          "//": "[Database] Open Interactive Shell",
+          "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "3@1"
         },
         {
-          "//": "[Database] Mongo DB|Cluster Scrapbook Submenu",
-          "submenu": "documentDB.submenus.mongo.database.scrapbook",
+          "//": "[Database] Open Interactive Shell (inline)",
+          "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "3@2"
+          "group": "inline@1"
+        },
+        {
+          "//": "[Database] New Query Playground (inline)",
+          "command": "vscode-documentdb.command.playground.new",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "inline@2"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Open collection",
@@ -824,15 +871,33 @@
           "group": "4@1"
         },
         {
-          "//": "[Collection] Launch shell",
-          "command": "vscode-documentdb.command.launchShell",
+          "//": "[Collection] Open Interactive Shell",
+          "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "5@1"
         },
         {
-          "//": "[Collection] Mongo DB|Cluster Scrapbook Submenu",
-          "submenu": "documentDB.submenus.mongo.collection.scrapbook",
+          "//": "[Collection] Open Collection (inline)",
+          "command": "vscode-documentdb.command.containerView.open",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "inline@1"
+        },
+        {
+          "//": "[Collection] Open Interactive Shell (inline)",
+          "command": "vscode-documentdb.command.openInteractiveShell",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "inline@2"
+        },
+        {
+          "//": "[Collection] New Query Playground (inline)",
+          "command": "vscode-documentdb.command.playground.new",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "inline@3"
+        },
+        {
+          "//": "[Database/Collection] Query Playground submenu",
+          "submenu": "documentDB.submenus.playground",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "5@2"
         },
         {
@@ -864,6 +929,16 @@
           "command": "vscode-documentdb.command.pasteCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "3@4"
+        }
+      ],
+      "documentDB.submenus.playground": [
+        {
+          "command": "vscode-documentdb.command.playground.new",
+          "group": "1@1"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.connect",
+          "group": "1@2"
         }
       ],
       "explorer/context": [],
@@ -977,7 +1052,7 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.launchShell",
+          "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "never"
         },
         {
@@ -985,35 +1060,31 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.scrapbook.new",
+          "command": "vscode-documentdb.command.playground.connect",
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.scrapbook.connect",
+          "command": "vscode-documentdb.command.playground.runAll",
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
-          "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.scrapbook.executeCommand",
+          "command": "vscode-documentdb.command.playground.runSelected",
           "when": "never"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "vscode-documentdb.command.scrapbook.executeCommand",
-        "key": "ctrl+shift+'",
-        "mac": "cmd+shift+'",
-        "when": "editorLangId == 'vscode-documentdb-scrapbook-language' && editorTextFocus"
+        "command": "vscode-documentdb.command.playground.runAll",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorLangId == 'documentdb-playground' && editorTextFocus"
       },
       {
-        "command": "vscode-documentdb.command.scrapbook.executeAllCommands",
-        "key": "ctrl+shift+;",
-        "mac": "cmd+shift+;",
-        "when": "editorLangId == 'vscode-documentdb-scrapbook-language' && editorTextFocus"
+        "command": "vscode-documentdb.command.playground.runSelected",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorLangId == 'documentdb-playground' && editorTextFocus"
       }
     ],
     "configuration": [
@@ -1072,33 +1143,32 @@
             "default": 10260,
             "description": "Port to use when connecting to DocumentDB Local instance"
           },
-          "documentDB.mongoShell.path": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Full path to folder and executable to start the Mongo shell, needed by some DocumentDB Scrapbook commands. The default is to search in the system path for 'mongosh'.",
-            "default": null
+          "documentDB.shell.batchSize": {
+            "type": "integer",
+            "description": "Number of documents to display per cursor iteration in the Query Playground and Interactive Shell. Applies to find(), aggregate(), and other cursor-returning operations.",
+            "default": 50,
+            "minimum": 1
           },
-          "documentDB.mongoShell.args": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Arguments to pass when starting the Mongo shell.",
-            "default": [
-              "--quiet"
-            ]
-          },
-          "documentDB.mongoShell.timeout": {
+          "documentDB.shell.timeout": {
             "type": "number",
-            "description": "The duration allowed (in seconds) for the Mongo shell to execute a command. Default value is 30 seconds.",
+            "description": "The duration allowed (in seconds) for a query to execute in the Query Playground or Interactive Shell. Default value is 30 seconds.",
             "default": 30
           },
-          "documentDB.mongoShell.batchSize": {
+          "documentDB.shell.initTimeout": {
             "type": "number",
-            "description": "The batch size to be used when querying working with the shell.",
-            "default": 50
+            "description": "Maximum time (in seconds) to wait for the Interactive Shell to connect during initialization. Default value is 60 seconds.",
+            "default": 60,
+            "minimum": 5
+          },
+          "documentDB.shell.display.colorOutput": {
+            "type": "boolean",
+            "description": "Enable ANSI color-coded JSON output in the Interactive Shell. Disable for accessibility (screen readers) or piped output.",
+            "default": true
+          },
+          "documentDB.shell.display.autocompletion": {
+            "type": "boolean",
+            "description": "Enable autocompletion in the Interactive Shell (when available). Reserved for future use.",
+            "default": true
           },
           "documentDB.collectionView.defaultPageSize": {
             "type": "number",

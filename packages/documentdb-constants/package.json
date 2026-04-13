@@ -1,0 +1,25 @@
+{
+  "name": "@vscode-documentdb/documentdb-constants",
+  "version": "1.0.0",
+  "description": "Static operator metadata for DocumentDB-supported operators, stages, accumulators, and BSON constructors",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p . && tsc -p tsconfig.scripts.json --noEmit",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "test": "jest --config jest.config.js",
+    "prettier-fix": "prettier -w \"(scripts|src)/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\"",
+    "scrape": "ts-node scripts/scrape-operator-docs.ts && prettier --write resources/scraped/operator-reference.md",
+    "generate": "ts-node scripts/generate-from-reference.ts",
+    "evaluate": "ts-node scripts/evaluate-overrides.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode-documentdb",
+    "directory": "packages/documentdb-constants"
+  },
+  "license": "MIT"
+}

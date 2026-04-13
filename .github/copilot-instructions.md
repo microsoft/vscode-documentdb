@@ -1,6 +1,6 @@
 # GitHub Copilot Instructions for vscode-documentdb
 
-VS Code Extension for Azure Cosmos DB and MongoDB. TypeScript (strict mode), React webviews, Jest testing.
+VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mode), React webviews, Jest testing.
 
 ## Critical Build Commands
 
@@ -31,6 +31,12 @@ Before finishing work on a PR, agents **must** run the following steps in order:
    ```
 
 > ⚠️ **An agent must not finish or terminate until all three steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
+
+## Git Safety
+
+- **Never use `git add -f`** to force-add files. If `git add` refuses a file, it is likely in `.gitignore` for a reason (e.g., `docs/plan/`, `docs/analysis/`, build outputs). Do NOT override this with `-f`.
+- When `git add` warns that a path is ignored, **stop and inform the user** instead of force-adding.
+- Files in `docs/plan/` and `docs/analysis/` are **local planning documents** that must not be committed to the repository.
 
 ## Project Structure
 
@@ -177,6 +183,32 @@ For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replace
 > 💡 **Extensibility**: If adding a non-Azure discovery source (e.g., AWS, GCP), consider creating a new model type (e.g., `AwsClusterModel`) extending `BaseClusterModel` with source-specific metadata.
 
 See `src/tree/models/BaseClusterModel.ts` and `docs/analysis/08-cluster-model-simplification-plan.md` for details.
+
+## Terminology
+
+This is a **DocumentDB** extension that uses the **MongoDB-compatible wire protocol**.
+
+- Use **"DocumentDB"** when referring to the database service itself.
+- Use **"MongoDB API"** or **"DocumentDB API"** when referring to the wire protocol, query language, or API compatibility layer.
+- **Never use "MongoDB" alone** as a product name in code, comments, docs, or user-facing strings.
+
+| ✅ Do                                                | ❌ Don't                         |
+| ---------------------------------------------------- | -------------------------------- |
+| `// Query operators supported by the DocumentDB API` | `// MongoDB query operators`     |
+| `// BSON types per the MongoDB API spec`             | `// Uses MongoDB's $match stage` |
+| `documentdbQuery` (variable name)                    | `mongoQuery`                     |
+
+This applies to: code comments, JSDoc/TSDoc, naming (prefer `documentdb` prefix), user-facing strings, docs, and test descriptions.
+
+## TDD Contract Tests
+
+Test suites prefixed with `TDD:` (e.g., `describe('TDD: Completion Behavior', ...)`) are **behavior contracts** written before the implementation. If a `TDD:` test fails after a code change:
+
+1. **Do NOT automatically fix the test.**
+2. **Stop and ask the user** whether the behavior change is intentional.
+3. The user decides: update the contract (test) or fix the implementation.
+
+This applies to any test whose name starts with `TDD:`, regardless of folder location.
 
 ## Additional Patterns
 

@@ -44,13 +44,9 @@ Your feedback, contributions, and ideas shape the future of the extension.
 
 # Prerequisites
 
-- **Mongo Shell Requirement (Optional)**: Some advanced commands in the Mongo [scrapbook](#mongo-scrapbooks), as well as use of the MongoDB shell, require installing [MongoDB shell](https://docs.mongodb.com/manual/installation/).
-
 ## Known Issues
 
 Here are some known issues and limitations to be aware of when using the DocumentDB VS Code extension:
-
-- **Escaped Characters in Scrapbooks**: Scrapbook support for escaped characters is preliminary. Use double escaping for newlines (`\\n` instead of `\n`).
 
 <!-- region exclude-from-marketplace -->
 
