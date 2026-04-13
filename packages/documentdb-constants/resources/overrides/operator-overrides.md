@@ -319,3 +319,27 @@
 ### $natural
 
 - **Standalone:** false
+
+## Field Update Operators
+
+### $min
+
+- **Description:** Updates the field only if the specified value is less than the existing field value.
+
+### $max
+
+- **Description:** Updates the field only if the specified value is greater than the existing field value.
+
+### $unset
+
+- **Description:** Removes the specified field from a document.
+
+## Array Update Operators
+
+### $slice
+
+- **Description:** Limits the number of elements in an array during a `$push` operation.
+
+### $sort
+
+- **Description:** Sorts the elements of an array during a `$push` operation.
