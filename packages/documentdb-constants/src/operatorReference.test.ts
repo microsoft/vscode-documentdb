@@ -104,11 +104,23 @@ describe('operator reference verification', () => {
     });
 
     test('descriptions match the dump (detect drift)', () => {
+        // Build a set of operator+category pairs that have description overrides.
+        // These are intentionally different from the raw dump and are validated
+        // separately by the "merged dump + overrides" test suite below.
+        const overriddenDescriptions = new Set<string>(
+            overrideOperators.filter((ov) => ov.description).map((ov) => `${ov.operator}|${ov.category}`),
+        );
+
         const mismatches: string[] = [];
 
         for (const ref of referenceOperators) {
             if (!ref.description) {
                 continue; // some operators have empty descriptions (missing upstream docs)
+            }
+
+            // Skip operators whose descriptions are intentionally overridden
+            if (overriddenDescriptions.has(`${ref.operator}|${ref.category}`)) {
+                continue;
             }
 
             // Find implementation entry matching this operator + category's meta

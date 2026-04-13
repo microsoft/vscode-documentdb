@@ -40,14 +40,14 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
     {
         value: '$min',
         meta: META_UPDATE_FIELD,
-        description: 'Retrieves the minimum value for a specified field',
+        description: 'Updates the field only if the specified value is less than the existing field value.',
         snippet: '{ $min: { "${1:field}": ${2:value} } }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$min', // inferred from another category
     },
     {
         value: '$max',
         meta: META_UPDATE_FIELD,
-        description: 'The $max operator returns the maximum value from a set of input values.',
+        description: 'Updates the field only if the specified value is greater than the existing field value.',
         snippet: '{ $max: { "${1:field}": ${2:value} } }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$max', // inferred from another category
     },
@@ -83,7 +83,7 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
     {
         value: '$unset',
         meta: META_UPDATE_FIELD,
-        description: 'The $unset stage in the aggregation pipeline is used to remove specified fields from documents.',
+        description: 'Removes the specified field from a document.',
         snippet: '{ $unset: { "${1:field}": ${2:value} } }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$unset', // inferred from another category
     },
@@ -166,15 +166,14 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
     {
         value: '$slice',
         meta: META_UPDATE_ARRAY,
-        description: 'The $slice operator returns a subset of an array from any element onwards in the array.',
+        description: 'Limits the number of elements in an array during a `$push` operation.',
         snippet: '{ $slice: ${1:number} }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$slice', // inferred from another category
     },
     {
         value: '$sort',
         meta: META_UPDATE_ARRAY,
-        description:
-            'The $sort stage in the aggregation pipeline is used to order the documents in the pipeline by a specified field or fields.',
+        description: 'Sorts the elements of an array during a `$push` operation.',
         snippet: '{ $sort: { "${1:field}": ${2:1} } }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$sort', // inferred from another category
     },
