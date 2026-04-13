@@ -886,13 +886,13 @@
           "//": "[Collection] Open Interactive Shell (inline)",
           "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "inline@2"
+          "group": "inline@3"
         },
         {
           "//": "[Collection] New Query Playground (inline)",
           "command": "vscode-documentdb.command.playground.new",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "inline@3"
+          "group": "inline@2"
         },
         {
           "//": "[Database/Collection] Query Playground submenu",
