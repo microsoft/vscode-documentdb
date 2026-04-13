@@ -140,6 +140,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     close(): void {
         this._closed = true;
+        this._spinner?.stop();
+        this._spinner = undefined;
         this._sessionManager.dispose();
         this._writeEmitter.dispose();
         this._closeEmitter.dispose();

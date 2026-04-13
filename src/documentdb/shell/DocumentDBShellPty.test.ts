@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
+import { ShellSpinner } from './ShellSpinner';
 
 // Mock ShellSessionManager
 const mockInitialize = jest.fn().mockResolvedValue({
@@ -331,6 +332,31 @@ describe('DocumentDBShellPty', () => {
             pty.open(undefined);
             pty.close();
             expect(mockDispose).toHaveBeenCalled();
+        });
+
+        it('should stop the spinner when closing during initialization', async () => {
+            let resolveInit!: (value: unknown) => void;
+            mockInitialize.mockReturnValue(
+                new Promise((resolve) => {
+                    resolveInit = resolve;
+                }),
+            );
+
+            const stopSpy = jest.spyOn(ShellSpinner.prototype, 'stop');
+
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            const callsBeforeClose = stopSpy.mock.calls.length;
+            pty.close();
+
+            expect(stopSpy).toHaveBeenCalledTimes(callsBeforeClose + 1);
+
+            resolveInit({
+                host: 'test-host.documents.azure.com:10255',
+                authMechanism: 'NativeAuth',
+                isEmulator: false,
+            });
         });
     });
 
