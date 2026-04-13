@@ -247,5 +247,41 @@ describe('ShellOutputFormatter', () => {
             const output = formatter.formatResult(result);
             expect(output).toContain('Available commands');
         });
+
+        it('should colorize section headers with bold cyan when color enabled', () => {
+            const helpText = '# Query\n  db.find({})                             Find documents';
+            const result = makeResult({
+                type: 'Help',
+                printable: EJSON.stringify(helpText, { relaxed: false }),
+            });
+            const output = formatter.formatResult(result);
+            // Header should be bold+cyan
+            expect(output).toContain('\x1b[1m\x1b[36mQuery\x1b[0m');
+        });
+
+        it('should colorize command entries with yellow command and gray description', () => {
+            const helpText = '  db.find({})                             Find documents';
+            const result = makeResult({
+                type: 'Help',
+                printable: EJSON.stringify(helpText, { relaxed: false }),
+            });
+            const output = formatter.formatResult(result);
+            expect(output).toContain('\x1b[33mdb.find({})');
+            expect(output).toContain('\x1b[90mFind documents');
+        });
+
+        it('should not colorize help text when color is disabled', () => {
+            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: jest.fn(() => false),
+            } as unknown as vscode.WorkspaceConfiguration);
+
+            const helpText = '# Query\n  db.find({})                             Find documents';
+            const result = makeResult({
+                type: 'Help',
+                printable: EJSON.stringify(helpText, { relaxed: false }),
+            });
+            const output = formatter.formatResult(result);
+            expect(output).not.toContain('\x1b[');
+        });
     });
 });

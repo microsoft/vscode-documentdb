@@ -82,36 +82,47 @@ describe('HelpProvider', () => {
             helpProvider = new HelpProvider('shell');
         });
 
-        it('includes Interactive Shell header', () => {
+        it('includes DocumentDB Shell header', () => {
             const text = helpProvider.getHelpText();
-            expect(text).toContain('Interactive Shell');
+            expect(text).toContain('DocumentDB Shell');
         });
 
-        it('includes shared sections', () => {
+        it('uses compact format with section headers', () => {
             const text = helpProvider.getHelpText();
-            expect(text).toContain('db.getCollection');
-            expect(text).toContain('.find(');
-            expect(text).toContain('.insertOne(');
-            expect(text).toContain('show dbs');
-            expect(text).toContain('ObjectId');
+            expect(text).toContain('# Query');
+            expect(text).toContain('# Write');
+            expect(text).toContain('# Shell');
         });
 
-        it('includes shell commands section', () => {
+        it('includes query commands with short db.<coll> notation', () => {
+            const text = helpProvider.getHelpText();
+            expect(text).toContain('db.<coll>.find');
+            expect(text).toContain('db.<coll>.insertOne');
+            expect(text).toContain('db.<coll>.aggregate');
+        });
+
+        it('includes shell commands', () => {
             const text = helpProvider.getHelpText();
             expect(text).toContain('exit / quit');
             expect(text).toContain('cls / clear');
             expect(text).toContain('it');
         });
 
-        it('includes use <db> in database commands', () => {
+        it('includes use <db> in database section', () => {
             const text = helpProvider.getHelpText();
             expect(text).toContain('use <db>');
         });
 
-        it('includes shell-specific tips', () => {
+        it('includes BSON constructors', () => {
             const text = helpProvider.getHelpText();
-            expect(text).toContain('Variables persist across commands');
-            expect(text).toContain('console.log() output appears inline');
+            expect(text).toContain('ObjectId');
+            expect(text).toContain('ISODate');
+        });
+
+        it('includes shell tips', () => {
+            const text = helpProvider.getHelpText();
+            expect(text).toContain('Variables persist');
+            expect(text).toContain('console.log()');
         });
 
         it('does NOT include keyboard shortcuts', () => {
@@ -120,7 +131,7 @@ describe('HelpProvider', () => {
             expect(text).not.toContain('Run entire file');
         });
 
-        it('does NOT include playground-specific tips', () => {
+        it('does NOT include playground-specific content', () => {
             const text = helpProvider.getHelpText();
             expect(text).not.toContain('Separate code blocks with blank lines');
             expect(text).not.toContain('Playground Output');

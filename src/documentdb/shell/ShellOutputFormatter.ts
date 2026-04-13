@@ -220,17 +220,64 @@ export class ShellOutputFormatter {
 
     // ─── Private: Help formatting ────────────────────────────────────────────
 
+    /**
+     * Format help text for terminal display.
+     *
+     * Shell help uses a structured format:
+     * - Lines starting with `# ` are section headers → rendered bold (+ cyan when color enabled)
+     * - Lines starting with `  ` contain a padded command/description pair → command in yellow
+     * - Other lines (tips, blanks) are rendered as-is in gray
+     *
+     * ANSI colors are theme-aware in VS Code terminals: the basic 16 ANSI colors
+     * map to `terminal.ansiRed`, `terminal.ansiGreen`, etc. from the active color theme.
+     * This means we get automatic light/dark adaptation and users can customize.
+     */
     private formatHelpText(printable: unknown): string {
+        let text: string;
         if (typeof printable === 'string') {
-            return printable;
+            text = printable;
+        } else if (typeof printable === 'object' && printable !== null && 'help' in printable) {
+            // @mongosh Help results have a .help property with the help text
+            text = String((printable as { help: unknown }).help);
+        } else {
+            return this.toEjsonString(printable);
         }
 
-        // @mongosh Help results have a .help property with the help text
-        if (typeof printable === 'object' && printable !== null && 'help' in printable) {
-            return String((printable as { help: unknown }).help);
+        if (!this.isColorEnabled()) {
+            return text;
         }
 
-        return this.toEjsonString(printable);
+        return this.colorizeHelpText(text);
+    }
+
+    /**
+     * Apply theme-aware ANSI coloring to structured help text.
+     */
+    private colorizeHelpText(text: string): string {
+        return text
+            .split('\n')
+            .map((line) => {
+                // Section headers: "# Title"
+                if (line.startsWith('# ')) {
+                    return `${ANSI.bold}${ANSI.cyan}${line.slice(2)}${ANSI.reset}`;
+                }
+
+                // Command entries: "  command(padded)     description"
+                // Detect two-column layout: starts with 2+ spaces, has a command, then whitespace gap + description
+                const entryMatch = /^( {2})(\S.*?\S)( {2,})(.+)$/.exec(line);
+                if (entryMatch) {
+                    const [, indent, command, gap, description] = entryMatch;
+                    return `${indent}${ANSI.yellow}${command}${ANSI.reset}${gap}${ANSI.gray}${description}${ANSI.reset}`;
+                }
+
+                // Tip lines (indented text without two-column structure)
+                if (line.startsWith('  ') && line.trim().length > 0) {
+                    return `${ANSI.gray}${line}${ANSI.reset}`;
+                }
+
+                return line;
+            })
+            .join('\r\n');
     }
 
     // ─── Private: Settings ───────────────────────────────────────────────────

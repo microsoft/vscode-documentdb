@@ -32,33 +32,10 @@ export class HelpProvider {
      * Returns help text appropriate for the configured surface.
      */
     getHelpText(): string {
-        const sections: string[][] = [];
-
-        sections.push(this.getHeader());
-        sections.push(this.getCollectionAccessSection());
-        sections.push(this.getQueryCommandsSection());
-        sections.push(this.getWriteCommandsSection());
-        sections.push(this.getIndexCommandsSection());
-        sections.push(this.getCursorModifiersSection());
-        sections.push(this.getDatabaseCommandsSection());
-
         if (this._surface === 'shell') {
-            sections.push(this.getShellCommandsSection());
+            return this.buildShellHelp();
         }
-
-        sections.push(this.getBsonConstructorsSection());
-
-        if (this._surface === 'playground') {
-            sections.push(this.getKeyboardShortcutsSection());
-            sections.push(this.getPlaygroundTipsSection());
-            sections.push(this.getConsoleOutputSection());
-        }
-
-        if (this._surface === 'shell') {
-            sections.push(this.getShellTipsSection());
-        }
-
-        return sections.map((lines) => lines.join('\n')).join('\n\n');
+        return this.buildPlaygroundHelp();
     }
 
     /**
@@ -72,14 +49,119 @@ export class HelpProvider {
         };
     }
 
+    // ─── Private: Playground format (unchanged, wide monospaced layout) ──────
+
+    private buildPlaygroundHelp(): string {
+        const sections: string[][] = [];
+
+        sections.push(this.getHeader());
+        sections.push(this.getCollectionAccessSection());
+        sections.push(this.getQueryCommandsSection());
+        sections.push(this.getWriteCommandsSection());
+        sections.push(this.getIndexCommandsSection());
+        sections.push(this.getCursorModifiersSection());
+        sections.push(this.getDatabaseCommandsSection());
+        sections.push(this.getBsonConstructorsSection());
+        sections.push(this.getKeyboardShortcutsSection());
+        sections.push(this.getPlaygroundTipsSection());
+        sections.push(this.getConsoleOutputSection());
+
+        return sections.map((lines) => lines.join('\n')).join('\n\n');
+    }
+
+    // ─── Private: Shell compact format ───────────────────────────────────────
+
+    /**
+     * Build compact shell help with two-column layout.
+     *
+     * The output uses a structured format that {@link ShellOutputFormatter}
+     * can colorize with theme-aware ANSI codes.
+     *
+     * Lines starting with `#` are section headers (rendered bold/colored).
+     * Lines starting with `  ` are command entries (command  description).
+     */
+    private buildShellHelp(): string {
+        const lines: string[] = [];
+
+        lines.push('# DocumentDB Shell — Quick Reference');
+        lines.push('');
+
+        // Query & Read
+        lines.push('# Query');
+        this.addEntry(lines, 'db.<coll>.find({})', 'Find documents');
+        this.addEntry(lines, 'db.<coll>.findOne({})', 'Find a single document');
+        this.addEntry(lines, 'db.<coll>.countDocuments({})', 'Count matching documents');
+        this.addEntry(lines, 'db.<coll>.distinct("field")', 'Distinct field values');
+        this.addEntry(lines, 'db.<coll>.aggregate([...])', 'Aggregation pipeline');
+        lines.push('');
+
+        // Cursor Modifiers
+        lines.push('# Cursor Modifiers');
+        this.addEntry(lines, '.limit(n)  .skip(n)  .sort({f:1})', 'Chain on find() cursors');
+        this.addEntry(lines, '.project({field: 1})  .toArray()', 'Project fields / materialize');
+        this.addEntry(lines, 'it', 'Fetch next batch of results');
+        lines.push('');
+
+        // Write
+        lines.push('# Write');
+        this.addEntry(lines, 'db.<coll>.insertOne({...})', 'Insert a document');
+        this.addEntry(lines, 'db.<coll>.insertMany([...])', 'Insert multiple documents');
+        this.addEntry(lines, 'db.<coll>.updateOne({}, {$set:{}})', 'Update one document');
+        this.addEntry(lines, 'db.<coll>.replaceOne({}, {...})', 'Replace one document');
+        this.addEntry(lines, 'db.<coll>.deleteOne({})', 'Delete one document');
+        lines.push('');
+
+        // Index
+        lines.push('# Indexes');
+        this.addEntry(lines, 'db.<coll>.createIndex({field: 1})', 'Create an index');
+        this.addEntry(lines, 'db.<coll>.getIndexes()', 'List indexes');
+        this.addEntry(lines, 'db.<coll>.dropIndex("name")', 'Drop an index');
+        lines.push('');
+
+        // Database
+        lines.push('# Database');
+        this.addEntry(lines, 'show dbs', 'List databases');
+        this.addEntry(lines, 'show collections', 'List collections in current db');
+        this.addEntry(lines, 'use <db>', 'Switch database');
+        this.addEntry(lines, 'db.createCollection("name")', 'Create a collection');
+        this.addEntry(lines, 'db.runCommand({...})', 'Run a database command');
+        lines.push('');
+
+        // BSON
+        lines.push('# BSON Constructors');
+        this.addEntry(lines, 'ObjectId("...")', 'Create ObjectId');
+        this.addEntry(lines, 'ISODate("...")', 'Create Date');
+        this.addEntry(lines, 'NumberDecimal("...")', 'Create Decimal128');
+        lines.push('');
+
+        // Shell
+        lines.push('# Shell');
+        this.addEntry(lines, 'help', 'Show this reference');
+        this.addEntry(lines, 'exit / quit', 'Close the shell');
+        this.addEntry(lines, 'cls / clear', 'Clear the screen');
+        lines.push('');
+
+        // Tips
+        lines.push('# Tips');
+        lines.push('  Variables persist across commands within a session.');
+        lines.push('  Use db.getCollection("name") for collection names with special characters.');
+        lines.push('  console.log() output appears inline.');
+
+        return lines.join('\n');
+    }
+
+    /**
+     * Append a padded two-column entry: `  command  description`.
+     */
+    private addEntry(lines: string[], command: string, description: string): void {
+        const padded = command.padEnd(40);
+        lines.push(`  ${padded}${description}`);
+    }
+
     // ─── Private: Help sections ──────────────────────────────────────────────
 
     private getHeader(): string[] {
-        const title =
-            this._surface === 'shell'
-                ? 'DocumentDB Interactive Shell - Quick Reference'
-                : 'DocumentDB Query Playground - Quick Reference';
-        return [title, '═══════════════════════════════════════'];
+        return ['DocumentDB Query Playground - Quick Reference', '═══════════════════════════════════════'];
     }
 
     private getCollectionAccessSection(): string[] {
@@ -137,34 +219,15 @@ export class HelpProvider {
     }
 
     private getDatabaseCommandsSection(): string[] {
-        const lines = [
+        return [
             'Database Commands:',
             '  show dbs                                       List databases',
             '  show collections                               List collections',
-        ];
-
-        if (this._surface === 'shell') {
-            lines.push('  use <db>                                       Switch database');
-        }
-
-        lines.push(
             '  db.getCollectionNames()                        List collection names',
             '  db.getCollectionInfos()                        Collection metadata',
             '  db.createCollection("name")                    Create collection',
             '  db.getCollection("name").drop()                Drop collection',
             '  db.runCommand({...})                           Run a database command',
-        );
-
-        return lines;
-    }
-
-    private getShellCommandsSection(): string[] {
-        return [
-            'Shell Commands:',
-            '  help                                           Show this help text',
-            '  exit / quit                                    Close the shell',
-            '  cls / clear                                    Clear the screen',
-            '  it                                             Show next batch of cursor results',
         ];
     }
 
@@ -202,16 +265,6 @@ export class HelpProvider {
             '  console.log(value)                             Log to output channel',
             '  print() and printjson() are also supported',
             '  Output appears in the "DocumentDB Query Playground Output" panel',
-        ];
-    }
-
-    private getShellTipsSection(): string[] {
-        return [
-            'Tips:',
-            '  • Variables persist across commands within a session',
-            '  • Use "it" to page through cursor results',
-            '  • Use .toArray() to get all results (default batch size: documentDB.shell.batchSize)',
-            '  • console.log() output appears inline',
         ];
     }
 }
