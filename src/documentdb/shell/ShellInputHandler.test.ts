@@ -10,11 +10,13 @@ describe('ShellInputHandler', () => {
     let written: string;
     let lines: string[];
     let interrupts: number;
+    let continuations: number;
 
     beforeEach(() => {
         written = '';
         lines = [];
         interrupts = 0;
+        continuations = 0;
 
         const callbacks: ShellInputHandlerCallbacks = {
             write: (data: string) => {
@@ -25,6 +27,9 @@ describe('ShellInputHandler', () => {
             },
             onInterrupt: () => {
                 interrupts++;
+            },
+            onContinuation: () => {
+                continuations++;
             },
         };
 
@@ -340,6 +345,159 @@ describe('ShellInputHandler', () => {
             handler.handleInput('test');
             handler.resetLine();
             expect(handler.getBuffer()).toBe('');
+        });
+
+        it('should clear multi-line buffer', () => {
+            handler.handleInput('db.test.find({');
+            handler.handleInput('\r'); // continuation
+            expect(handler.isInMultiLineMode).toBe(true);
+
+            handler.resetLine();
+            expect(handler.isInMultiLineMode).toBe(false);
+        });
+    });
+
+    describe('multi-line input', () => {
+        it('should show continuation when expression has unclosed brace', () => {
+            handler.handleInput('db.test.find({');
+            handler.handleInput('\r');
+
+            expect(lines).toEqual([]);
+            expect(continuations).toBe(1);
+            expect(handler.isInMultiLineMode).toBe(true);
+        });
+
+        it('should show continuation when expression has unclosed bracket', () => {
+            handler.handleInput('db.test.aggregate([');
+            handler.handleInput('\r');
+
+            expect(lines).toEqual([]);
+            expect(continuations).toBe(1);
+        });
+
+        it('should show continuation when expression has unclosed paren', () => {
+            handler.handleInput('db.test.find(');
+            handler.handleInput('\r');
+
+            expect(lines).toEqual([]);
+            expect(continuations).toBe(1);
+        });
+
+        it('should execute when expression is completed', () => {
+            handler.handleInput('db.test.find({');
+            handler.handleInput('\r'); // continuation
+            handler.handleInput('  age: 25');
+            handler.handleInput('\r'); // continuation
+            handler.handleInput('})');
+            handler.handleInput('\r'); // execute
+
+            expect(lines).toEqual(['db.test.find({\n  age: 25\n})']);
+            expect(continuations).toBe(2);
+        });
+
+        it('should execute balanced expression immediately', () => {
+            handler.handleInput('db.test.find({ age: 25 })');
+            handler.handleInput('\r');
+
+            expect(lines).toEqual(['db.test.find({ age: 25 })']);
+            expect(continuations).toBe(0);
+        });
+
+        it('should execute plain text commands immediately', () => {
+            handler.handleInput('show dbs');
+            handler.handleInput('\r');
+
+            expect(lines).toEqual(['show dbs']);
+            expect(continuations).toBe(0);
+        });
+
+        it('should clear multi-line buffer on Ctrl+C', () => {
+            handler.handleInput('db.test.find({');
+            handler.handleInput('\r'); // continuation
+
+            expect(handler.isInMultiLineMode).toBe(true);
+
+            handler.handleInput('\x03'); // Ctrl+C
+
+            expect(handler.isInMultiLineMode).toBe(false);
+            expect(interrupts).toBe(1);
+        });
+
+        it('should handle \\n (LF) the same as \\r (CR)', () => {
+            handler.handleInput('show dbs');
+            handler.handleInput('\n');
+
+            expect(lines).toEqual(['show dbs']);
+        });
+
+        it('should handle pasted multi-line text with \\n newlines', () => {
+            handler.handleInput('db.test.find({\n  age: 25\n})');
+            handler.handleInput('\r');
+
+            expect(lines).toEqual(['db.test.find({\n  age: 25\n})']);
+        });
+
+        it('should store multi-line commands as single history entry', () => {
+            handler.handleInput('db.test.find({');
+            handler.handleInput('\r');
+            handler.handleInput('})');
+            handler.handleInput('\r');
+
+            expect(lines).toEqual(['db.test.find({\n})']);
+
+            // Reset and navigate history
+            handler.resetLine();
+            handler.handleInput('\x1b[A'); // Up arrow
+
+            // Multi-line history recalled as single line (newlines → spaces)
+            expect(handler.getBuffer()).toBe('db.test.find({ })');
+        });
+
+        it('should show continuation for unterminated string', () => {
+            handler.handleInput("db.test.find({ name: 'hello");
+            handler.handleInput('\r');
+
+            expect(lines).toEqual([]);
+            expect(continuations).toBe(1);
+        });
+    });
+
+    describe('paste queue', () => {
+        it('should queue remaining input when command is submitted', () => {
+            // Simulate the PTY disabling input after onLine fires.
+            // The handler's onLine callback will disable input, simulating
+            // what the PTY does when it starts evaluating.
+            const disablingCallbacks: ShellInputHandlerCallbacks = {
+                write: (data: string) => {
+                    written += data;
+                },
+                onLine: (line: string) => {
+                    lines.push(line);
+                    disablingHandler.setEnabled(false);
+                },
+                onInterrupt: () => {
+                    interrupts++;
+                },
+                onContinuation: () => {
+                    continuations++;
+                },
+            };
+
+            const disablingHandler = new ShellInputHandler(disablingCallbacks);
+
+            // Paste two commands separated by \n
+            disablingHandler.handleInput('show dbs\nuse mydb\n');
+
+            // First command should have been delivered
+            expect(lines).toEqual(['show dbs']);
+
+            // Re-enable and process pending input
+            disablingHandler.setEnabled(true);
+            disablingHandler.resetLine();
+            disablingHandler.processPendingInput();
+
+            // Second command should now be delivered
+            expect(lines).toEqual(['show dbs', 'use mydb']);
         });
     });
 });

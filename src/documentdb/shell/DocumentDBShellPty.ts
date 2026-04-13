@@ -110,6 +110,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             write: (data: string) => this._writeEmitter.fire(data),
             onLine: (line: string) => void this.handleLineInput(line),
             onInterrupt: () => this.handleInterrupt(),
+            onContinuation: () => this.showContinuationPrompt(),
         });
     }
 
@@ -276,6 +277,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                         this._lastOutputHadTrailingNewline = true;
                     }
                     this.showPrompt();
+
+                    // Process any input that was queued during execution
+                    // (e.g., remaining lines from a multi-line paste).
+                    this._inputHandler.processPendingInput();
                 }
             }
 
@@ -408,6 +413,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const prompt = `${this._currentDatabase}> `;
         this._inputHandler.setPromptWidth(prompt.length);
         this._inputHandler.resetLine();
+        this._writeEmitter.fire(prompt);
+    }
+
+    /**
+     * Show the continuation prompt (`... `) for multi-line input.
+     * Called by ShellInputHandler when an incomplete expression is detected.
+     */
+    private showContinuationPrompt(): void {
+        const prompt = '... ';
+        this._inputHandler.setPromptWidth(prompt.length);
         this._writeEmitter.fire(prompt);
     }
 

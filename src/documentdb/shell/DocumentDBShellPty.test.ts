@@ -471,4 +471,110 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('[mydb.stores (10)]');
         });
     });
+
+    describe('multi-line input', () => {
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('should show continuation prompt for incomplete expression', () => {
+            pty.handleInput('db.test.find({');
+            pty.handleInput('\r');
+
+            expect(written).toContain('... ');
+            expect(mockEvaluate).not.toHaveBeenCalled();
+        });
+
+        it('should evaluate complete multi-line expression', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'Cursor',
+                printable: '[{"age":25}]',
+                durationMs: 5,
+            });
+
+            pty.handleInput('db.test.find({');
+            pty.handleInput('\r');
+            pty.handleInput('  age: 25');
+            pty.handleInput('\r');
+            pty.handleInput('})');
+            pty.handleInput('\r');
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})', expect.any(Number));
+        });
+
+        it('should show database prompt after multi-line evaluation completes', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: null,
+                printable: '"done"',
+                durationMs: 1,
+            });
+
+            pty.handleInput('db.test.find({');
+            pty.handleInput('\r');
+            pty.handleInput('})');
+            pty.handleInput('\r');
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // Should show the database prompt after execution
+            expect(written).toContain('testdb> ');
+        });
+
+        it('should return to normal prompt on Ctrl+C during multi-line mode', () => {
+            pty.handleInput('db.test.find({');
+            pty.handleInput('\r');
+
+            expect(written).toContain('... ');
+
+            written = '';
+            pty.handleInput('\x03'); // Ctrl+C
+
+            expect(written).toContain('testdb> ');
+            expect(mockKillWorker).not.toHaveBeenCalled();
+        });
+
+        it('should handle pasted multi-line text with LF newlines', async () => {
+            mockEvaluate.mockResolvedValue({
+                type: 'Cursor',
+                printable: '[{"age":25}]',
+                durationMs: 5,
+            });
+
+            // Paste a complete multi-line expression with \n
+            pty.handleInput('db.test.find({\n  age: 25\n})');
+            pty.handleInput('\r');
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})', expect.any(Number));
+        });
+
+        it('should process sequential pasted commands via paste queue', async () => {
+            mockEvaluate
+                .mockResolvedValueOnce({
+                    type: null,
+                    printable: '"dbs listed"',
+                    durationMs: 1,
+                })
+                .mockResolvedValueOnce({
+                    type: null,
+                    printable: JSON.stringify('switched to db newdb'),
+                    durationMs: 1,
+                });
+
+            // Paste two commands separated by \n
+            pty.handleInput('show dbs\nuse newdb\n');
+
+            // Wait for both commands to complete
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            expect(mockEvaluate).toHaveBeenCalledTimes(2);
+            expect(mockEvaluate).toHaveBeenNthCalledWith(1, 'show dbs', expect.any(Number));
+            expect(mockEvaluate).toHaveBeenNthCalledWith(2, 'use newdb', expect.any(Number));
+        });
+    });
 });

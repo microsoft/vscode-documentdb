@@ -11,6 +11,8 @@
  * and produces the correct ANSI escape sequences for visual feedback.
  */
 
+import { isExpressionIncomplete } from './bracketDepthCounter';
+
 // ─── ANSI constants ──────────────────────────────────────────────────────────
 
 /** Erase from cursor to end of line */
@@ -26,6 +28,8 @@ export interface ShellInputHandlerCallbacks {
     onLine: (line: string) => void;
     /** Called when the user presses Ctrl+C. */
     onInterrupt: () => void;
+    /** Called when multi-line continuation is needed (PTY shows `... ` prompt). */
+    onContinuation: () => void;
 }
 
 /** Word character pattern for word navigation (Ctrl+Left/Right). */
@@ -50,6 +54,11 @@ export class ShellInputHandler {
 
     /** Whether input is currently accepted. */
     private _enabled: boolean = true;
+
+    /** Accumulated lines when building a multi-line expression. */
+    private _multiLineBuffer: string[] = [];
+    /** Remaining paste data to process after the current command finishes executing. */
+    private _pendingInput: string = '';
 
     /** Accumulated escape sequence buffer for multi-byte sequences. */
     private _escapeBuffer: string = '';
@@ -85,13 +94,33 @@ export class ShellInputHandler {
     }
 
     /**
-     * Reset input state (buffer, cursor). Called when displaying a new prompt.
+     * Whether the handler is currently accumulating a multi-line expression.
+     */
+    get isInMultiLineMode(): boolean {
+        return this._multiLineBuffer.length > 0;
+    }
+
+    /**
+     * Reset input state (buffer, cursor, multi-line buffer). Called when displaying a new prompt.
      */
     resetLine(): void {
         this._buffer = '';
         this._cursor = 0;
         this._historyIndex = -1;
         this._savedInput = '';
+        this._multiLineBuffer = [];
+    }
+
+    /**
+     * Process any input that was queued while a command was executing.
+     * Called by the PTY after evaluation completes and a new prompt is shown.
+     */
+    processPendingInput(): void {
+        if (this._pendingInput.length > 0) {
+            const data = this._pendingInput;
+            this._pendingInput = '';
+            this.handleInput(data);
+        }
     }
 
     /**
@@ -130,7 +159,18 @@ export class ShellInputHandler {
             return;
         }
 
-        for (const ch of data) {
+        // Use index-based iteration so we can save remaining characters
+        // when a command fires onLine (paste queue support).
+        for (let i = 0; i < data.length; i++) {
+            // If onLine was called (command submitted), queue remaining input
+            // for processing after the command finishes executing.
+            if (!this._enabled) {
+                this._pendingInput += data.slice(i);
+                return;
+            }
+
+            const ch = data[i];
+
             if (this._inEscape) {
                 this._escapeBuffer += ch;
                 if (this.isEscapeComplete(this._escapeBuffer)) {
@@ -155,13 +195,18 @@ export class ShellInputHandler {
 
     private processCharacter(ch: string): void {
         switch (ch) {
-            case '\r': // Enter
+            case '\r': // Enter (CR)
+            case '\n': // Enter (LF — from pasted text with Unix newlines)
                 this.handleEnter();
                 break;
             case '\x7f': // Backspace
                 this.handleBackspace();
                 break;
             case '\x03': // Ctrl+C
+                if (this._multiLineBuffer.length > 0) {
+                    // Cancel multi-line accumulation without killing the worker
+                    this._multiLineBuffer = [];
+                }
                 this._callbacks.onInterrupt();
                 break;
             case '\x01': // Ctrl+A — Home
@@ -189,23 +234,46 @@ export class ShellInputHandler {
     }
 
     private handleEnter(): void {
-        const line = this._buffer;
+        const currentLine = this._buffer;
 
-        // Add to history if non-empty and different from last entry
-        if (line.trim().length > 0) {
-            if (this._history.length === 0 || this._history[this._history.length - 1] !== line) {
-                this._history.push(line);
+        // Build the full text from accumulated multi-line buffer + current line
+        const allLines = [...this._multiLineBuffer, currentLine];
+        const fullText = allLines.join('\n');
+
+        // Check if the expression is incomplete (unclosed brackets, strings, etc.)
+        if (isExpressionIncomplete(fullText)) {
+            // Accumulate: push current line, show continuation prompt
+            this._multiLineBuffer.push(currentLine);
+            this._buffer = '';
+            this._cursor = 0;
+            this._callbacks.write('\r\n');
+            this._callbacks.onContinuation();
+            return;
+        }
+
+        // Expression is complete — add to history and deliver
+
+        // For history, store the full multi-line text. When recalled,
+        // newlines are replaced with spaces for single-line display.
+        const historyEntry = this._multiLineBuffer.length > 0 ? fullText : currentLine;
+
+        if (historyEntry.trim().length > 0) {
+            if (this._history.length === 0 || this._history[this._history.length - 1] !== historyEntry) {
+                this._history.push(historyEntry);
                 if (this._history.length > this._maxHistory) {
                     this._history.shift();
                 }
             }
         }
 
+        // Clear multi-line state
+        this._multiLineBuffer = [];
+
         // Write newline to terminal
         this._callbacks.write('\r\n');
 
-        // Deliver the line
-        this._callbacks.onLine(line);
+        // Deliver the full text
+        this._callbacks.onLine(fullText);
     }
 
     private handleBackspace(): void {
@@ -464,18 +532,22 @@ export class ShellInputHandler {
 
     /**
      * Replace the entire current line buffer with new text and update the display.
+     * Multi-line history entries are flattened to a single line (newlines → spaces).
      */
     private replaceLineWith(newText: string): void {
+        // Flatten multi-line history entries for single-line display
+        const displayText = newText.replace(/\n/g, ' ');
+
         // Move cursor to start of input
         if (this._cursor > 0) {
             this._callbacks.write(`\x1b[${String(this._cursor)}D`);
         }
 
         // Write new text and erase any leftover characters
-        const clearLen = Math.max(0, this._buffer.length - newText.length);
-        this._callbacks.write(newText + ' '.repeat(clearLen) + '\b'.repeat(clearLen));
+        const clearLen = Math.max(0, this._buffer.length - displayText.length);
+        this._callbacks.write(displayText + ' '.repeat(clearLen) + '\b'.repeat(clearLen));
 
-        this._buffer = newText;
-        this._cursor = newText.length;
+        this._buffer = displayText;
+        this._cursor = displayText.length;
     }
 }
