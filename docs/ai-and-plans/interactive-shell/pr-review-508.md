@@ -92,6 +92,8 @@ Differentiate severity: "already executing" is informational (expected), others 
 
 </details>
 
+**RESOLVED:** Option A was selected (Information Messages with friendly wording). Added `showInformationMessage` calls for: empty playground file, no code to run, no connection, and already executing. Commit: 9b956fb
+
 ---
 
 ### C2. Race Condition: Concurrent Shell Worker Initialization
@@ -160,6 +162,8 @@ Move the lock deeper, into `ensureWorker()`, so all callers are protected.
 
 ---
 
+**RESOLVED:** Option A was selected (initialization promise lock). Concurrent `evaluate()` calls now await the same init promise. Commit: d7eecae
+
 ### C3. Resource Leak: Fresh Context Mode Never Cleans Up
 
 | Field         | Value                                                                     |
@@ -216,6 +220,8 @@ If fresh mode isn't a key user feature, remove it and simplify.
 | None                         | Larger code change                                          |
 
 </details>
+
+**RESOLVED:** Option A was selected (try/finally cleanup). `evaluateFresh()` now calls `instanceState.close()` in a finally block. Commit: 9f2a544
 
 ---
 
@@ -279,6 +285,8 @@ Make PlaygroundService react to `CredentialCache` changes.
 
 **Test gap:** Add a TDD contract: "Removing the active connection must disconnect the playground and shut down its worker."
 
+**DEFERRED:** Not fixing in this PR. Created GitHub issue #566 to address unified disconnect/remove connection experience across all views (playground, shell, collection view, document view, running tasks).
+
 ---
 
 ### H2. `parseShellBSON` Accepts Non-Object Values for Projection/Sort
@@ -334,6 +342,8 @@ Add validation in the Collection View webview before submitting queries.
 </details>
 
 **Test gap:** Add a TDD contract: "Projection/sort must reject non-object values (scalars, arrays) before reaching the driver."
+
+**RESOLVED:** Option A was selected (plain-object type guard). Added `assertDocumentObject()` validation after `parseShellBSON()` in both `runFindQuery()` and `streamDocumentsWithQuery()`. Commit: bc2fcd6
 
 ---
 
@@ -391,6 +401,8 @@ Fix the generated file by hand.
 
 **Test gap:** Add a structural invariant test that verifies update operators don't reference "accumulator" or "aggregation" in their descriptions.
 
+**DEFERRED:** Created GitHub issue #570. After fetching each published doc page, the documentation is actually correct — pages like `accumulators/$min` cover both the accumulator AND field update use cases (syntax, parameters, examples 4-8). The problem is only the scraped hover description, which uses the page's opening sentence (accumulator/aggregation-biased). Fix: add description overrides in `operator-overrides.md` for 5 operators (`$set` is already correct). Links should be kept as-is. Only `$unset` is a genuine doc gap (page only covers aggregation pipeline, not update syntax).
+
 ---
 
 ### H4. Stale ClustersClient Cache After Create/Delete
@@ -434,6 +446,8 @@ After any create/delete, force the next list call to refresh.
 
 </details>
 
+**RESOLVED:** Option A was selected (cache invalidation in CRUD methods). `dropCollection`/`createCollection` clear collections cache, `dropDatabase`/`createDatabase` clear databases cache. Commit: 78d719f
+
 ---
 
 ### H5. SchemaStore Unbounded Growth
@@ -472,6 +486,8 @@ After any create/delete, force the next list call to refresh.
 | None                                 | None                         |
 
 </details>
+
+**RESOLVED:** Option B was selected (known limitation). Schema accumulation is intentional per planning doc 6.1. Unbounded growth only affects power users with many connections over long sessions.
 
 ---
 
@@ -543,6 +559,14 @@ The single-threaded model makes the worst outcomes unlikely. Add TDD tests for t
 
 **Test gap:** Add a TDD contract: "Ctrl+C during evaluation, then immediately submit another command, must not produce duplicate prompts."
 
+**REVISITED:** The option to revisit after progress animation changes was selected. After reviewing the current code with spinner/progress animation changes, the race condition is now well-mitigated:
+- `handleInterrupt()` sets `_interrupted = true` synchronously and kills the worker. The `finally` block in `handleLineInput()` checks `!this._interrupted` and skips duplicate prompt/state cleanup.
+- The spinner is null-checked (`_spinner?.stop()`) so both paths safely stop it.
+- `_evaluating` is set to `false` by the interrupt handler *before* the `finally` block runs, so no conflicting state.
+- The `_interrupted` flag is reset to `false` at the end of `finally`, which is after the old evaluation's cleanup — by then, any new command from re-enabled input processes in a separate async event loop turn.
+
+The theoretical window (stale `finally` interfering with new command state) is prevented by the `_interrupted` guard. The generation-token approach would add defense-in-depth but is not strictly necessary given the current guards. **Leaving as-is; can add generation tokens as a hardening pass if needed.**
+
 ---
 
 ### M2. No Shell Initialization Timeout
@@ -584,6 +608,8 @@ Wrap `initialize()` with a `Promise.race()` against a timeout.
 
 </details>
 
+**RESOLVED:** Option A was selected (initialization timeout, configurable via settings). Added `documentDB.shell.initTimeout` setting (default: 60s). Commit: 8c3b760
+
 ---
 
 ### M3. Playground Diagnostics: No Debouncing (O(n) per Keystroke)
@@ -624,6 +650,8 @@ For small files this is unnoticeable. For large playground files (1000+ lines), 
 | None           | None                                      |
 
 </details>
+
+**RESOLVED:** Option A was selected (300ms debounce). Added `debouncedAnalyze()` method to `PlaygroundDiagnostics`. Commit: 20f608c
 
 ---
 
@@ -668,6 +696,8 @@ Keep scan as accumulative, add explicit "Clear Collection Schema" to context men
 
 </details>
 
+**RESOLVED:** Option A was selected (clear schema before scanning). `scanCollectionSchema()` now calls `SchemaStore.clearSchema()` before adding new samples. Commit: 20f608c
+
 ---
 
 ### M5. `toLocaleString()` in Playground Filename Is Locale-Dependent
@@ -710,6 +740,8 @@ const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-'
 | None                          | None                     |
 
 </details>
+
+**RESOLVED:** Option A was selected (toISOString). Playground filenames now use locale-independent ISO 8601 format. Commit: d60288b
 
 ---
 
@@ -754,6 +786,8 @@ The `PlaygroundConnection` type likely has access to a display name via the conn
 
 </details>
 
+**RESOLVED:** Option A was selected (use connection display name). Error message now shows `clusterDisplayName` instead of internal `clusterId`. Commit: d1ad9b1
+
 ---
 
 ### M7. `localeCompare` with Base Sensitivity for Query Cache Keys
@@ -790,6 +824,8 @@ Replace `localeCompare(...)` with `previousQueryKey === userQueryKey`.
 
 </details>
 
+**RESOLVED:** Option A was selected (strict equality). Replaced `localeCompare` with `===`. Commit: d60288b
+
 ---
 
 ### M8. AST Walk Errors Silently Swallowed
@@ -823,6 +859,8 @@ catch (error) {
 | None                                   | None                        |
 
 </details>
+
+**RESOLVED:** Option A was selected (log unexpected errors). Now logs non-SyntaxError exceptions via `console.error`. Commit: d60288b
 
 ---
 
@@ -860,6 +898,8 @@ private _persistent: {
 
 </details>
 
+**RESOLVED:** Option A was selected (single compound object). Replaced four nullable fields + flag with `_persistent?: { instanceState, evaluator, context, vmContext }`. Commit: c6d0558
+
 ---
 
 ### M10. Inconsistent Parameter Naming: `clusterId` vs `credentialId`
@@ -885,6 +925,8 @@ private _persistent: {
 | None                                     | None                             |
 
 </details>
+
+**INVESTIGATED:** Per copilot-instructions.md, `clusterId` is the correct name for cache keys. `CredentialCache.ts` consistently uses `clusterId` (10+ methods). `ClustersClient.ts` has 2 methods (`exists`, `deleteClient`) using `credentialId` while 2 others (`getClient`, `getExistingClient`) correctly use `clusterId`. This is a naming inconsistency, not a functional bug. Created GitHub issue #567 for the rename.
 
 ---
 
@@ -927,6 +969,8 @@ Map newlines to Enter, executing each pasted line sequentially.
 
 </details>
 
+**DEFERRED:** Multi-line support needs to be revisited in general; there are other related issues. Created GitHub issue #569 (assigned to milestone 0.8.0) to track multi-line input support including paste handling, interactive continuation prompts, and bracket matching.
+
 ---
 
 ### M12. Word Navigation Only Uses Space as Delimiter
@@ -957,6 +1001,8 @@ Replace space check with `/\b/` or common separator set (`.`, `_`, `-`, `(`, `)`
 
 </details>
 
+**RESOLVED:** Option A was selected (regex word boundaries). Word navigation now uses `[a-zA-Z0-9_$]` pattern. Commit: 2a0f689
+
 ---
 
 ## 🟢 Low Severity Issues
@@ -974,6 +1020,8 @@ Replace space check with `/\b/` or common separator set (`.`, `_`, `-`, `(`, `)`
 
 **Analysis:** `` help`\ndb.dropDatabase()` `` would be intercepted as help instead of evaluated. However, this is an extremely unlikely user input pattern. **No action needed** unless reported.
 
+**IGNORED:** Extremely unlikely edge case. Multi-line execution will be addressed holistically in issue #569 (milestone 0.8.0).
+
 ---
 
 ### L2. Playground Diagnostics `.toArray()` Check Doesn't Exclude Comments
@@ -986,6 +1034,8 @@ Replace space check with `/\b/` or common separator set (`.`, `_`, `-`, `(`, `)`
 | **File**      | `src/documentdb/playground/PlaygroundDiagnostics.ts:83-84` |
 
 **Analysis:** `lineText.includes('.toArray()')` would suppress the warning if `.toArray()` appears in a comment on the same line. Edge case, unlikely to confuse users.
+
+**IGNORED:** Non-critical edge case — the warning is about `.limit()` exceeding batch size, and false suppression from a comment is harmless.
 
 ---
 
@@ -1000,6 +1050,8 @@ Replace space check with `/\b/` or common separator set (`.`, `_`, `-`, `(`, `)`
 
 **Analysis:** When `wordInfo.startColumn = 1`, `lineContent[-1]` returns `undefined`, which is `!== '$'`, so the code works. But it relies on JavaScript's undefined array access — fragile.
 
+**RESOLVED:** Added explicit bounds check (`charBeforeIndex >= 0`) instead of relying on undefined array access. Commit: 3a47dbb
+
 ---
 
 ### L4. Various Minor Items (Previously Enumerated)
@@ -1012,7 +1064,9 @@ The following items from the original review are confirmed as low-severity and c
 - **L4 (original):** `randomSample` safe but confusing when `count > array.length`
 - **L5 (original):** Levenshtein distance not cached (acceptable for small inputs)
 - **L6 (original):** Terminal resize not handled (no multi-line editing yet)
-- **L7 (original):** Unused `standalone` field in operator entries
+- **L7 (original):** Unused `standalone` field in operator entries — **false positive**, field is actively used in 12 locations
+
+**RESOLVED (partial):** Fixed `randomSample` to clamp `count` to `array.length` (L4 original). History off-by-one (L3 original) is actually correct — temporary overshoot of 1 entry is immediately trimmed. Other items deferred as acceptable.
 
 ---
 
@@ -1061,6 +1115,8 @@ These are **not bugs** — they are documented scope decisions and don't need to
 ---
 
 ## TDD Contract Recommendations
+
+> **Deferred:** These TDD contracts are pushed back to a dedicated testing iteration where we will also add integration tests. Integration tests are still missing and have higher priority — they will be addressed first before adding granular TDD contracts for individual fixes.
 
 Based on this review, the following new TDD contracts would add the most protection:
 
