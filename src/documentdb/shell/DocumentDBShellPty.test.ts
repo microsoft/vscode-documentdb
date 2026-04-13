@@ -483,7 +483,8 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('db.test.find({');
             pty.handleInput('\r');
 
-            expect(written).toContain('... ');
+            // All continuation prompt candidates end with ` > ` (baseline alignment testing)
+            expect(written).toContain(' > ');
             expect(mockEvaluate).not.toHaveBeenCalled();
         });
 
@@ -528,7 +529,8 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('db.test.find({');
             pty.handleInput('\r');
 
-            expect(written).toContain('... ');
+            // All continuation prompt candidates end with ` > ` (baseline alignment testing)
+            expect(written).toContain(' > ');
 
             written = '';
             pty.handleInput('\x03'); // Ctrl+C

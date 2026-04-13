@@ -417,11 +417,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     /**
-     * Show the continuation prompt (`... `) for multi-line input.
+     * Show a continuation prompt for incomplete multi-line expressions.
+     * Uses midline ellipsis (⋯ >) for clean baseline alignment.
      * Called by ShellInputHandler when an incomplete expression is detected.
      */
     private showContinuationPrompt(): void {
-        const prompt = '... ';
+        const prompt = '⋯ > ';
         this._inputHandler.setPromptWidth(prompt.length);
         this._writeEmitter.fire(prompt);
     }

@@ -28,7 +28,7 @@ export interface ShellInputHandlerCallbacks {
     onLine: (line: string) => void;
     /** Called when the user presses Ctrl+C. */
     onInterrupt: () => void;
-    /** Called when multi-line continuation is needed (PTY shows `... ` prompt). */
+    /** Called when multi-line continuation is needed (PTY shows a continuation prompt). */
     onContinuation: () => void;
 }
 
