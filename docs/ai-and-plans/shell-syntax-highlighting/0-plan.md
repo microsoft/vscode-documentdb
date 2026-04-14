@@ -136,7 +136,7 @@ Each `MonarchRule` is one of:
 
 ---
 
-### WI-2: Monarch State-Machine Executor (`monarchRunner.ts`)
+### WI-2: Monarch State-Machine Executor (`monarchRunner.ts`) — ✅ DONE
 
 **Goal:** A function that takes a string and the `MonarchLanguageRules`, runs the tokenizer state machine, and returns an array of `(startOffset, endOffset, tokenType)` spans.
 

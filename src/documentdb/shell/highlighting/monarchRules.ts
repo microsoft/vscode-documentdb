@@ -28,10 +28,9 @@
  */
 export type MonarchRule =
     | { regex: RegExp; action: string } // match → emit token
-    | { regex: RegExp; actionCases: Record<string, string> } // match → lookup cases
     | { regex: RegExp; action: string; next: string } // match → emit token + push/pop state
-    | { regex: RegExp; actionByGroup: string[] } // match → emit one token per capture group
     | { regex: RegExp; actionCases: Record<string, string>; next?: string } // match → lookup cases + optional next
+    | { regex: RegExp; actionByGroup: string[]; next?: string } // match → one token per group + optional next
     | { include: string }; // include another state's rules
 
 /**
