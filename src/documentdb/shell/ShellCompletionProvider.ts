@@ -230,7 +230,10 @@ export class ShellCompletionProvider {
         }
 
         // Check for db. patterns
-        if (trimmed.startsWith('db.') || trimmed.startsWith('db[')) {
+        // NOTE: db["collection"] bracket notation is not supported for completions.
+        // The parser assumes dot-access syntax; bracket notation would need separate
+        // parsing to extract the collection name from db['name'] or db["name"].
+        if (trimmed.startsWith('db.')) {
             return this.detectDbContext(trimmed, text, cursor);
         }
 
