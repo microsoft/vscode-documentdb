@@ -40,8 +40,9 @@ describe('ShellInputHandler', () => {
     describe('basic character input', () => {
         it('should echo printable characters', () => {
             handler.handleInput('a');
-            expect(written).toBe('a');
             expect(handler.getBuffer()).toBe('a');
+            // The re-render output contains ANSI positioning + the character
+            expect(written).toContain('a');
         });
 
         it('should accumulate characters in buffer', () => {
@@ -56,7 +57,8 @@ describe('ShellInputHandler', () => {
         it('should handle multi-character input at once', () => {
             handler.handleInput('hello');
             expect(handler.getBuffer()).toBe('hello');
-            expect(written).toBe('hello');
+            // The re-render output contains ANSI positioning + the full text
+            expect(written).toContain('hello');
         });
 
         it('should ignore control characters below space (except special ones)', () => {
