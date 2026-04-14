@@ -599,13 +599,20 @@ export class ShellCompletionProvider {
         // Use the shared cursor context detection for inner query-object context
         const cursorCtx = detectCursorContext(ctx.argumentText, ctx.cursorOffsetInArg, fieldLookup);
 
+        // Extract the prefix to determine whether the user is typing a $-operator
+        const argPrefix = this.extractArgumentPrefix(ctx.argumentText, ctx.cursorOffsetInArg);
+        const typingOperator = argPrefix.startsWith('$');
+
         switch (cursorCtx.position) {
             case 'key':
             case 'array-element': {
-                // Field names from schema
-                this.addFieldCandidates(candidates, shellCtx, ctx.collectionName);
-                // Key-position operators ($and, $or, $nor, etc.)
-                this.addOperatorCandidates(candidates, metaFilter);
+                if (typingOperator) {
+                    // User typed `$` — show operators only
+                    this.addOperatorCandidates(candidates, metaFilter);
+                } else {
+                    // Show field names only (operators appear once `$` is typed)
+                    this.addFieldCandidates(candidates, shellCtx, ctx.collectionName);
+                }
                 break;
             }
             case 'value': {
@@ -621,9 +628,12 @@ export class ShellCompletionProvider {
                 break;
             }
             default: {
-                // Unknown — provide fields + operators
-                this.addFieldCandidates(candidates, shellCtx, ctx.collectionName);
-                this.addOperatorCandidates(candidates, metaFilter);
+                // Unknown — show fields or operators based on prefix
+                if (typingOperator) {
+                    this.addOperatorCandidates(candidates, metaFilter);
+                } else {
+                    this.addFieldCandidates(candidates, shellCtx, ctx.collectionName);
+                }
                 break;
             }
         }
@@ -709,23 +719,23 @@ export class ShellCompletionProvider {
     /**
      * Find the start position of the current word being typed (for replacement).
      * Scans backward from cursor to find the last non-identifier character.
+     * Includes '.' to support dotted nested field paths (e.g., 'address.city').
      */
     private findReplacementStart(buffer: string, cursor: number): number {
         let pos = cursor - 1;
-        while (pos >= 0 && /[a-zA-Z0-9_$]/.test(buffer[pos])) {
+        while (pos >= 0 && /[a-zA-Z0-9_$.]/.test(buffer[pos])) {
             pos--;
         }
-        // If preceded by a dot, include everything after the dot
         return pos + 1;
     }
 
     /**
      * Extract the prefix being typed inside a method argument.
-     * Looks for identifier characters or $ at the cursor position.
+     * Looks for identifier characters, $, or '.' (for nested field paths) at the cursor position.
      */
     private extractArgumentPrefix(argumentText: string, cursorOffset: number): string {
         let start = cursorOffset - 1;
-        while (start >= 0 && /[a-zA-Z0-9_$]/.test(argumentText[start])) {
+        while (start >= 0 && /[a-zA-Z0-9_$.]/.test(argumentText[start])) {
             start--;
         }
         return argumentText.slice(start + 1, cursorOffset);

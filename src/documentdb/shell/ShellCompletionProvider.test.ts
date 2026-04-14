@@ -299,9 +299,14 @@ describe('ShellCompletionProvider', () => {
             expect(labels).toContain('_id');
         });
 
-        it('should return operators inside find()', () => {
+        it('should not return operators inside find() without $ prefix', () => {
             const result = provider.getCompletions('db.users.find({ ', 17, TEST_CONTEXT);
-            // Should include at least some operators
+            const operatorCandidates = result.candidates.filter((c) => c.kind === 'operator');
+            expect(operatorCandidates.length).toBe(0);
+        });
+
+        it('should return operators inside find() when $ is typed', () => {
+            const result = provider.getCompletions('db.users.find({ $', 18, TEST_CONTEXT);
             const operatorCandidates = result.candidates.filter((c) => c.kind === 'operator');
             expect(operatorCandidates.length).toBeGreaterThan(0);
         });
@@ -375,6 +380,208 @@ describe('ShellCompletionProvider', () => {
             const result = provider.getCompletions('db.users.', 10, TEST_CONTEXT);
             const allMethods = result.candidates.every((c) => c.kind === 'method');
             expect(allMethods).toBe(true);
+        });
+    });
+
+    // ─── Operator vs field separation (Option C) ─────────────────────────────
+
+    describe('operator/field separation at key position', () => {
+        beforeEach(() => {
+            mockSchemaStore(
+                [],
+                [
+                    { path: 'name', type: 'string', bsonType: 'string' },
+                    { path: 'age', type: 'number', bsonType: 'int32' },
+                    { path: 'status', type: 'string', bsonType: 'string' },
+                ],
+            );
+        });
+
+        it('should show only fields (no operators) at key position with empty prefix', () => {
+            const result = provider.getCompletions('db.users.find({ ', 17, TEST_CONTEXT);
+            const fields = result.candidates.filter((c) => c.kind === 'field');
+            const operators = result.candidates.filter((c) => c.kind === 'operator');
+            expect(fields.length).toBe(3);
+            expect(operators.length).toBe(0);
+        });
+
+        it('should show only fields when prefix is a plain identifier', () => {
+            const input = 'db.users.find({ na';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('name');
+            expect(labels).not.toContain('$ne');
+        });
+
+        it('should show only operators when prefix starts with $', () => {
+            const input = 'db.users.find({ $';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const fields = result.candidates.filter((c) => c.kind === 'field');
+            const operators = result.candidates.filter((c) => c.kind === 'operator');
+            expect(fields.length).toBe(0);
+            expect(operators.length).toBeGreaterThan(0);
+        });
+
+        it('should filter operators by prefix after $', () => {
+            const input = 'db.users.find({ $g';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('$gt');
+            expect(labels).toContain('$gte');
+            expect(labels).not.toContain('$lt');
+        });
+
+        it('should show operators at value position (after colon)', () => {
+            const input = 'db.users.find({ age: { $';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const operators = result.candidates.filter((c) => c.kind === 'operator');
+            expect(operators.length).toBeGreaterThan(0);
+        });
+
+        it('should show operators at operator position', () => {
+            const input = 'db.users.find({ age: { $gt: 5, $';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const operators = result.candidates.filter((c) => c.kind === 'operator');
+            expect(operators.length).toBeGreaterThan(0);
+        });
+
+        it('should show only fields after comma at key position', () => {
+            const input = 'db.users.find({ name: "alice", ';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const fields = result.candidates.filter((c) => c.kind === 'field');
+            const operators = result.candidates.filter((c) => c.kind === 'operator');
+            expect(fields.length).toBe(3);
+            expect(operators.length).toBe(0);
+        });
+
+        it('should show only operators after comma when $ typed', () => {
+            const input = 'db.users.find({ name: "alice", $';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const fields = result.candidates.filter((c) => c.kind === 'field');
+            const operators = result.candidates.filter((c) => c.kind === 'operator');
+            expect(fields.length).toBe(0);
+            expect(operators.length).toBeGreaterThan(0);
+        });
+    });
+
+    // ─── Nested field prefix extraction ──────────────────────────────────────
+
+    describe('nested field path completions', () => {
+        beforeEach(() => {
+            mockSchemaStore(
+                [],
+                [
+                    { path: 'name', type: 'string', bsonType: 'string' },
+                    { path: 'address', type: 'object', bsonType: 'object' },
+                    { path: 'address.city', type: 'string', bsonType: 'string' },
+                    { path: 'address.state', type: 'string', bsonType: 'string' },
+                    { path: 'address.zip', type: 'string', bsonType: 'string' },
+                    { path: 'toplevel', type: 'object', bsonType: 'object' },
+                    { path: 'toplevel.isEnabled', type: 'boolean', bsonType: 'bool' },
+                    { path: 'toplevel.isActive', type: 'boolean', bsonType: 'bool' },
+                    { path: 'toplevel.itemCount', type: 'number', bsonType: 'int32' },
+                    { path: 'settings.theme.color', type: 'string', bsonType: 'string' },
+                ],
+            );
+        });
+
+        it('should match nested field by dotted prefix', () => {
+            const input = 'db.users.find({ address.ci';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('address.city');
+            expect(labels).not.toContain('address.state');
+        });
+
+        it('should match all sub-fields of a parent path', () => {
+            const input = 'db.users.find({ address.';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('address.city');
+            expect(labels).toContain('address.state');
+            expect(labels).toContain('address.zip');
+            expect(labels).not.toContain('name');
+        });
+
+        it('should not match ISODate for toplevel.is prefix', () => {
+            const input = 'db.users.find({ toplevel.is';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('toplevel.isEnabled');
+            expect(labels).toContain('toplevel.isActive');
+            expect(labels).not.toContain('toplevel.itemCount');
+            // Must NOT match BSON constructors
+            const bsonCandidates = result.candidates.filter((c) => c.kind === 'bson');
+            expect(bsonCandidates.length).toBe(0);
+        });
+
+        it('should not match unrelated top-level fields for nested prefix', () => {
+            const input = 'db.users.find({ toplevel.';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('toplevel.isEnabled');
+            expect(labels).toContain('toplevel.isActive');
+            expect(labels).toContain('toplevel.itemCount');
+            expect(labels).not.toContain('name');
+            expect(labels).not.toContain('address');
+        });
+
+        it('should match deeply nested fields', () => {
+            const input = 'db.users.find({ settings.theme.';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('settings.theme.color');
+        });
+
+        it('should match full dotted path with partial last segment', () => {
+            const input = 'db.users.find({ settings.theme.co';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('settings.theme.color');
+        });
+
+        it('should return all fields when no prefix is typed', () => {
+            const input = 'db.users.find({ ';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const fields = result.candidates.filter((c) => c.kind === 'field');
+            expect(fields.length).toBe(10); // all fields from mock
+        });
+
+        it('should handle prefix that matches top-level and nested', () => {
+            const input = 'db.users.find({ top';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('toplevel');
+            expect(labels).toContain('toplevel.isEnabled');
+            expect(labels).toContain('toplevel.isActive');
+            expect(labels).toContain('toplevel.itemCount');
+        });
+
+        it('should produce correct replacementStart for dotted prefix', () => {
+            const input = 'db.users.find({ address.ci';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            // replacementStart should point to 'a' in 'address.ci'
+            expect(result.prefix).toBe('address.ci');
+            // The replacement should cover the entire dotted path
+            const expectedStart = input.indexOf('address.ci');
+            expect(result.replacementStart).toBe(expectedStart);
+        });
+
+        it('should not break $ operator prefix with dot inclusion', () => {
+            const input = 'db.users.find({ $g';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            expect(result.prefix).toBe('$g');
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('$gt');
+            expect(labels).toContain('$gte');
+        });
+
+        it('should not break simple field prefix', () => {
+            const input = 'db.users.find({ na';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            expect(result.prefix).toBe('na');
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('name');
         });
     });
 });
