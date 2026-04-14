@@ -109,23 +109,8 @@ const SHOW_SUBCOMMANDS: readonly CompletionCandidate[] = [
     { label: 'collections', insertText: 'collections', kind: 'command', detail: 'List collections' },
 ];
 
-/** Known database methods — used to distinguish `db.<method>` from `db.<collection>`. */
-const DATABASE_METHODS = new Set([
-    'getCollection',
-    'getCollectionNames',
-    'getCollectionInfos',
-    'createCollection',
-    'dropDatabase',
-    'runCommand',
-    'adminCommand',
-    'aggregate',
-    'getSiblingDB',
-    'getName',
-    'stats',
-    'version',
-    'createView',
-    'listCommands',
-]);
+/** Known database methods — derived from shell API types to stay in sync automatically. */
+const DATABASE_METHODS = new Set(getMethodsByTarget('database').map((m) => m.name));
 
 /** Methods that return a find cursor. */
 const FIND_CURSOR_METHODS = new Set(['find']);
@@ -438,11 +423,14 @@ export class ShellCompletionProvider {
                 const fetchKey = `dbs:${context.clusterId}`;
                 if (!this._backgroundFetchTriggered.has(fetchKey)) {
                     this._backgroundFetchTriggered.add(fetchKey);
-                    void client.listDatabases().catch(() => {
-                        // Non-critical — degrade gracefully
-                    }).finally(() => {
-                        this._backgroundFetchTriggered.delete(fetchKey);
-                    });
+                    void client
+                        .listDatabases()
+                        .catch(() => {
+                            // Non-critical — degrade gracefully
+                        })
+                        .finally(() => {
+                            this._backgroundFetchTriggered.delete(fetchKey);
+                        });
                 }
             }
         }
@@ -496,11 +484,14 @@ export class ShellCompletionProvider {
                 const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
                 if (!this._backgroundFetchTriggered.has(fetchKey)) {
                     this._backgroundFetchTriggered.add(fetchKey);
-                    void client.listCollections(context.databaseName).catch(() => {
-                        // Non-critical
-                    }).finally(() => {
-                        this._backgroundFetchTriggered.delete(fetchKey);
-                    });
+                    void client
+                        .listCollections(context.databaseName)
+                        .catch(() => {
+                            // Non-critical
+                        })
+                        .finally(() => {
+                            this._backgroundFetchTriggered.delete(fetchKey);
+                        });
                 }
             }
         }
