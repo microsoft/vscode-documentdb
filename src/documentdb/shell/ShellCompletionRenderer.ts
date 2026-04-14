@@ -16,6 +16,10 @@ import { type CompletionCandidate } from './ShellCompletionProvider';
 // ─── ANSI constants ──────────────────────────────────────────────────────────
 
 const ANSI_GRAY = '\x1b[90m';
+const ANSI_CYAN = '\x1b[36m';
+const ANSI_YELLOW = '\x1b[33m';
+const ANSI_GREEN = '\x1b[32m';
+const ANSI_MAGENTA = '\x1b[35m';
 const ANSI_RESET = '\x1b[0m';
 
 /** Maximum number of rows to display before truncating. */
@@ -26,6 +30,47 @@ const MIN_COLUMN_WIDTH = 4;
 
 /** Padding between columns. */
 const COLUMN_PADDING = 2;
+
+/**
+ * Returns the ANSI color code for a completion candidate kind.
+ *
+ * Color scheme:
+ * - Collections: cyan — data containers, visually prominent
+ * - Methods/commands: yellow — callable actions
+ * - Fields: green — data attributes
+ * - Operators: magenta — query operators ($gt, $match, etc.)
+ * - Databases, BSON, etc.: gray (default)
+ */
+function getKindColor(kind: CompletionCandidate['kind']): string {
+    switch (kind) {
+        case 'collection':
+            return ANSI_CYAN;
+        case 'method':
+        case 'command':
+            return ANSI_YELLOW;
+        case 'field':
+            return ANSI_GREEN;
+        case 'operator':
+        case 'bson':
+            return ANSI_MAGENTA;
+        case 'database':
+        default:
+            return ANSI_GRAY;
+    }
+}
+
+/**
+ * Formats a candidate label for display, adding visual hints based on kind.
+ *
+ * Methods get a trailing `()` suffix so users can distinguish
+ * `restaurants` (collection) from `aggregate()` (method) at a glance.
+ */
+function formatDisplayLabel(candidate: CompletionCandidate): string {
+    if (candidate.kind === 'method') {
+        return candidate.label + '()';
+    }
+    return candidate.label;
+}
 
 /**
  * Renders completion candidates in a multi-column layout for the terminal.
@@ -49,46 +94,46 @@ export function renderCompletionList(candidates: readonly CompletionCandidate[],
         return '';
     }
 
-    const labels = candidates.map((c) => c.label);
+    // Build display labels (methods get `()` suffix for visual distinction)
+    const displayLabels = candidates.map(formatDisplayLabel);
 
-    // Calculate column width from longest label
-    const maxLabelLen = Math.max(...labels.map((l) => l.length));
+    // Calculate column width from longest display label
+    const maxLabelLen = Math.max(...displayLabels.map((l) => l.length));
     const colWidth = Math.max(maxLabelLen + COLUMN_PADDING, MIN_COLUMN_WIDTH);
 
     // Calculate number of columns that fit
     const numCols = Math.max(1, Math.floor(terminalWidth / colWidth));
 
     // Calculate number of rows
-    const totalRows = Math.ceil(labels.length / numCols);
+    const totalRows = Math.ceil(candidates.length / numCols);
     const displayRows = Math.min(totalRows, MAX_DISPLAY_ROWS);
     const displayCount = displayRows * numCols;
-    const truncated = labels.length > displayCount;
-    const visibleLabels = truncated ? labels.slice(0, displayCount) : labels;
+    const truncated = candidates.length > displayCount;
+    const visibleCandidates = truncated ? candidates.slice(0, displayCount) : [...candidates];
+    const visibleLabels = truncated ? displayLabels.slice(0, displayCount) : displayLabels;
 
-    // Build the output
+    // Build the output with per-candidate coloring
     let output = '';
 
     for (let row = 0; row < displayRows; row++) {
-        output += '\r\n' + ANSI_GRAY;
+        output += '\r\n';
 
         for (let col = 0; col < numCols; col++) {
             const idx = row * numCols + col;
-            if (idx >= visibleLabels.length) break;
+            if (idx >= visibleCandidates.length) break;
 
+            const candidate = visibleCandidates[idx];
             const label = visibleLabels[idx];
-            // Pad to column width (except last column)
-            if (col < numCols - 1) {
-                output += label.padEnd(colWidth);
-            } else {
-                output += label;
-            }
-        }
+            const color = getKindColor(candidate.kind);
 
-        output += ANSI_RESET;
+            // Pad to column width (except last column)
+            const paddedLabel = col < numCols - 1 ? label.padEnd(colWidth) : label;
+            output += color + paddedLabel + ANSI_RESET;
+        }
     }
 
     if (truncated) {
-        const remaining = labels.length - displayCount;
+        const remaining = candidates.length - displayCount;
         output += '\r\n' + ANSI_GRAY + `\u2026and ${String(remaining)} more` + ANSI_RESET;
     }
 

@@ -307,4 +307,75 @@ describe('ShellCompletionProvider', () => {
             expect(operatorCandidates.length).toBeGreaterThan(0);
         });
     });
+
+    describe('cursor chain completions', () => {
+        it('should detect cursor chain after find()', () => {
+            const input = 'db.users.find({}).';
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('cursor-chain');
+            if (ctx.kind === 'cursor-chain') {
+                expect(ctx.cursorType).toBe('find');
+                expect(ctx.prefix).toBe('');
+            }
+        });
+
+        it('should return find cursor methods after find().', () => {
+            const input = 'db.users.find({}).';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('limit');
+            expect(labels).toContain('skip');
+            expect(labels).toContain('sort');
+            expect(labels).toContain('toArray');
+        });
+
+        it('should filter cursor methods by prefix', () => {
+            const input = 'db.users.find({}).li';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('limit');
+            expect(labels).not.toContain('skip');
+        });
+
+        it('should detect cursor chain after chained calls', () => {
+            const input = 'db.users.find({}).limit(10).';
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('cursor-chain');
+        });
+
+        it('should return cursor methods after chained calls', () => {
+            const input = 'db.users.find({}).limit(10).';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('sort');
+            expect(labels).toContain('toArray');
+        });
+
+        it('should detect aggregate cursor chain', () => {
+            const input = 'db.users.aggregate([]).';
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('cursor-chain');
+            if (ctx.kind === 'cursor-chain') {
+                expect(ctx.cursorType).toBe('aggregate');
+            }
+        });
+    });
+
+    describe('kind differentiation', () => {
+        it('should mark db. collection candidates as kind "collection"', () => {
+            mockClustersClient([], [{ name: 'users' }, { name: 'orders' }]);
+
+            const result = provider.getCompletions('db.', 3, TEST_CONTEXT);
+            const collections = result.candidates.filter((c) => c.kind === 'collection');
+            const methods = result.candidates.filter((c) => c.kind === 'method');
+            expect(collections.length).toBeGreaterThan(0);
+            expect(methods.length).toBeGreaterThan(0);
+        });
+
+        it('should mark collection methods as kind "method"', () => {
+            const result = provider.getCompletions('db.users.', 10, TEST_CONTEXT);
+            const allMethods = result.candidates.every((c) => c.kind === 'method');
+            expect(allMethods).toBe(true);
+        });
+    });
 });

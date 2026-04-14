@@ -8,8 +8,8 @@ import { findCommonPrefix, renderCompletionList } from './ShellCompletionRendere
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeCandidate(label: string): CompletionCandidate {
-    return { label, insertText: label, kind: 'collection' };
+function makeCandidate(label: string, kind: CompletionCandidate['kind'] = 'collection'): CompletionCandidate {
+    return { label, insertText: label, kind };
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -31,11 +31,41 @@ describe('ShellCompletionRenderer', () => {
             expect(output).toContain('orders');
         });
 
-        it('should use gray ANSI codes', () => {
+        it('should use cyan ANSI for collection candidates', () => {
             const candidates = [makeCandidate('a'), makeCandidate('b')];
             const output = renderCompletionList(candidates, 80);
-            expect(output).toContain('\x1b[90m');
+            // Cyan for collections
+            expect(output).toContain('\x1b[36m');
             expect(output).toContain('\x1b[0m');
+        });
+
+        it('should use yellow ANSI for method candidates', () => {
+            const candidates = [makeCandidate('find', 'method'), makeCandidate('findOne', 'method')];
+            const output = renderCompletionList(candidates, 80);
+            // Yellow for methods
+            expect(output).toContain('\x1b[33m');
+        });
+
+        it('should append () to method labels', () => {
+            const candidates = [makeCandidate('find', 'method'), makeCandidate('insertOne', 'method')];
+            const output = renderCompletionList(candidates, 80);
+            expect(output).toContain('find()');
+            expect(output).toContain('insertOne()');
+        });
+
+        it('should not append () to collection labels', () => {
+            const candidates = [makeCandidate('users'), makeCandidate('orders')];
+            const output = renderCompletionList(candidates, 80);
+            expect(output).not.toContain('users()');
+            expect(output).not.toContain('orders()');
+        });
+
+        it('should use different colors for mixed kinds', () => {
+            const candidates = [makeCandidate('restaurants', 'collection'), makeCandidate('aggregate', 'method')];
+            const output = renderCompletionList(candidates, 80);
+            // Both cyan and yellow should be present
+            expect(output).toContain('\x1b[36m'); // cyan for collection
+            expect(output).toContain('\x1b[33m'); // yellow for method
         });
 
         it('should wrap to multiple rows when needed', () => {
