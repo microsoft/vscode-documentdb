@@ -643,6 +643,8 @@ export class ShellCompletionProvider {
 
     /**
      * Add field name candidates from SchemaStore.
+     * Dotted paths (nested fields) get quoted insertText since they must be
+     * quoted when used as keys in JavaScript object literals.
      */
     private addFieldCandidates(
         candidates: CompletionCandidate[],
@@ -656,9 +658,10 @@ export class ShellCompletionProvider {
         );
 
         for (const field of fields) {
+            const needsQuoting = field.path.includes('.');
             candidates.push({
                 label: field.path,
-                insertText: field.path,
+                insertText: needsQuoting ? `"${field.path}"` : field.path,
                 kind: 'field',
                 detail: field.type,
             });

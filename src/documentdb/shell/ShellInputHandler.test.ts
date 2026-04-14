@@ -563,6 +563,51 @@ describe('ShellInputHandler', () => {
         });
     });
 
+    describe('replaceText', () => {
+        it('should replace text before cursor with new text', () => {
+            handler.handleInput('address.ci');
+            handler.replaceText(10, '"address.city"');
+            expect(handler.getBuffer()).toBe('"address.city"');
+            expect(handler.getCursor()).toBe(14);
+        });
+
+        it('should handle replacement shorter than deleted text', () => {
+            handler.handleInput('longprefix');
+            handler.replaceText(10, 'short');
+            expect(handler.getBuffer()).toBe('short');
+            expect(handler.getCursor()).toBe(5);
+        });
+
+        it('should handle replacement longer than deleted text', () => {
+            handler.handleInput('ab');
+            handler.replaceText(2, '"address.city"');
+            expect(handler.getBuffer()).toBe('"address.city"');
+            expect(handler.getCursor()).toBe(14);
+        });
+
+        it('should preserve text after cursor', () => {
+            handler.handleInput('find({ address.ci })');
+            // Move cursor to after 'ci' (position 16)
+            for (let i = 0; i < 3; i++) handler.handleInput('\x1b[D'); // Left x3 to go before ' })'
+            handler.replaceText(10, '"address.city"');
+            expect(handler.getBuffer()).toBe('find({ "address.city" })');
+        });
+
+        it('should not delete beyond buffer start', () => {
+            handler.handleInput('ab');
+            handler.replaceText(100, 'replacement');
+            expect(handler.getBuffer()).toBe('replacement');
+            expect(handler.getCursor()).toBe(11);
+        });
+
+        it('should handle zero deleteCount (pure insert)', () => {
+            handler.handleInput('hello');
+            handler.replaceText(0, 'X');
+            expect(handler.getBuffer()).toBe('helloX');
+            expect(handler.getCursor()).toBe(6);
+        });
+    });
+
     describe('onBufferChange callback', () => {
         it('should fire after printable char insertion', () => {
             let changeCount = 0;

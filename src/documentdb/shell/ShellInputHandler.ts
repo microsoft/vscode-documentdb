@@ -167,6 +167,46 @@ export class ShellInputHandler {
     }
 
     /**
+     * Replace text before the cursor and insert new text.
+     * Used by the PTY when a completion needs to replace the typed prefix
+     * (e.g., quoting a dotted field path: `address.ci` → `"address.city"`).
+     *
+     * NOTE: Like {@link insertText}, this does NOT fire `onBufferChange`.
+     *
+     * @param deleteCount - number of characters to delete before the cursor
+     * @param text - the replacement text to insert
+     */
+    replaceText(deleteCount: number, text: string): void {
+        // Safety: don't delete beyond buffer start
+        deleteCount = Math.min(deleteCount, this._cursor);
+
+        const before = this._buffer.slice(0, this._cursor - deleteCount);
+        const after = this._buffer.slice(this._cursor);
+        this._buffer = before + text + after;
+
+        // Move cursor back to start of replaced region
+        if (deleteCount > 0) {
+            this._callbacks.write(`\x1b[${String(deleteCount)}D`);
+        }
+
+        // Write new text + remainder of line
+        this._callbacks.write(text + after);
+
+        // Erase leftover characters if replacement is shorter than deleted text
+        const cleanup = Math.max(0, deleteCount - text.length);
+        if (cleanup > 0) {
+            this._callbacks.write(' '.repeat(cleanup) + '\b'.repeat(cleanup));
+        }
+
+        // Move cursor back to end of inserted text (before 'after' portion)
+        if (after.length > 0) {
+            this._callbacks.write('\b'.repeat(after.length));
+        }
+
+        this._cursor = before.length + text.length;
+    }
+
+    /**
      * Process raw terminal input data from `handleInput(data)`.
      *
      * Terminal input arrives as individual characters or escape sequences.

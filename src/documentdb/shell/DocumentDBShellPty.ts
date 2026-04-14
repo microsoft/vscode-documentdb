@@ -76,6 +76,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _ghostTextTimer: ReturnType<typeof setTimeout> | undefined;
     /** Whether a completion list is currently displayed below the prompt. */
     private _completionListVisible: boolean = false;
+    /** Whether the current ghost text is an informational hint (not insertable). */
+    private _ghostTextIsHint: boolean = false;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
@@ -204,6 +206,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // which are handled by the input handler's escape sequence processing)
         if (data !== '\x1b[C' && data !== '\x09') {
             this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            this._ghostTextIsHint = false;
         }
 
         // Dismiss completion list on any input
@@ -593,10 +596,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Handle Tab keypress — provide completions or accept ghost text.
      */
     private handleTab(buffer: string, cursor: number): void {
-        // If ghost text is visible (single prefix match), accept it
-        if (this._ghostText.isVisible) {
+        // If insertable ghost text is visible (not a hint), accept it
+        if (this._ghostText.isVisible && !this._ghostTextIsHint) {
             this.handleAcceptGhostText();
             return;
+        }
+
+        // Clear hint ghost text if visible (hints are not insertable)
+        if (this._ghostText.isVisible) {
+            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            this._ghostTextIsHint = false;
         }
 
         const result = this.getCompletionResult(buffer, cursor);
@@ -630,9 +639,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /**
      * Apply a single completion by inserting the remaining text.
+     * For quoted dotted field paths, replaces the typed prefix with the full quoted text.
      */
     private applySingleCompletion(result: CompletionResult): void {
         const candidate = result.candidates[0];
+
+        // Quoted field path: insertText starts with `"` but the prefix doesn't.
+        // Replace the entire prefix with the quoted insertText.
+        if (candidate.insertText.startsWith('"') && !result.prefix.startsWith('"')) {
+            this._inputHandler.replaceText(result.prefix.length, candidate.insertText);
+            return;
+        }
+
         const remaining = candidate.insertText.slice(result.prefix.length);
         if (remaining.length > 0) {
             this._inputHandler.insertText(remaining);
@@ -712,16 +730,44 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const result = this.getCompletionResult(buffer, cursor);
 
         if (result.candidates.length === 1 && result.prefix.length > 0) {
-            // Single match with a typed prefix — show ghost text
             const candidate = result.candidates[0];
+
+            // Skip ghost text for quoted field paths — the visual would be
+            // misleading (e.g., showing `ty"` instead of the full quoted path).
+            if (candidate.insertText.startsWith('"') && !result.prefix.startsWith('"')) {
+                this._ghostText.clear((d) => this._writeEmitter.fire(d));
+                return;
+            }
+
+            // Single match with a typed prefix — show ghost text
             const remaining = candidate.insertText.slice(result.prefix.length);
             if (remaining.length > 0) {
+                this._ghostTextIsHint = false;
                 this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
                 return;
             }
         }
 
+        // No completions inside a method argument — show schema hint if no fields are known
+        if (result.candidates.length === 0) {
+            const ctx = this._completionProvider.detectContext(buffer, cursor);
+            if (ctx.kind === 'method-argument') {
+                this.showSchemaHint(ctx.collectionName);
+                return;
+            }
+        }
+
         this._ghostText.clear((d) => this._writeEmitter.fire(d));
+    }
+
+    /**
+     * Show a hint as ghost text when no schema data is available for a collection.
+     * The hint is non-insertable — pressing Tab or Right Arrow won't accept it.
+     */
+    private showSchemaHint(collectionName: string): void {
+        const hint = `  ⓘ Run db.${collectionName}.find() first for field suggestions`;
+        this._ghostTextIsHint = true;
+        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d));
     }
 
     /**
@@ -732,6 +778,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private handleAcceptGhostText(): string | undefined {
         if (!this._ghostText.isVisible) {
+            return undefined;
+        }
+
+        // Don't accept hint ghost text — it's informational only
+        if (this._ghostTextIsHint) {
+            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            this._ghostTextIsHint = false;
             return undefined;
         }
 

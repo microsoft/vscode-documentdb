@@ -584,4 +584,64 @@ describe('ShellCompletionProvider', () => {
             expect(labels).toContain('name');
         });
     });
+
+    // ─── Dotted field quoting ────────────────────────────────────────────────
+
+    describe('dotted field quoting', () => {
+        beforeEach(() => {
+            mockSchemaStore(
+                [],
+                [
+                    { path: 'name', type: 'string', bsonType: 'string' },
+                    { path: 'address', type: 'object', bsonType: 'object' },
+                    { path: 'address.city', type: 'string', bsonType: 'string' },
+                    { path: 'address.state', type: 'string', bsonType: 'string' },
+                    { path: 'toplevel.isEnabled', type: 'boolean', bsonType: 'bool' },
+                    { path: 'settings.theme.color', type: 'string', bsonType: 'string' },
+                ],
+            );
+        });
+
+        it('should quote dotted field paths in insertText', () => {
+            const input = 'db.users.find({ ';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const addressCity = result.candidates.find((c) => c.label === 'address.city');
+            expect(addressCity).toBeDefined();
+            expect(addressCity!.insertText).toBe('"address.city"');
+        });
+
+        it('should not quote simple field paths', () => {
+            const input = 'db.users.find({ ';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const name = result.candidates.find((c) => c.label === 'name');
+            expect(name).toBeDefined();
+            expect(name!.insertText).toBe('name');
+        });
+
+        it('should quote deeply nested field paths', () => {
+            const input = 'db.users.find({ ';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const deep = result.candidates.find((c) => c.label === 'settings.theme.color');
+            expect(deep).toBeDefined();
+            expect(deep!.insertText).toBe('"settings.theme.color"');
+        });
+
+        it('should filter quoted candidates by dotted prefix', () => {
+            const input = 'db.users.find({ address.ci';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            expect(result.candidates.length).toBe(1);
+            expect(result.candidates[0].label).toBe('address.city');
+            expect(result.candidates[0].insertText).toBe('"address.city"');
+        });
+
+        it('should filter by label not insertText', () => {
+            // Prefix 'address.' should match fields with dotted label, not the quoted insertText
+            const input = 'db.users.find({ address.';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('address.city');
+            expect(labels).toContain('address.state');
+            expect(labels).not.toContain('name');
+        });
+    });
 });
