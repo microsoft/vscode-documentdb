@@ -151,6 +151,9 @@ const PIPELINE_ARG_METHODS = new Set(['aggregate']);
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export class ShellCompletionProvider {
+    /** Tracks background fetches already triggered to avoid duplicate network requests. */
+    private readonly _backgroundFetchTriggered = new Set<string>();
+
     /**
      * Get completion candidates for the current input buffer and cursor position.
      *
@@ -432,9 +435,15 @@ export class ShellCompletionProvider {
                 }
             } else {
                 // No cached data — trigger a background fetch for next Tab press
-                void client.listDatabases().catch(() => {
-                    // Non-critical — degrade gracefully
-                });
+                const fetchKey = `dbs:${context.clusterId}`;
+                if (!this._backgroundFetchTriggered.has(fetchKey)) {
+                    this._backgroundFetchTriggered.add(fetchKey);
+                    void client.listDatabases().catch(() => {
+                        // Non-critical — degrade gracefully
+                    }).finally(() => {
+                        this._backgroundFetchTriggered.delete(fetchKey);
+                    });
+                }
             }
         }
 
@@ -484,9 +493,15 @@ export class ShellCompletionProvider {
                 }
             } else {
                 // Trigger background fetch
-                void client.listCollections(context.databaseName).catch(() => {
-                    // Non-critical
-                });
+                const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
+                if (!this._backgroundFetchTriggered.has(fetchKey)) {
+                    this._backgroundFetchTriggered.add(fetchKey);
+                    void client.listCollections(context.databaseName).catch(() => {
+                        // Non-critical
+                    }).finally(() => {
+                        this._backgroundFetchTriggered.delete(fetchKey);
+                    });
+                }
             }
         }
 
