@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
+import { SchemaStore } from '../SchemaStore';
 import { type CompletionResult, ShellCompletionProvider } from './ShellCompletionProvider';
 import { findCommonPrefix, renderCompletionList } from './ShellCompletionRenderer';
 import { ShellGhostText } from './ShellGhostText';
@@ -748,12 +749,20 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             }
         }
 
-        // No completions inside a method argument — show schema hint if no fields are known
+        // No completions inside a method argument — show schema hint only if
+        // SchemaStore has no fields for this collection (not just a typo/no match)
         if (result.candidates.length === 0) {
             const ctx = this._completionProvider.detectContext(buffer, cursor);
             if (ctx.kind === 'method-argument') {
-                this.showSchemaHint(ctx.collectionName);
-                return;
+                const fields = SchemaStore.getInstance().getKnownFields(
+                    this._connectionInfo.clusterId,
+                    this._currentDatabase,
+                    ctx.collectionName,
+                );
+                if (fields.length === 0) {
+                    this.showSchemaHint(ctx.collectionName);
+                    return;
+                }
             }
         }
 
@@ -765,7 +774,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * The hint is non-insertable — pressing Tab or Right Arrow won't accept it.
      */
     private showSchemaHint(collectionName: string): void {
-        const hint = `  ⓘ Run db.${collectionName}.find() first for field suggestions`;
+        const hint = `  🛈 Run db.${collectionName}.find() first for field suggestions`;
         this._ghostTextIsHint = true;
         this._ghostText.show(hint, (d) => this._writeEmitter.fire(d));
     }
