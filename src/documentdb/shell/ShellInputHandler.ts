@@ -507,11 +507,13 @@ export class ShellInputHandler {
         this._callbacks.write(
             `\x1b[${String(eraseCount)}D` + after + ' '.repeat(eraseCount) + '\b'.repeat(after.length + eraseCount),
         );
+        this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     private clearAfterCursor(): void {
         this._buffer = this._buffer.slice(0, this._cursor);
         this._callbacks.write(ERASE_TO_EOL);
+        this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     private deleteWordBeforeCursor(): void {
@@ -538,6 +540,7 @@ export class ShellInputHandler {
             `\x1b[${String(deleted)}D` + after + ' '.repeat(deleted) + '\b'.repeat(after.length + deleted),
         );
         this._cursor = pos;
+        this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     // ─── Private: history navigation ─────────────────────────────────────────
