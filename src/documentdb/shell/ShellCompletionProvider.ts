@@ -107,7 +107,6 @@ const SHOW_SUBCOMMANDS: readonly CompletionCandidate[] = [
     { label: 'dbs', insertText: 'dbs', kind: 'command', detail: 'List databases' },
     { label: 'databases', insertText: 'databases', kind: 'command', detail: 'List databases' },
     { label: 'collections', insertText: 'collections', kind: 'command', detail: 'List collections' },
-    { label: 'tables', insertText: 'tables', kind: 'command', detail: 'List collections' },
 ];
 
 /** Known database methods — used to distinguish `db.<method>` from `db.<collection>`. */
