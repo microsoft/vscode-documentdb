@@ -27,4 +27,17 @@ export interface ConnectionClusterModel extends BaseClusterModel {
      * Present when this connection represents a local emulator instance.
      */
     emulatorConfiguration?: EmulatorConfiguration;
+
+    /**
+     * The selected authentication method ID (e.g. 'NativeAuth', 'MicrosoftEntraID').
+     * Populated from storage when the tree item is built, used for tooltip display.
+     */
+    selectedAuthMethod?: string;
+
+    /**
+     * The connection username for native (SCRAM) authentication.
+     * Populated from storage when the tree item is built, used for tooltip display.
+     * Never contains a password.
+     */
+    connectionUser?: string;
 }

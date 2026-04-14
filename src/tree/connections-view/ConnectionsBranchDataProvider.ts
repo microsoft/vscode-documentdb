@@ -150,6 +150,8 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                 dbExperience: DocumentDBExperience,
                 connectionString: connection.secrets.connectionString,
                 emulatorConfiguration: connection.properties.emulatorConfiguration,
+                selectedAuthMethod: connection.properties.selectedAuthMethod,
+                connectionUser: connection.secrets.nativeAuthConfig?.connectionUser,
             };
 
             ext.outputChannel.trace(
