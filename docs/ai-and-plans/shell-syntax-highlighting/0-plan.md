@@ -414,14 +414,14 @@ WI-1 and WI-3 can be developed in parallel since WI-3 only depends on the `Token
 
 Before marking this feature complete:
 
-- [ ] `npm run build` succeeds
-- [ ] `npm run lint` passes
-- [ ] `npm run prettier-fix` has been run
-- [ ] All new files have the Microsoft copyright header
-- [ ] All new tests pass
-- [ ] Existing `ShellInputHandler.test.ts` tests pass (with updated assertions)
-- [ ] Existing `DocumentDBShellPty.test.ts` tests pass
-- [ ] No new `any` types
-- [ ] No references to product names other than "DocumentDB" and "DocumentDB API" in code, comments, and test descriptions
-- [ ] The `documentDB.shell.display.colorOutput` setting (already exists) gates highlighting — when `false`, the `colorize` callback returns the input unchanged
-- [ ] Bundle size has not increased (no new dependencies)
+- [x] `npm run build` succeeds
+- [x] `npm run lint` passes (1 pre-existing error in DocumentDBClusterItem.ts, unrelated)
+- [x] `npm run prettier-fix` has been run
+- [x] All new files have the Microsoft copyright header
+- [x] All new tests pass (253 tests across 9 test suites)
+- [x] Existing `ShellInputHandler.test.ts` tests pass (2 assertions updated for re-render format)
+- [x] Existing `DocumentDBShellPty.test.ts` tests pass
+- [x] No new `any` types
+- [x] No references to product names other than "DocumentDB" and "DocumentDB API" in code, comments, and test descriptions
+- [x] The `documentDB.shell.display.colorOutput` setting (already exists) gates highlighting — when `false`, the `colorize` callback returns the input unchanged
+- [x] Bundle size has not increased (no new dependencies)

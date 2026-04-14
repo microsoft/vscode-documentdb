@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/* eslint-disable no-useless-escape -- Regex patterns vendored from Monaco Editor; preserved as-is */
+
 /**
  * Vendored and extended Monarch tokenizer rules for the DocumentDB interactive shell.
  *
