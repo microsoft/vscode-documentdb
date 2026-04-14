@@ -9,7 +9,7 @@
 ## 1. Autocompletion via `TerminalCompletionProvider`
 
 **Priority:** High — implement as soon as the API is finalized
-**Tracking:** [microsoft/vscode#224505](https://github.com/microsoft/vscode/issues/224505)
+**Tracking:** [microsoft/vscode#224505](https://github.com/microsoft/vscode/issues/224505), [#577](https://github.com/microsoft/vscode-documentdb/issues/577)
 **Blocked by:** API finalization (proposed as of April 2026)
 
 ### Background
@@ -38,11 +38,12 @@ VS Code's Terminal Suggest feature (IntelliSense popup in terminals) is stable s
 
 ---
 
-## 2. Tab Completion Fallback
+## ~~2. Tab Completion Fallback~~ ✅
 
-**Priority:** Low — only if `TerminalCompletionProvider` remains proposed long-term
+**Completed in:** [PR #576](https://github.com/microsoft/vscode-documentdb/pull/576)
+**Architecture docs:** `docs/ai-and-plans/interactive-shell/9-shell-autocompletion.md`
 
-Basic tab-completion in the Pseudoterminal: on Tab keypress, scan the current input buffer against known completions. If unambiguous, complete inline. If multiple matches, print options below the prompt.
+Implemented as a self-contained tab completion system in the Pseudoterminal with context-aware completions (7 context types), color-coded bash/zsh-style multi-column picker, and inline ghost text for single prefix matches. See the architecture docs for full details and design decisions.
 
 ---
 
@@ -79,7 +80,7 @@ Pre-fill the Collection View with the same filter/sort/projection the user ran i
 
 **Priority:** Low
 
-- Auto-suggest from history (ghost text)
+- ~~Auto-suggest from history (ghost text)~~ — Inline ghost text for single prefix matches implemented in [PR #576](https://github.com/microsoft/vscode-documentdb/pull/576). History-based ghost text not implemented (deferred).
 - Prompt coloring (green when connected, red when disconnected)
 - Execution status indicator (spinner while running)
 
