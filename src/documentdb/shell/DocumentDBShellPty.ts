@@ -293,6 +293,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             const timeoutMs = this.getShellTimeoutMs();
             const result = await this._sessionManager.evaluate(input, timeoutMs);
 
+            // Stop the spinner before writing any output so the spinner
+            // character doesn't collide with the result text.
+            this._spinner?.stop();
+            this._spinner = undefined;
+
             // If this eval was cancelled by Ctrl+C, skip output — the interrupt
             // handler already showed ^C and a new prompt.
             if (this._interrupted) {
@@ -316,6 +321,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // Show "Open in Collection View" action line for query results with a namespace
             this.maybeWriteActionLine(result);
         } catch (error: unknown) {
+            // Stop the spinner before writing error output.
+            this._spinner?.stop();
+            this._spinner = undefined;
+
             // Suppress errors from intentional Ctrl+C cancellation — the interrupt
             // handler already showed ^C and a new prompt.
             if (this._interrupted) {
