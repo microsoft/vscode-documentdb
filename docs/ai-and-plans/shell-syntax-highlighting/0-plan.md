@@ -108,6 +108,7 @@ Each `MonarchRule` is one of:
 > **DEVIATION (WI-1 — Rule Types):** The `MonarchRule` type uses **named properties** (`{ regex, action }`, `{ regex, actionCases }`, `{ regex, actionByGroup }`, `{ include }`) instead of positional tuples (`[RegExp, string]`). This makes the executor's pattern-matching simpler and produces self-documenting code.
 >
 > **Alternatives analyzed:**
+>
 > 1. **Tuple arrays (as planned):** Pro: closer to Monaco's internal format. Con: requires index-based discrimination (`rule.length === 2` vs `3`) which is brittle. Con: `[RegExp, string | { cases } | string[]]` union is hard to narrow.
 > 2. **Named properties (chosen):** Pro: explicit `'actionCases' in rule` checks. Pro: easier to read and maintain. Con: slightly more verbose than tuple literals.
 > 3. **Tagged union with `kind` discriminant:** Pro: perfect type narrowing. Con: over-engineering; `'field' in obj` checks work fine for 4 variants.
@@ -119,6 +120,7 @@ Each `MonarchRule` is one of:
 > **Reasoning:** Eliminates the need for regex source string manipulation in the executor — the most error-prone step.
 >
 > **Alternatives analyzed:**
+>
 > 1. **Keep `@name` references (as planned):**
 >    - Pro: Faithful to Monaco Monarch format; easier to diff against upstream.
 >    - Pro: Single source of truth for named patterns.
@@ -425,3 +427,213 @@ Before marking this feature complete:
 - [x] No references to product names other than "DocumentDB" and "DocumentDB API" in code, comments, and test descriptions
 - [x] The `documentDB.shell.display.colorOutput` setting (already exists) gates highlighting — when `false`, the `colorize` callback returns the input unchanged
 - [x] Bundle size has not increased (no new dependencies)
+
+---
+
+## Manual Test Plan
+
+Open a DocumentDB Interactive Shell terminal (`DocumentDB: Open Shell`) connected to any database. The prompt should appear as `dbname> `. Verify each scenario below.
+
+### Prerequisites
+
+- The setting `documentDB.shell.display.colorOutput` is **true** (default).
+- The terminal uses a theme with visible ANSI 16-color support (any VS Code default theme works).
+
+### Color Reference
+
+| Color   | ANSI | Applied To                             |
+| ------- | ---- | -------------------------------------- |
+| Cyan    | 36   | JS keywords, BSON constructors         |
+| Green   | 32   | Strings                                |
+| Yellow  | 33   | Numbers, `$`-operators, escape seqs    |
+| Magenta | 35   | Shell commands                         |
+| Gray    | 90   | Comments                               |
+| Red     | 31   | Regex literals, unterminated strings   |
+| Default | —    | Identifiers, delimiters, brackets, `.` |
+
+---
+
+### T-01: JS Keywords (Cyan)
+
+| Step | Action                                                                                           | Expected                                                                |
+| ---- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| 1    | Type `const x = 1`                                                                               | `const` is cyan; `x`, `=` are default; `1` is yellow                    |
+| 2    | Clear line (Ctrl+U), type `if (true) { return false }`                                           | `if`, `true`, `return`, `false` are all cyan; parens/braces are default |
+| 3    | Type `let`, `var`, `function`, `new`, `this`, `null`, `undefined` (one at a time, clear between) | Each is cyan                                                            |
+
+### T-02: Strings — Double Quotes (Green)
+
+| Step | Action                                  | Expected                                                  |
+| ---- | --------------------------------------- | --------------------------------------------------------- |
+| 1    | Type `"hello world"`                    | Entire `"hello world"` is green                           |
+| 2    | Type `"with \"escape\""`                | String content is green; `\"` escape sequences are yellow |
+| 3    | Type `"unterminated` (no closing quote) | Text appears red (string.invalid)                         |
+
+### T-03: Strings — Single Quotes (Green)
+
+| Step | Action               | Expected                                       |
+| ---- | -------------------- | ---------------------------------------------- |
+| 1    | Type `'hello world'` | Entire `'hello world'` is green                |
+| 2    | Type `'it\'s'`       | String content is green; `\'` escape is yellow |
+| 3    | Type `'unterminated` | Text appears red (string.invalid)              |
+
+### T-04: Template Literals (Green + Default for interpolation)
+
+| Step | Action                     | Expected                                                                                                 |
+| ---- | -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1    | Type `` `hello` ``         | String parts are green                                                                                   |
+| 2    | Type `` `hello ${name}` `` | `` `hello `` and `` ` `` are green; `${` and `}` are default (delimiter); `name` is default (identifier) |
+
+### T-05: Numbers (Yellow)
+
+| Step | Action        | Expected |
+| ---- | ------------- | -------- |
+| 1    | Type `42`     | Yellow   |
+| 2    | Type `3.14`   | Yellow   |
+| 3    | Type `1e10`   | Yellow   |
+| 4    | Type `0xFF`   | Yellow   |
+| 5    | Type `0o77`   | Yellow   |
+| 6    | Type `0b1010` | Yellow   |
+
+### T-06: Comments (Gray)
+
+| Step | Action                      | Expected                                       |
+| ---- | --------------------------- | ---------------------------------------------- |
+| 1    | Type `// this is a comment` | Entire line is gray                            |
+| 2    | Type `/* block comment */`  | Entire comment is gray                         |
+| 3    | Type `x = 1 // inline`      | `x`, `=` default; `1` yellow; `// inline` gray |
+
+### T-07: BSON Constructors (Cyan)
+
+| Step | Action                       | Expected                                    |
+| ---- | ---------------------------- | ------------------------------------------- |
+| 1    | Type `ObjectId("abc123")`    | `ObjectId` is cyan; `"abc123"` is green     |
+| 2    | Type `ISODate("2025-01-01")` | `ISODate` is cyan; string is green          |
+| 3    | Type `NumberLong(42)`        | `NumberLong` is cyan; `42` is yellow        |
+| 4    | Type `NumberInt(1)`          | `NumberInt` is cyan                         |
+| 5    | Type `NumberDecimal("3.14")` | `NumberDecimal` is cyan; string is green    |
+| 6    | Type `UUID("abc")`           | `UUID` is cyan                              |
+| 7    | Type `Timestamp(1, 0)`       | `Timestamp` is cyan; numbers are yellow     |
+| 8    | Type `MinKey()`              | `MinKey` is cyan                            |
+| 9    | Type `MaxKey()`              | `MaxKey` is cyan                            |
+| 10   | Type `BinData(0, "abc")`     | `BinData` is cyan; `0` yellow; string green |
+
+### T-08: Non-BSON PascalCase (Default)
+
+| Step | Action              | Expected                 |
+| ---- | ------------------- | ------------------------ |
+| 1    | Type `MyClass`      | Default color (not cyan) |
+| 2    | Type `SomeFunction` | Default color            |
+
+### T-09: `$`-Prefixed DocumentDB Operators (Yellow)
+
+| Step | Action                     | Expected                                                                 |
+| ---- | -------------------------- | ------------------------------------------------------------------------ |
+| 1    | Type `{ $gt: 5 }`          | `$gt` is yellow; `5` is yellow; `{`, `}`, `:` are default                |
+| 2    | Type `{ $match: {} }`      | `$match` is yellow                                                       |
+| 3    | Type `{ $lookup: {} }`     | `$lookup` is yellow                                                      |
+| 4    | Type `{ $regex: /test/i }` | `$regex` is yellow; `/test/` is red (regex); `i` is cyan (keyword.other) |
+| 5    | Type `$group` alone        | Yellow                                                                   |
+
+### T-10: Shell Commands (Magenta)
+
+| Step | Action          | Expected                            |
+| ---- | --------------- | ----------------------------------- |
+| 1    | Type `show dbs` | `show` is magenta; `dbs` is default |
+| 2    | Type `use mydb` | `use` is magenta; `mydb` is default |
+| 3    | Type `it`       | Magenta                             |
+| 4    | Type `exit`     | Magenta                             |
+| 5    | Type `quit`     | Magenta                             |
+| 6    | Type `help`     | Magenta                             |
+| 7    | Type `cls`      | Magenta                             |
+| 8    | Type `clear`    | Magenta                             |
+
+### T-11: Identifiers and Delimiters (Default / Uncolored)
+
+| Step | Action                 | Expected                                                                |
+| ---- | ---------------------- | ----------------------------------------------------------------------- |
+| 1    | Type `db.users.find()` | `db`, `users`, `find` are default; `.` is default; `(`, `)` are default |
+| 2    | Type `x = y + z`       | `x`, `y`, `z` are default; `=`, `+` are default                         |
+| 3    | Type `[1, 2, 3]`       | `[`, `]`, `,` are default; `1` `2` `3` are yellow                       |
+
+### T-12: Realistic Query Expressions
+
+| Step | Action                                                          | Expected                                                                                     |
+| ---- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1    | Type `db.users.find({ age: { $gt: 25 } })`                      | `db`, `users`, `find`, `age` default; `$gt` yellow; `25` yellow; brackets/delimiters default |
+| 2    | Type `db.orders.aggregate([{ $match: { status: "active" } }])`  | `$match` yellow; `"active"` green; `status` default; all brackets default                    |
+| 3    | Type `db.test.insertOne({ name: "alice", age: NumberInt(30) })` | `"alice"` green; `NumberInt` cyan; `30` yellow; `name`, `age` default                        |
+| 4    | Type `db.test.updateMany({}, { $set: { flag: true } })`         | `$set` yellow; `true` cyan; rest default                                                     |
+
+### T-13: Editing and Re-highlighting
+
+| Step | Action                                                           | Expected                                                  |
+| ---- | ---------------------------------------------------------------- | --------------------------------------------------------- |
+| 1    | Type `const` (cyan), then Backspace twice → `con`                | `con` loses cyan (not a keyword)                          |
+| 2    | Continue typing `sole` → `console`                               | `console` is default (not a keyword)                      |
+| 3    | Type `show`, then Home, type `x` → `xshow`                       | `xshow` is default (not a shell command)                  |
+| 4    | Type `"hello"`, move cursor into string, insert `X` → `"helXlo"` | Entire string stays green                                 |
+| 5    | Type `$gt`, then Backspace all → empty                           | Prompt reappears clean with no leftover colors            |
+| 6    | Type `db.find()`, then Ctrl+U (clear before cursor)              | Line clears, no residual colored text                     |
+| 7    | Type `db.find()`, then Home, Ctrl+K (clear after cursor)         | Only characters before cursor remain, rest erased cleanly |
+
+### T-14: History Recall
+
+| Step | Action                                                                                              | Expected                                                                                           |
+| ---- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 1    | Type `const x = 1` and press Enter                                                                  | Command executes                                                                                   |
+| 2    | Press Up arrow                                                                                      | Recalled line `const x = 1` appears with highlighting: `const` cyan, `1` yellow                    |
+| 3    | Press Down arrow                                                                                    | Line clears back to empty (no residual colors)                                                     |
+| 4    | Type `db.test.find({\n  age: 25\n})` as multi-line (press Enter after `{`), then complete with `})` | After submission, press Up; recalled flattened line `db.test.find({ age: 25 })` has `25` in yellow |
+
+### T-15: Multi-Line Continuation
+
+| Step | Action                                  | Expected                           |
+| ---- | --------------------------------------- | ---------------------------------- |
+| 1    | Type `db.test.find({` and press Enter   | Continuation prompt `⋯ > ` appears |
+| 2    | On the continuation line, type `$gt: 5` | `$gt` is yellow; `5` is yellow     |
+| 3    | Type `})` and press Enter               | Expression executes                |
+
+### T-16: Color Output Setting Gate
+
+| Step | Action                                                    | Expected                                       |
+| ---- | --------------------------------------------------------- | ---------------------------------------------- |
+| 1    | Set `documentDB.shell.display.colorOutput` to `false`     | —                                              |
+| 2    | Open a new shell terminal                                 | —                                              |
+| 3    | Type `const x = 1`                                        | No colors — all text is default terminal color |
+| 4    | Type `show dbs`                                           | No colors — "show" is default                  |
+| 5    | Set `documentDB.shell.display.colorOutput` back to `true` | —                                              |
+| 6    | Open a new shell terminal                                 | —                                              |
+| 7    | Type `const x = 1`                                        | `const` is cyan, `1` is yellow                 |
+
+### T-17: Cursor Positioning After Re-render
+
+| Step | Action                                                                                                | Expected                                                          |
+| ---- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 1    | Type `abcdef`, press Home, type `X` → `Xabcdef`                                                       | Cursor is at position 1 (after `X`); remaining text not corrupted |
+| 2    | Type `hello world`, press Left 5 times (cursor on `w`), type `Z` → `hello Zworld`                     | Cursor stays after `Z`; both words visible                        |
+| 3    | Type `const`, press Home, press Right twice (cursor on `n`), then Delete → `cost`                     | `cost` is not a keyword — no cyan                                 |
+| 4    | Type a long line (~80+ chars), e.g. `db.mycollection.find({ name: "a very long string value here" })` | No wrapping artifacts; cursor tracks correctly at end             |
+
+### T-18: Paste Behavior
+
+| Step | Action                                            | Expected                                                                                     |
+| ---- | ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1    | Paste `db.users.find({ $gt: 1 })` from clipboard  | Entire line appears with correct highlighting in one render                                  |
+| 2    | Paste multi-line: `db.test.find({\n  age: 25\n})` | First line triggers continuation; each continuation line is highlighted; final line executes |
+
+### T-19: Ctrl+C Interrupt
+
+| Step | Action                                         | Expected                                                           |
+| ---- | ---------------------------------------------- | ------------------------------------------------------------------ |
+| 1    | Type `db.test.find({` to enter multi-line mode | Continuation prompt appears                                        |
+| 2    | Press Ctrl+C                                   | Multi-line cancelled; new prompt appears; no residual colored text |
+| 3    | Type `show` after the fresh prompt             | `show` appears in magenta normally                                 |
+
+### T-20: Empty and Whitespace Input
+
+| Step | Action                                   | Expected                                          |
+| ---- | ---------------------------------------- | ------------------------------------------------- |
+| 1    | Press Enter on empty prompt              | New prompt, no errors                             |
+| 2    | Type only spaces `   `                   | No colors applied (whitespace has no token color) |
+| 3    | Type `  const  ` (spaces around keyword) | `const` is cyan; spaces are uncolored             |
