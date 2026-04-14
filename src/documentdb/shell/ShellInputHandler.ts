@@ -146,6 +146,10 @@ export class ShellInputHandler {
     /**
      * Insert text at the current cursor position and update the display.
      * Used by the PTY to insert accepted completions or ghost text.
+     *
+     * NOTE: This method intentionally does NOT fire `onBufferChange`. It is a
+     * PTY-controlled mutation — the PTY is responsible for any follow-up
+     * evaluations (e.g., ghost text) after calling this method.
      */
     insertText(text: string): void {
         const before = this._buffer.slice(0, this._cursor);
