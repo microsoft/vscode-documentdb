@@ -75,12 +75,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _ghostTextTimer: ReturnType<typeof setTimeout> | undefined;
     /** Whether a completion list is currently displayed below the prompt. */
     private _completionListVisible: boolean = false;
-    /**
-     * Whether the current ghost text is a "smart" pattern-based suggestion
-     * (e.g., `find()` after `db.collection.`) rather than a single prefix match.
-     * Tab dismisses smart ghost and shows the full picker; Right Arrow accepts it.
-     */
-    private _ghostTextIsSmart: boolean = false;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
@@ -464,7 +458,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._inputHandler.setPromptWidth(prompt.length);
         this._inputHandler.resetLine();
         this._ghostText.reset();
-        this._ghostTextIsSmart = false;
         this._completionListVisible = false;
         this._writeEmitter.fire(prompt);
     }
@@ -561,16 +554,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Handle Tab keypress — provide completions or accept ghost text.
      */
     private handleTab(buffer: string, cursor: number): void {
-        // If ghost text is visible from a single prefix match, accept it.
-        // If it's a smart/pattern-based suggestion (e.g., find() after db.coll.),
-        // dismiss the ghost and show the full picker instead.
+        // If ghost text is visible (single prefix match), accept it
         if (this._ghostText.isVisible) {
-            if (!this._ghostTextIsSmart) {
-                this.handleAcceptGhostText();
-                return;
-            }
-            // Smart ghost — dismiss and fall through to show picker
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            this.handleAcceptGhostText();
+            return;
         }
 
         const result = this.getCompletionResult(buffer, cursor);
@@ -690,45 +677,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             const candidate = result.candidates[0];
             const remaining = candidate.insertText.slice(result.prefix.length);
             if (remaining.length > 0) {
-                this._ghostTextIsSmart = false;
                 this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
                 return;
             }
         }
 
-        // Check for smart ghost text patterns (Tab dismisses these, Right Arrow accepts)
-        const smartGhost = this.getSmartGhostText(buffer);
-        if (smartGhost) {
-            this._ghostTextIsSmart = true;
-            this._ghostText.show(smartGhost, (d) => this._writeEmitter.fire(d));
-            return;
-        }
-
         this._ghostText.clear((d) => this._writeEmitter.fire(d));
-    }
-
-    /**
-     * Smart ghost text for common typing patterns.
-     */
-    private getSmartGhostText(buffer: string): string | undefined {
-        const trimmed = buffer.trimStart();
-
-        // db.<collection>. → suggest find()
-        const collMethodMatch = /^db\.[a-zA-Z0-9_$]+\.$/i.exec(trimmed);
-        if (collMethodMatch) {
-            // Verify the name after db. is not a database method
-            const afterDb = trimmed.slice(3, trimmed.length - 1);
-            if (!DATABASE_METHODS_SET.has(afterDb)) {
-                return 'find()';
-            }
-        }
-
-        // db.<collection>.find( → suggest {}
-        if (/^db\.[a-zA-Z0-9_$]+\.find\($/i.test(trimmed)) {
-            return '{}';
-        }
-
-        return undefined;
     }
 
     /**
@@ -768,21 +722,3 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         return config.get<boolean>('documentDB.shell.display.colorOutput', true);
     }
 }
-
-/** Database methods set for ghost text filtering. */
-const DATABASE_METHODS_SET = new Set([
-    'getCollection',
-    'getCollectionNames',
-    'getCollectionInfos',
-    'createCollection',
-    'dropDatabase',
-    'runCommand',
-    'adminCommand',
-    'aggregate',
-    'getSiblingDB',
-    'getName',
-    'stats',
-    'version',
-    'createView',
-    'listCommands',
-]);
