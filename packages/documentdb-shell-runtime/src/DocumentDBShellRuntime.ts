@@ -289,7 +289,7 @@ export class DocumentDBShellRuntime {
                         }
                     })
                     .join(' ');
-                onConsoleOutput(output);
+                onConsoleOutput(output + '\n');
             },
         });
     }

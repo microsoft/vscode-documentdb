@@ -50,8 +50,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _currentDatabase: string;
     /** Cached username from initialization (used for terminal tab title). */
     private _username: string | undefined;
-    /** Whether the last console output ended with a newline. */
-    private _lastOutputHadTrailingNewline = true;
     /** Whether the shell is currently evaluating a command. */
     private _evaluating = false;
     /** Whether the shell has been closed. */
@@ -76,9 +74,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     this._spinner.hide();
                 }
                 this.writeOutput(output);
-                // Track that we received console output so we can ensure
-                // a newline before the next prompt (print() doesn't add one).
-                this._lastOutputHadTrailingNewline = output.endsWith('\n');
             },
             onWorkerExit: (_exitCode: number) => {
                 if (!this._closed) {
@@ -247,7 +242,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Disable input while evaluating
         this._evaluating = true;
         this._interrupted = false;
-        this._lastOutputHadTrailingNewline = true;
         this._inputHandler.setEnabled(false);
 
         // Start the spinner — it appears after a short delay so fast
@@ -270,12 +264,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this._inputHandler.setEnabled(true);
 
                 if (!this._closed) {
-                    // Ensure a newline before the prompt if the last console output
-                    // (e.g., print()) didn't end with one.
-                    if (!this._lastOutputHadTrailingNewline) {
-                        this._writeEmitter.fire('\r\n');
-                        this._lastOutputHadTrailingNewline = true;
-                    }
                     this.showPrompt();
 
                     // Process any input that was queued during execution
