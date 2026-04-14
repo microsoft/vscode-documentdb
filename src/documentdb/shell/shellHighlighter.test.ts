@@ -233,5 +233,68 @@ describe('Shell Syntax Highlighting (integrated)', () => {
             expect(written).not.toContain('\x1b[33m'); // Yellow
             expect(written).toContain('const x = 1');
         });
+
+        it('should not add ANSI codes when colorize returns input unchanged (setting disabled)', () => {
+            let written = '';
+            const callbacks: ShellInputHandlerCallbacks = {
+                write: (data: string) => {
+                    written += data;
+                },
+                onLine: () => {},
+                onInterrupt: () => {},
+                onContinuation: () => {},
+                // Simulates the PTY callback when documentDB.shell.display.colorOutput = false
+                colorize: (input: string) => input,
+            };
+
+            const handler = new ShellInputHandler(callbacks);
+            handler.setPromptWidth(5);
+            handler.handleInput('const x = 1');
+
+            expect(written).not.toContain('\x1b[36m'); // Cyan
+            expect(written).not.toContain('\x1b[33m'); // Yellow
+            expect(written).not.toContain('\x1b[32m'); // Green
+            expect(written).not.toContain('\x1b[35m'); // Magenta
+            expect(written).not.toContain('\x1b[90m'); // Gray
+            expect(written).not.toContain('\x1b[31m'); // Red
+            expect(written).toContain('const x = 1');
+        });
+
+        it('should not colorize any token types when setting is disabled', () => {
+            let written = '';
+            const callbacks: ShellInputHandlerCallbacks = {
+                write: (data: string) => {
+                    written += data;
+                },
+                onLine: () => {},
+                onInterrupt: () => {},
+                onContinuation: () => {},
+                colorize: (input: string) => input,
+            };
+
+            const handler = new ShellInputHandler(callbacks);
+            handler.setPromptWidth(5);
+
+            // Type input that contains every color category
+            handler.handleInput('show dbs'); // shell command (magenta)
+            written = '';
+            handler.handleInput('\x15'); // Ctrl+U to clear
+            handler.handleInput('ObjectId("abc")'); // BSON (cyan) + string (green)
+            const render1 = written;
+            written = '';
+            handler.handleInput('\x15');
+            handler.handleInput('{ $gt: 42 }'); // operator (yellow) + number (yellow)
+            const render2 = written;
+            written = '';
+            handler.handleInput('\x15');
+            handler.handleInput('// comment'); // comment (gray)
+            const render3 = written;
+
+            // None of the renders should contain any ANSI color escape
+            for (const render of [render1, render2, render3]) {
+                expect(render).not.toContain('\x1b[3'); // No 30-series colors
+                expect(render).not.toContain('\x1b[9'); // No 90-series colors (gray)
+            }
+        });
     });
 });
