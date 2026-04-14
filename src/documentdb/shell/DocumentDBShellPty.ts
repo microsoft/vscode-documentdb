@@ -7,11 +7,17 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
+import { SettingsHintError } from './SettingsHintError';
 import { ShellInputHandler } from './ShellInputHandler';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
 import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManager } from './ShellSessionManager';
 import { ShellSpinner } from './ShellSpinner';
-import { ACTION_LINE_PREFIX, type ShellTerminalInfo, unregisterShellTerminal } from './ShellTerminalLinkProvider';
+import {
+    ACTION_LINE_PREFIX,
+    SETTINGS_ACTION_PREFIX,
+    type ShellTerminalInfo,
+    unregisterShellTerminal,
+} from './ShellTerminalLinkProvider';
 
 /**
  * Configuration for the interactive shell Pseudoterminal.
@@ -223,6 +229,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.writeLine(this._outputFormatter.formatError(l10n.t('Failed to connect: {0}', errorMessage)));
+
+            // Show a hint line and clickable settings link for errors that reference a VS Code setting
+            if (error instanceof SettingsHintError) {
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(
+                        `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
+                    ),
+                );
+            }
+
             this._inputHandler.setEnabled(true);
             this._closeEmitter.fire(1);
         }
@@ -320,6 +336,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             }
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.writeLine(this._outputFormatter.formatError(errorMessage));
+
+            // Show a hint line and clickable settings link for errors that reference a VS Code setting
+            if (error instanceof SettingsHintError) {
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(
+                        `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
+                    ),
+                );
+            }
         }
     }
 
