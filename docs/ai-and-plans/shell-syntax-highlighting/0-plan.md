@@ -45,7 +45,7 @@ Modified files:
 
 ## Work Items
 
-### WI-1: Vendored Monarch Rules (`monarchRules.ts`)
+### WI-1: Vendored Monarch Rules (`monarchRules.ts`) — ✅ DONE
 
 **Goal:** Create a standalone copy of the JavaScript Monarch tokenizer rules, extended with DocumentDB-specific token categories. No runtime dependency on `monaco-editor`.
 
@@ -105,7 +105,32 @@ Each `MonarchRule` is one of:
 - `[RegExp, string[]]` — match regex, emit array of tokens (one per capture group)
 - `{ include: string }` — include another state's rules
 
+> **DEVIATION (WI-1 — Rule Types):** The `MonarchRule` type uses **named properties** (`{ regex, action }`, `{ regex, actionCases }`, `{ regex, actionByGroup }`, `{ include }`) instead of positional tuples (`[RegExp, string]`). This makes the executor's pattern-matching simpler and produces self-documenting code.
+>
+> **Alternatives analyzed:**
+> 1. **Tuple arrays (as planned):** Pro: closer to Monaco's internal format. Con: requires index-based discrimination (`rule.length === 2` vs `3`) which is brittle. Con: `[RegExp, string | { cases } | string[]]` union is hard to narrow.
+> 2. **Named properties (chosen):** Pro: explicit `'actionCases' in rule` checks. Pro: easier to read and maintain. Con: slightly more verbose than tuple literals.
+> 3. **Tagged union with `kind` discriminant:** Pro: perfect type narrowing. Con: over-engineering; `'field' in obj` checks work fine for 4 variants.
+
 **Important:** All regex patterns from the Monaco source use `@name` references (e.g., `@digits`, `@escapes`). The executor (WI-2) must resolve these at init time by replacing `@name` in the pattern source with the corresponding regex source string before compiling.
+
+> **DEVIATION (WI-1):** Instead of keeping `@name` references in regex source strings and resolving them in the executor, all regex patterns were **inlined directly** in `monarchRules.ts`. For example, `/(@digits)[eE]([\-+]?(@digits))?/` became `/(\d+(_+\d+)*)[eE]([\-+]?(\d+(_+\d+)*))?/`. Patterns like `escapes`, `regexpctl`, `regexpesc` are used as standalone `RegExp` objects directly in string/regexp state rules.
+>
+> **Reasoning:** Eliminates the need for regex source string manipulation in the executor — the most error-prone step.
+>
+> **Alternatives analyzed:**
+> 1. **Keep `@name` references (as planned):**
+>    - Pro: Faithful to Monaco Monarch format; easier to diff against upstream.
+>    - Pro: Single source of truth for named patterns.
+>    - Con: Requires non-trivial regex-source-string replacement at init time (string→RegExp→string round-trip is fragile).
+> 2. **Inline patterns (chosen):**
+>    - Pro: Simpler executor — no resolution step, fewer moving parts.
+>    - Pro: Direct `RegExp` objects avoid regex compilation bugs from malformed source splicing.
+>    - Con: Patterns are duplicated (but they're constants that never change).
+> 3. **Build a pre-compilation step that resolves at build time:**
+>    - Pro: Best of both worlds — faithful source and no runtime cost.
+>    - Con: Adds a build-time dependency and makes the code harder to understand.
+>    - Con: Over-engineering for a set of fixed patterns.
 
 **Licensing:** The Monaco Editor source is MIT-licensed. Include the Monaco license header in the file comment.
 
