@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
+import { colorizeShellInput } from './highlighting/colorizeShellInput';
 import { SettingsHintError } from './SettingsHintError';
 import { ShellInputHandler } from './ShellInputHandler';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
@@ -112,6 +113,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             onLine: (line: string) => void this.handleLineInput(line),
             onInterrupt: () => this.handleInterrupt(),
             onContinuation: () => this.showContinuationPrompt(),
+            colorize: (input: string) => {
+                if (!this.isColorEnabled()) {
+                    return input;
+                }
+                return colorizeShellInput(input);
+            },
         });
     }
 

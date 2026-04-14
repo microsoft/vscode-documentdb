@@ -272,7 +272,7 @@ The function builds the output string by iterating tokens in order:
 
 ---
 
-### WI-4: ShellInputHandler Re-Rendering (`ShellInputHandler.ts` modifications)
+### WI-4: ShellInputHandler Re-Rendering (`ShellInputHandler.ts` modifications) — ✅ DONE
 
 **Goal:** Replace the current per-character echo approach with full-line re-rendering so syntax highlighting applies on every buffer mutation.
 
