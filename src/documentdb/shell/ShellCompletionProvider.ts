@@ -579,15 +579,15 @@ export class ShellCompletionProvider {
             metaFilter = FILTER_COMPLETION_META;
         }
 
-        // Build a field type lookup from SchemaStore
+        // Build a field type lookup from SchemaStore (pre-compute Map for O(1) lookups)
+        const fields = SchemaStore.getInstance().getKnownFields(
+            shellCtx.clusterId,
+            shellCtx.databaseName,
+            ctx.collectionName,
+        );
+        const fieldTypeByPath = new Map(fields.map((f) => [f.path, f.type]));
         const fieldLookup: FieldTypeLookup = (fieldName: string): string | undefined => {
-            const fields = SchemaStore.getInstance().getKnownFields(
-                shellCtx.clusterId,
-                shellCtx.databaseName,
-                ctx.collectionName,
-            );
-            const field = fields.find((f) => f.path === fieldName);
-            return field?.type;
+            return fieldTypeByPath.get(fieldName);
         };
 
         // Use the shared cursor context detection for inner query-object context
