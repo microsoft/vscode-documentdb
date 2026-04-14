@@ -459,6 +459,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._inputHandler.resetLine();
         this._ghostText.reset();
         this._completionListVisible = false;
+
+        // Cancel any pending ghost text timer — its closure captures the old
+        // buffer/cursor and would re-render ghost text on the fresh prompt.
+        if (this._ghostTextTimer) {
+            clearTimeout(this._ghostTextTimer);
+            this._ghostTextTimer = undefined;
+        }
+
         this._writeEmitter.fire(prompt);
     }
 
