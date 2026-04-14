@@ -6,6 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { type CompletionResult, ShellCompletionProvider } from './ShellCompletionProvider';
 import { findCommonPrefix, renderCompletionList } from './ShellCompletionRenderer';
@@ -359,6 +360,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // Show "Open in Collection View" action line for query results with a namespace
             this.maybeWriteActionLine(result);
+
+            // Feed query result documents to SchemaStore for field completions.
+            // This runs asynchronously after output is displayed — schema feeding
+            // is non-blocking and failure is non-critical.
+            this.maybeFeedSchemaStore(result);
         } catch (error: unknown) {
             // Suppress errors from intentional Ctrl+C cancellation — the interrupt
             // handler already showed ^C and a new prompt.
@@ -554,6 +560,31 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const actionText = `${ACTION_LINE_PREFIX}[${ns.db}.${ns.collection}]`;
         this.writeLine(this._outputFormatter.formatSystemMessage(actionText));
+    }
+
+    /**
+     * Feed query result documents to {@link SchemaStore} for field completions.
+     *
+     * Deserializes the EJSON printable string back to raw objects (preserving BSON
+     * types) and delegates to the shared {@link feedResultToSchemaStore} utility.
+     * Runs asynchronously and never blocks the prompt — failures are silently ignored.
+     */
+    private maybeFeedSchemaStore(result: SerializableExecutionResult): void {
+        // Only Cursor and Document results with a namespace are worth parsing
+        if (result.type !== 'Cursor' && result.type !== 'Document') {
+            return;
+        }
+        if (!result.source?.namespace?.collection) {
+            return;
+        }
+
+        void deserializeResultForSchema(result)
+            .then((deserialized) => {
+                feedResultToSchemaStore(deserialized, this._connectionInfo.clusterId);
+            })
+            .catch(() => {
+                // Non-critical — schema feeding is best-effort
+            });
     }
 
     // ─── Private: Tab completion ────────────────────────────────────────────
