@@ -107,6 +107,8 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
                     dbExperience: DocumentDBExperience,
                     connectionString: child?.secrets?.connectionString ?? undefined,
                     emulatorConfiguration: child.properties.emulatorConfiguration,
+                    selectedAuthMethod: child.properties.selectedAuthMethod,
+                    connectionUser: child.secrets?.nativeAuthConfig?.connectionUser,
                 };
 
                 ext.outputChannel.trace(
