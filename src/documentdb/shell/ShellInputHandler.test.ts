@@ -500,4 +500,144 @@ describe('ShellInputHandler', () => {
             expect(lines).toEqual(['show dbs', 'use mydb']);
         });
     });
+
+    describe('Tab key', () => {
+        it('should call onTab callback with buffer and cursor', () => {
+            let tabBuffer = '';
+            let tabCursor = -1;
+            const tabCallbacks: ShellInputHandlerCallbacks = {
+                write: () => {},
+                onLine: () => {},
+                onInterrupt: () => {},
+                onContinuation: () => {},
+                onTab: (buffer: string, cursor: number) => {
+                    tabBuffer = buffer;
+                    tabCursor = cursor;
+                },
+            };
+
+            const tabHandler = new ShellInputHandler(tabCallbacks);
+            tabHandler.handleInput('db.us');
+            tabHandler.handleInput('\x09'); // Tab
+            expect(tabBuffer).toBe('db.us');
+            expect(tabCursor).toBe(5);
+        });
+
+        it('should not crash when onTab is not provided', () => {
+            // Default handler has no onTab
+            handler.handleInput('test');
+            handler.handleInput('\x09'); // Tab
+            // Should not throw
+            expect(handler.getBuffer()).toBe('test');
+        });
+    });
+
+    describe('getCursor', () => {
+        it('should return current cursor position', () => {
+            handler.handleInput('hello');
+            expect(handler.getCursor()).toBe(5);
+        });
+
+        it('should track cursor after left arrow', () => {
+            handler.handleInput('hello');
+            handler.handleInput('\x1b[D'); // Left
+            expect(handler.getCursor()).toBe(4);
+        });
+    });
+
+    describe('insertText', () => {
+        it('should insert text at cursor and update buffer', () => {
+            handler.handleInput('db.');
+            handler.insertText('users');
+            expect(handler.getBuffer()).toBe('db.users');
+            expect(handler.getCursor()).toBe(8);
+        });
+
+        it('should insert text in the middle of existing buffer', () => {
+            handler.handleInput('hello');
+            handler.handleInput('\x1b[D'); // Left arrow once
+            handler.handleInput('\x1b[D'); // Left arrow twice
+            handler.insertText('XX');
+            expect(handler.getBuffer()).toBe('helXXlo');
+            expect(handler.getCursor()).toBe(5);
+        });
+    });
+
+    describe('onBufferChange callback', () => {
+        it('should fire after printable char insertion', () => {
+            let changeCount = 0;
+            const changeCallbacks: ShellInputHandlerCallbacks = {
+                write: () => {},
+                onLine: () => {},
+                onInterrupt: () => {},
+                onContinuation: () => {},
+                onBufferChange: () => {
+                    changeCount++;
+                },
+            };
+
+            const changeHandler = new ShellInputHandler(changeCallbacks);
+            changeHandler.handleInput('abc');
+            expect(changeCount).toBe(3);
+        });
+
+        it('should fire after backspace', () => {
+            let lastBuffer = '';
+            const changeCallbacks: ShellInputHandlerCallbacks = {
+                write: () => {},
+                onLine: () => {},
+                onInterrupt: () => {},
+                onContinuation: () => {},
+                onBufferChange: (buffer: string) => {
+                    lastBuffer = buffer;
+                },
+            };
+
+            const changeHandler = new ShellInputHandler(changeCallbacks);
+            changeHandler.handleInput('ab');
+            changeHandler.handleInput('\x7f'); // Backspace
+            expect(lastBuffer).toBe('a');
+        });
+    });
+
+    describe('ghost text acceptance via Right Arrow', () => {
+        it('should call onAcceptGhostText when at end of buffer', () => {
+            let ghostCalled = false;
+            const ghostCallbacks: ShellInputHandlerCallbacks = {
+                write: () => {},
+                onLine: () => {},
+                onInterrupt: () => {},
+                onContinuation: () => {},
+                onAcceptGhostText: () => {
+                    ghostCalled = true;
+                    return 'aurants';
+                },
+            };
+
+            const ghostHandler = new ShellInputHandler(ghostCallbacks);
+            ghostHandler.handleInput('db.rest');
+            ghostHandler.handleInput('\x1b[C'); // Right arrow
+            expect(ghostCalled).toBe(true);
+        });
+
+        it('should not call onAcceptGhostText when not at end of buffer', () => {
+            let ghostCalled = false;
+            const ghostCallbacks: ShellInputHandlerCallbacks = {
+                write: () => {},
+                onLine: () => {},
+                onInterrupt: () => {},
+                onContinuation: () => {},
+                onAcceptGhostText: () => {
+                    ghostCalled = true;
+                    return 'text';
+                },
+            };
+
+            const ghostHandler = new ShellInputHandler(ghostCallbacks);
+            ghostHandler.handleInput('hello');
+            ghostHandler.handleInput('\x1b[D'); // Left arrow
+            ghostHandler.handleInput('\x1b[C'); // Right arrow
+            expect(ghostCalled).toBe(false);
+        });
+    });
 });

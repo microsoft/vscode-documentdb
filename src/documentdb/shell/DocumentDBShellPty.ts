@@ -7,6 +7,9 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
+import { type CompletionResult, ShellCompletionProvider } from './ShellCompletionProvider';
+import { findCommonPrefix, renderCompletionList } from './ShellCompletionRenderer';
+import { ShellGhostText } from './ShellGhostText';
 import { ShellInputHandler } from './ShellInputHandler';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
 import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManager } from './ShellSessionManager';
@@ -62,10 +65,23 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _spinner: ShellSpinner | undefined;
     /** The terminal instance this PTY is attached to (set via {@link setTerminal}). */
     private _terminal: vscode.Terminal | undefined;
+    /** Terminal width in columns (used for completion rendering). */
+    private _columns: number = 80;
+    /** Completion provider for tab completion and ghost text. */
+    private readonly _completionProvider: ShellCompletionProvider;
+    /** Ghost text manager for inline suggestions. */
+    private readonly _ghostText: ShellGhostText;
+    /** Timer for debounced ghost text evaluation. */
+    private _ghostTextTimer: ReturnType<typeof setTimeout> | undefined;
+    /** Whether a completion list is currently displayed below the prompt. */
+    private _completionListVisible: boolean = false;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
         this._currentDatabase = options.connectionInfo.databaseName;
+
+        this._completionProvider = new ShellCompletionProvider();
+        this._ghostText = new ShellGhostText();
 
         const sessionCallbacks: ShellSessionCallbacks = {
             onConsoleOutput: (output: string) => {
@@ -111,12 +127,20 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             onLine: (line: string) => void this.handleLineInput(line),
             onInterrupt: () => this.handleInterrupt(),
             onContinuation: () => this.showContinuationPrompt(),
+            onTab: (buffer: string, cursor: number) => this.handleTab(buffer, cursor),
+            onBufferChange: (buffer: string, cursor: number) => this.handleBufferChange(buffer, cursor),
+            onAcceptGhostText: () => this.handleAcceptGhostText(),
         });
     }
 
     // ─── Pseudoterminal interface ────────────────────────────────────────────
 
-    open(_initialDimensions: vscode.TerminalDimensions | undefined): void {
+    open(initialDimensions: vscode.TerminalDimensions | undefined): void {
+        // Track terminal width for completion rendering
+        if (initialDimensions) {
+            this._columns = initialDimensions.columns;
+        }
+
         // Disable input during initialization to prevent race conditions
         this._inputHandler.setEnabled(false);
 
@@ -143,6 +167,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._closed = true;
         this._spinner?.stop();
         this._spinner = undefined;
+        if (this._ghostTextTimer) {
+            clearTimeout(this._ghostTextTimer);
+            this._ghostTextTimer = undefined;
+        }
         this._sessionManager.dispose();
         this._writeEmitter.dispose();
         this._closeEmitter.dispose();
@@ -171,7 +199,23 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     handleInput(data: string): void {
+        // Clear ghost text before processing input (except for Right Arrow and Tab
+        // which are handled by the input handler's escape sequence processing)
+        if (data !== '\x1b[C' && data !== '\x09') {
+            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+        }
+
+        // Dismiss completion list on any input
+        this._completionListVisible = false;
+
         this._inputHandler.handleInput(data);
+    }
+
+    /**
+     * Called when the terminal dimensions change.
+     */
+    setDimensions(dimensions: vscode.TerminalDimensions): void {
+        this._columns = dimensions.columns;
     }
 
     // ─── Private: Session initialization ─────────────────────────────────────
@@ -413,6 +457,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const prompt = `${this._currentDatabase}> `;
         this._inputHandler.setPromptWidth(prompt.length);
         this._inputHandler.resetLine();
+        this._ghostText.reset();
+        this._completionListVisible = false;
         this._writeEmitter.fire(prompt);
     }
 
@@ -502,6 +548,198 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this.writeLine(this._outputFormatter.formatSystemMessage(actionText));
     }
 
+    // ─── Private: Tab completion ────────────────────────────────────────────
+
+    /**
+     * Handle Tab keypress — provide completions or accept ghost text.
+     */
+    private handleTab(buffer: string, cursor: number): void {
+        // If ghost text is visible, accept it (ghost takes priority over picker)
+        if (this._ghostText.isVisible) {
+            this.handleAcceptGhostText();
+            return;
+        }
+
+        const result = this.getCompletionResult(buffer, cursor);
+        if (result.candidates.length === 0) {
+            return;
+        }
+
+        if (result.candidates.length === 1) {
+            // Single match — complete inline
+            this.applySingleCompletion(result);
+            return;
+        }
+
+        // Multiple matches — insert common prefix and show picker
+        const commonExtra = findCommonPrefix(result.candidates, result.prefix);
+        if (commonExtra.length > 0) {
+            this._inputHandler.insertText(commonExtra);
+        }
+
+        // Render the completion list below the prompt
+        const listOutput = renderCompletionList(result.candidates, this._columns);
+        if (listOutput.length > 0) {
+            this._writeEmitter.fire(listOutput);
+            this._completionListVisible = true;
+
+            // Rewrite the prompt + buffer so the user continues editing
+            this._writeEmitter.fire('\r\n');
+            this.rewriteCurrentLine();
+        }
+    }
+
+    /**
+     * Apply a single completion by inserting the remaining text.
+     */
+    private applySingleCompletion(result: CompletionResult): void {
+        const candidate = result.candidates[0];
+        const remaining = candidate.insertText.slice(result.prefix.length);
+        if (remaining.length > 0) {
+            this._inputHandler.insertText(remaining);
+        }
+    }
+
+    /**
+     * Get completion result from the provider using current shell context.
+     */
+    private getCompletionResult(buffer: string, cursor: number): CompletionResult {
+        return this._completionProvider.getCompletions(buffer, cursor, {
+            clusterId: this._connectionInfo.clusterId,
+            databaseName: this._currentDatabase,
+        });
+    }
+
+    /**
+     * Rewrite the prompt and current buffer after showing a completion list.
+     */
+    private rewriteCurrentLine(): void {
+        const prompt = `${this._currentDatabase}> `;
+        const buffer = this._inputHandler.getBuffer();
+        const cursor = this._inputHandler.getCursor();
+        this._writeEmitter.fire(prompt + buffer);
+
+        // Position cursor at the correct location
+        const trailingChars = buffer.length - cursor;
+        if (trailingChars > 0) {
+            this._writeEmitter.fire(`\x1b[${String(trailingChars)}D`);
+        }
+    }
+
+    // ─── Private: Ghost text ─────────────────────────────────────────────────
+
+    /**
+     * Handle buffer changes for ghost text evaluation.
+     * Called after every character insertion or deletion.
+     */
+    private handleBufferChange(buffer: string, cursor: number): void {
+        // Clear any pending ghost text timer
+        if (this._ghostTextTimer) {
+            clearTimeout(this._ghostTextTimer);
+        }
+
+        // Don't show ghost text during evaluation, multi-line mode, or when completion list is visible
+        if (this._evaluating || this._inputHandler.isInMultiLineMode || this._completionListVisible) {
+            return;
+        }
+
+        // Don't show ghost text if cursor is not at end of buffer
+        if (cursor < buffer.length) {
+            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            return;
+        }
+
+        // Debounce ghost text evaluation (50ms)
+        this._ghostTextTimer = setTimeout(() => {
+            this._ghostTextTimer = undefined;
+            this.evaluateGhostText(buffer, cursor);
+        }, 50);
+    }
+
+    /**
+     * Evaluate and show ghost text if there's a single obvious completion.
+     */
+    private evaluateGhostText(buffer: string, cursor: number): void {
+        if (this._closed || this._evaluating) {
+            return;
+        }
+
+        // Need at least 1 character to show ghost text
+        if (buffer.trim().length === 0) {
+            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            return;
+        }
+
+        const result = this.getCompletionResult(buffer, cursor);
+
+        if (result.candidates.length === 1 && result.prefix.length > 0) {
+            // Single match with a typed prefix — show ghost text
+            const candidate = result.candidates[0];
+            const remaining = candidate.insertText.slice(result.prefix.length);
+            if (remaining.length > 0) {
+                this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
+                return;
+            }
+        }
+
+        // Check for smart ghost text patterns
+        const smartGhost = this.getSmartGhostText(buffer);
+        if (smartGhost) {
+            this._ghostText.show(smartGhost, (d) => this._writeEmitter.fire(d));
+            return;
+        }
+
+        this._ghostText.clear((d) => this._writeEmitter.fire(d));
+    }
+
+    /**
+     * Smart ghost text for common typing patterns.
+     */
+    private getSmartGhostText(buffer: string): string | undefined {
+        const trimmed = buffer.trimStart();
+
+        // db.<collection>. → suggest find()
+        const collMethodMatch = /^db\.[a-zA-Z0-9_$]+\.$/i.exec(trimmed);
+        if (collMethodMatch) {
+            // Verify the name after db. is not a database method
+            const afterDb = trimmed.slice(3, trimmed.length - 1);
+            if (!DATABASE_METHODS_SET.has(afterDb)) {
+                return 'find()';
+            }
+        }
+
+        // db.<collection>.find( → suggest {}
+        if (/^db\.[a-zA-Z0-9_$]+\.find\($/i.test(trimmed)) {
+            return '{}';
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Accept the currently displayed ghost text.
+     * Called when the user presses Right Arrow at end of buffer or Tab with ghost visible.
+     *
+     * @returns the accepted text, or undefined if no ghost text was visible
+     */
+    private handleAcceptGhostText(): string | undefined {
+        if (!this._ghostText.isVisible) {
+            return undefined;
+        }
+
+        const ghostText = this._ghostText.currentText;
+        // Clear ghost state and erase the dim rendering
+        this._ghostText.clear((d) => this._writeEmitter.fire(d));
+
+        if (ghostText) {
+            // Insert the ghost text into the buffer through the input handler.
+            // insertText handles buffer update + terminal echo in normal color.
+            this._inputHandler.insertText(ghostText);
+        }
+
+        return ghostText;
+    }
+
     // ─── Private: Settings ───────────────────────────────────────────────────
 
     private getShellTimeoutMs(): number {
@@ -515,3 +753,21 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         return config.get<boolean>('documentDB.shell.display.colorOutput', true);
     }
 }
+
+/** Database methods set for ghost text filtering. */
+const DATABASE_METHODS_SET = new Set([
+    'getCollection',
+    'getCollectionNames',
+    'getCollectionInfos',
+    'createCollection',
+    'dropDatabase',
+    'runCommand',
+    'adminCommand',
+    'aggregate',
+    'getSiblingDB',
+    'getName',
+    'stats',
+    'version',
+    'createView',
+    'listCommands',
+]);
