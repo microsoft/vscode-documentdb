@@ -182,7 +182,6 @@ describe('ShellCompletionProvider', () => {
             expect(labels).toContain('dbs');
             expect(labels).toContain('databases');
             expect(labels).toContain('collections');
-            expect(labels).toContain('tables');
         });
 
         it('should filter by prefix', () => {

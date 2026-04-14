@@ -75,6 +75,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _ghostTextTimer: ReturnType<typeof setTimeout> | undefined;
     /** Whether a completion list is currently displayed below the prompt. */
     private _completionListVisible: boolean = false;
+    /**
+     * Whether the current ghost text is a "smart" pattern-based suggestion
+     * (e.g., `find()` after `db.collection.`) rather than a single prefix match.
+     * Tab dismisses smart ghost and shows the full picker; Right Arrow accepts it.
+     */
+    private _ghostTextIsSmart: boolean = false;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
@@ -458,6 +464,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._inputHandler.setPromptWidth(prompt.length);
         this._inputHandler.resetLine();
         this._ghostText.reset();
+        this._ghostTextIsSmart = false;
         this._completionListVisible = false;
         this._writeEmitter.fire(prompt);
     }
@@ -554,10 +561,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Handle Tab keypress — provide completions or accept ghost text.
      */
     private handleTab(buffer: string, cursor: number): void {
-        // If ghost text is visible, accept it (ghost takes priority over picker)
+        // If ghost text is visible from a single prefix match, accept it.
+        // If it's a smart/pattern-based suggestion (e.g., find() after db.coll.),
+        // dismiss the ghost and show the full picker instead.
         if (this._ghostText.isVisible) {
-            this.handleAcceptGhostText();
-            return;
+            if (!this._ghostTextIsSmart) {
+                this.handleAcceptGhostText();
+                return;
+            }
+            // Smart ghost — dismiss and fall through to show picker
+            this._ghostText.clear((d) => this._writeEmitter.fire(d));
         }
 
         const result = this.getCompletionResult(buffer, cursor);
@@ -677,14 +690,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             const candidate = result.candidates[0];
             const remaining = candidate.insertText.slice(result.prefix.length);
             if (remaining.length > 0) {
+                this._ghostTextIsSmart = false;
                 this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
                 return;
             }
         }
 
-        // Check for smart ghost text patterns
+        // Check for smart ghost text patterns (Tab dismisses these, Right Arrow accepts)
         const smartGhost = this.getSmartGhostText(buffer);
         if (smartGhost) {
+            this._ghostTextIsSmart = true;
             this._ghostText.show(smartGhost, (d) => this._writeEmitter.fire(d));
             return;
         }
