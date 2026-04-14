@@ -217,7 +217,7 @@ Write tests for these categories, using a `describe('MonarchRunner', ...)` block
 
 ---
 
-### WI-3: Token-to-ANSI Mapper (`tokenColorizer.ts`)
+### WI-3: Token-to-ANSI Mapper (`tokenColorizer.ts`) — ✅ DONE
 
 **Goal:** Convert an array of `TokenSpan` and the original input string into an ANSI-colorized string suitable for writing to the terminal via `Pseudoterminal.onDidWrite`.
 
