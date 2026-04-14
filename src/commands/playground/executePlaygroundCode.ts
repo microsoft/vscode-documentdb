@@ -5,14 +5,13 @@
 
 import { UserCancelledError, callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { SchemaStore } from '../../documentdb/SchemaStore';
+import { feedResultToSchemaStore } from '../../documentdb/feedResultToSchemaStore';
 import { PlaygroundEvaluator } from '../../documentdb/playground/PlaygroundEvaluator';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { formatError, formatResult } from '../../documentdb/playground/resultFormatter';
-import { type ExecutionResult, type PlaygroundConnection } from '../../documentdb/playground/types';
+import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
@@ -126,7 +125,7 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
 
                     let formattedOutput = formatResult(result, code, connection);
-                    feedResultToSchemaStore(result, connection);
+                    feedResultToSchemaStore(result, connection.clusterId);
 
                     // If console output was produced, append a hint to check the output channel
                     if (evaluator!.lastEvalConsoleOutputCount > 0) {
@@ -193,84 +192,4 @@ function collectDomainTelemetry(
     } catch {
         // Domain info is best-effort — don't fail telemetry if parsing fails
     }
-}
-
-/**
- * Maximum number of documents to feed to SchemaStore per execution.
- * If the result set is larger, a random sample of this size is used.
- */
-const SCHEMA_DOC_CAP = 100;
-
-/**
- * Very conservative schema feeding: only feed 'Cursor' and 'Document' result types.
- * Extracts documents from the printable result and adds them to SchemaStore.
- *
- * Caps at {@link SCHEMA_DOC_CAP} documents (randomly sampled if more).
- */
-function feedResultToSchemaStore(result: ExecutionResult, connection: PlaygroundConnection): void {
-    // Only feed known document-producing result types
-    if (result.type !== 'Cursor' && result.type !== 'Document') {
-        return;
-    }
-
-    const ns = result.source?.namespace;
-    if (!ns?.collection) {
-        return;
-    }
-
-    const printable = result.printable;
-    if (printable === null || printable === undefined) {
-        return;
-    }
-
-    // CursorIterationResult from @mongosh wraps documents in { cursorHasMore, documents }.
-    // Only unwrap when the full wrapper shape is present to avoid false positives
-    // on user documents that happen to have a `documents` field.
-    let items: unknown[];
-    if (
-        typeof printable === 'object' &&
-        !Array.isArray(printable) &&
-        'cursorHasMore' in printable &&
-        typeof (printable as Record<string, unknown>).cursorHasMore === 'boolean' &&
-        'documents' in printable &&
-        Array.isArray((printable as { documents: unknown }).documents)
-    ) {
-        items = (printable as { documents: unknown[] }).documents;
-    } else if (Array.isArray(printable)) {
-        items = printable;
-    } else {
-        items = [printable];
-    }
-
-    // Filter to actual document objects with _id (not primitives, not nested arrays,
-    // not projection results with _id: 0 which have artificial shapes)
-    let docs = items.filter(
-        (d): d is WithId<Document> =>
-            d !== null && d !== undefined && typeof d === 'object' && !Array.isArray(d) && '_id' in d,
-    );
-
-    if (docs.length === 0) {
-        return;
-    }
-
-    // Cap at SCHEMA_DOC_CAP documents — randomly sample if more
-    if (docs.length > SCHEMA_DOC_CAP) {
-        docs = randomSample(docs, SCHEMA_DOC_CAP);
-    }
-
-    SchemaStore.getInstance().addDocuments(connection.clusterId, ns.db, ns.collection, docs);
-}
-
-/**
- * Partial Fisher–Yates random sample of `count` items from `array`.
- * Only performs `count` swaps instead of shuffling the entire array.
- */
-function randomSample<T>(array: T[], count: number): T[] {
-    const n = Math.min(count, array.length);
-    const copy = [...array];
-    for (let i = 0; i < n; i++) {
-        const j = i + Math.floor(Math.random() * (copy.length - i));
-        [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy.slice(0, n);
 }
