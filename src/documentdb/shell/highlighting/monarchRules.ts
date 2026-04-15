@@ -180,7 +180,7 @@ const octaldigits = /[0-7]+(_+[0-7]+)*/;
 const binarydigits = /[0-1]+(_+[0-1]+)*/;
 const hexdigits = /[0-9a-fA-F]+(_+[0-9a-fA-F]+)*/;
 const regexpctl = /[(){}\[\]\$\^|\-*+?\.]/;
-const regexpesc = /\\(?:[bBdDfnrstvwWn0\\\/]|[(){}\[\]\$\^|\-*+?\.] |c[A-Z]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4})/;
+const regexpesc = /\\(?:[bBdDfnrstvwWn0\\\/]|[(){}\[\]\$\^|\-*+?\.]|c[A-Z]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4})/;
 
 // ─── Tokenizer state machine ─────────────────────────────────────────────────
 //
