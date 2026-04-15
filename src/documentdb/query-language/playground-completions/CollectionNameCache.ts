@@ -37,8 +37,8 @@ export class CollectionNameCache implements vscode.Disposable {
     private _pendingFetches = new Map<string, Promise<void>>();
 
     private constructor() {
-        // On connection change, trigger background fetches so that
-        // ClustersClient's cache is warm for all connected databases.
+        // On connection change, trigger a background fetch so that
+        // ClustersClient's cache is warm for the active editor's connection.
         this._disposables.push(
             PlaygroundService.getInstance().onDidChangeState(() => {
                 const activeEditor = vscode.window.activeTextEditor;
