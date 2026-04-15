@@ -1127,6 +1127,12 @@
             "default": 10260,
             "description": "Port to use when connecting to DocumentDB Local instance"
           },
+          "documentDB.playground.confirmRunAll": {
+            "order": 14,
+            "type": "boolean",
+            "default": true,
+            "description": "Show a confirmation dialog before running the entire playground file with Run All."
+          },
           "documentDB.shell.batchSize": {
             "type": "integer",
             "description": "Number of documents to display per cursor iteration in the Query Playground and Interactive Shell. Applies to find(), aggregate(), and other cursor-returning operations.",
