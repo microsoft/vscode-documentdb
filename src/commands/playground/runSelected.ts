@@ -12,8 +12,9 @@ import { detectBlocks, detectCurrentBlock } from '../../documentdb/playground/st
 import { executePlaygroundCode } from './executePlaygroundCode';
 
 /**
- * Runs the selected text, the block specified by CodeLens arguments,
- * or the current block at the cursor position.
+ * Runs the block specified by CodeLens arguments or the current block
+ * at the cursor position. Any active text selection is intentionally
+ * ignored to avoid executing partial code left selected by autocomplete.
  *
  * CodeLens passes `[startLine, endLine]` as arguments so clicking
  * a per-block "▶ Run" lens executes exactly that block.
@@ -38,11 +39,10 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
         // Invoked from CodeLens with explicit block range
         const range = new vscode.Range(startLine, 0, endLine, editor.document.lineAt(endLine).text.length);
         codeToRun = editor.document.getText(range);
-    } else if (!editor.selection.isEmpty) {
-        // Behavior 1: Run selection
-        codeToRun = editor.document.getText(editor.selection);
     } else {
-        // Behavior 2: Run current block at cursor, fall back to preceding block
+        // Run current block at cursor, fall back to preceding block.
+        // Any active selection (e.g. from autocomplete) is intentionally
+        // ignored so we always execute the full block.
         codeToRun = detectCurrentBlock(editor.document, editor.selection.active);
         if (!codeToRun.trim()) {
             // Cursor is on a blank line — fall back to the nearest preceding block
@@ -65,9 +65,7 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
     }
 
     if (!codeToRun.trim()) {
-        void vscode.window.showInformationMessage(
-            l10n.t('No code to run. Select some code or place the cursor in a code block.'),
-        );
+        void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));
         return;
     }
 

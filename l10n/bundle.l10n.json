@@ -717,7 +717,7 @@
   "No Azure subscription found for this tree item.": "No Azure subscription found for this tree item.",
   "No Azure Subscriptions Found": "No Azure Subscriptions Found",
   "No Azure VMs found with tag \"{tagName}\" in subscription \"{subscriptionName}\".": "No Azure VMs found with tag \"{tagName}\" in subscription \"{subscriptionName}\".",
-  "No code to run. Select some code or place the cursor in a code block.": "No code to run. Select some code or place the cursor in a code block.",
+  "No code to run. Place the cursor in a code block.": "No code to run. Place the cursor in a code block.",
   "No collection has been marked for copy. Please use \"Copy Collection...\" first to select a source collection.": "No collection has been marked for copy. Please use \"Copy Collection...\" first to select a source collection.",
   "No collection selected.": "No collection selected.",
   "No Connectivity": "No Connectivity",
