@@ -9,10 +9,10 @@ import { PLAYGROUND_LANGUAGE_ID } from './constants';
 import { detectBlocks, findBlockAtLine } from './statementDetector';
 
 /**
- * Shows a vertical bar in the gutter for all code blocks in query playground files.
- * The active block (containing the cursor) is brighter; inactive blocks are dimmed.
- * Decoration types are recreated when the color theme changes to use the
- * appropriate dark/light SVG variants.
+ * Shows a vertical indicator in the gutter for all code blocks in query
+ * playground files. The active block (containing the cursor) is brighter;
+ * inactive blocks are dimmed. Decoration types are recreated when the color
+ * theme changes to use the appropriate dark/light SVG variants.
  */
 export class PlaygroundBlockHighlighter implements vscode.Disposable {
     private _activeDecoration!: vscode.TextEditorDecorationType;
