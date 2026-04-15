@@ -889,9 +889,9 @@
           "group": "inline@2"
         },
         {
-          "//": "[Cluster/Database/Collection] New Query Playground",
+          "//": "[Database/Collection] New Query Playground",
           "command": "vscode-documentdb.command.playground.new",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "5@2"
         },
         {
