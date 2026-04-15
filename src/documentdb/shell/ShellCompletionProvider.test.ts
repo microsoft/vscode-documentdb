@@ -644,4 +644,230 @@ describe('ShellCompletionProvider', () => {
             expect(labels).not.toContain('name');
         });
     });
+
+    // ─── Bracket notation completions ────────────────────────────────────────
+
+    describe('db[ bracket notation completions', () => {
+        beforeEach(() => {
+            mockClustersClient([], [{ name: 'restaurants' }, { name: 'orders' }, { name: 'users' }]);
+        });
+
+        it('should detect "db[" as db-bracket context with no quote', () => {
+            const ctx = provider.detectContext('db[', 3);
+            expect(ctx.kind).toBe('db-bracket');
+            if (ctx.kind === 'db-bracket') {
+                expect(ctx.prefix).toBe('');
+                expect(ctx.quote).toBe('');
+            }
+        });
+
+        it('should detect "db[\'" as db-bracket context with single quote', () => {
+            const ctx = provider.detectContext("db['", 4);
+            expect(ctx.kind).toBe('db-bracket');
+            if (ctx.kind === 'db-bracket') {
+                expect(ctx.prefix).toBe('');
+                expect(ctx.quote).toBe("'");
+            }
+        });
+
+        it("should detect 'db[\"' as db-bracket context with double quote", () => {
+            const ctx = provider.detectContext('db["', 4);
+            expect(ctx.kind).toBe('db-bracket');
+            if (ctx.kind === 'db-bracket') {
+                expect(ctx.prefix).toBe('');
+                expect(ctx.quote).toBe('"');
+            }
+        });
+
+        it('should detect "db[\'res" as db-bracket with prefix', () => {
+            const ctx = provider.detectContext("db['res", 7);
+            expect(ctx.kind).toBe('db-bracket');
+            if (ctx.kind === 'db-bracket') {
+                expect(ctx.prefix).toBe('res');
+                expect(ctx.quote).toBe("'");
+            }
+        });
+
+        it('should return collection names for "db["', () => {
+            const result = provider.getCompletions('db["', 4, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('restaurants');
+            expect(labels).toContain('orders');
+            expect(labels).toContain('users');
+        });
+
+        it('should not include database methods for bracket notation', () => {
+            const result = provider.getCompletions('db["', 4, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).not.toContain('getCollection');
+            expect(labels).not.toContain('createCollection');
+        });
+
+        it("should wrap insertText with closing quote and bracket for db['", () => {
+            const result = provider.getCompletions("db['", 4, TEST_CONTEXT);
+            const restaurants = result.candidates.find((c) => c.label === 'restaurants');
+            expect(restaurants).toBeDefined();
+            expect(restaurants!.insertText).toBe("restaurants']");
+        });
+
+        it('should wrap insertText with closing double quote and bracket for db["', () => {
+            const result = provider.getCompletions('db["', 4, TEST_CONTEXT);
+            const restaurants = result.candidates.find((c) => c.label === 'restaurants');
+            expect(restaurants).toBeDefined();
+            expect(restaurants!.insertText).toBe('restaurants"]');
+        });
+
+        it('should add opening quote when no quote typed (db[)', () => {
+            const result = provider.getCompletions('db[', 3, TEST_CONTEXT);
+            const restaurants = result.candidates.find((c) => c.label === 'restaurants');
+            expect(restaurants).toBeDefined();
+            expect(restaurants!.insertText).toBe("'restaurants']");
+        });
+
+        it("should filter by prefix for db['res", () => {
+            const result = provider.getCompletions("db['res", 7, TEST_CONTEXT);
+            expect(result.candidates.length).toBe(1);
+            expect(result.candidates[0].label).toBe('restaurants');
+            expect(result.candidates[0].insertText).toBe("restaurants']");
+        });
+
+        it('should return empty for non-matching prefix', () => {
+            const result = provider.getCompletions("db['xyz", 7, TEST_CONTEXT);
+            expect(result.candidates.length).toBe(0);
+        });
+    });
+
+    // ─── Value-position operator filtering ───────────────────────────────────
+
+    describe('value-position operator filtering', () => {
+        beforeEach(() => {
+            mockSchemaStore(
+                [],
+                [
+                    { path: '_id', type: 'objectId', bsonType: 'objectId' },
+                    { path: 'name', type: 'string', bsonType: 'string' },
+                    { path: 'age', type: 'number', bsonType: 'int32' },
+                ],
+            );
+        });
+
+        it('should not show query operators in value position', () => {
+            const input = 'db.restaurants.find({_id: $';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const operators = result.candidates.filter((c) => c.kind === 'operator');
+            expect(operators.length).toBe(0);
+        });
+
+        it('should show BSON constructors in value position', () => {
+            const input = 'db.restaurants.find({_id: ';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const bson = result.candidates.filter((c) => c.kind === 'bson');
+            expect(bson.length).toBeGreaterThan(0);
+        });
+
+        it('should still show operators at operator position (inside nested object)', () => {
+            const input = 'db.restaurants.find({age: { $';
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const operators = result.candidates.filter((c) => c.kind === 'operator');
+            expect(operators.length).toBeGreaterThan(0);
+        });
+    });
+
+    // ─── Bracket notation method completions ─────────────────────────────────
+
+    describe("db['collection']. method completions", () => {
+        it("should detect db['restaurants']. as collection-method", () => {
+            const input = "db['restaurants'].";
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('collection-method');
+            if (ctx.kind === 'collection-method') {
+                expect(ctx.collectionName).toBe('restaurants');
+                expect(ctx.prefix).toBe('');
+            }
+        });
+
+        it('should detect db["restaurants"]. as collection-method', () => {
+            const input = 'db["restaurants"].';
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('collection-method');
+            if (ctx.kind === 'collection-method') {
+                expect(ctx.collectionName).toBe('restaurants');
+                expect(ctx.prefix).toBe('');
+            }
+        });
+
+        it("should detect db['restaurants'].fi as collection-method with prefix", () => {
+            const input = "db['restaurants'].fi";
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('collection-method');
+            if (ctx.kind === 'collection-method') {
+                expect(ctx.collectionName).toBe('restaurants');
+                expect(ctx.prefix).toBe('fi');
+            }
+        });
+
+        it("should return collection methods for db['restaurants'].", () => {
+            const input = "db['restaurants'].";
+            const result = provider.getCompletions(input, input.length, TEST_CONTEXT);
+            const labels = result.candidates.map((c) => c.label);
+            expect(labels).toContain('find');
+            expect(labels).toContain('insertOne');
+            expect(labels).toContain('aggregate');
+        });
+
+        it("should detect method argument for db['restaurants'].find(", () => {
+            const input = "db['restaurants'].find(";
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('method-argument');
+            if (ctx.kind === 'method-argument') {
+                expect(ctx.collectionName).toBe('restaurants');
+                expect(ctx.methodName).toBe('find');
+            }
+        });
+
+        it("should handle special-char collection names: db['stores (10)'].", () => {
+            const input = "db['stores (10)'].";
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('collection-method');
+            if (ctx.kind === 'collection-method') {
+                expect(ctx.collectionName).toBe('stores (10)');
+            }
+        });
+    });
+
+    // ─── Special-char collection bracket notation switch ─────────────────────
+
+    describe('special-char collection auto-switch to bracket notation', () => {
+        beforeEach(() => {
+            mockClustersClient([], [{ name: 'restaurants' }, { name: 'stores (10)' }, { name: 'my-collection' }]);
+        });
+
+        it('should use dot notation insertText for normal collection names', () => {
+            const result = provider.getCompletions('db.', 3, TEST_CONTEXT);
+            const restaurants = result.candidates.find((c) => c.label === 'restaurants');
+            expect(restaurants).toBeDefined();
+            expect(restaurants!.insertText).toBe('restaurants');
+        });
+
+        it('should use bracket notation insertText for special-char names', () => {
+            const result = provider.getCompletions('db.', 3, TEST_CONTEXT);
+            const stores = result.candidates.find((c) => c.label === 'stores (10)');
+            expect(stores).toBeDefined();
+            expect(stores!.insertText).toBe("['stores (10)']");
+        });
+
+        it('should use bracket notation for hyphenated names', () => {
+            const result = provider.getCompletions('db.', 3, TEST_CONTEXT);
+            const coll = result.candidates.find((c) => c.label === 'my-collection');
+            expect(coll).toBeDefined();
+            expect(coll!.insertText).toBe("['my-collection']");
+        });
+
+        it('should filter bracket-notation candidates by label prefix', () => {
+            const result = provider.getCompletions('db.sto', 6, TEST_CONTEXT);
+            expect(result.candidates.length).toBe(1);
+            expect(result.candidates[0].label).toBe('stores (10)');
+            expect(result.candidates[0].insertText).toBe("['stores (10)']");
+        });
+    });
 });

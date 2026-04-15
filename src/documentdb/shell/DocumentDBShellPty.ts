@@ -662,14 +662,17 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /**
      * Apply a single completion by inserting the remaining text.
-     * For quoted dotted field paths, replaces the typed prefix with the full quoted text.
+     * When the insertText doesn't start with the typed prefix (e.g., bracket
+     * notation, quoted field paths), replaces the prefix entirely.
      */
     private applySingleCompletion(result: CompletionResult): void {
         const candidate = result.candidates[0];
 
-        // Quoted field path: insertText starts with `"` but the prefix doesn't.
-        // Replace the entire prefix with the quoted insertText.
-        if (candidate.insertText.startsWith('"') && !result.prefix.startsWith('"')) {
+        // If insertText doesn't start with the typed prefix, replace
+        // the prefix entirely. Covers bracket notation (db[re → 'restaurants']),
+        // quoted field paths (address.ci → "address.city"), and
+        // special-char collections (sto → ['stores (10)']).
+        if (result.prefix.length > 0 && !candidate.insertText.startsWith(result.prefix)) {
             this._inputHandler.replaceText(result.prefix.length, candidate.insertText);
             return;
         }
@@ -755,9 +758,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (result.candidates.length === 1 && result.prefix.length > 0) {
             const candidate = result.candidates[0];
 
-            // Skip ghost text for quoted field paths — the visual would be
-            // misleading (e.g., showing `ty"` instead of the full quoted path).
-            if (candidate.insertText.startsWith('"') && !result.prefix.startsWith('"')) {
+            // Skip ghost text when insertText doesn't start with the typed prefix
+            // (e.g., bracket notation, quoted field paths, special-char collections).
+            // The visual would be misleading since the insertion replaces the prefix.
+            if (!candidate.insertText.startsWith(result.prefix)) {
                 this._ghostText.clear((d) => this._writeEmitter.fire(d));
                 return;
             }

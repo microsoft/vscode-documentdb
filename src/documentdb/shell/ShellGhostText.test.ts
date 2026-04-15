@@ -47,6 +47,16 @@ describe('ShellGhostText', () => {
             expect(written).toContain('\x1b[3D');
         });
 
+        it('should move cursor back by display width, not string length, for surrogate pairs', () => {
+            // 🛈 (U+1F6C8) is a surrogate pair: string length = 2, display width = 1
+            const hint = '  🛈 hint';
+            ghostText.show(hint, write);
+            // "  🛈 hint" = 2 spaces + 1 emoji + 1 space + 4 chars = 8 display columns
+            expect(written).toContain('\x1b[8D');
+            // Must NOT contain the incorrect string-length-based value
+            expect(written).not.toContain(`\x1b[9D`);
+        });
+
         it('should clear existing ghost before showing new one', () => {
             ghostText.show('old', write);
             written = '';

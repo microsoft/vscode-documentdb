@@ -78,6 +78,7 @@ type ShellContext =
     | { kind: 'show-subcommand'; prefix: string }
     | { kind: 'use-database'; prefix: string }
     | { kind: 'db-dot'; prefix: string }
+    | { kind: 'db-bracket'; prefix: string; quote: '"' | "'" | '' }
     | { kind: 'collection-method'; collectionName: string; prefix: string }
     | { kind: 'cursor-chain'; cursorType: 'find' | 'aggregate'; prefix: string }
     | {
@@ -133,6 +134,20 @@ const UPDATE_ARG_METHODS = new Set(['updateOne', 'updateMany', 'findOneAndUpdate
  */
 const PIPELINE_ARG_METHODS = new Set(['aggregate']);
 
+/**
+ * Regex to match a completed bracket-notation collection access: db['name'] or db["name"]
+ * Captures the collection name and provides the position after the closing `]`.
+ */
+const DB_BRACKET_COMPLETE_RE = /^db\[(['"])((?:(?!\1).)*)\1\]/;
+
+/**
+ * Returns true if a collection name requires bracket notation (contains characters
+ * that are not valid in a JavaScript dot-access identifier).
+ */
+function needsBracketNotation(name: string): boolean {
+    return !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name);
+}
+
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export class ShellCompletionProvider {
@@ -160,6 +175,13 @@ export class ShellCompletionProvider {
 
             case 'db-dot':
                 return this.buildResult(this.getDbDotCandidates(context), shellCtx.prefix, 'db.'.length);
+
+            case 'db-bracket':
+                return this.buildResult(
+                    this.getDbBracketCandidates(context, shellCtx.quote),
+                    shellCtx.prefix,
+                    shellCtx.quote ? 'db[x'.length : 'db['.length,
+                );
 
             case 'collection-method':
                 return this.buildResult(
@@ -217,10 +239,30 @@ export class ShellCompletionProvider {
             return { kind: 'use-database', prefix };
         }
 
+        // Check for completed db['name'] or db["name"] bracket notation
+        const bracketCompleteMatch = DB_BRACKET_COMPLETE_RE.exec(trimmed);
+        if (bracketCompleteMatch) {
+            const collectionName = bracketCompleteMatch[2];
+            const afterBracket = trimmed.slice(bracketCompleteMatch[0].length);
+
+            // db['name']. or db['name'].method... — collection method access
+            if (afterBracket.startsWith('.')) {
+                return this.detectBracketDbContext(trimmed, collectionName, afterBracket.slice(1), cursor);
+            }
+
+            // db['name']<cursor> — completed bracket, no completions needed
+            return { kind: 'unknown' };
+        }
+
+        // Check for db[ bracket notation: db[, db[', db["
+        const bracketMatch = /^db\[(["']?)([a-zA-Z0-9_$]*)$/.exec(trimmed);
+        if (bracketMatch) {
+            const quote = (bracketMatch[1] ?? '') as '"' | "'" | '';
+            const prefix = bracketMatch[2] ?? '';
+            return { kind: 'db-bracket', prefix, quote };
+        }
+
         // Check for db. patterns
-        // NOTE: db["collection"] bracket notation is not supported for completions.
-        // The parser assumes dot-access syntax; bracket notation would need separate
-        // parsing to extract the collection name from db['name'] or db["name"].
         if (trimmed.startsWith('db.')) {
             return this.detectDbContext(trimmed, text, cursor);
         }
@@ -264,6 +306,32 @@ export class ShellCompletionProvider {
     }
 
     /**
+     * Detect context for expressions starting with `db['name'].` (bracket notation).
+     * Mirrors {@link detectDbContext} but extracts the collection name from brackets.
+     */
+    private detectBracketDbContext(
+        trimmed: string,
+        collectionName: string,
+        afterDot: string,
+        cursor: number,
+    ): ShellContext {
+        // Check if we're inside a method argument
+        const argContext = this.detectMethodArgContext(trimmed, cursor);
+        if (argContext) {
+            return argContext;
+        }
+
+        // Check for cursor chain: db['name'].find({}).| or db['name'].find({}).limit(10).|
+        const cursorChain = this.detectCursorChain(trimmed);
+        if (cursorChain) {
+            return cursorChain;
+        }
+
+        // db['name'].| or db['name'].<partial> — collection method access
+        return { kind: 'collection-method', collectionName, prefix: afterDot };
+    }
+
+    /**
      * Detect if the cursor is inside a method call argument.
      * Looks for the last unmatched open parenthesis.
      */
@@ -290,14 +358,30 @@ export class ShellCompletionProvider {
         }
 
         // Extract method name and collection name from the text before `(`
+        // Supports both dot notation: db.collection.method(
+        // and bracket notation: db['collection'].method(
         const beforeParen = text.slice(0, openParenPos);
-        const methodMatch = /db\.([a-zA-Z0-9_$]+)\.([a-zA-Z0-9_$]+)$/.exec(beforeParen);
-        if (!methodMatch) {
-            return undefined;
+
+        // Try dot notation first: db.collection.method
+        let collectionName: string | undefined;
+        let methodName: string | undefined;
+
+        const dotMatch = /db\.([a-zA-Z0-9_$]+)\.([a-zA-Z0-9_$]+)$/.exec(beforeParen);
+        if (dotMatch) {
+            collectionName = dotMatch[1];
+            methodName = dotMatch[2];
+        } else {
+            // Try bracket notation: db['collection'].method or db["collection"].method
+            const bracketMatch = /db\[(['"])((?:(?!\1).)*)\1\]\.([a-zA-Z0-9_$]+)$/.exec(beforeParen);
+            if (bracketMatch) {
+                collectionName = bracketMatch[2];
+                methodName = bracketMatch[3];
+            }
         }
 
-        const collectionName = methodMatch[1];
-        const methodName = methodMatch[2];
+        if (!collectionName || !methodName) {
+            return undefined;
+        }
 
         // Don't treat database methods as collection methods
         if (DATABASE_METHODS.has(collectionName)) {
@@ -459,6 +543,8 @@ export class ShellCompletionProvider {
 
     /**
      * Get candidates for `db.` — collection names + database methods.
+     * Collections with special characters get bracket-notation insertText
+     * so that `db.sto<Tab>` produces `db['stores (10)']` instead of `db.stores (10)`.
      */
     private getDbDotCandidates(context: ShellCompletionContext): CompletionCandidate[] {
         const candidates: CompletionCandidate[] = [];
@@ -472,9 +558,90 @@ export class ShellCompletionProvider {
                 for (const coll of cached) {
                     if (coll.name && !seen.has(coll.name)) {
                         seen.add(coll.name);
+                        candidates.push(this.makeCollectionCandidate(coll.name));
+                    }
+                }
+            } else {
+                // Trigger background fetch
+                const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
+                if (!this._backgroundFetchTriggered.has(fetchKey)) {
+                    this._backgroundFetchTriggered.add(fetchKey);
+                    void client
+                        .listCollections(context.databaseName)
+                        .catch(() => {
+                            // Non-critical
+                        })
+                        .finally(() => {
+                            this._backgroundFetchTriggered.delete(fetchKey);
+                        });
+                }
+            }
+        }
+
+        // Collection names from SchemaStore
+        const store = SchemaStore.getInstance();
+        const stats = store.getStats();
+        const keyPrefix = `${context.clusterId}::${context.databaseName}::`;
+        for (const coll of stats.collections) {
+            if (coll.key.startsWith(keyPrefix)) {
+                const collName = coll.key.substring(keyPrefix.length);
+                if (collName && !seen.has(collName)) {
+                    seen.add(collName);
+                    candidates.push(this.makeCollectionCandidate(collName));
+                }
+            }
+        }
+
+        // Database methods
+        const methods = getMethodsByTarget('database');
+        for (const method of methods) {
+            if (!seen.has(method.name)) {
+                seen.add(method.name);
+                candidates.push({
+                    label: method.name,
+                    insertText: method.name,
+                    kind: 'method',
+                    detail: method.description,
+                });
+            }
+        }
+
+        return candidates.sort((a, b) => {
+            // Collections before methods
+            if (a.kind !== b.kind) {
+                return a.kind === 'collection' ? -1 : 1;
+            }
+            return a.label.localeCompare(b.label);
+        });
+    }
+
+    /**
+     * Get candidates for `db[` bracket notation — collection names only.
+     *
+     * Wraps each collection name with the appropriate quote + closing bracket
+     * so that completing `db[` inserts e.g. `'restaurants']` and completing
+     * `db['` inserts `restaurants']`.
+     */
+    private getDbBracketCandidates(context: ShellCompletionContext, quote: '"' | "'" | ''): CompletionCandidate[] {
+        const candidates: CompletionCandidate[] = [];
+        const seen = new Set<string>();
+
+        // The suffix appended after the collection name
+        const closeQuote = quote || "'";
+        const openQuote = quote ? '' : "'";
+        const suffix = `${closeQuote}]`;
+
+        // Collection names from ClustersClient cache
+        const client = ClustersClient.getExistingClient(context.clusterId);
+        if (client) {
+            const cached = client.getCachedCollections(context.databaseName);
+            if (cached) {
+                for (const coll of cached) {
+                    if (coll.name && !seen.has(coll.name)) {
+                        seen.add(coll.name);
                         candidates.push({
                             label: coll.name,
-                            insertText: coll.name,
+                            insertText: `${openQuote}${coll.name}${suffix}`,
                             kind: 'collection',
                         });
                     }
@@ -507,34 +674,14 @@ export class ShellCompletionProvider {
                     seen.add(collName);
                     candidates.push({
                         label: collName,
-                        insertText: collName,
+                        insertText: `${openQuote}${collName}${suffix}`,
                         kind: 'collection',
                     });
                 }
             }
         }
 
-        // Database methods
-        const methods = getMethodsByTarget('database');
-        for (const method of methods) {
-            if (!seen.has(method.name)) {
-                seen.add(method.name);
-                candidates.push({
-                    label: method.name,
-                    insertText: method.name,
-                    kind: 'method',
-                    detail: method.description,
-                });
-            }
-        }
-
-        return candidates.sort((a, b) => {
-            // Collections before methods
-            if (a.kind !== b.kind) {
-                return a.kind === 'collection' ? -1 : 1;
-            }
-            return a.label.localeCompare(b.label);
-        });
+        return candidates.sort((a, b) => a.label.localeCompare(b.label));
     }
 
     /**
@@ -616,9 +763,9 @@ export class ShellCompletionProvider {
                 break;
             }
             case 'value': {
-                // Value-position operators
-                this.addOperatorCandidates(candidates, metaFilter);
-                // BSON constructors
+                // In value position (e.g., `{ _id: | }`), operators like $gt are
+                // not syntactically valid — the user must open a nested object
+                // first: `{ _id: { $gt: 5 } }`. Only show BSON constructors here.
                 this.addBsonCandidates(candidates);
                 break;
             }
@@ -701,6 +848,31 @@ export class ShellCompletionProvider {
     }
 
     // ─── Utilities ───────────────────────────────────────────────────────────
+
+    /**
+     * Create a collection completion candidate for the `db.` context.
+     *
+     * Collections with names that are valid JS identifiers use plain insertText.
+     * Names with special characters (spaces, parens, hyphens, etc.) produce
+     * bracket-notation insertText that rewrites the `db.` prefix:
+     *   prefix `sto` → insertText `['stores (10)']` → result `db['stores (10)']`
+     */
+    private makeCollectionCandidate(name: string): CompletionCandidate {
+        if (needsBracketNotation(name)) {
+            // Escape single quotes within the name
+            const escaped = name.replace(/'/g, "\\'");
+            return {
+                label: name,
+                insertText: `['${escaped}']`,
+                kind: 'collection',
+            };
+        }
+        return {
+            label: name,
+            insertText: name,
+            kind: 'collection',
+        };
+    }
 
     /**
      * Build a CompletionResult by filtering candidates against the given prefix.
