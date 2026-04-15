@@ -12,11 +12,9 @@
  */
 
 import { isExpressionIncomplete } from './bracketDepthCounter';
+import { terminalDisplayWidth } from './terminalDisplayWidth';
 
 // ─── ANSI constants ──────────────────────────────────────────────────────────
-
-/** Erase from cursor to end of line */
-const ERASE_TO_EOL = '\x1b[K';
 
 /**
  * Callbacks for the ShellInputHandler to communicate with the Pseudoterminal.
@@ -30,6 +28,8 @@ export interface ShellInputHandlerCallbacks {
     onInterrupt: () => void;
     /** Called when multi-line continuation is needed (PTY shows a continuation prompt). */
     onContinuation: () => void;
+    /** Optional: colorize the input buffer for syntax highlighting. */
+    colorize?: (input: string) => string;
     /** Called when the user presses Tab — the PTY handles completion logic. */
     onTab?: (buffer: string, cursor: number) => void;
     /** Called after any buffer/cursor change — the PTY uses this for ghost text. */
@@ -71,6 +71,12 @@ export class ShellInputHandler {
     /** Whether we are in the middle of reading an escape sequence. */
     private _inEscape: boolean = false;
 
+    /** Width of the prompt string in characters (for cursor repositioning). */
+    private _promptWidth: number = 0;
+
+    /** Terminal width in columns (for wrap-aware re-rendering). */
+    private _columns: number = 80;
+
     private readonly _callbacks: ShellInputHandlerCallbacks;
 
     constructor(callbacks: ShellInputHandlerCallbacks) {
@@ -79,10 +85,16 @@ export class ShellInputHandler {
 
     /**
      * Set the prompt width so cursor positioning accounts for it.
-     * Reserved for future multi-line wrapping support.
      */
-    setPromptWidth(_width: number): void {
-        // Reserved for future multi-line input support
+    setPromptWidth(width: number): void {
+        this._promptWidth = width;
+    }
+
+    /**
+     * Set the terminal width in columns (for wrap-aware re-rendering).
+     */
+    setColumns(columns: number): void {
+        this._columns = columns;
     }
 
     /**
@@ -144,6 +156,14 @@ export class ShellInputHandler {
     }
 
     /**
+     * Force a re-render of the current line (used after PTY-controlled mutations
+     * like rewriting the prompt after a completion list is shown).
+     */
+    renderCurrentLine(): void {
+        this.reRenderLine();
+    }
+
+    /**
      * Insert text at the current cursor position and update the display.
      * Used by the PTY to insert accepted completions or ghost text.
      *
@@ -156,14 +176,7 @@ export class ShellInputHandler {
         const after = this._buffer.slice(this._cursor);
         this._buffer = before + text + after;
         this._cursor += text.length;
-
-        if (after.length > 0) {
-            // Insert mode: write text + rest of line, move cursor back
-            this._callbacks.write(text + after + '\b'.repeat(after.length));
-        } else {
-            // Append mode: just echo the text
-            this._callbacks.write(text);
-        }
+        this.reRenderLine();
     }
 
     /**
@@ -183,27 +196,8 @@ export class ShellInputHandler {
         const before = this._buffer.slice(0, this._cursor - deleteCount);
         const after = this._buffer.slice(this._cursor);
         this._buffer = before + text + after;
-
-        // Move cursor back to start of replaced region
-        if (deleteCount > 0) {
-            this._callbacks.write(`\x1b[${String(deleteCount)}D`);
-        }
-
-        // Write new text + remainder of line
-        this._callbacks.write(text + after);
-
-        // Erase leftover characters if replacement is shorter than deleted text
-        const cleanup = Math.max(0, deleteCount - text.length);
-        if (cleanup > 0) {
-            this._callbacks.write(' '.repeat(cleanup) + '\b'.repeat(cleanup));
-        }
-
-        // Move cursor back to end of inserted text (before 'after' portion)
-        if (after.length > 0) {
-            this._callbacks.write('\b'.repeat(after.length));
-        }
-
         this._cursor = before.length + text.length;
+        this.reRenderLine();
     }
 
     /**
@@ -361,29 +355,16 @@ export class ShellInputHandler {
             return;
         }
 
-        const before = this._buffer.slice(0, this._cursor - 1);
-        const after = this._buffer.slice(this._cursor);
-        this._buffer = before + after;
+        this._buffer = this._buffer.slice(0, this._cursor - 1) + this._buffer.slice(this._cursor);
         this._cursor--;
-
-        // Move cursor back one, rewrite remainder, erase trailing char
-        this._callbacks.write('\b' + after + ' ' + '\b'.repeat(after.length + 1));
+        this.reRenderLine();
         this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     private insertCharacter(ch: string): void {
-        const before = this._buffer.slice(0, this._cursor);
-        const after = this._buffer.slice(this._cursor);
-        this._buffer = before + ch + after;
+        this._buffer = this._buffer.slice(0, this._cursor) + ch + this._buffer.slice(this._cursor);
         this._cursor++;
-
-        if (after.length > 0) {
-            // Insert mode: write char + rest of line, move cursor back
-            this._callbacks.write(ch + after + '\b'.repeat(after.length));
-        } else {
-            // Append mode: just echo the character
-            this._callbacks.write(ch);
-        }
+        this.reRenderLine();
     }
 
     // ─── Private: escape sequence handling ───────────────────────────────────
@@ -528,12 +509,8 @@ export class ShellInputHandler {
             return;
         }
 
-        const before = this._buffer.slice(0, this._cursor);
-        const after = this._buffer.slice(this._cursor + 1);
-        this._buffer = before + after;
-
-        // Rewrite remainder + erase trailing char
-        this._callbacks.write(after + ' ' + '\b'.repeat(after.length + 1));
+        this._buffer = this._buffer.slice(0, this._cursor) + this._buffer.slice(this._cursor + 1);
+        this.reRenderLine();
         this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
@@ -542,21 +519,15 @@ export class ShellInputHandler {
             return;
         }
 
-        const after = this._buffer.slice(this._cursor);
-        const eraseCount = this._cursor;
-        this._buffer = after;
+        this._buffer = this._buffer.slice(this._cursor);
         this._cursor = 0;
-
-        // Move cursor to start of input, rewrite remaining text, erase old chars
-        this._callbacks.write(
-            `\x1b[${String(eraseCount)}D` + after + ' '.repeat(eraseCount) + '\b'.repeat(after.length + eraseCount),
-        );
+        this.reRenderLine();
         this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     private clearAfterCursor(): void {
         this._buffer = this._buffer.slice(0, this._cursor);
-        this._callbacks.write(ERASE_TO_EOL);
+        this.reRenderLine();
         this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
@@ -575,15 +546,9 @@ export class ShellInputHandler {
             pos--;
         }
 
-        const deleted = this._cursor - pos;
-        const after = this._buffer.slice(this._cursor);
-        this._buffer = this._buffer.slice(0, pos) + after;
-
-        // Move left, rewrite remainder, erase trailing
-        this._callbacks.write(
-            `\x1b[${String(deleted)}D` + after + ' '.repeat(deleted) + '\b'.repeat(after.length + deleted),
-        );
+        this._buffer = this._buffer.slice(0, pos) + this._buffer.slice(this._cursor);
         this._cursor = pos;
+        this.reRenderLine();
         this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
@@ -631,16 +596,81 @@ export class ShellInputHandler {
         // Flatten multi-line history entries for single-line display
         const displayText = newText.replace(/\n/g, ' ');
 
-        // Move cursor to start of input
-        if (this._cursor > 0) {
-            this._callbacks.write(`\x1b[${String(this._cursor)}D`);
-        }
-
-        // Write new text and erase any leftover characters
-        const clearLen = Math.max(0, this._buffer.length - displayText.length);
-        this._callbacks.write(displayText + ' '.repeat(clearLen) + '\b'.repeat(clearLen));
-
         this._buffer = displayText;
         this._cursor = displayText.length;
+        this.reRenderLine();
+    }
+
+    // ─── Private: line re-rendering ──────────────────────────────────────────
+
+    /**
+     * Re-render the entire input line with syntax highlighting.
+     *
+     * This replaces the old per-character echo approach. On every buffer mutation:
+     * 1. Move cursor up to the prompt row if input wraps across multiple rows.
+     * 2. Move cursor to the start of the input area (after the prompt).
+     * 3. Write the (optionally colorized) buffer content.
+     * 4. Erase any leftover characters/rows from the previous (longer) buffer.
+     * 5. Reposition the cursor to the correct row and column.
+     */
+    private reRenderLine(): void {
+        const bufferWidth = terminalDisplayWidth(this._buffer);
+        const cursorDisplayOffset = terminalDisplayWidth(this._buffer.slice(0, this._cursor));
+        const cols = this._columns;
+
+        let output = '';
+
+        // Step 1: Move cursor up to the prompt row if wrapping occurred
+        const cursorAbsCol = this._promptWidth + cursorDisplayOffset;
+        const cursorRow = cols > 0 ? Math.floor(cursorAbsCol / cols) : 0;
+        if (cursorRow > 0) {
+            output += `\x1b[${String(cursorRow)}A`;
+        }
+
+        // Step 2: Carriage return + move right past the prompt
+        output += '\r';
+        if (this._promptWidth > 0) {
+            output += `\x1b[${String(this._promptWidth)}C`;
+        }
+
+        // Step 3: Write the buffer content, optionally colorized
+        const displayText = this._callbacks.colorize ? this._callbacks.colorize(this._buffer) : this._buffer;
+        output += displayText;
+
+        // Step 4: Erase from cursor to end of screen (handles wrapped leftover rows)
+        output += '\x1b[J';
+
+        // Step 5: Reposition cursor to the correct position
+        const endAbsCol = this._promptWidth + bufferWidth;
+        const targetAbsCol = this._promptWidth + cursorDisplayOffset;
+
+        if (cols > 0 && endAbsCol !== targetAbsCol) {
+            const endRow = Math.floor(endAbsCol / cols);
+            const targetRow = Math.floor(targetAbsCol / cols);
+            const endCol = endAbsCol % cols;
+            const targetCol = targetAbsCol % cols;
+
+            // Move up from end row to target row
+            const rowDiff = endRow - targetRow;
+            if (rowDiff > 0) {
+                output += `\x1b[${String(rowDiff)}A`;
+            }
+
+            // Move horizontally to target column
+            const colDiff = endCol - targetCol;
+            if (colDiff > 0) {
+                output += `\x1b[${String(colDiff)}D`;
+            } else if (colDiff < 0) {
+                output += `\x1b[${String(-colDiff)}C`;
+            }
+        } else {
+            // Fallback for unknown columns: simple cursor-back
+            const tailWidth = terminalDisplayWidth(this._buffer.slice(this._cursor));
+            if (tailWidth > 0) {
+                output += `\x1b[${String(tailWidth)}D`;
+            }
+        }
+
+        this._callbacks.write(output);
     }
 }

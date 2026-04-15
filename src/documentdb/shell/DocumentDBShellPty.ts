@@ -9,6 +9,7 @@ import { ext } from '../../extensionVariables';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { SchemaStore } from '../SchemaStore';
+import { colorizeShellInput } from './highlighting/colorizeShellInput';
 import { SettingsHintError } from './SettingsHintError';
 import { type CompletionResult, ShellCompletionProvider } from './ShellCompletionProvider';
 import { findCommonPrefix, renderCompletionList } from './ShellCompletionRenderer';
@@ -132,6 +133,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             onLine: (line: string) => void this.handleLineInput(line),
             onInterrupt: () => this.handleInterrupt(),
             onContinuation: () => this.showContinuationPrompt(),
+            colorize: (input: string) => {
+                if (!this.isColorEnabled()) {
+                    return input;
+                }
+                return colorizeShellInput(input);
+            },
             onTab: (buffer: string, cursor: number) => this.handleTab(buffer, cursor),
             onBufferChange: (buffer: string, cursor: number) => this.handleBufferChange(buffer, cursor),
             onAcceptGhostText: () => this.handleAcceptGhostText(),
@@ -141,9 +148,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Pseudoterminal interface ────────────────────────────────────────────
 
     open(initialDimensions: vscode.TerminalDimensions | undefined): void {
-        // Track terminal width for completion rendering
+        // Track terminal width for completion rendering and wrap-aware re-rendering
         if (initialDimensions) {
             this._columns = initialDimensions.columns;
+            this._inputHandler.setColumns(initialDimensions.columns);
         }
 
         // Disable input during initialization to prevent race conditions
@@ -222,6 +230,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     setDimensions(dimensions: vscode.TerminalDimensions): void {
         this._columns = dimensions.columns;
+        this._inputHandler.setColumns(dimensions.columns);
     }
 
     // ─── Private: Session initialization ─────────────────────────────────────
@@ -701,18 +710,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /**
      * Rewrite the prompt and current buffer after showing a completion list.
+     * Uses the colorize callback (via renderCurrentLine) so highlighting is preserved.
      */
     private rewriteCurrentLine(): void {
         const prompt = `${this._currentDatabase}> `;
-        const buffer = this._inputHandler.getBuffer();
-        const cursor = this._inputHandler.getCursor();
-        this._writeEmitter.fire(prompt + buffer);
-
-        // Position cursor at the correct location
-        const trailingChars = buffer.length - cursor;
-        if (trailingChars > 0) {
-            this._writeEmitter.fire(`\x1b[${String(trailingChars)}D`);
-        }
+        this._inputHandler.setPromptWidth(prompt.length);
+        this._writeEmitter.fire(prompt);
+        this._inputHandler.renderCurrentLine();
     }
 
     // ─── Private: Ghost text ─────────────────────────────────────────────────
