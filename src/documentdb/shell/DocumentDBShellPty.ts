@@ -14,7 +14,7 @@ import { type CompletionResult, ShellCompletionProvider } from './ShellCompletio
 import { findCommonPrefix, renderCompletionList } from './ShellCompletionRenderer';
 import { ShellGhostText } from './ShellGhostText';
 import { ShellInputHandler } from './ShellInputHandler';
-import { ShellOutputFormatter } from './ShellOutputFormatter';
+import { extractErrorCode, ShellOutputFormatter } from './ShellOutputFormatter';
 import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManager } from './ShellSessionManager';
 import { ShellSpinner } from './ShellSpinner';
 import {
@@ -276,7 +276,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._spinner?.stop();
             this._spinner = undefined;
 
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const rawMessage = error instanceof Error ? error.message : String(error);
+            // Strip technical error codes for clean user-facing output;
+            // the extracted code is preserved for future telemetry.
+            const { message: errorMessage } = extractErrorCode(rawMessage);
             this.writeLine(this._outputFormatter.formatError(l10n.t('Failed to connect: {0}', errorMessage)));
 
             // Show a hint line and clickable settings link for errors that reference a VS Code setting
@@ -388,7 +391,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             if (this._interrupted) {
                 return;
             }
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const rawMessage = error instanceof Error ? error.message : String(error);
+            // Strip technical error codes for clean user-facing output;
+            // the extracted code is preserved for future telemetry.
+            const { message: errorMessage } = extractErrorCode(rawMessage);
             this.writeLine(this._outputFormatter.formatError(errorMessage));
 
             // Show a hint line and clickable settings link for errors that reference a VS Code setting

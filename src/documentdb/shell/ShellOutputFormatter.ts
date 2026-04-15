@@ -23,6 +23,50 @@ const ANSI = {
 } as const;
 
 /**
+ * Matches a technical error code prefix at the start of an error message.
+ * Pattern: `[LETTERS-DIGITS]` followed by a space and the actual message.
+ * Examples: `[PREFIX-12345]`, `[ERR-90001]`, `[API-100]`
+ */
+const ERROR_CODE_PREFIX_RE = /^\[([A-Z]+-\d+)\]\s*/;
+
+/**
+ * Result of extracting a technical error code from an error message.
+ */
+export interface ErrorCodeExtraction {
+    /** The error message with the technical code prefix removed. */
+    readonly message: string;
+    /** The extracted error code, if one was present (e.g. `'COMMON-10001'`). */
+    readonly errorCode?: string;
+}
+
+/**
+ * Extracts a technical error code prefix from an error message.
+ *
+ * Internal error codes are stripped from user-facing output to keep messages
+ * clean. The extracted code is preserved for telemetry and diagnostics.
+ *
+ * @param errorMessage - The raw error message string.
+ * @returns The cleaned message and any extracted error code.
+ *
+ * @example
+ * extractErrorCode("[PREFIX-12345] Invalid input provided")
+ * // → { message: "Invalid input provided", errorCode: "PREFIX-12345" }
+ *
+ * extractErrorCode("Connection refused")
+ * // → { message: "Connection refused", errorCode: undefined }
+ */
+export function extractErrorCode(errorMessage: string): ErrorCodeExtraction {
+    const match = ERROR_CODE_PREFIX_RE.exec(errorMessage);
+    if (!match) {
+        return { message: errorMessage };
+    }
+    return {
+        message: errorMessage.slice(match[0].length),
+        errorCode: match[1],
+    };
+}
+
+/**
  * Formats shell evaluation results for terminal output.
  *
  * Handles EJSON deserialization, pretty-printing, and optional ANSI coloring
