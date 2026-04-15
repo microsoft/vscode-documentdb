@@ -49,7 +49,13 @@ export function showWorkerStats(_context: IActionContext): void {
         log(`    Active sessions: ${String(shellTerminals.length)}`);
         for (const { terminal, info } of shellTerminals) {
             log(`    ─ Terminal: "${terminal.name}"`);
-            log(`      Cluster ID: ${info.clusterId}`);
+            log(`      Cluster: ${info.clusterDisplayName} (${info.clusterId})`);
+            log(`      Database: ${info.activeDatabase}`);
+            log(`      Initialized: ${String(info.isInitialized)}`);
+            log(`      Worker state: ${info.workerState}`);
+            log(`      Evaluating: ${String(info.isEvaluating)}`);
+            log(`      Auth method: ${info.authMethod ?? '(not yet initialized)'}`);
+            log(`      Username: ${info.username ?? '(n/a)'}`);
         }
     }
 
