@@ -144,4 +144,113 @@ describe('PlaygroundService', () => {
             expect(vscode.window.createStatusBarItem).toHaveBeenCalledWith(vscode.StatusBarAlignment.Left, 100);
         });
     });
+
+    describe('onDidCloseTextDocument cleanup', () => {
+        const connection: PlaygroundConnection = {
+            clusterId: 'cluster-123',
+            clusterDisplayName: 'MyCluster',
+            databaseName: 'orders',
+        };
+
+        function getCloseDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
+            const calls = (vscode.workspace.onDidCloseTextDocument as jest.Mock).mock.calls;
+            // Find the callback registered by PlaygroundService
+            const lastCall = calls[calls.length - 1];
+            return lastCall[0] as (doc: Partial<vscode.TextDocument>) => void;
+        }
+
+        it('removes connection when a playground document is closed', () => {
+            service.setConnection(mockUri, connection);
+            expect(service.isConnected(mockUri)).toBe(true);
+
+            const handler = getCloseDocHandler();
+            handler({
+                uri: mockUri,
+                languageId: 'documentdb-playground',
+            });
+
+            expect(service.isConnected(mockUri)).toBe(false);
+            expect(service.getConnection(mockUri)).toBeUndefined();
+        });
+
+        it('fires onDidChangeState when document is closed', () => {
+            service.setConnection(mockUri, connection);
+            const listener = jest.fn();
+            service.onDidChangeState(listener);
+
+            const handler = getCloseDocHandler();
+            handler({
+                uri: mockUri,
+                languageId: 'documentdb-playground',
+            });
+
+            expect(listener).toHaveBeenCalledTimes(1);
+        });
+
+        it('ignores non-playground documents', () => {
+            service.setConnection(mockUri, connection);
+
+            const handler = getCloseDocHandler();
+            handler({
+                uri: mockUri,
+                languageId: 'javascript',
+            });
+
+            expect(service.isConnected(mockUri)).toBe(true);
+        });
+    });
+
+    describe('untitled→file URI migration', () => {
+        const connection: PlaygroundConnection = {
+            clusterId: 'cluster-123',
+            clusterDisplayName: 'MyCluster',
+            databaseName: 'orders',
+        };
+
+        function getCloseDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
+            const calls = (vscode.workspace.onDidCloseTextDocument as jest.Mock).mock.calls;
+            return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
+        }
+
+        function getOpenDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
+            const calls = (vscode.workspace.onDidOpenTextDocument as jest.Mock).mock.calls;
+            return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
+        }
+
+        it('migrates connection when untitled doc closes and file doc opens with same fsPath', () => {
+            const fsPath = '/workspace/playground-test.documentdb.js';
+            const untitledUri = {
+                toString: () => `untitled:${fsPath}`,
+                scheme: 'untitled',
+                fsPath,
+            } as vscode.Uri;
+            const fileUri = {
+                toString: () => `file://${fsPath}`,
+                scheme: 'file',
+                fsPath,
+            } as vscode.Uri;
+
+            service.setConnection(untitledUri, connection);
+            expect(service.isConnected(untitledUri)).toBe(true);
+
+            // Simulate VS Code closing the untitled doc on save
+            const closeHandler = getCloseDocHandler();
+            closeHandler({
+                uri: untitledUri,
+                languageId: 'documentdb-playground',
+            });
+
+            expect(service.isConnected(untitledUri)).toBe(false);
+
+            // Simulate VS Code opening the file doc
+            const openHandler = getOpenDocHandler();
+            openHandler({
+                uri: fileUri,
+                languageId: 'documentdb-playground',
+            });
+
+            expect(service.isConnected(fileUri)).toBe(true);
+            expect(service.getConnection(fileUri)).toEqual(connection);
+        });
+    });
 });
