@@ -251,7 +251,7 @@ export class WorkerSessionManager implements vscode.Disposable {
                     pending.reject(
                         new SettingsHintError(
                             l10n.t('Operation timed out after {0} seconds.', String(Math.round(timeoutMs / 1000))),
-                            'documentDB.shell.timeout',
+                            'documentDB.timeout',
                             l10n.t('You can increase the timeout in Settings:'),
                         ),
                     );

@@ -9,7 +9,7 @@
  *
  * When the shell PTY catches a {@link SettingsHintError}, it displays
  * the error message followed by a hint line and a clickable settings
- * action line (e.g., `⚙ [documentDB.shell.timeout]`) that opens the setting.
+ * action line (e.g., `⚙ [documentDB.timeout]`) that opens the setting.
  */
 export class SettingsHintError extends Error {
     constructor(

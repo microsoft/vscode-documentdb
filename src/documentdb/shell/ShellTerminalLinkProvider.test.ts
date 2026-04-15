@@ -211,7 +211,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should detect settings action line and return a settings link', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
-            const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.shell.timeout]`;
+            const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.timeout]`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -221,7 +221,7 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'settings',
-                settingKey: 'documentDB.shell.timeout',
+                settingKey: 'documentDB.timeout',
             });
         });
 
@@ -245,7 +245,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should not match settings line for non-shell terminals', () => {
             const context = {
                 terminal: { name: 'bash' } as unknown as vscode.Terminal,
-                line: `${SETTINGS_ACTION_PREFIX}[documentDB.shell.timeout]`,
+                line: `${SETTINGS_ACTION_PREFIX}[documentDB.timeout]`,
             } as vscode.TerminalLinkContext;
 
             const links = provider.provideTerminalLinks(context);
@@ -259,14 +259,14 @@ describe('ShellTerminalLinkProvider', () => {
                 linkType: 'settings' as const,
                 startIndex: 0,
                 length: 40,
-                settingKey: 'documentDB.shell.timeout',
+                settingKey: 'documentDB.timeout',
             };
 
             provider.handleTerminalLink(link as Parameters<typeof provider.handleTerminalLink>[0]);
 
             return new Promise<void>((resolve) => {
                 setTimeout(() => {
-                    expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.shell.timeout');
+                    expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.timeout');
                     spy.mockRestore();
                     resolve();
                 }, 50);

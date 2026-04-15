@@ -59,7 +59,7 @@ describe('DocumentDBShellPty', () => {
                 if (_key === 'documentDB.shell.display.colorOutput') {
                     return false; // Disable colors for easier test assertions
                 }
-                if (_key === 'documentDB.shell.timeout') {
+                if (_key === 'documentDB.timeout') {
                     return 120;
                 }
                 return defaultValue;
