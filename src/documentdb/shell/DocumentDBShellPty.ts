@@ -9,6 +9,7 @@ import { ext } from '../../extensionVariables';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { SchemaStore } from '../SchemaStore';
+import { SettingsHintError } from './SettingsHintError';
 import { type CompletionResult, ShellCompletionProvider } from './ShellCompletionProvider';
 import { findCommonPrefix, renderCompletionList } from './ShellCompletionRenderer';
 import { ShellGhostText } from './ShellGhostText';
@@ -16,7 +17,12 @@ import { ShellInputHandler } from './ShellInputHandler';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
 import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManager } from './ShellSessionManager';
 import { ShellSpinner } from './ShellSpinner';
-import { ACTION_LINE_PREFIX, type ShellTerminalInfo, unregisterShellTerminal } from './ShellTerminalLinkProvider';
+import {
+    ACTION_LINE_PREFIX,
+    SETTINGS_ACTION_PREFIX,
+    type ShellTerminalInfo,
+    unregisterShellTerminal,
+} from './ShellTerminalLinkProvider';
 
 /**
  * Configuration for the interactive shell Pseudoterminal.
@@ -55,8 +61,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _currentDatabase: string;
     /** Cached username from initialization (used for terminal tab title). */
     private _username: string | undefined;
-    /** Whether the last console output ended with a newline. */
-    private _lastOutputHadTrailingNewline = true;
     /** Whether the shell is currently evaluating a command. */
     private _evaluating = false;
     /** Whether the shell has been closed. */
@@ -96,9 +100,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     this._spinner.hide();
                 }
                 this.writeOutput(output);
-                // Track that we received console output so we can ensure
-                // a newline before the next prompt (print() doesn't add one).
-                this._lastOutputHadTrailingNewline = output.endsWith('\n');
             },
             onWorkerExit: (_exitCode: number) => {
                 if (!this._closed) {
@@ -277,6 +278,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.writeLine(this._outputFormatter.formatError(l10n.t('Failed to connect: {0}', errorMessage)));
+
+            // Show a hint line and clickable settings link for errors that reference a VS Code setting
+            if (error instanceof SettingsHintError) {
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(
+                        `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
+                    ),
+                );
+            }
+
             this._inputHandler.setEnabled(true);
             this._closeEmitter.fire(1);
         }
@@ -296,7 +307,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Disable input while evaluating
         this._evaluating = true;
         this._interrupted = false;
-        this._lastOutputHadTrailingNewline = true;
         this._inputHandler.setEnabled(false);
 
         // Start the spinner — it appears after a short delay so fast
@@ -319,12 +329,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this._inputHandler.setEnabled(true);
 
                 if (!this._closed) {
-                    // Ensure a newline before the prompt if the last console output
-                    // (e.g., print()) didn't end with one.
-                    if (!this._lastOutputHadTrailingNewline) {
-                        this._writeEmitter.fire('\r\n');
-                        this._lastOutputHadTrailingNewline = true;
-                    }
                     this.showPrompt();
 
                     // Process any input that was queued during execution
@@ -341,6 +345,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             const timeoutMs = this.getShellTimeoutMs();
             const result = await this._sessionManager.evaluate(input, timeoutMs);
+
+            // Stop the spinner before writing any output so the spinner
+            // character doesn't collide with the result text.
+            this._spinner?.stop();
+            this._spinner = undefined;
 
             // If this eval was cancelled by Ctrl+C, skip output — the interrupt
             // handler already showed ^C and a new prompt.
@@ -370,6 +379,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // is non-blocking and failure is non-critical.
             this.maybeFeedSchemaStore(result);
         } catch (error: unknown) {
+            // Stop the spinner before writing error output.
+            this._spinner?.stop();
+            this._spinner = undefined;
+
             // Suppress errors from intentional Ctrl+C cancellation — the interrupt
             // handler already showed ^C and a new prompt.
             if (this._interrupted) {
@@ -377,6 +390,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             }
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.writeLine(this._outputFormatter.formatError(errorMessage));
+
+            // Show a hint line and clickable settings link for errors that reference a VS Code setting
+            if (error instanceof SettingsHintError) {
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(
+                        `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
+                    ),
+                );
+            }
         }
     }
 

@@ -69,6 +69,8 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                 dbExperience: DocumentDBExperience,
                 connectionString: connection.secrets.connectionString,
                 emulatorConfiguration: emulatorConfiguration,
+                selectedAuthMethod: connection.properties.selectedAuthMethod,
+                connectionUser: connection.secrets.nativeAuthConfig?.connectionUser,
             };
 
             ext.outputChannel.trace(

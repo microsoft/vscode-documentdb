@@ -75,6 +75,14 @@ export function getRegisteredShellTerminals(): ReadonlyArray<{
 export const ACTION_LINE_PREFIX = '\u{1F517} '; // 🔗 + space
 
 /**
+ * The marker prefix for the "Open Settings" action line.
+ *
+ * Format: `⚙ [settingKey]`
+ * The settings key is NOT localized — it's the programmatic VS Code setting ID.
+ */
+export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
+
+/**
  * Regex to match the "Open in Collection View" action line.
  *
  * Captures:
@@ -93,9 +101,23 @@ const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{1F517} \[([^\].]+)\.([^\]]+)\](?:
 /* eslint-enable no-control-regex */
 
 /**
+ * Regex to match the "Open Settings" action line.
+ *
+ * Captures:
+ * - Group 1: the VS Code setting key (e.g., `documentDB.shell.timeout`)
+ *
+ * The pattern accounts for optional ANSI color codes that wrap the line.
+ * The format is locale-independent.
+ */
+/* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
+const SETTINGS_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2699} \[([^\]]+)\](?:\x1b\[\d+m)*/u;
+/* eslint-enable no-control-regex */
+
+/**
  * Extended terminal link that carries navigation metadata.
  */
 interface CollectionViewTerminalLink extends vscode.TerminalLink {
+    readonly linkType: 'collectionView';
     /** Cluster ID for opening the collection view. */
     readonly clusterId: string;
     /** Database name parsed from the action line. */
@@ -103,6 +125,20 @@ interface CollectionViewTerminalLink extends vscode.TerminalLink {
     /** Collection name parsed from the action line. */
     readonly collectionName: string;
 }
+
+/**
+ * Terminal link that opens a VS Code setting.
+ */
+interface SettingsTerminalLink extends vscode.TerminalLink {
+    readonly linkType: 'settings';
+    /** The VS Code setting key to open. */
+    readonly settingKey: string;
+}
+
+/**
+ * Union of all shell terminal link types.
+ */
+type ShellTerminalLink = CollectionViewTerminalLink | SettingsTerminalLink;
 
 /**
  * Provides clickable "Open in Collection View" links in DocumentDB shell terminals.
@@ -115,36 +151,70 @@ interface CollectionViewTerminalLink extends vscode.TerminalLink {
  *
  * Only active for terminals registered via {@link registerShellTerminal}.
  */
-export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<CollectionViewTerminalLink> {
-    provideTerminalLinks(context: vscode.TerminalLinkContext): CollectionViewTerminalLink[] {
+export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<ShellTerminalLink> {
+    provideTerminalLinks(context: vscode.TerminalLinkContext): ShellTerminalLink[] {
         const infoProvider = shellTerminalRegistry.get(context.terminal);
         if (!infoProvider) {
             // Not a shell terminal — no links
             return [];
         }
 
-        const match = ACTION_LINE_PATTERN.exec(context.line);
-        if (!match) {
-            return [];
+        // Check for collection view action line
+        const collectionMatch = ACTION_LINE_PATTERN.exec(context.line);
+        if (collectionMatch) {
+            const info = infoProvider();
+            const databaseName = collectionMatch[1];
+            const collectionName = collectionMatch[2];
+
+            return [
+                {
+                    linkType: 'collectionView',
+                    startIndex: collectionMatch.index,
+                    length: collectionMatch[0].length,
+                    tooltip: vscode.l10n.t(
+                        'Open collection "{0}.{1}" in Collection View',
+                        databaseName,
+                        collectionName,
+                    ),
+                    clusterId: info.clusterId,
+                    databaseName,
+                    collectionName,
+                },
+            ];
         }
 
-        const info = infoProvider();
-        const databaseName = match[1];
-        const collectionName = match[2];
+        // Check for settings action line
+        const settingsMatch = SETTINGS_LINE_PATTERN.exec(context.line);
+        if (settingsMatch) {
+            const settingKey = settingsMatch[1];
+            return [
+                {
+                    linkType: 'settings',
+                    startIndex: settingsMatch.index,
+                    length: settingsMatch[0].length,
+                    tooltip: vscode.l10n.t('Open setting: {0}', settingKey),
+                    settingKey,
+                },
+            ];
+        }
 
-        return [
-            {
-                startIndex: match.index,
-                length: match[0].length,
-                tooltip: vscode.l10n.t('Open collection "{0}.{1}" in Collection View', databaseName, collectionName),
-                clusterId: info.clusterId,
-                databaseName,
-                collectionName,
-            },
-        ];
+        return [];
     }
 
-    handleTerminalLink(link: CollectionViewTerminalLink): void {
+    handleTerminalLink(link: ShellTerminalLink): void {
+        if (link.linkType === 'settings') {
+            void callWithTelemetryAndErrorHandling(
+                'vscode-documentdb.shell.terminalLink.openSettings',
+                async (context: IActionContext) => {
+                    context.telemetry.properties.linkType = 'settingsActionLine';
+                    context.telemetry.properties.settingKey = link.settingKey;
+
+                    await vscode.commands.executeCommand('workbench.action.openSettings', link.settingKey);
+                },
+            );
+            return;
+        }
+
         void callWithTelemetryAndErrorHandling(
             'vscode-documentdb.shell.terminalLink.openCollectionView',
             async (context: IActionContext) => {

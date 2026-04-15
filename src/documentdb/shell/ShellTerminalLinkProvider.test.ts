@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import {
     ACTION_LINE_PREFIX,
     registerShellTerminal,
+    SETTINGS_ACTION_PREFIX,
     ShellTerminalLinkProvider,
     unregisterShellTerminal,
 } from './ShellTerminalLinkProvider';
@@ -63,9 +64,12 @@ describe('ShellTerminalLinkProvider', () => {
 
             const links = provider.provideTerminalLinks(context);
             expect(links).toHaveLength(1);
-            expect(links[0].databaseName).toBe('mydb');
-            expect(links[0].collectionName).toBe('users');
-            expect(links[0].clusterId).toBe('test-cluster-id');
+            expect(links[0]).toMatchObject({
+                linkType: 'collectionView',
+                databaseName: 'mydb',
+                collectionName: 'users',
+                clusterId: 'test-cluster-id',
+            });
         });
 
         it('should handle collection names with dots', () => {
@@ -80,8 +84,11 @@ describe('ShellTerminalLinkProvider', () => {
             const links = provider.provideTerminalLinks(context);
             expect(links).toHaveLength(1);
             // First dot separates db from collection; rest belongs to collection name
-            expect(links[0].databaseName).toBe('analytics');
-            expect(links[0].collectionName).toBe('events.2024');
+            expect(links[0]).toMatchObject({
+                linkType: 'collectionView',
+                databaseName: 'analytics',
+                collectionName: 'events.2024',
+            });
         });
 
         it('should handle collection names with parentheses', () => {
@@ -95,8 +102,11 @@ describe('ShellTerminalLinkProvider', () => {
 
             const links = provider.provideTerminalLinks(context);
             expect(links).toHaveLength(1);
-            expect(links[0].databaseName).toBe('mydb');
-            expect(links[0].collectionName).toBe('stores (10)');
+            expect(links[0]).toMatchObject({
+                linkType: 'collectionView',
+                databaseName: 'mydb',
+                collectionName: 'stores (10)',
+            });
         });
 
         it('should handle collection names with spaces', () => {
@@ -110,8 +120,11 @@ describe('ShellTerminalLinkProvider', () => {
 
             const links = provider.provideTerminalLinks(context);
             expect(links).toHaveLength(1);
-            expect(links[0].databaseName).toBe('mydb');
-            expect(links[0].collectionName).toBe('my collection');
+            expect(links[0]).toMatchObject({
+                linkType: 'collectionView',
+                databaseName: 'mydb',
+                collectionName: 'my collection',
+            });
         });
 
         it('should handle ANSI-wrapped action line (gray color)', () => {
@@ -126,8 +139,11 @@ describe('ShellTerminalLinkProvider', () => {
 
             const links = provider.provideTerminalLinks(context);
             expect(links).toHaveLength(1);
-            expect(links[0].databaseName).toBe('mydb');
-            expect(links[0].collectionName).toBe('users');
+            expect(links[0]).toMatchObject({
+                linkType: 'collectionView',
+                databaseName: 'mydb',
+                collectionName: 'users',
+            });
         });
 
         it('should not match partial action line text', () => {
@@ -148,6 +164,7 @@ describe('ShellTerminalLinkProvider', () => {
             const spy = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
 
             const link = {
+                linkType: 'collectionView' as const,
                 startIndex: 0,
                 length: 50,
                 clusterId: 'my-cluster',
@@ -168,6 +185,73 @@ describe('ShellTerminalLinkProvider', () => {
                             collectionName: 'users',
                         }),
                     );
+                    spy.mockRestore();
+                    resolve();
+                }, 50);
+            });
+        });
+    });
+
+    describe('settings links', () => {
+        it('should detect settings action line and return a settings link', () => {
+            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+
+            const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.shell.timeout]`;
+            const context = {
+                terminal: mockTerminal,
+                line: actionLine,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toHaveLength(1);
+            expect(links[0]).toMatchObject({
+                linkType: 'settings',
+                settingKey: 'documentDB.shell.timeout',
+            });
+        });
+
+        it('should handle ANSI-wrapped settings action line', () => {
+            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+
+            const actionLine = `\x1b[90m${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]\x1b[0m`;
+            const context = {
+                terminal: mockTerminal,
+                line: actionLine,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toHaveLength(1);
+            expect(links[0]).toMatchObject({
+                linkType: 'settings',
+                settingKey: 'documentDB.shell.initTimeout',
+            });
+        });
+
+        it('should not match settings line for non-shell terminals', () => {
+            const context = {
+                terminal: { name: 'bash' } as unknown as vscode.Terminal,
+                line: `${SETTINGS_ACTION_PREFIX}[documentDB.shell.timeout]`,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toEqual([]);
+        });
+
+        it('should execute openSettings command for settings links', () => {
+            const spy = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+
+            const link = {
+                linkType: 'settings' as const,
+                startIndex: 0,
+                length: 40,
+                settingKey: 'documentDB.shell.timeout',
+            };
+
+            provider.handleTerminalLink(link as Parameters<typeof provider.handleTerminalLink>[0]);
+
+            return new Promise<void>((resolve) => {
+                setTimeout(() => {
+                    expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.shell.timeout');
                     spy.mockRestore();
                     resolve();
                 }, 50);

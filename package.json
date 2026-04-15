@@ -1151,7 +1151,7 @@
           },
           "documentDB.shell.timeout": {
             "type": "number",
-            "description": "The duration allowed (in seconds) for a query to execute in the Query Playground or Interactive Shell. Default value is 30 seconds.",
+            "description": "Maximum time (in seconds) allowed for a query to execute in the Query Playground or Interactive Shell before the operation is cancelled.",
             "default": 30
           },
           "documentDB.shell.initTimeout": {

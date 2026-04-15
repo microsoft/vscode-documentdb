@@ -15,6 +15,7 @@ import {
     type SerializableMongoClientOptions,
     type WorkerToMainMessage,
 } from '../playground/workerTypes';
+import { SettingsHintError } from './SettingsHintError';
 
 /**
  * Connection parameters for a shell session.
@@ -146,7 +147,14 @@ export class ShellSessionManager implements vscode.Disposable {
         const timeoutMs = this.getInitTimeoutMs();
         const timeoutPromise = new Promise<never>((_resolve, reject) => {
             setTimeout(
-                () => reject(new Error(l10n.t('Shell initialization timed out after {0} seconds', timeoutMs / 1000))),
+                () =>
+                    reject(
+                        new SettingsHintError(
+                            l10n.t('Shell initialization timed out after {0} seconds.', timeoutMs / 1000),
+                            ext.settingsKeys.shellInitTimeout,
+                            l10n.t('You can increase the timeout in Settings:'),
+                        ),
+                    ),
                 timeoutMs,
             );
         });
@@ -179,7 +187,10 @@ export class ShellSessionManager implements vscode.Disposable {
      * @returns The serializable execution result from the worker.
      */
     async evaluate(code: string, timeoutMs: number): Promise<SerializableExecutionResult> {
-        if (!this._initialized) {
+        // Reconnect if the worker is not alive — handles all cases:
+        // timeout kills, Ctrl+C cancellation, unexpected worker crashes.
+        if (!this._initialized || !this._workerManager.isAlive) {
+            this._initialized = false;
             this._callbacks?.onReconnecting?.();
             if (!this._initPromise) {
                 this._initPromise = this.initialize().finally(() => {
