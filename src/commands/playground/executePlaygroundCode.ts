@@ -147,7 +147,7 @@ export async function executePlaygroundCode(
                 });
 
                 const startTime = Date.now();
-                const sourceUri = vscode.window.activeTextEditor?.document.uri;
+                const sourceUri = documentUri;
 
                 try {
                     const result = await evaluator!.evaluate(connection, code, (message) => {
