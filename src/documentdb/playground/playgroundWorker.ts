@@ -30,6 +30,13 @@ let mongoClient: MongoClientType | undefined;
 let shellRuntime: DocumentDBShellRuntime | undefined;
 
 /**
+ * Tracks the requestId of the currently executing eval message.
+ * Used by the uncaught exception handler to send error details back
+ * to the main thread before the worker exits.
+ */
+let currentEvalRequestId: string | undefined;
+
+/**
  * Cache for pending Entra ID token requests from the OIDC callback.
  * The OIDC_CALLBACK in the worker sends a tokenRequest to the main thread
  * and awaits the response via this map.
@@ -62,6 +69,7 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 
         case 'eval':
             void handleEval(msg).catch((err: unknown) => {
+                currentEvalRequestId = undefined;
                 const errorMessage = err instanceof Error ? err.message : String(err);
                 const stack = err instanceof Error ? err.stack : undefined;
                 const response: WorkerToMainMessage = {
@@ -182,6 +190,8 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
         throw new Error('Worker not initialized — call init first');
     }
 
+    currentEvalRequestId = msg.requestId;
+
     // Evaluate via shell-runtime (handles @mongosh setup, command interception, result transformation)
     const result = await shellRuntime.evaluate(msg.code, msg.databaseName, {
         displayBatchSize: msg.displayBatchSize,
@@ -222,6 +232,8 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     }
 
     log('trace', `Evaluation complete (${String(result.durationMs)}ms, type: ${result.type ?? 'null'})`);
+
+    currentEvalRequestId = undefined;
 
     const response: WorkerToMainMessage = {
         type: 'evalResult',
@@ -285,6 +297,19 @@ function handleTokenError(msg: Extract<MainToWorkerMessage, { type: 'tokenError'
 // ─── Uncaught exception handler ──────────────────────────────────────────────
 
 process.on('uncaughtException', (error: Error) => {
+    // Send the actual exception details to the main thread so the user sees
+    // the real error instead of a generic "Worker exited unexpectedly" message.
+    if (currentEvalRequestId) {
+        const response: WorkerToMainMessage = {
+            type: 'evalError',
+            requestId: currentEvalRequestId,
+            error: `Uncaught exception: ${error.message}`,
+            stack: error.stack,
+        };
+        parentPort!.postMessage(response);
+        currentEvalRequestId = undefined;
+    }
+
     log('error', `Uncaught exception in worker: ${error.message}\n${error.stack ?? ''}`);
 });
 
