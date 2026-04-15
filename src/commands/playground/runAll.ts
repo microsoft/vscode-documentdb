@@ -40,13 +40,16 @@ export async function runAll(_context: IActionContext): Promise<void> {
 
     if (confirmRunAll) {
         const confirmed = await vscode.window.showWarningMessage(
-            l10n.t('Are you sure you want to run the entire playground file?'),
+            l10n.t('Are you sure you want to run all code?'),
             {
                 modal: true,
-                detail: l10n.t(
-                    'This will execute all statements in the file against the connected database. You can disable this confirmation by setting "{0}" to false.',
-                    ext.settingsKeys.playgroundConfirmRunAll,
-                ),
+                detail:
+                    l10n.t('This will execute all statements in the file against the connected cluster.') +
+                    '\n\n' +
+                    l10n.t(
+                        'You can disable this confirmation by setting "{0}" to false.',
+                        ext.settingsKeys.playgroundConfirmRunAll,
+                    ),
             },
             l10n.t('Run All'),
         );
