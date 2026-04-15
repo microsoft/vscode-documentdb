@@ -285,3 +285,57 @@ describe('ShellOutputFormatter', () => {
         });
     });
 });
+
+// ─── extractErrorCode ────────────────────────────────────────────────────────
+
+import { extractErrorCode } from './ShellOutputFormatter';
+
+describe('extractErrorCode', () => {
+    it('should extract an error code and return clean message', () => {
+        const result = extractErrorCode('[PREFIX-12345] Invalid input provided');
+        expect(result.errorCode).toBe('PREFIX-12345');
+        expect(result.message).toBe('Invalid input provided');
+    });
+
+    it('should extract a multi-segment error code', () => {
+        const result = extractErrorCode('[ERR-90001] Unexpected failure');
+        expect(result.errorCode).toBe('ERR-90001');
+        expect(result.message).toBe('Unexpected failure');
+    });
+
+    it('should extract a short error code', () => {
+        const result = extractErrorCode('[API-100] Operation timed out');
+        expect(result.errorCode).toBe('API-100');
+        expect(result.message).toBe('Operation timed out');
+    });
+
+    it('should return the original message when no code is present', () => {
+        const result = extractErrorCode('Connection refused');
+        expect(result.errorCode).toBeUndefined();
+        expect(result.message).toBe('Connection refused');
+    });
+
+    it('should return the original message for empty string', () => {
+        const result = extractErrorCode('');
+        expect(result.errorCode).toBeUndefined();
+        expect(result.message).toBe('');
+    });
+
+    it('should not match codes that are not at the start of the message', () => {
+        const result = extractErrorCode('Error occurred [COMMON-10001] in handler');
+        expect(result.errorCode).toBeUndefined();
+        expect(result.message).toBe('Error occurred [COMMON-10001] in handler');
+    });
+
+    it('should not match malformed code patterns', () => {
+        const result = extractErrorCode('[common-10001] lowercase prefix');
+        expect(result.errorCode).toBeUndefined();
+        expect(result.message).toBe('[common-10001] lowercase prefix');
+    });
+
+    it('should handle code with no trailing message', () => {
+        const result = extractErrorCode('[COMMON-90001] ');
+        expect(result.errorCode).toBe('COMMON-90001');
+        expect(result.message).toBe('');
+    });
+});
