@@ -5,6 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
+import { SettingsHintError } from '../shell/SettingsHintError';
 import { extractErrorCode } from '../shell/ShellOutputFormatter';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
 
@@ -92,6 +93,13 @@ export function formatError(
     // the extracted code is preserved for future telemetry.
     const { message: errorMessage } = extractErrorCode(rawMessage);
     lines.push(errorMessage);
+
+    // Show a settings hint for timeout errors (mirrors the shell's clickable hint)
+    if (error instanceof SettingsHintError) {
+        lines.push('');
+        lines.push(`// ${error.settingsHint}`);
+        lines.push(`// Settings → '${error.settingKey}'`);
+    }
 
     return lines.join('\n');
 }

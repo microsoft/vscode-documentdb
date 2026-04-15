@@ -221,7 +221,7 @@ export class PlaygroundHoverProvider implements vscode.HoverProvider {
      * a method argument for a known collection.
      */
     private buildFieldLookup(document: vscode.TextDocument, position: vscode.Position): FieldEntryLookup | undefined {
-        const connection = PlaygroundService.getInstance().getConnection();
+        const connection = PlaygroundService.getInstance().getConnection(document.uri);
         if (!connection) return undefined;
 
         const text = document.getText();

@@ -88,7 +88,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             onConsoleOutput: (output: string) => {
                 this._lastEvalConsoleOutputCount++;
                 ext.playgroundOutputChannel.show(true);
-                ext.playgroundOutputChannel.appendLine(output);
+                // Use append(), not appendLine() — the runtime already includes a trailing newline.
+                ext.playgroundOutputChannel.append(output);
             },
             onLog: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string) => {
                 switch (level) {

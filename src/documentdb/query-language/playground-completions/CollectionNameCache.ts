@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import { ClustersClient } from '../../ClustersClient';
 import { SchemaStore } from '../../SchemaStore';
 import { PlaygroundService } from '../../playground/PlaygroundService';
@@ -38,12 +38,15 @@ export class CollectionNameCache implements vscode.Disposable {
 
     private constructor() {
         // On connection change, trigger a background fetch so that
-        // ClustersClient's cache is warm for the new database.
+        // ClustersClient's cache is warm for the active editor's connection.
         this._disposables.push(
             PlaygroundService.getInstance().onDidChangeState(() => {
-                const connection = PlaygroundService.getInstance().getConnection();
-                if (connection) {
-                    this.ensureFetched(connection.clusterId, connection.databaseName);
+                const activeEditor = vscode.window.activeTextEditor;
+                if (activeEditor) {
+                    const connection = PlaygroundService.getInstance().getConnection(activeEditor.document.uri);
+                    if (connection) {
+                        this.ensureFetched(connection.clusterId, connection.databaseName);
+                    }
                 }
             }),
         );

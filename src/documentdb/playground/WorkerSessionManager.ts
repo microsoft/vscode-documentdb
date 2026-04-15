@@ -200,6 +200,14 @@ export class WorkerSessionManager implements vscode.Disposable {
 
         this._worker.on('error', (error: Error) => {
             this._callbacks.onLog?.('error', error.message);
+
+            // Reject all pending requests with the actual error so callers
+            // get an immediate, meaningful failure instead of waiting for
+            // the eval timeout to fire with a misleading "timed out" message.
+            for (const [, entry] of this._pendingRequests) {
+                entry.reject(error);
+            }
+            this._pendingRequests.clear();
         });
 
         // Send init and wait for acknowledgment.

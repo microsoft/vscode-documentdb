@@ -13,7 +13,9 @@ import { PlaygroundCommandIds } from './constants';
  */
 function mockDocument(text: string): vscode.TextDocument {
     const lines = text.split('\n');
+    const uri = { toString: () => 'untitled:playground-test.documentdb.js' } as vscode.Uri;
     return {
+        uri,
         lineCount: lines.length,
         lineAt(lineNumber: number) {
             return { text: lines[lineNumber] ?? '' };
@@ -44,19 +46,19 @@ describe('PlaygroundCodeLensProvider', () => {
 
         // First lens should be connection status
         const connectionLens = lenses[0];
-        expect(connectionLens.command?.command).toBe(PlaygroundCommandIds.connect);
-        expect(connectionLens.command?.title).toContain('Connect to a database');
+        expect(connectionLens.command?.command).toBe(PlaygroundCommandIds.showConnectionInfo);
+        expect(connectionLens.command?.title).toContain('Not connected');
         expect(connectionLens.range.start.line).toBe(0);
     });
 
     it('provides connection status lens showing cluster name when connected', () => {
-        service.setConnection({
+        const doc = mockDocument('db.test.find({})');
+        service.setConnection(doc.uri, {
             clusterId: 'test-id',
             clusterDisplayName: 'MyCluster',
             databaseName: 'orders',
         });
 
-        const doc = mockDocument('db.test.find({})');
         const lenses = provider.provideCodeLenses(doc);
 
         const connectionLens = lenses[0];

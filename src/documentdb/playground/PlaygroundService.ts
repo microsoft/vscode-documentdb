@@ -9,17 +9,22 @@ import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
 import { type PlaygroundConnection } from './types';
 
 /**
- * Singleton service managing the active query playground connection and execution state.
+ * Singleton service managing per-document query playground connections and execution state.
  *
- * Design decisions (from 06-scrapbook-rebuild.md (historical reference)):
- * - D1 (Option B): All query playground files share a single global connection
- * - StatusBarItem shows connection status when a `.documentdb.js` file is active
- * - Service emits state changes so UI components (CodeLens, StatusBar) can refresh
+ * Each playground document is permanently bound to a cluster/database connection.
+ * Multiple playgrounds can be open simultaneously, each connected to different servers.
  */
 export class PlaygroundService implements vscode.Disposable {
     private static _instance: PlaygroundService | undefined;
 
-    private _connection: PlaygroundConnection | undefined;
+    /** Per-document connections keyed by `uri.toString()`. */
+    private readonly _connections = new Map<string, PlaygroundConnection>();
+    /**
+     * Temporarily stashed connections for untitled→file URI migration.
+     * When an untitled playground is saved, VS Code closes the untitled doc and opens a file doc.
+     * We stash the connection keyed by fsPath so it can be migrated to the new URI.
+     */
+    private readonly _pendingMigrations = new Map<string, PlaygroundConnection>();
     private _isExecuting = false;
 
     private readonly _onDidChangeState = new vscode.EventEmitter<void>();
@@ -31,7 +36,7 @@ export class PlaygroundService implements vscode.Disposable {
     private constructor() {
         // StatusBarItem — left-aligned, shown only when a query playground file is the active editor
         this._statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-        this._statusBarItem.command = PlaygroundCommandIds.connect;
+        this._statusBarItem.command = PlaygroundCommandIds.showConnectionInfo;
         this._disposables.push(this._statusBarItem);
 
         // Update StatusBar visibility when the active editor changes
@@ -48,6 +53,40 @@ export class PlaygroundService implements vscode.Disposable {
             }),
         );
 
+        // Clean up connection when a playground document is closed.
+        // For untitled documents, stash the connection briefly so it can be
+        // migrated if the document is being saved (untitled → file transition).
+        this._disposables.push(
+            vscode.workspace.onDidCloseTextDocument((doc) => {
+                if (doc.languageId === PLAYGROUND_LANGUAGE_ID) {
+                    const connection = this._connections.get(doc.uri.toString());
+                    if (connection && doc.uri.scheme === 'untitled') {
+                        this._pendingMigrations.set(doc.uri.fsPath, connection);
+                        // Clear the stash after a short delay if no file doc claims it
+                        setTimeout(() => {
+                            this._pendingMigrations.delete(doc.uri.fsPath);
+                        }, 2000);
+                    }
+                    this._connections.delete(doc.uri.toString());
+                    this._onDidChangeState.fire();
+                }
+            }),
+        );
+
+        // Migrate connection when a playground file document opens after an untitled save
+        this._disposables.push(
+            vscode.workspace.onDidOpenTextDocument((doc) => {
+                if (doc.languageId === PLAYGROUND_LANGUAGE_ID && doc.uri.scheme === 'file') {
+                    const stashed = this._pendingMigrations.get(doc.uri.fsPath);
+                    if (stashed) {
+                        this._pendingMigrations.delete(doc.uri.fsPath);
+                        this._connections.set(doc.uri.toString(), stashed);
+                        this._onDidChangeState.fire();
+                    }
+                }
+            }),
+        );
+
         // Initialize with current editor
         this.updateStatusBar(vscode.window.activeTextEditor);
     }
@@ -61,33 +100,57 @@ export class PlaygroundService implements vscode.Disposable {
 
     // ── Connection management ──────────────────────────────────────────
 
-    setConnection(connection: PlaygroundConnection): void {
-        this._connection = connection;
+    setConnection(uri: vscode.Uri, connection: PlaygroundConnection): void {
+        this._connections.set(uri.toString(), connection);
         this._onDidChangeState.fire();
     }
 
-    clearConnection(): void {
-        this._connection = undefined;
+    removeConnection(uri: vscode.Uri): void {
+        this._connections.delete(uri.toString());
         this._onDidChangeState.fire();
     }
 
-    isConnected(): boolean {
-        return this._connection !== undefined;
+    isConnected(uri: vscode.Uri): boolean {
+        return this._connections.has(uri.toString());
     }
 
-    getConnection(): PlaygroundConnection | undefined {
-        return this._connection;
+    getConnection(uri: vscode.Uri): PlaygroundConnection | undefined {
+        return this._connections.get(uri.toString());
     }
 
     /**
-     * Returns a human-readable display string for the active connection,
+     * Returns a human-readable display string for a document's connection,
      * e.g. "MyCluster / orders". Returns `undefined` if disconnected.
      */
-    getDisplayName(): string | undefined {
-        if (!this._connection) {
+    getDisplayName(uri: vscode.Uri): string | undefined {
+        const connection = this._connections.get(uri.toString());
+        if (!connection) {
             return undefined;
         }
-        return `${this._connection.clusterDisplayName} / ${this._connection.databaseName}`;
+        return `${connection.clusterDisplayName} / ${connection.databaseName}`;
+    }
+
+    /**
+     * Returns all cluster IDs that have at least one open playground document.
+     */
+    getActiveClusterIds(): Set<string> {
+        const ids = new Set<string>();
+        for (const conn of this._connections.values()) {
+            ids.add(conn.clusterId);
+        }
+        return ids;
+    }
+
+    /**
+     * Check whether any open playground document is connected to the given cluster.
+     */
+    hasPlaygroundsForCluster(clusterId: string): boolean {
+        for (const conn of this._connections.values()) {
+            if (conn.clusterId === clusterId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ── Execution state ────────────────────────────────────────────────
@@ -109,13 +172,15 @@ export class PlaygroundService implements vscode.Disposable {
             return;
         }
 
-        if (this._connection) {
-            const displayName = this.getDisplayName()!;
+        const displayName = this.getDisplayName(editor.document.uri);
+        if (displayName) {
             this._statusBarItem.text = `$(plug) ${displayName}`;
             this._statusBarItem.tooltip = l10n.t('Query Playground connected to {0}', displayName);
         } else {
             this._statusBarItem.text = `$(warning) ${l10n.t('No database connected')}`;
-            this._statusBarItem.tooltip = l10n.t('Click to learn how to connect a database for the Query Playground');
+            this._statusBarItem.tooltip = l10n.t(
+                'This playground has no connection. Create a new playground from the DocumentDB panel.',
+            );
         }
 
         this._statusBarItem.show();
@@ -128,6 +193,7 @@ export class PlaygroundService implements vscode.Disposable {
             d?.dispose();
         }
         this._onDidChangeState.dispose();
+        this._connections.clear();
         PlaygroundService._instance = undefined;
     }
 }

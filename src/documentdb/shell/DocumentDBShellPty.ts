@@ -203,11 +203,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     /**
-     * Returns current shell metadata for the terminal link provider.
+     * Returns current shell metadata for the terminal link provider and debug stats.
      */
     getTerminalInfo(): ShellTerminalInfo {
         return {
             clusterId: this._connectionInfo.clusterId,
+            clusterDisplayName: this._connectionInfo.clusterDisplayName,
+            activeDatabase: this._sessionManager.activeDatabase,
+            isInitialized: this._sessionManager.isInitialized,
+            isEvaluating: this._evaluating,
+            workerState: this._sessionManager.workerState,
+            authMethod: this._sessionManager.authMethod,
+            username: this._username,
         };
     }
 

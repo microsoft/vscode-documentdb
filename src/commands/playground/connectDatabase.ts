@@ -6,33 +6,31 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
-import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
-import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 
 /**
- * Sets the active query playground connection from a tree node context,
- * or shows instructions when invoked without a tree context (e.g., CodeLens click).
+ * Shows connection information for the active query playground document.
+ * Invoked from the CodeLens on line 0 and from the status bar.
  */
-export async function connectDatabase(_context: IActionContext, node?: DatabaseItem | CollectionItem): Promise<void> {
-    if (node) {
-        const service = PlaygroundService.getInstance();
-        service.setConnection({
-            clusterId: node.cluster.clusterId,
-            clusterDisplayName: node.cluster.name,
-            databaseName: node.databaseInfo.name,
-        });
+export async function showConnectionInfo(_context: IActionContext): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
+        return;
+    }
 
+    const service = PlaygroundService.getInstance();
+    const connection = service.getConnection(editor.document.uri);
+
+    if (connection) {
         void vscode.window.showInformationMessage(
-            l10n.t('Query Playground connected to {0}/{1}', node.cluster.name, node.databaseInfo.name),
+            l10n.t('Connected to {0}/{1}', connection.clusterDisplayName, connection.databaseName),
         );
     } else {
-        // No tree context — show instructions as modal dialog
-        void vscode.window.showInformationMessage(l10n.t('No database connected'), {
-            modal: true,
-            detail: l10n.t(
-                'Right-click a database or collection in the DocumentDB panel and select "Connect query playground to this database".',
+        void vscode.window.showInformationMessage(
+            l10n.t(
+                'This playground has no connection. Create a new playground by right-clicking a database or collection in the DocumentDB panel.',
             ),
-        });
+        );
     }
 }

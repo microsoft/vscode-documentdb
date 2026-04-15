@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Represents the active query playground connection.
- * All query playground files share a single global connection (Decision D1: Option B).
+ * Represents a query playground connection bound to a specific document.
+ * Each playground document has its own connection to a cluster/database.
  */
 export interface PlaygroundConnection {
     /** Stable cluster ID for ClustersClient/CredentialCache lookups. */

@@ -77,6 +77,8 @@ export class ShellSessionManager implements vscode.Disposable {
     private _initPromise: Promise<ShellConnectionMetadata> | undefined;
     /** Tracks the active database, surviving worker restarts. Updated on `use <db>`. */
     private _activeDatabase: string;
+    /** Auth mechanism used for the current session (set after init). */
+    private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | undefined;
 
     constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
         this._connectionInfo = connectionInfo;
@@ -135,6 +137,20 @@ export class ShellSessionManager implements vscode.Disposable {
     }
 
     /**
+     * Worker thread state ('idle' | 'spawning' | 'ready' | 'executing').
+     */
+    get workerState(): 'idle' | 'spawning' | 'ready' | 'executing' {
+        return this._workerManager.workerState;
+    }
+
+    /**
+     * Authentication method used for the current session.
+     */
+    get authMethod(): 'NativeAuth' | 'MicrosoftEntraID' | undefined {
+        return this._authMethod;
+    }
+
+    /**
      * Initialize the shell session: spawn the worker, connect to the cluster,
      * and set the initial database.
      *
@@ -161,6 +177,7 @@ export class ShellSessionManager implements vscode.Disposable {
 
         await Promise.race([this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg), timeoutPromise]);
         this._initialized = true;
+        this._authMethod = initMsg.authMechanism;
 
         const username =
             initMsg.authMechanism === 'NativeAuth'

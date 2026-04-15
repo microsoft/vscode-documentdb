@@ -17,33 +17,63 @@ import { getHostsFromConnectionString } from '../../documentdb/utils/connectionS
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
 
-/** Shared evaluator instance — lazily created, reused across runs. */
-let evaluator: PlaygroundEvaluator | undefined;
+/** Per-cluster evaluator pool — one worker per cluster, lazily created. */
+const evaluators = new Map<string, PlaygroundEvaluator>();
 
 /**
- * Dispose the shared evaluator instance (kills the worker thread).
+ * Dispose all evaluator instances (kills all worker threads).
  * Called during extension deactivation.
  */
-export function disposeEvaluator(): void {
-    evaluator?.dispose();
-    evaluator = undefined;
+export function disposeEvaluators(): void {
+    for (const ev of evaluators.values()) {
+        ev.dispose();
+    }
+    evaluators.clear();
 }
 
 /**
- * Gracefully shut down the evaluator's worker thread (closes MongoClient).
- * Called when the query playground connection is cleared or when all query playground editors close.
+ * Gracefully shut down a specific cluster's evaluator worker thread.
+ * Called when all playground documents for that cluster are closed.
  * The worker will be re-spawned lazily on the next Run.
  */
-export function shutdownEvaluator(): void {
-    void evaluator?.shutdown();
+export function shutdownEvaluator(clusterId: string): void {
+    const ev = evaluators.get(clusterId);
+    if (ev) {
+        void ev.shutdown();
+        evaluators.delete(clusterId);
+    }
 }
 
 /**
- * Returns the current playground evaluator instance (if any).
+ * Shut down all evaluators that have no remaining open playground documents.
+ * Called when playground documents close or state changes.
+ *
+ * Evaluators whose worker is currently executing are skipped — they will be
+ * cleaned up after the execution completes (the next state-change event
+ * re-triggers this function).
+ */
+export function shutdownOrphanedEvaluators(): void {
+    const service = PlaygroundService.getInstance();
+    const activeClusterIds = service.getActiveClusterIds();
+
+    for (const [clusterId, ev] of evaluators) {
+        if (!activeClusterIds.has(clusterId)) {
+            // Don't kill a worker mid-execution; defer until it finishes
+            if (ev.workerState === 'executing') {
+                continue;
+            }
+            void ev.shutdown();
+            evaluators.delete(clusterId);
+        }
+    }
+}
+
+/**
+ * Returns all current playground evaluator instances.
  * Used by the worker task manager debug command to report stats.
  */
-export function getPlaygroundEvaluator(): PlaygroundEvaluator | undefined {
-    return evaluator;
+export function getPlaygroundEvaluators(): ReadonlyMap<string, PlaygroundEvaluator> {
+    return evaluators;
 }
 
 /**
@@ -52,12 +82,16 @@ export function getPlaygroundEvaluator(): PlaygroundEvaluator | undefined {
  */
 export type PlaygroundRunMode = 'runAll' | 'runSelected';
 
-export async function executePlaygroundCode(code: string, runMode: PlaygroundRunMode): Promise<void> {
+export async function executePlaygroundCode(
+    code: string,
+    runMode: PlaygroundRunMode,
+    documentUri: vscode.Uri,
+): Promise<void> {
     const service = PlaygroundService.getInstance();
-    const connection = service.getConnection();
+    const connection = service.getConnection(documentUri);
     if (!connection) {
         void vscode.window.showInformationMessage(
-            l10n.t('Connect to a database before running. Right-click a database in the DocumentDB panel.'),
+            l10n.t('This playground has no connection. Create a new playground from the DocumentDB panel.'),
         );
         return;
     }
@@ -68,8 +102,11 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
         return;
     }
 
+    // Get or create the evaluator for this cluster
+    let evaluator = evaluators.get(connection.clusterId);
     if (!evaluator) {
         evaluator = new PlaygroundEvaluator();
+        evaluators.set(connection.clusterId, evaluator);
     }
 
     service.setExecuting(true);
@@ -110,7 +147,7 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                 });
 
                 const startTime = Date.now();
-                const sourceUri = vscode.window.activeTextEditor?.document.uri;
+                const sourceUri = documentUri;
 
                 try {
                     const result = await evaluator!.evaluate(connection, code, (message) => {

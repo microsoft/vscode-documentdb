@@ -9,11 +9,25 @@ import { Views } from '../Views';
 
 /**
  * Metadata about an active shell terminal, exposed by the PTY
- * for the link provider to build navigation actions.
+ * for the link provider and debug stats command.
  */
 export interface ShellTerminalInfo {
     /** Stable cluster ID for CredentialCache and session lookups. */
     readonly clusterId: string;
+    /** Human-readable cluster display name. */
+    readonly clusterDisplayName: string;
+    /** Current active database name (may change after `use <db>`). */
+    readonly activeDatabase: string;
+    /** Whether the worker is initialized and connected. */
+    readonly isInitialized: boolean;
+    /** Whether the shell is currently evaluating a command. */
+    readonly isEvaluating: boolean;
+    /** Worker thread state. */
+    readonly workerState: 'idle' | 'spawning' | 'ready' | 'executing';
+    /** Authentication method used. */
+    readonly authMethod: 'NativeAuth' | 'MicrosoftEntraID' | undefined;
+    /** Username for SCRAM auth (undefined for Entra ID or before init). */
+    readonly username: string | undefined;
 }
 
 /**

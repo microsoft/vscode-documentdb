@@ -5,6 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { modifierKey } from '../../constants';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
 import { PlaygroundService } from './PlaygroundService';
 import { detectBlocks, findBlockAtLine } from './statementDetector';
@@ -28,7 +29,7 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
     private _lastActiveBlockStart: number | undefined;
 
     /** OS-aware modifier key for shortcut labels. */
-    private readonly _mod = process.platform === 'darwin' ? '⌘' : 'Ctrl';
+    private readonly _mod = modifierKey;
 
     constructor() {
         const service = PlaygroundService.getInstance();
@@ -86,21 +87,21 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
         const topRange = new vscode.Range(0, 0, 0, 0);
 
         // 1. Connection status lens
-        if (service.isConnected()) {
-            const displayName = service.getDisplayName()!;
+        const displayName = service.getDisplayName(document.uri);
+        if (displayName) {
             lenses.push(
                 new vscode.CodeLens(topRange, {
                     title: `$(plug) ${displayName}`,
-                    command: PlaygroundCommandIds.connect,
+                    command: PlaygroundCommandIds.showConnectionInfo,
                     tooltip: l10n.t('Connected to {0}', displayName),
                 }),
             );
         } else {
             lenses.push(
                 new vscode.CodeLens(topRange, {
-                    title: `$(plug) ${l10n.t('Connect to a database')}`,
-                    command: PlaygroundCommandIds.connect,
-                    tooltip: l10n.t('Click to learn how to connect'),
+                    title: `$(warning) ${l10n.t('Not connected')}`,
+                    command: PlaygroundCommandIds.showConnectionInfo,
+                    tooltip: l10n.t('This playground has no connection'),
                 }),
             );
         }

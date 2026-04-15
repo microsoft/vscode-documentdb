@@ -575,10 +575,10 @@
         "icon": "$(keyboard)"
       },
       {
-        "//": "[Query Playground] Connect Query Playground to Database",
+        "//": "[Query Playground] Show Connection Info",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.playground.connect",
-        "title": "Connect Query Playground to this database"
+        "command": "vscode-documentdb.command.playground.showConnectionInfo",
+        "title": "Query Playground: Show Connection Info"
       },
       {
         "//": "[Query Playground] Run All",
@@ -617,12 +617,6 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.showWorkerStats",
         "title": "Show Worker Stats"
-      }
-    ],
-    "submenus": [
-      {
-        "id": "documentDB.submenus.playground",
-        "label": "Query Playground"
       }
     ],
     "menus": {
@@ -808,7 +802,7 @@
           "//": "[Database] Open Interactive Shell",
           "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "3@1"
+          "group": "5@1"
         },
         {
           "//": "[Database] Open Interactive Shell (inline)",
@@ -895,8 +889,8 @@
           "group": "inline@2"
         },
         {
-          "//": "[Database/Collection] Query Playground submenu",
-          "submenu": "documentDB.submenus.playground",
+          "//": "[Database/Collection] New Query Playground",
+          "command": "vscode-documentdb.command.playground.new",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "5@2"
         },
@@ -929,16 +923,6 @@
           "command": "vscode-documentdb.command.pasteCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "3@4"
-        }
-      ],
-      "documentDB.submenus.playground": [
-        {
-          "command": "vscode-documentdb.command.playground.new",
-          "group": "1@1"
-        },
-        {
-          "command": "vscode-documentdb.command.playground.connect",
-          "group": "1@2"
         }
       ],
       "explorer/context": [],
@@ -1060,7 +1044,7 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.playground.connect",
+          "command": "vscode-documentdb.command.playground.showConnectionInfo",
           "when": "never"
         },
         {

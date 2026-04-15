@@ -10,7 +10,22 @@ import {
     SETTINGS_ACTION_PREFIX,
     ShellTerminalLinkProvider,
     unregisterShellTerminal,
+    type ShellTerminalInfo,
 } from './ShellTerminalLinkProvider';
+
+/** Build a mock ShellTerminalInfo with sensible defaults. */
+function mockShellInfo(clusterId: string): ShellTerminalInfo {
+    return {
+        clusterId,
+        clusterDisplayName: 'TestCluster',
+        activeDatabase: 'testdb',
+        isInitialized: true,
+        isEvaluating: false,
+        workerState: 'ready',
+        authMethod: 'NativeAuth',
+        username: 'admin',
+    };
+}
 
 describe('ShellTerminalLinkProvider', () => {
     let provider: ShellTerminalLinkProvider;
@@ -42,7 +57,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should return empty array when line does not match action pattern', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
             const context = {
                 terminal: mockTerminal,
@@ -54,7 +69,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should detect action line and return a link', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-cluster-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-cluster-id'));
 
             const actionLine = `${ACTION_LINE_PREFIX}[mydb.users]`;
             const context = {
@@ -73,7 +88,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should handle collection names with dots', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
             const actionLine = `${ACTION_LINE_PREFIX}[analytics.events.2024]`;
             const context = {
@@ -92,7 +107,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should handle collection names with parentheses', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
             const actionLine = `${ACTION_LINE_PREFIX}[mydb.stores (10)]`;
             const context = {
@@ -110,7 +125,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should handle collection names with spaces', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
             const actionLine = `${ACTION_LINE_PREFIX}[mydb.my collection]`;
             const context = {
@@ -128,7 +143,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should handle ANSI-wrapped action line (gray color)', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
             // Gray ANSI wrapping: \x1b[90m ... \x1b[0m
             const actionLine = `\x1b[90m${ACTION_LINE_PREFIX}[mydb.users]\x1b[0m`;
@@ -147,7 +162,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should not match partial action line text', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
             const context = {
                 terminal: mockTerminal,
@@ -194,7 +209,7 @@ describe('ShellTerminalLinkProvider', () => {
 
     describe('settings links', () => {
         it('should detect settings action line and return a settings link', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
             const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.shell.timeout]`;
             const context = {
@@ -211,7 +226,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should handle ANSI-wrapped settings action line', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
             const actionLine = `\x1b[90m${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]\x1b[0m`;
             const context = {
@@ -261,7 +276,7 @@ describe('ShellTerminalLinkProvider', () => {
 
     describe('registry', () => {
         it('should not match after terminal is unregistered', () => {
-            registerShellTerminal(mockTerminal, () => ({ clusterId: 'test-id' }));
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
             unregisterShellTerminal(mockTerminal);
 
             const actionLine = `${ACTION_LINE_PREFIX}[mydb.users]`;
