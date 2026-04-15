@@ -26,9 +26,9 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
     }
 
     const service = PlaygroundService.getInstance();
-    if (!service.isConnected()) {
+    if (!service.isConnected(editor.document.uri)) {
         void vscode.window.showWarningMessage(
-            l10n.t('Connect to a database before running. Right-click a database in the DocumentDB panel.'),
+            l10n.t('This playground has no connection. Create a new playground from the DocumentDB panel.'),
         );
         return;
     }
@@ -69,5 +69,5 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
         return;
     }
 
-    await executePlaygroundCode(codeToRun, 'runSelected');
+    await executePlaygroundCode(codeToRun, 'runSelected', editor.document.uri);
 }

@@ -4,14 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { getRegisteredShellTerminals } from '../../documentdb/shell/ShellTerminalLinkProvider';
 import { ext } from '../../extensionVariables';
-import { getPlaygroundEvaluator } from '../playground/executePlaygroundCode';
+import { getPlaygroundEvaluators } from '../playground/executePlaygroundCode';
 
 /**
  * Command handler: Show worker thread statistics in the output channel.
- * Displays playground worker state and all active interactive shell sessions.
+ * Displays all playground workers (one per cluster) and all active interactive shell sessions.
  */
 export function showWorkerStats(_context: IActionContext): void {
     const log = (msg: string): void => ext.outputChannel.appendLog(msg);
@@ -20,27 +19,25 @@ export function showWorkerStats(_context: IActionContext): void {
     log('[Worker Task Manager] Worker Stats');
     log('──────────────────────────────────────');
 
-    // ── Playground Worker ────────────────────────────────────────────────
+    // ── Playground Workers ───────────────────────────────────────────────
     log('');
-    log('  Playground Worker:');
+    log('  Playground Workers:');
 
-    const evaluator = getPlaygroundEvaluator();
-    if (!evaluator) {
-        log('    Status: not created (no playground run yet)');
+    const evaluators = getPlaygroundEvaluators();
+    if (evaluators.size === 0) {
+        log('    (no playground workers — no playground run yet)');
     } else {
-        log(`    Status: ${evaluator.isAlive ? 'alive' : 'not running'}`);
-        log(`    Worker state: ${evaluator.workerState}`);
-        log(`    Cluster ID: ${evaluator.workerClusterId ?? '(none)'}`);
-        log(`    Session ID: ${evaluator.sessionId ?? '(none)'}`);
-        log(`    Eval count (session): ${String(evaluator.sessionEvalCount)}`);
-        log(`    Auth method: ${evaluator.sessionAuthMethod ?? '(none)'}`);
-        log(`    Last init duration: ${String(evaluator.lastInitDurationMs)}ms`);
+        log(`    Active workers: ${String(evaluators.size)}`);
+        for (const [clusterId, evaluator] of evaluators) {
+            log(`    ─ Cluster: ${clusterId}`);
+            log(`      Status: ${evaluator.isAlive ? 'alive' : 'not running'}`);
+            log(`      Worker state: ${evaluator.workerState}`);
+            log(`      Session ID: ${evaluator.sessionId ?? '(none)'}`);
+            log(`      Eval count (session): ${String(evaluator.sessionEvalCount)}`);
+            log(`      Auth method: ${evaluator.sessionAuthMethod ?? '(none)'}`);
+            log(`      Last init duration: ${String(evaluator.lastInitDurationMs)}ms`);
+        }
     }
-
-    const playgroundService = PlaygroundService.getInstance();
-    log(`    Playground connected: ${String(playgroundService.isConnected())}`);
-    log(`    Playground executing: ${String(playgroundService.isExecuting)}`);
-
     // ── Interactive Shell Workers ────────────────────────────────────────
     log('');
     log('  Interactive Shell Workers:');

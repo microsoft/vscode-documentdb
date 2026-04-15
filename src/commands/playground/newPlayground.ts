@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as l10n from '@vscode/l10n';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -15,27 +16,24 @@ import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 /**
  * Creates a new Query Playground file.
  *
- * When invoked from a tree node (database or collection), the query playground
- * connection is set to that node's cluster/database and the template
- * is pre-filled accordingly.
+ * When invoked from a tree node (database or collection), the playground
+ * is permanently bound to that node's cluster/database connection.
+ * Each new playground gets its own connection — multiple playgrounds can
+ * be open simultaneously, each connected to different servers.
  */
 export async function newPlayground(_context: IActionContext, node?: DatabaseItem | CollectionItem): Promise<void> {
-    const service = PlaygroundService.getInstance();
-
-    // If invoked from a tree node, set the connection
-    if (node) {
-        service.setConnection({
-            clusterId: node.cluster.clusterId,
-            clusterDisplayName: node.cluster.name,
-            databaseName: node.databaseInfo.name,
-        });
+    if (!node) {
+        void vscode.window.showInformationMessage(
+            l10n.t('Right-click a database or collection in the DocumentDB panel to create a new Query Playground.'),
+        );
+        return;
     }
+
+    const service = PlaygroundService.getInstance();
 
     // Build template — customize when launched from a collection node
     const collectionName = isCollectionItem(node) ? node.collectionInfo.name : 'collectionName';
-    const headerComment = node
-        ? `// Query Playground — ${collectionName} @ ${node.cluster.name}/${node.databaseInfo.name}`
-        : '// Query Playground — Write and run DocumentDB API queries';
+    const headerComment = `// Query Playground — ${collectionName} @ ${node.cluster.name}/${node.databaseInfo.name}`;
 
     const template = [
         headerComment,
@@ -61,6 +59,13 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
     await vscode.workspace.applyEdit(edit);
     const doc = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(doc, { preview: true });
+
+    // Bind connection to this specific document
+    service.setConnection(doc.uri, {
+        clusterId: node.cluster.clusterId,
+        clusterDisplayName: node.cluster.name,
+        databaseName: node.databaseInfo.name,
+    });
 }
 
 function isCollectionItem(node: DatabaseItem | CollectionItem | undefined): node is CollectionItem {

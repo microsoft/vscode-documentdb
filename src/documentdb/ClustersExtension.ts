@@ -51,8 +51,8 @@ import { openCollectionView, openCollectionViewInternal } from '../commands/open
 import { openDocumentView } from '../commands/openDocument/openDocument';
 import { openInteractiveShell } from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
-import { connectDatabase } from '../commands/playground/connectDatabase';
-import { disposeEvaluator, shutdownEvaluator } from '../commands/playground/executePlaygroundCode';
+import { showConnectionInfo } from '../commands/playground/connectDatabase';
+import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
 import { newPlayground } from '../commands/playground/newPlayground';
 import { runAll } from '../commands/playground/runAll';
 import { runSelected } from '../commands/playground/runSelected';
@@ -217,15 +217,12 @@ export class ClustersExtension implements vscode.Disposable {
                 ext.context.subscriptions.push(playgroundService);
 
                 // Register evaluator disposal for clean worker shutdown on deactivation
-                ext.context.subscriptions.push({ dispose: disposeEvaluator });
+                ext.context.subscriptions.push({ dispose: disposeEvaluators });
 
-                // Shut down the query playground worker when connection is cleared
+                // Shut down playground workers when their last document closes
                 ext.context.subscriptions.push(
                     playgroundService.onDidChangeState(() => {
-                        if (!playgroundService.isConnected()) {
-                            ext.outputChannel.debug('[Playground] Connection cleared — shutting down worker');
-                            shutdownEvaluator();
-                        }
+                        shutdownOrphanedEvaluators();
                     }),
                 );
 
@@ -250,21 +247,8 @@ export class ClustersExtension implements vscode.Disposable {
                             return;
                         }
 
-                        // Check if any query playground tabs remain open
-                        const hasOpenPlayground = vscode.window.tabGroups.all.some((group) =>
-                            group.tabs.some((tab) => {
-                                const input = tab.input;
-                                return (
-                                    input instanceof vscode.TabInputText &&
-                                    input.uri.path.endsWith(PLAYGROUND_FILE_EXTENSION)
-                                );
-                            }),
-                        );
-
-                        if (!hasOpenPlayground) {
-                            ext.outputChannel.debug('[Playground] All editors closed — shutting down worker');
-                            shutdownEvaluator();
-                        }
+                        // Shut down evaluators whose cluster has no remaining playgrounds
+                        shutdownOrphanedEvaluators();
                     }),
                 );
 
@@ -368,10 +352,7 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(newPlayground),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
-                    PlaygroundCommandIds.connect,
-                    withTreeNodeCommandCorrelation(connectDatabase),
-                );
+                registerCommand(PlaygroundCommandIds.showConnectionInfo, withCommandCorrelation(showConnectionInfo));
 
                 registerCommand(PlaygroundCommandIds.runAll, withCommandCorrelation(runAll));
 

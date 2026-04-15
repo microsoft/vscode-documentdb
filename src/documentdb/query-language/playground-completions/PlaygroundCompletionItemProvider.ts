@@ -75,7 +75,7 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
         // db.getCollection("...") or use("..."). Must be checked BEFORE
         // detectMethodArgContext because that treats the entire parenthesized
         // content as a query-object argument.
-        const stringCompletions = this.checkStringLiteralContext(text, offset);
+        const stringCompletions = this.checkStringLiteralContext(text, offset, document.uri);
         if (stringCompletions !== undefined) {
             return stringCompletions;
         }
@@ -87,7 +87,15 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
             // For db.getCollection("name").find({...}), extract collection name from getCollection argument
             const effectiveCollectionName = this.resolveCollectionName(argContext, text);
             const resolved = { ...argContext, collectionName: effectiveCollectionName };
-            return this.provideMethodArgumentCompletions(resolved, text, offset, context, replaceRange, isDollarPrefix);
+            return this.provideMethodArgumentCompletions(
+                resolved,
+                text,
+                offset,
+                context,
+                replaceRange,
+                isDollarPrefix,
+                document.uri,
+            );
         }
 
         // Stage 1: JS-level context detection
@@ -106,10 +114,10 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
             case 'db-dot':
                 // Layer 1 handles database methods (getCollection, runCommand, etc.).
                 // We only add dynamic collection names from SchemaStore.
-                return this.provideDbDotCompletions();
+                return this.provideDbDotCompletions(document.uri);
 
             case 'string-literal':
-                return this.provideStringCompletions(playgroundCtx.enclosingCall);
+                return this.provideStringCompletions(playgroundCtx.enclosingCall, document.uri);
 
             case 'method-argument':
                 // This case is handled above via detectMethodArgContext,
@@ -130,8 +138,8 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
     // Database methods are handled by Layer 1 (TS Server Plugin).
     // -----------------------------------------------------------------------
 
-    private provideDbDotCompletions(): vscode.CompletionItem[] | undefined {
-        const connection = PlaygroundService.getInstance().getConnection();
+    private provideDbDotCompletions(documentUri: vscode.Uri): vscode.CompletionItem[] | undefined {
+        const connection = PlaygroundService.getInstance().getConnection(documentUri);
         if (!connection) {
             return undefined; // No connection — let TS handle db. methods only
         }
@@ -153,11 +161,15 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
     // S6: String literal completions (collection names)
     // -----------------------------------------------------------------------
 
-    private provideStringCompletions(enclosingCall: string): vscode.CompletionItem[] | undefined {
+    private provideStringCompletions(
+        enclosingCall: string,
+        documentUri?: vscode.Uri,
+    ): vscode.CompletionItem[] | undefined {
         // NOTE: use() should suggest database names, not collection names.
         // Database-name completion is tracked in docs/plan/future-nice-to-have.md.
         if (enclosingCall === 'getCollection') {
-            const connection = PlaygroundService.getInstance().getConnection();
+            if (!documentUri) return undefined;
+            const connection = PlaygroundService.getInstance().getConnection(documentUri);
             if (!connection) return undefined;
 
             const collectionNames = CollectionNameCache.getInstance().getCollectionNames(
@@ -190,13 +202,14 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
         context: vscode.CompletionContext,
         replaceRange: vscode.Range,
         isDollarPrefix: boolean,
+        documentUri: vscode.Uri,
     ): vscode.CompletionItem[] {
         const items: vscode.CompletionItem[] = [];
         const argumentText = fullText.substring(argCtx.argStart, offset);
         const cursorOffsetInArg = offset - argCtx.argStart;
 
         // Use the field type lookup from SchemaStore
-        const connection = PlaygroundService.getInstance().getConnection();
+        const connection = PlaygroundService.getInstance().getConnection(documentUri);
         const fieldLookup = (fieldName: string): string | undefined => {
             if (!connection) return undefined;
             const fields = SchemaStore.getInstance().getKnownFields(
@@ -429,7 +442,11 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
      * Check if the cursor is inside a string literal argument to getCollection() or use().
      * Returns collection names if so, undefined to continue with normal flow.
      */
-    private checkStringLiteralContext(text: string, offset: number): vscode.CompletionItem[] | undefined {
+    private checkStringLiteralContext(
+        text: string,
+        offset: number,
+        documentUri: vscode.Uri,
+    ): vscode.CompletionItem[] | undefined {
         // Quick check: is the cursor inside a string?
         let inString = false;
         let quoteChar = '';
@@ -452,7 +469,7 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
         if (!argCtx) return undefined;
 
         if (argCtx.methodName === 'getCollection') {
-            return this.provideStringCompletions(argCtx.methodName) ?? [];
+            return this.provideStringCompletions(argCtx.methodName, documentUri) ?? [];
         }
 
         return undefined;
