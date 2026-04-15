@@ -10,7 +10,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { modifierKey } from '../../constants';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
-import { PLAYGROUND_FILE_EXTENSION } from '../../documentdb/playground/constants';
+import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 
@@ -49,9 +49,10 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
     // Create untitled file with a workspace-relative path so VS Code's hot exit
     // can persist the content across restarts. Without a real-looking path,
     // untitled documents lose their content on relaunch.
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/:/g, '-').replace(/\./g, '-').replace('T', '_').replace('Z', '');
-    const fileName = `playground-${timestamp}${PLAYGROUND_FILE_EXTENSION}`;
+    const numberUntitledPlaygrounds = vscode.workspace.textDocuments.filter(
+        (doc) => doc.languageId === PLAYGROUND_LANGUAGE_ID,
+    ).length;
+    const fileName = `playground-${numberUntitledPlaygrounds + 1}${PLAYGROUND_FILE_EXTENSION}`;
     const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
     const filePath = path.join(folderPath, fileName);
     const uri = vscode.Uri.file(filePath).with({ scheme: 'untitled' });
