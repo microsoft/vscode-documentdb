@@ -47,6 +47,10 @@ export function shutdownEvaluator(clusterId: string): void {
 /**
  * Shut down all evaluators that have no remaining open playground documents.
  * Called when playground documents close or state changes.
+ *
+ * Evaluators whose worker is currently executing are skipped — they will be
+ * cleaned up after the execution completes (the next state-change event
+ * re-triggers this function).
  */
 export function shutdownOrphanedEvaluators(): void {
     const service = PlaygroundService.getInstance();
@@ -54,6 +58,10 @@ export function shutdownOrphanedEvaluators(): void {
 
     for (const [clusterId, ev] of evaluators) {
         if (!activeClusterIds.has(clusterId)) {
+            // Don't kill a worker mid-execution; defer until it finishes
+            if (ev.workerState === 'executing') {
+                continue;
+            }
             void ev.shutdown();
             evaluators.delete(clusterId);
         }
