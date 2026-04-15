@@ -198,6 +198,8 @@ const tokenizer: Record<string, MonarchRule[]> = {
         { regex: /\$[a-zA-Z_]\w*/, action: 'documentdb.operator' },
 
         // Lowercase identifiers and keywords
+        // NOTE: Key order matters — resolveCases checks keys in insertion order
+        // and returns the first match. shellCommands must be checked before keywords.
         {
             regex: /#?[a-z_$][\w$]*/,
             actionCases: {
