@@ -28,6 +28,7 @@ export interface TokenSpan {
 
 let cachedInput: string | undefined;
 let cachedResult: TokenSpan[] | undefined;
+let cachedRules: MonarchLanguageRules | undefined;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
@@ -43,13 +44,14 @@ export function tokenize(input: string, rules: MonarchLanguageRules): TokenSpan[
         return [];
     }
 
-    // Memoize: return cached result if input hasn't changed (cursor-only movements)
-    if (input === cachedInput && cachedResult !== undefined) {
+    // Memoize: return cached result if input and rules haven't changed (cursor-only movements)
+    if (input === cachedInput && rules === cachedRules && cachedResult !== undefined) {
         return cachedResult;
     }
 
     const result = runTokenizer(input, rules);
     cachedInput = input;
+    cachedRules = rules;
     cachedResult = result;
     return result;
 }
