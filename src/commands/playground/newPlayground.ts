@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { modifierKey } from '../../constants';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { PLAYGROUND_FILE_EXTENSION } from '../../documentdb/playground/constants';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
@@ -33,12 +34,12 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
 
     // Build template — customize when launched from a collection node
     const collectionName = isCollectionItem(node) ? node.collectionInfo.name : 'collectionName';
-    const headerComment = `// Query Playground — ${collectionName} @ ${node.cluster.name}/${node.databaseInfo.name}`;
+    const headerComment = `// Query Playground: ${collectionName} @ ${node.cluster.name}/${node.databaseInfo.name}`;
 
     const template = [
         headerComment,
-        '// Use Ctrl+Enter (Cmd+Enter) to run the current block',
-        '// Use Ctrl+Shift+Enter (Cmd+Shift+Enter) to run the entire file',
+        '//',
+        `// Use ${modifierKey}+Enter to run the current block or ${modifierKey}+Shift+Enter to run the entire file`,
         '// Note: when running multiple statements, only the last result is displayed',
         '',
         `db.getCollection('${collectionName}').find({ })`,

@@ -7,6 +7,9 @@ export const isWindows: boolean = /^win/.test(process.platform);
 export const isLinux: boolean = /^linux/.test(process.platform);
 export const isMacOS: boolean = /^darwin/.test(process.platform);
 
+/** OS-aware modifier key label: ⌘ on macOS, Ctrl elsewhere. */
+export const modifierKey: string = isMacOS ? '⌘' : 'Ctrl';
+
 export namespace Links {
     export const LocalConnectionDebuggingTips: string = 'https://aka.ms/vscode-documentdb-local-connections';
 }

@@ -5,6 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { modifierKey } from '../../constants';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
 import { PlaygroundService } from './PlaygroundService';
 import { detectBlocks, findBlockAtLine } from './statementDetector';
@@ -28,7 +29,7 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
     private _lastActiveBlockStart: number | undefined;
 
     /** OS-aware modifier key for shortcut labels. */
-    private readonly _mod = process.platform === 'darwin' ? '⌘' : 'Ctrl';
+    private readonly _mod = modifierKey;
 
     constructor() {
         const service = PlaygroundService.getInstance();
