@@ -19,6 +19,12 @@ export class PlaygroundService implements vscode.Disposable {
 
     /** Per-document connections keyed by `uri.toString()`. */
     private readonly _connections = new Map<string, PlaygroundConnection>();
+    /**
+     * Temporarily stashed connections for untitled→file URI migration.
+     * When an untitled playground is saved, VS Code closes the untitled doc and opens a file doc.
+     * We stash the connection keyed by fsPath so it can be migrated to the new URI.
+     */
+    private readonly _pendingMigrations = new Map<string, PlaygroundConnection>();
     private _isExecuting = false;
 
     private readonly _onDidChangeState = new vscode.EventEmitter<void>();
@@ -47,12 +53,36 @@ export class PlaygroundService implements vscode.Disposable {
             }),
         );
 
-        // Clean up connection when a playground document is closed
+        // Clean up connection when a playground document is closed.
+        // For untitled documents, stash the connection briefly so it can be
+        // migrated if the document is being saved (untitled → file transition).
         this._disposables.push(
             vscode.workspace.onDidCloseTextDocument((doc) => {
                 if (doc.languageId === PLAYGROUND_LANGUAGE_ID) {
+                    const connection = this._connections.get(doc.uri.toString());
+                    if (connection && doc.uri.scheme === 'untitled') {
+                        this._pendingMigrations.set(doc.uri.fsPath, connection);
+                        // Clear the stash after a short delay if no file doc claims it
+                        setTimeout(() => {
+                            this._pendingMigrations.delete(doc.uri.fsPath);
+                        }, 2000);
+                    }
                     this._connections.delete(doc.uri.toString());
                     this._onDidChangeState.fire();
+                }
+            }),
+        );
+
+        // Migrate connection when a playground file document opens after an untitled save
+        this._disposables.push(
+            vscode.workspace.onDidOpenTextDocument((doc) => {
+                if (doc.languageId === PLAYGROUND_LANGUAGE_ID && doc.uri.scheme === 'file') {
+                    const stashed = this._pendingMigrations.get(doc.uri.fsPath);
+                    if (stashed) {
+                        this._pendingMigrations.delete(doc.uri.fsPath);
+                        this._connections.set(doc.uri.toString(), stashed);
+                        this._onDidChangeState.fire();
+                    }
                 }
             }),
         );
