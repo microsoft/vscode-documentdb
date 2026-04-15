@@ -802,13 +802,19 @@
           "//": "[Database] Open Interactive Shell",
           "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "3@1"
+          "group": "5@1"
         },
         {
           "//": "[Database] Open Interactive Shell (inline)",
           "command": "vscode-documentdb.command.openInteractiveShell",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "inline@1"
+        },
+        {
+          "//": "[Database] New Query Playground (inline)",
+          "command": "vscode-documentdb.command.playground.new",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "inline@2"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Open collection",
@@ -889,9 +895,9 @@
           "group": "inline@2"
         },
         {
-          "//": "[Database/Collection] New Query Playground",
+          "//": "[Cluster/Database/Collection] New Query Playground",
           "command": "vscode-documentdb.command.playground.new",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "5@2"
         },
         {
