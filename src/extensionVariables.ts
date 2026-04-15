@@ -63,7 +63,7 @@ export namespace ext {
     export let helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
 
     export namespace settingsKeys {
-        export const batchSize = 'documentDB.shell.batchSize';
+        export const batchSize = 'documentDB.batchSize';
         export const shellTimeout = 'documentDB.shell.timeout';
         export const shellInitTimeout = 'documentDB.shell.initTimeout';
         export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';

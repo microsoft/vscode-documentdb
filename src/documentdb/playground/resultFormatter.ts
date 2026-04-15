@@ -49,7 +49,7 @@ export function formatResult(result: ExecutionResult, code: string, connection: 
     // Batch size hint -- shown only when the cursor explicitly reports more documents
     if (result.type === 'Cursor' && result.cursorHasMore === true && Array.isArray(unwrapped)) {
         lines.push(
-            `// ${l10n.t("Showing first {0} documents (batch size). To change: Settings → 'documentDB.shell.batchSize'", unwrapped.length)}`,
+            `// ${l10n.t("Showing first {0} documents (batch size). To change: Settings → 'documentDB.batchSize'", unwrapped.length)}`,
         );
     }
 
