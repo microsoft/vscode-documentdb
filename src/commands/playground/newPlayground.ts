@@ -34,7 +34,7 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
 
     // Build template — customize when launched from a collection node
     const collectionName = isCollectionItem(node) ? node.collectionInfo.name : 'collectionName';
-    const headerComment = `// Query Playground: ${collectionName} @ ${node.cluster.name}/${node.databaseInfo.name}`;
+    const headerComment = `// Query Playground: ${node.cluster.name}`;
 
     const template = [
         headerComment,
