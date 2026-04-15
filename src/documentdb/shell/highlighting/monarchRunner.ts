@@ -222,7 +222,7 @@ function emitGroupTokens(match: RegExpExecArray, basePos: number, actions: strin
         }
 
         // Find the actual position of this group's text within the match
-        const groupStart = input_indexOf(match[0], groupText, offset - basePos) + basePos;
+        const groupStart = inputIndexOf(match[0], groupText, offset - basePos) + basePos;
         const tokenType = resolveAction(actions[i]);
         if (tokenType.length > 0) {
             tokens.push({ start: groupStart, end: groupStart + groupText.length, type: tokenType });
@@ -236,7 +236,7 @@ function emitGroupTokens(match: RegExpExecArray, basePos: number, actions: strin
  * Used instead of String.indexOf to handle the case where the needle
  * appears multiple times in the full match.
  */
-function input_indexOf(haystack: string, needle: string, fromIndex: number): number {
+function inputIndexOf(haystack: string, needle: string, fromIndex: number): number {
     const idx = haystack.indexOf(needle, fromIndex);
     return idx >= 0 ? idx : fromIndex;
 }
