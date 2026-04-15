@@ -156,6 +156,14 @@ export class ShellInputHandler {
     }
 
     /**
+     * Force a re-render of the current line (used after PTY-controlled mutations
+     * like rewriting the prompt after a completion list is shown).
+     */
+    renderCurrentLine(): void {
+        this.reRenderLine();
+    }
+
+    /**
      * Insert text at the current cursor position and update the display.
      * Used by the PTY to insert accepted completions or ghost text.
      *
@@ -168,14 +176,7 @@ export class ShellInputHandler {
         const after = this._buffer.slice(this._cursor);
         this._buffer = before + text + after;
         this._cursor += text.length;
-
-        if (after.length > 0) {
-            // Insert mode: write text + rest of line, move cursor back
-            this._callbacks.write(text + after + '\b'.repeat(after.length));
-        } else {
-            // Append mode: just echo the text
-            this._callbacks.write(text);
-        }
+        this.reRenderLine();
     }
 
     /**
@@ -195,27 +196,8 @@ export class ShellInputHandler {
         const before = this._buffer.slice(0, this._cursor - deleteCount);
         const after = this._buffer.slice(this._cursor);
         this._buffer = before + text + after;
-
-        // Move cursor back to start of replaced region
-        if (deleteCount > 0) {
-            this._callbacks.write(`\x1b[${String(deleteCount)}D`);
-        }
-
-        // Write new text + remainder of line
-        this._callbacks.write(text + after);
-
-        // Erase leftover characters if replacement is shorter than deleted text
-        const cleanup = Math.max(0, deleteCount - text.length);
-        if (cleanup > 0) {
-            this._callbacks.write(' '.repeat(cleanup) + '\b'.repeat(cleanup));
-        }
-
-        // Move cursor back to end of inserted text (before 'after' portion)
-        if (after.length > 0) {
-            this._callbacks.write('\b'.repeat(after.length));
-        }
-
         this._cursor = before.length + text.length;
+        this.reRenderLine();
     }
 
     /**

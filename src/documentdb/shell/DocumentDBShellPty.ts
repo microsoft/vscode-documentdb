@@ -8,8 +8,8 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
-import { colorizeShellInput } from './highlighting/colorizeShellInput';
 import { SchemaStore } from '../SchemaStore';
+import { colorizeShellInput } from './highlighting/colorizeShellInput';
 import { SettingsHintError } from './SettingsHintError';
 import { type CompletionResult, ShellCompletionProvider } from './ShellCompletionProvider';
 import { findCommonPrefix, renderCompletionList } from './ShellCompletionRenderer';
@@ -710,18 +710,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /**
      * Rewrite the prompt and current buffer after showing a completion list.
+     * Uses the colorize callback (via renderCurrentLine) so highlighting is preserved.
      */
     private rewriteCurrentLine(): void {
         const prompt = `${this._currentDatabase}> `;
-        const buffer = this._inputHandler.getBuffer();
-        const cursor = this._inputHandler.getCursor();
-        this._writeEmitter.fire(prompt + buffer);
-
-        // Position cursor at the correct location
-        const trailingChars = buffer.length - cursor;
-        if (trailingChars > 0) {
-            this._writeEmitter.fire(`\x1b[${String(trailingChars)}D`);
-        }
+        this._inputHandler.setPromptWidth(prompt.length);
+        this._writeEmitter.fire(prompt);
+        this._inputHandler.renderCurrentLine();
     }
 
     // ─── Private: Ghost text ─────────────────────────────────────────────────
