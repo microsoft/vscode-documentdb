@@ -552,6 +552,7 @@ When no schema data is available for a collection, a non-insertable hint appears
 ### Full bracket notation support (`b6da576`)
 
 Supersedes the initial resolution of #2 (which simply removed bracket notation). Now fully supports:
+
 - `db[` / `db['` / `db["` — collection name completions with quote+bracket wrapping
 - `db['name'].` — collection method completions
 - `db['name'].find({` — method argument completions (fields, operators)

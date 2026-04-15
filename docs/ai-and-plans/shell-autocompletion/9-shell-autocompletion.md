@@ -16,14 +16,14 @@ Tab completion and inline ghost text for the Interactive Shell's Pseudoterminal.
 
 ### Components
 
-| File | Purpose |
-|------|---------|
-| `ShellCompletionProvider.ts` | Context detection + candidate generation (platform-neutral, no VS Code API) |
-| `ShellCompletionRenderer.ts` | Multi-column ANSI rendering of completion picker (bash/zsh style) |
-| `ShellGhostText.ts` | Inline dim suggestion lifecycle (show / clear / accept / reset), Unicode-aware cursor movement |
-| `ShellInputHandler.ts` | Tab key handling, `getCursor()` getter, `insertText()`, `replaceText()`, new callbacks |
-| `ShellOutputFormatter.ts` | Error code extraction (`extractErrorCode`) for cleaner error messages in shell output |
-| `DocumentDBShellPty.ts` | Wiring: connects completion provider + ghost text to terminal I/O |
+| File                         | Purpose                                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `ShellCompletionProvider.ts` | Context detection + candidate generation (platform-neutral, no VS Code API)                    |
+| `ShellCompletionRenderer.ts` | Multi-column ANSI rendering of completion picker (bash/zsh style)                              |
+| `ShellGhostText.ts`          | Inline dim suggestion lifecycle (show / clear / accept / reset), Unicode-aware cursor movement |
+| `ShellInputHandler.ts`       | Tab key handling, `getCursor()` getter, `insertText()`, `replaceText()`, new callbacks         |
+| `ShellOutputFormatter.ts`    | Error code extraction (`extractErrorCode`) for cleaner error messages in shell output          |
+| `DocumentDBShellPty.ts`      | Wiring: connects completion provider + ghost text to terminal I/O                              |
 
 ### Data Flow
 
@@ -55,28 +55,28 @@ User presses Right Arrow at end of buffer
 
 The `ShellCompletionProvider` detects 8 context types:
 
-| Priority | Context | Buffer Pattern | Candidates |
-|----------|---------|---------------|------------|
-| 1 | Top-level | Empty or partial command | `show`, `use`, `exit`, `quit`, `cls`, `clear`, `help`, `it`, `db` |
-| 2 | Show subcommand | `show <partial>` | `dbs`, `databases`, `collections` |
-| 3 | Use database | `use <partial>` | Database names from cache |
-| 4 | db-bracket | `db[`, `db['`, `db["` | Collection names (with quote + `]` suffix) |
-| 5 | db-dot | `db.<partial>` | Collection names + database methods |
-| 6 | Collection method | `db.<coll>.<partial>` or `db['coll'].<partial>` | Collection methods (`find`, `insertOne`, etc.) |
-| 7 | Method argument | `db.<coll>.find({...` or `db['coll'].find({...` | Field names + query operators |
-| 8 | Cursor chain | `db.<coll>.find({}).` | Cursor methods (`limit`, `skip`, `sort`, etc.) |
+| Priority | Context           | Buffer Pattern                                  | Candidates                                                        |
+| -------- | ----------------- | ----------------------------------------------- | ----------------------------------------------------------------- |
+| 1        | Top-level         | Empty or partial command                        | `show`, `use`, `exit`, `quit`, `cls`, `clear`, `help`, `it`, `db` |
+| 2        | Show subcommand   | `show <partial>`                                | `dbs`, `databases`, `collections`                                 |
+| 3        | Use database      | `use <partial>`                                 | Database names from cache                                         |
+| 4        | db-bracket        | `db[`, `db['`, `db["`                           | Collection names (with quote + `]` suffix)                        |
+| 5        | db-dot            | `db.<partial>`                                  | Collection names + database methods                               |
+| 6        | Collection method | `db.<coll>.<partial>` or `db['coll'].<partial>` | Collection methods (`find`, `insertOne`, etc.)                    |
+| 7        | Method argument   | `db.<coll>.find({...` or `db['coll'].find({...` | Field names + query operators                                     |
+| 8        | Cursor chain      | `db.<coll>.find({}).`                           | Cursor methods (`limit`, `skip`, `sort`, etc.)                    |
 
 Both dot notation (`db.collection`) and bracket notation (`db['collection']`) are fully supported for contexts 4–8. Bracket notation is required for collections with special characters (hyphens, spaces, dots) in their names.
 
 ### Data Sources
 
-| Source | Provides | Access |
-|--------|----------|--------|
-| Static lists | Top-level commands, show subcommands | Hardcoded |
-| `ClustersClient` | Database names, collection names | Synchronous cache read; background fetch if empty |
-| `SchemaStore` | Collection names (from queries), field names + types | Synchronous singleton |
-| `documentdb-constants` | Query operators, BSON constructors, update operators, stages | `getFilteredCompletions()` |
-| `documentdb-shell-api-types` | Shell API methods by target (database, collection, cursor) | `getMethodsByTarget()` |
+| Source                       | Provides                                                     | Access                                            |
+| ---------------------------- | ------------------------------------------------------------ | ------------------------------------------------- |
+| Static lists                 | Top-level commands, show subcommands                         | Hardcoded                                         |
+| `ClustersClient`             | Database names, collection names                             | Synchronous cache read; background fetch if empty |
+| `SchemaStore`                | Collection names (from queries), field names + types         | Synchronous singleton                             |
+| `documentdb-constants`       | Query operators, BSON constructors, update operators, stages | `getFilteredCompletions()`                        |
+| `documentdb-shell-api-types` | Shell API methods by target (database, collection, cursor)   | `getMethodsByTarget()`                            |
 
 All reads are **synchronous from caches** — Tab never blocks on network I/O. If a cache is empty, a background fetch is triggered so subsequent Tab presses have data.
 
@@ -103,6 +103,7 @@ All reads are **synchronous from caches** — Tab never blocks on network I/O. I
 **Reason:** When `db.` shows both collection names and database methods, users need to instantly distinguish them. Colors provide a visual channel without inflating column width. The `()` suffix is a secondary signal that works even on color-limited displays.
 
 **Alternatives considered:**
+
 - Unicode prefix icons (`📦` collection, `ƒ` method) — variable-width chars break column alignment
 - Suffix tags (`[collection]`, `[method]`) — doubles column width, wastes horizontal space
 - Grouping with separator lines — loses alphabetical sorting users expect
@@ -112,6 +113,7 @@ All reads are **synchronous from caches** — Tab never blocks on network I/O. I
 **Decision:** Ghost text only appears when there is exactly one completion candidate matching the typed prefix (e.g., `db.rest` → dim `aurants` when `restaurants` is the only match).
 
 **Reason:** We initially implemented "smart" pattern-based ghost text (e.g., `find()` suggested after `db.collection.`) but removed it because:
+
 - It created a confusing UX inconsistency: Tab accepted prefix ghost text but dismissed smart ghost text
 - Users expected Tab to always accept visible ghost text, leading to frustration
 - The Tab picker already provides method discoverability at `db.<coll>.`
@@ -152,6 +154,7 @@ This hint cannot be accepted via Tab or Right Arrow — it is purely information
 **Reason:** `db.stores (10)` is a SyntaxError. When the user types `db.sto` and the only matching collection is `stores (10)`, Tab completion produces `db['stores (10)']` instead. The `needsBracketNotation()` helper detects names that are not valid JavaScript identifiers and switches to bracket syntax.
 
 **Bracket notation contexts supported:**
+
 - `db[` — shows all collection names with quote+bracket wrapping
 - `db['partial` / `db["partial` — prefix-filters collection names
 - `db['name'].` — collection method completions
@@ -188,14 +191,14 @@ The `ShellCompletionProvider` is modeled after `PlaygroundCompletionItemProvider
 
 ## Test Coverage
 
-| Test File | Tests | Coverage |
-|-----------|-------|----------|
-| `ShellCompletionProvider.test.ts` | 63+ | All 8 context types, prefix filtering, candidate kinds, cursor chains, bracket notation, dotted field quoting, special-char collections |
-| `ShellCompletionRenderer.test.ts` | 17 | Column layout, colors, method suffix, truncation, common prefix |
-| `ShellGhostText.test.ts` | 25+ | Show / clear / accept / reset lifecycle, ANSI output, Unicode width |
-| `ShellInputHandler.test.ts` (additions) | 18+ | Tab callback, getCursor, insertText, replaceText, onBufferChange, ghost acceptance |
-| `ShellOutputFormatter.test.ts` | 54+ | Error code extraction, result formatting |
-| `feedResultToSchemaStore.test.ts` | 26 | Result type filtering, namespace validation, document cap, EJSON deserialization |
+| Test File                               | Tests | Coverage                                                                                                                                |
+| --------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `ShellCompletionProvider.test.ts`       | 63+   | All 8 context types, prefix filtering, candidate kinds, cursor chains, bracket notation, dotted field quoting, special-char collections |
+| `ShellCompletionRenderer.test.ts`       | 17    | Column layout, colors, method suffix, truncation, common prefix                                                                         |
+| `ShellGhostText.test.ts`                | 25+   | Show / clear / accept / reset lifecycle, ANSI output, Unicode width                                                                     |
+| `ShellInputHandler.test.ts` (additions) | 18+   | Tab callback, getCursor, insertText, replaceText, onBufferChange, ghost acceptance                                                      |
+| `ShellOutputFormatter.test.ts`          | 54+   | Error code extraction, result formatting                                                                                                |
+| `feedResultToSchemaStore.test.ts`       | 26    | Result type filtering, namespace validation, document cap, EJSON deserialization                                                        |
 
 ---
 
