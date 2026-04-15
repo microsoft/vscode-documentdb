@@ -148,9 +148,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Pseudoterminal interface ────────────────────────────────────────────
 
     open(initialDimensions: vscode.TerminalDimensions | undefined): void {
-        // Track terminal width for completion rendering
+        // Track terminal width for completion rendering and wrap-aware re-rendering
         if (initialDimensions) {
             this._columns = initialDimensions.columns;
+            this._inputHandler.setColumns(initialDimensions.columns);
         }
 
         // Disable input during initialization to prevent race conditions
@@ -229,6 +230,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     setDimensions(dimensions: vscode.TerminalDimensions): void {
         this._columns = dimensions.columns;
+        this._inputHandler.setColumns(dimensions.columns);
     }
 
     // ─── Private: Session initialization ─────────────────────────────────────

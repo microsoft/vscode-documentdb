@@ -12,11 +12,9 @@
  */
 
 import { isExpressionIncomplete } from './bracketDepthCounter';
+import { terminalDisplayWidth } from './terminalDisplayWidth';
 
 // ─── ANSI constants ──────────────────────────────────────────────────────────
-
-/** Erase from cursor to end of line */
-const ERASE_TO_EOL = '\x1b[K';
 
 /**
  * Callbacks for the ShellInputHandler to communicate with the Pseudoterminal.
@@ -76,6 +74,9 @@ export class ShellInputHandler {
     /** Width of the prompt string in characters (for cursor repositioning). */
     private _promptWidth: number = 0;
 
+    /** Terminal width in columns (for wrap-aware re-rendering). */
+    private _columns: number = 80;
+
     private readonly _callbacks: ShellInputHandlerCallbacks;
 
     constructor(callbacks: ShellInputHandlerCallbacks) {
@@ -87,6 +88,13 @@ export class ShellInputHandler {
      */
     setPromptWidth(width: number): void {
         this._promptWidth = width;
+    }
+
+    /**
+     * Set the terminal width in columns (for wrap-aware re-rendering).
+     */
+    setColumns(columns: number): void {
+        this._columns = columns;
     }
 
     /**
@@ -617,30 +625,68 @@ export class ShellInputHandler {
      * Re-render the entire input line with syntax highlighting.
      *
      * This replaces the old per-character echo approach. On every buffer mutation:
-     * 1. Move cursor to the start of the input area (after the prompt).
-     * 2. Write the (optionally colorized) buffer content.
-     * 3. Erase any leftover characters from the previous (longer) buffer.
-     * 4. Reposition the cursor to the correct position.
+     * 1. Move cursor up to the prompt row if input wraps across multiple rows.
+     * 2. Move cursor to the start of the input area (after the prompt).
+     * 3. Write the (optionally colorized) buffer content.
+     * 4. Erase any leftover characters/rows from the previous (longer) buffer.
+     * 5. Reposition the cursor to the correct row and column.
      */
     private reRenderLine(): void {
-        // Step 1: Move cursor to start of input area
-        // Use carriage return + move right past the prompt
-        let output = '\r';
+        const bufferWidth = terminalDisplayWidth(this._buffer);
+        const cursorDisplayOffset = terminalDisplayWidth(this._buffer.slice(0, this._cursor));
+        const cols = this._columns;
+
+        let output = '';
+
+        // Step 1: Move cursor up to the prompt row if wrapping occurred
+        const cursorAbsCol = this._promptWidth + cursorDisplayOffset;
+        const cursorRow = cols > 0 ? Math.floor(cursorAbsCol / cols) : 0;
+        if (cursorRow > 0) {
+            output += `\x1b[${String(cursorRow)}A`;
+        }
+
+        // Step 2: Carriage return + move right past the prompt
+        output += '\r';
         if (this._promptWidth > 0) {
             output += `\x1b[${String(this._promptWidth)}C`;
         }
 
-        // Step 2: Write the buffer content, optionally colorized
+        // Step 3: Write the buffer content, optionally colorized
         const displayText = this._callbacks.colorize ? this._callbacks.colorize(this._buffer) : this._buffer;
         output += displayText;
 
-        // Step 3: Erase any leftover characters from previous render
-        output += ERASE_TO_EOL;
+        // Step 4: Erase from cursor to end of screen (handles wrapped leftover rows)
+        output += '\x1b[J';
 
-        // Step 4: Reposition cursor if not at end of buffer
-        const cursorOffset = this._buffer.length - this._cursor;
-        if (cursorOffset > 0) {
-            output += `\x1b[${String(cursorOffset)}D`;
+        // Step 5: Reposition cursor to the correct position
+        const endAbsCol = this._promptWidth + bufferWidth;
+        const targetAbsCol = this._promptWidth + cursorDisplayOffset;
+
+        if (cols > 0 && endAbsCol !== targetAbsCol) {
+            const endRow = Math.floor(endAbsCol / cols);
+            const targetRow = Math.floor(targetAbsCol / cols);
+            const endCol = endAbsCol % cols;
+            const targetCol = targetAbsCol % cols;
+
+            // Move up from end row to target row
+            const rowDiff = endRow - targetRow;
+            if (rowDiff > 0) {
+                output += `\x1b[${String(rowDiff)}A`;
+            }
+
+            // Move horizontally to target column
+            const colDiff = endCol - targetCol;
+            if (colDiff > 0) {
+                output += `\x1b[${String(colDiff)}D`;
+            } else if (colDiff < 0) {
+                output += `\x1b[${String(-colDiff)}C`;
+            }
+        } else {
+            // Fallback for unknown columns: simple cursor-back
+            const tailWidth = terminalDisplayWidth(this._buffer.slice(this._cursor));
+            if (tailWidth > 0) {
+                output += `\x1b[${String(tailWidth)}D`;
+            }
         }
 
         this._callbacks.write(output);
