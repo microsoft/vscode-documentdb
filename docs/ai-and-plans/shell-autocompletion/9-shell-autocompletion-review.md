@@ -1,7 +1,7 @@
 # PR #576 — Shell Autocompletion: Critical Review
 
 > **PR:** [#576 — Add context-aware shell completion and inline suggestions](https://github.com/microsoft/vscode-documentdb/pull/576)
-> **Reviewed:** 2026-04-14
+> **Reviewed:** 2026-04-14, updated 2026-04-15
 > **Plan doc:** [9-shell-autocompletion.md](./9-shell-autocompletion.md)
 > **Sources:** Manual code review + [Copilot automated review](https://github.com/microsoft/vscode-documentdb/pull/576)
 > **Update:** Second-pass manual review added 8 more issues beyond the first draft, focused on mid-line editing, nested fields, multi-argument methods, and long-query terminal behavior.
@@ -47,6 +47,7 @@
 **File:** `src/documentdb/shell/ShellCompletionProvider.ts`
 **Origin:** [Copilot review comment on ShellCompletionProvider.ts](https://github.com/microsoft/vscode-documentdb/pull/576#discussion_r2043764830)
 **Resolved:** [`5fd6bd7`](https://github.com/microsoft/vscode-documentdb/commit/5fd6bd7) — Removed the `db[` branch (option 1: don't advertise unsupported syntax).
+**Superseded:** [`b6da576`](https://github.com/microsoft/vscode-documentdb/commit/b6da576) — Full bracket notation support added. The `db[` pattern now routes to a dedicated `db-bracket` context kind with proper parsing for `db['name']` and `db["name"]`. Bracket notation completions work for collection names, method access (`db['name'].find`), method arguments (`db['name'].find({`), and cursor chains (`db['name'].find({}).`). This also resolves #11 and #13 for bracket notation users.
 
 The context detection entry point checks:
 
@@ -232,7 +233,11 @@ common[j] === text[j];
 
 ---
 
-### #11 — Collection names conflicting with `DATABASE_METHODS` get no method completions
+### #11 — ~~Collection names conflicting with `DATABASE_METHODS` get no method completions~~ ✅ MITIGATED
+
+**Severity: S4 — Low**
+**File:** `src/documentdb/shell/ShellCompletionProvider.ts`, `detectDbContext`
+**Mitigated:** [`b6da576`](https://github.com/microsoft/vscode-documentdb/commit/b6da576) — Users can now use bracket notation (`db['aggregate'].find()`) which bypasses the `DATABASE_METHODS` ambiguity entirely.
 
 **Severity: S4 — Low**
 **File:** `src/documentdb/shell/ShellCompletionProvider.ts`, `detectDbContext`
@@ -271,22 +276,11 @@ This comparison works correctly only if VS Code sends each key as a separate `ha
 
 ---
 
-### #13 — `detectMethodArgContext` regex doesn't handle nested method calls or `getCollection()`
+### #13 — ~~`detectMethodArgContext` regex doesn't handle nested method calls or `getCollection()`~~ ✅ PARTIALLY RESOLVED
 
 **Severity: S4 — Low**
 **File:** `src/documentdb/shell/ShellCompletionProvider.ts`, `detectMethodArgContext`
-
-The regex for extracting collection and method names:
-
-```typescript
-const methodMatch = /db\.([a-zA-Z0-9_$]+)\.([a-zA-Z0-9_$]+)$/.exec(beforeParen);
-```
-
-This doesn't handle `db.getCollection("name").find({...` because the `getCollection("name")` call interrupts the pattern. The regex expects `db.<identifier>.<identifier>` immediately before `(`.
-
-**Impact:** Users who access collections via `db.getCollection("...")` instead of `db.<name>` get no field/operator completions inside method arguments. This is an uncommon but valid access pattern, especially for collections with special characters in names.
-
-**Recommendation:** Accept as a known limitation for the fallback completion system. Document that method argument completions only work with the `db.<collection>.<method>()` syntax.
+**Partially resolved:** [`b6da576`](https://github.com/microsoft/vscode-documentdb/commit/b6da576) — `detectMethodArgContext` now supports bracket notation (`db['collection'].method()`) in addition to dot notation. `getCollection()` remains unsupported as a known limitation.
 
 ---
 
@@ -540,3 +534,36 @@ The test coverage is unit-only (mocked ClustersClient, SchemaStore). There's no 
 2. PTY receives keystrokes → debounced ghost text → provider returns → ghost text rendered → right arrow accepts
 
 Unit tests verify each component in isolation but not the wiring in `DocumentDBShellPty`. A wiring bug (e.g., callback not connected, wrong parameter order) would pass all unit tests.
+
+---
+
+## Post-Review Enhancements (2026-04-14 → 2026-04-15)
+
+The following features were implemented after the initial review, addressing review findings and adding new capabilities:
+
+### Auto-quoting of dotted field paths (`2d486fa`)
+
+Nested field paths like `address.city` are not valid as unquoted JavaScript object keys. Tab completion now wraps them in quotes: `db.users.find({"address.city": ...})`. Added `replaceText(deleteCount, text)` to `ShellInputHandler` as a replace-mode insertion. Ghost text is suppressed for quoting candidates.
+
+### Schema hint ghost text (`2d486fa`, `84d699f`)
+
+When no schema data is available for a collection, a non-insertable hint appears in ghost text position: `ⓘ Run db.users.find() first for field suggestions`. The hint only shows when `SchemaStore.getKnownFields()` returns empty — not on prefix mismatches like typos.
+
+### Full bracket notation support (`b6da576`)
+
+Supersedes the initial resolution of #2 (which simply removed bracket notation). Now fully supports:
+- `db[` / `db['` / `db["` — collection name completions with quote+bracket wrapping
+- `db['name'].` — collection method completions
+- `db['name'].find({` — method argument completions (fields, operators)
+- `db['name'].find({}).` — cursor chain completions
+- Special-char collections in dot-notation context (e.g., `db.sto` → `db['stores (10)']`)
+
+The `detectMethodArgContext` regex was also updated to support bracket notation, partially resolving #13.
+
+### Unicode-aware ghost text cursor movement (`b6da576`)
+
+Ghost text now uses `Intl.Segmenter`-based display width calculation (`terminalDisplayWidth()`) instead of `String.length`. Handles CJK full-width characters (2 columns), surrogate pairs, combining marks, and ZWJ sequences correctly.
+
+### Error code extraction (`6750ec9`, `0588c19`)
+
+`ShellOutputFormatter.extractErrorCode()` strips technical error code prefixes (e.g., `[COMMON-10001]`) from error messages for cleaner terminal output while preserving the code for diagnostics. Applied to both shell and playground error paths.

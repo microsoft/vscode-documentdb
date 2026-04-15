@@ -20,8 +20,9 @@ Tab completion and inline ghost text for the Interactive Shell's Pseudoterminal.
 |------|---------|
 | `ShellCompletionProvider.ts` | Context detection + candidate generation (platform-neutral, no VS Code API) |
 | `ShellCompletionRenderer.ts` | Multi-column ANSI rendering of completion picker (bash/zsh style) |
-| `ShellGhostText.ts` | Inline dim suggestion lifecycle (show / clear / accept / reset) |
-| `ShellInputHandler.ts` | Tab key handling, `getCursor()` getter, `insertText()`, new callbacks |
+| `ShellGhostText.ts` | Inline dim suggestion lifecycle (show / clear / accept / reset), Unicode-aware cursor movement |
+| `ShellInputHandler.ts` | Tab key handling, `getCursor()` getter, `insertText()`, `replaceText()`, new callbacks |
+| `ShellOutputFormatter.ts` | Error code extraction (`extractErrorCode`) for cleaner error messages in shell output |
 | `DocumentDBShellPty.ts` | Wiring: connects completion provider + ghost text to terminal I/O |
 
 ### Data Flow
@@ -52,17 +53,20 @@ User presses Right Arrow at end of buffer
 
 ### Context Detection
 
-The `ShellCompletionProvider` detects 7 context types:
+The `ShellCompletionProvider` detects 8 context types:
 
 | Priority | Context | Buffer Pattern | Candidates |
 |----------|---------|---------------|------------|
 | 1 | Top-level | Empty or partial command | `show`, `use`, `exit`, `quit`, `cls`, `clear`, `help`, `it`, `db` |
 | 2 | Show subcommand | `show <partial>` | `dbs`, `databases`, `collections` |
 | 3 | Use database | `use <partial>` | Database names from cache |
-| 4 | db-dot | `db.<partial>` | Collection names + database methods |
-| 5 | Collection method | `db.<coll>.<partial>` | Collection methods (`find`, `insertOne`, etc.) |
-| 6 | Method argument | `db.<coll>.find({...` | Field names + query operators |
-| 7 | Cursor chain | `db.<coll>.find({}).` | Cursor methods (`limit`, `skip`, `sort`, etc.) |
+| 4 | db-bracket | `db[`, `db['`, `db["` | Collection names (with quote + `]` suffix) |
+| 5 | db-dot | `db.<partial>` | Collection names + database methods |
+| 6 | Collection method | `db.<coll>.<partial>` or `db['coll'].<partial>` | Collection methods (`find`, `insertOne`, etc.) |
+| 7 | Method argument | `db.<coll>.find({...` or `db['coll'].find({...` | Field names + query operators |
+| 8 | Cursor chain | `db.<coll>.find({}).` | Cursor methods (`limit`, `skip`, `sort`, etc.) |
+
+Both dot notation (`db.collection`) and bracket notation (`db['collection']`) are fully supported for contexts 4–8. Bracket notation is required for collections with special characters (hyphens, spaces, dots) in their names.
 
 ### Data Sources
 
@@ -113,6 +117,14 @@ All reads are **synchronous from caches** — Tab never blocks on network I/O. I
 - The Tab picker already provides method discoverability at `db.<coll>.`
 - Keeping ghost text limited to unambiguous single-match cases makes the behavior predictable: if you see ghost text, Tab accepts it. Always.
 
+**Exception — Schema hint ghost text:** When the user presses Tab inside a method argument (e.g., `db.users.find({`) and no field names are available (SchemaStore has no data for that collection), a non-insertable hint is displayed:
+
+```
+ⓘ Run db.users.find() first for field suggestions
+```
+
+This hint cannot be accepted via Tab or Right Arrow — it is purely informational. The hint only appears when SchemaStore truly has no fields for the collection; typing a non-matching prefix (e.g., a typo) on a collection with known schema will not trigger the hint.
+
 ### 5. Synchronous Cache Reads (No Async Blocking)
 
 **Decision:** Tab completion never triggers an await or blocks on I/O. All data reads are from in-memory caches.
@@ -124,6 +136,39 @@ All reads are **synchronous from caches** — Tab never blocks on network I/O. I
 **Decision:** Right Arrow at end of buffer accepts ghost text, consistent with VS Code's own inline suggestions and GitHub Copilot ghost text.
 
 **Reason:** This is the established convention for inline suggestion acceptance in VS Code. Tab also accepts ghost text (since ghost only appears for unambiguous single matches).
+
+### 7. Auto-Quote Dotted Field Paths
+
+**Decision:** Dotted nested field paths (e.g., `address.city`) are automatically wrapped in quotes when inserted via Tab completion.
+
+**Reason:** Dotted paths are not valid as unquoted JavaScript object keys. Without quoting, `db.users.find({address.city: 'x'})` is a SyntaxError. Tab completion now produces `db.users.find({"address.city": 'x'})`. Ghost text is skipped for these candidates because the visual would be misleading (the insertion replaces the typed prefix rather than appending).
+
+**Implementation:** Added `replaceText(deleteCount, text)` to `ShellInputHandler` as a replace-mode alternative to `insertText()`. When a candidate's `insertText` doesn't start with the typed prefix, `applySingleCompletion` uses `replaceText` to delete the prefix and insert the full quoted text.
+
+### 8. Bracket Notation for Special-Character Collections
+
+**Decision:** Collections with names containing special characters (hyphens, spaces, parentheses, etc.) automatically use bracket notation in completions.
+
+**Reason:** `db.stores (10)` is a SyntaxError. When the user types `db.sto` and the only matching collection is `stores (10)`, Tab completion produces `db['stores (10)']` instead. The `needsBracketNotation()` helper detects names that are not valid JavaScript identifiers and switches to bracket syntax.
+
+**Bracket notation contexts supported:**
+- `db[` — shows all collection names with quote+bracket wrapping
+- `db['partial` / `db["partial` — prefix-filters collection names
+- `db['name'].` — collection method completions
+- `db['name'].find({` — method argument completions (fields, operators)
+- `db['name'].find({}).` — cursor chain completions
+
+### 9. Unicode-Aware Ghost Text Cursor Movement
+
+**Decision:** Ghost text cursor repositioning uses `Intl.Segmenter`-based display width calculation instead of `String.length`.
+
+**Reason:** JavaScript's `String.length` counts UTF-16 code units, but ANSI cursor movement operates on display columns. Surrogate pairs (emoji), CJK characters (2-column width), and combining marks would cause the cursor to be positioned incorrectly after rendering ghost text. The `terminalDisplayWidth()` function iterates grapheme clusters and applies full-width character detection for CJK ranges.
+
+### 10. Error Code Extraction for Cleaner Error Messages
+
+**Decision:** Technical error code prefixes (e.g., `[PREFIX-12345]`) are stripped from error messages displayed in the shell.
+
+**Reason:** Internal error codes like `[COMMON-10001]` are useful for diagnostics but clutter user-facing output. The `extractErrorCode()` function in `ShellOutputFormatter` separates the code from the message, keeping the display clean while preserving the code for telemetry.
 
 ---
 
@@ -145,10 +190,12 @@ The `ShellCompletionProvider` is modeled after `PlaygroundCompletionItemProvider
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
-| `ShellCompletionProvider.test.ts` | 37 | All 7 context types, prefix filtering, candidate kinds, cursor chains |
+| `ShellCompletionProvider.test.ts` | 63+ | All 8 context types, prefix filtering, candidate kinds, cursor chains, bracket notation, dotted field quoting, special-char collections |
 | `ShellCompletionRenderer.test.ts` | 17 | Column layout, colors, method suffix, truncation, common prefix |
-| `ShellGhostText.test.ts` | 15 | Show / clear / accept / reset lifecycle, ANSI output |
-| `ShellInputHandler.test.ts` (additions) | 12 | Tab callback, getCursor, insertText, onBufferChange, ghost acceptance |
+| `ShellGhostText.test.ts` | 25+ | Show / clear / accept / reset lifecycle, ANSI output, Unicode width |
+| `ShellInputHandler.test.ts` (additions) | 18+ | Tab callback, getCursor, insertText, replaceText, onBufferChange, ghost acceptance |
+| `ShellOutputFormatter.test.ts` | 54+ | Error code extraction, result formatting |
+| `feedResultToSchemaStore.test.ts` | 26 | Result type filtering, namespace validation, document cap, EJSON deserialization |
 
 ---
 
