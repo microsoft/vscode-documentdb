@@ -1,5 +1,7 @@
 # Multi-Connection Playgrounds
 
+> **Status: ✅ Complete** — Implemented in PR [#583](https://github.com/microsoft/vscode-documentdb/pull/583).
+
 ## Goal
 
 Each Query Playground document is permanently bound to the cluster/database it was created for. Multiple playgrounds can be open simultaneously, each connected to different servers, each with its own worker thread and result panel.
@@ -25,7 +27,7 @@ Each Query Playground document is permanently bound to the cluster/database it w
 
 ## Architecture Changes
 
-### 1. PlaygroundService — Per-Document Connection Map
+### 1. PlaygroundService — Per-Document Connection Map ✅
 
 **Before:** Singleton with `_connection: PlaygroundConnection | undefined`
 **After:** Singleton with `_connections: Map<string, PlaygroundConnection>` keyed by `uri.toString()`
@@ -36,8 +38,10 @@ New methods:
 - `getConnection(uri)` — get connection for a specific document
 - `removeConnection(uri)` — clean up when document closes
 - `isConnected(uri)` — check if a specific document has a connection
+- `getActiveClusterIds()` — returns all unique cluster IDs with open playgrounds _(added during implementation for orphan cleanup)_
+- `hasPlaygroundsForCluster(clusterId)` — checks if any playground uses a given cluster _(added during implementation)_
 
-Remove:
+Removed:
 
 - `clearConnection()` (global)
 - `isConnected()` (global, parameterless)
@@ -46,7 +50,9 @@ Remove:
 
 The StatusBar updates based on the active editor's URI, not a global state.
 
-### 2. PlaygroundEvaluator — Per-Cluster Worker Pool
+**Implementation note:** Document close cleanup (`onDidCloseTextDocument`) was added directly in the `PlaygroundService` constructor rather than as a separate external listener, keeping the cleanup logic co-located with the connection map.
+
+### 2. PlaygroundEvaluator — Per-Cluster Worker Pool ✅
 
 **Before:** Single `PlaygroundEvaluator` instance in `executePlaygroundCode.ts` module scope.
 **After:** `Map<string, PlaygroundEvaluator>` keyed by `clusterId`.
@@ -55,17 +61,18 @@ The StatusBar updates based on the active editor's URI, not a global state.
 - Each evaluator owns one `WorkerSessionManager` → one worker thread.
 - On document close, if no remaining playgrounds use that cluster's evaluator, shut it down.
 - `getPlaygroundEvaluator()` → `getPlaygroundEvaluators()` returning the full map for debug stats.
+- Added `shutdownOrphanedEvaluators()` — iterates the map and shuts down evaluators whose cluster has no remaining open playgrounds. Called from both `onDidChangeState` and `onDidChangeTabs` handlers in `ClustersExtension.ts`.
 
-### 3. CodeLens — Display Only, No Connect Action
+### 3. CodeLens — Display Only, No Connect Action ✅
 
 **Before:** Connection lens uses `PlaygroundCommandIds.connect` command.
-**After:** Connection lens uses a new inline info command that shows a notification.
+**After:** Connection lens uses `PlaygroundCommandIds.showConnectionInfo` command.
 
 - Line 0: Show `$(plug) ClusterName / DatabaseName` — clicking shows `vscode.window.showInformationMessage` with connection details.
-- Line 0: If not connected (shouldn't happen normally since playgrounds are always created from a tree node), show `$(warning) Not connected` with info about how to create a new playground from the tree.
-- Remove the `connect` command entirely.
+- Line 0: If not connected, show `$(warning) Not connected` with info about creating a new playground from the tree.
+- The old `connect` command ID was replaced with `showConnectionInfo` (not removed entirely — the command still exists but now only shows info).
 
-### 4. Context Menu — Remove Submenu, Keep Direct Command
+### 4. Context Menu — Remove Submenu, Keep Direct Command ✅
 
 **Before:**
 
@@ -83,41 +90,46 @@ The StatusBar updates based on the active editor's URI, not a global state.
 [group]  New Query Playground    (non-inline, in a context menu group)
 ```
 
-Remove:
+Removed:
 
 - `documentDB.submenus.playground` submenu definition
-- `vscode-documentdb.command.playground.connect` command
+- `vscode-documentdb.command.playground.connect` command definition
 - The submenu reference in `view/item/context`
+- The `documentDB.submenus.playground` menu entries
 
-Replace with:
+Replaced with:
 
 - Direct `vscode-documentdb.command.playground.new` entry in the `5@2` group
 
-### 5. newPlayground — Always Create New, Bind Connection
+### 5. newPlayground — Always Create New, Bind Connection ✅
 
-The command already creates a new untitled document each time. We just need to:
+The command already creates a new untitled document each time. Changes:
 
 - Store the connection in `PlaygroundService` keyed by the new document's URI.
-- Register a listener for document close to clean up.
-- Remove the `connect` path (no longer needed).
+- Document close cleanup is handled by `PlaygroundService` internally (not a separate listener per document).
 
-### 6. executePlaygroundCode — Per-URI Connection, Per-Cluster Evaluator
+**Deviation from plan:** The command now **requires** a tree node. When invoked without one (e.g., from the command palette), it shows an informational message directing the user to right-click a database/collection in the panel. The template header comment is always cluster-specific (the generic "Write and run DocumentDB API queries" fallback was removed).
 
-- Get connection from `PlaygroundService.getConnection(activeEditor.document.uri)`.
-- Look up or create evaluator from the per-cluster map.
-- `isExecuting` becomes per-document (or we can keep global — only one execution at a time across all playgrounds is a reasonable UX constraint). **Decision: keep global isExecuting** — simpler, prevents resource exhaustion, matches shell behavior where one terminal runs at a time.
+### 6. executePlaygroundCode — Per-URI Connection, Per-Cluster Evaluator ✅
 
-### 7. Show Worker Stats — Report All Playground Workers
+- `executePlaygroundCode` now takes a `documentUri` parameter.
+- Gets connection from `PlaygroundService.getConnection(documentUri)`.
+- Looks up or creates evaluator from the per-cluster `Map<string, PlaygroundEvaluator>`.
+- **Decision: kept global `isExecuting`** — simpler, prevents resource exhaustion.
 
-Update `showWorkerStats` to iterate the evaluator map and report each cluster's worker state.
+### 7. Show Worker Stats — Report All Playground Workers ✅
 
-### 8. Lifecycle — Clean Up on Document Close
+Updated `showWorkerStats` to iterate the evaluator map and report each cluster's worker state (session ID, eval count, auth method, init duration).
 
-Listen for `onDidCloseTextDocument` events:
+**Additional scope:** Also enriched the Interactive Shell worker stats with details that were previously missing: `clusterDisplayName`, `activeDatabase`, `isInitialized`, `isEvaluating`, `workerState`, `authMethod`, and `username`. This required extending `ShellTerminalInfo`, adding getters to `ShellSessionManager`, and updating `DocumentDBShellPty.getTerminalInfo()`.
 
-- Remove connection from `PlaygroundService`.
-- If no remaining playground documents use that cluster's evaluator, shut it down.
-- Already existing: `PlaygroundResultProvider` cleans up result content on close.
+### 8. Lifecycle — Clean Up on Document Close ✅
+
+- `PlaygroundService` listens for `onDidCloseTextDocument` internally and removes the connection.
+- `ClustersExtension.ts` calls `shutdownOrphanedEvaluators()` on `onDidChangeState` and `onDidChangeTabs` to shut down workers whose cluster has no remaining playgrounds.
+- Already existing: `PlaygroundResultProvider` cleans up result content on close (unchanged).
+
+**Deviation from plan:** The tab close handler in `ClustersExtension.ts` was simplified — instead of checking whether _any_ playgrounds remain open (old global logic), it now delegates to `shutdownOrphanedEvaluators()` which checks per-cluster.
 
 ## Files to Modify
 
