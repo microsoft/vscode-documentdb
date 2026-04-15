@@ -5,6 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
+import { extractErrorCode } from '../shell/ShellOutputFormatter';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
 
 /**
@@ -86,7 +87,10 @@ export function formatError(
     lines.push('// ─────────────────────────');
     lines.push('');
 
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    // Strip technical error codes for clean user-facing output;
+    // the extracted code is preserved for future telemetry.
+    const { message: errorMessage } = extractErrorCode(rawMessage);
     lines.push(errorMessage);
 
     return lines.join('\n');

@@ -30,6 +30,12 @@ export interface ShellInputHandlerCallbacks {
     onInterrupt: () => void;
     /** Called when multi-line continuation is needed (PTY shows a continuation prompt). */
     onContinuation: () => void;
+    /** Called when the user presses Tab — the PTY handles completion logic. */
+    onTab?: (buffer: string, cursor: number) => void;
+    /** Called after any buffer/cursor change — the PTY uses this for ghost text. */
+    onBufferChange?: (buffer: string, cursor: number) => void;
+    /** Called when the user presses Right Arrow at end of buffer with ghost text visible. */
+    onAcceptGhostText?: () => string | undefined;
 }
 
 /** Word character pattern for word navigation (Ctrl+Left/Right). */
@@ -131,6 +137,76 @@ export class ShellInputHandler {
     }
 
     /**
+     * Get the current cursor position within the buffer.
+     */
+    getCursor(): number {
+        return this._cursor;
+    }
+
+    /**
+     * Insert text at the current cursor position and update the display.
+     * Used by the PTY to insert accepted completions or ghost text.
+     *
+     * NOTE: This method intentionally does NOT fire `onBufferChange`. It is a
+     * PTY-controlled mutation — the PTY is responsible for any follow-up
+     * evaluations (e.g., ghost text) after calling this method.
+     */
+    insertText(text: string): void {
+        const before = this._buffer.slice(0, this._cursor);
+        const after = this._buffer.slice(this._cursor);
+        this._buffer = before + text + after;
+        this._cursor += text.length;
+
+        if (after.length > 0) {
+            // Insert mode: write text + rest of line, move cursor back
+            this._callbacks.write(text + after + '\b'.repeat(after.length));
+        } else {
+            // Append mode: just echo the text
+            this._callbacks.write(text);
+        }
+    }
+
+    /**
+     * Replace text before the cursor and insert new text.
+     * Used by the PTY when a completion needs to replace the typed prefix
+     * (e.g., quoting a dotted field path: `address.ci` → `"address.city"`).
+     *
+     * NOTE: Like {@link insertText}, this does NOT fire `onBufferChange`.
+     *
+     * @param deleteCount - number of characters to delete before the cursor
+     * @param text - the replacement text to insert
+     */
+    replaceText(deleteCount: number, text: string): void {
+        // Safety: don't delete beyond buffer start
+        deleteCount = Math.min(deleteCount, this._cursor);
+
+        const before = this._buffer.slice(0, this._cursor - deleteCount);
+        const after = this._buffer.slice(this._cursor);
+        this._buffer = before + text + after;
+
+        // Move cursor back to start of replaced region
+        if (deleteCount > 0) {
+            this._callbacks.write(`\x1b[${String(deleteCount)}D`);
+        }
+
+        // Write new text + remainder of line
+        this._callbacks.write(text + after);
+
+        // Erase leftover characters if replacement is shorter than deleted text
+        const cleanup = Math.max(0, deleteCount - text.length);
+        if (cleanup > 0) {
+            this._callbacks.write(' '.repeat(cleanup) + '\b'.repeat(cleanup));
+        }
+
+        // Move cursor back to end of inserted text (before 'after' portion)
+        if (after.length > 0) {
+            this._callbacks.write('\b'.repeat(after.length));
+        }
+
+        this._cursor = before.length + text.length;
+    }
+
+    /**
      * Process raw terminal input data from `handleInput(data)`.
      *
      * Terminal input arrives as individual characters or escape sequences.
@@ -224,10 +300,14 @@ export class ShellInputHandler {
             case '\x17': // Ctrl+W — delete word before cursor
                 this.deleteWordBeforeCursor();
                 break;
+            case '\x09': // Tab — completion
+                this._callbacks.onTab?.(this._buffer, this._cursor);
+                break;
             default:
                 // Printable characters (>= space, not DEL)
                 if (ch >= ' ') {
                     this.insertCharacter(ch);
+                    this._callbacks.onBufferChange?.(this._buffer, this._cursor);
                 }
                 break;
         }
@@ -288,6 +368,7 @@ export class ShellInputHandler {
 
         // Move cursor back one, rewrite remainder, erase trailing char
         this._callbacks.write('\b' + after + ' ' + '\b'.repeat(after.length + 1));
+        this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     private insertCharacter(ch: string): void {
@@ -343,7 +424,15 @@ export class ShellInputHandler {
             case '\x1b[B': // Down arrow — history next
                 this.historyNext();
                 break;
-            case '\x1b[C': // Right arrow — move cursor right
+            case '\x1b[C': // Right arrow — move cursor right or accept ghost text
+                if (this._cursor >= this._buffer.length) {
+                    // At end of buffer — try to accept ghost text
+                    const accepted = this._callbacks.onAcceptGhostText?.();
+                    if (accepted) {
+                        // Ghost text was accepted — insertText handles display
+                        return;
+                    }
+                }
                 this.moveCursorRight();
                 break;
             case '\x1b[D': // Left arrow — move cursor left
@@ -445,6 +534,7 @@ export class ShellInputHandler {
 
         // Rewrite remainder + erase trailing char
         this._callbacks.write(after + ' ' + '\b'.repeat(after.length + 1));
+        this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     private clearBeforeCursor(): void {
@@ -461,11 +551,13 @@ export class ShellInputHandler {
         this._callbacks.write(
             `\x1b[${String(eraseCount)}D` + after + ' '.repeat(eraseCount) + '\b'.repeat(after.length + eraseCount),
         );
+        this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     private clearAfterCursor(): void {
         this._buffer = this._buffer.slice(0, this._cursor);
         this._callbacks.write(ERASE_TO_EOL);
+        this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     private deleteWordBeforeCursor(): void {
@@ -492,6 +584,7 @@ export class ShellInputHandler {
             `\x1b[${String(deleted)}D` + after + ' '.repeat(deleted) + '\b'.repeat(after.length + deleted),
         );
         this._cursor = pos;
+        this._callbacks.onBufferChange?.(this._buffer, this._cursor);
     }
 
     // ─── Private: history navigation ─────────────────────────────────────────
