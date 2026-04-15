@@ -12,6 +12,7 @@ import { PlaygroundEvaluator } from '../../documentdb/playground/PlaygroundEvalu
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { formatError, formatResult } from '../../documentdb/playground/resultFormatter';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
+import { extractErrorCode } from '../../documentdb/shell/ShellOutputFormatter';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
@@ -151,7 +152,10 @@ export async function executePlaygroundCode(code: string, runMode: PlaygroundRun
                     }
 
                     // Show our own error UI before re-throwing
-                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    const rawMessage = error instanceof Error ? error.message : String(error);
+                    // Strip technical error codes for clean user-facing output;
+                    // the extracted code is preserved for future telemetry.
+                    const { message: errorMessage } = extractErrorCode(rawMessage);
                     const durationMs = Date.now() - startTime;
                     const formattedOutput = formatError(error, code, durationMs, connection);
 
