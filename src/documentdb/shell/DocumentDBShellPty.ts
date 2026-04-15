@@ -519,11 +519,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /**
      * Show a continuation prompt for incomplete multi-line expressions.
-     * Uses midline ellipsis (⋯ >) for clean baseline alignment.
+     * Uses a dashed vertical line (┆) to match the playground gutter's
+     * block indicator for a unified visual language.
      * Called by ShellInputHandler when an incomplete expression is detected.
      */
     private showContinuationPrompt(): void {
-        const prompt = '⋯ > ';
+        const prompt = '┆ > ';
         this._inputHandler.setPromptWidth(prompt.length);
         this._writeEmitter.fire(prompt);
     }
