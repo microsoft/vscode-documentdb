@@ -78,7 +78,7 @@ export class ShellSessionManager implements vscode.Disposable {
     /** Tracks the active database, surviving worker restarts. Updated on `use <db>`. */
     private _activeDatabase: string;
     /** Auth mechanism used for the current session (set after init). */
-    private _authMethod: string | undefined;
+    private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | undefined;
 
     constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
         this._connectionInfo = connectionInfo;
@@ -139,14 +139,14 @@ export class ShellSessionManager implements vscode.Disposable {
     /**
      * Worker thread state ('idle' | 'spawning' | 'ready' | 'executing').
      */
-    get workerState(): string {
+    get workerState(): 'idle' | 'spawning' | 'ready' | 'executing' {
         return this._workerManager.workerState;
     }
 
     /**
      * Authentication method used for the current session.
      */
-    get authMethod(): string | undefined {
+    get authMethod(): 'NativeAuth' | 'MicrosoftEntraID' | undefined {
         return this._authMethod;
     }
 

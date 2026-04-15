@@ -22,10 +22,10 @@ export interface ShellTerminalInfo {
     readonly isInitialized: boolean;
     /** Whether the shell is currently evaluating a command. */
     readonly isEvaluating: boolean;
-    /** Worker thread state ('idle' | 'spawning' | 'ready' | 'executing'). */
-    readonly workerState: string;
-    /** Authentication method used ('NativeAuth' | 'MicrosoftEntraID' | undefined). */
-    readonly authMethod: string | undefined;
+    /** Worker thread state. */
+    readonly workerState: 'idle' | 'spawning' | 'ready' | 'executing';
+    /** Authentication method used. */
+    readonly authMethod: 'NativeAuth' | 'MicrosoftEntraID' | undefined;
     /** Username for SCRAM auth (undefined for Entra ID or before init). */
     readonly username: string | undefined;
 }
