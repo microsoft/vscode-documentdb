@@ -187,8 +187,8 @@ const regexpesc = /\\(?:[bBdDfnrstvwWn0\\\/]|[(){}\[\]\$\^|\-*+?\.]|c[A-Z]|x[0-9
 // States: root, common, whitespace, comment, jsdoc, regexp, regexrange,
 //         string_double, string_single, string_backtick, bracketCounting
 //
-// Inline regex references like `@digits` are resolved in the executor
-// by replacing `@name` with the source of the corresponding pattern.
+// All @name references from the original Monaco source have been inlined directly
+// in the regex patterns below. The executor does not need to resolve @name references.
 
 const tokenizer: Record<string, MonarchRule[]> = {
     root: [{ regex: /[{}]/, action: 'delimiter.bracket' }, { include: 'common' }],
