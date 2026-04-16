@@ -22,6 +22,7 @@ import {
 } from '../../../commands/llmEnhancedCommands/queryGenerationCommands';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
+import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import {
     ExplainPlanAnalyzer,
     type ExecutionStatsAnalysis,
@@ -36,7 +37,6 @@ import {
 } from '../../../documentdb/queryInsights/transformations';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
-import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';

@@ -312,11 +312,7 @@ const ToolbarOpenIn = (): JSX.Element => {
         <Toolbar size="small">
             <ToolbarDividerTransparent />
             <Tooltip content={l10n.t('Copy current query to clipboard')} relationship="description" withArrow>
-                <ToolbarButton
-                    aria-label={l10n.t('Copy Query')}
-                    icon={<CopyRegular />}
-                    onClick={handleCopyQuery}
-                />
+                <ToolbarButton aria-label={l10n.t('Copy Query')} icon={<CopyRegular />} onClick={handleCopyQuery} />
             </Tooltip>
             <Tooltip
                 content={l10n.t('Paste a find query from clipboard into the editors')}

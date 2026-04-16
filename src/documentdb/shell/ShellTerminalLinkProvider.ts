@@ -233,11 +233,7 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
                 linkType: 'playground',
                 startIndex: playgroundMatch.index,
                 length: playgroundMatch[0].length,
-                tooltip: vscode.l10n.t(
-                    'Open "{0}.{1}" in Query Playground',
-                    playgroundMatch[1],
-                    playgroundMatch[2],
-                ),
+                tooltip: vscode.l10n.t('Open "{0}.{1}" in Query Playground', playgroundMatch[1], playgroundMatch[2]),
                 clusterId: info.clusterId,
                 databaseName: playgroundMatch[1],
                 collectionName: playgroundMatch[2],

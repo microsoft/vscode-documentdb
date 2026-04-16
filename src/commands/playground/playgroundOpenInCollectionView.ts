@@ -6,9 +6,9 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { Views } from '../../documentdb/Views';
 import { extractCollectionName } from '../../documentdb/playground/extractCollectionName';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
+import { Views } from '../../documentdb/Views';
 
 /**
  * Opens the current playground code block in Collection View.
@@ -41,9 +41,7 @@ export async function playgroundOpenInCollectionView(
     const collectionName = extractCollectionName(blockText);
 
     if (!collectionName) {
-        void vscode.window.showWarningMessage(
-            l10n.t('Could not detect a collection name in this code block.'),
-        );
+        void vscode.window.showWarningMessage(l10n.t('Could not detect a collection name in this code block.'));
         return;
     }
 
