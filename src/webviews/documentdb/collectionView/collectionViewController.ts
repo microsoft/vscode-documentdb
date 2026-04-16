@@ -25,6 +25,12 @@ export type CollectionViewWebviewConfigurationType = {
     defaultPageSize: number;
     feedbackSignalsEnabled: boolean;
     enableAIQueryGeneration: boolean;
+    /** Pre-populated query from cross-feature navigation (e.g., Playground → Collection View). */
+    initialQuery?: {
+        filter?: string;
+        project?: string;
+        sort?: string;
+    };
 };
 
 export class CollectionViewController extends WebviewController<CollectionViewWebviewConfigurationType> {

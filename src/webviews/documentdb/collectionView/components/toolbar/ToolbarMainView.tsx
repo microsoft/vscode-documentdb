@@ -257,17 +257,14 @@ const ToolbarOpenIn = (): JSX.Element => {
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const { trpcClient } = useTrpcClient();
 
-    const getCurrentQuery = (): { filter: string; project: string; sort: string } => {
-        const query = currentContext.queryEditor?.getCurrentQuery();
-        return {
-            filter: query?.filter ?? '{  }',
-            project: query?.project ?? '{  }',
-            sort: query?.sort ?? '{  }',
-        };
-    };
+    const getLastExecutedQuery = (): { filter: string; project: string; sort: string } => ({
+        filter: currentContext.activeQuery.filter,
+        project: currentContext.activeQuery.project,
+        sort: currentContext.activeQuery.sort,
+    });
 
     const handleOpenInPlayground = (): void => {
-        const query = getCurrentQuery();
+        const query = getLastExecutedQuery();
         void trpcClient.mongoClusters.collectionView.openInPlayground.mutate({
             filter: query.filter,
             project: query.project,
@@ -276,7 +273,7 @@ const ToolbarOpenIn = (): JSX.Element => {
     };
 
     const handleOpenInShell = (): void => {
-        const query = getCurrentQuery();
+        const query = getLastExecutedQuery();
         void trpcClient.mongoClusters.collectionView.openInShell.mutate({
             filter: query.filter,
             project: query.project,
@@ -285,7 +282,7 @@ const ToolbarOpenIn = (): JSX.Element => {
     };
 
     const handleCopyQuery = (): void => {
-        const query = getCurrentQuery();
+        const query = getLastExecutedQuery();
         void trpcClient.mongoClusters.collectionView.copyQueryToClipboard.mutate({
             filter: query.filter,
             project: query.project,

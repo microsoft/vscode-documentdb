@@ -7,6 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { extractCollectionName } from '../../documentdb/playground/extractCollectionName';
+import { parseFindExpression } from '../../documentdb/playground/parseFindExpression';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { Views } from '../../documentdb/Views';
 
@@ -45,10 +46,20 @@ export async function playgroundOpenInCollectionView(
         return;
     }
 
+    // Try to extract filter/project/sort from the code block for a richer handoff
+    const parsed = parseFindExpression(blockText);
+
     await vscode.commands.executeCommand('vscode-documentdb.command.internal.containerView.open', {
         clusterId: connection.clusterId,
         viewId: Views.ConnectionsView,
         databaseName: connection.databaseName,
         collectionName,
+        initialQuery: parsed.filter
+            ? {
+                  filter: parsed.filter,
+                  project: parsed.project,
+                  sort: parsed.sort,
+              }
+            : undefined,
     });
 }

@@ -85,6 +85,22 @@ export const CollectionView = (): JSX.Element => {
 
     useSelectiveContextMenuPrevention();
 
+    // Apply initial query from cross-feature navigation (e.g., Playground → Collection View)
+    useEffect(() => {
+        if (configuration.initialQuery) {
+            setCurrentContext((prev) => ({
+                ...prev,
+                pendingPaste: {
+                    filter: configuration.initialQuery?.filter,
+                    project: configuration.initialQuery?.project,
+                    sort: configuration.initialQuery?.sort,
+                },
+            }));
+        }
+        // Only run on mount — configuration is stable after creation
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();

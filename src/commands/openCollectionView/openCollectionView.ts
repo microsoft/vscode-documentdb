@@ -42,6 +42,11 @@ export async function openCollectionViewInternal(
         viewId: string;
         databaseName: string;
         collectionName: string;
+        initialQuery?: {
+            filter?: string;
+            project?: string;
+            sort?: string;
+        };
     },
 ): Promise<void> {
     /**
@@ -68,6 +73,7 @@ export async function openCollectionViewInternal(
         databaseName: props.databaseName,
         collectionName: props.collectionName,
         feedbackSignalsEnabled: feedbackSignalsEnabled,
+        initialQuery: props.initialQuery,
     });
 
     // Clean up the ClusterSession when the tab is closed
