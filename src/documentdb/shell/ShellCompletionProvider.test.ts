@@ -869,5 +869,15 @@ describe('ShellCompletionProvider', () => {
             expect(result.candidates[0].label).toBe('stores (10)');
             expect(result.candidates[0].insertText).toBe("['stores (10)']");
         });
+
+        it('should escape backslashes and single quotes in bracket notation insertText', () => {
+            mockClustersClient([], [{ name: "a\\b'c" }]);
+
+            const result = provider.getCompletions('db.', 3, TEST_CONTEXT);
+            const escaped = result.candidates.find((c) => c.label === "a\\b'c");
+
+            expect(escaped).toBeDefined();
+            expect(escaped!.insertText).toBe("['a\\\\b\\'c']");
+        });
     });
 });

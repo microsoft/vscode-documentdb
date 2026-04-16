@@ -859,8 +859,8 @@ export class ShellCompletionProvider {
      */
     private makeCollectionCandidate(name: string): CompletionCandidate {
         if (needsBracketNotation(name)) {
-            // Escape single quotes within the name
-            const escaped = name.replace(/'/g, "\\'");
+            // Escape backslashes first, then single quotes, for safe JS string literal insertion.
+            const escaped = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             return {
                 label: name,
                 insertText: `['${escaped}']`,
