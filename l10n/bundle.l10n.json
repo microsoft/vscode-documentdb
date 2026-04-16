@@ -100,7 +100,6 @@
   "{0} file(s) were ignored because they do not match the \"*.json\" pattern.": "{0} file(s) were ignored because they do not match the \"*.json\" pattern.",
   "{0} inserted": "{0} inserted",
   "{0} item(s) already exist in the destination. Check the Output panel for details.": "{0} item(s) already exist in the destination. Check the Output panel for details.",
-  "{0} more actions": "{0} more actions",
   "{0} processed": "{0} processed",
   "{0} replaced": "{0} replaced",
   "{0} skipped": "{0} skipped",
