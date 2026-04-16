@@ -82,6 +82,7 @@ export async function newPlaygroundWithContent(
         `// Query Playground: ${params.clusterDisplayName}`,
         '//',
         `// Use ${modifierKey}+Enter to run the current block or ${modifierKey}+Shift+Enter to run the entire file`,
+        '// Note: when running multiple statements, only the last result is displayed',
         '',
         params.content,
         '',
