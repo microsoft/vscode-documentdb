@@ -125,16 +125,45 @@ describe('PlaygroundService', () => {
     });
 
     describe('execution state', () => {
+        const connection: PlaygroundConnection = {
+            clusterId: 'cluster-123',
+            clusterDisplayName: 'MyCluster',
+            databaseName: 'orders',
+        };
+
         it('starts not executing', () => {
-            expect(service.isExecuting).toBe(false);
+            expect(service.isExecuting()).toBe(false);
+            expect(service.isExecuting('cluster-123')).toBe(false);
         });
 
-        it('setExecuting updates state and fires event', () => {
+        it('setExecuting tracks state per cluster and fires event', () => {
             const listener = jest.fn();
             service.onDidChangeState(listener);
-            service.setExecuting(true);
-            expect(service.isExecuting).toBe(true);
+            service.setExecuting('cluster-123', true);
+            expect(service.isExecuting('cluster-123')).toBe(true);
+            expect(service.isExecuting()).toBe(true);
             expect(listener).toHaveBeenCalledTimes(1);
+        });
+
+        it('setExecuting(false) clears state for a specific cluster', () => {
+            service.setExecuting('cluster-123', true);
+            service.setExecuting('cluster-456', true);
+            service.setExecuting('cluster-123', false);
+            expect(service.isExecuting('cluster-123')).toBe(false);
+            expect(service.isExecuting('cluster-456')).toBe(true);
+            expect(service.isExecuting()).toBe(true);
+        });
+
+        it('isExecutingForUri checks the document connection cluster', () => {
+            service.setConnection(mockUri, connection);
+            expect(service.isExecutingForUri(mockUri)).toBe(false);
+            service.setExecuting('cluster-123', true);
+            expect(service.isExecutingForUri(mockUri)).toBe(true);
+        });
+
+        it('isExecutingForUri returns false for disconnected documents', () => {
+            service.setExecuting('cluster-123', true);
+            expect(service.isExecutingForUri(mockUri)).toBe(false);
         });
     });
 

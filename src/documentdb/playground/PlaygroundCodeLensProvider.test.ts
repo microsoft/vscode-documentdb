@@ -83,12 +83,33 @@ describe('PlaygroundCodeLensProvider', () => {
         expect(lenses.length).toBe(2);
     });
 
-    it('shows running state when executing', () => {
-        service.setExecuting(true);
+    it('shows running state when cluster is executing', () => {
         const doc = mockDocument('db.test.find({})');
+        service.setConnection(doc.uri, {
+            clusterId: 'test-cluster',
+            clusterDisplayName: 'TestCluster',
+            databaseName: 'testdb',
+        });
+        service.setExecuting('test-cluster', true);
         const lenses = provider.provideCodeLenses(doc);
 
         const runAllLens = lenses[1];
         expect(runAllLens.command?.title).toContain('Running');
+        expect(runAllLens.command?.tooltip).toContain('worker');
+    });
+
+    it('does not show running state for a different cluster', () => {
+        const doc = mockDocument('db.test.find({})');
+        service.setConnection(doc.uri, {
+            clusterId: 'cluster-A',
+            clusterDisplayName: 'ClusterA',
+            databaseName: 'dbA',
+        });
+        service.setExecuting('cluster-B', true);
+        const lenses = provider.provideCodeLenses(doc);
+
+        const runAllLens = lenses[1];
+        expect(runAllLens.command?.title).toContain('Run All');
+        expect(runAllLens.command?.title).not.toContain('Running');
     });
 });

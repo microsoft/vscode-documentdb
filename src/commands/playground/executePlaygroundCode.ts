@@ -96,9 +96,11 @@ export async function executePlaygroundCode(
         return;
     }
 
-    // Prevent concurrent runs — no queuing
-    if (service.isExecuting) {
-        void vscode.window.showInformationMessage(l10n.t('A playground is already running. Wait for it to finish.'));
+    // Prevent concurrent runs on the same cluster — no queuing
+    if (service.isExecuting(connection.clusterId)) {
+        void vscode.window.showInformationMessage(
+            l10n.t('A playground is already running on this cluster. Wait for it to finish.'),
+        );
         return;
     }
 
@@ -109,7 +111,7 @@ export async function executePlaygroundCode(
         evaluators.set(connection.clusterId, evaluator);
     }
 
-    service.setExecuting(true);
+    service.setExecuting(connection.clusterId, true);
 
     // callWithTelemetryAndErrorHandling automatically tracks:
     //   - duration (measured from callback start to end)
@@ -206,7 +208,7 @@ export async function executePlaygroundCode(
                     // error, and errorMessage in telemetry
                     throw error;
                 } finally {
-                    service.setExecuting(false);
+                    service.setExecuting(connection.clusterId, false);
                 }
             },
         );

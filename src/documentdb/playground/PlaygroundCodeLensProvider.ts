@@ -107,14 +107,16 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
         }
 
         // 2. Run All lens
-        const runAllTitle = service.isExecuting
-            ? `$(loading~spin) ${l10n.t('Running…')}`
-            : `$(run-all) ${l10n.t('Run All')}`;
+        const isRunning = service.isExecutingForUri(document.uri);
+        const runAllTitle = isRunning ? `$(loading~spin) ${l10n.t('Running…')}` : `$(run-all) ${l10n.t('Run All')}`;
+        const runAllTooltip = isRunning
+            ? l10n.t('The worker for this cluster is busy executing a playground')
+            : l10n.t('Run the entire file ({0}+Shift+Enter)', this._mod);
         lenses.push(
             new vscode.CodeLens(topRange, {
                 title: runAllTitle,
                 command: PlaygroundCommandIds.runAll,
-                tooltip: l10n.t('Run the entire file ({0}+Shift+Enter)', this._mod),
+                tooltip: runAllTooltip,
             }),
         );
 
@@ -128,15 +130,16 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
 
             if (activeBlock) {
                 const blockRange = new vscode.Range(activeBlock.startLine, 0, activeBlock.startLine, 0);
-                const runTitle = service.isExecuting
-                    ? `$(loading~spin) ${l10n.t('Running…')}`
-                    : `$(play) ${l10n.t('Run')}`;
+                const runTitle = isRunning ? `$(loading~spin) ${l10n.t('Running…')}` : `$(play) ${l10n.t('Run')}`;
+                const runTooltip = isRunning
+                    ? l10n.t('The worker for this cluster is busy executing a playground')
+                    : l10n.t('Run this block ({0}+Enter)', this._mod);
                 lenses.push(
                     new vscode.CodeLens(blockRange, {
                         title: runTitle,
                         command: PlaygroundCommandIds.runSelected,
                         arguments: [activeBlock.startLine, activeBlock.endLine],
-                        tooltip: l10n.t('Run this block ({0}+Enter)', this._mod),
+                        tooltip: runTooltip,
                     }),
                 );
             }

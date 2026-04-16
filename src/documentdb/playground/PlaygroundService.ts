@@ -25,7 +25,9 @@ export class PlaygroundService implements vscode.Disposable {
      * We stash the connection keyed by fsPath so it can be migrated to the new URI.
      */
     private readonly _pendingMigrations = new Map<string, PlaygroundConnection>();
-    private _isExecuting = false;
+
+    /** Cluster IDs that currently have a running evaluation. */
+    private readonly _executingClusterIds = new Set<string>();
 
     private readonly _onDidChangeState = new vscode.EventEmitter<void>();
     readonly onDidChangeState: vscode.Event<void> = this._onDidChangeState.event;
@@ -155,12 +157,35 @@ export class PlaygroundService implements vscode.Disposable {
 
     // ── Execution state ────────────────────────────────────────────────
 
-    get isExecuting(): boolean {
-        return this._isExecuting;
+    /**
+     * Check whether a cluster's worker is currently executing.
+     * When called without arguments, returns true if any cluster is executing.
+     */
+    isExecuting(clusterId?: string): boolean {
+        if (clusterId) {
+            return this._executingClusterIds.has(clusterId);
+        }
+        return this._executingClusterIds.size > 0;
     }
 
-    setExecuting(executing: boolean): void {
-        this._isExecuting = executing;
+    /**
+     * Check whether the playground document at the given URI is on a cluster
+     * that is currently executing.
+     */
+    isExecutingForUri(uri: vscode.Uri): boolean {
+        const connection = this._connections.get(uri.toString());
+        if (!connection) {
+            return false;
+        }
+        return this._executingClusterIds.has(connection.clusterId);
+    }
+
+    setExecuting(clusterId: string, executing: boolean): void {
+        if (executing) {
+            this._executingClusterIds.add(clusterId);
+        } else {
+            this._executingClusterIds.delete(clusterId);
+        }
         this._onDidChangeState.fire();
     }
 
