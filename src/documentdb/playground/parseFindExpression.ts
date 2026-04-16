@@ -11,6 +11,8 @@ export interface ParsedFindExpression {
     readonly filter?: string;
     readonly project?: string;
     readonly sort?: string;
+    readonly skip?: number;
+    readonly limit?: number;
 }
 
 /**
@@ -66,6 +68,17 @@ export function parseFindExpression(code: string): ParsedFindExpression {
             if (sortArgs.length >= 1 && sortArgs[0].trim()) {
                 (result as { sort: string }).sort = sortArgs[0].trim();
             }
+        }
+
+        // Look for .skip(N) and .limit(N) — simple numeric arguments
+        const skipMatch = /\.skip\(\s*(\d+)\s*\)/.exec(afterFind);
+        if (skipMatch) {
+            (result as { skip: number }).skip = parseInt(skipMatch[1], 10);
+        }
+
+        const limitMatch = /\.limit\(\s*(\d+)\s*\)/.exec(afterFind);
+        if (limitMatch) {
+            (result as { limit: number }).limit = parseInt(limitMatch[1], 10);
         }
     }
 

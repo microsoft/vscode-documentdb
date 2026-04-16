@@ -119,6 +119,8 @@ function buildFindExpression(
     filter: string,
     project: string | undefined,
     sort: string | undefined,
+    skip: number | undefined,
+    limit: number | undefined,
 ): string {
     const hasProject = project && project.trim() !== '{}' && project.trim() !== '{  }' && project.trim() !== '';
     const hasSort = sort && sort.trim() !== '{}' && sort.trim() !== '{  }' && sort.trim() !== '';
@@ -134,6 +136,14 @@ function buildFindExpression(
 
     if (hasSort) {
         expr += `.sort(${sort})`;
+    }
+
+    if (skip && skip > 0) {
+        expr += `.skip(${skip})`;
+    }
+
+    if (limit && limit > 0) {
+        expr += `.limit(${limit})`;
     }
 
     return expr;
@@ -928,12 +938,21 @@ export const collectionsViewRouter = router({
                 filter: z.string(),
                 project: z.string().optional(),
                 sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
-            const query = buildFindExpression(myCtx.collectionName, input.filter, input.project, input.sort);
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
 
             await vscode.commands.executeCommand('vscode-documentdb.command.playground.newWithContent', {
                 clusterId: myCtx.clusterId,
@@ -949,12 +968,21 @@ export const collectionsViewRouter = router({
                 filter: z.string(),
                 project: z.string().optional(),
                 sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
-            const query = buildFindExpression(myCtx.collectionName, input.filter, input.project, input.sort);
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
 
             await vscode.commands.executeCommand('vscode-documentdb.command.openInteractiveShell.withInput', {
                 clusterId: myCtx.clusterId,
@@ -970,12 +998,21 @@ export const collectionsViewRouter = router({
                 filter: z.string(),
                 project: z.string().optional(),
                 sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
-            const query = buildFindExpression(myCtx.collectionName, input.filter, input.project, input.sort);
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
             await vscode.env.clipboard.writeText(query);
             void vscode.window.showInformationMessage(l10n.t('Query copied to clipboard'));
         }),
@@ -998,6 +1035,8 @@ export const collectionsViewRouter = router({
             filter: parsed.filter,
             project: parsed.project,
             sort: parsed.sort,
+            skip: parsed.skip,
+            limit: parsed.limit,
         };
     }),
 });

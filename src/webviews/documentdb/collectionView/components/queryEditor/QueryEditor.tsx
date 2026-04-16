@@ -382,6 +382,18 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 setIsEnhancedQueryMode(true);
             }
         }
+        if (paste.skip !== undefined) {
+            setSkipValue(paste.skip);
+            if (!isEnhancedQueryMode) {
+                setIsEnhancedQueryMode(true);
+            }
+        }
+        if (paste.limit !== undefined) {
+            setLimitValue(paste.limit);
+            if (!isEnhancedQueryMode) {
+                setIsEnhancedQueryMode(true);
+            }
+        }
 
         // Clear the pending paste
         setCurrentContext((prev) => ({

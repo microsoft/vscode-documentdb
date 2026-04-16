@@ -46,6 +46,8 @@ export async function openCollectionViewInternal(
             filter?: string;
             project?: string;
             sort?: string;
+            skip?: number;
+            limit?: number;
         };
     },
 ): Promise<void> {

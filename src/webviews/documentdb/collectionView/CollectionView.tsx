@@ -97,6 +97,8 @@ export const CollectionView = (): JSX.Element => {
                     filter: iq.filter,
                     project: iq.project,
                     sort: iq.sort,
+                    skip: iq.skip,
+                    limit: iq.limit,
                 },
                 // Execute the query immediately
                 activeQuery: {
@@ -105,6 +107,8 @@ export const CollectionView = (): JSX.Element => {
                     filter: iq.filter ?? prev.activeQuery.filter,
                     project: iq.project ?? prev.activeQuery.project,
                     sort: iq.sort ?? prev.activeQuery.sort,
+                    skip: iq.skip ?? prev.activeQuery.skip,
+                    limit: iq.limit ?? prev.activeQuery.limit,
                     pageNumber: 1,
                     executionIntent: 'initial',
                 },

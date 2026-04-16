@@ -30,6 +30,8 @@ export type CollectionViewWebviewConfigurationType = {
         filter?: string;
         project?: string;
         sort?: string;
+        skip?: number;
+        limit?: number;
     };
 };
 

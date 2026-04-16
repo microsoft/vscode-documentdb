@@ -93,4 +93,27 @@ describe('parseFindExpression', () => {
             filter: "{ msg: 'hello, world' }",
         });
     });
+
+    it('should parse skip and limit', () => {
+        const result = parseFindExpression(
+            "db.getCollection('orders').find({ status: 'active' }).sort({ date: -1 }).skip(20).limit(10)",
+        );
+        expect(result).toMatchObject({
+            collectionName: 'orders',
+            filter: "{ status: 'active' }",
+            sort: '{ date: -1 }',
+            skip: 20,
+            limit: 10,
+        });
+    });
+
+    it('should parse limit without skip', () => {
+        const result = parseFindExpression("db.getCollection('users').find({}).limit(50)");
+        expect(result).toMatchObject({
+            collectionName: 'users',
+            filter: '{}',
+            limit: 50,
+        });
+        expect(result.skip).toBeUndefined();
+    });
 });

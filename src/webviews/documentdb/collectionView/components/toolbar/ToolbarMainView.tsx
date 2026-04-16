@@ -257,10 +257,18 @@ const ToolbarOpenIn = (): JSX.Element => {
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const { trpcClient } = useTrpcClient();
 
-    const getLastExecutedQuery = (): { filter: string; project: string; sort: string } => ({
+    const getLastExecutedQuery = (): {
+        filter: string;
+        project: string;
+        sort: string;
+        skip: number;
+        limit: number;
+    } => ({
         filter: currentContext.activeQuery.filter,
         project: currentContext.activeQuery.project,
         sort: currentContext.activeQuery.sort,
+        skip: currentContext.activeQuery.skip,
+        limit: currentContext.activeQuery.limit,
     });
 
     const handleOpenInPlayground = (): void => {
@@ -269,6 +277,8 @@ const ToolbarOpenIn = (): JSX.Element => {
             filter: query.filter,
             project: query.project,
             sort: query.sort,
+            skip: query.skip,
+            limit: query.limit,
         });
     };
 
@@ -278,6 +288,8 @@ const ToolbarOpenIn = (): JSX.Element => {
             filter: query.filter,
             project: query.project,
             sort: query.sort,
+            skip: query.skip,
+            limit: query.limit,
         });
     };
 
@@ -287,6 +299,8 @@ const ToolbarOpenIn = (): JSX.Element => {
             filter: query.filter,
             project: query.project,
             sort: query.sort,
+            skip: query.skip,
+            limit: query.limit,
         });
     };
 
@@ -299,6 +313,8 @@ const ToolbarOpenIn = (): JSX.Element => {
                         filter: result.filter,
                         project: result.project,
                         sort: result.sort,
+                        skip: result.skip,
+                        limit: result.limit,
                     },
                 }));
             }

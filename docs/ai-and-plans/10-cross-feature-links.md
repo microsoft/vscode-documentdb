@@ -4,14 +4,14 @@
 
 ## Implementation Progress
 
-| Work Item | Description | Commit | Status |
-|-----------|-------------|--------|--------|
-| WI1 | `newPlaygroundWithContent` command | `6f788c5a` | ✅ Done |
-| WI2 | Shell `initialInput` pre-feed | `6d5d1bb1` | ✅ Done |
-| WI3 | Collection View toolbar buttons (Playground + Shell) | `16d20244` | ✅ Done |
-| WI4 | Shell → Playground terminal link | `608c4d95` | ✅ Done |
-| WI5 | Playground CodeLens navigation (CV + Shell) | `e4667bb7` | ✅ Done |
-| WI6 | Collection View Copy/Paste query buttons | `dece660f` | ✅ Done |
+| Work Item | Description                                          | Commit     | Status  |
+| --------- | ---------------------------------------------------- | ---------- | ------- |
+| WI1       | `newPlaygroundWithContent` command                   | `6f788c5a` | ✅ Done |
+| WI2       | Shell `initialInput` pre-feed                        | `6d5d1bb1` | ✅ Done |
+| WI3       | Collection View toolbar buttons (Playground + Shell) | `16d20244` | ✅ Done |
+| WI4       | Shell → Playground terminal link                     | `608c4d95` | ✅ Done |
+| WI5       | Playground CodeLens navigation (CV + Shell)          | `e4667bb7` | ✅ Done |
+| WI6       | Collection View Copy/Paste query buttons             | `dece660f` | ✅ Done |
 
 ### Deviations from Plan
 
