@@ -10,8 +10,11 @@ import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { IndexItem } from '../../tree/documentdb/IndexItem';
 
-interface CopyReferenceOption extends vscode.QuickPickItem {
-    value: string;
+interface CopyReferenceOption {
+    id: string;
+    label: string;
+    detail: string;
+    alwaysShow: true;
 }
 
 function formatIndexKey(key: Record<string, number | string>): string {
@@ -50,29 +53,18 @@ function getClusterHost(connectionString: string | undefined): string | undefine
     }
 }
 
+function opt(label: string, value: string): CopyReferenceOption {
+    return { id: value, label, detail: value, alwaysShow: true };
+}
+
 function getDatabaseOptions(node: DatabaseItem): CopyReferenceOption[] {
     const dbName = node.databaseInfo.name;
     const host = getClusterHost(node.cluster.connectionString);
 
-    const options: CopyReferenceOption[] = [
-        {
-            label: l10n.t('Name'),
-            detail: dbName,
-            value: dbName,
-        },
-        {
-            label: l10n.t('Shell Command'),
-            detail: `use ${dbName}`,
-            value: `use ${dbName}`,
-        },
-    ];
+    const options: CopyReferenceOption[] = [opt(l10n.t('Name'), dbName), opt(l10n.t('Shell Command'), `use ${dbName}`)];
 
     if (host) {
-        options.push({
-            label: l10n.t('Qualified Name'),
-            detail: `${host}/${dbName}`,
-            value: `${host}/${dbName}`,
-        });
+        options.push(opt(l10n.t('Qualified Name'), `${host}/${dbName}`));
     }
 
     return options;
@@ -84,35 +76,14 @@ function getCollectionOptions(node: CollectionItem): CopyReferenceOption[] {
     const quoted = needsQuoting(collName) || needsQuoting(dbName);
     const escapedCollName = escapeDoubleQuotes(collName);
 
-    const options: CopyReferenceOption[] = [
-        {
-            label: l10n.t('Name'),
-            detail: collName,
-            value: collName,
-        },
-    ];
+    const options: CopyReferenceOption[] = [opt(l10n.t('Name'), collName)];
 
     if (!quoted) {
-        options.push({
-            label: l10n.t('Namespace'),
-            detail: `${dbName}.${collName}`,
-            value: `${dbName}.${collName}`,
-        });
+        options.push(opt(l10n.t('Namespace'), `${dbName}.${collName}`));
+        options.push(opt(l10n.t('Shell Reference'), `db.${collName}`));
     }
 
-    if (!quoted) {
-        options.push({
-            label: l10n.t('Shell Reference'),
-            detail: `db.${collName}`,
-            value: `db.${collName}`,
-        });
-    }
-
-    options.push({
-        label: l10n.t('Shell Command'),
-        detail: `db.getCollection("${escapedCollName}")`,
-        value: `db.getCollection("${escapedCollName}")`,
-    });
+    options.push(opt(l10n.t('Shell Command'), `db.getCollection("${escapedCollName}")`));
 
     return options;
 }
@@ -121,31 +92,17 @@ function getIndexOptions(node: IndexItem): CopyReferenceOption[] {
     const indexName = node.indexInfo.name;
     const collName = node.collectionInfo.name;
 
-    const options: CopyReferenceOption[] = [
-        {
-            label: l10n.t('Name'),
-            detail: indexName,
-            value: indexName,
-        },
-    ];
+    const options: CopyReferenceOption[] = [opt(l10n.t('Name'), indexName)];
 
     if (node.indexInfo.key) {
         const keyDef = formatIndexKey(node.indexInfo.key);
-
-        options.push({
-            label: l10n.t('Key Definition'),
-            detail: keyDef,
-            value: keyDef,
-        });
-
         const collRef = shellCollectionRef(collName);
         const escapedIndexName = escapeDoubleQuotes(indexName);
 
-        options.push({
-            label: l10n.t('Shell Command'),
-            detail: `${collRef}.getIndexes().find(i => i.name === "${escapedIndexName}")`,
-            value: `${collRef}.getIndexes().find(i => i.name === "${escapedIndexName}")`,
-        });
+        options.push(opt(l10n.t('Key Definition'), keyDef));
+        options.push(
+            opt(l10n.t('Shell Command'), `${collRef}.getIndexes().find(i => i.name === "${escapedIndexName}")`),
+        );
     }
 
     return options;
@@ -176,7 +133,7 @@ function getOptionsForNode(node: DatabaseItem | CollectionItem | IndexItem): {
 }
 
 export async function copyReference(
-    _context: IActionContext,
+    context: IActionContext,
     node: DatabaseItem | CollectionItem | IndexItem,
 ): Promise<void> {
     if (!node) {
@@ -185,32 +142,12 @@ export async function copyReference(
 
     const { title, options } = getOptionsForNode(node);
 
-    const picker = vscode.window.createQuickPick<CopyReferenceOption>();
-    picker.title = title;
-    picker.placeholder = l10n.t('Select a format to copy');
-    picker.items = options;
-    picker.matchOnDetail = true;
-
-    // Workaround: setting sortByLabel to false via the options object is not available
-    // in the createQuickPick API, but we can suppress persistence by not setting a value
-    // for the quickpick's value property, which avoids reordering.
-
-    const result = await new Promise<CopyReferenceOption | undefined>((resolve) => {
-        picker.onDidAccept(() => {
-            resolve(picker.selectedItems[0] as CopyReferenceOption | undefined);
-            picker.dispose();
-        });
-        picker.onDidHide(() => {
-            resolve(undefined);
-            picker.dispose();
-        });
-        picker.show();
+    const picked = await context.ui.showQuickPick(options, {
+        placeHolder: title,
+        stepName: 'copyReference',
+        suppressPersistence: true,
     });
 
-    if (!result) {
-        return;
-    }
-
-    await vscode.env.clipboard.writeText(result.value);
+    await vscode.env.clipboard.writeText(picked.id);
     void vscode.window.showInformationMessage(l10n.t('Copied to clipboard'));
 }

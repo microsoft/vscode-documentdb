@@ -856,7 +856,6 @@
   "See output for more details.": "See output for more details.",
   "Select {0}": "Select {0}",
   "Select {mongoExecutableFileName}": "Select {mongoExecutableFileName}",
-  "Select a format to copy": "Select a format to copy",
   "Select a location for new resources.": "Select a location for new resources.",
   "Select a tenant for Microsoft Entra ID authentication": "Select a tenant for Microsoft Entra ID authentication",
   "Select a workspace folder": "Select a workspace folder",
