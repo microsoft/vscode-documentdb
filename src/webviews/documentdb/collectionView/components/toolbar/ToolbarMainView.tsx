@@ -19,8 +19,8 @@ import {
     ArrowExportRegular,
     ArrowImportRegular,
     ClipboardPasteRegular,
-    CodeRegular,
     CopyRegular,
+    KeyboardRegular,
     PlayRegular,
     SparkleFilled,
     SparkleRegular,
@@ -326,7 +326,7 @@ const ToolbarOpenIn = (): JSX.Element => {
             <Tooltip content={l10n.t('Open current query in a Query Playground')} relationship="description" withArrow>
                 <ToolbarButton
                     aria-label={l10n.t('Open in Playground')}
-                    icon={<CodeRegular />}
+                    icon={<KeyboardRegular />}
                     onClick={handleOpenInPlayground}
                 >
                     {l10n.t('Playground')}

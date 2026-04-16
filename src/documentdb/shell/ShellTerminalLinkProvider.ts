@@ -85,9 +85,9 @@ export function getRegisteredShellTerminals(): ReadonlyArray<{
  * containing special characters (e.g., `stores (10)`) are unambiguous.
  *
  * The action line format is locale-independent — only the link tooltip is localized.
- * Format: `🔗 [<db>.<collection>]`
+ * Format: `� [<db>.<collection>]`
  */
-export const ACTION_LINE_PREFIX = '\u{1F517} '; // 🔗 + space
+export const ACTION_LINE_PREFIX = '\u{1F4C4} '; // 📄 + space
 
 /**
  * The marker prefix for the "Open Settings" action line.
@@ -98,10 +98,10 @@ export const ACTION_LINE_PREFIX = '\u{1F517} '; // 🔗 + space
 /**
  * The marker prefix for the "Open in Playground" action line.
  *
- * Format: `📝 [<db>.<collection>]`
+ * Format: `⌨ [<db>.<collection>]`
  * Uses a different emoji from the Collection View link so both can appear on the same line.
  */
-export const PLAYGROUND_ACTION_PREFIX = '\u{1F4DD} '; // 📝 + space
+export const PLAYGROUND_ACTION_PREFIX = '\u{2328} '; // ⌨ + space
 
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
@@ -120,7 +120,7 @@ export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
  * followed by `[db.collection]`, with no English text to translate.
  */
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
-const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{1F517} \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
+const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{1F4C4} \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
 /* eslint-enable no-control-regex */
 
 /**
@@ -138,7 +138,7 @@ const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{1F517} \[([^\].]+)\.([^\]]+)\](?:
  * Same capture structure as ACTION_LINE_PATTERN but uses 📝 prefix.
  */
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
-const PLAYGROUND_LINE_PATTERN = /\u{1F4DD} \[([^\].]+)\.([^\]]+)\]/u;
+const PLAYGROUND_LINE_PATTERN = /\u{2328} \[([^\].]+)\.([^\]]+)\]/u;
 /* eslint-enable no-control-regex */
 
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
