@@ -31,6 +31,8 @@ import {
 export interface DocumentDBShellPtyOptions {
     /** Connection parameters for the shell session. */
     readonly connectionInfo: ShellConnectionInfo;
+    /** Optional command to pre-fill in the input line after initialization (not executed). */
+    readonly initialInput?: string;
 }
 
 /**
@@ -84,10 +86,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _completionListVisible: boolean = false;
     /** Whether the current ghost text is an informational hint (not insertable). */
     private _ghostTextIsHint: boolean = false;
+    /** Optional initial input to pre-fill after initialization. */
+    private _initialInput: string | undefined;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
         this._currentDatabase = options.connectionInfo.databaseName;
+        this._initialInput = options.initialInput;
 
         this._completionProvider = new ShellCompletionProvider();
         this._ghostText = new ShellGhostText();
@@ -287,6 +292,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this.updateTerminalTitle();
 
             this.showPrompt();
+
+            // Pre-fill initial input (e.g., from Collection View → Shell navigation)
+            if (this._initialInput) {
+                this._inputHandler.insertText(this._initialInput);
+                this._initialInput = undefined;
+            }
         } catch (error: unknown) {
             // Stop the connection spinner on failure
             this._spinner?.stop();

@@ -49,7 +49,10 @@ import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
-import { openInteractiveShell } from '../commands/openInteractiveShell/openInteractiveShell';
+import {
+    openInteractiveShell,
+    openInteractiveShellWithInput,
+} from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { showConnectionInfo } from '../commands/playground/connectDatabase';
 import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
@@ -564,6 +567,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.openInteractiveShell',
                     withTreeNodeCommandCorrelation(openInteractiveShell),
+                );
+
+                registerCommand(
+                    'vscode-documentdb.command.openInteractiveShell.withInput',
+                    openInteractiveShellWithInput,
                 );
 
                 // Register the terminal link provider for "Open in Collection View" action lines

@@ -15,6 +15,18 @@ import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 
 /**
+ * Parameters for opening an interactive shell with pre-formatted content.
+ * Used by cross-feature navigation (Collection View → Shell, Playground → Shell).
+ */
+export interface OpenShellWithInputParams {
+    readonly clusterId: string;
+    readonly clusterDisplayName: string;
+    readonly databaseName: string;
+    /** Optional command to pre-fill in the shell input line (not executed). */
+    readonly initialInput?: string;
+}
+
+/**
  * Opens an interactive DocumentDB shell in a VS Code terminal.
  *
  * Can be invoked from:
@@ -51,6 +63,51 @@ export async function openInteractiveShell(
     context.telemetry.properties.nodeType = getNodeType(node);
 
     const pty = new DocumentDBShellPty({ connectionInfo });
+
+    const terminal = vscode.window.createTerminal({
+        name: l10n.t('DocumentDB: {0}/{1}', connectionInfo.clusterDisplayName, connectionInfo.databaseName),
+        pty,
+        iconPath: new vscode.ThemeIcon('terminal'),
+    });
+
+    pty.setTerminal(terminal);
+    registerShellTerminal(terminal, () => pty.getTerminalInfo());
+
+    terminal.show();
+}
+
+/**
+ * Opens an interactive shell with explicit connection info and optional pre-filled input.
+ *
+ * Used by cross-feature navigation (Collection View → Shell, Playground → Shell).
+ * Unlike {@link openInteractiveShell}, this does not require a tree node.
+ */
+export async function openInteractiveShellWithInput(
+    _context: IActionContext,
+    params?: OpenShellWithInputParams,
+): Promise<void> {
+    if (!params) {
+        return;
+    }
+
+    const connectionInfo: ShellConnectionInfo = {
+        clusterId: params.clusterId,
+        clusterDisplayName: params.clusterDisplayName,
+        databaseName: params.databaseName,
+    };
+
+    // Verify credentials are available before opening the terminal
+    if (!CredentialCache.hasCredentials(connectionInfo.clusterId)) {
+        void vscode.window.showErrorMessage(
+            l10n.t('Not signed in to {0}. Please authenticate first.', connectionInfo.clusterDisplayName),
+        );
+        return;
+    }
+
+    const pty = new DocumentDBShellPty({
+        connectionInfo,
+        initialInput: params.initialInput,
+    });
 
     const terminal = vscode.window.createTerminal({
         name: l10n.t('DocumentDB: {0}/{1}', connectionInfo.clusterDisplayName, connectionInfo.databaseName),
