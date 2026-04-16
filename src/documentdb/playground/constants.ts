@@ -31,4 +31,8 @@ export const PlaygroundCommandIds = {
     runSelected: 'vscode-documentdb.command.playground.runSelected',
     /** Sample documents from a collection to discover field names */
     scanCollectionSchema: 'vscode-documentdb.command.playground.scanCollectionSchema',
+    /** Open the current code block in Collection View */
+    openInCollectionView: 'vscode-documentdb.command.playground.openInCollectionView',
+    /** Open the current code block in Interactive Shell */
+    openInShell: 'vscode-documentdb.command.playground.openInShell',
 } as const;
