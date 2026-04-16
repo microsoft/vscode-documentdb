@@ -366,10 +366,11 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         // Auth method
         const authMethodId = this.cluster.selectedAuthMethod;
         if (authMethodId) {
-            const authLabel = isSupportedAuthMethod(authMethodId) ? getAuthMethod(authMethodId).label : authMethodId;
+            const isSupported = isSupportedAuthMethod(authMethodId);
+            const authLabel = isSupported ? getAuthMethod(authMethodId).label : authMethodId;
             md.appendMarkdown(`**${l10n.t('Auth')}:** ${escapeMarkdown(authLabel)}\n\n`);
 
-            if (authMethodId === AuthMethodId.NativeAuth && this.cluster.connectionUser) {
+            if (isSupported && authMethodId === AuthMethodId.NativeAuth && this.cluster.connectionUser) {
                 md.appendMarkdown(`**${l10n.t('User')}:** ${escapeMarkdown(this.cluster.connectionUser)}\n\n`);
             }
         }
