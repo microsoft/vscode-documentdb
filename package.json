@@ -535,16 +535,10 @@
         "title": "Paste Collection…"
       },
       {
-        "//": "Copy Database Reference",
+        "//": "Copy Reference",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.copyDatabaseReference",
-        "title": "Copy Database Reference"
-      },
-      {
-        "//": "Copy Collection Reference",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.copyCollectionReference",
-        "title": "Copy Collection Reference"
+        "command": "vscode-documentdb.command.copyReference",
+        "title": "Copy Reference…"
       }
     ],
     "submenus": [
@@ -879,15 +873,21 @@
         },
         {
           "//": "[Database] Copy Reference",
-          "command": "vscode-documentdb.command.copyDatabaseReference",
+          "command": "vscode-documentdb.command.copyReference",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "6@1"
+          "group": "yheAlmostLastGroup@1"
         },
         {
           "//": "[Collection] Copy Reference",
-          "command": "vscode-documentdb.command.copyCollectionReference",
+          "command": "vscode-documentdb.command.copyReference",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
-          "group": "6@1"
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
+          "//": "[Index] Copy Reference",
+          "command": "vscode-documentdb.command.copyReference",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "yheAlmostLastGroup@1"
         }
       ],
       "explorer/context": [],
@@ -953,11 +953,7 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.copyDatabaseReference",
-          "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.copyCollectionReference",
+          "command": "vscode-documentdb.command.copyReference",
           "when": "never"
         },
         {
