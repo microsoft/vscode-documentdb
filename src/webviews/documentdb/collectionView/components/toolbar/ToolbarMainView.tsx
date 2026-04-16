@@ -12,14 +12,17 @@ import {
     Toolbar,
     ToolbarButton,
     ToolbarToggleButton,
+    Tooltip,
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
     ArrowExportRegular,
     ArrowImportRegular,
+    CodeRegular,
     PlayRegular,
     SparkleFilled,
     SparkleRegular,
+    WindowConsoleRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
@@ -37,33 +40,7 @@ export const ToolbarMainView = (): JSX.Element => {
         <>
             <ToolbarQueryOperations />
             <ToolbarDataOperations />
-            {/* <ToolbarDivider /> */}
-            {/* <Menu>
-                <MenuTrigger>
-                    <Tooltip content={l10n.t('Provide Feedback')} relationship="description" withArrow>
-                        <ToolbarButton
-                            aria-label={l10n.t('Provide Feedback')}
-                            icon={<EmojiSmileSlightRegular />}
-                        ></ToolbarButton>
-                    </Tooltip>
-                </MenuTrigger>
-                <MenuPopover>
-                    <MenuList>
-                        <MenuItem
-                            icon={<CommentCheckmarkRegular />}
-                            onClick={() => {
-                                trpcClient.common.surveyOpen
-                                    .mutate({
-                                        triggerAction: 'documentDB.collectionView.provideFeedback',
-                                    })
-                                    .catch(() => {});
-                            }}
-                        >
-                            {l10n.t('Provide Feedback')}
-                        </MenuItem>
-                    </MenuList>
-                </MenuPopover>
-            </Menu> */}
+            <ToolbarOpenIn />
         </>
     );
 };
@@ -270,6 +247,66 @@ const ToolbarDataOperations = (): JSX.Element => {
                     </MenuList>
                 </MenuPopover>
             </Menu>
+        </Toolbar>
+    );
+};
+
+const ToolbarOpenIn = (): JSX.Element => {
+    const [currentContext] = useContext(CollectionViewContext);
+    const { trpcClient } = useTrpcClient();
+
+    const getCurrentQuery = (): { filter: string; project: string; sort: string } => {
+        const query = currentContext.queryEditor?.getCurrentQuery();
+        return {
+            filter: query?.filter ?? '{  }',
+            project: query?.project ?? '{  }',
+            sort: query?.sort ?? '{  }',
+        };
+    };
+
+    const handleOpenInPlayground = (): void => {
+        const query = getCurrentQuery();
+        void trpcClient.mongoClusters.collectionView.openInPlayground.mutate({
+            filter: query.filter,
+            project: query.project,
+            sort: query.sort,
+        });
+    };
+
+    const handleOpenInShell = (): void => {
+        const query = getCurrentQuery();
+        void trpcClient.mongoClusters.collectionView.openInShell.mutate({
+            filter: query.filter,
+            project: query.project,
+            sort: query.sort,
+        });
+    };
+
+    return (
+        <Toolbar size="small">
+            <ToolbarDividerTransparent />
+            <Tooltip content={l10n.t('Open current query in a Query Playground')} relationship="description" withArrow>
+                <ToolbarButton
+                    aria-label={l10n.t('Open in Playground')}
+                    icon={<CodeRegular />}
+                    onClick={handleOpenInPlayground}
+                >
+                    {l10n.t('Playground')}
+                </ToolbarButton>
+            </Tooltip>
+            <Tooltip
+                content={l10n.t('Open current query in an Interactive Shell')}
+                relationship="description"
+                withArrow
+            >
+                <ToolbarButton
+                    aria-label={l10n.t('Open in Shell')}
+                    icon={<WindowConsoleRegular />}
+                    onClick={handleOpenInShell}
+                >
+                    {l10n.t('Shell')}
+                </ToolbarButton>
+            </Tooltip>
         </Toolbar>
     );
 };

@@ -108,6 +108,36 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
     }
 }
 
+/**
+ * Build a `db.getCollection('name').find(filter, project).sort(sort)` expression
+ * from the Collection View's current query state. Used by cross-feature navigation
+ * to carry the query to Playground or Shell.
+ */
+function buildFindExpression(
+    collectionName: string,
+    filter: string,
+    project: string | undefined,
+    sort: string | undefined,
+): string {
+    const hasProject = project && project.trim() !== '{}' && project.trim() !== '{  }' && project.trim() !== '';
+    const hasSort = sort && sort.trim() !== '{}' && sort.trim() !== '{  }' && sort.trim() !== '';
+
+    const filterArg = filter || '{}';
+
+    let expr: string;
+    if (hasProject) {
+        expr = `db.getCollection('${collectionName}').find(${filterArg}, ${project})`;
+    } else {
+        expr = `db.getCollection('${collectionName}').find(${filterArg})`;
+    }
+
+    if (hasSort) {
+        expr += `.sort(${sort})`;
+    }
+
+    return expr;
+}
+
 // Helper function to find the collection node based on context
 // Delegates to the appropriate branch data provider's findCollectionByClusterId method
 async function findCollectionNodeInTree(
@@ -890,4 +920,46 @@ export const collectionsViewRouter = router({
 
         return { success: true };
     }),
+
+    openInPlayground: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const query = buildFindExpression(myCtx.collectionName, input.filter, input.project, input.sort);
+
+            await vscode.commands.executeCommand('vscode-documentdb.command.playground.newWithContent', {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterId, // best available; controller doesn't expose display name
+                databaseName: myCtx.databaseName,
+                content: query,
+            });
+        }),
+
+    openInShell: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const query = buildFindExpression(myCtx.collectionName, input.filter, input.project, input.sort);
+
+            await vscode.commands.executeCommand('vscode-documentdb.command.openInteractiveShell.withInput', {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterId,
+                databaseName: myCtx.databaseName,
+                initialInput: query,
+            });
+        }),
 });
