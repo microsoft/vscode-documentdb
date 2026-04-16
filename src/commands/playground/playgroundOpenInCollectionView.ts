@@ -59,6 +59,8 @@ export async function playgroundOpenInCollectionView(
                   filter: parsed.filter,
                   project: parsed.project,
                   sort: parsed.sort,
+                  skip: parsed.skip,
+                  limit: parsed.limit,
               }
             : undefined,
     });
