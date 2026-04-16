@@ -8,11 +8,20 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
+import { formatSize } from '../../utils/formatSize';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { CollectionItem } from './CollectionItem';
+
+/**
+ * Escapes markdown special characters so user-provided text is always rendered
+ * as plain text rather than being interpreted as markdown formatting or links.
+ */
+function escapeMarkdown(text: string): string {
+    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+}
 
 export class DatabaseItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
     public readonly id: string;
@@ -62,12 +71,34 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     }
 
     getTreeItem(): vscode.TreeItem {
+        // Show size on disk as the description (e.g., "1.2 MB")
+        const description =
+            typeof this.databaseInfo.sizeOnDisk === 'number' ? formatSize(this.databaseInfo.sizeOnDisk) : undefined;
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.databaseInfo.name,
+            description,
+            tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('database'), // TODO: create our own icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    /**
+     * Builds a markdown tooltip showing the database name and size on disk.
+     */
+    private buildTooltip(): vscode.MarkdownString {
+        const md = new vscode.MarkdownString();
+        md.isTrusted = false;
+
+        md.appendMarkdown(`### ${escapeMarkdown(this.databaseInfo.name)}\n\n`);
+
+        if (typeof this.databaseInfo.sizeOnDisk === 'number') {
+            md.appendMarkdown(`**${l10n.t('Size on Disk')}:** ${formatSize(this.databaseInfo.sizeOnDisk)}\n\n`);
+        }
+
+        return md;
     }
 }
