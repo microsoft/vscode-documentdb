@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import { modifierKey } from '../../constants';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
+import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 
@@ -30,8 +31,6 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
         return;
     }
 
-    const service = PlaygroundService.getInstance();
-
     // Build template — customize when launched from a collection node
     const collectionName = isCollectionItem(node) ? node.collectionInfo.name : 'collectionName';
     const headerComment = `// Query Playground: ${node.cluster.name}`;
@@ -46,6 +45,61 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
         '',
     ].join('\n');
 
+    await createPlaygroundWithContent(template, {
+        clusterId: node.cluster.clusterId,
+        clusterDisplayName: node.cluster.name,
+        databaseName: node.databaseInfo.name,
+    });
+}
+
+/**
+ * Parameters for creating a playground with pre-formatted content.
+ * Used by cross-feature navigation links (Collection View → Playground, Shell → Playground).
+ */
+export interface NewPlaygroundWithContentParams {
+    readonly clusterId: string;
+    readonly clusterDisplayName: string;
+    readonly databaseName: string;
+    readonly content: string;
+}
+
+/**
+ * Creates a new Query Playground file with the given content and connection.
+ *
+ * Unlike {@link newPlayground}, this does not require a tree node — it accepts
+ * an explicit connection and content string. Used by cross-feature navigation
+ * (e.g., opening a query from Collection View or Interactive Shell in a playground).
+ */
+export async function newPlaygroundWithContent(
+    _context: IActionContext,
+    params?: NewPlaygroundWithContentParams,
+): Promise<void> {
+    if (!params) {
+        return;
+    }
+
+    const template = [
+        `// Query Playground: ${params.clusterDisplayName}`,
+        '//',
+        `// Use ${modifierKey}+Enter to run the current block or ${modifierKey}+Shift+Enter to run the entire file`,
+        '',
+        params.content,
+        '',
+    ].join('\n');
+
+    await createPlaygroundWithContent(template, {
+        clusterId: params.clusterId,
+        clusterDisplayName: params.clusterDisplayName,
+        databaseName: params.databaseName,
+    });
+}
+
+/**
+ * Shared logic for creating an untitled playground document and binding its connection.
+ */
+async function createPlaygroundWithContent(content: string, connection: PlaygroundConnection): Promise<void> {
+    const service = PlaygroundService.getInstance();
+
     // Create untitled file with a workspace-relative path so VS Code's hot exit
     // can persist the content across restarts. Without a real-looking path,
     // untitled documents lose their content on relaunch.
@@ -57,17 +111,13 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
     const filePath = path.join(folderPath, fileName);
     const uri = vscode.Uri.file(filePath).with({ scheme: 'untitled' });
     const edit = new vscode.WorkspaceEdit();
-    edit.insert(uri, new vscode.Position(0, 0), template);
+    edit.insert(uri, new vscode.Position(0, 0), content);
     await vscode.workspace.applyEdit(edit);
     const doc = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(doc, { preview: true });
 
     // Bind connection to this specific document
-    service.setConnection(doc.uri, {
-        clusterId: node.cluster.clusterId,
-        clusterDisplayName: node.cluster.name,
-        databaseName: node.databaseInfo.name,
-    });
+    service.setConnection(doc.uri, connection);
 }
 
 function isCollectionItem(node: DatabaseItem | CollectionItem | undefined): node is CollectionItem {

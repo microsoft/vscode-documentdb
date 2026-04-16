@@ -21,6 +21,8 @@ export const PLAYGROUND_FILE_EXTENSION = '.documentdb.js';
 export const PlaygroundCommandIds = {
     /** Create a new query playground file and optionally connect */
     new: 'vscode-documentdb.command.playground.new',
+    /** Create a new query playground with pre-formatted content and explicit connection */
+    newWithContent: 'vscode-documentdb.command.playground.newWithContent',
     /** Show connection info for the active playground (info notification) */
     showConnectionInfo: 'vscode-documentdb.command.playground.showConnectionInfo',
     /** Run the entire query playground file */
