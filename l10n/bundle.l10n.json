@@ -888,7 +888,6 @@
   "Signed in to tenant \"{0}\"": "Signed in to tenant \"{0}\"",
   "Signing out programmatically is not supported. You must sign out by selecting the account in the Accounts menu and choosing Sign Out.": "Signing out programmatically is not supported. You must sign out by selecting the account in the Accounts menu and choosing Sign Out.",
   "Simulated failure at step {0} for testing purposes": "Simulated failure at step {0} for testing purposes",
-  "Size on Disk": "Size on Disk",
   "Skip": "Skip",
   "Skip and Log (continue)": "Skip and Log (continue)",
   "Skip for now": "Skip for now",

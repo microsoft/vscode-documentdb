@@ -122,9 +122,10 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
 
         md.appendMarkdown(`### ${escapeMarkdown(this.collectionInfo.name)}\n\n`);
 
-        // Type badge (collection, view, timeseries)
+        // Type badge (Collection, View, Timeseries)
         const collectionType = this.collectionInfo.type ?? 'collection';
-        md.appendMarkdown(`\`${collectionType}\`\n\n`);
+        const capitalizedType = collectionType.charAt(0).toUpperCase() + collectionType.slice(1);
+        md.appendMarkdown(`\`${capitalizedType}\`\n\n`);
 
         md.appendMarkdown('---\n\n');
 

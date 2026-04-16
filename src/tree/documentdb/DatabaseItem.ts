@@ -8,7 +8,6 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
-import { formatSize } from '../../utils/formatSize';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -71,15 +70,10 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     }
 
     getTreeItem(): vscode.TreeItem {
-        // Show size on disk as the description (e.g., "1.2 MB")
-        const description =
-            typeof this.databaseInfo.sizeOnDisk === 'number' ? formatSize(this.databaseInfo.sizeOnDisk) : undefined;
-
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.databaseInfo.name,
-            description,
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('database'), // TODO: create our own icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
@@ -87,7 +81,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     }
 
     /**
-     * Builds a markdown tooltip showing the database name and size on disk.
+     * Builds a markdown tooltip showing the database name.
      */
     private buildTooltip(): vscode.MarkdownString {
         const md = new vscode.MarkdownString();
@@ -95,9 +89,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
         md.appendMarkdown(`### ${escapeMarkdown(this.databaseInfo.name)}\n\n`);
 
-        if (typeof this.databaseInfo.sizeOnDisk === 'number') {
-            md.appendMarkdown(`**${l10n.t('Size on Disk')}:** ${formatSize(this.databaseInfo.sizeOnDisk)}\n\n`);
-        }
+        md.appendMarkdown(`\`${l10n.t('Database')}\`\n\n`);
 
         return md;
     }
