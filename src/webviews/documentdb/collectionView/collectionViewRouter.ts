@@ -36,6 +36,7 @@ import {
 } from '../../../documentdb/queryInsights/transformations';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
+import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
@@ -962,4 +963,41 @@ export const collectionsViewRouter = router({
                 initialInput: query,
             });
         }),
+
+    copyQueryToClipboard: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const query = buildFindExpression(myCtx.collectionName, input.filter, input.project, input.sort);
+            await vscode.env.clipboard.writeText(query);
+            void vscode.window.showInformationMessage(l10n.t('Query copied to clipboard'));
+        }),
+
+    pasteQueryFromClipboard: publicProcedureWithTelemetry.mutation(async () => {
+        const text = await vscode.env.clipboard.readText();
+
+        if (!text.trim()) {
+            return { success: false as const, reason: 'empty' as const };
+        }
+
+        const parsed = parseFindExpression(text);
+
+        if (!parsed.filter && !parsed.collectionName) {
+            return { success: false as const, reason: 'no-find' as const };
+        }
+
+        return {
+            success: true as const,
+            filter: parsed.filter,
+            project: parsed.project,
+            sort: parsed.sort,
+        };
+    }),
 });

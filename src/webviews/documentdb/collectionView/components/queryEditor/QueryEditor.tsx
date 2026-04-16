@@ -356,6 +356,40 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         }));
     }, [filterValue, projectValue, sortValue, skipValue, limitValue, setCurrentContext]);
 
+    // Apply pasted query values to the editors when pendingPaste is set
+    useEffect(() => {
+        const paste = currentContext.pendingPaste;
+        if (!paste) {
+            return;
+        }
+
+        if (paste.filter) {
+            setFilterValue(paste.filter);
+            filterEditorRef.current?.setValue(paste.filter);
+        }
+        if (paste.project) {
+            setProjectValue(paste.project);
+            projectEditorRef.current?.setValue(paste.project);
+            // Expand enhanced query mode to show the project/sort editors
+            if (!isEnhancedQueryMode) {
+                setIsEnhancedQueryMode(true);
+            }
+        }
+        if (paste.sort) {
+            setSortValue(paste.sort);
+            sortEditorRef.current?.setValue(paste.sort);
+            if (!isEnhancedQueryMode) {
+                setIsEnhancedQueryMode(true);
+            }
+        }
+
+        // Clear the pending paste
+        setCurrentContext((prev) => ({
+            ...prev,
+            pendingPaste: undefined,
+        }));
+    }, [currentContext.pendingPaste, setCurrentContext, isEnhancedQueryMode]);
+
     // Focus AI input when AI row becomes visible
     useEffect(() => {
         if (currentContext.isAiRowVisible && aiInputRef.current) {

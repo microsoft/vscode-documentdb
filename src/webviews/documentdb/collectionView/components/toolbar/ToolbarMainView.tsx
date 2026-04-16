@@ -18,7 +18,9 @@ import {
     ArrowClockwiseRegular,
     ArrowExportRegular,
     ArrowImportRegular,
+    ClipboardPasteRegular,
     CodeRegular,
+    CopyRegular,
     PlayRegular,
     SparkleFilled,
     SparkleRegular,
@@ -252,7 +254,7 @@ const ToolbarDataOperations = (): JSX.Element => {
 };
 
 const ToolbarOpenIn = (): JSX.Element => {
-    const [currentContext] = useContext(CollectionViewContext);
+    const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const { trpcClient } = useTrpcClient();
 
     const getCurrentQuery = (): { filter: string; project: string; sort: string } => {
@@ -282,8 +284,51 @@ const ToolbarOpenIn = (): JSX.Element => {
         });
     };
 
+    const handleCopyQuery = (): void => {
+        const query = getCurrentQuery();
+        void trpcClient.mongoClusters.collectionView.copyQueryToClipboard.mutate({
+            filter: query.filter,
+            project: query.project,
+            sort: query.sort,
+        });
+    };
+
+    const handlePasteQuery = (): void => {
+        void trpcClient.mongoClusters.collectionView.pasteQueryFromClipboard.mutate().then((result) => {
+            if (result.success) {
+                setCurrentContext((prev) => ({
+                    ...prev,
+                    pendingPaste: {
+                        filter: result.filter,
+                        project: result.project,
+                        sort: result.sort,
+                    },
+                }));
+            }
+        });
+    };
+
     return (
         <Toolbar size="small">
+            <ToolbarDividerTransparent />
+            <Tooltip content={l10n.t('Copy current query to clipboard')} relationship="description" withArrow>
+                <ToolbarButton
+                    aria-label={l10n.t('Copy Query')}
+                    icon={<CopyRegular />}
+                    onClick={handleCopyQuery}
+                />
+            </Tooltip>
+            <Tooltip
+                content={l10n.t('Paste a find query from clipboard into the editors')}
+                relationship="description"
+                withArrow
+            >
+                <ToolbarButton
+                    aria-label={l10n.t('Paste Query')}
+                    icon={<ClipboardPasteRegular />}
+                    onClick={handlePasteQuery}
+                />
+            </Tooltip>
             <ToolbarDividerTransparent />
             <Tooltip content={l10n.t('Open current query in a Query Playground')} relationship="description" withArrow>
                 <ToolbarButton
