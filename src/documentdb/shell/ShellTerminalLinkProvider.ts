@@ -98,10 +98,10 @@ export const ACTION_LINE_PREFIX = '\u{1F4C4} '; // 📄 + space
 /**
  * The marker prefix for the "Open in Playground" action line.
  *
- * Format: `⌨ [<db>.<collection>]`
+ * Format: `⌨️ [<db>.<collection>]`
  * Uses a different emoji from the Collection View link so both can appear on the same line.
  */
-export const PLAYGROUND_ACTION_PREFIX = '\u{2328} '; // ⌨ + space
+export const PLAYGROUND_ACTION_PREFIX = '\u{2328}\u{FE0F} '; // ⌨️ + space
 
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
@@ -138,7 +138,7 @@ const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{1F4C4} \[([^\].]+)\.([^\]]+)\](?:
  * Same capture structure as ACTION_LINE_PATTERN but uses 📝 prefix.
  */
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
-const PLAYGROUND_LINE_PATTERN = /\u{2328} \[([^\].]+)\.([^\]]+)\]/u;
+const PLAYGROUND_LINE_PATTERN = /\u{2328}\u{FE0F}? \[([^\].]+)\.([^\]]+)\]/u;
 /* eslint-enable no-control-regex */
 
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */

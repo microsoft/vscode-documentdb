@@ -88,12 +88,25 @@ export const CollectionView = (): JSX.Element => {
     // Apply initial query from cross-feature navigation (e.g., Playground → Collection View)
     useEffect(() => {
         if (configuration.initialQuery) {
+            const iq = configuration.initialQuery;
+
+            // Populate the query editors with the initial values
             setCurrentContext((prev) => ({
                 ...prev,
                 pendingPaste: {
-                    filter: configuration.initialQuery?.filter,
-                    project: configuration.initialQuery?.project,
-                    sort: configuration.initialQuery?.sort,
+                    filter: iq.filter,
+                    project: iq.project,
+                    sort: iq.sort,
+                },
+                // Execute the query immediately
+                activeQuery: {
+                    ...prev.activeQuery,
+                    queryText: iq.filter ?? prev.activeQuery.queryText,
+                    filter: iq.filter ?? prev.activeQuery.filter,
+                    project: iq.project ?? prev.activeQuery.project,
+                    sort: iq.sort ?? prev.activeQuery.sort,
+                    pageNumber: 1,
+                    executionIntent: 'initial',
                 },
             }));
         }
