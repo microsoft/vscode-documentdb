@@ -603,7 +603,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * sentinels matched by {@link ShellTerminalLinkProvider}. Database and collection
      * names are wrapped in brackets to handle names with special characters.
      *
-     * Format: `  ↗ Collection View [db.collection]    ↗ Query Playground [db.collection]`
+     * Format: ` ↗ Collection View [db.collection]   ↗ Query Playground [db.collection]`
      */
     private maybeWriteActionLine(result: SerializableExecutionResult): void {
         const ns = result.source?.namespace;

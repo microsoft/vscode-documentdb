@@ -87,7 +87,7 @@ export function getRegisteredShellTerminals(): ReadonlyArray<{
  * The action line format is locale-independent — only the link tooltip is localized.
  * Format: `  ↗ Collection View [<db>.<collection>]`
  */
-export const ACTION_LINE_PREFIX = '  \u{21D7} Collection View '; // '  ↗ Collection View '
+export const ACTION_LINE_PREFIX = '\u{2197} Collection View '; // '↗ Collection View '
 
 /**
  * The marker prefix for the "Open Settings" action line.
@@ -101,7 +101,7 @@ export const ACTION_LINE_PREFIX = '  \u{21D7} Collection View '; // '  ↗ Colle
  * Format: `  ↗ Query Playground [<db>.<collection>]`
  * Uses a different text label from the Collection View link so both can appear on the same line.
  */
-export const PLAYGROUND_ACTION_PREFIX = '  \u{21D7} Query Playground '; // '  ↗ Query Playground '
+export const PLAYGROUND_ACTION_PREFIX = '\u{2197} Query Playground '; // '↗ Query Playground '
 
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
@@ -120,7 +120,7 @@ export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
  * followed by `[db.collection]`, with no English text to translate.
  */
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
-const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{21D7} Collection View \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
+const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2197} Collection View \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
 /* eslint-enable no-control-regex */
 
 /**
@@ -138,7 +138,7 @@ const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{21D7} Collection View \[([^\].]+)
  * Same capture structure as ACTION_LINE_PATTERN but uses 📝 prefix.
  */
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
-const PLAYGROUND_LINE_PATTERN = /\u{21D7} Query Playground \[([^\].]+)\.([^\]]+)\]/u;
+const PLAYGROUND_LINE_PATTERN = /\u{2197} Query Playground \[([^\].]+)\.([^\]]+)\]/u;
 /* eslint-enable no-control-regex */
 
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
