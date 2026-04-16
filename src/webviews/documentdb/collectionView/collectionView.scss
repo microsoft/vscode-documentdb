@@ -43,6 +43,12 @@
         > :first-child {
             margin-right: auto; // This ensures space is created between the first and remaining elements.
         }
+
+        // Allow the Overflow container to shrink below content width
+        > :not(:first-child) {
+            min-width: 0;
+            overflow: hidden;
+        }
     }
 
     .resultsActionBar {
