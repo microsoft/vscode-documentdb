@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createContextValue } from '@microsoft/vscode-azext-utils';
+import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
@@ -15,6 +16,14 @@ import { type TreeElementWithContextValue } from '../TreeElementWithContextValue
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { DocumentsItem } from './DocumentsItem';
 import { IndexesItem } from './IndexesItem';
+
+/**
+ * Escapes markdown special characters so user-provided text is always rendered
+ * as plain text rather than being interpreted as markdown formatting or links.
+ */
+function escapeMarkdown(text: string): string {
+    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+}
 
 export class CollectionItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
     public readonly id: string;
@@ -98,8 +107,36 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
             contextValue: this.contextValue,
             label: this.collectionInfo.name,
             description,
+            tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('folder-library'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    /**
+     * Builds a markdown tooltip showing the collection name, type, and document count.
+     */
+    private buildTooltip(): vscode.MarkdownString {
+        const md = new vscode.MarkdownString();
+        md.isTrusted = false;
+
+        md.appendMarkdown(`### ${escapeMarkdown(this.collectionInfo.name)}\n\n`);
+
+        // Type badge (Collection, View, Timeseries)
+        const collectionType = this.collectionInfo.type ?? 'collection';
+        const capitalizedType = collectionType.charAt(0).toUpperCase() + collectionType.slice(1);
+        md.appendMarkdown(`\`${capitalizedType}\`\n\n`);
+
+        md.appendMarkdown('---\n\n');
+
+        // Database context
+        md.appendMarkdown(`**${l10n.t('Database')}:** ${escapeMarkdown(this.databaseInfo.name)}\n\n`);
+
+        // Document count
+        if (typeof this.documentCount === 'number') {
+            md.appendMarkdown(`**${l10n.t('Documents')}:** ${formatDocumentCount(this.documentCount)}\n\n`);
+        }
+
+        return md;
     }
 }

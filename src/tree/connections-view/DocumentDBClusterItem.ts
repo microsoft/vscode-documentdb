@@ -13,7 +13,13 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { nonNullProp } from '../../utils/nonNull';
 
-import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import {
+    authMethodFromString,
+    AuthMethodId,
+    authMethodsFromString,
+    getAuthMethod,
+    isSupportedAuthMethod,
+} from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -29,6 +35,14 @@ import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
+
+/**
+ * Escapes markdown special characters so user-provided text is always rendered
+ * as plain text rather than being interpreted as markdown formatting or links.
+ */
+function escapeMarkdown(text: string): string {
+    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+}
 
 export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterModel> implements TreeElementWithStorageId {
     public override readonly cluster: TreeCluster<ConnectionClusterModel>;
@@ -309,19 +323,12 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      */
     getTreeItem(): vscode.TreeItem {
         let description: string | undefined = undefined;
-        let tooltipMessage: string | undefined = undefined;
-
-        if (this.cluster.emulatorConfiguration?.isEmulator) {
-            // For emulator clusters, show TLS/SSL status if security is disabled
-            if (this.cluster.emulatorConfiguration?.disableEmulatorSecurity) {
-                description = l10n.t('⚠ TLS/SSL Disabled');
-                tooltipMessage = l10n.t('⚠️ **Security:** TLS/SSL Disabled');
-            } else {
-                tooltipMessage = l10n.t('✅ **Security:** TLS/SSL Enabled');
-            }
+        if (
+            this.cluster.emulatorConfiguration?.isEmulator &&
+            this.cluster.emulatorConfiguration?.disableEmulatorSecurity
+        ) {
+            description = l10n.t('⚠ TLS/SSL Disabled');
         }
-        // Note: ConnectionClusterModel doesn't include Azure-specific fields like SKU.
-        // For user-added connections, we only show basic cluster name without Azure metadata.
 
         return {
             id: this.id,
@@ -332,7 +339,66 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 ? new vscode.ThemeIcon('plug')
                 : new vscode.ThemeIcon('server-environment'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
-            tooltip: new vscode.MarkdownString(tooltipMessage),
+            tooltip: this.buildTooltip(),
         };
+    }
+
+    /**
+     * Builds a markdown tooltip showing the connection name, host, auth method,
+     * username (SCRAM only), and emulator security status.
+     *
+     * The cluster name is escaped so it always renders as plain text regardless
+     * of characters that might otherwise be interpreted as markdown links or formatting.
+     */
+    private buildTooltip(): vscode.MarkdownString {
+        const md = new vscode.MarkdownString();
+        md.isTrusted = false;
+
+        md.appendMarkdown(`### ${escapeMarkdown(this.cluster.name)}\n\n`);
+
+        // Host(s) from the connection string
+        const hosts = this.getHosts();
+        if (hosts.length > 0) {
+            const escapedHosts = hosts.map((host) => escapeMarkdown(host));
+            md.appendMarkdown(`**${l10n.t('Host')}:** ${escapedHosts.join(', ')}\n\n`);
+        }
+
+        // Auth method
+        const authMethodId = this.cluster.selectedAuthMethod;
+        if (authMethodId) {
+            const isSupported = isSupportedAuthMethod(authMethodId);
+            const authLabel = isSupported ? getAuthMethod(authMethodId).label : authMethodId;
+            md.appendMarkdown(`**${l10n.t('Auth')}:** ${escapeMarkdown(authLabel)}\n\n`);
+
+            if (isSupported && authMethodId === AuthMethodId.NativeAuth && this.cluster.connectionUser) {
+                md.appendMarkdown(`**${l10n.t('User')}:** ${escapeMarkdown(this.cluster.connectionUser)}\n\n`);
+            }
+        }
+
+        // Emulator security notice
+        if (this.cluster.emulatorConfiguration?.isEmulator) {
+            if (this.cluster.emulatorConfiguration.disableEmulatorSecurity) {
+                md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
+            } else {
+                md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
+            }
+        }
+
+        return md;
+    }
+
+    /**
+     * Extracts the host(s) from the connection string for display in the tooltip.
+     * Returns an empty array if the connection string is unavailable or unparseable.
+     */
+    private getHosts(): string[] {
+        if (!this.cluster.connectionString) {
+            return [];
+        }
+        try {
+            return new DocumentDBConnectionString(this.cluster.connectionString).hosts ?? [];
+        } catch {
+            return [];
+        }
     }
 }
