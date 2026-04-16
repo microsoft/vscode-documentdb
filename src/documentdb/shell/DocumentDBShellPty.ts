@@ -20,6 +20,7 @@ import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManag
 import { ShellSpinner } from './ShellSpinner';
 import {
     ACTION_LINE_PREFIX,
+    PLAYGROUND_ACTION_PREFIX,
     SETTINGS_ACTION_PREFIX,
     type ShellTerminalInfo,
     unregisterShellTerminal,
@@ -596,11 +597,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /**
      * If the result came from a query with a known namespace (db + collection),
-     * write a clickable action line below the output.
+     * write clickable action lines below the output.
      *
-     * The line uses the {@link ACTION_LINE_PREFIX} sentinel matched by
-     * {@link ShellTerminalLinkProvider}. Database and collection names are
-     * wrapped in brackets to handle names with special characters.
+     * The line uses the {@link ACTION_LINE_PREFIX} and {@link PLAYGROUND_ACTION_PREFIX}
+     * sentinels matched by {@link ShellTerminalLinkProvider}. Database and collection
+     * names are wrapped in brackets to handle names with special characters.
+     *
+     * Format: `🔗 [db.collection]  📝 [db.collection]`
      */
     private maybeWriteActionLine(result: SerializableExecutionResult): void {
         const ns = result.source?.namespace;
@@ -618,7 +621,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
-        const actionText = `${ACTION_LINE_PREFIX}[${ns.db}.${ns.collection}]`;
+        const nsLabel = `[${ns.db}.${ns.collection}]`;
+        const actionText = `${ACTION_LINE_PREFIX}${nsLabel}  ${PLAYGROUND_ACTION_PREFIX}${nsLabel}`;
         this.writeLine(this._outputFormatter.formatSystemMessage(actionText));
     }
 

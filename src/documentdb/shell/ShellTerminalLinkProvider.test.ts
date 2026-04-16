@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import {
     ACTION_LINE_PREFIX,
+    PLAYGROUND_ACTION_PREFIX,
     registerShellTerminal,
     SETTINGS_ACTION_PREFIX,
     ShellTerminalLinkProvider,
@@ -267,6 +268,80 @@ describe('ShellTerminalLinkProvider', () => {
             return new Promise<void>((resolve) => {
                 setTimeout(() => {
                     expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.timeout');
+                    spy.mockRestore();
+                    resolve();
+                }, 50);
+            });
+        });
+    });
+
+    describe('playground links', () => {
+        it('should detect playground action line and return a playground link', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-cluster-id'));
+
+            const actionLine = `${PLAYGROUND_ACTION_PREFIX}[mydb.users]`;
+            const context = {
+                terminal: mockTerminal,
+                line: actionLine,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toHaveLength(1);
+            expect(links[0]).toMatchObject({
+                linkType: 'playground',
+                databaseName: 'mydb',
+                collectionName: 'users',
+                clusterId: 'test-cluster-id',
+            });
+        });
+
+        it('should detect both collection view and playground links on the same line', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-cluster-id'));
+
+            const actionLine = `${ACTION_LINE_PREFIX}[mydb.orders]  ${PLAYGROUND_ACTION_PREFIX}[mydb.orders]`;
+            const context = {
+                terminal: mockTerminal,
+                line: actionLine,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toHaveLength(2);
+            expect(links[0]).toMatchObject({
+                linkType: 'collectionView',
+                databaseName: 'mydb',
+                collectionName: 'orders',
+            });
+            expect(links[1]).toMatchObject({
+                linkType: 'playground',
+                databaseName: 'mydb',
+                collectionName: 'orders',
+            });
+        });
+
+        it('should execute the open playground command for playground links', () => {
+            const spy = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+
+            const link = {
+                linkType: 'playground' as const,
+                startIndex: 0,
+                length: 50,
+                clusterId: 'my-cluster',
+                databaseName: 'mydb',
+                collectionName: 'users',
+            };
+
+            provider.handleTerminalLink(link as Parameters<typeof provider.handleTerminalLink>[0]);
+
+            return new Promise<void>((resolve) => {
+                setTimeout(() => {
+                    expect(spy).toHaveBeenCalledWith(
+                        'vscode-documentdb.command.playground.newWithContent',
+                        expect.objectContaining({
+                            clusterId: 'my-cluster',
+                            databaseName: 'mydb',
+                            content: "db.getCollection('users').find({ })",
+                        }),
+                    );
                     spy.mockRestore();
                     resolve();
                 }, 50);

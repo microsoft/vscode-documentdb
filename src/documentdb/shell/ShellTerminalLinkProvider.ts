@@ -5,6 +5,7 @@
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { PlaygroundCommandIds } from '../playground/constants';
 import { Views } from '../Views';
 
 /**
@@ -94,6 +95,14 @@ export const ACTION_LINE_PREFIX = '\u{1F517} '; // 🔗 + space
  * Format: `⚙ [settingKey]`
  * The settings key is NOT localized — it's the programmatic VS Code setting ID.
  */
+/**
+ * The marker prefix for the "Open in Playground" action line.
+ *
+ * Format: `📝 [<db>.<collection>]`
+ * Uses a different emoji from the Collection View link so both can appear on the same line.
+ */
+export const PLAYGROUND_ACTION_PREFIX = '\u{1F4DD} '; // 📝 + space
+
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
 /**
@@ -123,6 +132,15 @@ const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{1F517} \[([^\].]+)\.([^\]]+)\](?:
  * The pattern accounts for optional ANSI color codes that wrap the line.
  * The format is locale-independent.
  */
+/**
+ * Regex to match the "Open in Playground" action line.
+ *
+ * Same capture structure as ACTION_LINE_PATTERN but uses 📝 prefix.
+ */
+/* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
+const PLAYGROUND_LINE_PATTERN = /\u{1F4DD} \[([^\].]+)\.([^\]]+)\]/u;
+/* eslint-enable no-control-regex */
+
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
 const SETTINGS_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2699} \[([^\]]+)\](?:\x1b\[\d+m)*/u;
 /* eslint-enable no-control-regex */
@@ -133,6 +151,19 @@ const SETTINGS_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2699} \[([^\]]+)\](?:\x1b\[\d+m
 interface CollectionViewTerminalLink extends vscode.TerminalLink {
     readonly linkType: 'collectionView';
     /** Cluster ID for opening the collection view. */
+    readonly clusterId: string;
+    /** Database name parsed from the action line. */
+    readonly databaseName: string;
+    /** Collection name parsed from the action line. */
+    readonly collectionName: string;
+}
+
+/**
+ * Terminal link that opens a Query Playground.
+ */
+interface PlaygroundTerminalLink extends vscode.TerminalLink {
+    readonly linkType: 'playground';
+    /** Cluster ID for the playground connection. */
     readonly clusterId: string;
     /** Database name parsed from the action line. */
     readonly databaseName: string;
@@ -152,16 +183,16 @@ interface SettingsTerminalLink extends vscode.TerminalLink {
 /**
  * Union of all shell terminal link types.
  */
-type ShellTerminalLink = CollectionViewTerminalLink | SettingsTerminalLink;
+type ShellTerminalLink = CollectionViewTerminalLink | PlaygroundTerminalLink | SettingsTerminalLink;
 
 /**
- * Provides clickable "Open in Collection View" links in DocumentDB shell terminals.
+ * Provides clickable navigation links in DocumentDB shell terminals.
  *
- * After a query that targets a specific collection, the PTY appends an action line:
- *   `📊 Open collection [myDb.myCollection] in Collection View`
+ * After a query that targets a specific collection, the PTY appends action lines
+ * with sentinels (🔗 for Collection View, 📝 for Playground). This provider
+ * detects those markers and returns clickable links.
  *
- * This provider detects that line and makes it a clickable link that opens
- * the Collection View for that database and collection.
+ * Multiple links can appear on the same line (e.g., `🔗 [db.coll]  📝 [db.coll]`).
  *
  * Only active for terminals registered via {@link registerShellTerminal}.
  */
@@ -173,28 +204,48 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
             return [];
         }
 
-        // Check for collection view action line
+        const links: ShellTerminalLink[] = [];
+
+        // Check for collection view action line (🔗)
         const collectionMatch = ACTION_LINE_PATTERN.exec(context.line);
         if (collectionMatch) {
             const info = infoProvider();
-            const databaseName = collectionMatch[1];
-            const collectionName = collectionMatch[2];
+            links.push({
+                linkType: 'collectionView',
+                startIndex: collectionMatch.index,
+                length: collectionMatch[0].length,
+                tooltip: vscode.l10n.t(
+                    'Open collection "{0}.{1}" in Collection View',
+                    collectionMatch[1],
+                    collectionMatch[2],
+                ),
+                clusterId: info.clusterId,
+                databaseName: collectionMatch[1],
+                collectionName: collectionMatch[2],
+            });
+        }
 
-            return [
-                {
-                    linkType: 'collectionView',
-                    startIndex: collectionMatch.index,
-                    length: collectionMatch[0].length,
-                    tooltip: vscode.l10n.t(
-                        'Open collection "{0}.{1}" in Collection View',
-                        databaseName,
-                        collectionName,
-                    ),
-                    clusterId: info.clusterId,
-                    databaseName,
-                    collectionName,
-                },
-            ];
+        // Check for playground action line (📝)
+        const playgroundMatch = PLAYGROUND_LINE_PATTERN.exec(context.line);
+        if (playgroundMatch) {
+            const info = infoProvider();
+            links.push({
+                linkType: 'playground',
+                startIndex: playgroundMatch.index,
+                length: playgroundMatch[0].length,
+                tooltip: vscode.l10n.t(
+                    'Open "{0}.{1}" in Query Playground',
+                    playgroundMatch[1],
+                    playgroundMatch[2],
+                ),
+                clusterId: info.clusterId,
+                databaseName: playgroundMatch[1],
+                collectionName: playgroundMatch[2],
+            });
+        }
+
+        if (links.length > 0) {
+            return links;
         }
 
         // Check for settings action line
@@ -224,6 +275,25 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
                     context.telemetry.properties.settingKey = link.settingKey;
 
                     await vscode.commands.executeCommand('workbench.action.openSettings', link.settingKey);
+                },
+            );
+            return;
+        }
+
+        if (link.linkType === 'playground') {
+            void callWithTelemetryAndErrorHandling(
+                'vscode-documentdb.shell.terminalLink.openPlayground',
+                async (context: IActionContext) => {
+                    context.telemetry.properties.linkType = 'playgroundActionLine';
+
+                    const content = `db.getCollection('${link.collectionName}').find({ })`;
+
+                    await vscode.commands.executeCommand(PlaygroundCommandIds.newWithContent, {
+                        clusterId: link.clusterId,
+                        clusterDisplayName: link.clusterId,
+                        databaseName: link.databaseName,
+                        content,
+                    });
                 },
             );
             return;
