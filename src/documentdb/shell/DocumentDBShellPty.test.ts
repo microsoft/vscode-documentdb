@@ -604,8 +604,13 @@ describe('DocumentDBShellPty', () => {
                             return vscodePasteWarning;
                         }
                         // Preserve base settings needed by the PTY
-                        if ((section === undefined || section === '') && _key === 'documentDB.timeout') {
-                            return 120;
+                        if (section === undefined || section === '') {
+                            if (_key === 'documentDB.shell.display.colorOutput') {
+                                return false;
+                            }
+                            if (_key === 'documentDB.timeout') {
+                                return 120;
+                            }
                         }
                         return defaultValue;
                     }),
