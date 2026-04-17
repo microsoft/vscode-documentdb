@@ -39,6 +39,7 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
+import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
@@ -55,6 +56,10 @@ export type RouterContext = BaseRouterContext & {
      * For Azure/Discovery Views: This is the Azure Resource ID (already a valid tree path)
      */
     clusterId: string;
+    /**
+     * Human-readable cluster display name for use in Playground headers and Shell titles.
+     */
+    clusterDisplayName: string;
     /**
      * Identifies which tree view this cluster belongs to.
      *
@@ -127,11 +132,13 @@ function buildFindExpression(
 
     const filterArg = filter || '{}';
 
+    const escaped = escapeJsString(collectionName);
+
     let expr: string;
     if (hasProject) {
-        expr = `db.getCollection('${collectionName}').find(${filterArg}, ${project})`;
+        expr = `db.getCollection('${escaped}').find(${filterArg}, ${project})`;
     } else {
-        expr = `db.getCollection('${collectionName}').find(${filterArg})`;
+        expr = `db.getCollection('${escaped}').find(${filterArg})`;
     }
 
     if (hasSort) {
@@ -956,9 +963,10 @@ export const collectionsViewRouter = router({
 
             await vscode.commands.executeCommand('vscode-documentdb.command.playground.newWithContent', {
                 clusterId: myCtx.clusterId,
-                clusterDisplayName: myCtx.clusterId, // best available; controller doesn't expose display name
+                clusterDisplayName: myCtx.clusterDisplayName,
                 databaseName: myCtx.databaseName,
                 content: query,
+                viewId: myCtx.viewId,
             });
         }),
 
@@ -986,8 +994,9 @@ export const collectionsViewRouter = router({
 
             await vscode.commands.executeCommand('vscode-documentdb.command.openInteractiveShell.withInput', {
                 clusterId: myCtx.clusterId,
-                clusterDisplayName: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
                 databaseName: myCtx.databaseName,
+                viewId: myCtx.viewId,
                 initialInput: query,
             });
         }),
@@ -1021,13 +1030,20 @@ export const collectionsViewRouter = router({
         const text = await vscode.env.clipboard.readText();
 
         if (!text.trim()) {
-            return { success: false as const, reason: 'empty' as const };
+            throw new Error(l10n.t('Clipboard is empty.'));
         }
 
         const parsed = parseFindExpression(text);
 
-        if (!parsed.filter && !parsed.collectionName) {
-            return { success: false as const, reason: 'no-find' as const };
+        // Require at least one transferable query component before reporting success
+        if (
+            !parsed.filter &&
+            !parsed.project &&
+            !parsed.sort &&
+            parsed.skip === undefined &&
+            parsed.limit === undefined
+        ) {
+            throw new Error(l10n.t('Clipboard does not contain a recognizable find() query.'));
         }
 
         return {

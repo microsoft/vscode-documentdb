@@ -582,7 +582,7 @@ export function collectionNameToCompletionItem(name: string): vscode.CompletionI
     item.sortText = `!0_${name}`;
 
     if (needsGetCollection) {
-        // Escape single quotes inside the collection name
+        // Escape single quotes and backslashes inside the collection name
         const escaped = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         item.insertText = `getCollection('${escaped}')`;
         // filterText must match what the user typed after `db.` so the item

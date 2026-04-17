@@ -14,6 +14,7 @@ import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID } from '../../documen
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
+import { escapeJsString } from '../../utils/escapeJsString';
 
 /**
  * Creates a new Query Playground file.
@@ -32,7 +33,7 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
     }
 
     // Build template — customize when launched from a collection node
-    const collectionName = isCollectionItem(node) ? node.collectionInfo.name : 'collectionName';
+    const collectionName = isCollectionItem(node) ? escapeJsString(node.collectionInfo.name) : 'collectionName';
     const headerComment = `// Query Playground: ${node.cluster.name}`;
 
     const template = [
@@ -49,6 +50,7 @@ export async function newPlayground(_context: IActionContext, node?: DatabaseIte
         clusterId: node.cluster.clusterId,
         clusterDisplayName: node.cluster.name,
         databaseName: node.databaseInfo.name,
+        viewId: node.cluster.viewId,
     });
 }
 
@@ -61,6 +63,7 @@ export interface NewPlaygroundWithContentParams {
     readonly clusterDisplayName: string;
     readonly databaseName: string;
     readonly content: string;
+    readonly viewId?: string;
 }
 
 /**
@@ -92,6 +95,7 @@ export async function newPlaygroundWithContent(
         clusterId: params.clusterId,
         clusterDisplayName: params.clusterDisplayName,
         databaseName: params.databaseName,
+        viewId: params.viewId,
     });
 }
 
