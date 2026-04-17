@@ -226,6 +226,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     handleInput(data: string): void {
+        // Detect multi-line paste: a single handleInput call with multiple characters
+        // containing newlines. Single keystrokes are always length 1 (or short escape
+        // sequences that never contain \r or \n).
+        if (data.length > 1 && /[\r\n]/.test(data) && this._inputHandler.isEnabled) {
+            void this.handleMultiLinePaste(data);
+            return;
+        }
+
         // Clear ghost text before processing input (except for Right Arrow and Tab
         // which are handled by the input handler's escape sequence processing)
         if (data !== '\x1b[C' && data !== '\x09') {
@@ -245,6 +253,162 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     setDimensions(dimensions: vscode.TerminalDimensions): void {
         this._columns = dimensions.columns;
         this._inputHandler.setColumns(dimensions.columns);
+    }
+
+    // ─── Private: Multi-line paste handling ──────────────────────────────────
+
+    /**
+     * Handle pasted text that contains multiple lines.
+     *
+     * Depending on the `documentDB.shell.multiLinePasteBehavior` setting, either:
+     * - Asks the user how to process the text (default)
+     * - Joins lines into a single expression
+     * - Runs each line independently (raw shell behavior)
+     */
+    private async handleMultiLinePaste(data: string): Promise<void> {
+        // Normalize line endings and split
+        const lines = data.split(/\r\n|\r|\n/).filter((l) => l.trim().length > 0);
+
+        // If only one non-empty line after splitting, process normally
+        if (lines.length <= 1) {
+            this.processInputDirectly(data);
+            return;
+        }
+
+        const behavior = vscode.workspace
+            .getConfiguration('documentDB.shell')
+            .get<string>('multiLinePasteBehavior', 'ask');
+
+        if (behavior === 'executeAsOne') {
+            this.processInputDirectly(this.joinPastedLines(lines) + '\r');
+            return;
+        }
+
+        if (behavior === 'runLineByLine') {
+            this.processInputDirectly(data);
+            return;
+        }
+
+        // 'ask' — show QuickPick, but only if VS Code's built-in multi-line paste
+        // warning is disabled.  When their dialog is active ('auto' or 'always'),
+        // the user already had a chance to cancel or "Paste as one line", so
+        // showing a second dialog would be redundant.
+        // 'alwaysAsk' — always show our dialog regardless of VS Code's setting.
+        if (behavior === 'ask') {
+            const vscodePasteWarning = vscode.workspace
+                .getConfiguration('terminal.integrated')
+                .get<string>('enableMultiLinePasteWarning', 'auto');
+
+            if (vscodePasteWarning !== 'never') {
+                // VS Code already prompted — run line by line (the user chose "Paste")
+                this.processInputDirectly(data);
+                return;
+            }
+        }
+
+        // 'ask' with VS Code dialog disabled, or 'alwaysAsk' — show our own
+        // Disable input while the dialog is open to prevent typing
+        this._inputHandler.setEnabled(false);
+
+        try {
+            const picked = await vscode.window.showQuickPick(
+                [
+                    {
+                        label: l10n.t('Execute as One'),
+                        detail: l10n.t('Lines will be joined into a single expression and executed.'),
+                        id: 'join',
+                    },
+                    {
+                        label: l10n.t('Run as Is'),
+                        detail: l10n.t('Each line will be run independently.'),
+                        id: 'lineByLine',
+                    },
+                    {
+                        label: l10n.t('Cancel'),
+                        detail: l10n.t('Discard the pasted input.'),
+                        id: 'cancel',
+                    },
+                    {
+                        label: '',
+                        kind: vscode.QuickPickItemKind.Separator,
+                    },
+                    {
+                        label: l10n.t('Configure in Settings'),
+                        detail: l10n.t('Open settings to change the default behavior.'),
+                        id: 'settings',
+                    },
+                ],
+                {
+                    title: l10n.t('How to process your multi-line text?'),
+                    placeHolder: l10n.t('{0} lines detected in pasted text', lines.length),
+                },
+            );
+
+            if (!picked || !('id' in picked)) {
+                // Dismissed — do nothing
+                return;
+            }
+
+            // Re-enable input before processing the chosen action
+            this._inputHandler.setEnabled(true);
+
+            switch (picked.id) {
+                case 'join':
+                    this.processInputDirectly(this.joinPastedLines(lines) + '\r');
+                    break;
+                case 'lineByLine':
+                    this.processInputDirectly(data);
+                    break;
+                case 'settings':
+                    void vscode.commands.executeCommand(
+                        'workbench.action.openSettings',
+                        'documentDB.shell.multiLinePasteBehavior',
+                    );
+                    break;
+                case 'cancel':
+                default:
+                    break;
+            }
+        } finally {
+            if (!this._evaluating) {
+                this._inputHandler.setEnabled(true);
+            }
+        }
+    }
+
+    /**
+     * Join pasted lines into a single expression.
+     * Lines that start with `.` (method chaining) are joined directly;
+     * other continuation lines are joined with a space.
+     */
+    private joinPastedLines(lines: string[]): string {
+        if (lines.length === 0) {
+            return '';
+        }
+
+        let result = lines[0];
+        for (let i = 1; i < lines.length; i++) {
+            const trimmed = lines[i].trimStart();
+            if (trimmed.startsWith('.')) {
+                // Method chaining — join directly (no space needed)
+                result += trimmed;
+            } else {
+                // Other continuation — join with a space
+                result += ' ' + trimmed;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Process input through the normal path (clear ghost text, dismiss
+     * completion, forward to input handler).
+     */
+    private processInputDirectly(data: string): void {
+        this._ghostText.clear((d) => this._writeEmitter.fire(d));
+        this._ghostTextIsHint = false;
+        this._completionListVisible = false;
+        this._inputHandler.handleInput(data);
     }
 
     // ─── Private: Session initialization ─────────────────────────────────────

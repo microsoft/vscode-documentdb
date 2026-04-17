@@ -1160,6 +1160,23 @@
             "description": "Enable autocompletion in the Interactive Shell (when available). Reserved for future use.",
             "default": true
           },
+          "documentDB.shell.multiLinePasteBehavior": {
+            "type": "string",
+            "description": "Controls how multi-line text is handled when pasted into the Interactive Shell. When set to 'ask', the prompt is only shown if VS Code's built-in paste warning (terminal.integrated.enableMultiLinePasteWarning) is disabled.",
+            "default": "ask",
+            "enum": [
+              "ask",
+              "alwaysAsk",
+              "executeAsOne",
+              "runLineByLine"
+            ],
+            "enumDescriptions": [
+              "Show a prompt asking how to process the pasted text. Skipped when VS Code's own multi-line paste warning is enabled, to avoid a double prompt.",
+              "Always show the prompt, even if VS Code's own multi-line paste warning is also enabled.",
+              "Always join pasted lines into a single expression and execute.",
+              "Always run each pasted line independently."
+            ]
+          },
           "documentDB.collectionView.defaultPageSize": {
             "type": "number",
             "description": "Default page size for loading data in the collection view.",

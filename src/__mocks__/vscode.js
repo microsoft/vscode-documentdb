@@ -17,6 +17,11 @@ vsCodeMock.l10n = {
     }),
 };
 
+// QuickPickItemKind enum (not provided by jest-mock-vscode)
+if (!vsCodeMock.QuickPickItemKind) {
+    vsCodeMock.QuickPickItemKind = { Separator: -1, Default: 0 };
+}
+
 // CancellationTokenSource mock for AzureWizard
 vsCodeMock.CancellationTokenSource = class CancellationTokenSource {
     constructor() {

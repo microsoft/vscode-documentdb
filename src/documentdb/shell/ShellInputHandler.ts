@@ -77,6 +77,13 @@ export class ShellInputHandler {
     /** Terminal width in columns (for wrap-aware re-rendering). */
     private _columns: number = 80;
 
+    /**
+     * Tracks the terminal row (relative to the prompt row) where the cursor
+     * was left after the last {@link reRenderLine} call. Used in Step 1 of
+     * the next re-render to move up the correct number of rows.
+     */
+    private _lastCursorRow: number = 0;
+
     private readonly _callbacks: ShellInputHandlerCallbacks;
 
     constructor(callbacks: ShellInputHandlerCallbacks) {
@@ -88,6 +95,9 @@ export class ShellInputHandler {
      */
     setPromptWidth(width: number): void {
         this._promptWidth = width;
+        // Always called when the cursor is at a fresh prompt row, so reset
+        // the tracked cursor row to avoid stale values from the previous line.
+        this._lastCursorRow = 0;
     }
 
     /**
@@ -95,6 +105,9 @@ export class ShellInputHandler {
      */
     setColumns(columns: number): void {
         this._columns = columns;
+        // Reset tracked cursor row — after a resize xterm.js reflows content,
+        // making the previous _lastCursorRow stale.
+        this._lastCursorRow = 0;
     }
 
     /**
@@ -127,6 +140,7 @@ export class ShellInputHandler {
         this._historyIndex = -1;
         this._savedInput = '';
         this._multiLineBuffer = [];
+        this._lastCursorRow = 0;
     }
 
     /**
@@ -449,25 +463,29 @@ export class ShellInputHandler {
     private moveCursorLeft(): void {
         if (this._cursor > 0) {
             this._cursor--;
-            this._callbacks.write('\x1b[D');
+            // Use full re-render to correctly handle row-boundary crossings.
+            // Simple \x1b[D does not wrap to the previous row in xterm.js.
+            this.reRenderLine();
         }
     }
 
     private moveCursorRight(): void {
         if (this._cursor < this._buffer.length) {
             this._cursor++;
-            this._callbacks.write('\x1b[C');
+            // Use full re-render to correctly handle row-boundary crossings.
+            // Simple \x1b[C does not advance to the next row in xterm.js.
+            this.reRenderLine();
         }
     }
 
     private moveCursorTo(position: number): void {
         const target = Math.max(0, Math.min(position, this._buffer.length));
-        if (target < this._cursor) {
-            this._callbacks.write(`\x1b[${String(this._cursor - target)}D`);
-        } else if (target > this._cursor) {
-            this._callbacks.write(`\x1b[${String(target - this._cursor)}C`);
+        if (target !== this._cursor) {
+            this._cursor = target;
+            // Use full re-render to correctly handle row-boundary crossings.
+            // Simple \x1b[nD / \x1b[nC do not cross row boundaries.
+            this.reRenderLine();
         }
-        this._cursor = target;
     }
 
     private wordLeft(): void {
@@ -607,11 +625,16 @@ export class ShellInputHandler {
      * Re-render the entire input line with syntax highlighting.
      *
      * This replaces the old per-character echo approach. On every buffer mutation:
-     * 1. Move cursor up to the prompt row if input wraps across multiple rows.
+     * 1. Move cursor up to the prompt row using the tracked {@link _lastCursorRow}.
      * 2. Move cursor to the start of the input area (after the prompt).
      * 3. Write the (optionally colorized) buffer content.
      * 4. Erase any leftover characters/rows from the previous (longer) buffer.
      * 5. Reposition the cursor to the correct row and column.
+     *
+     * Row calculations use a deferred-wrap–aware formula: when content exactly
+     * fills a terminal row, the cursor stays on that row (not the next) until
+     * another character is written.  The formula
+     * `absCol > 0 ? Math.floor((absCol - 1) / cols) : 0` accounts for this.
      */
     private reRenderLine(): void {
         const bufferWidth = terminalDisplayWidth(this._buffer);
@@ -620,11 +643,12 @@ export class ShellInputHandler {
 
         let output = '';
 
-        // Step 1: Move cursor up to the prompt row if wrapping occurred
-        const cursorAbsCol = this._promptWidth + cursorDisplayOffset;
-        const cursorRow = cols > 0 ? Math.floor(cursorAbsCol / cols) : 0;
-        if (cursorRow > 0) {
-            output += `\x1b[${String(cursorRow)}A`;
+        // Step 1: Move cursor up to the prompt row.
+        // Uses _lastCursorRow (set at the end of the previous call) instead of
+        // re-deriving from the new buffer state, which would be wrong because the
+        // buffer has already been mutated before this method runs.
+        if (this._lastCursorRow > 0) {
+            output += `\x1b[${String(this._lastCursorRow)}A`;
         }
 
         // Step 2: Carriage return + move right past the prompt
@@ -640,15 +664,22 @@ export class ShellInputHandler {
         // Step 4: Erase from cursor to end of screen (handles wrapped leftover rows)
         output += '\x1b[J';
 
-        // Step 5: Reposition cursor to the correct position
+        // Step 5: Reposition cursor to the correct position.
+        // After writing the buffer the terminal cursor is at an absolute column
+        // that may be in "deferred wrap" state (exactly fills a row).  We use
+        // \r to normalize to column 0 of the current physical row, then navigate
+        // to the target row and column with relative movements.
         const endAbsCol = this._promptWidth + bufferWidth;
         const targetAbsCol = this._promptWidth + cursorDisplayOffset;
 
         if (cols > 0 && endAbsCol !== targetAbsCol) {
-            const endRow = Math.floor(endAbsCol / cols);
-            const targetRow = Math.floor(targetAbsCol / cols);
-            const endCol = endAbsCol % cols;
-            const targetCol = targetAbsCol % cols;
+            // Deferred-wrap–aware row: when absCol is an exact multiple of cols
+            // the cursor hasn't wrapped yet — it's still on the previous row.
+            const endRow = endAbsCol > 0 ? Math.floor((endAbsCol - 1) / cols) : 0;
+            const targetRow = targetAbsCol > 0 ? Math.floor((targetAbsCol - 1) / cols) : 0;
+
+            // \r normalizes to column 0, avoiding deferred-wrap column ambiguity.
+            output += '\r';
 
             // Move up from end row to target row
             const rowDiff = endRow - targetRow;
@@ -656,19 +687,24 @@ export class ShellInputHandler {
                 output += `\x1b[${String(rowDiff)}A`;
             }
 
-            // Move horizontally to target column
-            const colDiff = endCol - targetCol;
-            if (colDiff > 0) {
-                output += `\x1b[${String(colDiff)}D`;
-            } else if (colDiff < 0) {
-                output += `\x1b[${String(-colDiff)}C`;
+            // Move right to target column (CUF is capped at cols-1 by the terminal,
+            // which is visually correct for the deferred-wrap edge case).
+            const targetCol = targetAbsCol > 0 ? ((targetAbsCol - 1) % cols) + 1 : 0;
+            if (targetCol > 0) {
+                output += `\x1b[${String(targetCol)}C`;
             }
+
+            this._lastCursorRow = targetRow;
+        } else if (cols > 0) {
+            // Cursor is at end of buffer — already positioned correctly.
+            this._lastCursorRow = endAbsCol > 0 ? Math.floor((endAbsCol - 1) / cols) : 0;
         } else {
             // Fallback for unknown columns: simple cursor-back
             const tailWidth = terminalDisplayWidth(this._buffer.slice(this._cursor));
             if (tailWidth > 0) {
                 output += `\x1b[${String(tailWidth)}D`;
             }
+            this._lastCursorRow = 0;
         }
 
         this._callbacks.write(output);
