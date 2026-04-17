@@ -144,7 +144,8 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
                 );
 
                 // Navigation CodeLens — open this block in other surfaces
-                if (displayName) {
+                // Only show for blocks that contain actual code (not comment-only blocks)
+                if (displayName && this.blockContainsCode(document, activeBlock)) {
                     lenses.push(
                         new vscode.CodeLens(blockRange, {
                             title: `$(files)  ${l10n.t('Collection View')}`,
@@ -164,6 +165,34 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
         }
 
         return lenses;
+    }
+
+    /**
+     * Returns true if the block contains at least one line that is not a comment.
+     * Comment-only blocks (e.g., the header block) should not get navigation lenses.
+     */
+    private blockContainsCode(document: vscode.TextDocument, block: { startLine: number; endLine: number }): boolean {
+        let inBlockComment = false;
+        for (let i = block.startLine; i <= block.endLine; i++) {
+            const trimmed = document.lineAt(i).text.trim();
+            if (inBlockComment) {
+                if (trimmed.includes('*/')) {
+                    inBlockComment = false;
+                }
+                continue;
+            }
+            if (trimmed.startsWith('/*')) {
+                if (!trimmed.includes('*/')) {
+                    inBlockComment = true;
+                }
+                continue;
+            }
+            if (trimmed.startsWith('//') || trimmed.length === 0) {
+                continue;
+            }
+            return true;
+        }
+        return false;
     }
 
     dispose(): void {
