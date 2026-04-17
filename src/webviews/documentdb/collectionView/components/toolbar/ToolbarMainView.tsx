@@ -209,19 +209,25 @@ const ToolbarSecondaryActions = (): JSX.Element => {
 
     // ─── Handlers ───────────────────────────────────────────────────────────────
 
-    const getLastExecutedQuery = (): {
+    const getCurrentQuery = (): {
         filter: string;
         project: string;
         sort: string;
         skip: number;
         limit: number;
-    } => ({
-        filter: currentContext.activeQuery.filter,
-        project: currentContext.activeQuery.project,
-        sort: currentContext.activeQuery.sort,
-        skip: currentContext.activeQuery.skip,
-        limit: currentContext.activeQuery.limit,
-    });
+    } => {
+        // Read live editor values when available; fall back to last-executed query
+        const live = currentContext.queryEditor?.getCurrentQuery();
+        return (
+            live ?? {
+                filter: currentContext.activeQuery.filter,
+                project: currentContext.activeQuery.project,
+                sort: currentContext.activeQuery.sort,
+                skip: currentContext.activeQuery.skip,
+                limit: currentContext.activeQuery.limit,
+            }
+        );
+    };
 
     const handleImportFromJson = (): void => {
         void trpcClient.mongoClusters.collectionView.importDocuments.query();
@@ -248,7 +254,7 @@ const ToolbarSecondaryActions = (): JSX.Element => {
     };
 
     const handleCopyQuery = (): void => {
-        const query = getLastExecutedQuery();
+        const query = getCurrentQuery();
         void trpcClient.mongoClusters.collectionView.copyQueryToClipboard.mutate({
             filter: query.filter,
             project: query.project,
@@ -259,24 +265,29 @@ const ToolbarSecondaryActions = (): JSX.Element => {
     };
 
     const handlePasteQuery = (): void => {
-        void trpcClient.mongoClusters.collectionView.pasteQueryFromClipboard.mutate().then((result) => {
-            if (result.success) {
-                setCurrentContext((prev) => ({
-                    ...prev,
-                    pendingPaste: {
-                        filter: result.filter,
-                        project: result.project,
-                        sort: result.sort,
-                        skip: result.skip,
-                        limit: result.limit,
-                    },
-                }));
-            }
-        });
+        void trpcClient.mongoClusters.collectionView.pasteQueryFromClipboard
+            .mutate()
+            .then((result) => {
+                if (result.success) {
+                    setCurrentContext((prev) => ({
+                        ...prev,
+                        pendingPaste: {
+                            filter: result.filter,
+                            project: result.project,
+                            sort: result.sort,
+                            skip: result.skip,
+                            limit: result.limit,
+                        },
+                    }));
+                }
+            })
+            .catch(() => {
+                // Error is already shown by tRPC error handling on the extension host
+            });
     };
 
     const handleOpenInPlayground = (): void => {
-        const query = getLastExecutedQuery();
+        const query = getCurrentQuery();
         void trpcClient.mongoClusters.collectionView.openInPlayground.mutate({
             filter: query.filter,
             project: query.project,
@@ -287,7 +298,7 @@ const ToolbarSecondaryActions = (): JSX.Element => {
     };
 
     const handleOpenInShell = (): void => {
-        const query = getLastExecutedQuery();
+        const query = getCurrentQuery();
         void trpcClient.mongoClusters.collectionView.openInShell.mutate({
             filter: query.filter,
             project: query.project,
@@ -340,7 +351,7 @@ const ToolbarSecondaryActions = (): JSX.Element => {
                 </OverflowItem>
 
                 {/* Divider between data and query groups — hides when data group overflows */}
-                <OverflowGroupDivider groupId="data" />
+                <OverflowGroupDivider />
 
                 {/* Group "query": Copy / Paste / Playground / Shell */}
                 <OverflowItem id="copy" groupId="query" priority={4}>
@@ -408,7 +419,7 @@ const ToolbarSecondaryActions = (): JSX.Element => {
  * Hidden when either group is fully overflowed — a divider only makes sense
  * when there are visible items on both sides.
  */
-const OverflowGroupDivider = (_props: { groupId: string }): JSX.Element | null => {
+const OverflowGroupDivider = (): JSX.Element | null => {
     const dataGroupVisible = useIsOverflowGroupVisible('data');
     const queryGroupVisible = useIsOverflowGroupVisible('query');
     if (dataGroupVisible === 'hidden' || queryGroupVisible === 'hidden') {
