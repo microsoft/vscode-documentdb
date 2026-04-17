@@ -588,13 +588,20 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('multi-line paste dialog', () => {
-        /** Override the multiLinePasteBehavior setting while preserving other mocked settings. */
-        function mockPasteBehavior(behavior: string): void {
+        /**
+         * Override paste-related settings while preserving other mocked settings.
+         * @param behavior - value for documentDB.shell.multiLinePasteBehavior
+         * @param vscodePasteWarning - value for terminal.integrated.enableMultiLinePasteWarning (default: 'never')
+         */
+        function mockPasteBehavior(behavior: string, vscodePasteWarning: string = 'never'): void {
             jest.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((section?: string) => {
                 return {
                     get: jest.fn((_key: string, defaultValue?: unknown) => {
                         if (section === 'documentDB.shell' && _key === 'multiLinePasteBehavior') {
                             return behavior;
+                        }
+                        if (section === 'terminal.integrated' && _key === 'enableMultiLinePasteWarning') {
+                            return vscodePasteWarning;
                         }
                         // Preserve base settings needed by the PTY
                         if ((section === undefined || section === '') && _key === 'documentDB.timeout') {
@@ -707,6 +714,60 @@ describe('DocumentDBShellPty', () => {
 
             expect(showQuickPickSpy).not.toHaveBeenCalled();
             expect(mockEvaluate).toHaveBeenCalledWith('show dbs', expect.any(Number));
+
+            showQuickPickSpy.mockRestore();
+        });
+
+        it('should skip our dialog and run line-by-line when VS Code paste warning is active', async () => {
+            // behavior=ask but VS Code's warning is 'auto' (default) → skip our dialog
+            mockPasteBehavior('ask', 'auto');
+
+            mockEvaluate
+                .mockResolvedValueOnce({ type: null, printable: '"r1"', durationMs: 1 })
+                .mockResolvedValueOnce({ type: null, printable: '"r2"', durationMs: 1 });
+
+            const showQuickPickSpy = jest.spyOn(vscode.window, 'showQuickPick');
+
+            pty.handleInput('show dbs\nuse mydb\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            // Our QuickPick should NOT have been shown
+            expect(showQuickPickSpy).not.toHaveBeenCalled();
+            // Lines should have been run independently
+            expect(mockEvaluate).toHaveBeenCalledTimes(2);
+
+            showQuickPickSpy.mockRestore();
+        });
+
+        it('should show our dialog when VS Code paste warning is disabled', async () => {
+            // behavior=ask and VS Code's warning is 'never' → show our dialog
+            mockPasteBehavior('ask', 'never');
+
+            const showQuickPickSpy = jest
+                .spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValue({ label: 'Cancel', detail: '', id: 'cancel' } as never);
+
+            pty.handleInput('line1\nline2\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(showQuickPickSpy).toHaveBeenCalledTimes(1);
+
+            showQuickPickSpy.mockRestore();
+        });
+
+        it('should show our dialog even when VS Code paste warning is active if alwaysAsk', async () => {
+            // behavior=alwaysAsk and VS Code's warning is 'auto' → still show our dialog
+            mockPasteBehavior('alwaysAsk', 'auto');
+
+            const showQuickPickSpy = jest
+                .spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValue({ label: 'Cancel', detail: '', id: 'cancel' } as never);
+
+            pty.handleInput('line1\nline2\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(showQuickPickSpy).toHaveBeenCalledTimes(1);
 
             showQuickPickSpy.mockRestore();
         });

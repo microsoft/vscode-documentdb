@@ -289,7 +289,24 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
-        // 'ask' — show QuickPick
+        // 'ask' — show QuickPick, but only if VS Code's built-in multi-line paste
+        // warning is disabled.  When their dialog is active ('auto' or 'always'),
+        // the user already had a chance to cancel or "Paste as one line", so
+        // showing a second dialog would be redundant.
+        // 'alwaysAsk' — always show our dialog regardless of VS Code's setting.
+        if (behavior === 'ask') {
+            const vscodePasteWarning = vscode.workspace
+                .getConfiguration('terminal.integrated')
+                .get<string>('enableMultiLinePasteWarning', 'auto');
+
+            if (vscodePasteWarning !== 'never') {
+                // VS Code already prompted — run line by line (the user chose "Paste")
+                this.processInputDirectly(data);
+                return;
+            }
+        }
+
+        // 'ask' with VS Code dialog disabled, or 'alwaysAsk' — show our own
         // Disable input while the dialog is open to prevent typing
         this._inputHandler.setEnabled(false);
 
