@@ -49,11 +49,16 @@ import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
-import { openInteractiveShell } from '../commands/openInteractiveShell/openInteractiveShell';
+import {
+    openInteractiveShell,
+    openInteractiveShellWithInput,
+} from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { showConnectionInfo } from '../commands/playground/connectDatabase';
 import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
-import { newPlayground } from '../commands/playground/newPlayground';
+import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
+import { playgroundOpenInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
+import { playgroundOpenInShell } from '../commands/playground/playgroundOpenInShell';
 import { runAll } from '../commands/playground/runAll';
 import { runSelected } from '../commands/playground/runSelected';
 import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
@@ -352,6 +357,8 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(newPlayground),
                 );
 
+                registerCommand(PlaygroundCommandIds.newWithContent, newPlaygroundWithContent);
+
                 registerCommand(PlaygroundCommandIds.showConnectionInfo, withCommandCorrelation(showConnectionInfo));
 
                 registerCommand(PlaygroundCommandIds.runAll, withCommandCorrelation(runAll));
@@ -363,6 +370,10 @@ export class ClustersExtension implements vscode.Disposable {
                     PlaygroundCommandIds.scanCollectionSchema,
                     withCommandCorrelation(scanCollectionSchema),
                 );
+
+                // Playground → Collection View / Shell navigation
+                registerCommand(PlaygroundCommandIds.openInCollectionView, playgroundOpenInCollectionView);
+                registerCommand(PlaygroundCommandIds.openInShell, playgroundOpenInShell);
 
                 registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
 
@@ -562,6 +573,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.openInteractiveShell',
                     withTreeNodeCommandCorrelation(openInteractiveShell),
+                );
+
+                registerCommand(
+                    'vscode-documentdb.command.openInteractiveShell.withInput',
+                    openInteractiveShellWithInput,
                 );
 
                 // Register the terminal link provider for "Open in Collection View" action lines

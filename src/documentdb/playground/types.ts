@@ -14,6 +14,12 @@ export interface PlaygroundConnection {
     readonly clusterDisplayName: string;
     /** Target database name for query execution. */
     readonly databaseName: string;
+    /**
+     * Identifies which tree view this cluster belongs to.
+     * Used by cross-feature navigation to open the correct branch data provider.
+     * @see Views enum
+     */
+    readonly viewId?: string;
 }
 
 /**

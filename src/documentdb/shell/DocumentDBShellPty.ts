@@ -20,6 +20,7 @@ import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManag
 import { ShellSpinner } from './ShellSpinner';
 import {
     ACTION_LINE_PREFIX,
+    PLAYGROUND_ACTION_PREFIX,
     SETTINGS_ACTION_PREFIX,
     type ShellTerminalInfo,
     unregisterShellTerminal,
@@ -31,6 +32,8 @@ import {
 export interface DocumentDBShellPtyOptions {
     /** Connection parameters for the shell session. */
     readonly connectionInfo: ShellConnectionInfo;
+    /** Optional command to pre-fill in the input line after initialization (not executed). */
+    readonly initialInput?: string;
 }
 
 /**
@@ -84,10 +87,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _completionListVisible: boolean = false;
     /** Whether the current ghost text is an informational hint (not insertable). */
     private _ghostTextIsHint: boolean = false;
+    /** Optional initial input to pre-fill after initialization. */
+    private _initialInput: string | undefined;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
         this._currentDatabase = options.connectionInfo.databaseName;
+        this._initialInput = options.initialInput;
 
         this._completionProvider = new ShellCompletionProvider();
         this._ghostText = new ShellGhostText();
@@ -287,6 +293,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this.updateTerminalTitle();
 
             this.showPrompt();
+
+            // Pre-fill initial input (e.g., from Collection View → Shell navigation)
+            if (this._initialInput) {
+                this._inputHandler.insertText(this._initialInput);
+                this._initialInput = undefined;
+            }
         } catch (error: unknown) {
             // Stop the connection spinner on failure
             this._spinner?.stop();
@@ -585,11 +597,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /**
      * If the result came from a query with a known namespace (db + collection),
-     * write a clickable action line below the output.
+     * write clickable action lines below the output.
      *
-     * The line uses the {@link ACTION_LINE_PREFIX} sentinel matched by
-     * {@link ShellTerminalLinkProvider}. Database and collection names are
-     * wrapped in brackets to handle names with special characters.
+     * The line uses the {@link ACTION_LINE_PREFIX} and {@link PLAYGROUND_ACTION_PREFIX}
+     * sentinels matched by {@link ShellTerminalLinkProvider}. Database and collection
+     * names are wrapped in brackets to handle names with special characters.
+     *
+     * Format: ` ↗ Collection View [db.collection]   ↗ Query Playground [db.collection]`
      */
     private maybeWriteActionLine(result: SerializableExecutionResult): void {
         const ns = result.source?.namespace;
@@ -607,7 +621,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
-        const actionText = `${ACTION_LINE_PREFIX}[${ns.db}.${ns.collection}]`;
+        const nsLabel = `[${ns.db}.${ns.collection}]`;
+        const actionText = `${ACTION_LINE_PREFIX}${nsLabel}  ${PLAYGROUND_ACTION_PREFIX}${nsLabel}`;
         this.writeLine(this._outputFormatter.formatSystemMessage(actionText));
     }
 

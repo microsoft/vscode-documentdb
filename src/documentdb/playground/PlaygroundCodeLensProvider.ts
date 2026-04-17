@@ -142,10 +142,57 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
                         tooltip: runTooltip,
                     }),
                 );
+
+                // Navigation CodeLens — open this block in other surfaces
+                // Only show for blocks that contain actual code (not comment-only blocks)
+                if (displayName && this.blockContainsCode(document, activeBlock)) {
+                    lenses.push(
+                        new vscode.CodeLens(blockRange, {
+                            title: `$(files)  ${l10n.t('Collection View')}`,
+                            command: PlaygroundCommandIds.openInCollectionView,
+                            arguments: [document.uri, activeBlock.startLine, activeBlock.endLine],
+                            tooltip: l10n.t('Open this query in Collection View'),
+                        }),
+                        new vscode.CodeLens(blockRange, {
+                            title: `$(terminal)  ${l10n.t('Shell')}`,
+                            command: PlaygroundCommandIds.openInShell,
+                            arguments: [document.uri, activeBlock.startLine, activeBlock.endLine],
+                            tooltip: l10n.t('Open this query in Interactive Shell'),
+                        }),
+                    );
+                }
             }
         }
 
         return lenses;
+    }
+
+    /**
+     * Returns true if the block contains at least one line that is not a comment.
+     * Comment-only blocks (e.g., the header block) should not get navigation lenses.
+     */
+    private blockContainsCode(document: vscode.TextDocument, block: { startLine: number; endLine: number }): boolean {
+        let inBlockComment = false;
+        for (let i = block.startLine; i <= block.endLine; i++) {
+            const trimmed = document.lineAt(i).text.trim();
+            if (inBlockComment) {
+                if (trimmed.includes('*/')) {
+                    inBlockComment = false;
+                }
+                continue;
+            }
+            if (trimmed.startsWith('/*')) {
+                if (!trimmed.includes('*/')) {
+                    inBlockComment = true;
+                }
+                continue;
+            }
+            if (trimmed.startsWith('//') || trimmed.length === 0) {
+                continue;
+            }
+            return true;
+        }
+        return false;
     }
 
     dispose(): void {

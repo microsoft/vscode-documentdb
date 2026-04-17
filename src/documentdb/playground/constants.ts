@@ -21,6 +21,8 @@ export const PLAYGROUND_FILE_EXTENSION = '.documentdb.js';
 export const PlaygroundCommandIds = {
     /** Create a new query playground file and optionally connect */
     new: 'vscode-documentdb.command.playground.new',
+    /** Create a new query playground with pre-formatted content and explicit connection */
+    newWithContent: 'vscode-documentdb.command.playground.newWithContent',
     /** Show connection info for the active playground (info notification) */
     showConnectionInfo: 'vscode-documentdb.command.playground.showConnectionInfo',
     /** Run the entire query playground file */
@@ -29,4 +31,8 @@ export const PlaygroundCommandIds = {
     runSelected: 'vscode-documentdb.command.playground.runSelected',
     /** Sample documents from a collection to discover field names */
     scanCollectionSchema: 'vscode-documentdb.command.playground.scanCollectionSchema',
+    /** Open the current code block in Collection View */
+    openInCollectionView: 'vscode-documentdb.command.playground.openInCollectionView',
+    /** Open the current code block in Interactive Shell */
+    openInShell: 'vscode-documentdb.command.playground.openInShell',
 } as const;

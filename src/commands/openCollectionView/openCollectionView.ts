@@ -29,6 +29,7 @@ export async function openCollectionView(context: IActionContext, node: Collecti
 
     return openCollectionViewInternal(context, {
         clusterId: node.cluster.clusterId,
+        clusterDisplayName: node.cluster.name,
         viewId: viewId,
         databaseName: node.databaseInfo.name,
         collectionName: node.collectionInfo.name,
@@ -39,9 +40,17 @@ export async function openCollectionViewInternal(
     _context: IActionContext,
     props: {
         clusterId: string;
+        clusterDisplayName: string;
         viewId: string;
         databaseName: string;
         collectionName: string;
+        initialQuery?: {
+            filter?: string;
+            project?: string;
+            sort?: string;
+            skip?: number;
+            limit?: number;
+        };
     },
 ): Promise<void> {
     /**
@@ -64,10 +73,12 @@ export async function openCollectionViewInternal(
     const view = new CollectionViewController({
         sessionId: sessionId,
         clusterId: props.clusterId,
+        clusterDisplayName: props.clusterDisplayName,
         viewId: props.viewId,
         databaseName: props.databaseName,
         collectionName: props.collectionName,
         feedbackSignalsEnabled: feedbackSignalsEnabled,
+        initialQuery: props.initialQuery,
     });
 
     // Clean up the ClusterSession when the tab is closed

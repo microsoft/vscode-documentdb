@@ -5,6 +5,8 @@
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { escapeJsString } from '../../utils/escapeJsString';
+import { PlaygroundCommandIds } from '../playground/constants';
 import { Views } from '../Views';
 
 /**
@@ -84,9 +86,17 @@ export function getRegisteredShellTerminals(): ReadonlyArray<{
  * containing special characters (e.g., `stores (10)`) are unambiguous.
  *
  * The action line format is locale-independent — only the link tooltip is localized.
- * Format: `🔗 [<db>.<collection>]`
+ * Format: `  ↗ Collection View [<db>.<collection>]`
  */
-export const ACTION_LINE_PREFIX = '\u{1F517} '; // 🔗 + space
+export const ACTION_LINE_PREFIX = '\u{2197} Collection View '; // '↗ Collection View '
+
+/**
+ * The marker prefix for the "Open in Playground" action line.
+ *
+ * Format: `  ↗ Query Playground [<db>.<collection>]`
+ * Uses a different text label from the Collection View link so both can appear on the same line.
+ */
+export const PLAYGROUND_ACTION_PREFIX = '\u{2197} Query Playground '; // '↗ Query Playground '
 
 /**
  * The marker prefix for the "Open Settings" action line.
@@ -111,7 +121,17 @@ export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
  * followed by `[db.collection]`, with no English text to translate.
  */
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
-const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{1F517} \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
+const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2197} Collection View \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
+/* eslint-enable no-control-regex */
+
+/**
+ * Regex to match the "Open in Playground" action line.
+ *
+ * Same capture structure as ACTION_LINE_PATTERN but uses `↗ Query Playground` prefix.
+ * The pattern accounts for optional ANSI color codes (gray) that wrap the line.
+ */
+/* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
+const PLAYGROUND_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2197} Query Playground \[([^\].]+)\.([^\]]+)\](?:\x1b\[\d+m)*/u;
 /* eslint-enable no-control-regex */
 
 /**
@@ -123,6 +143,7 @@ const ACTION_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{1F517} \[([^\].]+)\.([^\]]+)\](?:
  * The pattern accounts for optional ANSI color codes that wrap the line.
  * The format is locale-independent.
  */
+
 /* eslint-disable no-control-regex -- ANSI escape codes are intentional for matching terminal output */
 const SETTINGS_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2699} \[([^\]]+)\](?:\x1b\[\d+m)*/u;
 /* eslint-enable no-control-regex */
@@ -134,6 +155,23 @@ interface CollectionViewTerminalLink extends vscode.TerminalLink {
     readonly linkType: 'collectionView';
     /** Cluster ID for opening the collection view. */
     readonly clusterId: string;
+    /** Human-readable cluster display name. */
+    readonly clusterDisplayName: string;
+    /** Database name parsed from the action line. */
+    readonly databaseName: string;
+    /** Collection name parsed from the action line. */
+    readonly collectionName: string;
+}
+
+/**
+ * Terminal link that opens a Query Playground.
+ */
+interface PlaygroundTerminalLink extends vscode.TerminalLink {
+    readonly linkType: 'playground';
+    /** Cluster ID for the playground connection. */
+    readonly clusterId: string;
+    /** Human-readable cluster display name. */
+    readonly clusterDisplayName: string;
     /** Database name parsed from the action line. */
     readonly databaseName: string;
     /** Collection name parsed from the action line. */
@@ -152,16 +190,16 @@ interface SettingsTerminalLink extends vscode.TerminalLink {
 /**
  * Union of all shell terminal link types.
  */
-type ShellTerminalLink = CollectionViewTerminalLink | SettingsTerminalLink;
+type ShellTerminalLink = CollectionViewTerminalLink | PlaygroundTerminalLink | SettingsTerminalLink;
 
 /**
- * Provides clickable "Open in Collection View" links in DocumentDB shell terminals.
+ * Provides clickable navigation links in DocumentDB shell terminals.
  *
- * After a query that targets a specific collection, the PTY appends an action line:
- *   `📊 Open collection [myDb.myCollection] in Collection View`
+ * After a query that targets a specific collection, the PTY appends action lines
+ * with sentinels (`↗ Collection View` and `↗ Query Playground`). This provider
+ * detects those markers and returns clickable links.
  *
- * This provider detects that line and makes it a clickable link that opens
- * the Collection View for that database and collection.
+ * Multiple links can appear on the same line (e.g., `↗ Collection View [db.coll]  ↗ Query Playground [db.coll]`).
  *
  * Only active for terminals registered via {@link registerShellTerminal}.
  */
@@ -173,28 +211,46 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
             return [];
         }
 
-        // Check for collection view action line
+        const links: ShellTerminalLink[] = [];
+
+        // Check for collection view action line (↗ Collection View)
         const collectionMatch = ACTION_LINE_PATTERN.exec(context.line);
         if (collectionMatch) {
             const info = infoProvider();
-            const databaseName = collectionMatch[1];
-            const collectionName = collectionMatch[2];
+            links.push({
+                linkType: 'collectionView',
+                startIndex: collectionMatch.index,
+                length: collectionMatch[0].length,
+                tooltip: vscode.l10n.t(
+                    'Open collection "{0}.{1}" in Collection View',
+                    collectionMatch[1],
+                    collectionMatch[2],
+                ),
+                clusterId: info.clusterId,
+                clusterDisplayName: info.clusterDisplayName,
+                databaseName: collectionMatch[1],
+                collectionName: collectionMatch[2],
+            });
+        }
 
-            return [
-                {
-                    linkType: 'collectionView',
-                    startIndex: collectionMatch.index,
-                    length: collectionMatch[0].length,
-                    tooltip: vscode.l10n.t(
-                        'Open collection "{0}.{1}" in Collection View',
-                        databaseName,
-                        collectionName,
-                    ),
-                    clusterId: info.clusterId,
-                    databaseName,
-                    collectionName,
-                },
-            ];
+        // Check for playground action line (↗ Query Playground)
+        const playgroundMatch = PLAYGROUND_LINE_PATTERN.exec(context.line);
+        if (playgroundMatch) {
+            const info = infoProvider();
+            links.push({
+                linkType: 'playground',
+                startIndex: playgroundMatch.index,
+                length: playgroundMatch[0].length,
+                tooltip: vscode.l10n.t('Open "{0}.{1}" in Query Playground', playgroundMatch[1], playgroundMatch[2]),
+                clusterId: info.clusterId,
+                clusterDisplayName: info.clusterDisplayName,
+                databaseName: playgroundMatch[1],
+                collectionName: playgroundMatch[2],
+            });
+        }
+
+        if (links.length > 0) {
+            return links;
         }
 
         // Check for settings action line
@@ -229,6 +285,26 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
             return;
         }
 
+        if (link.linkType === 'playground') {
+            void callWithTelemetryAndErrorHandling(
+                'vscode-documentdb.shell.terminalLink.openPlayground',
+                async (context: IActionContext) => {
+                    context.telemetry.properties.linkType = 'playgroundActionLine';
+
+                    const escaped = escapeJsString(link.collectionName);
+                    const content = `db.getCollection('${escaped}').find({ })`;
+
+                    await vscode.commands.executeCommand(PlaygroundCommandIds.newWithContent, {
+                        clusterId: link.clusterId,
+                        clusterDisplayName: link.clusterDisplayName,
+                        databaseName: link.databaseName,
+                        content,
+                    });
+                },
+            );
+            return;
+        }
+
         void callWithTelemetryAndErrorHandling(
             'vscode-documentdb.shell.terminalLink.openCollectionView',
             async (context: IActionContext) => {
@@ -236,6 +312,7 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
 
                 await vscode.commands.executeCommand('vscode-documentdb.command.internal.containerView.open', {
                     clusterId: link.clusterId,
+                    clusterDisplayName: link.clusterDisplayName,
                     viewId: Views.ConnectionsView,
                     databaseName: link.databaseName,
                     collectionName: link.collectionName,

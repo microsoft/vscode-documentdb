@@ -22,6 +22,7 @@ import {
 } from '../../../commands/llmEnhancedCommands/queryGenerationCommands';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
+import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import {
     ExplainPlanAnalyzer,
     type ExecutionStatsAnalysis,
@@ -38,6 +39,7 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
+import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
@@ -54,6 +56,10 @@ export type RouterContext = BaseRouterContext & {
      * For Azure/Discovery Views: This is the Azure Resource ID (already a valid tree path)
      */
     clusterId: string;
+    /**
+     * Human-readable cluster display name for use in Playground headers and Shell titles.
+     */
+    clusterDisplayName: string;
     /**
      * Identifies which tree view this cluster belongs to.
      *
@@ -106,6 +112,48 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
         );
         return null;
     }
+}
+
+/**
+ * Build a `db.getCollection('name').find(filter, project).sort(sort)` expression
+ * from the Collection View's current query state. Used by cross-feature navigation
+ * to carry the query to Playground or Shell.
+ */
+function buildFindExpression(
+    collectionName: string,
+    filter: string,
+    project: string | undefined,
+    sort: string | undefined,
+    skip: number | undefined,
+    limit: number | undefined,
+): string {
+    const hasProject = project && project.trim() !== '{}' && project.trim() !== '{  }' && project.trim() !== '';
+    const hasSort = sort && sort.trim() !== '{}' && sort.trim() !== '{  }' && sort.trim() !== '';
+
+    const filterArg = filter || '{}';
+
+    const escaped = escapeJsString(collectionName);
+
+    let expr: string;
+    if (hasProject) {
+        expr = `db.getCollection('${escaped}').find(${filterArg}, ${project})`;
+    } else {
+        expr = `db.getCollection('${escaped}').find(${filterArg})`;
+    }
+
+    if (hasSort) {
+        expr += `.sort(${sort})`;
+    }
+
+    if (skip && skip > 0) {
+        expr += `.skip(${skip})`;
+    }
+
+    if (limit && limit > 0) {
+        expr += `.limit(${limit})`;
+    }
+
+    return expr;
 }
 
 // Helper function to find the collection node based on context
@@ -889,5 +937,122 @@ export const collectionsViewRouter = router({
         await vscode.window.showTextDocument(doc);
 
         return { success: true };
+    }),
+
+    openInPlayground: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+
+            await vscode.commands.executeCommand('vscode-documentdb.command.playground.newWithContent', {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                content: query,
+                viewId: myCtx.viewId,
+            });
+        }),
+
+    openInShell: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+
+            await vscode.commands.executeCommand('vscode-documentdb.command.openInteractiveShell.withInput', {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                viewId: myCtx.viewId,
+                initialInput: query,
+            });
+        }),
+
+    copyQueryToClipboard: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+            await vscode.env.clipboard.writeText(query);
+            void vscode.window.showInformationMessage(l10n.t('Query copied to clipboard'));
+        }),
+
+    pasteQueryFromClipboard: publicProcedureWithTelemetry.mutation(async () => {
+        const text = await vscode.env.clipboard.readText();
+
+        if (!text.trim()) {
+            throw new Error(l10n.t('Clipboard is empty.'));
+        }
+
+        const parsed = parseFindExpression(text);
+
+        // Require at least one transferable query component before reporting success
+        if (
+            !parsed.filter &&
+            !parsed.project &&
+            !parsed.sort &&
+            parsed.skip === undefined &&
+            parsed.limit === undefined
+        ) {
+            throw new Error(l10n.t('Clipboard does not contain a recognizable find() query.'));
+        }
+
+        return {
+            success: true as const,
+            filter: parsed.filter,
+            project: parsed.project,
+            sort: parsed.sort,
+            skip: parsed.skip,
+            limit: parsed.limit,
+        };
     }),
 });
