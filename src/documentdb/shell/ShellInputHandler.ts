@@ -105,6 +105,9 @@ export class ShellInputHandler {
      */
     setColumns(columns: number): void {
         this._columns = columns;
+        // Reset tracked cursor row — after a resize xterm.js reflows content,
+        // making the previous _lastCursorRow stale.
+        this._lastCursorRow = 0;
     }
 
     /**
