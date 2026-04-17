@@ -167,8 +167,11 @@ export function findCommonPrefix(candidates: readonly CompletionCandidate[], cur
         if (common.length === 0) break;
     }
 
-    // Return only the additional text beyond what's already typed
-    if (common.length > currentPrefix.length) {
+    // Return only the additional text beyond what's already typed.
+    // Verify the common prefix actually starts with the typed prefix (case-insensitive)
+    // to avoid misaligned slicing when insertText has a different structure
+    // (e.g., quoted field paths like `"address.city"` vs typed prefix `add`).
+    if (common.length > currentPrefix.length && common.toLowerCase().startsWith(currentPrefix.toLowerCase())) {
         return common.slice(currentPrefix.length);
     }
 

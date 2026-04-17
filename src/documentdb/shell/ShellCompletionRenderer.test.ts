@@ -123,5 +123,13 @@ describe('ShellCompletionRenderer', () => {
             const candidates = [makeCandidate('alpha'), makeCandidate('beta')];
             expect(findCommonPrefix(candidates, '')).toBe('');
         });
+
+        it('should return empty when insertText has leading quote not in prefix', () => {
+            // Regression: dotted field paths get quoted insertText (e.g., "address.building")
+            // but the typed prefix is unquoted (e.g., "add"). The leading '"' in insertText
+            // must not cause a spurious extra character to be inserted.
+            const candidates = [makeCandidate('"additionalInfo.averageWaitTime"'), makeCandidate('"address.building"')];
+            expect(findCommonPrefix(candidates, 'add')).toBe('');
+        });
     });
 });
