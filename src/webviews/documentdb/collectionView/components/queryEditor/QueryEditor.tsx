@@ -400,7 +400,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             ...prev,
             pendingPaste: undefined,
         }));
-    }, [currentContext.pendingPaste, setCurrentContext, isEnhancedQueryMode]);
+    }, [currentContext.pendingPaste, setCurrentContext]);
 
     // Focus AI input when AI row becomes visible
     useEffect(() => {

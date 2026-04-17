@@ -28,16 +28,23 @@ export interface ParsedFindExpression {
  * real user queries. Gracefully returns partial results when parsing fails.
  */
 export function parseFindExpression(code: string): ParsedFindExpression {
-    const result: ParsedFindExpression = {};
+    const result: {
+        collectionName?: string;
+        filter?: string;
+        project?: string;
+        sort?: string;
+        skip?: number;
+        limit?: number;
+    } = {};
 
     // Extract collection name
     const getCollectionMatch = /db\.getCollection\(\s*['"]([^'"]+)['"]\s*\)/.exec(code);
     if (getCollectionMatch) {
-        (result as { collectionName: string }).collectionName = getCollectionMatch[1];
+        result.collectionName = getCollectionMatch[1];
     } else {
         const directMatch = /db\.([a-zA-Z_$][a-zA-Z0-9_$]*)\./.exec(code);
         if (directMatch && directMatch[1] !== 'getCollection') {
-            (result as { collectionName: string }).collectionName = directMatch[1];
+            result.collectionName = directMatch[1];
         }
     }
 
@@ -51,10 +58,10 @@ export function parseFindExpression(code: string): ParsedFindExpression {
     const args = extractBalancedArgs(code, argsStart);
 
     if (args.length >= 1 && args[0].trim()) {
-        (result as { filter: string }).filter = args[0].trim();
+        result.filter = args[0].trim();
     }
     if (args.length >= 2 && args[1].trim()) {
-        (result as { project: string }).project = args[1].trim();
+        result.project = args[1].trim();
     }
 
     // Look for .sort( after the find() call
@@ -66,19 +73,19 @@ export function parseFindExpression(code: string): ParsedFindExpression {
             const sortArgsStart = sortIndex + '.sort('.length;
             const sortArgs = extractBalancedArgs(afterFind, sortArgsStart);
             if (sortArgs.length >= 1 && sortArgs[0].trim()) {
-                (result as { sort: string }).sort = sortArgs[0].trim();
+                result.sort = sortArgs[0].trim();
             }
         }
 
         // Look for .skip(N) and .limit(N) — simple numeric arguments
         const skipMatch = /\.skip\(\s*(\d+)\s*\)/.exec(afterFind);
         if (skipMatch) {
-            (result as { skip: number }).skip = parseInt(skipMatch[1], 10);
+            result.skip = parseInt(skipMatch[1], 10);
         }
 
         const limitMatch = /\.limit\(\s*(\d+)\s*\)/.exec(afterFind);
         if (limitMatch) {
-            (result as { limit: number }).limit = parseInt(limitMatch[1], 10);
+            result.limit = parseInt(limitMatch[1], 10);
         }
     }
 
