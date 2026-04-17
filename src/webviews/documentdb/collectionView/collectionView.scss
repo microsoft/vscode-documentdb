@@ -32,22 +32,36 @@
     .toolbarMainView {
         padding-top: 10px;
 
-        display: flex;
-        flex-direction: row;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
         align-items: center;
         gap: 10px;
 
         text-wrap: nowrap;
 
-        // Push all elements after the first one to the right
-        > :first-child {
-            margin-right: auto; // This ensures space is created between the first and remaining elements.
-        }
-
-        // Allow the Overflow container to shrink below content width
-        > :not(:first-child) {
+        // The overflow toolbar (second column) needs these styles so the
+        // FluentUI Overflow manager can measure and clip items correctly.
+        // The Overflow component clones its child (Toolbar) and merges the
+        // fui-Overflow class, so we target that directly.
+        .fui-Overflow {
+            flex-wrap: nowrap;
             min-width: 0;
             overflow: hidden;
+            justify-content: flex-end;
+        }
+
+        // Wrapper for Menu-based OverflowItems (Import/Export) that cannot
+        // forward refs directly.  Uses a CSS class instead of an inline style
+        // so the overflow manager's DOM manipulation (display:none / display:'')
+        // does not conflict with React-controlled inline styles.
+        .overflowItemMenuWrapper {
+            display: inline-flex;
+
+            // When the overflow manager marks this item as overflowing,
+            // ensure it is hidden even though the class above sets display.
+            &[data-overflowing] {
+                display: none;
+            }
         }
     }
 

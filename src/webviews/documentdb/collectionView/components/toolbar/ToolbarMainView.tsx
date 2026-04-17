@@ -5,15 +5,21 @@
 
 import {
     Menu,
+    MenuDivider,
     MenuItem,
     MenuList,
     MenuPopover,
     MenuTrigger,
+    Overflow,
+    OverflowItem,
     Toolbar,
     ToolbarButton,
     ToolbarDivider,
     ToolbarToggleButton,
     Tooltip,
+    useIsOverflowGroupVisible,
+    useIsOverflowItemVisible,
+    useOverflowMenu,
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
@@ -22,6 +28,7 @@ import {
     ClipboardPasteRegular,
     CopyRegular,
     KeyboardRegular,
+    MoreHorizontalRegular,
     PlayRegular,
     SparkleFilled,
     SparkleRegular,
@@ -192,8 +199,9 @@ const ToolbarQueryOperations = (): JSX.Element => {
 };
 
 /**
- * Secondary toolbar actions (Import, Export, Copy, Paste, Playground, Shell)
- * with a divider separating the import/export group from the query-transfer group.
+ * Secondary toolbar actions (Import, Export | Copy, Paste, Playground, Shell)
+ * wrapped in an Overflow container with two groups separated by a divider.
+ * Items collapse into a "..." overflow menu when the toolbar is too narrow.
  */
 const ToolbarSecondaryActions = (): JSX.Element => {
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
@@ -290,70 +298,220 @@ const ToolbarSecondaryActions = (): JSX.Element => {
     };
 
     return (
-        <Toolbar size="small">
-            {/* Import / Export group */}
-            <Menu>
-                <MenuTrigger>
-                    <Tooltip content={l10n.t('Import documents')} relationship="description" withArrow>
-                        <ToolbarButton icon={<ArrowImportRegular />}>{l10n.t('Import')}</ToolbarButton>
-                    </Tooltip>
-                </MenuTrigger>
-                <MenuPopover>
-                    <MenuList>
-                        <MenuItem onClick={handleImportFromJson}>{l10n.t('Import From JSON…')}</MenuItem>
-                    </MenuList>
-                </MenuPopover>
-            </Menu>
-            <Menu>
-                <MenuTrigger>
-                    <Tooltip content={l10n.t('Export documents')} relationship="description" withArrow>
-                        <ToolbarButton icon={<ArrowExportRegular />}>{l10n.t('Export')}</ToolbarButton>
-                    </Tooltip>
-                </MenuTrigger>
-                <MenuPopover>
-                    <MenuList>
-                        <MenuItem onClick={handleExportEntireCollection}>
-                            {l10n.t('Export Entire Collection…')}
-                        </MenuItem>
-                        <MenuItem onClick={handleExportQueryResults}>
-                            {l10n.t('Export Current Query Results…')}
-                        </MenuItem>
-                    </MenuList>
-                </MenuPopover>
-            </Menu>
+        <Overflow padding={40}>
+            <Toolbar size="small">
+                {/* Group "data": Import / Export */}
+                <OverflowItem id="import" groupId="data" priority={6}>
+                    <span className="overflowItemMenuWrapper">
+                        <Menu>
+                            <MenuTrigger>
+                                <Tooltip content={l10n.t('Import documents')} relationship="description" withArrow>
+                                    <ToolbarButton icon={<ArrowImportRegular />}>{l10n.t('Import')}</ToolbarButton>
+                                </Tooltip>
+                            </MenuTrigger>
+                            <MenuPopover>
+                                <MenuList>
+                                    <MenuItem onClick={handleImportFromJson}>{l10n.t('Import From JSON…')}</MenuItem>
+                                </MenuList>
+                            </MenuPopover>
+                        </Menu>
+                    </span>
+                </OverflowItem>
+                <OverflowItem id="export" groupId="data" priority={5}>
+                    <span className="overflowItemMenuWrapper">
+                        <Menu>
+                            <MenuTrigger>
+                                <Tooltip content={l10n.t('Export documents')} relationship="description" withArrow>
+                                    <ToolbarButton icon={<ArrowExportRegular />}>{l10n.t('Export')}</ToolbarButton>
+                                </Tooltip>
+                            </MenuTrigger>
+                            <MenuPopover>
+                                <MenuList>
+                                    <MenuItem onClick={handleExportEntireCollection}>
+                                        {l10n.t('Export Entire Collection…')}
+                                    </MenuItem>
+                                    <MenuItem onClick={handleExportQueryResults}>
+                                        {l10n.t('Export Current Query Results…')}
+                                    </MenuItem>
+                                </MenuList>
+                            </MenuPopover>
+                        </Menu>
+                    </span>
+                </OverflowItem>
 
-            {/* Separator between import/export and query-transfer actions */}
-            <ToolbarDivider />
+                {/* Divider between data and query groups — hides when data group overflows */}
+                <OverflowGroupDivider groupId="data" />
 
-            {/* Copy / Paste / Playground / Shell group */}
-            <Tooltip content={l10n.t('Copy current query to clipboard')} relationship="description" withArrow>
-                <ToolbarButton aria-label={l10n.t('Copy Query')} icon={<CopyRegular />} onClick={handleCopyQuery} />
-            </Tooltip>
-            <Tooltip
-                content={l10n.t('Paste a find query from clipboard into the editors')}
-                relationship="description"
-                withArrow
-            >
-                <ToolbarButton
-                    aria-label={l10n.t('Paste Query')}
-                    icon={<ClipboardPasteRegular />}
-                    onClick={handlePasteQuery}
+                {/* Group "query": Copy / Paste / Playground / Shell */}
+                <OverflowItem id="copy" groupId="query" priority={4}>
+                    <Tooltip content={l10n.t('Copy current query to clipboard')} relationship="description" withArrow>
+                        <ToolbarButton
+                            aria-label={l10n.t('Copy Query')}
+                            icon={<CopyRegular />}
+                            onClick={handleCopyQuery}
+                        />
+                    </Tooltip>
+                </OverflowItem>
+                <OverflowItem id="paste" groupId="query" priority={3}>
+                    <Tooltip
+                        content={l10n.t('Paste a find query from clipboard into the editors')}
+                        relationship="description"
+                        withArrow
+                    >
+                        <ToolbarButton
+                            aria-label={l10n.t('Paste Query')}
+                            icon={<ClipboardPasteRegular />}
+                            onClick={handlePasteQuery}
+                        />
+                    </Tooltip>
+                </OverflowItem>
+                <OverflowItem id="playground" groupId="query" priority={2}>
+                    <Tooltip
+                        content={l10n.t('Open current query in a Query Playground')}
+                        relationship="description"
+                        withArrow
+                    >
+                        <ToolbarButton icon={<KeyboardRegular />} onClick={handleOpenInPlayground}>
+                            {l10n.t('Playground')}
+                        </ToolbarButton>
+                    </Tooltip>
+                </OverflowItem>
+                <OverflowItem id="shell" groupId="query" priority={1}>
+                    <Tooltip
+                        content={l10n.t('Open current query in an Interactive Shell')}
+                        relationship="description"
+                        withArrow
+                    >
+                        <ToolbarButton icon={<WindowConsoleRegular />} onClick={handleOpenInShell}>
+                            {l10n.t('Shell')}
+                        </ToolbarButton>
+                    </Tooltip>
+                </OverflowItem>
+
+                {/* Overflow menu — appears as "..." when items are hidden */}
+                <OverflowMenuButton
+                    handleImportFromJson={handleImportFromJson}
+                    handleExportEntireCollection={handleExportEntireCollection}
+                    handleExportQueryResults={handleExportQueryResults}
+                    handleCopyQuery={handleCopyQuery}
+                    handlePasteQuery={handlePasteQuery}
+                    handleOpenInPlayground={handleOpenInPlayground}
+                    handleOpenInShell={handleOpenInShell}
                 />
-            </Tooltip>
-            <Tooltip content={l10n.t('Open current query in a Query Playground')} relationship="description" withArrow>
-                <ToolbarButton icon={<KeyboardRegular />} onClick={handleOpenInPlayground}>
-                    {l10n.t('Playground')}
-                </ToolbarButton>
-            </Tooltip>
-            <Tooltip
-                content={l10n.t('Open current query in an Interactive Shell')}
-                relationship="description"
-                withArrow
-            >
-                <ToolbarButton icon={<WindowConsoleRegular />} onClick={handleOpenInShell}>
-                    {l10n.t('Shell')}
-                </ToolbarButton>
-            </Tooltip>
-        </Toolbar>
+            </Toolbar>
+        </Overflow>
+    );
+};
+
+/**
+ * Divider between the data and query groups in the toolbar.
+ * Hidden when either group is fully overflowed — a divider only makes sense
+ * when there are visible items on both sides.
+ */
+const OverflowGroupDivider = (_props: { groupId: string }): JSX.Element | null => {
+    const dataGroupVisible = useIsOverflowGroupVisible('data');
+    const queryGroupVisible = useIsOverflowGroupVisible('query');
+    if (dataGroupVisible === 'hidden' || queryGroupVisible === 'hidden') {
+        return null;
+    }
+    return <ToolbarDivider />;
+};
+
+/**
+ * A menu item that only renders when its overflow item is hidden from the toolbar.
+ * Must be a separate component because `useIsOverflowItemVisible` is a React hook.
+ */
+const OverflowMenuItem = ({ id, children }: { id: string; children: JSX.Element | null }): JSX.Element | null => {
+    const isVisible = useIsOverflowItemVisible(id);
+    return isVisible ? null : children;
+};
+
+/**
+ * The "..." overflow menu button. Only renders when items have overflowed.
+ * Contains all overflowed items in toolbar order, each conditionally shown
+ * based on whether the corresponding toolbar item is still visible.
+ */
+const OverflowMenuButton = ({
+    handleImportFromJson,
+    handleExportEntireCollection,
+    handleExportQueryResults,
+    handleCopyQuery,
+    handlePasteQuery,
+    handleOpenInPlayground,
+    handleOpenInShell,
+}: {
+    handleImportFromJson: () => void;
+    handleExportEntireCollection: () => void;
+    handleExportQueryResults: () => void;
+    handleCopyQuery: () => void;
+    handlePasteQuery: () => void;
+    handleOpenInPlayground: () => void;
+    handleOpenInShell: () => void;
+}): JSX.Element | null => {
+    const { ref, overflowCount, isOverflowing } = useOverflowMenu<HTMLButtonElement>();
+    const dataGroupVisible = useIsOverflowGroupVisible('data');
+
+    if (!isOverflowing) {
+        return null;
+    }
+
+    return (
+        <Menu>
+            <MenuTrigger disableButtonEnhancement>
+                <Tooltip content={l10n.t('{0} more actions', overflowCount)} relationship="label" withArrow>
+                    <ToolbarButton
+                        ref={ref}
+                        icon={<MoreHorizontalRegular />}
+                        aria-label={l10n.t('{0} more actions', overflowCount)}
+                    >
+                        +{overflowCount}
+                    </ToolbarButton>
+                </Tooltip>
+            </MenuTrigger>
+            <MenuPopover>
+                <MenuList>
+                    {/* Items in toolbar order — Shell at bottom */}
+                    <OverflowMenuItem id="import">
+                        <MenuItem icon={<ArrowImportRegular />} onClick={handleImportFromJson}>
+                            {l10n.t('Import From JSON…')}
+                        </MenuItem>
+                    </OverflowMenuItem>
+                    <OverflowMenuItem id="export">
+                        <>
+                            <MenuItem icon={<ArrowExportRegular />} onClick={handleExportEntireCollection}>
+                                {l10n.t('Export Entire Collection…')}
+                            </MenuItem>
+                            <MenuItem icon={<ArrowExportRegular />} onClick={handleExportQueryResults}>
+                                {l10n.t('Export Current Query Results…')}
+                            </MenuItem>
+                        </>
+                    </OverflowMenuItem>
+
+                    {/* Divider between data and query groups — only when data group has overflowed items */}
+                    {dataGroupVisible !== 'visible' && <MenuDivider />}
+
+                    <OverflowMenuItem id="copy">
+                        <MenuItem icon={<CopyRegular />} onClick={handleCopyQuery}>
+                            {l10n.t('Copy Query')}
+                        </MenuItem>
+                    </OverflowMenuItem>
+                    <OverflowMenuItem id="paste">
+                        <MenuItem icon={<ClipboardPasteRegular />} onClick={handlePasteQuery}>
+                            {l10n.t('Paste Query')}
+                        </MenuItem>
+                    </OverflowMenuItem>
+                    <OverflowMenuItem id="playground">
+                        <MenuItem icon={<KeyboardRegular />} onClick={handleOpenInPlayground}>
+                            {l10n.t('Open in Playground')}
+                        </MenuItem>
+                    </OverflowMenuItem>
+                    <OverflowMenuItem id="shell">
+                        <MenuItem icon={<WindowConsoleRegular />} onClick={handleOpenInShell}>
+                            {l10n.t('Open in Shell')}
+                        </MenuItem>
+                    </OverflowMenuItem>
+                </MenuList>
+            </MenuPopover>
+        </Menu>
     );
 };
