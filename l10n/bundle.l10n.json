@@ -1085,7 +1085,6 @@
   "This will also delete {0}.": "This will also delete {0}.",
   "This will execute all statements in the file against the connected cluster.": "This will execute all statements in the file against the connected cluster.",
   "This will prevent the query planner from using this index.": "This will prevent the query planner from using this index.",
-
   "TLS/SSL Disabled": "TLS/SSL Disabled",
   "TLS/SSL Enabled": "TLS/SSL Enabled",
   "To connect to Azure resources, you need to sign in to Azure accounts.": "To connect to Azure resources, you need to sign in to Azure accounts.",
