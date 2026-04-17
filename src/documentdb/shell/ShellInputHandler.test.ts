@@ -694,6 +694,7 @@ describe('ShellInputHandler', () => {
          */
         function extractMoveUp(output: string): number {
             // \x1b[<n>A at the START of the output = Step 1 move-up
+            // eslint-disable-next-line no-control-regex
             const match = /^\x1b\[(\d+)A/.exec(output);
             return match ? Number(match[1]) : 0;
         }
