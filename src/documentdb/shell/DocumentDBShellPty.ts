@@ -9,6 +9,7 @@ import { ext } from '../../extensionVariables';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { SchemaStore } from '../SchemaStore';
+import { getClosingBrackets } from './bracketDepthCounter';
 import { colorizeShellInput } from './highlighting/colorizeShellInput';
 import { SettingsHintError } from './SettingsHintError';
 import { type CompletionResult, ShellCompletionProvider } from './ShellCompletionProvider';
@@ -822,6 +823,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     this.showSchemaHint(ctx.collectionName);
                     return;
                 }
+            }
+        }
+
+        // Fallback: suggest closing brackets when the buffer ends with a space
+        // and has unclosed brackets/parens/braces.
+        // e.g. `db.col.find({ _id: { $exists: true ` → ghost `}})`
+        if (buffer.endsWith(' ')) {
+            const closing = getClosingBrackets(buffer);
+            if (closing.length > 0) {
+                this._ghostTextIsHint = false;
+                this._ghostText.show(closing, (d) => this._writeEmitter.fire(d));
+                return;
             }
         }
 

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isExpressionIncomplete } from './bracketDepthCounter';
+import { getClosingBrackets, isExpressionIncomplete } from './bracketDepthCounter';
 
 describe('isExpressionIncomplete', () => {
     describe('balanced expressions (complete)', () => {
@@ -190,6 +190,72 @@ describe('isExpressionIncomplete', () => {
             // Our scanner doesn't parse regex — treats /.../ as division or comment start.
             // This is acceptable since regex rarely contains brackets in shell input.
             expect(isExpressionIncomplete('db.test.find({ name: "test" })')).toBe(false);
+        });
+    });
+});
+
+describe('getClosingBrackets', () => {
+    describe('balanced expressions', () => {
+        it('should return empty for empty string', () => {
+            expect(getClosingBrackets('')).toBe('');
+        });
+
+        it('should return empty for balanced expression', () => {
+            expect(getClosingBrackets('db.test.find({ age: 25 })')).toBe('');
+        });
+
+        it('should return empty for text without brackets', () => {
+            expect(getClosingBrackets('show dbs')).toBe('');
+        });
+    });
+
+    describe('unclosed brackets', () => {
+        it('should close a single open brace', () => {
+            expect(getClosingBrackets('{')).toBe('}');
+        });
+
+        it('should close a single open paren', () => {
+            expect(getClosingBrackets('(')).toBe(')');
+        });
+
+        it('should close a single open bracket', () => {
+            expect(getClosingBrackets('[')).toBe(']');
+        });
+
+        it('should close nested braces and paren for find query', () => {
+            expect(getClosingBrackets('db.test.find({ _id: { $exists: true ')).toBe('}})');
+        });
+
+        it('should close paren and brace for partial find', () => {
+            expect(getClosingBrackets('db.test.find({')).toBe('})');
+        });
+
+        it('should close aggregate pipeline brackets', () => {
+            expect(getClosingBrackets('db.test.aggregate([{ $match: { x: 1 } ')).toBe('}])');
+        });
+
+        it('should close partially closed nested query', () => {
+            expect(getClosingBrackets('db.test.find({ age: { $gt: 25 }}')).toBe(')');
+        });
+    });
+
+    describe('strings — brackets inside strings ignored', () => {
+        it('should ignore braces in double-quoted strings', () => {
+            expect(getClosingBrackets('db.test.find({ name: "a{b" ')).toBe('})');
+        });
+
+        it('should ignore braces in single-quoted strings', () => {
+            expect(getClosingBrackets("db.test.find({ name: 'a{b' ")).toBe('})');
+        });
+    });
+
+    describe('comments — brackets inside comments ignored', () => {
+        it('should ignore braces in line comments', () => {
+            expect(getClosingBrackets('{ // comment with {\n')).toBe('}');
+        });
+
+        it('should ignore braces in block comments', () => {
+            expect(getClosingBrackets('{ /* { */ ')).toBe('}');
         });
     });
 });

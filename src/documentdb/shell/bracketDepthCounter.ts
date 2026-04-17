@@ -120,3 +120,124 @@ export function isExpressionIncomplete(text: string): boolean {
 
     return depth > 0 || inSingleQuote || inDoubleQuote || inTemplateLiteral || inBlockComment;
 }
+
+/**
+ * The closing bracket characters needed to balance the given expression.
+ *
+ * Uses a stack to track each opening bracket type (`(`, `[`, `{`) so the
+ * returned string contains the matching closers in the correct order.
+ * Brackets inside strings and comments are ignored, just like
+ * {@link isExpressionIncomplete}.
+ *
+ * @returns The closing characters (e.g. `}})` ), or an empty string when
+ *          the expression is already balanced or has no unclosed brackets.
+ */
+export function getClosingBrackets(text: string): string {
+    const stack: string[] = [];
+
+    const CLOSING: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
+
+    // String state
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inTemplateLiteral = false;
+
+    // Comment state
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = i + 1 < text.length ? text[i + 1] : '';
+
+        // ─── Line comment ────────────────────────────────────────────
+        if (inLineComment) {
+            if (ch === '\n') {
+                inLineComment = false;
+            }
+            continue;
+        }
+
+        // ─── Block comment ───────────────────────────────────────────
+        if (inBlockComment) {
+            if (ch === '*' && next === '/') {
+                inBlockComment = false;
+                i++; // skip '/'
+            }
+            continue;
+        }
+
+        // ─── Single-quoted string ────────────────────────────────────
+        if (inSingleQuote) {
+            if (ch === '\\') {
+                i++; // skip escaped character
+            } else if (ch === "'") {
+                inSingleQuote = false;
+            }
+            continue;
+        }
+
+        // ─── Double-quoted string ────────────────────────────────────
+        if (inDoubleQuote) {
+            if (ch === '\\') {
+                i++; // skip escaped character
+            } else if (ch === '"') {
+                inDoubleQuote = false;
+            }
+            continue;
+        }
+
+        // ─── Template literal ────────────────────────────────────────
+        if (inTemplateLiteral) {
+            if (ch === '\\') {
+                i++; // skip escaped character
+            } else if (ch === '`') {
+                inTemplateLiteral = false;
+            }
+            continue;
+        }
+
+        // ─── Normal code ─────────────────────────────────────────────
+
+        // Detect comment starts
+        if (ch === '/' && next === '/') {
+            inLineComment = true;
+            i++; // skip second '/'
+            continue;
+        }
+        if (ch === '/' && next === '*') {
+            inBlockComment = true;
+            i++; // skip '*'
+            continue;
+        }
+
+        // Detect string starts
+        if (ch === "'") {
+            inSingleQuote = true;
+            continue;
+        }
+        if (ch === '"') {
+            inDoubleQuote = true;
+            continue;
+        }
+        if (ch === '`') {
+            inTemplateLiteral = true;
+            continue;
+        }
+
+        // Track bracket stack
+        if (ch === '(' || ch === '[' || ch === '{') {
+            stack.push(ch);
+        } else if (ch === ')' || ch === ']' || ch === '}') {
+            if (stack.length > 0) {
+                stack.pop();
+            }
+        }
+    }
+
+    // Build closing sequence in reverse order (innermost bracket closes first)
+    return stack
+        .reverse()
+        .map((ch) => CLOSING[ch] ?? '')
+        .join('');
+}
