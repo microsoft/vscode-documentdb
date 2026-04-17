@@ -15,6 +15,10 @@ export type CollectionViewWebviewConfigurationType = {
     sessionId: string;
     clusterId: string;
     /**
+     * Human-readable cluster display name for Playground headers and Shell titles.
+     */
+    clusterDisplayName: string;
+    /**
      * Identifies which tree view this cluster belongs to.
      * Required for finding the tree node during import/export operations.
      * @see Views enum
@@ -68,6 +72,7 @@ export class CollectionViewController extends WebviewController<CollectionViewWe
             webviewName: 'collectionView',
             sessionId: initialData.sessionId,
             clusterId: initialData.clusterId,
+            clusterDisplayName: initialData.clusterDisplayName,
             viewId: initialData.viewId,
             databaseName: initialData.databaseName,
             collectionName: initialData.collectionName,

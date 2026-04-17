@@ -244,6 +244,8 @@
   "Click here to retry": "Click here to retry",
   "Click here to update credentials": "Click here to update credentials",
   "Click to view resource": "Click to view resource",
+  "Clipboard does not contain a recognizable find() query.": "Clipboard does not contain a recognizable find() query.",
+  "Clipboard is empty.": "Clipboard is empty.",
   "Close tips": "Close tips",
   "Cluster metadata not initialized. Client may not be properly connected.": "Cluster metadata not initialized. Client may not be properly connected.",
   "Cluster support unknown $(info)": "Cluster support unknown $(info)",

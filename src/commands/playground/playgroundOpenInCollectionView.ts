@@ -51,7 +51,8 @@ export async function playgroundOpenInCollectionView(
 
     await vscode.commands.executeCommand('vscode-documentdb.command.internal.containerView.open', {
         clusterId: connection.clusterId,
-        viewId: Views.ConnectionsView,
+        clusterDisplayName: connection.clusterDisplayName,
+        viewId: connection.viewId ?? Views.ConnectionsView,
         databaseName: connection.databaseName,
         collectionName,
         initialQuery: parsed.filter
