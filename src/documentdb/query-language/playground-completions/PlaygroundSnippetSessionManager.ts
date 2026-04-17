@@ -25,7 +25,7 @@ const SNIPPET_EXIT_CHARS = new Set([',', '}', ']']);
  * expose the snippet controller directly.  Instead, this manager listens for
  * text changes on playground documents and executes the built-in `leaveSnippet`
  * command to close the active snippet session when a delimiter character is
- * typed or Enter is pressed.
+ * typed.
  *
  * Without this, the snippet tab-stop highlight stays active after the user
  * fills in a value and continues editing — pressing `,`, `}`, `]`, or even
@@ -45,6 +45,12 @@ export class PlaygroundSnippetSessionManager implements vscode.Disposable {
 
     private onDocumentChange(e: vscode.TextDocumentChangeEvent): void {
         if (e.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
+            return;
+        }
+
+        // `leaveSnippet` acts on the active editor. Guard against programmatic
+        // edits to a playground document while a different editor is focused.
+        if (vscode.window.activeTextEditor?.document !== e.document) {
             return;
         }
 
