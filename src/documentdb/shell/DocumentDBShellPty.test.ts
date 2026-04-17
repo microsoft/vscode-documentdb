@@ -54,17 +54,24 @@ describe('DocumentDBShellPty', () => {
         terminalName = undefined;
 
         // Mock settings
-        jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
-            get: jest.fn((_key: string, defaultValue?: unknown) => {
-                if (_key === 'documentDB.shell.display.colorOutput') {
-                    return false; // Disable colors for easier test assertions
-                }
-                if (_key === 'documentDB.timeout') {
-                    return 120;
-                }
-                return defaultValue;
-            }),
-        } as unknown as vscode.WorkspaceConfiguration);
+        jest.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((section?: string) => {
+            return {
+                get: jest.fn((_key: string, defaultValue?: unknown) => {
+                    if (section === undefined || section === '') {
+                        if (_key === 'documentDB.shell.display.colorOutput') {
+                            return false; // Disable colors for easier test assertions
+                        }
+                        if (_key === 'documentDB.timeout') {
+                            return 120;
+                        }
+                    }
+                    if (section === 'documentDB.shell' && _key === 'multiLinePasteBehavior') {
+                        return 'runLineByLine'; // Default to line-by-line in tests for backward compat
+                    }
+                    return defaultValue;
+                }),
+            } as unknown as vscode.WorkspaceConfiguration;
+        });
 
         pty = new DocumentDBShellPty(defaultOptions);
 
@@ -577,6 +584,197 @@ describe('DocumentDBShellPty', () => {
             expect(mockEvaluate).toHaveBeenCalledTimes(2);
             expect(mockEvaluate).toHaveBeenNthCalledWith(1, 'show dbs', expect.any(Number));
             expect(mockEvaluate).toHaveBeenNthCalledWith(2, 'use newdb', expect.any(Number));
+        });
+    });
+
+    describe('multi-line paste dialog', () => {
+        /**
+         * Override paste-related settings while preserving other mocked settings.
+         * @param behavior - value for documentDB.shell.multiLinePasteBehavior
+         * @param vscodePasteWarning - value for terminal.integrated.enableMultiLinePasteWarning (default: 'never')
+         */
+        function mockPasteBehavior(behavior: string, vscodePasteWarning: string = 'never'): void {
+            jest.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((section?: string) => {
+                return {
+                    get: jest.fn((_key: string, defaultValue?: unknown) => {
+                        if (section === 'documentDB.shell' && _key === 'multiLinePasteBehavior') {
+                            return behavior;
+                        }
+                        if (section === 'terminal.integrated' && _key === 'enableMultiLinePasteWarning') {
+                            return vscodePasteWarning;
+                        }
+                        // Preserve base settings needed by the PTY
+                        if (section === undefined || section === '') {
+                            if (_key === 'documentDB.shell.display.colorOutput') {
+                                return false;
+                            }
+                            if (_key === 'documentDB.timeout') {
+                                return 120;
+                            }
+                        }
+                        return defaultValue;
+                    }),
+                } as unknown as vscode.WorkspaceConfiguration;
+            });
+        }
+
+        beforeEach(async () => {
+            pty.open({ columns: 80, rows: 24 });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('should show QuickPick when behavior is "ask" and multi-line paste detected', async () => {
+            mockPasteBehavior('ask');
+
+            const showQuickPickSpy = jest
+                .spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValue({ label: 'Cancel', detail: '', id: 'cancel' } as never);
+
+            pty.handleInput('line1\nline2\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(showQuickPickSpy).toHaveBeenCalledTimes(1);
+
+            showQuickPickSpy.mockRestore();
+        });
+
+        it('should join and execute when "Execute as One" is chosen', async () => {
+            mockPasteBehavior('ask');
+
+            mockEvaluate.mockResolvedValue({
+                type: null,
+                printable: '"result"',
+                durationMs: 1,
+            });
+
+            const showQuickPickSpy = jest
+                .spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValue({ label: 'Execute as One', detail: '', id: 'join' } as never);
+
+            pty.handleInput('db.restaurants\n    .find({})\n    .limit(5);\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            // Lines starting with . should be joined directly (no space)
+            expect(mockEvaluate).toHaveBeenCalledWith('db.restaurants.find({}).limit(5);', expect.any(Number));
+
+            showQuickPickSpy.mockRestore();
+        });
+
+        it('should join continuation lines with space when they do not start with .', async () => {
+            mockPasteBehavior('executeAsOne');
+
+            mockEvaluate.mockResolvedValue({
+                type: null,
+                printable: '"result"',
+                durationMs: 1,
+            });
+
+            pty.handleInput('var x =\n  42;\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            expect(mockEvaluate).toHaveBeenCalledWith('var x = 42;', expect.any(Number));
+        });
+
+        it('should run line by line when behavior is "runLineByLine"', async () => {
+            // Already the default in tests — just verify
+            mockEvaluate
+                .mockResolvedValueOnce({ type: null, printable: '"r1"', durationMs: 1 })
+                .mockResolvedValueOnce({ type: null, printable: '"r2"', durationMs: 1 });
+
+            pty.handleInput('show dbs\nuse mydb\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            expect(mockEvaluate).toHaveBeenCalledTimes(2);
+        });
+
+        it('should discard input when dialog is cancelled', async () => {
+            mockPasteBehavior('ask');
+
+            const showQuickPickSpy = jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue(undefined);
+
+            pty.handleInput('line1\nline2\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            expect(mockEvaluate).not.toHaveBeenCalled();
+
+            showQuickPickSpy.mockRestore();
+        });
+
+        it('should not show dialog for single-line paste', async () => {
+            mockPasteBehavior('ask');
+
+            mockEvaluate.mockResolvedValue({ type: null, printable: '"ok"', durationMs: 1 });
+
+            const showQuickPickSpy = jest.spyOn(vscode.window, 'showQuickPick');
+
+            // Single line with trailing \r — should NOT trigger the dialog
+            pty.handleInput('show dbs\r');
+
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            expect(showQuickPickSpy).not.toHaveBeenCalled();
+            expect(mockEvaluate).toHaveBeenCalledWith('show dbs', expect.any(Number));
+
+            showQuickPickSpy.mockRestore();
+        });
+
+        it('should skip our dialog and run line-by-line when VS Code paste warning is active', async () => {
+            // behavior=ask but VS Code's warning is 'auto' (default) → skip our dialog
+            mockPasteBehavior('ask', 'auto');
+
+            mockEvaluate
+                .mockResolvedValueOnce({ type: null, printable: '"r1"', durationMs: 1 })
+                .mockResolvedValueOnce({ type: null, printable: '"r2"', durationMs: 1 });
+
+            const showQuickPickSpy = jest.spyOn(vscode.window, 'showQuickPick');
+
+            pty.handleInput('show dbs\nuse mydb\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            // Our QuickPick should NOT have been shown
+            expect(showQuickPickSpy).not.toHaveBeenCalled();
+            // Lines should have been run independently
+            expect(mockEvaluate).toHaveBeenCalledTimes(2);
+
+            showQuickPickSpy.mockRestore();
+        });
+
+        it('should show our dialog when VS Code paste warning is disabled', async () => {
+            // behavior=ask and VS Code's warning is 'never' → show our dialog
+            mockPasteBehavior('ask', 'never');
+
+            const showQuickPickSpy = jest
+                .spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValue({ label: 'Cancel', detail: '', id: 'cancel' } as never);
+
+            pty.handleInput('line1\nline2\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(showQuickPickSpy).toHaveBeenCalledTimes(1);
+
+            showQuickPickSpy.mockRestore();
+        });
+
+        it('should show our dialog even when VS Code paste warning is active if alwaysAsk', async () => {
+            // behavior=alwaysAsk and VS Code's warning is 'auto' → still show our dialog
+            mockPasteBehavior('alwaysAsk', 'auto');
+
+            const showQuickPickSpy = jest
+                .spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValue({ label: 'Cancel', detail: '', id: 'cancel' } as never);
+
+            pty.handleInput('line1\nline2\n');
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(showQuickPickSpy).toHaveBeenCalledTimes(1);
+
+            showQuickPickSpy.mockRestore();
         });
     });
 });
