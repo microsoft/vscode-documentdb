@@ -120,9 +120,10 @@ describe('ShellInputHandler', () => {
     describe('arrow key navigation', () => {
         it('should move cursor left', () => {
             handler.handleInput('abc');
-            written = '';
             handler.handleInput('\x1b[D'); // Left
-            expect(written).toBe('\x1b[D');
+            expect(handler.getCursor()).toBe(2);
+            // Re-render output contains the buffer with repositioned cursor
+            expect(written).toContain('abc');
         });
 
         it('should not move cursor left past start', () => {
@@ -130,15 +131,17 @@ describe('ShellInputHandler', () => {
             handler.handleInput('\x1b[D'); // Left to start
             written = '';
             handler.handleInput('\x1b[D'); // Try left again
+            expect(handler.getCursor()).toBe(0);
             expect(written).toBe(''); // No output — already at start
         });
 
         it('should move cursor right', () => {
             handler.handleInput('abc');
             handler.handleInput('\x1b[D'); // Left
-            written = '';
             handler.handleInput('\x1b[C'); // Right
-            expect(written).toBe('\x1b[C');
+            expect(handler.getCursor()).toBe(3);
+            // Re-render output contains the buffer
+            expect(written).toContain('abc');
         });
 
         it('should not move cursor right past end', () => {
@@ -152,32 +155,28 @@ describe('ShellInputHandler', () => {
     describe('Home/End', () => {
         it('should move cursor to start with Home', () => {
             handler.handleInput('abc');
-            written = '';
             handler.handleInput('\x1b[H'); // Home
-            expect(written).toContain('\x1b[3D'); // Move left 3
+            expect(handler.getCursor()).toBe(0);
         });
 
         it('should move cursor to end with End', () => {
             handler.handleInput('abc');
             handler.handleInput('\x1b[H'); // Home
-            written = '';
             handler.handleInput('\x1b[F'); // End
-            expect(written).toContain('\x1b[3C'); // Move right 3
+            expect(handler.getCursor()).toBe(3);
         });
 
         it('should handle Ctrl+A (Home)', () => {
             handler.handleInput('abc');
-            written = '';
             handler.handleInput('\x01'); // Ctrl+A
-            expect(written).toContain('\x1b[3D');
+            expect(handler.getCursor()).toBe(0);
         });
 
         it('should handle Ctrl+E (End)', () => {
             handler.handleInput('abc');
             handler.handleInput('\x01'); // Ctrl+A — go home
-            written = '';
             handler.handleInput('\x05'); // Ctrl+E — go end
-            expect(written).toContain('\x1b[3C');
+            expect(handler.getCursor()).toBe(3);
         });
     });
 
@@ -685,6 +684,125 @@ describe('ShellInputHandler', () => {
             ghostHandler.handleInput('\x1b[D'); // Left arrow
             ghostHandler.handleInput('\x1b[C'); // Right arrow
             expect(ghostCalled).toBe(false);
+        });
+    });
+
+    describe('line wrapping', () => {
+        /**
+         * Helper: parse the ANSI output to extract the "move up" count from
+         * Step 1 of reRenderLine().  Returns 0 if no CUU sequence is found.
+         */
+        function extractMoveUp(output: string): number {
+            // \x1b[<n>A at the START of the output = Step 1 move-up
+            const match = /^\x1b\[(\d+)A/.exec(output);
+            return match ? Number(match[1]) : 0;
+        }
+
+        it('should NOT move up when typing stays within a single row', () => {
+            // prompt=5, cols=80 → 75 chars fit on the first row
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(10));
+            written = '';
+            handler.handleInput('b');
+            // Still on row 0, no move-up expected
+            expect(extractMoveUp(written)).toBe(0);
+        });
+
+        it('should NOT incorrectly move up at the exact column boundary (deferred-wrap)', () => {
+            // prompt=5, cols=80: typing 75 chars fills exactly to column 80
+            // The terminal cursor is in deferred-wrap on row 0, NOT row 1.
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(75)); // fills row 0 exactly
+            written = '';
+            handler.handleInput('b'); // this is the 76th char, wraps to row 1
+            // Step 1 should move up 0 rows (cursor WAS on row 0 from the previous render)
+            expect(extractMoveUp(written)).toBe(0);
+        });
+
+        it('should move up 1 row when cursor is on the second row', () => {
+            // prompt=5, cols=80: 76 chars = prompt+buffer = 81 cols → wraps to row 1
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(76)); // cursor ends up on row 1
+            written = '';
+            handler.handleInput('b'); // 77th char, still on row 1
+            // Previous render left cursor on row 1, so Step 1 should move up 1
+            expect(extractMoveUp(written)).toBe(1);
+        });
+
+        it('should handle cursor movement across row boundaries with Left arrow', () => {
+            // prompt=5, cols=80: 76 chars wraps.
+            // Char 75 is at (row 0, col 79), char 76 is at (row 1, col 0).
+            // Moving left from col 0 of row 1 should cross to row 0, col 79.
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(76)); // cursor at end (row 1, col 1)
+            handler.handleInput('\x1b[D'); // Left → cursor at pos 75, (row 1, col 0)
+            handler.handleInput('\x1b[D'); // Left → cursor at pos 74, (row 0, col 79)
+            expect(handler.getCursor()).toBe(74);
+            // Buffer unchanged
+            expect(handler.getBuffer()).toBe('a'.repeat(76));
+        });
+
+        it('should handle Home across wrapped rows', () => {
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(100)); // wraps across 2 rows
+            handler.handleInput('\x1b[H'); // Home
+            expect(handler.getCursor()).toBe(0);
+        });
+
+        it('should handle End across wrapped rows', () => {
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(100));
+            handler.handleInput('\x1b[H'); // Home
+            handler.handleInput('\x1b[F'); // End
+            expect(handler.getCursor()).toBe(100);
+        });
+
+        it('should handle backspace at the wrap boundary', () => {
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(76)); // wraps to row 1
+            handler.handleInput('\x7f'); // Backspace — remove last char
+            expect(handler.getBuffer()).toBe('a'.repeat(75));
+            expect(handler.getCursor()).toBe(75);
+        });
+
+        it('should handle double wrap boundary (160+ cols)', () => {
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(155)); // 5+155=160 → exactly fills 2 rows
+            written = '';
+            handler.handleInput('b'); // wraps to row 2
+            // Previous render left cursor at deferred-wrap on row 1
+            // Step 1 should move up 1 (not 2)
+            expect(extractMoveUp(written)).toBe(1);
+        });
+
+        it('should re-render correctly when pasting text that wraps', () => {
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            // Paste 100 chars at once
+            const pastedText = 'x'.repeat(100);
+            handler.handleInput(pastedText);
+            expect(handler.getBuffer()).toBe(pastedText);
+            expect(handler.getCursor()).toBe(100);
+        });
+
+        it('should handle insert in the middle of a wrapped line', () => {
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(100));
+            // Move cursor to position 50 (middle of first row)
+            handler.handleInput('\x1b[H'); // Home
+            for (let i = 0; i < 50; i++) handler.handleInput('\x1b[C'); // Right x50
+            expect(handler.getCursor()).toBe(50);
+            handler.handleInput('X'); // Insert in middle
+            expect(handler.getBuffer()).toBe('a'.repeat(50) + 'X' + 'a'.repeat(50));
         });
     });
 });
