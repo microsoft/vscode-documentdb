@@ -14,6 +14,14 @@ import { type TreeElementWithContextValue } from '../TreeElementWithContextValue
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { CollectionItem } from './CollectionItem';
 
+/**
+ * Escapes markdown special characters so user-provided text is always rendered
+ * as plain text rather than being interpreted as markdown formatting or links.
+ */
+function escapeMarkdown(text: string): string {
+    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+}
+
 export class DatabaseItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
     public readonly id: string;
     public readonly experience: Experience;
@@ -66,8 +74,23 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
             id: this.id,
             contextValue: this.contextValue,
             label: this.databaseInfo.name,
+            tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('database'), // TODO: create our own icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    /**
+     * Builds a markdown tooltip showing the database name.
+     */
+    private buildTooltip(): vscode.MarkdownString {
+        const md = new vscode.MarkdownString();
+        md.isTrusted = false;
+
+        md.appendMarkdown(`### ${escapeMarkdown(this.databaseInfo.name)}\n\n`);
+
+        md.appendMarkdown(`\`${l10n.t('Database')}\`\n\n`);
+
+        return md;
     }
 }

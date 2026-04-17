@@ -601,6 +601,12 @@
         "title": "Query Playground: Scan Collection Schema"
       },
       {
+        "//": "Copy Reference",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.copyReference",
+        "title": "Copy Reference…"
+      },
+      {
         "//": "[Diagnostics] Clear Schema Cache",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.clearSchemaCache",
@@ -923,6 +929,24 @@
           "command": "vscode-documentdb.command.pasteCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "3@4"
+        },
+        {
+          "//": "[Database] Copy Reference",
+          "command": "vscode-documentdb.command.copyReference",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
+          "//": "[Collection] Copy Reference",
+          "command": "vscode-documentdb.command.copyReference",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
+          "//": "[Index] Copy Reference",
+          "command": "vscode-documentdb.command.copyReference",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "group": "yheAlmostLastGroup@1"
         }
       ],
       "explorer/context": [],
@@ -985,6 +1009,10 @@
         },
         {
           "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.copyReference",
           "when": "never"
         },
         {

@@ -359,7 +359,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         // Host(s) from the connection string
         const hosts = this.getHosts();
         if (hosts.length > 0) {
-            md.appendMarkdown(`**${l10n.t('Host')}:** ${hosts.join(', ')}\n\n`);
+            const escapedHosts = hosts.map((host) => escapeMarkdown(host));
+            md.appendMarkdown(`**${l10n.t('Host')}:** ${escapedHosts.join(', ')}\n\n`);
         }
 
         // Auth method
@@ -367,7 +368,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         if (authMethodId) {
             const isSupported = isSupportedAuthMethod(authMethodId);
             const authLabel = isSupported ? getAuthMethod(authMethodId).label : authMethodId;
-            md.appendMarkdown(`**${l10n.t('Auth')}:** ${authLabel}\n\n`);
+            md.appendMarkdown(`**${l10n.t('Auth')}:** ${escapeMarkdown(authLabel)}\n\n`);
 
             if (isSupported && authMethodId === AuthMethodId.NativeAuth && this.cluster.connectionUser) {
                 md.appendMarkdown(`**${l10n.t('User')}:** ${escapeMarkdown(this.cluster.connectionUser)}\n\n`);
