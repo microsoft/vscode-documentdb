@@ -267,7 +267,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private async handleMultiLinePaste(data: string): Promise<void> {
         // Normalize line endings and split
-        const lines = data.split(/\r\n|\r|\n/).filter((l) => l.length > 0);
+        const lines = data.split(/\r\n|\r|\n/).filter((l) => l.trim().length > 0);
 
         // If only one non-empty line after splitting, process normally
         if (lines.length <= 1) {
