@@ -829,12 +829,20 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Fallback: suggest closing brackets when the buffer ends with a space
         // and has unclosed brackets/parens/braces.
         // e.g. `db.col.find({ _id: { $exists: true ` → ghost `}})`
+        //
+        // Skip when the last non-whitespace character indicates the user is
+        // still typing a value, field, or operator (e.g. `:`, `,`, `{`, `.`).
         if (buffer.endsWith(' ')) {
-            const closing = getClosingBrackets(buffer);
-            if (closing.length > 0) {
-                this._ghostTextIsHint = false;
-                this._ghostText.show(closing, (d) => this._writeEmitter.fire(d));
-                return;
+            const trimmed = buffer.trimEnd();
+            const lastCh = trimmed.length > 0 ? trimmed[trimmed.length - 1] : '';
+            const expectsMoreInput = ':,([{.=+*/%!<>&|?~-';
+            if (lastCh && !expectsMoreInput.includes(lastCh)) {
+                const closing = getClosingBrackets(buffer);
+                if (closing.length > 0) {
+                    this._ghostTextIsHint = false;
+                    this._ghostText.show(closing, (d) => this._writeEmitter.fire(d));
+                    return;
+                }
             }
         }
 
